@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 ## 2026-10-04 — plán 1 (jádro + CLI), průběh
 
 Implementace po úkolech; každý úkol napsal subagent a zkontroloval nezávislý reviewer.
+- Úkol 13 — Verifier: opětovné ověření offloadu proti seznamu xxh64 v _REPORT
 - Úkol 12 — engine: jedno čtení karty rozvětvené na hasher a všechny cíle, flush, ověření po jednom vlákně na cíl, zápis reportu
 
 - Úkol 11 — Engine preflight (kontroly svazků, místa, Windows názvů, FAT32)
