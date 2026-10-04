@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
 
+- Úkol 2 — detekce klipů (video, R3D segmenty, ARRI sekvence, BRAW, Canon RAW, proxy kamery) a čtení metadat přes ffprobe
 - Úkol 1 — hledání externích nástrojů (ffmpeg, REDline, art-cmd, braw-decode) a spouštění procesů
 
 ## 2026-10-04 — plán 1 (jádro + CLI), průběh

@@ -55,4 +55,8 @@ internal static unsafe partial class Win32
 
     [LibraryImport("kernel32.dll")]
     internal static partial uint SetThreadExecutionState(uint flags);
+
+    /// Explorer's natural order ("C2" before "C10") — the Windows counterpart of localizedStandardCompare.
+    [LibraryImport("shlwapi.dll", StringMarshalling = StringMarshalling.Utf16)]
+    internal static partial int StrCmpLogicalW(string a, string b);
 }
