@@ -256,8 +256,9 @@ Doplněno 2026-10-04 na žádost uživatele; mění i Mac verzi.
 - Zdroj snímků:
   - video (ffmpeg): `-ss` na daný čas, 1 frame; poslední frame přes `-sseof -1/fps` s `-update 1`, aby se trefil opravdu poslední,
   - BRAW: `braw-decode --start N --count 1`,
-  - R3D / ARRIRAW: z hotové proxy; když se proxy nerenderují, dekodér vytáhne tři jednotlivé framy
-    (REDline `--start/--end`, art-cmd s rozsahem framů) do tempu.
+  - R3D / ARRIRAW: z hotové proxy (jako dnes na Macu). **Změna 2026-10-05:** varianta „dekodér vytáhne tři
+    framy bez proxy“ se odkládá — REDline ani art-cmd na tomto PC nejsou a neověřené parametry by byly hádání.
+    Bez proxy nemají R3D/ARRI klipy v reportu náhledy; doplní se, až budou nástroje k dispozici pro ověření.
 - Mac: stejná změna v `mac/Sources/OffloadKit/Proxy.swift`, `Job.swift`, `Report.swift`, `HTMLReport.swift`.
   **Na tomto PC ji nelze sestavit ani otestovat** — Mac část se dokončí a ověří na Macu.
 
@@ -275,6 +276,13 @@ Doplněno 2026-10-04 na žádost uživatele; mění i Mac verzi.
   build skript je hledá v cestě z proměnné `BRAW_SDK`).
 
 ## 7. PDF report
+
+> **Změna 2026-10-05 (před plánem 2):** PDF se tiskne přes **Microsoft Edge v headless režimu**
+> (`msedge --headless=new --print-to-pdf`, vlastní dočasný profil `--user-data-dir`, formát stránky přes CSS
+> `@page { size: A4 landscape; margin: 28pt }`), ne přes WebView2. Edge je ve Windows 10/11 vždy, je to stejný
+> engine jako WebView2, nepotřebuje NuGet balíček ani okno a funguje i z CLI. Ověřeno na tomto PC: A4 na šířku
+> (MediaBox 841,92 × 594,96 pt), čeština v pořádku. Body níže o WebView2 tím nahrazuje; ostatní (zápis přes tmp,
+> timeout 60 s, selhání PDF nikdy neshodí offload, chybějící Edge → PDF se přeskočí) platí dál.
 
 - `PdfReport.Write(report, path)`: vlastní STA vlákno s WPF `Dispatcher` (funguje z GUI i CLI).
 - `CoreWebView2Environment` s user data folder `%LOCALAPPDATA%\Offload\WebView2`; controller na message-only okně (`HWND_MESSAGE`).
