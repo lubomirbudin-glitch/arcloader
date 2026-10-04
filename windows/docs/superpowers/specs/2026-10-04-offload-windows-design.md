@@ -57,9 +57,12 @@ Výsledná distribuční složka:
 ```
 Offload/
   Offload.exe                  GUI (self-contained, single file)
-  offload.exe                  CLI (self-contained, single file)
+  bin/offload.exe              CLI (self-contained, single file)
   bin/ffmpeg.exe, ffprobe.exe, braw-decode.exe
 ```
+
+CLI je v `bin\` (jako na Macu v `Contents/Resources/bin/offload`): `Offload.exe` a `offload.exe` by ve stejné
+složce kolidovaly, protože NTFS nerozlišuje velikost písmen.
 
 Závislosti (NuGet): `System.IO.Hashing`, `System.CommandLine`, `Microsoft.Web.WebView2`, `xunit`.
 ffmpeg/ffprobe: build gyan.dev (full), přibalený do `bin/`; `windows/tools/bin/` je v `.gitignore`.
@@ -122,7 +125,8 @@ Stejný princip jako na Macu: karta se čte **jen jednou**, každý blok jde par
 | `beginActivity(idleSystemSleepDisabled)` | `SetThreadExecutionState(ES_CONTINUOUS \| ES_SYSTEM_REQUIRED)` |
 
 - Zdroj se otevírá `GENERIC_READ`, `FILE_SHARE_READ`. **Na kartu se nikdy nezapisuje.**
-- Všechny cesty interně s prefixem `\\?\` (dlouhé cesty); v reportech a UI bez něj.
+- Dlouhé cesty: .NET API je zvládají samo; přímá Win32 volání (`MoveFileExW`) dostávají cestu s prefixem `\\?\`.
+  V reportech a UI vždy bez něj.
 - Chyby: `IOError(op, path, win32Code)` se zprávou z `FormatMessage`.
 
 ### 4.3 Zarovnání při NO_BUFFERING
@@ -161,6 +165,7 @@ Navíc kvůli Windows:
 - **case kolize**: dvě cesty na kartě lišící se jen velikostí písmen → chyba preflightu (NTFS/exFAT jsou case-insensitive).
 - **nepovolené názvy**: znaky `<>:"\|?*`, řídicí znaky, koncová tečka/mezera, rezervovaná jména (`CON`, `NUL`, `COM1`…)
   → chyba preflightu se seznamem souborů.
+- **FAT32 cíl**: soubor ≥ 4 GiB na cíl s FAT/FAT32 → chyba preflightu (jinak by kopie selhala až v půlce).
 
 Scanner — přeskočené („junk“) položky: Mac seznam (`.Spotlight-V100`, `.fseventsd`, `.Trashes`, `.TemporaryItems`,
 `.DocumentRevisions-V100`, `.DS_Store`, `._*`) + Windows `System Volume Information`, `$RECYCLE.BIN`, `desktop.ini`, `Thumbs.db`.
@@ -238,6 +243,24 @@ Pořadí: explicitní cesta z nastavení → `bin\` vedle exe → vývojové `wi
 
 `art-cmd` se spouští s pracovní složkou v tempu (píše `art.log`).
 
+### 6.5a Tři snímky na klip (Windows i Mac)
+
+Doplněno 2026-10-04 na žádost uživatele; mění i Mac verzi.
+
+- Každý klip v reportu má **tři snímky: první, prostřední a poslední frame** (místo jednoho náhledu ve 30 % délky).
+- Časy: první = 0, prostřední = `frames / 2` (nebo `duration / 2`), poslední = `frames − 1` (nebo `duration − 1/fps`);
+  u klipů bez známé délky jen první snímek.
+- Výška 180 px, LUT aplikovaný stejně jako dnes u náhledu; JPEG vložený v HTML i PDF.
+- `ClipEntry.thumbnail` → `thumbnails` (pole až tří JPEG); v JSON se dál neukládají.
+- HTML: v řádku klipu tři náhledy vedle sebe s popiskem TC (nebo čísla framu) pod každým; v tisku (PDF) menší.
+- Zdroj snímků:
+  - video (ffmpeg): `-ss` na daný čas, 1 frame; poslední frame přes `-sseof -1/fps` s `-update 1`, aby se trefil opravdu poslední,
+  - BRAW: `braw-decode --start N --count 1`,
+  - R3D / ARRIRAW: z hotové proxy; když se proxy nerenderují, dekodér vytáhne tři jednotlivé framy
+    (REDline `--start/--end`, art-cmd s rozsahem framů) do tempu.
+- Mac: stejná změna v `Sources/OffloadKit/Proxy.swift`, `Job.swift`, `Report.swift`, `HTMLReport.swift`.
+  **Na tomto PC ji nelze sestavit ani otestovat** — Mac část se dokončí a ověří na Macu.
+
 ### 6.6 braw-decode pro Windows
 
 - Port `Tools/braw-decode/braw-decode.cpp` do `windows/tools/braw-decode/`, MSVC (C++17), CMake.
@@ -312,6 +335,62 @@ Vzhled: WPF Fluent theme (`ThemeMode="System"`), světlý i tmavý režim podle 
 `%APPDATA%\Offload\settings.json`, schéma `AppSettings` z Macu (`destRoots`, `verify`, `analyzeClips`, `proxy`, `tools`).
 Neznámé nebo chybějící klíče → výchozí hodnoty (jako `ProxySettings.init(from:)`).
 
+## 8a. HW diagnostika: USB porty a propustnost
+
+Doplněno 2026-10-04 na žádost uživatele.
+
+### 8a.1 Co se dá a nedá změřit
+
+- Windows prozradí **topologii**: USB řadiče (xHCI, USB4/Thunderbolt), huby, porty, co je v kterém portu,
+  co port umí (USB 2.0 / USB 3.x / SuperSpeedPlus) a **dohodnutou rychlost linky** zapojeného zařízení
+  (480 Mb/s, 5, 10, 20, 40 Gb/s) — SetupAPI + `IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX(_V2)`,
+  `IOCTL_USB_GET_PORT_CONNECTOR_PROPERTIES`, `IOCTL_STORAGE_QUERY_PROPERTY` (vazba svazek → disk → USB zařízení).
+- **Propustnost prázdného portu změřit nejde** — měří se vždy zapojené zařízení (čtečka s kartou, disk).
+- **Kabel samostatně změřit nejde.** Pozná se nepřímo: zařízení umí USB 3, ale linka běží jako USB 2
+  → „pravděpodobně kabel nebo port“.
+- Rychlost linky je strop daný nejslabším z port + kabel + zařízení; skutečná rychlost je naměřená.
+
+### 8a.2 Test při startu
+
+- **Při každém spuštění** se aplikace zeptá „Prověřit USB porty?“ (Ano / Ne).
+- **Rychlá část** (sekundy, nic nezapisuje): topologie, rychlosti linek, varování.
+- **Měření** (volitelné, na potvrzení): pro každé zapojené úložiště krátký test — čtení ~1 GB (karta/čtečka)
+  nebo zápis + čtení ~1 GB do dočasného souboru (disky, smaže se). Na kartu se nikdy nezapisuje.
+- Výstup = **doporučení**:
+  - kam zapojit čtečku a kam cílové disky (nejrychlejší porty, pokud možno čtečka a disky na různých řadičích),
+  - které porty na offload nepoužívat (USB 2.0) a k čemu se hodí (klávesnice, myš…),
+  - zařízení běžící pod svými možnostmi („WD Elements umí 5 Gb/s, běží na 480 Mb/s — vyměň kabel nebo port“),
+  - sdílený řadič/hub („čtečka i oba disky jdou přes jeden hub — dělí se o 5 Gb/s“),
+  - odhad rychlosti offloadu s aktuálním zapojením (min. z naměřených rychlostí karty a disků).
+- Porty se v UI pojmenují podle řadiče a čísla portu („Intel USB 3.20 xHCI · port 3“); fyzické umístění Windows
+  nezná — uživatel může portu dát vlastní název („přední levý“), uloží se v nastavení.
+- Výsledek posledního testu se uloží (`%APPDATA%\Offload\hwtest.json`) a zobrazí v sekci *Hardware*.
+- CLI: `offload ports [--measure]` vypíše totéž textově.
+
+### 8a.3 Propustnost během kopírování
+
+Karta úlohy (GUI) a stavový řádek (CLI) ukazují pro **každý článek řetězu**:
+
+```
+Karta  E: SanDisk 256GB  ── čtečka (USB 3.2 Gen1, 5 Gb/s) ── řadič Intel xHCI   312 MB/s  ▓▓▓▓▓▓▓░ 50 % linky
+D1     D: WD Elements    ── USB 3.0 (5 Gb/s) ── řadič Intel xHCI                 185 MB/s  ▓▓▓░░░░░ 30 % linky
+D2     F: Samsung T7     ── USB 3.2 Gen2 (10 Gb/s) ── řadič ASMedia               311 MB/s
+Řadič  Intel xHCI: 497 MB/s ze sdílených 5 Gb/s
+Úzké hrdlo: karta / čtečka
+```
+
+- Naměřená rychlost: čtení karty, zápis a ověření každého disku (už v `ProgressSnapshot`).
+- Strop linky: dohodnutá rychlost z topologie (8a.1), využití v %.
+- Součet přes sdílený řadič/hub.
+- Úzké hrdlo = článek, který brzdí (nejnižší rychlost; při > 85 % linky „linka je plná“).
+- Interní (SATA/NVMe) disky: typ sběrnice místo USB linky, bez % linky.
+
+### 8a.4 Zařazení
+
+Nový plán **„HW diagnostika“** (mezi plány 2 a 4): modul `Offload.Core/Hardware/` (topologie, mapování
+svazek → USB, měření, doporučení), `offload ports`, rozšíření stavového řádku CLI. GUI části (dotaz při startu,
+sekce *Hardware*, řetěz na kartě úlohy) jsou v plánu 4.
+
 ## 9. CLI
 
 `offload.exe` se stejnými příkazy a volbami jako Mac `offload`:
@@ -355,3 +434,5 @@ GUI ručně otestované (detekce karty, fronta, vysunutí).
 | Cesty k REDline / art-cmd na Windows | RAW proxy se nenajdou | ověřit při implementaci, nastavitelné v GUI |
 | WebView2 Runtime chybí (Win10) | bez PDF | PDF se přeskočí, HTML report zůstává |
 | Ovladače zařízení blokují vysunutí | nelze vysunout z aplikace | jasná hláška; vysunout ručně |
+| Některé USB řadiče/huby (zejména Thunderbolt docky) nevrací rychlost linky | chybí strop a % linky | zobrazit jen naměřenou rychlost, „rychlost linky neznámá“ |
+| Mac část tří snímků nejde otestovat na Windows | chyba se projeví až na Macu | Mac změna jako samostatný commit, ověření na Macu před sloučením |
