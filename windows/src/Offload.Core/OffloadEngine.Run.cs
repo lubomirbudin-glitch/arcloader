@@ -119,6 +119,7 @@ public sealed partial class OffloadEngine
                     pool.Give(buf);
                     break;
                 }
+                if (n < Options.ChunkSize) buf.Span[n..].Clear();   // unbuffered writes round up to the sector size: zero the overhang
                 var chunk = new Chunk(buf, n, offset, ws.Length + 1, pool);
                 hasher.Update(chunk);
                 foreach (var w in ws) w.Write(chunk);

@@ -90,6 +90,63 @@ public class PreflightTests
     public void Fat32Problem_AllowsJustUnderFourGigabytes() =>
         Assert.Null(OffloadEngine.Fat32Problem("FAT32", [new("a", uint.MaxValue, DateTime.UtcNow)]));
 
+    [Theory]
+    [InlineData("_REPORT")]
+    [InlineData("_proxy")]
+    [InlineData("ascmhl")]
+    public void SourceThatIsAnEarlierOffload_IsRejected(string folder)
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        Directory.CreateDirectory(Path.Combine(card, folder));
+        AssertPreflight("Source looks like an earlier offload", e => e.Prepare(card, [dir.Sub("d1")], null, null));
+    }
+
+    [Fact]
+    public void DuplicateDestination_IsRejectedEvenWithAllowSameDevice()
+    {
+        using var dir = new TempDir();
+        var d1 = dir.Sub("d1");
+        AssertPreflight("Destination given twice", e => e.Prepare(Card(dir), [d1, d1.ToUpperInvariant() + @"\"], null, null));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-4096)]
+    [InlineData(1000)]
+    [InlineData(4096 + 1)]
+    [InlineData((1 << 30) + 4096)]
+    public void BadChunkSize_IsRejected(int chunk)
+    {
+        using var dir = new TempDir();
+        var e = Assert.Throws<OffloadError>(() =>
+            new OffloadEngine(new OffloadOptions { AllowSameDevice = true, AllowSourceVolume = true, ChunkSize = chunk })
+                .Prepare(Card(dir), [dir.Sub("d1")], null, null));
+        Assert.True(e.IsPreflight);
+        Assert.Contains("ChunkSize", e.Message);
+    }
+
+    [Fact]
+    public void BufferCountBelowTwo_IsRejected()
+    {
+        using var dir = new TempDir();
+        var e = Assert.Throws<OffloadError>(() =>
+            new OffloadEngine(new OffloadOptions { AllowSameDevice = true, AllowSourceVolume = true, BufferCount = 1 })
+                .Prepare(Card(dir), [dir.Sub("d1")], null, null));
+        Assert.True(e.IsPreflight);
+        Assert.Contains("BufferCount", e.Message);
+    }
+
+    [Theory]
+    [InlineData("2026-1-4")]
+    [InlineData("../evil")]
+    [InlineData("2026-10-04\n")]
+    public void BadDate_IsRejected(string date)
+    {
+        using var dir = new TempDir();
+        AssertPreflight("Date must be", e => e.Prepare(Card(dir), [dir.Sub("d1")], null, date));
+    }
+
     static void AssertPreflight(string message, Action<OffloadEngine> act)
     {
         var e = Assert.Throws<OffloadError>(() => act(new OffloadEngine(SameVolume())));

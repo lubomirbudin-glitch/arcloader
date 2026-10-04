@@ -68,6 +68,48 @@ public class ReportTests
         Assert.Equal(["CLIP/c 02.mov"], failed.FailedFiles.Select(f => f.Path));
     }
 
+    [Theory]
+    [InlineData("verified")]
+    [InlineData("written")]
+    public void CancelledVerify_WrittenOrVerifiedFilesAreNotFailures(string state)
+    {
+        var r = Reports.Sample(Card, verified: false);
+        var files = r.Files.Select(f => new ReportFile
+        {
+            Path = f.Path, Size = f.Size, Modified = f.Modified, Xxh64 = f.Xxh64, Destinations = [state], Errors = [null],
+        }).ToList();
+        var cancelled = new OffloadReport
+        {
+            CardName = r.CardName, Date = r.Date, Source = r.Source, SourceFilesystem = r.SourceFilesystem,
+            Verified = false, Destinations = r.Destinations, Files = files, Skipped = [],
+        };
+        Assert.True(cancelled.Success);
+        Assert.False(cancelled.SafeToEject);
+        Assert.Empty(cancelled.FailedFiles);
+    }
+
+    [Fact]
+    public void Build_NotVerified_CountsWrittenAndVerifiedAsOk()
+    {
+        var plan = new OffloadPlan
+        {
+            Source = @"C:\card", Date = "2026-10-04", CardName = "A001", DestRoots = [@"C:\d1"],
+            Scan = new SourceScan
+            {
+                Root = @"C:\card",
+                Files = [new SourceFile("a", 1, DateTime.UtcNow), new SourceFile("b", 2, DateTime.UtcNow)],
+                Dirs = [], Skipped = [],
+            },
+        };
+        var r = OffloadReport.Build(plan, [1UL, 2UL], [null, null],
+            [[new DestFileResult(FileState.Verified, null), new DestFileResult(FileState.Written, null)]],
+            [true], verified: false, DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow);
+        Assert.Equal(2, r.Destinations[0].FilesOK);
+        Assert.Equal(0, r.Destinations[0].FilesFailed);
+        Assert.True(r.Success);
+        Assert.False(r.SafeToEject);
+    }
+
     [Fact]
     public void HashList_IsHashTwoSpacesPath()
     {

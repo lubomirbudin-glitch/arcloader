@@ -58,8 +58,9 @@ public sealed partial class OffloadReport
     {
         get
         {
-            var ok = Verified ? "verified" : "written";
-            return Files.Where(f => f.SourceError != null || f.Destinations.Any(d => d != ok)).ToList();
+            // A cancelled verification leaves files "written" or already "verified": both are fine then.
+            bool IsOk(string d) => d == "verified" || (!Verified && d == "written");
+            return Files.Where(f => f.SourceError != null || f.Destinations.Any(d => !IsOk(d))).ToList();
         }
     }
 
@@ -71,7 +72,7 @@ public sealed partial class OffloadReport
         IReadOnlyList<DestFileResult[]> destResults, IReadOnlyList<bool> unbuffered, bool verified,
         DateTime started, DateTime copyFinished, DateTime finished)
     {
-        var okState = verified ? FileState.Verified : FileState.Written;
+        bool IsOk(FileState s) => s == FileState.Verified || (!verified && s == FileState.Written);
         var files = plan.Scan.Files.Select((f, i) => new ReportFile
         {
             Path = f.RelPath,
@@ -88,8 +89,8 @@ public sealed partial class OffloadReport
             Root = root,
             CardPath = cardPaths[d],
             Filesystem = NativeIO.FilesystemType(root),
-            FilesOK = destResults[d].Count(r => r.State == okState),
-            FilesFailed = destResults[d].Count(r => r.State != okState),
+            FilesOK = destResults[d].Count(r => IsOk(r.State)),
+            FilesFailed = destResults[d].Count(r => !IsOk(r.State)),
             Unbuffered = unbuffered[d] ? null : false,
         }).ToList();
         return new OffloadReport
@@ -160,6 +161,7 @@ public sealed partial class OffloadReport
     static readonly JsonSerializerOptions WriteOptions = new()
     {
         WriteIndented = true,
+        NewLine = "\n",
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 

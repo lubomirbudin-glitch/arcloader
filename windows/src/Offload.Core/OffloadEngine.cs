@@ -12,6 +12,8 @@ public sealed partial class OffloadEngine
     DestWriter[] writers = [];
     OffloadPlan? plan;
 
+    static readonly System.Text.RegularExpressions.Regex DateFormat = new(@"^\d{4}-\d{2}-\d{2}\z");
+
     public OffloadOptions Options { get; }
 
     public OffloadEngine(OffloadOptions? options = null) => Options = options ?? new OffloadOptions();
@@ -23,10 +25,23 @@ public sealed partial class OffloadEngine
     /// Scans the card and checks the destinations before a single byte is written.
     public OffloadPlan Prepare(string source, IReadOnlyList<string> destRoots, string? cardName, string? date)
     {
+        if (Options.ChunkSize <= 0 || Options.ChunkSize % 4096 != 0 || Options.ChunkSize > 1 << 30)
+            throw OffloadError.Preflight($"ChunkSize must be a positive multiple of 4096 and at most 1 GiB (got {Options.ChunkSize})");
+        if (Options.BufferCount < 2)
+            throw OffloadError.Preflight($"BufferCount must be at least 2 (got {Options.BufferCount})");
+        if (date != null && !DateFormat.IsMatch(date))
+            throw OffloadError.Preflight($"Date must be YYYY-MM-DD (got \"{date}\")");
         if (!Directory.Exists(source)) throw OffloadError.Preflight($"Source not found: {source}");
         source = Path.GetFullPath(source);
         var roots = destRoots.Select(Path.GetFullPath).ToList();
         if (roots.Count == 0) throw OffloadError.Preflight("No destination given");
+        for (int i = 0; i < roots.Count; i++)
+            for (int j = 0; j < i; j++)
+                if (string.Equals(roots[i].TrimEnd(Path.DirectorySeparatorChar), roots[j].TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+                    throw OffloadError.Preflight($"Destination given twice: {roots[i]}");
+        foreach (var marker in new[] { Layout.ReportDirName, "_PROXY", "ascmhl" })
+            if (Directory.EnumerateDirectories(source).Any(d => string.Equals(Path.GetFileName(d), marker, StringComparison.OrdinalIgnoreCase)))
+                throw OffloadError.Preflight("Source looks like an earlier offload (has _REPORT/_PROXY/ascmhl) — copy its parent card instead, or remove these folders");
         var sourceVolume = NativeIO.VolumeId(source) ?? throw OffloadError.Preflight($"Cannot stat source {source}");
 
         var volumes = new List<string>();

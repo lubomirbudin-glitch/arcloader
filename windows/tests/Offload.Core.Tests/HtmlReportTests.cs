@@ -82,6 +82,10 @@ public class HtmlReportTests
         Assert.Empty(Directory.GetFiles(rep, "*.tmp"));
         var json = File.ReadAllBytes(Path.Combine(rep, "offload_report.json"));
         Assert.NotEqual(0xEF, json[0]);   // no UTF-8 BOM
+        foreach (var name in new[] { "offload_report.json", "offload_report.txt", "A001_report.html", "A001.xxh64" })
+            Assert.DoesNotContain((byte)13, File.ReadAllBytes(Path.Combine(rep, name)));
+        foreach (var name in Directory.GetFiles(Path.Combine(card, "ascmhl"), "*.mhl"))
+            Assert.DoesNotContain((byte)13, File.ReadAllBytes(name));
     }
 
     [Fact]
