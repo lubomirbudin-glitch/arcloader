@@ -58,4 +58,21 @@ public class JobTests
         Assert.False(job.Engine.Options.Verify);
         Assert.True(job.Engine.Options.AllowSameDevice);
     }
+
+    [Fact]
+    public void Run_UnexpectedException_EndsFailedAndDoesNotThrow()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "a.mov"), 1000, 1);
+        var job = new OffloadJob(new JobConfig(card, [Path.Combine(dir.Path, "bad\0name")]), Options());
+
+        var report = job.Run();
+
+        Assert.Null(report);
+        var s = job.Status();
+        Assert.Equal(JobPhase.Failed, s.Phase);
+        Assert.NotNull(s.Error);
+        Assert.NotEmpty(s.Error!);
+    }
 }

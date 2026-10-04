@@ -140,7 +140,12 @@ public sealed class OffloadJob
             });
             return false;
         }
-        catch (Exception e) when (e is OffloadError or IOError or IOException or UnauthorizedAccessException)
+        catch (OperationCanceledException)
+        {
+            Update(s => s with { Phase = JobPhase.Cancelled });
+            return false;
+        }
+        catch (Exception e)
         {
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
             return false;
