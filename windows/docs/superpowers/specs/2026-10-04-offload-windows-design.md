@@ -306,7 +306,11 @@ Vzhled: WPF Fluent theme (`ThemeMode="System"`), světlý i tmavý režim podle 
 - „Vypadá jako karta“: 1:1 s Macem (markery `DCIM`, `PRIVATE`, `CLIP`, `CONTENTS`, `XDROOT`, `M4ROOT`, `AVF_INFO`,
   `CANONMSC`, `BRAW`, `MISC`; přípony `braw r3d rdm rdc mxf mov mp4 ari crm` do dvou úrovní).
 - Nově připojená karta se automaticky zaškrtne; svazek, na kterém je cíl, se jako karta nenabízí.
-- Ruční zdroj: tlačítko *Složka…* (`OpenFolderDialog`).
+- Ruční zdroj: tlačítko *Složka…* (`OpenFolderDialog`) — libovolná složka (kopie karty na disku, NAS…),
+  chová se jako karta (lze přejmenovat, zaškrtnout, víc najednou).
+- Cíle: sekce *Cíle*, tlačítko *Přidat…* (`OpenFolderDialog`, lze vytvořit novou složku) — libovolná složka
+  na libovolném disku, libovolný počet; u každého cíle volné místo a souborový systém, tlačítko odebrat;
+  seznam se pamatuje v nastavení. Neexistující cíl (odpojený disk) je označený a „Spustit offload“ je neaktivní.
 - Název karty: jmenovka svazku (`GetVolumeInformationW`), jinak název složky; lze přepsat.
 
 ### 8.3 Fronta a souběh
