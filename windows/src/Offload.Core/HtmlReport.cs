@@ -170,8 +170,8 @@ public static class HtmlReport
         h.Append("<tr><th></th><th>Klip</th><th>Formát</th><th>Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Délka</th><th>TC</th><th class=\"num\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n");
         foreach (var c in r.Clips)
         {
-            var img = c.Thumbnail != null
-                ? $"<img class=\"thumb\" src=\"data:image/jpeg;base64,{Convert.ToBase64String(c.Thumbnail)}\" alt=\"\">"
+            var img = c.Thumbnails.Count > 0
+                ? $"<img class=\"thumb\" src=\"data:image/jpeg;base64,{Convert.ToBase64String(c.Thumbnails[0].Jpeg)}\" alt=\"\">"
                 : "<div class=\"nothumb\"></div>";
             var i = c.Info;
             var codecParts = new List<string>();

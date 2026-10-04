@@ -86,6 +86,7 @@ internal sealed class ToolProcess : IDisposable
         }
         catch (InvalidOperationException) { }
         catch (Win32Exception) { }
+        catch (AggregateException) { }
     }
 
     public void Dispose()

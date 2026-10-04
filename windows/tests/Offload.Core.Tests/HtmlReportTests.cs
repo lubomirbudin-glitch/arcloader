@@ -52,7 +52,7 @@ public class HtmlReportTests
             Clip = new Clip { Name = "A001C001", Path = "CLIP/A&B.mov", Format = ClipFormat.Video, Segments = ["CLIP/A&B.mov"], Bytes = 1000 },
             Info = new ClipInfo { Codec = "prores", Width = 3840, Height = 2160, FrameRate = "25/1", Duration = 12, AudioChannels = 2, Timecode = "01:00:00:00" },
             ProxyStatus = ProxyStatus.Done,
-            Thumbnail = [1, 2, 3],
+            Thumbnails = [new([1, 2, 3], "01:00:00:00")],
         });
         r.Proxy = new ProxySettings { Enabled = true, FrameAspect = 1.66 };
         var html = HtmlReport.Render(r);

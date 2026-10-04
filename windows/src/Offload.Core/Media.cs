@@ -106,8 +106,8 @@ public sealed class ClipEntry
     [JsonPropertyName("proxyPath")] public string? ProxyPath { get; set; }
     [JsonPropertyName("proxyNote")] public string? ProxyNote { get; set; }
     [JsonPropertyName("proxySeconds")] public double? ProxySeconds { get; set; }
-    /// JPEG; embedded in the HTML report only.
-    [JsonIgnore] public byte[]? Thumbnail { get; set; }
+    /// First, middle and last frame (JPEG + caption); embedded in the HTML/PDF report only.
+    [JsonIgnore] public List<Thumbnail> Thumbnails { get; set; } = [];
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<ProxyCodec>))]
@@ -196,3 +196,6 @@ public sealed class ProxySettings
           + (FrameScale < 1 ? " · " + (FrameScale * 100).ToString("0", CultureInfo.InvariantCulture) + " %" : "")
         : null;
 }
+
+/// One report thumbnail: a small JPEG and its caption (timecode, or frame number when the clip has no TC).
+public sealed record Thumbnail(byte[] Jpeg, string Label);
