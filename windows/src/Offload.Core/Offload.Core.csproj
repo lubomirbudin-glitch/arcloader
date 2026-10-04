@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="System.IO.Hashing" Version="10.0.12" />
+    <InternalsVisibleTo Include="Offload.Core.Tests" />
+  </ItemGroup>
+</Project>

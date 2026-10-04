@@ -1,0 +1,7 @@
+bin/
+obj/
+build/
+tools/bin/
+TestResults/
+.vs/
+*.user
