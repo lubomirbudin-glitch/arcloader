@@ -1,0 +1,441 @@
+import Darwin
+import Foundation
+
+public struct OffloadOptions {
+    /// Read/write block size. Large sequential blocks are what cards and disks like best.
+    public var chunkSize = 16 << 20
+    /// Blocks in flight. Lets a slower destination lag behind without stalling the card read.
+    public var bufferCount = 16
+    public var readRetries = 3
+    public var verify = true
+    /// Files at least this large get F_FULLFSYNC individually; the rest are flushed once at the end.
+    public var fullSyncThreshold: Int64 = 256 << 20
+    public var allowSameDevice = false
+
+    public init() {}
+}
+
+public enum FileState: String, Codable {
+    case pending, written, verified, failed
+}
+
+public struct DestFileResult {
+    public var state: FileState = .pending
+    public var error: String?
+}
+
+public struct OffloadPlan {
+    public let source: String
+    public let scan: SourceScan
+    public let date: String
+    public let cardName: String
+    public let destRoots: [String]
+    public var cardPaths: [String] { destRoots.map { "\($0)/\(date)/\(cardName)" } }
+}
+
+public struct ProgressSnapshot {
+    public enum Phase: String { case copy, flush, verify, report, done }
+    public var phase: Phase
+    public var totalBytes: Int64
+    public var totalFiles: Int
+    public var fileIndex: Int
+    public var currentFile: String
+    public var readBytes: Int64
+    public var writtenBytes: [Int64]
+    public var verifiedBytes: [Int64]
+    public var errors: Int
+}
+
+/// Byte counter shared between the I/O threads and the progress display.
+final class Counter {
+    private var value: Int64 = 0
+    private let lock = NSLock()
+    func add(_ n: Int) { lock.lock(); value += Int64(n); lock.unlock() }
+    func get() -> Int64 { lock.lock(); defer { lock.unlock() }; return value }
+}
+
+/// Fixed set of page-aligned buffers; `take` blocks when all are in flight (backpressure).
+final class BufferPool {
+    let size: Int
+    private var free: [UnsafeMutableRawPointer]
+    private let all: [UnsafeMutableRawPointer]
+    private let lock = NSLock()
+    private let available: DispatchSemaphore
+
+    init(count: Int, size: Int) {
+        self.size = size
+        all = (0..<count).map { _ in IO.allocateAligned(size) }
+        free = all
+        available = DispatchSemaphore(value: count)
+    }
+
+    deinit { all.forEach { Darwin.free($0) } }
+
+    func take() -> UnsafeMutableRawPointer {
+        available.wait()
+        lock.lock(); defer { lock.unlock() }
+        return free.removeLast()
+    }
+
+    func give(_ b: UnsafeMutableRawPointer) {
+        lock.lock()
+        free.append(b)
+        lock.unlock()
+        available.signal()
+    }
+}
+
+/// One block read from the card, shared by the hasher and every writer; returns to the pool when all are done.
+final class Chunk {
+    let buf: UnsafeMutableRawPointer
+    let length: Int
+    let offset: Int64
+    private var pending: Int
+    private let lock = NSLock()
+    private let pool: BufferPool
+
+    init(buf: UnsafeMutableRawPointer, length: Int, offset: Int64, consumers: Int, pool: BufferPool) {
+        self.buf = buf
+        self.length = length
+        self.offset = offset
+        self.pending = consumers
+        self.pool = pool
+    }
+
+    func release() {
+        lock.lock()
+        pending -= 1
+        let last = pending == 0
+        lock.unlock()
+        if last { pool.give(buf) }
+    }
+}
+
+/// Hashes the source stream. Runs on its own serial queue so hashing never blocks the card read.
+final class SourceHasher {
+    private let queue = DispatchQueue(label: "offload.hash")
+    private var stream: XXH64Stream?
+    private(set) var hashes: [UInt64?]
+
+    init(fileCount: Int) { hashes = Array(repeating: nil, count: fileCount) }
+
+    func begin() { queue.async { self.stream = XXH64Stream() } }
+
+    func update(_ c: Chunk) {
+        queue.async {
+            self.stream?.update(c.buf, c.length)
+            c.release()
+        }
+    }
+
+    func finish(_ i: Int) { queue.async { self.hashes[i] = self.stream?.digest(); self.stream = nil } }
+    func abort() { queue.async { self.stream = nil } }
+    func wait() { queue.sync {} }
+}
+
+/// Writes the stream to one destination. Each destination has its own serial queue, so disks run in parallel.
+final class DestWriter {
+    let cardPath: String
+    let options: OffloadOptions
+    let written = Counter()
+    let verified = Counter()
+    private let queue: DispatchQueue
+    private var fd: Int32 = -1
+    private var partPath = ""
+    private var currentError: String?
+    private(set) var results: [DestFileResult]
+
+    init(index: Int, cardPath: String, fileCount: Int, options: OffloadOptions) {
+        self.cardPath = cardPath
+        self.options = options
+        queue = DispatchQueue(label: "offload.dest\(index)")
+        results = Array(repeating: DestFileResult(), count: fileCount)
+    }
+
+    static func partName(_ rel: String) -> String {
+        let dir = (rel as NSString).deletingLastPathComponent
+        let name = "." + (rel as NSString).lastPathComponent + ".offload-part"
+        return dir.isEmpty ? name : dir + "/" + name
+    }
+
+    func begin(_ file: SourceFile) {
+        queue.async {
+            self.currentError = nil
+            self.partPath = self.cardPath + "/" + DestWriter.partName(file.relPath)
+            do {
+                self.fd = try IO.openWrite(self.partPath)
+                IO.preallocate(self.fd, file.size)
+            } catch {
+                self.fd = -1
+                self.currentError = "\(error)"
+            }
+        }
+    }
+
+    func write(_ c: Chunk) {
+        queue.async {
+            defer { c.release() }
+            guard self.fd >= 0 else { return }
+            do {
+                try IO.pwrite(self.fd, c.buf, c.length, c.offset, path: self.partPath)
+                self.written.add(c.length)
+            } catch {
+                self.currentError = "\(error)"
+                self.closeAndRemovePart()
+            }
+        }
+    }
+
+    func finish(_ i: Int, _ file: SourceFile) {
+        queue.async {
+            guard self.fd >= 0, self.currentError == nil else {
+                self.results[i] = DestFileResult(state: .failed, error: self.currentError ?? "write failed")
+                return
+            }
+            let finalPath = self.cardPath + "/" + file.relPath
+            do {
+                if file.size >= self.options.fullSyncThreshold {
+                    try IO.fullSync(self.fd, path: self.partPath)
+                } else if fsync(self.fd) != 0 {
+                    throw IOError("fsync", self.partPath)
+                }
+                IO.setModificationTime(self.fd, file.mtime)
+                guard close(self.fd) == 0 else { throw IOError("close", self.partPath) }
+                self.fd = -1
+                guard rename(self.partPath, finalPath) == 0 else { throw IOError("rename", finalPath) }
+                self.results[i].state = .written
+            } catch {
+                self.closeAndRemovePart()
+                self.results[i] = DestFileResult(state: .failed, error: "\(error)")
+            }
+        }
+    }
+
+    func abort(_ i: Int, reason: String) {
+        queue.async {
+            self.closeAndRemovePart()
+            self.results[i] = DestFileResult(state: .failed, error: reason)
+        }
+    }
+
+    /// One F_FULLFSYNC flushes the whole drive cache, covering all the small files at once.
+    func flushDevice() {
+        queue.sync {
+            let path = self.cardPath + "/.offload-flush"
+            guard let fd = try? IO.openWrite(path) else { return }
+            _ = "x".withCString { Darwin.write(fd, $0, 1) }
+            try? IO.fullSync(fd, path: path)
+            close(fd)
+            unlink(path)
+        }
+    }
+
+    func wait() { queue.sync {} }
+
+    /// Re-reads every written file from the disk and compares it with the source hash.
+    func verify(files: [SourceFile], sourceHashes: [UInt64?], isCancelled: () -> Bool) {
+        let buf = IO.allocateAligned(options.chunkSize)
+        defer { free(buf) }
+        for (i, f) in files.enumerated() where results[i].state == .written {
+            if isCancelled() { return }
+            let path = cardPath + "/" + f.relPath
+            do {
+                let r = try hashFile(path, chunkSize: options.chunkSize, buffer: buf) { self.verified.add($0) }
+                if r.size != f.size {
+                    results[i] = DestFileResult(state: .failed, error: "size mismatch: \(r.size) != \(f.size)")
+                } else if r.hash != sourceHashes[i] {
+                    results[i] = DestFileResult(state: .failed, error: "HASH MISMATCH: dest \(hex64(r.hash)) != source \(sourceHashes[i].map(hex64) ?? "-")")
+                } else {
+                    results[i].state = .verified
+                }
+            } catch {
+                results[i] = DestFileResult(state: .failed, error: "verify: \(error)")
+            }
+        }
+    }
+
+    private func closeAndRemovePart() {
+        if fd >= 0 { close(fd); fd = -1 }
+        if !partPath.isEmpty { unlink(partPath) }
+    }
+}
+
+public enum OffloadError: Error, CustomStringConvertible {
+    case preflight(String)
+    case failed(String)
+
+    public var description: String {
+        switch self {
+        case .preflight(let m), .failed(let m): return m
+        }
+    }
+}
+
+public final class OffloadEngine {
+    public let options: OffloadOptions
+    private let lock = NSLock()
+    private var phase: ProgressSnapshot.Phase = .copy
+    private var fileIndex = 0
+    private var currentFile = ""
+    private var errorCount = 0
+    private var cancelled = false
+    private let readCounter = Counter()
+    private var writers: [DestWriter] = []
+    private var plan: OffloadPlan?
+
+    public init(options: OffloadOptions = OffloadOptions()) { self.options = options }
+
+    /// Scans the card and checks the destinations before a single byte is written.
+    public func prepare(source: String, destRoots: [String], cardName: String?, date: String?) throws -> OffloadPlan {
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: source, isDirectory: &isDir), isDir.boolValue else {
+            throw OffloadError.preflight("Source not found: \(source)")
+        }
+        guard !destRoots.isEmpty else { throw OffloadError.preflight("No destination given") }
+        guard let srcDev = IO.device(of: source) else { throw OffloadError.preflight("Cannot stat source \(source)") }
+
+        var devices: [dev_t] = []
+        for root in destRoots {
+            guard fm.fileExists(atPath: root, isDirectory: &isDir), isDir.boolValue else {
+                throw OffloadError.preflight("Destination not found: \(root)")
+            }
+            guard fm.isWritableFile(atPath: root) else { throw OffloadError.preflight("Destination not writable: \(root)") }
+            let dev = IO.device(of: root)!
+            if dev == srcDev { throw OffloadError.preflight("Destination \(root) is on the same volume as the source") }
+            if devices.contains(dev) && !options.allowSameDevice {
+                throw OffloadError.preflight("Destinations share a volume (\(root)) — that is not a second copy. Use --allow-same-device to override.")
+            }
+            devices.append(dev)
+        }
+
+        let scan = try Scanner.scan(source)
+        guard !scan.files.isEmpty else { throw OffloadError.preflight("Source contains no files") }
+        let needed = scan.totalBytes + Int64(scan.files.count) * 64 * 1024 + 64 << 20
+        for root in destRoots {
+            let free = IO.availableBytes(root) ?? 0
+            if free < needed {
+                throw OffloadError.preflight("Not enough space on \(root): need \(formatBytes(needed)), free \(formatBytes(free))")
+            }
+        }
+
+        let day = date ?? Layout.today()
+        let name = Layout.uniqueCardFolder(roots: destRoots, date: day, name: cardName.map(Layout.sanitize) ?? Layout.defaultCardName(for: source))
+        return OffloadPlan(source: source, scan: scan, date: day, cardName: name, destRoots: destRoots)
+    }
+
+    public func cancel() {
+        lock.lock(); cancelled = true; lock.unlock()
+    }
+
+    private var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
+
+    public func snapshot() -> ProgressSnapshot {
+        lock.lock(); defer { lock.unlock() }
+        return ProgressSnapshot(
+            phase: phase,
+            totalBytes: plan?.scan.totalBytes ?? 0,
+            totalFiles: plan?.scan.files.count ?? 0,
+            fileIndex: fileIndex,
+            currentFile: currentFile,
+            readBytes: readCounter.get(),
+            writtenBytes: writers.map { $0.written.get() },
+            verifiedBytes: writers.map { $0.verified.get() },
+            errors: errorCount)
+    }
+
+    private func setPhase(_ p: ProgressSnapshot.Phase) { lock.lock(); phase = p; lock.unlock() }
+
+    public func run(_ plan: OffloadPlan) throws -> OffloadReport {
+        let files = plan.scan.files
+        let started = Date()
+        for path in plan.cardPaths {
+            try IO.mkdirs(path)
+            for d in plan.scan.dirs { try IO.mkdirs(path + "/" + d) }
+        }
+        let ws = plan.cardPaths.enumerated().map {
+            DestWriter(index: $0.offset, cardPath: $0.element, fileCount: files.count, options: options)
+        }
+        lock.lock(); self.plan = plan; writers = ws; lock.unlock()
+
+        let pool = BufferPool(count: options.bufferCount, size: options.chunkSize)
+        let hasher = SourceHasher(fileCount: files.count)
+        var sourceErrors: [String?] = Array(repeating: nil, count: files.count)
+
+        // Copy: the card is read exactly once; every block fans out to the hasher and all destinations.
+        for (i, f) in files.enumerated() {
+            if isCancelled { sourceErrors[i] = "cancelled"; continue }
+            lock.lock(); fileIndex = i; currentFile = f.relPath; lock.unlock()
+            let src = plan.source + "/" + f.relPath
+            ws.forEach { $0.begin(f) }
+            hasher.begin()
+            var failure: String?
+            var offset: Int64 = 0
+            var fd: Int32 = -1
+            do { fd = try IO.openRead(src) } catch { failure = "\(error)" }
+            while failure == nil && !isCancelled {
+                let buf = pool.take()
+                var n = 0
+                var attempt = 0
+                while true {
+                    do {
+                        n = try IO.pread(fd, buf, options.chunkSize, offset, path: src)
+                        break
+                    } catch {
+                        attempt += 1
+                        if attempt > options.readRetries { failure = "\(error) (after \(options.readRetries) retries)"; break }
+                        usleep(250_000)
+                    }
+                }
+                if failure != nil || n == 0 { pool.give(buf); break }
+                let chunk = Chunk(buf: buf, length: n, offset: offset, consumers: ws.count + 1, pool: pool)
+                hasher.update(chunk)
+                ws.forEach { $0.write(chunk) }
+                offset += Int64(n)
+                readCounter.add(n)
+                if n < options.chunkSize { break }
+            }
+            if fd >= 0 { close(fd) }
+            if failure == nil && isCancelled { failure = "cancelled" }
+            if failure == nil && offset != f.size { failure = "source size changed during copy (\(offset) != \(f.size))" }
+            if let failure {
+                sourceErrors[i] = failure
+                hasher.abort()
+                ws.forEach { $0.abort(i, reason: "source: \(failure)") }
+                lock.lock(); errorCount += 1; lock.unlock()
+            } else {
+                hasher.finish(i)
+                ws.forEach { $0.finish(i, f) }
+            }
+        }
+        hasher.wait()
+        ws.forEach { $0.wait() }
+
+        setPhase(.flush)
+        DispatchQueue.concurrentPerform(iterations: ws.count) { ws[$0].flushDevice() }
+        let copyFinished = Date()
+
+        if options.verify && !isCancelled {
+            setPhase(.verify)
+            let hashes = hasher.hashes
+            DispatchQueue.concurrentPerform(iterations: ws.count) { d in
+                ws[d].verify(files: files, sourceHashes: hashes, isCancelled: { self.isCancelled })
+            }
+        }
+        let finished = Date()
+
+        setPhase(.report)
+        let report = OffloadReport.build(plan: plan, hashes: hasher.hashes, sourceErrors: sourceErrors,
+                                         destResults: ws.map(\.results), verified: options.verify && !isCancelled,
+                                         started: started, copyFinished: copyFinished, finished: finished)
+        var reportErrors: [String] = []
+        for path in plan.cardPaths {
+            do { try report.write(cardPath: path, includeHashRecords: true) } catch { reportErrors.append("\(error)") }
+        }
+        setPhase(.done)
+        if !reportErrors.isEmpty {
+            throw OffloadError.failed("Report could not be written: " + reportErrors.joined(separator: "; "))
+        }
+        return report
+    }
+}

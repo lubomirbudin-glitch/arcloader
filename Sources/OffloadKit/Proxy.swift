@@ -1,0 +1,332 @@
+import Darwin
+import Foundation
+
+public enum ProxyCodec: String, Codable, CaseIterable, Identifiable {
+    case h264, hevc, proresProxy, proresLT, prores422, prores422HQ
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .h264: return "H.264"
+        case .hevc: return "H.265 / HEVC"
+        case .proresProxy: return "ProRes 422 Proxy"
+        case .proresLT: return "ProRes 422 LT"
+        case .prores422: return "ProRes 422"
+        case .prores422HQ: return "ProRes 422 HQ"
+        }
+    }
+
+    var pixelFormat: String {
+        switch self {
+        case .h264, .hevc: return "yuv420p"
+        case .proresProxy, .proresLT, .prores422, .prores422HQ: return "yuv422p10le"
+        }
+    }
+
+    func encoderArgs(bitrateMbps: Int) -> [String] {
+        switch self {
+        case .h264:
+            return ["-c:v", "h264_videotoolbox", "-allow_sw", "1", "-profile:v", "high",
+                    "-b:v", "\(bitrateMbps)M", "-maxrate", "\(bitrateMbps * 3 / 2)M"]
+        case .hevc:
+            return ["-c:v", "hevc_videotoolbox", "-allow_sw", "1", "-tag:v", "hvc1",
+                    "-b:v", "\(bitrateMbps)M", "-maxrate", "\(bitrateMbps * 3 / 2)M"]
+        case .proresProxy:
+            return ["-c:v", "prores_ks", "-profile:v", "0", "-vendor", "apl0"]
+        case .proresLT:
+            return ["-c:v", "prores_ks", "-profile:v", "1", "-vendor", "apl0"]
+        case .prores422:
+            return ["-c:v", "prores_ks", "-profile:v", "2", "-vendor", "apl0"]
+        case .prores422HQ:
+            return ["-c:v", "prores_ks", "-profile:v", "3", "-vendor", "apl0"]
+        }
+    }
+
+    var audioArgs: [String] {
+        switch self {
+        case .h264, .hevc: return ["-c:a", "aac", "-b:a", "192k"]
+        case .proresProxy, .proresLT, .prores422, .prores422HQ: return ["-c:a", "pcm_s16le"]
+        }
+    }
+}
+
+public struct ProxySettings: Codable, Equatable {
+    public var enabled = false
+    public var height = 1080
+    public var codec: ProxyCodec = .h264
+    public var bitrateMbps = 10
+    /// .cube 3D LUT applied after downscaling (cheap at proxy resolution).
+    public var lutPath: String?
+    public var burnFilename = true
+    public var burnTimecode = true
+    public var audio = true
+    /// Skip the low-res files cameras record themselves (Sony SUB, PROXY folders).
+    public var skipCameraProxies = true
+    /// Proxies are rendered once, onto the first destination, then copied to the others.
+    public var copyToAllDestinations = true
+    /// Crop to the frame lines: aspect ratio of the frame (e.g. 1.66) and how much of the image
+    /// it covers (0.9 = 90 %, i.e. 10 % overscan around it). nil = full image.
+    public var frameAspect: Double?
+    public var frameScale: Double = 1.0
+
+    public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = ProxySettings()
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
+        height = try c.decodeIfPresent(Int.self, forKey: .height) ?? d.height
+        codec = (try? c.decodeIfPresent(ProxyCodec.self, forKey: .codec)) ?? d.codec
+        bitrateMbps = try c.decodeIfPresent(Int.self, forKey: .bitrateMbps) ?? d.bitrateMbps
+        lutPath = try c.decodeIfPresent(String.self, forKey: .lutPath)
+        burnFilename = try c.decodeIfPresent(Bool.self, forKey: .burnFilename) ?? d.burnFilename
+        burnTimecode = try c.decodeIfPresent(Bool.self, forKey: .burnTimecode) ?? d.burnTimecode
+        audio = try c.decodeIfPresent(Bool.self, forKey: .audio) ?? d.audio
+        skipCameraProxies = try c.decodeIfPresent(Bool.self, forKey: .skipCameraProxies) ?? d.skipCameraProxies
+        copyToAllDestinations = try c.decodeIfPresent(Bool.self, forKey: .copyToAllDestinations) ?? d.copyToAllDestinations
+        frameAspect = try c.decodeIfPresent(Double.self, forKey: .frameAspect)
+        frameScale = try c.decodeIfPresent(Double.self, forKey: .frameScale) ?? d.frameScale
+    }
+
+    /// Centered crop rectangle (x, y, w, h) inside a w×h image, even-sized, or nil when no crop is set.
+    public func frameCrop(width W: Int, height H: Int) -> (x: Int, y: Int, w: Int, h: Int)? {
+        guard let aspect = frameAspect, aspect > 0, W > 0, H > 0 else { return nil }
+        let scale = min(max(frameScale, 0.1), 1.0)
+        var w = Double(W) * scale
+        var h = w / aspect
+        if h > Double(H) * scale {
+            h = Double(H) * scale
+            w = h * aspect
+        }
+        let cw = Int(w) & ~1, ch = Int(h) & ~1
+        return ((W - cw) / 2 & ~1, (H - ch) / 2 & ~1, cw, ch)
+    }
+
+    public var frameLabel: String? {
+        guard let a = frameAspect else { return nil }
+        return String(format: "%.2f", a) + (frameScale < 1 ? String(format: " · %.0f %%", frameScale * 100) : "")
+    }
+}
+
+/// How frames reach ffmpeg: straight from a file, or piped from a vendor RAW decoder.
+struct FrameSource {
+    var inputArgs: [String]
+    var feeder: Process?
+    var audioFromInput = true
+    /// The decoder already cropped to the frame lines (ARRI does it before debayering).
+    var alreadyCropped = false
+    /// Intermediate files to delete once ffmpeg is done.
+    var cleanup: [String] = []
+
+    func removeIntermediates() {
+        for p in cleanup { try? FileManager.default.removeItem(atPath: p) }
+    }
+}
+
+/// Per-format decoding for formats ffmpeg cannot read itself.
+protocol RawBackend {
+    var format: ClipFormat { get }
+    var missingHint: String { get }
+    func isAvailable(_ tools: ExternalTools) -> Bool
+    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo
+    /// `singleFrameAt` (seconds) asks for just one frame — used for report thumbnails.
+    func source(_ path: String, info: ClipInfo, settings: ProxySettings, tools: ExternalTools,
+                tempDir: String, singleFrameAt: Double?) throws -> FrameSource
+}
+
+public final class ProxyRenderer {
+    public let settings: ProxySettings
+    public let tools: ExternalTools
+    let backends: [ClipFormat: RawBackend]
+    let tempDir: String
+
+    public init(settings: ProxySettings, tools: ExternalTools) {
+        self.settings = settings
+        self.tools = tools
+        backends = Dictionary(uniqueKeysWithValues: RawBackends.all.map { ($0.format, $0) })
+        tempDir = NSTemporaryDirectory() + "offload-" + UUID().uuidString.prefix(8)
+        try? IO.mkdirs(tempDir)
+        // Filter graphs are picky about quoting; a copy at a plain path avoids every escaping problem.
+        if let lut = settings.lutPath, !lut.isEmpty {
+            try? FileManager.default.removeItem(atPath: lutCopy)
+            try? FileManager.default.copyItem(atPath: lut, toPath: lutCopy)
+        }
+    }
+
+    deinit { try? FileManager.default.removeItem(atPath: tempDir) }
+
+    var lutCopy: String { tempDir + "/look.cube" }
+    var hasLUT: Bool { FileManager.default.fileExists(atPath: lutCopy) }
+
+    /// nil when the clip can be rendered, otherwise the reason it cannot.
+    public func unsupportedReason(_ clip: Clip) -> String? {
+        guard tools.ffmpeg != nil else { return "ffmpeg not found" }
+        switch clip.format {
+        case .video: return nil
+        case .unknown: return "unknown format"
+        default:
+            guard let b = backends[clip.format] else { return "\(clip.format.label): no decoder available" }
+            return b.isAvailable(tools) ? nil : b.missingHint
+        }
+    }
+
+    /// MXF is a container for many codecs; ARRIRAW/ARRICORE inside it only the ARRI tool can read.
+    /// Returns the clip reclassified as ARRIRAW when ffmpeg cannot decode it but art-cmd can.
+    public func reclassifyUndecodableMXF(_ clip: Clip, cardPath: String) -> (Clip, ClipInfo)? {
+        guard clip.format == .video, (clip.path as NSString).pathExtension.lowercased() == "mxf",
+              let arri = backends[.arriraw], arri.isAvailable(tools),
+              let info = try? arri.probe(cardPath + "/" + clip.path, tools: tools), info.width != nil else { return nil }
+        var c = clip
+        c.format = .arriraw
+        return (c, info)
+    }
+
+    public func probe(_ clip: Clip, cardPath: String) throws -> ClipInfo {
+        let path = cardPath + "/" + clip.path
+        if clip.format == .video {
+            guard let ffprobe = tools.ffprobe else { throw ToolError(tool: "ffprobe", status: -1, message: "ffprobe not found") }
+            return try FFProbe.probe(ffprobe, path)
+        }
+        guard let b = backends[clip.format], b.isAvailable(tools) else {
+            throw ToolError(tool: clip.format.label, status: -1, message: unsupportedReason(clip) ?? "")
+        }
+        return try b.probe(path, tools: tools)
+    }
+
+    private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, singleFrameAt: Double?) throws -> FrameSource {
+        let path = cardPath + "/" + clip.path
+        if clip.format == .video {
+            var args = ["-hwaccel", "videotoolbox"]
+            if let t = singleFrameAt { args += ["-ss", String(format: "%.3f", t)] }
+            return FrameSource(inputArgs: args + ["-i", path])
+        }
+        guard let b = backends[clip.format] else { throw ToolError(tool: clip.format.label, status: -1, message: "no decoder") }
+        return try b.source(path, info: info, settings: settings, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt)
+    }
+
+    /// Small JPEG for the report, with the LUT applied so log footage is readable.
+    public func thumbnail(_ clip: Clip, cardPath: String, info: ClipInfo, applyLUT: Bool = true) throws -> Data {
+        guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
+        let at = (info.duration ?? 0) * 0.3
+        let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: at)
+        defer { src.removeIntermediates() }
+        let out = tempDir + "/thumb-\(UUID().uuidString).jpg"
+        defer { unlink(out) }
+        var vf = ["scale=-2:180:flags=bicubic"]
+        if hasLUT && applyLUT { vf += ["format=rgb48le", "lut3d=file=\(lutCopy):interp=tetrahedral"] }
+        vf.append("format=yuvj420p")
+        let args = ["-hide_banner", "-loglevel", "error", "-y"] + src.inputArgs +
+            ["-frames:v", "1", "-vf", vf.joined(separator: ","), "-q:v", "5", out]
+        try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: nil, progress: nil, isCancelled: { false })
+        return try Data(contentsOf: URL(fileURLWithPath: out))
+    }
+
+    public func render(_ clip: Clip, cardPath: String, info: ClipInfo, output: String,
+                       progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
+        guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
+        let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: nil)
+        defer { src.removeIntermediates() }
+        let outHeight = min(settings.height, info.height ?? settings.height) & ~1
+
+        var vf: [String] = []
+        if let aspect = settings.frameAspect, !src.alreadyCropped {
+            // Crop to the frame lines first, sized from whatever resolution the decoder delivers.
+            let s = min(max(settings.frameScale, 0.1), 1.0)
+            vf.append("crop=w='trunc(min(iw*\(s),ih*\(s)*\(aspect))/2)*2':h='trunc(min(iw*\(s),ih*\(s)*\(aspect))/\(aspect)/2)*2'")
+        }
+        vf += ["scale=-2:\(outHeight):flags=bicubic", "setsar=1"]
+        if hasLUT { vf += ["format=rgb48le", "lut3d=file=\(lutCopy):interp=tetrahedral"] }
+        vf += burnIn(clip: clip, info: info, height: outHeight)
+        vf.append("format=\(settings.codec.pixelFormat)")
+
+        var args = ["-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
+        args += ["-map", "0:v:0"]
+        if settings.audio && info.audioChannels > 0 && src.audioFromInput {
+            args += ["-map", "0:a:0?"] + settings.codec.audioArgs
+        }
+        args += ["-vf", vf.joined(separator: ",")] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps)
+        if let tc = info.timecode, isValidTimecode(tc) { args += ["-timecode", tc] }
+
+        let dir = (output as NSString).deletingLastPathComponent
+        try IO.mkdirs(dir)
+        let part = dir + "/." + (output as NSString).lastPathComponent + ".part"
+        args += ["-f", "mov", part]
+        do {
+            try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: info.duration, progress: progress, isCancelled: isCancelled)
+            guard rename(part, output) == 0 else { throw IOError("rename", output) }
+        } catch {
+            unlink(part)
+            throw error
+        }
+    }
+
+    /// Bottom bar: clip name left, source timecode right.
+    func burnIn(clip: Clip, info: ClipInfo, height: Int) -> [String] {
+        guard settings.burnFilename || settings.burnTimecode else { return [] }
+        let font = ["/System/Library/Fonts/Menlo.ttc", "/System/Library/Fonts/Monaco.ttf"].first { FileManager.default.fileExists(atPath: $0) }
+        guard let font else { return [] }
+        let size = max(12, height * 3 / 100)
+        let margin = max(8, height * 2 / 100)
+        var f = ["drawbox=x=0:y=ih-\(size * 2):w=iw:h=\(size * 2):color=black@0.55:t=fill"]
+        let common = "fontfile=\(font):fontcolor=white:fontsize=\(size):y=h-\(size * 3 / 2)"
+        if settings.burnFilename {
+            let label = tempDir + "/label-\(UUID().uuidString.prefix(8)).txt"
+            try? Data(clip.name.utf8).write(to: URL(fileURLWithPath: label))
+            f.append("drawtext=\(common):textfile=\(label):x=\(margin)")
+        }
+        if settings.burnTimecode, let rate = info.frameRate {
+            let tc = info.timecode.flatMap { isValidTimecode($0) ? $0 : nil } ?? "00:00:00:00"
+            let escaped = tc.replacingOccurrences(of: ":", with: "\\:").replacingOccurrences(of: ";", with: "\\;")
+            f.append("drawtext=\(common):timecode='\(escaped)':rate=\(rate):x=w-tw-\(margin)")
+        }
+        return f
+    }
+
+    func isValidTimecode(_ tc: String) -> Bool {
+        tc.range(of: #"^\d{2}:\d{2}:\d{2}[:;.]\d{2}$"#, options: .regularExpression) != nil
+    }
+
+    func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, duration: Double?,
+                   progress: ((Double) -> Void)?, isCancelled: () -> Bool) throws {
+        let p = ToolProcess(ffmpeg, args)
+        p.captureStderr()
+        if let feeder {
+            let pipe = Pipe()
+            feeder.standardOutput = pipe
+            feeder.standardError = FileHandle.nullDevice
+            p.process.standardInput = pipe
+        } else {
+            p.process.standardInput = FileHandle.nullDevice
+        }
+        p.onStdoutLine { line in
+            guard let progress, let d = duration, d > 0, line.hasPrefix("out_time_us="),
+                  let us = Double(line.dropFirst("out_time_us=".count)) else { return }
+            progress(min(1, us / 1_000_000 / d))
+        }
+        try feeder?.run()
+        do {
+            try p.process.run()
+        } catch {
+            feeder?.terminate()
+            throw error
+        }
+        while p.process.isRunning {
+            if isCancelled() {
+                p.process.terminate()
+                feeder?.terminate()
+                p.process.waitUntilExit()
+                throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled")
+            }
+            usleep(200_000)
+        }
+        if let feeder, feeder.isRunning { feeder.terminate() }
+        feeder?.waitUntilExit()
+        guard p.process.terminationStatus == 0 else {
+            throw ToolError(tool: "ffmpeg", status: p.process.terminationStatus, message: p.stderrText)
+        }
+        if let feeder, feeder.terminationStatus != 0, feeder.terminationReason == .exit {
+            throw ToolError(tool: (feeder.executableURL?.lastPathComponent ?? "decoder"), status: feeder.terminationStatus, message: "")
+        }
+    }
+}

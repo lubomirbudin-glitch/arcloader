@@ -1,0 +1,177 @@
+import Foundation
+
+/// Self-contained HTML report (thumbnails embedded) — can be emailed or opened straight from the disk.
+public enum HTMLReport {
+    static func esc(_ s: String) -> String {
+        var o = ""
+        o.reserveCapacity(s.count)
+        for c in s {
+            switch c {
+            case "&": o += "&amp;"
+            case "<": o += "&lt;"
+            case ">": o += "&gt;"
+            case "\"": o += "&quot;"
+            default: o.append(c)
+            }
+        }
+        return o
+    }
+
+    static func dateTime(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "cs_CZ")
+        f.dateFormat = "d. M. yyyy HH:mm:ss"
+        return f.string(from: d)
+    }
+
+    static func timeOnly(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f.string(from: d)
+    }
+
+    static func duration(_ s: Double) -> String {
+        let t = Int(s.rounded())
+        return t >= 3600 ? String(format: "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60) : String(format: "%d:%02d", t / 60, t % 60)
+    }
+
+    static let stateLabel: [String: String] = [
+        "verified": "ověřeno", "written": "zapsáno", "failed": "CHYBA", "pending": "nezpracováno",
+    ]
+
+    static func proxyLabel(_ c: ClipEntry) -> (String, String) {
+        switch c.proxyStatus {
+        case .done: return ("ok", "hotovo")
+        case .failed: return ("bad", "chyba")
+        case .unsupported: return ("warn", "nepodporováno")
+        case .skipped: return ("muted", "přeskočeno")
+        case .none: return ("muted", "—")
+        }
+    }
+
+    /// `forPrint`: light colours only and the full file list expanded (for the PDF).
+    static let darkCSS = "@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2e33;--ok:#4cc27c;--okbg:#14301f;--bad:#ff6b6b;--badbg:#3a1717;--warn:#f0b04a;--warnbg:#382a10;--accent:#8aa2ff}}"
+    static let printCSS = "body{background:#fff;font-size:11px}main{padding:0;max-width:none}th,td{padding:5px 7px}tr{break-inside:avoid}h2{break-after:avoid}"
+        + ".stat b{font-size:17px}.thumb,.nothumb{width:112px;height:63px}"
+
+    public static func render(_ r: OffloadReport, forPrint: Bool = false) -> String {
+        let ok = r.success
+        let status = !ok ? "CHYBA" : (r.verified ? "OVĚŘENO" : "ZKOPÍROVÁNO — NEOVĚŘENO")
+        let statusClass = !ok ? "bad" : (r.verified ? "ok" : "warn")
+        let failed = r.failedFiles
+        let videoClips = r.clips.filter { !$0.clip.isCameraProxy }
+        let totalDuration = videoClips.compactMap { $0.info?.duration }.reduce(0, +)
+
+        var h = """
+        <!doctype html>
+        <html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Offload \(esc(r.cardName)) – \(esc(r.date))</title>
+        <style>
+        :root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e3e3e0;--ok:#1f8a4c;--okbg:#e5f4ea;--bad:#c62828;--badbg:#fdeaea;--warn:#a86400;--warnbg:#fdf2dc;--accent:#3a5bd9}
+        \(forPrint ? printCSS : darkCSS)
+        *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
+        main{max-width:1200px;margin:0 auto;padding:28px 20px 60px}
+        header{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:22px}
+        h1{font-size:26px;margin:0;letter-spacing:-.01em}h2{font-size:16px;margin:30px 0 10px}
+        .sub{color:var(--muted)}.badge{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:600;font-size:13px}
+        .ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.muted{color:var(--muted)}
+        .badge.ok{background:var(--okbg)}.badge.bad{background:var(--badbg)}.badge.warn{background:var(--warnbg)}
+        .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+        .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+        .stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stat span{color:var(--muted);font-size:12px}
+        .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+        table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+        th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}
+        td.num{text-align:right;font-variant-numeric:tabular-nums}code,.mono{font:12px ui-monospace,Menlo,monospace}
+        td.clip{white-space:normal;min-width:180px;max-width:300px}.wrap{white-space:normal}
+        .thumb{width:128px;height:72px;object-fit:contain;background:#000;border-radius:4px;display:block}
+        .nothumb{width:128px;height:72px;border-radius:4px;background:var(--line)}
+        .clipname{font-weight:600}.path{color:var(--muted);font-size:12px}
+        details summary{cursor:pointer;padding:10px 0;font-weight:600}
+        .err{white-space:normal;color:var(--bad)}
+        footer{margin-top:40px;color:var(--muted);font-size:12px}
+        @media print{body{background:#fff}.panel,.stat{border-color:#ccc}details{display:block}}
+        </style></head><body><main>
+        <header><h1>\(esc(r.cardName))</h1><span class="badge \(statusClass)">\(status)</span>
+        <span class="sub">\(dateTime(r.started)) – \(timeOnly(r.finished))</span></header>
+        <div class="stats">
+        <div class="stat"><b>\(r.totalFiles)</b><span>souborů</span></div>
+        <div class="stat"><b>\(formatBytes(r.totalBytes))</b><span>data</span></div>
+        <div class="stat"><b>\(videoClips.count)</b><span>klipů\(totalDuration > 0 ? " · " + duration(totalDuration) : "")</span></div>
+        <div class="stat"><b>\(duration(r.copySeconds))</b><span>kopírování · \(formatRate(r.totalBytes, r.copySeconds))</span></div>
+        <div class="stat"><b>\(r.verified ? duration(r.verifySeconds) : "—")</b><span>ověření · \(r.verified ? formatRate(r.totalBytes, r.verifySeconds) : "neprovedeno")</span></div>
+        <div class="stat"><b>\(esc(r.hashAlgorithm.uppercased()))</b><span>kontrolní součet</span></div>
+        </div>
+
+        <h2>Cíle</h2><div class="panel"><table>
+        <tr><th>Disk</th><th>Složka</th><th>FS</th><th class="num">OK</th><th class="num">Chyby</th></tr>
+
+        """
+        for d in r.destinations {
+            h += "<tr><td>\(esc((d.root as NSString).lastPathComponent))</td><td class=\"mono wrap\">\(esc(d.cardPath))</td><td>\(esc(d.filesystem))</td>"
+            h += "<td class=\"num ok\">\(d.filesOK)</td><td class=\"num \(d.filesFailed > 0 ? "bad" : "muted")\">\(d.filesFailed)</td></tr>\n"
+        }
+        h += "</table></div>\n"
+        h += "<p class=\"sub\">Zdroj: <span class=\"mono\">\(esc(r.source))</span> (\(esc(r.sourceFilesystem)))</p>\n"
+
+        if !failed.isEmpty {
+            h += "<h2 class=\"bad\">Chyby (\(failed.count))</h2><div class=\"panel\"><table><tr><th>Soubor</th><th>Problém</th></tr>\n"
+            for f in failed {
+                var msgs: [String] = []
+                if let e = f.sourceError { msgs.append("karta: " + e) }
+                for (i, e) in f.errors.enumerated() { if let e { msgs.append("cíl \(i + 1): " + e) } }
+                h += "<tr><td class=\"mono\">\(esc(f.path))</td><td class=\"err\">\(esc(msgs.joined(separator: " · ")))</td></tr>\n"
+            }
+            h += "</table></div>\n"
+        }
+
+        if !r.clips.isEmpty {
+            h += "<h2>Klipy</h2><div class=\"panel\"><table>\n"
+            h += "<tr><th></th><th>Klip</th><th>Formát</th><th>Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Délka</th><th>TC</th><th class=\"num\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n"
+            for c in r.clips {
+                let img = c.thumbnail.map { "<img class=\"thumb\" src=\"data:image/jpeg;base64,\($0.base64EncodedString())\" alt=\"\">" }
+                    ?? "<div class=\"nothumb\"></div>"
+                let i = c.info
+                var codecParts: [String] = []
+                if c.clip.format != .video { codecParts.append(c.clip.format.label) }
+                if let codec = i?.codec, !codecParts.contains(codec) { codecParts.append(codec) }
+                let codec = codecParts.joined(separator: " · ")
+                let (pc, pl) = proxyLabel(c)
+                var notes: [String] = []
+                for n in [c.probeError, c.proxyNote].compactMap({ $0 }) where !notes.contains(n) { notes.append(n) }
+                let note = notes.joined(separator: " · ")
+                h += "<tr><td>\(img)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))\(c.clip.isCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "")</div>"
+                h += "<div class=\"path\">\(esc(c.clip.path))</div>\(note.isEmpty ? "" : "<div class=\"path err\">\(esc(note))</div>")</td>"
+                h += "<td class=\"wrap\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num\">\(esc(i?.fpsLabel ?? ""))</td>"
+                h += "<td class=\"num\">\(esc(i?.durationLabel ?? ""))</td><td class=\"mono\">\(esc(i?.timecode ?? ""))</td>"
+                h += "<td class=\"num\">\(i.map { $0.audioChannels > 0 ? "\($0.audioChannels) ch" : "—" } ?? "")</td>"
+                h += "<td class=\"num\">\(formatBytes(c.clip.bytes))</td><td class=\"\(pc)\">\(pl)</td></tr>\n"
+            }
+            h += "</table></div>\n"
+            if let p = r.proxy, p.enabled {
+                let lut = p.lutPath.map { ($0 as NSString).lastPathComponent } ?? "bez LUT"
+                let frame = p.frameLabel.map { ", výřez \($0)" } ?? ""
+                h += "<p class=\"sub\">Proxy: \(esc(p.codec.label)), \(p.height)p\(frame), LUT: \(esc(lut)) → <span class=\"mono\">\(Layout.proxyDirName)/</span></p>\n"
+            }
+        }
+
+        h += "<details\(forPrint ? " open" : "")><summary>Všechny soubory (\(r.files.count))</summary><div class=\"panel\"><table>\n"
+        h += "<tr><th>Soubor</th><th class=\"num\">Velikost</th><th>\(esc(r.hashAlgorithm))</th>"
+        for i in r.destinations.indices { h += "<th>Cíl \(i + 1)</th>" }
+        h += "</tr>\n"
+        for f in r.files {
+            h += "<tr><td class=\"mono\">\(esc(f.path))</td><td class=\"num\">\(formatBytes(f.size))</td><td class=\"mono\">\(esc(f.xxh64 ?? "—"))</td>"
+            for s in f.destinations {
+                let cls = s == "verified" ? "ok" : (s == "failed" ? "bad" : "warn")
+                h += "<td class=\"\(cls)\">\(stateLabel[s] ?? s)</td>"
+            }
+            h += "</tr>\n"
+        }
+        h += "</table></div></details>\n"
+        if !r.skipped.isEmpty {
+            h += "<p class=\"sub\">Vynechané systémové soubory: \(esc(r.skipped.joined(separator: ", ")))</p>\n"
+        }
+        h += "<footer>\(esc(r.tool)) \(esc(r.version)) · ASC MHL v ascmhl/ · \(dateTime(Date()))</footer></main></body></html>\n"
+        return h
+    }
+}

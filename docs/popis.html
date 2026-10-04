@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Offload – popis aplikace</title>
+<style>
+  /* Layout: A4 na výšku, jeden sloupec textu, screenshoty přes celou šířku; tmavě modrá jako akcent "záznamu". */
+  :root {
+    --ink: #17202b;
+    --muted: #5b6573;
+    --line: #dde2e8;
+    --panel: #f3f5f8;
+    --accent: #1f5fbf;
+    --ok: #1d7a46;
+    --font: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, Menlo, monospace;
+  }
+  @page { size: A4; margin: 16mm 16mm 18mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 10.5pt/1.5 var(--font); color: var(--ink); background: #fff; }
+  h1 { font-size: 30pt; line-height: 1.05; margin: 0 0 4mm; letter-spacing: -0.02em; }
+  h2 { font-size: 15pt; margin: 0 0 3mm; letter-spacing: -0.01em; text-wrap: balance; }
+  h3 { font-size: 11pt; margin: 0 0 1.5mm; }
+  p { margin: 0 0 3mm; max-width: 165mm; }
+  .eyebrow { font-size: 8.5pt; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 3mm; }
+  .lead { font-size: 12.5pt; line-height: 1.45; color: var(--ink); max-width: 160mm; }
+  .page { page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  section { margin-bottom: 5mm; }
+
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; margin: 5mm 0 6mm; }
+  .step { border-top: 2.5px solid var(--accent); padding-top: 2.5mm; }
+  .step b { display: block; font-size: 10.5pt; margin-bottom: 1mm; }
+  .step span { font-size: 9pt; color: var(--muted); line-height: 1.4; display: block; }
+  .step .n { font-size: 8pt; font-weight: 700; color: var(--accent); letter-spacing: 0.08em; }
+
+  figure { margin: 0 0 4.5mm; break-inside: avoid; page-break-inside: avoid; }
+  figure img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 2.5mm; }
+  figure.w80 img { width: 80%; }
+  figure.w70 img { width: 70%; }
+  figure.w62 img { width: 62%; }
+  figcaption { font-size: 9pt; color: var(--muted); margin-top: 1.8mm; }
+  figcaption b { color: var(--ink); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+
+  ul { margin: 0 0 3mm; padding-left: 4.5mm; }
+  li { margin-bottom: 1.4mm; }
+  li b { font-weight: 600; }
+
+  pre { font: 9pt/1.5 var(--mono); background: var(--panel); border-radius: 2mm; padding: 3mm 4mm; margin: 0 0 4mm; white-space: pre; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 4mm; }
+  th, td { text-align: left; padding: 2mm 2.5mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 8.5pt; color: var(--muted); font-weight: 600; }
+  td.yes { color: var(--ok); font-weight: 600; white-space: nowrap; }
+  td.no { color: var(--muted); white-space: nowrap; }
+  .note { font-size: 9pt; color: var(--muted); }
+  .callout { background: var(--panel); border-radius: 2.5mm; padding: 3.5mm 4.5mm; margin-bottom: 5mm; }
+  .callout b { color: var(--ok); }
+  code { font: 9pt var(--mono); background: var(--panel); padding: 0.2mm 1.2mm; border-radius: 1mm; }
+</style>
+</head>
+<body>
+
+<!-- 1 -->
+<div class="page">
+  <div class="eyebrow">macOS · záloha záznamu z kamery</div>
+  <h1>Offload</h1>
+  <p class="lead">Aplikace zkopíruje paměťovou kartu z kamery najednou na dva (nebo více) disků, každou kopii ověří kontrolním součtem, vytvoří report a&nbsp;volitelně vyrenderuje náhledová proxy videa s&nbsp;LUT. Hlavní důraz je na rychlost a&nbsp;na to, aby bylo vždy jednoznačně vidět, kdy je karta bezpečně zálohovaná.</p>
+
+  <div class="flow">
+    <div class="step"><span class="n">1</span><b>Kopie</b><span>Karta se čte jen jednou, data jdou paralelně na všechny disky.</span></div>
+    <div class="step"><span class="n">2</span><b>Ověření</b><span>Každý soubor se přečte zpět z každého disku a porovná se xxHash64.</span></div>
+    <div class="step"><span class="n">3</span><b>Report</b><span>HTML report s náhledy a metadaty klipů, záznam ASC MHL.</span></div>
+    <div class="step"><span class="n">4</span><b>Proxy</b><span>Volitelně: H.264 / HEVC / ProRes s LUT a burn-inem.</span></div>
+  </div>
+
+  <figure class="w62">
+    <img src="img/app-setup.jpg" alt="Hlavní okno aplikace">
+    <figcaption><b>Hlavní okno.</b> Vlevo nastavení: vložená karta se objeví a označí automaticky, pod ní cílové disky, kontrola a proxy (kodek, rozlišení, LUT, burn-in). Vpravo fronta karet. Offload se spustí tlačítkem nebo ⌘↩︎.</figcaption>
+  </figure>
+
+  <section>
+    <h2>Spolehlivost</h2>
+    <ul>
+      <li><b>Ověření z disku, ne z paměti.</b> Zápis i zpětné čtení obcházejí systémovou cache, před ověřením se vyprázdní i cache samotných disků.</li>
+      <li><b>Na kartu se nikdy nezapisuje.</b> Rozpracované soubory mají dočasný název, takže nedokončená kopie nikdy nevypadá jako hotová.</li>
+      <li><b>Kontroly před startem.</b> Volné místo na všech discích, cíl na stejném disku jako karta, dva cíle na jednom disku.</li>
+      <li><b>Opakovaná karta nic nepřepíše</b> – vznikne nová složka <code>A001_2</code>. Během offloadu Mac neusne.</li>
+      <li><b>Chyba je vidět.</b> Selhaný soubor je v aplikaci i v reportu červeně, karta se v tom případě neoznačí jako bezpečná.</li>
+    </ul>
+  </section>
+</div>
+
+<!-- 2 -->
+<div class="page">
+  <section>
+    <div class="eyebrow">Průběh offloadu</div>
+    <h2>Od karty k ověřeným kopiím</h2>
+    <figure class="w80">
+      <img src="img/app-copy.jpg" alt="Kopírování">
+      <figcaption><b>Kopírování.</b> Rychlost čtení karty a zápisu na každý disk (D1, D2), zbývající čas a aktuální soubor. Celková rychlost je dána nejpomalejším článkem, druhá kopie nic nezpomalí.</figcaption>
+    </figure>
+    <figure class="w80">
+      <img src="img/app-proxy.jpg" alt="Karta ověřena, běží proxy">
+      <figcaption><b>Karta ověřena, proxy se renderují.</b> Jakmile jsou všechny soubory na obou discích a ověřené, objeví se zelené potvrzení a tlačítko <i>Vysunout kartu</i>. Kartu lze vrátit kameře, i když proxy ještě běží – čtou se už z disku. Mezitím lze kopírovat další kartu.</figcaption>
+    </figure>
+    <figure class="w80">
+      <img src="img/app-done.jpg" alt="Hotovo">
+      <figcaption><b>Hotovo.</b> Souhrn rychlostí, počet klipů a proxy, odkazy na report a složku ve Finderu.</figcaption>
+    </figure>
+    <div class="callout">
+    <b>Kdy je karta bezpečná:</b> až když aplikace ukáže zelené „Všechny soubory jsou na N discích a ověřené“. Ne dřív – ani když kopírování doběhlo.
+    </div>
+  </section>
+
+</div>
+
+<!-- 3 -->
+<div class="page">
+  <section>
+    <div class="eyebrow">Výstup</div>
+    <h2>Report</h2>
+    <p>Do každé karty na každém disku se uloží složka <code>_REPORT</code> s&nbsp;HTML reportem (otevře se v&nbsp;prohlížeči, náhledy jsou uvnitř souboru), JSON, textovým souhrnem a seznamem hashů. Složka <code>ascmhl</code> obsahuje záznam ve standardu ASC MHL, se kterým pracují DIT nástroje jako Silverstack nebo ShotPut.</p>
+    <figure class="w80">
+      <img src="img/report-arri.jpg" alt="Report karty ARRI">
+      <figcaption><b>Report karty z ARRI ALEXA.</b> Stav, počty, rychlost kopie a ověření, cílové disky a klipy s náhledem (s LUT), rozlišením, fps, délkou, timecodem, zvukem a stavem proxy.</figcaption>
+    </figure>
+    <figure class="w80">
+      <img src="img/report-formats.jpg" alt="Klipy různých formátů v reportu">
+      <figcaption><b>Karta s různými formáty.</b> Blackmagic RAW, Canon RAW (zkopírováno a ověřeno, proxy nepodporováno), DNxHD v MXF, Sony XAVC s vlastním proxy kamery (přeskočeno) a ProRes 4K.</figcaption>
+    </figure>
+  </section>
+</div>
+
+<!-- 4 -->
+<div class="page">
+  <section>
+    <h2>Struktura složek</h2>
+<pre>DISK/
+└─ 2026-10-03/              datum kopírování
+   └─ A001/                 název karty (jmenovka svazku)
+      ├─ … obsah karty 1:1 …
+      ├─ _REPORT/           A001_report.html · offload_report.json · .txt · A001.xxh64
+      ├─ _PROXY/            A001C001.mov …
+      └─ ascmhl/            ASC MHL v2</pre>
+  </section>
+
+  <section>
+    <h2>Proxy</h2>
+    <p>Proxy se renderují až po ověření a z disku. Pořadí: zmenšení → LUT (.cube) → burn-in názvu klipu a timecodu. Do souboru se zapíše i timecode stopa, takže proxy jdou ve střižně napojit na originály.</p>
+    <div class="pair">
+      <figure>
+        <img src="img/proxy-alexa35.jpg" alt="Proxy z ARRI ALEXA 35">
+        <figcaption><b>ARRI ALEXA 35, ARRIRAW</b> · LUT ARRI LogC4 → Rec.709</figcaption>
+      </figure>
+      <figure>
+        <img src="img/proxy-braw.jpg" alt="Proxy z Blackmagic RAW">
+        <figcaption><b>Blackmagic URSA Mini Pro 4.6K, BRAW</b> · LUT Blackmagic Film → Video</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Formáty</h2>
+    <table>
+      <tr><th>Formát</th><th>Kopie a ověření</th><th>Proxy</th><th>Potřeba</th></tr>
+      <tr><td>ProRes, H.264/H.265, XAVC, XF-AVC, DNx (MOV, MP4, MXF)</td><td class="yes">ano</td><td class="yes">ano</td><td>součást aplikace</td></tr>
+      <tr><td>Blackmagic RAW</td><td class="yes">ano</td><td class="yes">ano</td><td>Blackmagic RAW Player nebo DaVinci Resolve</td></tr>
+      <tr><td>ARRIRAW, ARRIRAW HDE, ARRICORE</td><td class="yes">ano</td><td class="yes">ano</td><td>ARRI Reference Tool CMD (zdarma)</td></tr>
+      <tr><td>RED R3D</td><td class="yes">ano</td><td class="yes">ano*</td><td>REDCINE-X PRO (zdarma)</td></tr>
+      <tr><td>Canon Cinema RAW Light, Sony X-OCN</td><td class="yes">ano</td><td class="no">ne</td><td>pro macOS Intel neexistuje dekodér</td></tr>
+    </table>
+    <p class="note">* Podpora R3D je napsaná podle dokumentace REDline, zatím neověřená na skutečném klipu. Kopie a ověření fungují pro jakýkoli soubor na kartě bez ohledu na formát.</p>
+  </section>
+
+  <p class="note">Offload 0.1 · macOS 13 a novější · aplikace + příkazová řádka <code>offload</code></p>
+</div>
+
+</body>
+</html>

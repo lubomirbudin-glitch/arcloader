@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Offload – ALEXA 35 workflow</title>
+<style>
+  /* Layout: A4 portrait. The DoP's spec leads, matched line by line; the image proves it. Slate ink, one cool accent. */
+  :root {
+    --ink: #161b22;
+    --muted: #59626e;
+    --line: #dce1e7;
+    --panel: #f2f4f7;
+    --accent: #1d5bb8;
+    --ok: #1c7745;
+    --font: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, Menlo, monospace;
+  }
+  @page { size: A4; margin: 15mm 16mm 16mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 10.5pt/1.5 var(--font); color: var(--ink); background: #fff; }
+  h1 { font-size: 30pt; line-height: 1; margin: 0 0 2mm; letter-spacing: -0.02em; }
+  h2 { font-size: 14.5pt; margin: 0 0 3mm; letter-spacing: -0.01em; text-wrap: balance; }
+  p { margin: 0 0 3mm; max-width: 165mm; }
+  .eyebrow { font-size: 8.5pt; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 2.5mm; }
+  .sub { font-size: 12.5pt; color: var(--muted); margin-bottom: 5mm; }
+  .page { break-after: page; }
+  .page:last-child { break-after: auto; }
+  section { margin-bottom: 6mm; }
+
+  table.spec { width: 100%; border-collapse: collapse; margin-bottom: 6mm; font-size: 9.8pt; }
+  table.spec th { text-align: left; font-size: 8.5pt; color: var(--muted); font-weight: 600; padding: 0 3mm 1.5mm 0; border-bottom: 1.5px solid var(--ink); }
+  table.spec td { padding: 2.2mm 3mm 2.2mm 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.spec td:first-child { width: 36%; font-weight: 600; }
+  table.spec td:last-child { color: var(--ink); }
+  .tick { color: var(--ok); font-weight: 700; margin-right: 1.5mm; }
+
+  .frames { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+  .frames img { width: 100%; display: block; border-radius: 1.5mm; }
+  .frames-cap { font-size: 8.5pt; color: var(--muted); margin: 1.8mm 0 3mm; display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+  .frames-cap b { color: var(--ink); }
+
+  figure { margin: 0 0 5mm; break-inside: avoid; }
+  figure img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 2.5mm; }
+  figure.w80 img { width: 80%; }
+  figure.w60 img { width: 60%; }
+  figcaption { font-size: 9pt; color: var(--muted); margin-top: 1.8mm; max-width: 165mm; }
+  figcaption b { color: var(--ink); }
+
+  ul { margin: 0 0 3mm; padding-left: 4.5mm; }
+  li { margin-bottom: 1.4mm; }
+  pre { font: 9pt/1.5 var(--mono); background: var(--panel); border-radius: 2mm; padding: 3mm 4mm; margin: 0 0 3mm; white-space: pre; }
+  .note { font-size: 8.5pt; color: var(--muted); }
+  .callout { background: var(--panel); border-radius: 2.5mm; padding: 3.5mm 4.5mm; margin-bottom: 5mm; }
+  .callout b { color: var(--ok); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; align-items: start; }
+</style>
+</head>
+<body>
+
+<!-- 1: the spec, matched -->
+<div class="page">
+  <div class="eyebrow">Camera card offload · ALEXA 35 workflow</div>
+  <h1>Offload</h1>
+  <div class="sub">Your camera spec, carried from card to dailies.</div>
+
+  <table class="spec">
+    <tr><th>Your spec</th><th>What Offload does</th></tr>
+    <tr><td>ARRI ALEXA 35<br>ARRIRAW LogC4, Open Gate 4.6K</td>
+        <td><span class="tick">✓</span>Every card copied 1:1 to two drives at once; every file read back from both drives and checked before the card is released. ARRIRAW MXF is recognised automatically.</td></tr>
+    <tr><td>1.66 frame guides, 10% overscan</td>
+        <td><span class="tick">✓</span>Proxies are cropped to the 1.66 frame at 90% of the image. The crop happens on the sensor image, before debayering, so the frame keeps full detail.</td></tr>
+    <tr><td>G733 nostalgic textures for all scenes<br>K445 standard texture for VFX shots</td>
+        <td><span class="tick">✓</span>Textures are set in camera and are part of the recorded image. Offload copies the footage untouched and the proxies show the texture of each shot – no per-scene setup.</td></tr>
+    <tr><td>Rec 709 LUT for monitoring</td>
+        <td><span class="tick">✓</span>The same Rec 709 LUT is applied to proxies and report thumbnails: ARRI LogC4 → Rec 709 by default, or the show LUT as a .cube file.</td></tr>
+    <tr><td>Proxies: ProRes 422, Rec 709 LUT, 1.66 frame at 90%</td>
+        <td><span class="tick">✓</span>ProRes 422, 1794 × 1080 (1.66), source timecode track for relinking in the edit, clip name and timecode burn-in on request.</td></tr>
+  </table>
+
+  <div class="frames">
+    <img src="img/framelines-full.jpg" alt="Full image with 1.66 frame lines">
+    <img src="img/proxy-166.jpg" alt="Proxy cropped to 1.66">
+  </div>
+  <div class="frames-cap">
+    <span><b>Full image</b> with the 1.66 frame at 90% marked. The shaded area is the overscan.</span>
+    <span><b>The proxy</b> · ProRes 422, 1794 × 1080, ARRI LogC4 → Rec 709, clip name and source timecode burned in.</span>
+  </div>
+  <p class="note">Frames from an ARRI ALEXA 35 sample clip, processed by Offload.</p>
+</div>
+
+<!-- 2: on set -->
+<div class="page">
+  <div class="eyebrow">On set</div>
+  <h2>Set up once, then one button per card</h2>
+
+  <div class="two">
+    <figure>
+      <img src="img/app-proxy-settings.jpg" alt="Proxy settings">
+      <figcaption><b>Proxy settings for this show:</b> ProRes 422, 1080, frame 1.66 at 90%, Rec 709 LUT. Saved, so the loader only inserts cards. <span class="note">(UI shown in Czech.)</span></figcaption>
+    </figure>
+    <div>
+      <ul>
+        <li><b>Two drives, one read.</b> The card is read once and written to both drives in parallel. The second copy adds no time.</li>
+        <li><b>Card back to camera first.</b> As soon as both copies are verified, the card can be ejected. Proxies keep rendering from the drives while the next card copies.</li>
+        <li><b>Nothing is written to the card.</b> A card offloaded twice lands in a new folder; nothing is ever overwritten.</li>
+        <li><b>Errors are loud.</b> A failed file is shown in red in the app and in the report, and the card is never marked as safe.</li>
+      </ul>
+    </div>
+  </div>
+
+  <figure class="w80">
+    <img src="img/app-copy.jpg" alt="Copying">
+    <figcaption><b>Copying.</b> Live speed of the card and each drive (D1, D2), time remaining, current clip.</figcaption>
+  </figure>
+  <figure class="w80">
+    <img src="img/app-proxy.jpg" alt="Verified, proxies rendering">
+    <figcaption><b>Verified – card can go back.</b> The green line appears only when every file is on both drives and has been read back and matched.</figcaption>
+  </figure>
+
+  <div class="callout">
+    <b>Rule for the loader:</b> reformat a card only after Offload shows the green “all files on 2 drives and verified”. A finished copy alone is not enough.
+  </div>
+</div>
+
+<!-- 3: after wrap -->
+<div class="page">
+  <div class="eyebrow">After wrap</div>
+  <h2>The card report</h2>
+  <p>Saved with the footage on both drives; opens in any browser, ready for the production office, editorial and the lab. Per clip: thumbnail in Rec 709, resolution, frame rate, duration, start timecode, audio and proxy status. An ASC MHL record next to the footage lets anyone re-check the copies later with Silverstack, ShotPut or ascmhl.</p>
+  <figure>
+    <img src="img/report-arri.jpg" alt="Report of an ALEXA card">
+    <figcaption><b>Report of an ALEXA card</b> – verification status, copy and verify speed, both drives, clips.</figcaption>
+  </figure>
+
+  <section>
+    <h2>On the drives</h2>
+<pre>DRIVE/
+└─ 2026-10-03/            shoot day (offload date)
+   └─ A001/               card / reel name from the camera
+      ├─ A001C001_….mxf   ARRIRAW, exactly as on the card
+      ├─ _PROXY/          ProRes 422 · 1.66 · Rec 709
+      ├─ _REPORT/         card report
+      └─ ascmhl/          ASC MHL hash record</pre>
+  </section>
+
+  <p class="note">Tested with ARRI ALEXA 35 and ALEXA Mini ARRIRAW sample footage. Proxy render time for Open Gate 4.6K will be confirmed on the first real card. Other cameras on the show (Blackmagic RAW, ProRes, XAVC and others) go through the same workflow.</p>
+</div>
+
+</body>
+</html>
