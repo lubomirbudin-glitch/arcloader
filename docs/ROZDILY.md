@@ -7,7 +7,7 @@ Pravidlo: když změna v jedné verzi způsobí, že se verze v něčem rozejdou
 aktualizuje se tento soubor ve stejném commitu. Historie každé verze je v [VYVOJ-MAC.md](VYVOJ-MAC.md)
 a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 
-*Stav k 2026-10-04.*
+*Stav k 2026-10-05.*
 
 ## Přehled
 
@@ -27,9 +27,9 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Kopie karty na více disků, karta čtená jednou | ✅ | ✅ jádro hotové, testováno |
 | Ověření zpětným čtením (xxHash64) | ✅ | ✅ jádro |
 | Report JSON / TXT / `.xxh64` | ✅ | ✅ |
-| Report HTML | ✅ | 🔨 plán 1 (úkol 9) |
-| ASC MHL v2 | ✅ | 🔨 plán 1 (úkol 8) |
-| CLI `copy` / `verify` / `bench` | ✅ | 🔨 plán 1 (úkoly 13–16) |
+| Report HTML | ✅ | ✅ |
+| ASC MHL v2 | ✅ | ✅ |
+| CLI `copy` / `verify` / `bench` | ✅ | ✅ (čeká ostrý test na skutečné kartě) |
 | PDF report | ✅ (WebKit) | ⏳ plán 2 (WebView2) |
 | Analýza klipů, metadata | ✅ | ⏳ plán 2 |
 | Náhledy v reportu | 1 náhled ve 30 % délky → ⏳ **3 snímky** (první/prostřední/poslední) | ⏳ plán 2: 3 snímky |
@@ -74,4 +74,13 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **CLI na Windows je v `bin\`**, protože `Offload.exe` a `offload.exe` by ve stejné složce kolidovaly
   (NTFS nerozlišuje velikost písmen).
 - **HW diagnostika (USB porty, propustnost článků)** je zatím jen na Windows — na přání uživatele.
+- **Report při zrušeném ověření:** když je `verified` = false, Windows počítá soubory „zapsáno“ i „ověřeno“ jako
+  v pořádku (zrušené ověření nevypíše už ověřené soubory jako chybné bez důvodu); „kartu lze vysunout“ platí
+  jen při `verified` = true. Totéž je naplánováno i pro Mac.
+- **Zdroj, který je sám offload:** Windows odmítne kopírovat zdroj s nejvyšší úrovní složek `_REPORT`, `_PROXY`
+  nebo `ascmhl` (pravděpodobně dřívější offload). Naplánováno i pro Mac.
+- **Dvakrát zadaný cíl:** Windows odmítne dvě shodné cílové cesty (bez ohledu na velikost písmen a koncové `\`),
+  i s `--allow-same-device`. Naplánováno i pro Mac.
+- **Kontrola voleb před kopií:** Windows ověří velikost bloku (násobek 4096, nejvýše 1 GiB), počet bufferů (≥ 2)
+  a tvar data `RRRR-MM-DD` ještě před vytvořením čehokoli. Naplánováno i pro Mac.
 - **Verze v reportu:** Mac `0.1.0`, Windows `0.1.0-win` — z reportu je vidět, která verze kopírovala.

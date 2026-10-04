@@ -10,7 +10,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 
 | Část | Stav |
 |---|---|
-| Jádro + CLI (`bin\offload.exe`) | hotovo (plán 1) |
+| Jádro + CLI (`bin\offload.exe`) | hotovo (plán 1) — ostrý test na skutečné kartě a měření rychlostí zatím chybí |
 | Analýza klipů, proxy, RAW, PDF | plán 2 |
 | braw-decode | plán 3 |
 | GUI `Offload.exe` | plán 4 |
@@ -36,6 +36,24 @@ offload bench --read E:\ --write D:\ --gb 2     # rychlost karty a disků
 Na Windows se čte i zapisuje mimo systémovou cache (`FILE_FLAG_NO_BUFFERING`), po zápisu
 `FlushFileBuffers`; ověření tak čte data z disku, ne z RAM. Svazky, které to neumí (některé síťové),
 přejdou na běžný zápis a report to uvede.
+
+## ASC MHL a `ascmhl` na Windows
+
+Nástroj `ascmhl` 1.0.1 má příkaz `verify` jen ve skriptu `ascmhl-debug` (`python -m ascmhl` nemá vstupní bod).
+Na Windows hlásí falešné „new/missing file“, protože porovnává cesty s `\` s cestami s `/` v MHL (MHL je
+v tom správně). Po pouhé normalizaci oddělovačů ověřil všechny hashe složek vytvořených na Windows.
+Plné `ascmhl verify` proto pouštějte na macOS/Linuxu; na Windows použijte `offload verify`.
+
+## Ruční test (checklist)
+
+Ostrý test na skutečné kartě:
+
+- [ ] kopie ze skutečné karty na 2 disky
+- [ ] `offload verify` na hotovou kopii
+- [ ] Ctrl+C během kopie a během ověření — nezůstane žádný `.offload-part`, report říká „neověřeno“
+- [ ] vytažení karty uprostřed kopie
+- [ ] vytažení cílového disku uprostřed kopie
+- [ ] naměřené rychlosti zapsat do „Naměřeno“
 
 ## Naměřeno
 

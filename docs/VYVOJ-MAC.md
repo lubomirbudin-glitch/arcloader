@@ -12,6 +12,11 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   `Report.swift`, `HTMLReport.swift`; navrženo ve specifikaci Windows verze (oddíl 6.5a). Sestavit a ověřit
   se musí na Macu.
 
+- **Totéž chování jako ve Windows verzi** (zavedeno při závěrečné kontrole plánu 1 Windows, viz
+  [ROZDILY.md](ROZDILY.md)): report při zrušeném ověření (`verified` = false) nepočítá už zapsané/ověřené
+  soubory jako chybné; odmítnout zdroj, který obsahuje `_REPORT`/`_PROXY`/`ascmhl`; odmítnout dvakrát zadaný
+  cíl; ověřit volby (velikost bloku, počet bufferů, tvar data) před kopií.
+
 ## 2026-10-04 — přesun do `mac/`
 
 - Celý Mac projekt (`Package.swift`, `Sources/`, `Tools/`, `scripts/`, `docs/`, README) přesunut do složky

@@ -23,7 +23,9 @@ Změna čehokoli tady = změna v obou verzích + záznam v obou `VYVOJ-*.md` + v
 ```
 
 - Stejná karta podruhé týž den → `<karta>_2`, `<karta>_3` … (nikdy se nepřepíše starší offload).
-- Rozpracovaný soubor: `.<jméno>.offload-part` ve stejné složce; po ověřeném zápisu se přejmenuje.
+- Rozpracovaný soubor: `.<jméno>.offload-part` ve stejné složce; po dokončeném zápisu a flushi (před ověřením
+  zpětným čtením) se přejmenuje. Konečný název tedy znamená „plně zapsáno“, nikoli „ověřeno“ — ověřeno je
+  teprve to, co report označí `verified` (a „kartu lze vysunout“).
   Nedokončená kopie tak nikdy nevypadá jako hotová.
 - Reporty se zapisují přes `.<jméno>.tmp` a přejmenování.
 - Datum a čas změny souborů na cíli = jako na kartě.
