@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 ## 2026-10-04 — plán 1 (jádro + CLI), průběh
 
 Implementace po úkolech; každý úkol napsal subagent a zkontroloval nezávislý reviewer.
+- Úkol 17 — build skript scripts\build.ps1 (self-contained offload.exe), README, MHL ověřený nástrojem ascmhl
 - Úkol 16 — CLI offload.exe: příkazy copy (výchozí), verify a bench, stavový řádek, Ctrl+C a návratové kódy
 - Úkol 15 — Bench: měření rychlosti čtení karty, zápisu na disk a hashovací propustnosti
 - Úkol 14 — OffloadJob s stavem pro CLI a aplikaci
