@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
 
+- Úkol 5 — RAW backendy: Blackmagic RAW, RED (REDline), ARRIRAW (art-cmd), Canon RAW jen kopie; metadata a parametry testované bez nástrojů
 - Úkol 4 — filter graph pro náhledy a proxy (ořez na frame lines, LUT, burn-in názvu a TC) jen s relativními jmény souborů
 - Úkol 3 — timecode pro popisky náhledů, automatická volba enkodéru (NVENC → QSV → AMF → software)
 - Úkol 2 — detekce klipů (video, R3D segmenty, ARRI sekvence, BRAW, Canon RAW, proxy kamery) a čtení metadat přes ffprobe
