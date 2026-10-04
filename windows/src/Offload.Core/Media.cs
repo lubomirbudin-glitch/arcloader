@@ -132,6 +132,26 @@ public static class ProxyCodecExtensions
         ProxyCodec.Prores422 => "ProRes 422",
         _ => "ProRes 422 HQ",
     };
+
+    public static string Wire(this ProxyCodec c) => c switch
+    {
+        ProxyCodec.H264 => "h264",
+        ProxyCodec.Hevc => "hevc",
+        ProxyCodec.ProresProxy => "proresProxy",
+        ProxyCodec.ProresLT => "proresLT",
+        ProxyCodec.Prores422 => "prores422",
+        _ => "prores422HQ",
+    };
+
+    public static bool TryParseWire(string s, out ProxyCodec codec)
+    {
+        foreach (var c in Enum.GetValues<ProxyCodec>())
+        {
+            if (c.Wire() == s) { codec = c; return true; }
+        }
+        codec = default;
+        return false;
+    }
 }
 
 public sealed class ProxySettings
