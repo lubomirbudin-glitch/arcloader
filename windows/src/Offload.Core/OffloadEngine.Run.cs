@@ -1,0 +1,165 @@
+namespace Offload.Core;
+
+public sealed partial class OffloadEngine
+{
+    public OffloadReport Run(OffloadPlan plan)
+    {
+        var files = plan.Scan.Files;
+        var started = DateTime.UtcNow;
+        var cardPaths = plan.CardPaths;
+        foreach (var path in cardPaths)
+        {
+            NativeIO.Mkdirs(path);
+            foreach (var d in plan.Scan.Dirs) NativeIO.Mkdirs(Layout.Join(path, d));
+        }
+        var ws = cardPaths.Select((p, i) => new DestWriter(i, p, files.Count, Options)).ToArray();
+        lock (gate)
+        {
+            this.plan = plan;
+            writers = ws;
+        }
+        // Created before the try and disposed last: writer queues may still hold chunks that point into the pool's native buffers.
+        BufferPool? pool = null;
+        SourceHasher? hasher = null;
+        try
+        {
+            pool = new BufferPool(Options.BufferCount, Options.ChunkSize);
+            hasher = new SourceHasher(files.Count);
+            var sourceErrors = new string?[files.Count];
+
+            // Copy: the card is read exactly once; every block fans out to the hasher and all destinations.
+            for (int i = 0; i < files.Count; i++)
+            {
+                var f = files[i];
+                if (IsCancelled)
+                {
+                    sourceErrors[i] = "cancelled";
+                    continue;
+                }
+                lock (gate)
+                {
+                    fileIndex = i;
+                    currentFile = f.RelPath;
+                }
+                var failure = CopyFile(plan.Source, f, ws, hasher, pool);
+                if (failure != null)
+                {
+                    sourceErrors[i] = failure;
+                    hasher.Abort();
+                    foreach (var w in ws) w.Abort(i, "source: " + failure);
+                    lock (gate) errorCount++;
+                }
+                else
+                {
+                    hasher.Finish(i);
+                    foreach (var w in ws) w.Finish(i, f);
+                }
+            }
+            hasher.Wait();
+            foreach (var w in ws) w.Wait();
+
+            SetPhase(CopyPhase.Flush);
+            OnEachDestination(ws, w => w.FlushDevice());
+            var copyFinished = DateTime.UtcNow;
+
+            if (Options.Verify && !IsCancelled)
+            {
+                SetPhase(CopyPhase.Verify);
+                var hashes = hasher.Hashes;
+                OnEachDestination(ws, w => w.Verify(files, hashes, cts.Token));
+            }
+            var finished = DateTime.UtcNow;
+
+            SetPhase(CopyPhase.Report);
+            var report = OffloadReport.Build(plan, hasher.Hashes, sourceErrors, ws.Select(w => w.Results).ToList(),
+                ws.Select(w => w.Unbuffered).ToList(), Options.Verify && !IsCancelled, started, copyFinished, finished);
+            var reportErrors = new List<string>();
+            foreach (var path in cardPaths)
+            {
+                try { report.Write(path, includeHashRecords: true); }
+                catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException) { reportErrors.Add(e.Message); }
+            }
+            SetPhase(CopyPhase.Done);
+            if (reportErrors.Count > 0) throw OffloadError.Failed("Report could not be written: " + string.Join("; ", reportErrors));
+            return report;
+        }
+        finally
+        {
+            foreach (var w in ws) w.Dispose();
+            hasher?.Dispose();
+            pool?.Dispose();
+        }
+    }
+
+    /// Reads one file block by block and hands every block to the hasher and all writers. Returns the failure, or null.
+    string? CopyFile(string sourceRoot, SourceFile f, DestWriter[] ws, SourceHasher hasher, BufferPool pool)
+    {
+        var src = Layout.Join(sourceRoot, f.RelPath);
+        foreach (var w in ws) w.Begin(f);
+        hasher.Begin();
+        FileReader reader;
+        try { reader = new FileReader(src); }
+        catch (Exception e) { return e.Message; }
+
+        long offset = 0;
+        using (reader)
+        {
+            while (!IsCancelled)
+            {
+                var buf = pool.Take();
+                int n;
+                try { n = ReadWithRetries(reader, buf, offset); }
+                catch (Exception e)
+                {
+                    pool.Give(buf);
+                    return e.Message;
+                }
+                if (n == 0)
+                {
+                    pool.Give(buf);
+                    break;
+                }
+                var chunk = new Chunk(buf, n, offset, ws.Length + 1, pool);
+                hasher.Update(chunk);
+                foreach (var w in ws) w.Write(chunk);
+                offset += n;
+                Interlocked.Add(ref readBytes, n);
+                if (n < Options.ChunkSize) break;
+            }
+        }
+        if (IsCancelled) return "cancelled";
+        if (offset != f.Size) return $"source size changed during copy ({offset} != {f.Size})";
+        return null;
+    }
+
+    /// Card readers have bad moments; a failed read gets a few more tries before the file is given up.
+    int ReadWithRetries(FileReader reader, AlignedBuffer buf, long offset)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return reader.Read(buf.Span, offset);
+            }
+            catch (IOError e)
+            {
+                if (attempt >= Options.ReadRetries) throw new IOException($"{e.Message} (after {Options.ReadRetries} retries)", e);
+                Thread.Sleep(250);
+            }
+        }
+    }
+
+    /// One thread per destination, so every disk works at its own speed.
+    static void OnEachDestination(DestWriter[] ws, Action<DestWriter> work)
+    {
+        var errors = new List<Exception>();
+        var threads = ws.Select(w => new Thread(() =>
+        {
+            try { work(w); }
+            catch (Exception e) { lock (errors) errors.Add(e); }
+        }) { IsBackground = true }).ToList();
+        threads.ForEach(t => t.Start());
+        threads.ForEach(t => t.Join());
+        if (errors.Count > 0) throw OffloadError.Failed(string.Join("; ", errors.Select(e => e.Message)));
+    }
+}

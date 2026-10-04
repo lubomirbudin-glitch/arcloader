@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 ## 2026-10-04 — plán 1 (jádro + CLI), průběh
 
 Implementace po úkolech; každý úkol napsal subagent a zkontroloval nezávislý reviewer.
+- Úkol 12 — engine: jedno čtení karty rozvětvené na hasher a všechny cíle, flush, ověření po jednom vlákně na cíl, zápis reportu
 
 - Úkol 11 — Engine preflight (kontroly svazků, místa, Windows názvů, FAT32)
 - Úkol 10 — kopírovací pipeline: buffer pool, hasher zdroje a zapisovač cíle (nebufferovaný zápis, `.offload-part`, ověření zpětným čtením)

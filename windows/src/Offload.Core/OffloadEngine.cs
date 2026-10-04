@@ -1,6 +1,5 @@
 namespace Offload.Core;
 
-#pragma warning disable CS0649, CS0414
 public sealed partial class OffloadEngine
 {
     readonly Lock gate = new();
