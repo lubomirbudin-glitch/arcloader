@@ -21,6 +21,8 @@ public class ProxyRendererTests
     {
         Assert.Single(ProxyRenderer.FramePositions(new ClipInfo()));
         Assert.Single(ProxyRenderer.FramePositions(new ClipInfo { FrameRate = "25/1", Duration = 0.04, Frames = 1 }));
+        var two = ProxyRenderer.FramePositions(new ClipInfo { FrameRate = "25/1", Duration = 0.08, Frames = 2 });
+        Assert.Equal([0L, 1L], two.Select(p => p.Frame));
     }
 
     [Fact]
@@ -50,6 +52,7 @@ public class ProxyRendererTests
         Assert.Equal(3, thumbs.Count);
         Assert.All(thumbs, t => Assert.Equal(new byte[] { 0xFF, 0xD8 }, t.Jpeg[..2]));
         Assert.Equal("01:00:00:00", thumbs[0].Label);
+        Assert.Equal("01:00:02:00", thumbs[1].Label);
         Assert.Equal("01:00:03:24", thumbs[2].Label);
     }
 
@@ -63,7 +66,7 @@ public class ProxyRendererTests
         using var r = new ProxyRenderer(new ProxySettings(), Tools);
         var clip = VideoClip("one.mov");
         var thumbs = r.Thumbnails(clip, card, r.Probe(clip, card));
-        Assert.NotEmpty(thumbs);
+        Assert.Single(thumbs);
     }
 
     // Review focus 1
@@ -113,10 +116,71 @@ public class ProxyRendererTests
         using var r = new ProxyRenderer(new ProxySettings { Height = 1080, Codec = ProxyCodec.Prores422HQ }, Tools);
         var clip = VideoClip("long.mov");
         var output = Path.Combine(card, "_PROXY", "long.mov");
-        bool cancel = false;
-        var e = Assert.Throws<ToolError>(() => r.Render(clip, card, r.Probe(clip, card), output, _ => cancel = true, () => cancel));
+        int cancel = 0;
+        var e = Assert.Throws<ToolError>(() => r.Render(clip, card, r.Probe(clip, card), output, _ => Volatile.Write(ref cancel, 1), () => Volatile.Read(ref cancel) == 1));
         Assert.Contains("cancelled", e.Message);
         Assert.False(File.Exists(output));
         Assert.Empty(Directory.GetFiles(Path.Combine(card, "_PROXY")));
+    }
+
+    static FrameSource TestSrc(int seconds) => new()
+    {
+        InputArgs = ["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "320x180", "-r", "25", "-i", "-"],
+        FeederExe = TestMedia.Ffmpeg,
+        FeederArgs = ["-hide_banner", "-loglevel", "error", "-nostdin", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=25:d=" + seconds, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        AudioFromInput = false,
+    };
+
+    static List<string> ConsumerArgs(FrameSource src, string output)
+    {
+        var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1" };
+        args.AddRange(src.InputArgs);
+        args.AddRange(["-c:v", "libx264", "-f", "mp4", output]);
+        return args;
+    }
+
+    [FfmpegFact]
+    public void Feeder_RenderCompletes()
+    {
+        using var dir = new TempDir();
+        var output = Path.Combine(dir.Path, "out.mp4");
+        var src = TestSrc(2);
+        using var r = new ProxyRenderer(new ProxySettings(), Tools);
+        r.RunFfmpeg(TestMedia.Ffmpeg!, ConsumerArgs(src, output), src, 2, _ => { }, () => false);
+        Assert.True(new FileInfo(output).Length > 0);
+    }
+
+    [FfmpegFact]
+    public void Feeder_CancelRepeatedly_NoCrash()
+    {
+        using var dir = new TempDir();
+        using var r = new ProxyRenderer(new ProxySettings(), Tools);
+        for (int i = 0; i < 5; i++)
+        {
+            var src = TestSrc(60);
+            var output = Path.Combine(dir.Path, $"out{i}.mp4");
+            int cancel = 0;
+            var e = Assert.Throws<ToolError>(() => r.RunFfmpeg(TestMedia.Ffmpeg!, ConsumerArgs(src, output), src, 60,
+                _ => Volatile.Write(ref cancel, 1), () => Volatile.Read(ref cancel) == 1));
+            Assert.Contains("cancelled", e.Message);
+        }
+        Thread.Sleep(300); // a late exception on a background thread would have killed the test host by now
+    }
+
+    [FfmpegFact]
+    public void Feeder_Fails_ReportsFeederError()
+    {
+        using var dir = new TempDir();
+        var output = Path.Combine(dir.Path, "out.mp4");
+        var src = new FrameSource
+        {
+            InputArgs = ["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "320x180", "-r", "25", "-i", "-"],
+            FeederExe = TestMedia.Ffmpeg,
+            FeederArgs = ["-hide_banner", "-loglevel", "error", "-nostdin", "-i", "no-such-input-file.xyz", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+            AudioFromInput = false,
+        };
+        using var r = new ProxyRenderer(new ProxySettings(), Tools);
+        var e = Assert.Throws<ToolError>(() => r.RunFfmpeg(TestMedia.Ffmpeg!, ConsumerArgs(src, output), src, null, null, () => false));
+        Assert.Contains("no-such-input-file", e.Detail);
     }
 }

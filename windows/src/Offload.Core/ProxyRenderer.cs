@@ -25,15 +25,23 @@ public sealed class ProxyRenderer : IDisposable
         Tools = tools;
         workDir = Path.Combine(Path.GetTempPath(), "offload-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(workDir);
-        if (!string.IsNullOrEmpty(settings.LutPath) && File.Exists(settings.LutPath))
+        try
         {
-            File.Copy(settings.LutPath, Path.Combine(workDir, FilterGraph.LutFile));
-            hasLut = true;
+            if (!string.IsNullOrEmpty(settings.LutPath) && File.Exists(settings.LutPath))
+            {
+                File.Copy(settings.LutPath, Path.Combine(workDir, FilterGraph.LutFile));
+                hasLut = true;
+            }
+            if (FontCandidates.FirstOrDefault(File.Exists) is string font)
+            {
+                File.Copy(font, Path.Combine(workDir, FilterGraph.FontFile));
+                hasFont = true;
+            }
         }
-        if (FontCandidates.FirstOrDefault(File.Exists) is string font)
+        catch
         {
-            File.Copy(font, Path.Combine(workDir, FilterGraph.FontFile));
-            hasFont = true;
+            try { Directory.Delete(workDir, recursive: true); } catch (Exception) { }
+            throw;
         }
     }
 
@@ -97,7 +105,10 @@ public sealed class ProxyRenderer : IDisposable
         long frames = info.Frames ?? (long)Math.Round(duration * fps);
         if (frames <= 1) return [first];
         long middle = frames / 2, last = frames - 1;
-        return [first, new FramePosition(middle / fps, middle, false), new FramePosition(last / fps, last, true)];
+        var all = new List<FramePosition> { first };
+        if (middle > 0) all.Add(new FramePosition(middle / fps, middle, false));
+        if (last > middle) all.Add(new FramePosition(last / fps, last, true));
+        return all;
     }
 
     internal static string Label(ClipInfo info, FramePosition p) =>
@@ -120,6 +131,7 @@ public sealed class ProxyRenderer : IDisposable
         var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, "ffmpeg not found");
         var vf = FilterGraph.Thumbnail(hasLut && applyLut);
         var result = new List<Thumbnail>();
+        ToolError? lastError = null;
         foreach (var pos in FramePositions(info))
         {
             var src = SourceFor(clip, cardPath, info, pos.Seconds, forRender: false);
@@ -135,7 +147,12 @@ public sealed class ProxyRenderer : IDisposable
                 args.AddRange(video && pos.FromEnd ? ["-vf", vf, "-update", "1"] : ["-frames:v", "1", "-vf", vf]);
                 args.AddRange(["-q:v", "5", output]);
                 RunFfmpeg(ffmpeg, args, src, null, null, () => false);
+                if (!File.Exists(output)) throw new ToolError("ffmpeg", 0, "no frame");
                 result.Add(new Thumbnail(File.ReadAllBytes(output), Label(info, pos)));
+            }
+            catch (ToolError e)
+            {
+                lastError = e; // one bad position must not cost the other thumbnails
             }
             finally
             {
@@ -143,6 +160,7 @@ public sealed class ProxyRenderer : IDisposable
                 NativeIO.Delete(output);
             }
         }
+        if (result.Count == 0 && lastError != null) throw lastError;
         return result;
     }
 
@@ -196,44 +214,65 @@ public sealed class ProxyRenderer : IDisposable
         }
     }
 
-    void RunFfmpeg(string ffmpeg, List<string> args, FrameSource src, double? duration, Action<double>? progress, Func<bool> isCancelled)
+    internal void RunFfmpeg(string ffmpeg, List<string> args, FrameSource src, double? duration, Action<double>? progress, Func<bool> isCancelled)
     {
         using var ff = new ToolProcess(ffmpeg, args, workDir, pipeStdin: src.FeederExe != null);
         using var feeder = src.FeederExe != null ? new ToolProcess(src.FeederExe, src.FeederArgs, workDir, pipeStdin: false) : null;
         Thread? pump = null;
-        feeder?.Start(null);
-        ff.Start(line =>
+        Stream? input = null, sink = null;
+        bool feederKilled = false;
+        try
         {
-            if (progress == null || duration is not double d || d <= 0 || !line.StartsWith("out_time_us=", StringComparison.Ordinal)) return;
-            if (double.TryParse(line["out_time_us=".Length..], NumberStyles.Float, CultureInfo.InvariantCulture, out var us))
-                progress(Math.Min(1, us / 1_000_000 / d));
-        });
-        if (feeder != null)
-        {
-            pump = new Thread(() =>
+            feeder?.Start(null);
+            ff.Start(line =>
             {
-                try { feeder.Stdout.CopyTo(ff.Stdin, 4 << 20); }
-                catch (IOException) { /* ffmpeg closed its input (done or cancelled) */ }
-                finally { try { ff.Stdin.Close(); } catch (IOException) { } }
-            }) { IsBackground = true };
-            pump.Start();
-        }
-        while (!ff.WaitForExit(200))
-        {
-            if (!isCancelled()) continue;
-            ff.Kill();
-            feeder?.Kill();
+                if (progress == null || duration is not double d || d <= 0 || !line.StartsWith("out_time_us=", StringComparison.Ordinal)) return;
+                if (double.TryParse(line["out_time_us=".Length..], NumberStyles.Float, CultureInfo.InvariantCulture, out var us))
+                    progress(Math.Clamp(us / 1_000_000 / d, 0, 1));
+            });
+            if (feeder != null)
+            {
+                // Streams are taken here, on the calling thread, so the pump never touches a disposed process.
+                input = feeder.Stdout;
+                sink = ff.Stdin;
+                var from = input;
+                var to = sink;
+                pump = new Thread(() =>
+                {
+                    // Any failure here just means the pipe ended (done, cancelled or a process died); the exit codes tell the story.
+                    // Never let an exception escape a background thread: it would take the whole process down.
+                    try { from.CopyTo(to, 4 << 20); }
+                    catch (Exception) { }
+                    finally { try { to.Close(); } catch (Exception) { } }
+                }) { IsBackground = true };
+                pump.Start();
+            }
+            while (!ff.WaitForExit(200))
+            {
+                if (!isCancelled()) continue;
+                ff.Kill();
+                feeder?.Kill();
+                feederKilled = true;
+                ff.WaitForExit();
+                pump?.Join(5000);
+                throw new ToolError("ffmpeg", -1, "cancelled");
+            }
             ff.WaitForExit();
-            throw new ToolError("ffmpeg", -1, "cancelled");
+            if (feeder != null)
+            {
+                if (!feeder.WaitForExit(2000)) { feeder.Kill(); feederKilled = true; }
+                pump!.Join(2000);
+            }
+            // A feeder that died on its own is the real cause; ffmpeg only saw a truncated stream.
+            if (feeder != null && !feederKilled && feeder.WaitForExit(0) && feeder.ExitCode != 0)
+                throw new ToolError(feeder.Name, feeder.ExitCode, feeder.StderrTail);
+            if (ff.ExitCode != 0) throw new ToolError("ffmpeg", ff.ExitCode, ff.StderrTail);
         }
-        ff.WaitForExit();
-        if (feeder != null)
+        finally
         {
-            if (!feeder.WaitForExit(2000)) feeder.Kill();
-            pump!.Join(2000);
+            pump?.Join(2000);
+            try { input?.Dispose(); } catch (Exception) { }
+            try { sink?.Dispose(); } catch (Exception) { }
         }
-        if (ff.ExitCode != 0) throw new ToolError("ffmpeg", ff.ExitCode, ff.StderrTail);
-        if (feeder != null && feeder.WaitForExit(0) && feeder.ExitCode is int code && code != 0 && code != -1)
-            throw new ToolError(feeder.Name, code, feeder.StderrTail);
     }
 }
