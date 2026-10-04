@@ -33,3 +33,42 @@ public static class TestFs
         return data;
     }
 }
+
+public static class Reports
+{
+    /// Two-file report for one destination at `cardPath`; `destError` makes the second file fail there.
+    public static OffloadReport Sample(string cardPath, bool verified = true, string? destError = null, bool unbuffered = true)
+    {
+        var t0 = new DateTime(2026, 10, 4, 8, 0, 0, DateTimeKind.Utc);
+        var ok = verified ? "verified" : "written";
+        return new OffloadReport
+        {
+            CardName = "A001",
+            Date = "2026-10-04",
+            Source = @"E:\",
+            SourceFilesystem = "exFAT",
+            Started = t0,
+            CopyFinished = t0.AddSeconds(10),
+            Finished = t0.AddSeconds(15),
+            Verified = verified,
+            TotalFiles = 2,
+            TotalBytes = 3000,
+            Destinations =
+            [
+                new ReportDestination
+                {
+                    Root = Path.GetDirectoryName(Path.GetDirectoryName(cardPath))!, CardPath = cardPath, Filesystem = "NTFS",
+                    FilesOK = destError == null ? 2 : 1, FilesFailed = destError == null ? 0 : 1,
+                    Unbuffered = unbuffered ? null : false,
+                },
+            ],
+            Files =
+            [
+                new ReportFile { Path = "CLIP/A&B.mov", Size = 1000, Modified = t0, Xxh64 = "0123456789abcdef", Destinations = [ok], Errors = [null] },
+                new ReportFile { Path = "CLIP/c 02.mov", Size = 2000, Modified = t0, Xxh64 = "fedcba9876543210",
+                                 Destinations = [destError == null ? ok : "failed"], Errors = [destError] },
+            ],
+            Skipped = [".DS_Store"],
+        };
+    }
+}
