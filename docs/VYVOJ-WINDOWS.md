@@ -20,6 +20,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 Implementace po úkolech; každý úkol napsal subagent a zkontroloval nezávislý reviewer.
 
+- Úkol 10 — kopírovací pipeline: buffer pool, hasher zdroje a zapisovač cíle (nebufferovaný zápis, `.offload-part`, ověření zpětným čtením)
 - Úkol 9 — HTML report a zápis reportu
 - Úkol 8 — ASC MHL v2 se seznamem a C4 řetězem (`165d68b`)
 - Úkol 7 — `OffloadReport`: JSON kompatibilní s Mac (seřazené klíče, data UTC na sekundy, bez `null`),
