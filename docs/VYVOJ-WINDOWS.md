@@ -16,6 +16,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | naplánováno |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | naplánováno |
 
+## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
+
+- Úkol 1 — hledání externích nástrojů (ffmpeg, REDline, art-cmd, braw-decode) a spouštění procesů
+
 ## 2026-10-04 — plán 1 (jádro + CLI), průběh
 
 Implementace po úkolech; každý úkol napsal subagent a zkontroloval nezávislý reviewer.
