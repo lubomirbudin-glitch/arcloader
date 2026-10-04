@@ -33,3 +33,11 @@ public static class TestMedia
     public static void IdentityLut(string path) => File.WriteAllText(path,
         "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n");
 }
+
+public sealed class EdgeFactAttribute : FactAttribute
+{
+    public EdgeFactAttribute()
+    {
+        if (PdfReport.FindEdge() == null) Skip = "Microsoft Edge not found";
+    }
+}
