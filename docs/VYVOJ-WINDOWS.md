@@ -20,6 +20,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 Implementace po úkolech; každý úkol napsal subagent a zkontroloval nezávislý reviewer.
 
+- Úkol 8 — ASC MHL v2 se seznamem a C4 řetězem (`165d68b`)
 - Úkol 7 — `OffloadReport`: JSON kompatibilní s Mac (seřazené klíče, data UTC na sekundy, bez `null`),
   textový souhrn, seznam `.xxh64`; nové volitelné pole `unbuffered` u cíle (`28d1b11`)
 - Úkol 6 — datové typy enginu a médií, názvy v JSON jako Swift `Codable` (`46b00bc`)
