@@ -22,15 +22,24 @@ static class CopyCommand
         foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun }) cmd.Options.Add(o);
         cmd.SetAction(r =>
         {
-            var config = new JobConfig(Path.GetFullPath(r.GetValue(source)!), r.GetValue(dest)!.Select(Path.GetFullPath).ToList())
+            JobConfig config;
+            try
             {
-                CardName = r.GetValue(name),
-                Date = r.GetValue(date),
-                ChunkMB = r.GetValue(chunkMb),
-                Buffers = r.GetValue(buffers),
-                Verify = !r.GetValue(noVerify),
-                AllowSameDevice = r.GetValue(allowSame),
-            };
+                config = new JobConfig(CliPath.Full(r.GetValue(source)!), r.GetValue(dest)!.Select(CliPath.Full).ToList())
+                {
+                    CardName = r.GetValue(name),
+                    Date = r.GetValue(date),
+                    ChunkMB = r.GetValue(chunkMb),
+                    Buffers = r.GetValue(buffers),
+                    Verify = !r.GetValue(noVerify),
+                    AllowSameDevice = r.GetValue(allowSame),
+                };
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"Error: {e.Message}");
+                return 1;
+            }
             return Run(config, r.GetValue(dryRun));
         });
         return cmd;

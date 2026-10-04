@@ -35,6 +35,8 @@ sealed class ProgressDisplay : IDisposable
     {
         lock (gate)
         {
+            try
+            {
             var st = job.Status();
             var now = DateTime.UtcNow;
             double dt = Math.Max(0.001, (now - lastTime).TotalSeconds);
@@ -80,6 +82,11 @@ sealed class ProgressDisplay : IDisposable
             }
             ConsoleLine.Write(line);
             lastTime = now;
+            }
+            catch (Exception)
+            {
+                // Progress display is optional; never take the copy down.
+            }
         }
     }
 }

@@ -12,7 +12,20 @@ static class VerifyCommand
         var cardPath = new Argument<string>("cardPath") { Description = "Card folder (<root>/<date>/<card>)." };
         var cmd = new Command("verify", "Re-verify an existing card folder against its _REPORT hash list.");
         cmd.Arguments.Add(cardPath);
-        cmd.SetAction(r => Run(Path.GetFullPath(r.GetValue(cardPath)!)));
+        cmd.SetAction(r =>
+        {
+            string full;
+            try
+            {
+                full = CliPath.Full(r.GetValue(cardPath)!);
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"Error: {e.Message}");
+                return 1;
+            }
+            return Run(full);
+        });
         return cmd;
     }
 

@@ -24,12 +24,12 @@ static class BenchCommand
                 if (r.GetValue(read) is string rd)
                 {
                     Console.WriteLine($"Read {rd}");
-                    foreach (var l in Bench.Read(Path.GetFullPath(rd), bytes, [64 << 10, 1 << 20, 4 << 20, 16 << 20])) Print(l);
+                    foreach (var l in Bench.Read(CliPath.Full(rd), bytes, [64 << 10, 1 << 20, 4 << 20, 16 << 20])) Print(l);
                 }
                 foreach (var w in r.GetValue(write) ?? [])
                 {
                     Console.WriteLine($"Write {w}");
-                    foreach (var l in Bench.Write(Path.GetFullPath(w), bytes, 16 << 20)) Print(l);
+                    foreach (var l in Bench.Write(CliPath.Full(w), bytes, 16 << 20)) Print(l);
                 }
                 return 0;
             }
