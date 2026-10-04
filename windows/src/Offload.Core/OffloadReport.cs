@@ -168,6 +168,24 @@ public sealed partial class OffloadReport
 
     public static OffloadReport FromJson(string json) => JsonSerializer.Deserialize<OffloadReport>(json, SerializeOptions)!;
 
+    /// Writes all report files into `<card>/_REPORT`. The hash list and MHL are the record of the copy itself,
+    /// so they are written once (`includeHashRecords`); the HTML/JSON are refreshed as clips get analysed.
+    public void Write(string cardPath, bool includeHashRecords)
+    {
+        var dir = System.IO.Path.Combine(cardPath, Layout.ReportDirName);
+        NativeIO.Mkdirs(dir);
+        var outputs = new List<(string Name, string Text)>
+        {
+            ("offload_report.json", ToJson()),
+            ("offload_report.txt", Summary),
+            ($"{CardName}_report.html", HtmlReport.Render(this)),
+        };
+        if (includeHashRecords) outputs.Add(($"{CardName}.xxh64", HashList));
+        foreach (var (name, text) in outputs)
+            NativeIO.WriteFileDurably(System.IO.Path.Combine(dir, name), Encoding.UTF8.GetBytes(text));
+        if (includeHashRecords) Mhl.Write(this, cardPath);
+    }
+
     static JsonNode? Sorted(JsonNode? node) => node switch
     {
         JsonObject o => new JsonObject(o.OrderBy(p => p.Key, StringComparer.Ordinal)
