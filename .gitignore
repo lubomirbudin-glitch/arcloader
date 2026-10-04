@@ -1,6 +1,2 @@
-.build/
-build/
-Tools/bin/
-*.xcodeproj/xcuserdata/
 .DS_Store
-TestMedia/
+.superpowers/

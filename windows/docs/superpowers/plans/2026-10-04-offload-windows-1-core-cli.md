@@ -4,11 +4,11 @@
 
 **Goal:** Knihovna `Offload.Core` a CLI `offload.exe` (copy / verify / bench), které na Windows zkopírují kartu na více disků, ověří ji zpětným čtením (xxHash64) a zapíšou report (JSON, TXT, HTML, `.xxh64`, ASC MHL) ve stejném formátu jako Mac verze.
 
-**Architecture:** Port `Sources/OffloadKit` do C# soubor po souboru. Karta se čte jednou do zarovnaných bufferů; každý blok jde do vlákna hasheru a do vlákna každého cíle (sériové fronty). Zápis i čtení obcházejí cache Windows (`FILE_FLAG_NO_BUFFERING`), flush přes `FlushFileBuffers`. Analýza klipů, proxy, PDF (plán 2), braw-decode (plán 3) a GUI (plán 4) tu nejsou.
+**Architecture:** Port `mac/Sources/OffloadKit` do C# soubor po souboru. Karta se čte jednou do zarovnaných bufferů; každý blok jde do vlákna hasheru a do vlákna každého cíle (sériové fronty). Zápis i čtení obcházejí cache Windows (`FILE_FLAG_NO_BUFFERING`), flush přes `FlushFileBuffers`. Analýza klipů, proxy, PDF (plán 2), braw-decode (plán 3) a GUI (plán 4) tu nejsou.
 
 **Tech Stack:** C# / .NET 10 (`net10.0-windows`), `System.IO.Hashing` 10.0.12, `System.CommandLine` 2.0.12, xUnit, P/Invoke (`LibraryImport`) do kernel32.
 
-**Spec:** `windows/docs/superpowers/specs/2026-10-04-offload-windows-design.md` (oddíly 2–5, 9, 10). Referenční chování: Mac zdroj v `Sources/OffloadKit/*.swift` a `Sources/offload/main.swift`.
+**Spec:** `windows/docs/superpowers/specs/2026-10-04-offload-windows-design.md` (oddíly 2–5, 9, 10). Referenční chování: Mac zdroj v `mac/Sources/OffloadKit/*.swift` a `mac/Sources/offload/main.swift`.
 
 ## Rozdělení na plány
 
@@ -24,7 +24,7 @@
 
 - Platforma: `net10.0-windows`, Windows 10/11 x64. Všechny projekty dědí `windows/Directory.Build.props`.
 - Závislosti jen: `System.IO.Hashing` 10.0.12, `System.CommandLine` 2.0.12, šablona `xunit` pro testy. Nic dalšího.
-- Mac kód (`Sources/`, `Package.swift`, `scripts/`, `Tools/`) se nemění. Vše nové je ve `windows/`.
+- Mac kód (celá složka `mac/`) se nemění. Vše nové je ve `windows/`; společná dokumentace v `docs/`.
 - Na zdroj (kartu) se nikdy nezapisuje: otevírá se jen `FileAccess.Read`.
 - Formáty na disku shodné s Mac verzí: `<root>/<YYYY-MM-DD>/<karta>/`, `_REPORT/`, `_PROXY/`, `ascmhl/`, rozpracované soubory `.<jméno>.offload-part`, relativní cesty v reportech vždy s `/`, JSON klíče jako Swift `Codable` (camelCase), data ISO 8601 UTC na sekundy (`2026-10-04T08:00:00Z`), `null` vlastnosti vynechané.
 - `tool` = `offload`, `version` = `0.1.0-win`.
@@ -4924,7 +4924,7 @@ python -m pip install --user ascmhl
 python -m ascmhl verify D:\offload-e2e\2026-10-04\A001
 ```
 
-Expected: ascmhl ověří všech 5 souborů bez chyb (exit 0; žádné „mismatch“, „missing“ ani „new file“). Pokud ascmhl hlásí strukturu MHL jako neplatnou, porovnat výstup s Mac `Sources/OffloadKit/MHL.swift` a opravit `Mhl.cs` + test v `MhlTests` dřív, než se pokračuje.
+Expected: ascmhl ověří všech 5 souborů bez chyb (exit 0; žádné „mismatch“, „missing“ ani „new file“). Pokud ascmhl hlásí strukturu MHL jako neplatnou, porovnat výstup s Mac `mac/Sources/OffloadKit/MHL.swift` a opravit `Mhl.cs` + test v `MhlTests` dřív, než se pokračuje.
 
 - [ ] **Step 4: Ostrý test na skutečné kartě (s uživatelem)**
 

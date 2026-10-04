@@ -4,7 +4,7 @@ Datum: 2026-10-04 · Stav: ke schválení
 
 ## 1. Cíl
 
-Windows verze aplikace Offload s **plnou funkční paritou** s macOS verzí (`Sources/`, verze 0.1.0):
+Windows verze aplikace Offload s **plnou funkční paritou** s macOS verzí (`mac/Sources/`, verze 0.1.0):
 kopie karty na více disků najednou, ověření zpětným čtením (xxHash64), report (HTML, JSON, TXT, `.xxh64`,
 ASC MHL v2, PDF), analýza klipů s náhledy, proxy s LUT / burn-in / frame lines, RAW (BRAW, R3D, ARRIRAW),
 GUI i CLI.
@@ -22,7 +22,7 @@ GUI i CLI.
 |---|---|
 | Rozsah | plná parita s Mac verzí |
 | Technologie | C# / .NET 10, WPF |
-| BRAW | port `Tools/braw-decode` do C++ pro Windows |
+| BRAW | port `mac/Tools/braw-decode` do C++ pro Windows |
 | Umístění | stejné repo, složka `windows/`; Mac kód se nemění |
 | Jazyk UI | čeština, stejné texty a rozvržení jako na Macu |
 | Distribuce | přenosná složka / zip, bez instalátoru |
@@ -71,7 +71,7 @@ ffmpeg/ffprobe: build gyan.dev (full), přibalený do `bin/`; `windows/tools/bin
 
 `Offload.Core` drží rozdělení souborů OffloadKit, aby se obě verze daly porovnávat soubor proti souboru.
 
-| Mac (`Sources/OffloadKit`) | Windows (`Offload.Core`) | Poznámka |
+| Mac (`mac/Sources/OffloadKit`) | Windows (`Offload.Core`) | Poznámka |
 |---|---|---|
 | `IO.swift` | `NativeIO.cs` | P/Invoke Win32, viz 4.2 |
 | `Engine.swift` | `OffloadEngine.cs`, `BufferPool.cs`, `DestWriter.cs`, `SourceHasher.cs` | GCD → vlákna + fronty, viz 4.1 |
@@ -89,8 +89,8 @@ ffmpeg/ffprobe: build gyan.dev (full), přibalený do `bin/`; `windows/tools/bin
 | `Tools.swift` | `ExternalTools.cs`, `ToolProcess.cs` | hledání nástrojů, viz 6.4 |
 | `Job.swift` | `OffloadJob.cs` | 1:1 (stage 1 copy, stage 2 post) |
 | `Bench.swift` | `Bench.cs` | 1:1 |
-| `Sources/offload/main.swift` | `Offload.Cli/Program.cs` | stejné příkazy a volby |
-| `Sources/OffloadApp/*` | `Offload.App/*` | viz 8 |
+| `mac/Sources/offload/main.swift` | `Offload.Cli/Program.cs` | stejné příkazy a volby |
+| `mac/Sources/OffloadApp/*` | `Offload.App/*` | viz 8 |
 
 ## 4. Jádro kopírování
 
@@ -258,12 +258,12 @@ Doplněno 2026-10-04 na žádost uživatele; mění i Mac verzi.
   - BRAW: `braw-decode --start N --count 1`,
   - R3D / ARRIRAW: z hotové proxy; když se proxy nerenderují, dekodér vytáhne tři jednotlivé framy
     (REDline `--start/--end`, art-cmd s rozsahem framů) do tempu.
-- Mac: stejná změna v `Sources/OffloadKit/Proxy.swift`, `Job.swift`, `Report.swift`, `HTMLReport.swift`.
+- Mac: stejná změna v `mac/Sources/OffloadKit/Proxy.swift`, `Job.swift`, `Report.swift`, `HTMLReport.swift`.
   **Na tomto PC ji nelze sestavit ani otestovat** — Mac část se dokončí a ověří na Macu.
 
 ### 6.6 braw-decode pro Windows
 
-- Port `Tools/braw-decode/braw-decode.cpp` do `windows/tools/braw-decode/`, MSVC (C++17), CMake.
+- Port `mac/Tools/braw-decode/braw-decode.cpp` do `windows/tools/braw-decode/`, MSVC (C++17), CMake.
 - Stejné CLI: `--info [--scale S] clip`, `[--scale S] [--start N] [--count N] clip`; stejný JSON a výstup RGB48LE.
 - Windows SDK API je COM (`IUnknown`, `BSTR` místo `CFStringRef`); factory přes
   `CreateBlackmagicRawFactoryInstanceFromPath` z Windows dispatch souboru SDK.
@@ -401,7 +401,7 @@ sekce *Hardware*, řetěz na kartě úlohy) jsou v plánu 4.
 - `offload verify <cardPath>`
 - `offload bench [--read <card|file>] [--write <folder> …] [--gb 2]`
 
-Názvy a výchozí hodnoty jsou převzaté ze `Sources/offload/main.swift`. Výstup průběhu na konzoli jako na Macu.
+Názvy a výchozí hodnoty jsou převzaté ze `mac/Sources/offload/main.swift`. Výstup průběhu na konzoli jako na Macu.
 Exit kód jako na Macu: 0 = vše hotovo a ověřeno, 1 = chyba (preflight, selhané soubory, neúspěšné ověření).
 
 ## 10. Testování

@@ -1,51 +1,29 @@
 # Offload
 
-Kopírování paměťových karet z kamery na více disků najednou, s ověřením, reportem a volitelnými proxy s LUT. macOS 13+.
+Kopírování paměťových karet z kamery na více disků najednou: karta se přečte jednou, zapíše se na všechny
+cíle, každý soubor se zpětně přečte a ověří (xxHash64). Výsledkem je report (HTML, PDF, JSON, TXT, ASC MHL),
+volitelně proxy s LUT.
 
-## Jak to funguje
+Projekt má dvě verze, každou ve vlastní složce:
 
-1. **Kopie** – karta se čte **jen jednou** (velké bloky, bez page cache), každý blok jde paralelně na všechny cíle
-   a zároveň do xxHash64. Rychlost = nejpomalejší článek (karta nebo nejpomalejší disk).
-2. **Ověření** – po `F_FULLFSYNC` se každý soubor přečte z každého disku zpět (bez cache) a porovná se zdrojovým hashem.
-   Teprve potom aplikace hlásí „kartu lze vysunout“.
-3. **Report** – `<root>/<YYYY-MM-DD>/<karta>/_REPORT/`: HTML (náhledy, metadata, TC), JSON, TXT, seznam xxh64;
-   `ascmhl/` = ASC MHL v2 (ověřitelné `ascmhl` / Silverstack / ShotPut …).
-4. **Proxy (volitelné)** – po ověření, čte se z disku (karta už není potřeba): scale → LUT (.cube) → burn-in název + TC
-   → H.264/HEVC (VideoToolbox) nebo ProRes Proxy/LT do `_PROXY/`, s TC stopou pro relink. Kopie na všechny cíle.
+| Verze | Složka | Technologie | Stav |
+|---|---|---|---|
+| **Mac** | [`mac/`](mac/) | Swift, SwiftUI, macOS 13+ | 0.1.0 |
+| **Windows** | [`windows/`](windows/) | C# / .NET 10, WPF, Windows 10/11 | ve vývoji |
 
-Rozpracované soubory mají název `.<jméno>.offload-part`, nedokončená kopie tedy nikdy nevypadá jako hotová.
-Na kartu se nikdy nezapisuje. Během offloadu se nespí.
+Obě verze zapisují stejné výstupy na disk — kopii z Macu ověří Windows a naopak.
 
-## Formáty a dekodéry
+## Dokumentace
 
-| Formát | Proxy přes | Potřeba |
-|---|---|---|
-| ProRes, H.264/H.265, XAVC, XF-AVC, DNx, AVC-Intra (MOV/MP4/MXF) | ffmpeg | přibaleno |
-| Blackmagic RAW | `braw-decode` → ffmpeg | Blackmagic RAW Player, SDK nebo DaVinci Resolve |
-| RED R3D | REDline → ProRes LT → ffmpeg | REDCINE-X PRO |
-| ARRIRAW, ARRIRAW HDE, ARRICORE (MXF, .ari) | art-cmd → ProRes LT (log) → ffmpeg | ARRI Reference Tool CMD – nainstalováno v `~/Library/Application Support/Offload/arri/` (odkaz v `…/Offload/bin/art-cmd`) |
-| Canon Cinema RAW Light, Sony X-OCN | – | na macOS Intel neexistuje CLI dekodér; zkopíruje a ověří se, proxy se přeskočí |
+- [docs/ROZDILY.md](docs/ROZDILY.md) — co umí která verze, čím se liší, co čemu odpovídá
+- [docs/FORMATY.md](docs/FORMATY.md) — společný formát na disku (struktura složek, report, `.xxh64`, ASC MHL)
+- [docs/VYVOJ-MAC.md](docs/VYVOJ-MAC.md) — historie Mac verze
+- [docs/VYVOJ-WINDOWS.md](docs/VYVOJ-WINDOWS.md) — historie Windows verze
+- [mac/README.md](mac/README.md), [mac/docs/](mac/docs/) — popis a návod k Mac verzi
+- [windows/README.md](windows/README.md) — Windows verze; návrh a plány v `windows/docs/superpowers/`
 
-S LUT se RAW dekóduje do logu (RED: IPP2 Log3G10/RWG; ARRI: podle názvu LUT – „LogC4“/„LogC3“ – jinak nativní log klipu z metadat).
-ARRIRAW v MXF pozná aplikace automaticky (ffmpeg ho nečte → zeptá se art-cmd).
+## Pravidla pro změny
 
-Testovací materiál (mimo git): `TestMedia/ARRIRAW` – ukázky ARRI (ALEXA 35 Xtreme ARRIRAW, ALEXA Mini HDE)
-z veřejného FTP ARRI; `TestMedia/LUT` – oficiální ARRI LogC4 a LogC3 LUT balíčky.
-Bez LUT se použije look z kamery.
-
-## Build
-
-```sh
-scripts/build-app.sh          # → build/Offload.app (+ CLI uvnitř)
-```
-
-`Tools/bin/` (ignorováno gitem) musí obsahovat `ffmpeg` a `ffprobe` (statické x86_64 buildy z evermeet.cx);
-`braw-decode` se zbuilduje automaticky z `Tools/braw-decode/` (hlavičky BRAW SDK, licence Blackmagic je v nich).
-
-## CLI
-
-```sh
-offload /Volumes/A001 -d /Volumes/RAID_A -d /Volumes/SHUTTLE_B [--proxy --lut look.cube --proxy-codec h264]
-offload verify /Volumes/RAID_A/2026-10-03/A001
-offload bench --read /Volumes/A001 --write /Volumes/RAID_A --write /Volumes/SHUTTLE_B
-```
+- Změna jedné verze → záznam do jejího `docs/VYVOJ-*.md` ve stejném commitu.
+- Rozejdou-li se tím verze (funkce, chování) → úprava `docs/ROZDILY.md`.
+- Změna formátu na disku → změna v obou verzích + `docs/FORMATY.md`.
