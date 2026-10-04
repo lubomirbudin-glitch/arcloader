@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
 
+- Úkol 7 — HTML report: tři snímky na klip s popisky TC, stránka A4 na šířku pro tisk
 - Úkol 6 — renderer: 3 snímky na klip (první, prostřední, poslední) s popiskem TC, render proxy s LUT a burn-in, zrušení bez zbytků
 - Úkol 5 — RAW backendy: Blackmagic RAW, RED (REDline), ARRIRAW (art-cmd), Canon RAW jen kopie; metadata a parametry testované bez nástrojů
 - Úkol 4 — filter graph pro náhledy a proxy (ořez na frame lines, LUT, burn-in názvu a TC) jen s relativními jmény souborů

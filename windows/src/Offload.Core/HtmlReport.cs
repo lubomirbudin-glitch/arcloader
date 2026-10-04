@@ -17,7 +17,7 @@ public static class HtmlReport
     const string RootCss = ":root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e3e3e0;--ok:#1f8a4c;--okbg:#e5f4ea;--bad:#c62828;--badbg:#fdeaea;--warn:#a86400;--warnbg:#fdf2dc;--accent:#3a5bd9}";
     const string DarkCss = "@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2e33;--ok:#4cc27c;--okbg:#14301f;--bad:#ff6b6b;--badbg:#3a1717;--warn:#f0b04a;--warnbg:#382a10;--accent:#8aa2ff}}";
     /// For the PDF: light colours only and the full file list expanded.
-    const string PrintCss = "body{background:#fff;font-size:11px}main{padding:0;max-width:none}th,td{padding:5px 7px}tr{break-inside:avoid}h2{break-after:avoid}.stat b{font-size:17px}.thumb,.nothumb{width:112px;height:63px}";
+    const string PrintCss = "@page{size:A4 landscape;margin:28pt}body{background:#fff;font-size:11px}main{padding:0;max-width:none}th,td{padding:5px 7px}tr{break-inside:avoid}h2{break-after:avoid}.stat b{font-size:17px}.thumb,.nothumb{width:112px;height:63px}.thumbs figure img{width:96px;height:54px}";
     const string BaseCss =
         "*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 \"Segoe UI\",-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif}\n" +
         "main{max-width:1200px;margin:0 auto;padding:28px 20px 60px}\n" +
@@ -36,6 +36,7 @@ public static class HtmlReport
         "td.clip{white-space:normal;min-width:180px;max-width:300px}.wrap{white-space:normal}\n" +
         ".thumb{width:128px;height:72px;object-fit:contain;background:#000;border-radius:4px;display:block}\n" +
         ".nothumb{width:128px;height:72px;border-radius:4px;background:var(--line)}\n" +
+        ".thumbs{display:flex;gap:4px}.thumbs figure{margin:0}.thumbs figcaption{font:10px ui-monospace,Consolas,monospace;color:var(--muted);text-align:center}\n" +
         ".clipname{font-weight:600}.path{color:var(--muted);font-size:12px}\n" +
         "details summary{cursor:pointer;padding:10px 0;font-weight:600}\n" +
         ".err{white-space:normal;color:var(--bad)}\n" +
@@ -171,7 +172,8 @@ public static class HtmlReport
         foreach (var c in r.Clips)
         {
             var img = c.Thumbnails.Count > 0
-                ? $"<img class=\"thumb\" src=\"data:image/jpeg;base64,{Convert.ToBase64String(c.Thumbnails[0].Jpeg)}\" alt=\"\">"
+                ? "<div class=\"thumbs\">" + string.Concat(c.Thumbnails.Select(t =>
+                    $"<figure><img class=\"thumb\" src=\"data:image/jpeg;base64,{Convert.ToBase64String(t.Jpeg)}\" alt=\"\"><figcaption>{Esc(t.Label)}</figcaption></figure>")) + "</div>"
                 : "<div class=\"nothumb\"></div>";
             var i = c.Info;
             var codecParts = new List<string>();

@@ -44,6 +44,10 @@ public class HtmlReportTests
     }
 
     [Fact]
+    public void Print_HasA4LandscapePage() =>
+        Assert.Contains("@page{size:A4 landscape;margin:28pt}", HtmlReport.Render(Reports.Sample(Card), forPrint: true));
+
+    [Fact]
     public void Clips_RenderRowWithThumbnailAndProxyStatus()
     {
         var r = Reports.Sample(Card);
@@ -52,12 +56,14 @@ public class HtmlReportTests
             Clip = new Clip { Name = "A001C001", Path = "CLIP/A&B.mov", Format = ClipFormat.Video, Segments = ["CLIP/A&B.mov"], Bytes = 1000 },
             Info = new ClipInfo { Codec = "prores", Width = 3840, Height = 2160, FrameRate = "25/1", Duration = 12, AudioChannels = 2, Timecode = "01:00:00:00" },
             ProxyStatus = ProxyStatus.Done,
-            Thumbnails = [new([1, 2, 3], "01:00:00:00")],
+            Thumbnails = [new([1, 2, 3], "01:00:00:00"), new([4, 5, 6], "01:00:06:00"), new([7, 8, 9], "01:00:11:24")],
         });
         r.Proxy = new ProxySettings { Enabled = true, FrameAspect = 1.66 };
         var html = HtmlReport.Render(r);
         Assert.Contains("<h2>Klipy</h2>", html);
-        Assert.Contains("src=\"data:image/jpeg;base64,AQID\"", html);
+        Assert.Contains("<div class=\"thumbs\"><figure><img class=\"thumb\" src=\"data:image/jpeg;base64,AQID\" alt=\"\"><figcaption>01:00:00:00</figcaption></figure>", html);
+        Assert.Contains("base64,BAUG\" alt=\"\"><figcaption>01:00:06:00</figcaption>", html);
+        Assert.Contains("base64,BwgJ\" alt=\"\"><figcaption>01:00:11:24</figcaption></figure></div>", html);
         Assert.Contains("3840×2160", html);
         Assert.Contains("<td class=\"ok\">hotovo</td>", html);
         Assert.Contains("2 ch", html);
