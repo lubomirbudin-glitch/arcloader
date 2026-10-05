@@ -21,8 +21,9 @@ internal interface IRawBackend
 /// BRAW and Canon ignore it (BRAW always decodes in the clip's gamma).
 internal sealed record RawLook(bool Log, string? ArriColorSpace);
 
-/// Vendor decoders for formats ffmpeg cannot read. All of them hand ffmpeg footage in the camera's
-/// log encoding, so the same LUT / scale / burn-in chain applies to every camera.
+/// Vendor decoders for formats ffmpeg cannot read. When a LUT is applied they hand ffmpeg the camera's log
+/// (RawLook.Log; BRAW always decodes in the clip's gamma), so the same LUT / scale / burn-in chain fits every
+/// camera; without a LUT, RED and ARRI deliver their own Rec.709 look.
 internal static class RawBackends
 {
     public static readonly IReadOnlyList<IRawBackend> All = [new BrawBackend(), new R3dBackend(), new ArriBackend(), new CanonRawBackend()];

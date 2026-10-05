@@ -163,7 +163,7 @@ public sealed class ProxyRenderer : IDisposable
     }
 
     /// Built-in LUTs expect legal-range input: full-range sources (BRAW, video tagged "pc") are pre-mapped first.
-    static bool PreMap(LutUse? lut, FrameSource src, ClipInfo info) =>
+    internal static bool NeedsPreMap(LutUse? lut, FrameSource src, ClipInfo info) =>
         lut?.IsBuiltin == true && (src.FullRange || info.ColorRange == "pc");
 
     /// Where ffmpeg's input seek (-ss before -i) should land for a thumbnail position. A frame in the middle is
@@ -197,7 +197,7 @@ public sealed class ProxyRenderer : IDisposable
             try
             {
                 src = SourceFor(clip, cardPath, info, look, pos.Seconds, forRender: false);
-                var vf = FilterGraph.Thumbnail(lutFile, PreMap(lut, src, info));  // the pre-map depends on the source
+                var vf = FilterGraph.Thumbnail(lutFile, NeedsPreMap(lut, src, info));  // the pre-map depends on the source
                 bool video = clip.Format == ClipFormat.Video;
                 var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y" };
                 if (src.FeederExe == null) args.Add("-nostdin");
@@ -239,7 +239,7 @@ public sealed class ProxyRenderer : IDisposable
                 label = $"label-{Guid.NewGuid().ToString("N")[..8]}.txt";
                 File.WriteAllText(Path.Combine(workDir, label), clip.Name, new UTF8Encoding(false));
             }
-            var vf = FilterGraph.Proxy(Settings, outHeight, src.AlreadyCropped, lutFile, PreMap(lut, src, info), hasFont, label, info.Timecode, info.FrameRate);
+            var vf = FilterGraph.Proxy(Settings, outHeight, src.AlreadyCropped, lutFile, NeedsPreMap(lut, src, info), hasFont, label, info.Timecode, info.FrameRate);
 
             var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1" };
             if (src.FeederExe == null) args.Add("-nostdin");

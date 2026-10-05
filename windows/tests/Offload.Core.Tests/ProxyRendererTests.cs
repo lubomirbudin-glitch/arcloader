@@ -62,6 +62,20 @@ public class ProxyRendererTests
     }
 
     [Fact]
+    public void NeedsPreMap_OnlyBuiltinLutOnFullRangeSource()
+    {
+        var builtin = new LutUse("auto", "bmd-film-gen5", "n", "r") { File = "a.cube" };
+        var braw = new FrameSource { InputArgs = ["-i", "-"], FullRange = true };
+        var video = new FrameSource { InputArgs = ["-i", "a.mov"] };
+        Assert.True(ProxyRenderer.NeedsPreMap(builtin, braw, new ClipInfo()));
+        Assert.True(ProxyRenderer.NeedsPreMap(builtin, video, new ClipInfo { ColorRange = "pc" }));
+        Assert.False(ProxyRenderer.NeedsPreMap(builtin, video, new ClipInfo { ColorRange = "tv" }));
+        Assert.False(ProxyRenderer.NeedsPreMap(builtin, video, new ClipInfo()));
+        Assert.False(ProxyRenderer.NeedsPreMap(CustomLut("look.cube"), braw, new ClipInfo()));
+        Assert.False(ProxyRenderer.NeedsPreMap(null, braw, new ClipInfo { ColorRange = "pc" }));
+    }
+
+    [Fact]
     public void LookFor_LogWhenAnyLut_ArriSpaceFromBuiltin()
     {
         var info = new ClipInfo { Camera = "ALEXA Mini" };
@@ -113,6 +127,19 @@ public class ProxyRendererTests
         var y = MeanLuma(outPath);
         var code = (y - 16) / 219.0;
         Assert.InRange(code, 0.39, 0.45);
+
+        // Grey maps almost onto itself, so also check a level the LUT clearly moves: S-Log3 Y=150 (code ≈ 0.61
+        // without a LUT) comes out well above 0.75 through it. Fails if the LUT is dropped.
+        var brightPath = Path.Combine(clipDir, "C0002.MP4");
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=0x969696:s=320x180:d=1:r=25", "-vf", "format=yuv420p,lutyuv=y=150:u=128:v=128",
+            "-c:v", "libx264", "-color_range", "tv", brightPath);
+        var bright = new Clip { Name = "C0002", Path = "XDROOT/Clip/C0002.MP4", Format = ClipFormat.Video, Segments = ["XDROOT/Clip/C0002.MP4"], Bytes = 1 };
+        var brightOut = Path.Combine(dir.Path, "p2.mov");
+        r.Render(bright, card, r.Probe(bright, card), lut, brightOut, _ => { }, () => false);
+        Assert.True((MeanLuma(brightOut) - 16) / 219.0 >= 0.75);
+        var plainOut = Path.Combine(dir.Path, "p3.mov");
+        r.Render(bright, card, r.Probe(bright, card), null, plainOut, _ => { }, () => false);
+        Assert.InRange((MeanLuma(plainOut) - 16) / 219.0, 0.58, 0.64);
     }
 
     [FfmpegFact]
