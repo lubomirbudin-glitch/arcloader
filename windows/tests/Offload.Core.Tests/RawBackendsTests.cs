@@ -44,11 +44,11 @@ public class RawBackendsTests
     public void R3d_ArgsPickResolutionAndLogWithLut()
     {
         var info = new ClipInfo { Height = 4320 };
-        var args = R3dBackend.Args(@"E:\A.R3D", @"C:\t\r3d", info, new ProxySettings { Height = 1080, LutPath = "x.cube" });
+        var args = R3dBackend.Args(@"E:\A.R3D", @"C:\t\r3d", info, new ProxySettings { Height = 1080 }, new RawLook(Log: true, null));
         Assert.Equal(["--i", @"E:\A.R3D", "--outDir", @"C:\t\r3d", "--o", "intermediate", "--format", "201", "--PRcodec", "2", "--res", "4", "--useMeta",
             "--colorSciVersion", "3", "--colorSpace", "25", "--gammaCurve", "34"], args);
-        Assert.Contains("3", R3dBackend.Args("a", "b", new ClipInfo { Height = 2160 }, new ProxySettings()));
-        Assert.Contains("1", R3dBackend.Args("a", "b", new ClipInfo { Height = 1080 }, new ProxySettings()));
+        Assert.Contains("3", R3dBackend.Args("a", "b", new ClipInfo { Height = 2160 }, new ProxySettings(), new RawLook(false, null)));
+        Assert.Contains("1", R3dBackend.Args("a", "b", new ClipInfo { Height = 1080 }, new ProxySettings(), new RawLook(false, null)));
     }
 
     const string ArriJson = """
@@ -88,7 +88,7 @@ public class RawBackendsTests
     public void Arri_ArgsWithFrameLinesCropOnSensor()
     {
         var info = new ClipInfo { Width = 4608, Height = 3164 };
-        var (args, json, cropped) = ArriBackend.Args(@"E:\c.mxf", @"C:\t\i.mxf", info, new ProxySettings { FrameAspect = 1.66, Height = 1080 }, @"C:\t\p.json");
+        var (args, json, cropped) = ArriBackend.Args(@"E:\c.mxf", @"C:\t\i.mxf", info, new ProxySettings { FrameAspect = 1.66, Height = 1080 }, new RawLook(false, null), @"C:\t\p.json");
         Assert.True(cropped);
         Assert.Equal(["process", "--input", @"E:\c.mxf", "--video-codec", "prores422lt", "--deflip", "--output", @"C:\t\i.mxf",
             "--parameters", @"C:\t\p.json", "--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"], args);
@@ -104,11 +104,28 @@ public class RawBackendsTests
     [Fact]
     public void Arri_ArgsWithoutCropDesqueezeAndLog()
     {
-        var (args, json, cropped) = ArriBackend.Args("in", "out", new ClipInfo { Camera = "ALEXA 35" }, new ProxySettings { Height = 720, LutPath = "look.cube" }, "p.json");
+        var info = new ClipInfo { Camera = "ALEXA 35" };
+        var custom = new LutUse("custom", null, "look.cube", "vlastní LUT") { File = "look.cube" };
+        var (args, json, cropped) = ArriBackend.Args("in", "out", info, new ProxySettings { Height = 720, LutPath = "look.cube" }, ProxyRenderer.LookFor(custom, info), "p.json");
         Assert.False(cropped);
         Assert.Null(json);
         Assert.Equal(["process", "--input", "in", "--video-codec", "prores422lt", "--deflip", "--output", "out",
             "--desqueeze", "--output-height", "720", "--target-colorspace", "AWG4/D65/LogC4"], args);
+    }
+
+    // Review focus 5
+    [Fact]
+    public void Raw_LogRequested_ForBuiltinLut()
+    {
+        var info = new ClipInfo { Height = 4320 };
+        var log = R3dBackend.Args(@"E:\A.R3D", @"C:\t", info, new ProxySettings { Height = 1080 }, new RawLook(Log: true, null));
+        Assert.Contains("--gammaCurve", log);
+        var rec709 = R3dBackend.Args(@"E:\A.R3D", @"C:\t", info, new ProxySettings { Height = 1080 }, new RawLook(Log: false, null));
+        Assert.DoesNotContain("--gammaCurve", rec709);
+        var (arri, _, _) = ArriBackend.Args("in", "out", new ClipInfo(), new ProxySettings(), new RawLook(true, "AWG4/D65/LogC4"), "p.json");
+        Assert.Contains("AWG4/D65/LogC4", arri);
+        var (arri709, _, _) = ArriBackend.Args("in", "out", new ClipInfo(), new ProxySettings(), new RawLook(false, null), "p.json");
+        Assert.Contains("Rec.709/D65/BT.1886", arri709);
     }
 
     [Fact]

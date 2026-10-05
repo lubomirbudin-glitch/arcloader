@@ -50,6 +50,31 @@ public class StageTwoTests
         Assert.DoesNotContain("_PROXY", File.ReadAllText(Path.Combine(job.Plan.CardPaths[0], "_REPORT", "A001.xxh64")));
     }
 
+    // Plan 5, task 5: the LUT is chosen per clip (Sony XML read from the destination copy) and recorded in the report.
+    [FfmpegFact]
+    public void Report_RecordsLutPerClip()
+    {
+        using var dir = new TempDir();
+        var card = SonyCard(dir);
+        File.WriteAllText(Path.Combine(card, "PRIVATE", "M4ROOT", "CLIP", "C0001M01.XML"),
+            """<NonRealTimeMeta><Item name="CaptureGammaEquation" value="s-log3-cine"/><Item name="CaptureColorPrimaries" value="S-Gamut3Cine"/></NonRealTimeMeta>""");
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")])
+        {
+            Date = "2026-10-05",
+            AnalyzeClips = true,
+            Proxy = new ProxySettings { Enabled = true, Height = 360 },
+        }, Options());
+
+        var report = job.Run();
+
+        Assert.Equal(JobPhase.Done, job.Status().Phase);
+        Assert.Equal("C0001", report!.Clips[0].Clip.Name);
+        Assert.Equal(("auto", "sony-slog3-sgamut3cine"), (report.Clips[0].Lut?.Source, report.Clips[0].Lut?.Id));
+        Assert.Equal(ProxyStatus.Done, report.Clips[0].ProxyStatus);
+        Assert.Equal(3, report.Clips[0].Thumbnails.Count);
+        Assert.Contains("\"lut\"", File.ReadAllText(Path.Combine(job.Plan!.CardPaths[0], "_REPORT", "offload_report.json")));
+    }
+
     // Final review A7: a failed copy to another destination keeps the rendered proxy.
     [FfmpegFact]
     public void ProxyCopyFails_RenderedProxyKept()

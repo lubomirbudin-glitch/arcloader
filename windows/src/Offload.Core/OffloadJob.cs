@@ -253,9 +253,11 @@ public sealed class OffloadJob
                     }
                 }
                 entries[i].Info = info;
+                // The Sony XML is read from the destination: it sits next to the clip on the card, so it was copied too.
+                entries[i].Lut = LutResolver.Resolve(entries[i].Clip, info, Layout.Join(cardPaths[d], entries[i].Clip.Path), Config.Proxy, LutCatalog.Default);
                 // RED and ARRI raw cannot give a single frame directly; their thumbnails come from the proxy later.
                 if (entries[i].Clip.Format is not (ClipFormat.R3d or ClipFormat.Arriraw))
-                    entries[i].Thumbnails = TryThumbnails(renderer, entries[i].Clip, cardPaths[d], info, applyLut: true, () => IsCancelled, log);
+                    entries[i].Thumbnails = TryThumbnails(renderer, entries[i].Clip, cardPaths[d], info, entries[i].Lut, () => IsCancelled, log);
             }
             catch (Exception e)
             {
@@ -302,7 +304,7 @@ public sealed class OffloadJob
             var sw = Stopwatch.StartNew();
             try
             {
-                renderer.Render(clip, cardPaths[d], info, Layout.Join(cardPaths[d], rel),
+                renderer.Render(clip, cardPaths[d], info, entries[i].Lut, Layout.Join(cardPaths[d], rel),
                     f => Update(s => s with { ClipFraction = f }), () => IsCancelled);
                 entries[i].ProxyStatus = ProxyStatus.Done;
                 entries[i].ProxyPath = rel;
@@ -334,9 +336,9 @@ public sealed class OffloadJob
                 }
                 if (entries[i].Thumbnails.Count == 0)
                 {
-                    // RAW formats rendered via an intermediate: take the thumbnails from the finished proxy.
+                    // RAW formats rendered via an intermediate: take the thumbnails from the finished proxy (it already has the LUT).
                     var proxyClip = new Clip { Name = name, Path = rel, Format = ClipFormat.Video, Segments = [rel], Bytes = 0 };
-                    entries[i].Thumbnails = TryThumbnails(renderer, proxyClip, cardPaths[d], info, applyLut: false, () => IsCancelled, log);
+                    entries[i].Thumbnails = TryThumbnails(renderer, proxyClip, cardPaths[d], info, lut: null, () => IsCancelled, log);
                 }
                 entries[i].ProxySeconds = sw.Elapsed.TotalSeconds;
                 Update(s => s with { ProxiesDone = s.ProxiesDone + 1 });
@@ -355,12 +357,12 @@ public sealed class OffloadJob
         return report;
     }
 
-    static List<Thumbnail> TryThumbnails(ProxyRenderer renderer, Clip clip, string cardPath, ClipInfo info, bool applyLut,
+    static List<Thumbnail> TryThumbnails(ProxyRenderer renderer, Clip clip, string cardPath, ClipInfo info, LutUse? lut,
         Func<bool> isCancelled, Action<string>? log)
     {
         try
         {
-            return renderer.Thumbnails(clip, cardPath, info, applyLut, isCancelled);
+            return renderer.Thumbnails(clip, cardPath, info, lut, isCancelled);
         }
         catch (Exception e)
         {

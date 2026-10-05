@@ -10,6 +10,8 @@ internal sealed class FrameSource
     public bool AudioFromInput { get; init; } = true;
     /// The decoder already cropped to the frame lines (ARRI does it before debayering).
     public bool AlreadyCropped { get; init; }
+    /// Full-range RGB (the BRAW decoder) — built-in LUTs then need FilterGraph.PreMap first.
+    public bool FullRange { get; init; }
     /// Intermediate files or folders to delete once ffmpeg is done.
     public IReadOnlyList<string> Cleanup { get; init; } = [];
 
