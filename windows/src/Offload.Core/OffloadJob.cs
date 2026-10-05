@@ -63,8 +63,12 @@ public sealed class OffloadJob
 
     public JobConfig Config { get; }
     public OffloadEngine Engine { get; }
-    public OffloadPlan? Plan { get; private set; }
-    public OffloadReport? Report { get; private set; }
+    volatile OffloadPlan? planValue;
+    volatile OffloadReport? reportValue;
+
+    /// Set on a worker thread, read by the app's UI thread.
+    public OffloadPlan? Plan { get => planValue; private set => planValue = value; }
+    public OffloadReport? Report { get => reportValue; private set => reportValue = value; }
 
     public OffloadJob(JobConfig config)
         : this(config, new OffloadOptions
@@ -108,6 +112,8 @@ public sealed class OffloadJob
                 },
             };
         }
+        // Cancelled while still queued: it never runs, so say so instead of "Čeká" forever.
+        if (s.Phase == JobPhase.Waiting && IsCancelled) s = s with { Phase = JobPhase.Cancelled };
         return s;
     }
 
