@@ -92,6 +92,30 @@ public class HwTestTests
     }
 
     [Fact]
+    public void Advise_SameAsRun_AndUsesPortNames()
+    {
+        using var dir = new TempDir();
+        var r = HwTest.Run([dir.Sub("card")], [dir.Sub("dest")], measure: false);
+        Assert.Equal(r.Advice, HwTest.Advise(r.Drives, r.Connectors, r.Measurements, null));
+        if (r.Connectors.FirstOrDefault(c => c.UserVisible && c.SupportsUsb3 == true && c.Device == null) is { } free)
+        {
+            var named = HwTest.Advise(r.Drives, r.Connectors, r.Measurements, new Dictionary<string, string> { [free.Id] = "přední levý" });
+            Assert.Contains(named, a => a.Text.Contains("přední levý"));
+        }
+    }
+
+    [Fact]
+    public void Load_MissingLists_IsNull()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "hwtest.json");
+        File.WriteAllText(path, "{}");
+        Assert.Null(HwTest.Load(path));
+        File.WriteAllText(path, """{"Time":"2026-10-05T10:00:00Z","Drives":[],"Connectors":[],"Measurements":[]}""");
+        Assert.Null(HwTest.Load(path));
+    }
+
+    [Fact]
     public void SaveLoad_RoundTrip()
     {
         using var dir = new TempDir();

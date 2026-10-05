@@ -25,7 +25,33 @@ public partial class MainWindow : Window
             if (!closed && IsLoaded) Close();
         });
         vm.AttentionRequested += _ => NativeMethods.Flash(this);
+        vm.HardwareRequested += hw =>
+        {
+            hardwareWindow?.Close();
+            var w = new HardwareWindow(hw) { Owner = this };
+            w.Closed += (_, _) =>
+            {
+                if (hardwareWindow == w) hardwareWindow = null;
+            };
+            hardwareWindow = w;
+            w.Show();
+        };
+        // On exit a measurement finishes the disk it is on, so its temporary file is deleted (the windows are gone).
+        Closed += (_, _) => vm.WaitForHardware();
+        // Spec 8a.2: asked at every start — once the window is drawn, so the question sits on top of it.
+        ContentRendered += (_, _) =>
+        {
+            if (vm.Options.NoHwPrompt || promptShown) return;
+            promptShown = true;
+            var answer = MessageBox.Show(this,
+                "Prověřit USB porty?\n\nZjistím, kde a jak rychle jsou připojené karty a disky, a poradím, kam co zapojit. Nic se nezapisuje.",
+                "Offload", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Yes && !closed) vm.OpenHardware();
+        };
     }
+
+    HardwareWindow? hardwareWindow;
+    bool promptShown;
 
     protected override void OnSourceInitialized(EventArgs e)
     {

@@ -256,6 +256,19 @@
                     </StackPanel>
                 </Expander>
 
+                <!-- Hardware -->
+                <DockPanel Margin="0,18,0,0">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Prověřit…" Command="{Binding OpenHardwareCommand}"
+                            VerticalAlignment="Center" AutomationProperties.AutomationId="HardwareButton" />
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE88E;" Margin="0,0,8,0" />
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="Hardware" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding HardwareSummary}" Style="{StaticResource Caption}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </DockPanel>
+
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

@@ -40,17 +40,24 @@ function Start-Offload([string]$Exe, [string]$Arguments = '', [int]$TimeoutSecon
     $p
 }
 
-# Top-level windows of the process. Message boxes are Win32 dialogs (class #32770) titled "Offload" like the
+# Windows of the process. Message boxes are Win32 dialogs (class #32770) titled "Offload" like the
 # main window, so they are told apart by class: -Dialog picks message boxes, without it they are skipped.
-# A message box with an owner (MessageBox.Show(window, ...)) is not under the desktop in UI Automation but a child
-# of its owner window, so -Dialog also looks one level below each top-level window.
+# An owned window (the Hardware window, MessageBox.Show(window, ...)) is not under the desktop in UI Automation but a
+# child of its owner window, so the windows below each window are collected too (Hardware › its message box).
 function Get-OffloadWindows($Process, [switch]$Dialog) {
     $cond = New-Object System.Windows.Automation.PropertyCondition($AE::ProcessIdProperty, $Process.Id)
-    $top = @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $cond))
-    if (-not $Dialog) { return $top | Where-Object { $_.Current.ClassName -ne '#32770' } }
-    $dlg = New-Object System.Windows.Automation.PropertyCondition($AE::ClassNameProperty, '#32770')
-    $top | Where-Object { $_.Current.ClassName -eq '#32770' }
-    foreach ($w in $top) { @($w.FindAll([System.Windows.Automation.TreeScope]::Children, $dlg)) }
+    $isWindow = New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)
+    $all = New-Object System.Collections.Generic.List[object]
+    $queue = New-Object System.Collections.Generic.Queue[object]
+    foreach ($w in @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $cond))) { $queue.Enqueue($w) }
+    while ($queue.Count -gt 0) {
+        $w = $queue.Dequeue()
+        $all.Add($w)
+        if ($all.Count -gt 20) { break }
+        foreach ($c in @($w.FindAll([System.Windows.Automation.TreeScope]::Children, $isWindow))) { $queue.Enqueue($c) }
+    }
+    if ($Dialog) { $all | Where-Object { $_.Current.ClassName -eq '#32770' } }
+    else { $all | Where-Object { $_.Current.ClassName -ne '#32770' } }
 }
 
 function Find-OffloadWindow($Process, [string]$TitlePattern = 'Offload', [switch]$Dialog, [int]$TimeoutSeconds = 10) {
