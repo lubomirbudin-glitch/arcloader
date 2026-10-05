@@ -28,6 +28,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 - Úkol 7 (M3) — `braw-decode --info` má časový limit 60 s (v testech kratší): zaseknutá knihovna Blackmagic RAW úlohu nezasekne, proces se ukončí i s potomky a klip dostane poznámku „braw-decode failed (exit -1): neodpověděl do 60 s — ukončen“
 - Úkol 7 (M3) — náhledy BRAW (dekodér v rouře do ffmpeg) běží pod hlídačem zaseknutí jako proxy: dekodér, který nepošle data, se ukončí (do prvních dat 3× limit) a klip náhled nedostane, úloha jede dál
 - Úkol 7 — když ffmpeg skončí dřív než dekodér (náhled potřebuje jeden snímek, nebo ffmpeg selhal), pumpa zavře i výstup dekodéru: braw-decode hned uvidí zavřenou rouru a skončí sám s kódem 0, místo aby visel na plné rouře do zabití po 2 s; dekodér, který sám skončí s chybou, je dál chyba klipu
+- Úkol 7 — braw-decode.exe v balíčku (bin\), test celé cesty s klipem (proxy, tři snímky, LUT podle gamy) přes OFFLOAD_BRAW_SAMPLE, návod na vzorek v README
 
 ## 2026-10-05 — drobnosti po plánu 5
 

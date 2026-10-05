@@ -1,4 +1,4 @@
-# Builds windows\build\Offload: Offload.exe (GUI) + bin\offload.exe (CLI) + bin\ffmpeg.exe, ffprobe.exe (all self-contained).
+# Builds windows\build\Offload: Offload.exe (GUI) + bin\offload.exe (CLI) + bin\braw-decode.exe + bin\ffmpeg.exe, ffprobe.exe (all self-contained).
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $out = Join-Path $root 'build\Offload'
@@ -6,6 +6,10 @@ if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 dotnet publish (Join-Path $root 'src\Offload.Cli\Offload.Cli.csproj') -c Release -r win-x64 --self-contained `
     -p:PublishSingleFile=true -p:DebugType=none -o (Join-Path $out 'bin')
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
+# braw-decode: Blackmagic RAW decoder (trimmed single file; BlackmagicRawAPI.dll comes from the SDK, Player or Resolve).
+dotnet publish (Join-Path $root 'src\Offload.BrawDecode\Offload.BrawDecode.csproj') -c Release -r win-x64 --self-contained `
+    -p:PublishSingleFile=true -p:DebugType=none -o (Join-Path $out 'bin')
+if ($LASTEXITCODE -ne 0) { throw 'dotnet publish (braw-decode) failed' }
 # GUI: Offload.exe next to bin\ (single file; WPF native libraries are extracted at first start).
 dotnet publish (Join-Path $root 'src\Offload.App\Offload.App.csproj') -c Release -r win-x64 --self-contained `
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o $out

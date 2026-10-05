@@ -12,8 +12,8 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 |---|---|
 | Jádro + CLI (`bin\offload.exe`) | hotovo (plán 1) — ostrý test na skutečné kartě a měření rychlostí zatím chybí |
 | Analýza klipů, 3 snímky, proxy, PDF | hotovo (plán 2) — QSV/AMF a ostrý test na médiu neověřeno |
-| RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: plán 3 |
-| BRAW dekodér (C#, Blackmagic RAW SDK) | plán 3 |
+| RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: hotovo (plán 3), čeká test se vzorkem |
+| BRAW dekodér (C#, Blackmagic RAW SDK) | hotovo (plán 3, `bin\braw-decode.exe`) — ověřeno jen s knihovnou z DaVinci Resolve, dekódování snímků čeká na vzorek .braw |
 | HW diagnostika USB | hotovo (CLI `offload ports`, v GUI okno Hardware a kontrola na vyžádání) |
 | GUI `Offload.exe` | hotovo (čeká ruční test s kartou) |
 | Vestavěné LUTy (plán 5) | hotovo (čeká ruční test s klipy z kamer) |
@@ -26,8 +26,29 @@ dotnet test
 powershell -ExecutionPolicy Bypass -File scripts\build.ps1   # → build\Offload\Offload.exe, build\Offload\bin\offload.exe, build\Offload-win-x64.zip
 ```
 
-Balíček `build\Offload-win-x64.zip` obsahuje složku `Offload` (`Offload.exe` + `bin\` s `offload.exe`, `ffmpeg.exe`, `ffprobe.exe`);
-stačí ho rozbalit kamkoli a spustit `Offload.exe`. Neobsahuje nic, co by se muselo instalovat.
+Balíček `build\Offload-win-x64.zip` obsahuje složku `Offload` (`Offload.exe` + `bin\` s `offload.exe`, `braw-decode.exe`, `ffmpeg.exe`, `ffprobe.exe`);
+stačí ho rozbalit kamkoli a spustit `Offload.exe`. Neobsahuje nic, co by se muselo instalovat. Knihovnu `BlackmagicRawAPI.dll`
+balíček neobsahuje — bez ní se BRAW jen zkopíruje a ověří, proxy a náhledy se přeskočí.
+
+### Vzorek BRAW (testy dekodéru Blackmagic RAW)
+
+Dekodér `bin\braw-decode.exe` potřebuje knihovnu `BlackmagicRawAPI.dll` — stačí nainstalovaný DaVinci Resolve,
+nebo zdarma „Blackmagic RAW“ (Player + SDK) z https://www.blackmagicdesign.com/products/blackmagicraw.
+Testy, které potřebují skutečný klip, se bez vzorku přeskočí. Vzorek:
+
+1. Na https://www.blackmagicdesign.com/products/blackmagicraw (nebo https://www.blackmagicdesign.com/event/blackmagicrawinstaller,
+   „Download RAW Samples“) stáhnout jeden ukázkový klip (zdarma, formulář se jménem a e-mailem), rozbalit.
+2. Nastavit proměnnou na plnou cestu ke klipu a pustit testy:
+
+       setx OFFLOAD_BRAW_SAMPLE "D:\Vzorky\BRAW\A001_01011200_C001.braw"
+       # nové okno PowerShellu
+       dotnet test tests\Offload.Core.Tests --filter "FullyQualifiedName~Braw"
+
+   (Jméno souboru je příklad; ukázkové klipy z 12K kamery mají stovky MB až jednotky GB.) Test celé cesty
+   (`Offload_ProbeThumbnailsProxy`: analýza, tři náhledy, proxy 540p) potřebuje navíc ffmpeg a ffprobe.
+
+Při vývoji (GUI/CLI z `bin\Debug`) se `braw-decode.exe` hledá ve `windows\tools\bin`:
+`dotnet publish src\Offload.BrawDecode\Offload.BrawDecode.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:DebugType=none -o tools\bin`.
 
 ## Aplikace (GUI)
 

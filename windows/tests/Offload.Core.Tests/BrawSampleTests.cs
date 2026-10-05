@@ -89,6 +89,32 @@ public class BrawSampleTests
         Assert.Equal(Run("--scale", "eighth", "--count", "3", Sample).Stdout, r.Stdout);
     }
 
+    /// End to end through Offload: probe, three thumbnails, a short proxy. libx264 (the test switch), so a parallel
+    /// test never fights over NVENC sessions.
+    [BrawSampleFact(needsFfmpeg: true)]
+    public void Offload_ProbeThumbnailsProxy()
+    {
+        var tools = new ExternalTools { Ffmpeg = TestMedia.Ffmpeg, Ffprobe = TestMedia.Ffprobe, BrawDecoder = Path.Combine(AppContext.BaseDirectory, "braw-decode.exe"), NoSearch = true };
+        var clip = new Clip { Name = Path.GetFileNameWithoutExtension(Sample), Path = Path.GetFileName(Sample), Format = ClipFormat.Braw, Segments = [Path.GetFileName(Sample)], Bytes = new FileInfo(Sample).Length };
+        var card = Path.GetDirectoryName(Sample)!;
+        using var r = new ProxyRenderer(new ProxySettings { Enabled = true, Height = 540 }, tools) { ForcedEncoder = "libx264" };
+        Assert.Null(r.UnsupportedReason(clip));
+        var info = r.Probe(clip, card);
+        Assert.Equal("Blackmagic RAW", info.Codec);
+        Assert.False(string.IsNullOrEmpty(info.Gamma));
+        var lut = LutResolver.Resolve(clip, info, Sample, r.Settings, LutCatalog.Load(LutCatalog.DefaultFolder));
+        Assert.Contains("Blackmagic RAW", lut.Reason);
+        var thumbs = r.Thumbnails(clip, card, info, lut);
+        Assert.Equal(info.Frames > 2 ? 3 : info.Frames, thumbs.Count);
+        Assert.All(thumbs, t => Assert.True(t.Jpeg.Length > 1000));
+        using var dir = new TempDir();
+        var output = Path.Combine(dir.Path, "proxy.mp4");
+        r.Render(clip, card, info, lut, output, _ => { }, () => false);
+        var probed = FFProbe.Probe(TestMedia.Ffprobe!, output);
+        Assert.Equal(540, probed.Height);
+        Assert.Equal(info.Frames, probed.Frames);
+    }
+
     /// Ruling M1: when the reader closes the pipe (ffmpeg has what it wanted) the exe stops promptly instead of
     /// decoding the rest of the clip for nobody — and exits 0 like the Mac (a closed pipe is not a failure).
     [BrawSampleFact]
