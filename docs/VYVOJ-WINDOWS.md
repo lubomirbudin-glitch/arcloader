@@ -18,18 +18,18 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
 
-- Závěrečná kontrola plánu 2 — opravy: přesný prostřední snímek, `%` v názvu, poslední snímek u delšího zvuku, enkodér v reportu, zrušitelné náhledy, R3D/ARRI bez falešné chyby náhledu, proxy zůstane hotová i při selhání kopie na další cíl, test HEVC a záložního enkodéru, `tools\bin` jen pro vývojový build, build skript přeskočí malé shimy z PATH
-- Úkol 11 — balíček s ffmpeg/ffprobe, dokumentace
-- Úkol 10 — CLI: volby proxy (--proxy, --lut, --proxy-codec, --frame-aspect …) a souhrn klipů
-- Úkol 9 — fáze 2 úlohy: analýza klipů, 3 snímky, proxy na všechny cíle, PDF; selhání nikdy nezmění výsledek kopie
-- Úkol 8 — PDF report přes Microsoft Edge (headless), A4 na šířku, funguje i z příkazové řádky
-- Úkol 7 — HTML report: tři snímky na klip s popisky TC, stránka A4 na šířku pro tisk
-- Úkol 6 — renderer: 3 snímky na klip (první, prostřední, poslední) s popiskem TC, render proxy s LUT a burn-in, zrušení bez zbytků
-- Úkol 5 — RAW backendy: Blackmagic RAW, RED (REDline), ARRIRAW (art-cmd), Canon RAW jen kopie; metadata a parametry testované bez nástrojů
-- Úkol 4 — filter graph pro náhledy a proxy (ořez na frame lines, LUT, burn-in názvu a TC) jen s relativními jmény souborů
-- Úkol 3 — timecode pro popisky náhledů, automatická volba enkodéru (NVENC → QSV → AMF → software)
-- Úkol 2 — detekce klipů (video, R3D segmenty, ARRI sekvence, BRAW, Canon RAW, proxy kamery) a čtení metadat přes ffprobe
-- Úkol 1 — hledání externích nástrojů (ffmpeg, REDline, art-cmd, braw-decode) a spouštění procesů
+- Závěrečná kontrola plánu 2 — opravy: přesný prostřední snímek, `%` v názvu, poslední snímek u delšího zvuku, enkodér v reportu, zrušitelné náhledy, R3D/ARRI bez falešné chyby náhledu, proxy zůstane hotová i při selhání kopie na další cíl, test HEVC a záložního enkodéru, `tools\bin` jen pro vývojový build, build skript přeskočí malé shimy z PATH (`cea9059`)
+- Úkol 11 — balíček s ffmpeg/ffprobe, dokumentace (`ada13d7`, `833c53a`)
+- Úkol 10 — CLI: volby proxy (--proxy, --lut, --proxy-codec, --frame-aspect …) a souhrn klipů (`4bbb154`, `5666d65`)
+- Úkol 9 — fáze 2 úlohy: analýza klipů, 3 snímky, proxy na všechny cíle, PDF; selhání nikdy nezmění výsledek kopie (`c0f75c5`, `59ec55b`)
+- Úkol 8 — PDF report přes Microsoft Edge (headless), A4 na šířku, funguje i z příkazové řádky (`0ce9acb`)
+- Úkol 7 — HTML report: tři snímky na klip s popisky TC, stránka A4 na šířku pro tisk (`fd4d148`)
+- Úkol 6 — renderer: 3 snímky na klip (první, prostřední, poslední) s popiskem TC, render proxy s LUT a burn-in, zrušení bez zbytků (`1fb9ecc`, `ad061fe`)
+- Úkol 5 — RAW backendy: Blackmagic RAW, RED (REDline), ARRIRAW (art-cmd), Canon RAW jen kopie; metadata a parametry testované bez nástrojů (`c3f6f3a`)
+- Úkol 4 — filter graph pro náhledy a proxy (ořez na frame lines, LUT, burn-in názvu a TC) jen s relativními jmény souborů (`479d570`)
+- Úkol 3 — timecode pro popisky náhledů, automatická volba enkodéru (NVENC → QSV → AMF → software) (`ce95d57`)
+- Úkol 2 — detekce klipů (video, R3D segmenty, ARRI sekvence, BRAW, Canon RAW, proxy kamery) a čtení metadat přes ffprobe (`abd7669`)
+- Úkol 1 — hledání externích nástrojů (ffmpeg, REDline, art-cmd, braw-decode) a spouštění procesů (`c140b2b`)
 
 ## 2026-10-04 — plán 1 (jádro + CLI), průběh
 
