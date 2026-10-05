@@ -78,6 +78,23 @@ public class ProxyCopyTests
     }
 
     [Fact]
+    public void AllNamesTaken_ErrorAfterCap_NoThrow()
+    {
+        using var dir = new TempDir();
+        var src = Proxy(dir);
+        var extra = dir.Sub("proxies");
+        var target = Path.Combine(extra, "2026-10-05", "A001");
+        Directory.CreateDirectory(Path.Combine(target, "C0001.mov"));   // folders with the proxy's names
+        for (int n = 2; n <= 3; n++) Directory.CreateDirectory(Path.Combine(target, $"C0001_{n}.mov"));
+
+        var (path, error) = ProxyCopy.ToExtraFolder(src, extra, "2026-10-05", "A001", "C0001.mov", maxAttempts: 3);
+
+        Assert.Null(path);
+        Assert.Equal("žádné volné jméno (C0001.mov … C0001_3.mov)", error);
+        Assert.Empty(Directory.GetFiles(target));
+    }
+
+    [Fact]
     public void StaleTemp_Replaced()
     {
         using var dir = new TempDir();

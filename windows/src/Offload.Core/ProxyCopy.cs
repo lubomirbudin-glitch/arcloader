@@ -25,7 +25,12 @@ public static class ProxyCopy
     /// The extra copy of a proxy into the user's proxy folder: `<extraFolder>\<date>\<cardName>\<fileName>`, or
     /// `<name>_2.mov`, `_3` … when the name is taken there — never overwrites. Never throws: a missing folder
     /// (disconnected disk) or a failed copy comes back as the error text.
-    public static (string? Path, string? Error) ToExtraFolder(string source, string extraFolder, string date, string cardName, string fileName)
+    /// At most 1000 names (`_2` … `_1000`) are tried; then it gives up with an error.
+    public static (string? Path, string? Error) ToExtraFolder(string source, string extraFolder, string date, string cardName, string fileName) =>
+        ToExtraFolder(source, extraFolder, date, cardName, fileName, maxAttempts: 1000);
+
+    internal static (string? Path, string? Error) ToExtraFolder(string source, string extraFolder, string date, string cardName,
+        string fileName, int maxAttempts)
     {
         try
         {
@@ -33,9 +38,10 @@ public static class ProxyCopy
             var dir = Layout.CardPath(extraFolder, date, cardName);
             var stem = Path.GetFileNameWithoutExtension(fileName);
             var ext = Path.GetExtension(fileName);
-            for (int n = 1; ; n++)
+            string Name(int n) => n == 1 ? fileName : $"{stem}_{n}{ext}";
+            for (int n = 1; n <= maxAttempts; n++)
             {
-                var target = Path.Combine(dir, n == 1 ? fileName : $"{stem}_{n}{ext}");
+                var target = Path.Combine(dir, Name(n));
                 if (Path.Exists(target)) continue;
                 try
                 {
@@ -47,6 +53,7 @@ public static class ProxyCopy
                     // Taken between the check and the rename: try the next number.
                 }
             }
+            return (null, $"žádné volné jméno ({Name(1)} … {Name(maxAttempts)})");
         }
         catch (Exception e)
         {

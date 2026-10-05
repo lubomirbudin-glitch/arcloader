@@ -82,7 +82,8 @@ offload bench --read E:\ --write D:\ --gb 2     # rychlost karty a disků
 offload ports                                 # porty, kde a jak rychle jsou disky připojené, doporučení
 offload ports --measure --card E:\ --dest D:\   # + změřit skutečnou rychlost
 offload E:\ -d D:\Zaloha -d F:\Zaloha --proxy --lut look.cube --frame-aspect 1.85   # + proxy s LUT a výřezem
-offload E:\ -d D:\Zaloha --proxy --proxy-folder G:\Proxy   # proxy navíc do G:\Proxy\<datum>\<karta>```
+offload E:\ -d D:\Zaloha --proxy --proxy-folder G:\Proxy   # proxy navíc do G:\Proxy\<datum>\<karta>\
+```
 
 `--proxy-folder <složka>` (jen s `--proxy`): každá hotová proxy se kromě `_PROXY` na cílech zkopíruje i do
 `<složka>\<datum>\<karta>\` (stejný název souboru; když už tam soubor je, uloží se jako `_2`, `_3`… — nic se nepřepíše).
