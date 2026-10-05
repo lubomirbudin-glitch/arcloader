@@ -339,8 +339,12 @@ Vzhled: WPF Fluent theme (`ThemeMode="System"`), světlý i tmavý režim podle 
 
 ### 8.5 Upozornění
 
-- Ověřeno a lze vysunout: `SystemSounds.Asterisk` + toast notifikace.
-- Chyba: `SystemSounds.Hand` + `FlashWindowEx` v hlavním panelu.
+> **Nahrazeno (2026-10-05):** toast se nepoužívá (nebalená aplikace ho umí jen po registraci) — místo něj zvuk
+> a blikání tlačítka v hlavním panelu, viz `docs/ROZDILY.md` („Upozornění po dokončení“). Platí:
+
+- Ověřeno a lze vysunout: `SystemSounds.Asterisk`; po dokončení úlohy `FlashWindowEx` v hlavním panelu.
+- Chyba: `SystemSounds.Hand` + `FlashWindowEx`. Úloha zrušená uživatelem není chyba (bez chybového zvuku).
+- ~~toast notifikace~~ (původní návrh).
 
 ### 8.6 Nastavení
 

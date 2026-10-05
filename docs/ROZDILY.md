@@ -93,7 +93,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Upozornění po dokončení:** Windows hraje zvuk a bliká tlačítkem v hlavním panelu místo notifikace Macu
   (nebalená aplikace umí toast jen po registraci).
 - **Vysunutí karty:** karta ve čtečce se vysune jako médium, čtečka zůstane připojená; interní disky a složky
-  se nevysouvají nikdy. Skutečné vysunutí zatím není vyzkoušené na kartě (položka 4 ručního testu).
+  se nevysouvají nikdy. Vysune se jen karta, která se kopírovala (svazek + sériové číslo souborového systému zapsané
+  na začátku kopie): po výměně karty ve stejné čtečce tlačítko zmizí a vysunutí se odmítne; ani dokud z karty kopíruje
+  jiná úloha. Skutečné vysunutí zatím není vyzkoušené na kartě (položka 4 ručního testu).
+- **Thunderbolt čtečky CFexpress:** Windows je hlásí jako NVMe disk, takže je aplikace sama nenabídne jako kartu
+  (nabízí jen vyměnitelná média a USB/SD disky) — kartu v takové čtečce přidejte tlačítkem „Složka…“.
 - **GUI navíc na Windows:** zkratka Ctrl+Enter pro spuštění, tlačítko „Průzkumník“, upozornění „Doporučeno NTFS“
   u cíle na exFAT/FAT32 (Mac doporučuje APFS), okno Hardware s kontrolou USB portů na vyžádání (Ctrl+U) a vlastními
   názvy portů — jen na Windows.

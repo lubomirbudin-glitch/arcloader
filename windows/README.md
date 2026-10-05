@@ -41,7 +41,8 @@ klikněte na „Další informace“ → „Přesto spustit“.
   odhad času, řetěz připojení (karta → řadič → disk) a „Úzké hrdlo“. Karty se kopírují za sebou, proxy předchozí karty
   se renderují souběžně s kopií další.
 - **Po dokončení:** zelený pruh, „Vysunout kartu“ (karta ve čtečce se vysune jako médium, čtečka zůstane; interní disky
-  a složky se nevysouvají nikdy), „Report“ (HTML, PDF je vedle) a „Průzkumník“. Zrušená úloha ukáže oranžové
+  a složky se nevysouvají nikdy; vysune se jen ta karta, která se kopírovala — po výměně karty ve čtečce tlačítko zmizí),
+  „Report“ (HTML z prvního připojeného cíle, PDF je vedle) a „Průzkumník“. Zrušená úloha ukáže oranžové
   „Zrušeno — karta není kompletně zálohovaná.“. Upozornění: zvuk a blikání tlačítka v hlavním panelu.
 - **Hardware:** kontrola USB portů se nespouští při startu, jen na vyžádání — menu „Nástroje → Prověřit USB porty…“ (Ctrl+U)
   nebo tlačítko „Prověřit…“ v sekci Hardware. Okno Hardware ukazuje připojení, doporučení, měření rychlosti
@@ -56,11 +57,14 @@ Vše níže zatím nikdo neověřil na skutečné kartě — GUI je jinak zkouš
 - [ ] 1. Vložit kartu do čtečky → objeví se v „Karty“ a je zaškrtnutá
 - [ ] 2. Přidat dva cíle na různých discích
 - [ ] 3. Spustit (Ctrl+Enter) → průběh, rychlosti, řetěz připojení a „Úzké hrdlo“
-- [ ] 4. Zelený pruh → „Vysunout kartu“ → karta zmizí ze seznamu, čtečka zůstane; vložit další kartu → objeví se
-      (skutečné vysunutí je zatím nevyzkoušené — nejdůležitější bod testu)
+- [ ] 4. Kartu vysunujte až po zeleném pruhu: „Vysunout kartu“ → karta zmizí ze seznamu, čtečka zůstane; vložit další
+      kartu → objeví se (skutečné vysunutí je zatím nevyzkoušené — nejdůležitější bod testu)
 - [ ] 5. „Report“ otevře HTML report, PDF je vedle
-- [ ] 6. Během kopie zavřít okno → dotaz → „Ano“ → aplikace se zavře, v cílech nezůstanou `.offload-part`
-- [ ] 7. Okno Hardware (Ctrl+U): pojmenovat port, změřit rychlost
+- [ ] 6. Během kopie zavřít okno → dotaz → „Ano“ → aplikace se zavře, v cílech nezůstanou `.offload-part`.
+      Soubory `.offload-part` jsou skryté: v Průzkumníku zapněte „Zobrazit → Skryté položky“, nebo použijte `dir /a /s`
+      v cílové složce. Karta, jejíž kopie se zavřením přerušila, **není zálohovaná** — offloadujte ji znovu celou.
+- [ ] 7. Okno Hardware (Ctrl+U): pojmenovat port, změřit rychlost — před měřením se aplikace zeptá; z karty se jen čte,
+      na každý cílový disk se zapíše a hned smaže dočasný soubor 1 GB (během kopírování měření nejde spustit)
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
