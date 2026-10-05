@@ -11,6 +11,10 @@ public struct OffloadOptions {
     /// Files at least this large get F_FULLFSYNC individually; the rest are flushed once at the end.
     public var fullSyncThreshold: Int64 = 256 << 20
     public var allowSameDevice = false
+    /// Tests only (internal, reached through @testable): temporary folders share the source's volume.
+    var allowSourceVolume = false
+    /// Tests only (internal): called on the copy thread before file `i` is copied (a deterministic point to cancel at).
+    var beforeFileCopy: ((Int) -> Void)?
 
     public init() {}
 }
@@ -269,6 +273,11 @@ public enum OffloadError: Error, CustomStringConvertible {
         case .preflight(let m), .failed(let m): return m
         }
     }
+
+    public var isPreflight: Bool {
+        if case .preflight = self { return true }
+        return false
+    }
 }
 
 public final class OffloadEngine {
@@ -285,14 +294,49 @@ public final class OffloadEngine {
 
     public init(options: OffloadOptions = OffloadOptions()) { self.options = options }
 
+    /// Same destination given twice: compared after resolving symlinks, without trailing "/", ignoring case
+    /// (APFS and HFS+ are case-insensitive by default, like NTFS on Windows).
+    static func normalizedRoot(_ path: String) -> String {
+        var s = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+        while s.count > 1 && s.hasSuffix("/") { s.removeLast() }
+        return s.lowercased()
+    }
+
     /// Scans the card and checks the destinations before a single byte is written.
     public func prepare(source: String, destRoots: [String], cardName: String?, date: String?) throws -> OffloadPlan {
+        guard options.chunkSize > 0, options.chunkSize % 4096 == 0, options.chunkSize <= 1 << 30 else {
+            throw OffloadError.preflight("ChunkSize must be a positive multiple of 4096 and at most 1 GiB (got \(options.chunkSize))")
+        }
+        guard options.bufferCount >= 2 else {
+            throw OffloadError.preflight("BufferCount must be at least 2 (got \(options.bufferCount))")
+        }
+        // \z, not $: "$" would also accept a trailing newline.
+        if let date, date.range(of: #"^\d{4}-\d{2}-\d{2}\z"#, options: .regularExpression) == nil {
+            throw OffloadError.preflight("Date must be YYYY-MM-DD (got \"\(date)\")")
+        }
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: source, isDirectory: &isDir), isDir.boolValue else {
             throw OffloadError.preflight("Source not found: \(source)")
         }
         guard !destRoots.isEmpty else { throw OffloadError.preflight("No destination given") }
+        var seen: [String] = []
+        for root in destRoots {
+            let n = OffloadEngine.normalizedRoot(root)
+            if seen.contains(n) { throw OffloadError.preflight("Destination given twice: \(root)") }
+            seen.append(n)
+        }
+        let top = (try? fm.contentsOfDirectory(atPath: source)) ?? []
+        for marker in [Layout.reportDirName, Layout.proxyDirName, MHL.dirName] {
+            let found = top.contains { name in
+                var d: ObjCBool = false
+                return name.caseInsensitiveCompare(marker) == .orderedSame
+                    && fm.fileExists(atPath: source + "/" + name, isDirectory: &d) && d.boolValue
+            }
+            if found {
+                throw OffloadError.preflight("Source looks like an earlier offload (has _REPORT/_PROXY/ascmhl) — copy its parent card instead, or remove these folders")
+            }
+        }
         guard let srcDev = IO.device(of: source) else { throw OffloadError.preflight("Cannot stat source \(source)") }
 
         var devices: [dev_t] = []
@@ -301,8 +345,10 @@ public final class OffloadEngine {
                 throw OffloadError.preflight("Destination not found: \(root)")
             }
             guard fm.isWritableFile(atPath: root) else { throw OffloadError.preflight("Destination not writable: \(root)") }
-            let dev = IO.device(of: root)!
-            if dev == srcDev { throw OffloadError.preflight("Destination \(root) is on the same volume as the source") }
+            guard let dev = IO.device(of: root) else { throw OffloadError.preflight("Cannot stat destination \(root)") }
+            if dev == srcDev && !options.allowSourceVolume {
+                throw OffloadError.preflight("Destination \(root) is on the same volume as the source")
+            }
             if devices.contains(dev) && !options.allowSameDevice {
                 throw OffloadError.preflight("Destinations share a volume (\(root)) — that is not a second copy. Use --allow-same-device to override.")
             }
@@ -365,6 +411,7 @@ public final class OffloadEngine {
         // Copy: the card is read exactly once; every block fans out to the hasher and all destinations.
         for (i, f) in files.enumerated() {
             if isCancelled { sourceErrors[i] = "cancelled"; continue }
+            options.beforeFileCopy?(i)
             lock.lock(); fileIndex = i; currentFile = f.relPath; lock.unlock()
             let src = plan.source + "/" + f.relPath
             ws.forEach { $0.begin(f) }

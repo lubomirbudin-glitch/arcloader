@@ -83,12 +83,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Report při zrušeném ověření:** když je `verified` = false, Windows počítá soubory „zapsáno“ i „ověřeno“ jako
   v pořádku (zrušené ověření nevypíše už ověřené soubory jako chybné bez důvodu); „kartu lze vysunout“ platí
   jen při `verified` = true. Totéž je naplánováno i pro Mac.
-- **Zdroj, který je sám offload:** Windows odmítne kopírovat zdroj s nejvyšší úrovní složek `_REPORT`, `_PROXY`
-  nebo `ascmhl` (pravděpodobně dřívější offload). Naplánováno i pro Mac.
-- **Dvakrát zadaný cíl:** Windows odmítne dvě shodné cílové cesty (bez ohledu na velikost písmen a koncové `\`),
-  i s `--allow-same-device`. Naplánováno i pro Mac.
-- **Kontrola voleb před kopií:** Windows ověří velikost bloku (násobek 4096, nejvýše 1 GiB), počet bufferů (≥ 2)
-  a tvar data `RRRR-MM-DD` ještě před vytvořením čehokoli. Naplánováno i pro Mac.
 - **Blackmagic RAW (`braw-decode`):** Windows `--info` navíc vydává `gamma`, `gamut` a `colorScienceGen` a LUT se volí
   podle gamy klipu (Film Gen 5 → vestavěný LUT; Video, Extended Video a starší generace = bez LUTu; Film Gen 4 zatím bez LUTu —
   provizorně, ke schválení). Mac zatím vždy předpokládá Film Gen 5. Chybný argument = kód 2; konfigurace pipeline se
