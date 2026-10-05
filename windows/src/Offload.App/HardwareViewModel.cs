@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Windows.Threading;
 using Offload.Core.Desktop;
 using Offload.Core.Hardware;
 
@@ -41,11 +42,18 @@ public sealed class HardwareViewModel : ObservableObject
     HwTestResult? result;
     bool busy, showInternal, byDrive, stopping;
     string status = "";
+    // A port name is saved with every keystroke; the drive lines and advice that show it follow 400 ms later.
+    readonly DispatcherTimer renameTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
 
     public HardwareViewModel(MainViewModel owner)
     {
         this.owner = owner;
-        MeasureCommand = new RelayCommand(Measure, () => !Busy && !byDrive && result != null);
+        renameTimer.Tick += (_, _) =>
+        {
+            renameTimer.Stop();
+            RebuildNamed();
+        };
+        MeasureCommand = new RelayCommand(Measure, () => !Busy && !byDrive && result != null && !owner.CopyRunning);
         StopCommand = new RelayCommand(Stop, () => Busy && !stopping);
         RerunCommand = new RelayCommand(RunQuick, () => !Busy);
     }
@@ -64,7 +72,12 @@ public sealed class HardwareViewModel : ObservableObject
     public bool Busy { get => busy; private set => Set(ref busy, value); }
     public string Status { get => status; private set => Set(ref status, value); }
     public bool HasMeasurements => Measurements.Count > 0;
-    public string MeasureHint => byDrive ? "Pro měření vyberte kartu nebo přidejte cíl." : "";
+    public string MeasureHint =>
+        byDrive ? "Pro měření vyberte kartu nebo přidejte cíl."
+        : owner.CopyRunning ? "Během kopírování nelze měřit — měření zapisuje 1 GB na cílové disky." : "";
+
+    /// A copy started or ended (the main window's ticker): the hint follows; the button follows CanExecute.
+    internal void CopyStateChanged() => Raise(nameof(MeasureHint));
 
     public bool ShowInternal
     {
@@ -75,7 +88,11 @@ public sealed class HardwareViewModel : ObservableObject
     public void RunQuick() => Run(measure: false);
 
     /// The window closed: the run stops and the next "Prověřit USB porty…" opens a new window.
-    public void WindowClosed() => owner.HardwareClosed(this);
+    public void WindowClosed()
+    {
+        renameTimer.Stop();
+        owner.HardwareClosed(this);
+    }
 
     /// Zastavit, or the window closed: the run stops at once (a measurement deletes its temporary file);
     /// "Zastavuji…" until the task has really ended.
@@ -94,7 +111,8 @@ public sealed class HardwareViewModel : ObservableObject
         var text = "Změřit rychlost?\n\nZ karet se jen čte (až 1 GB z každé).\n" +
                    $"Na cílové disky se zapíše a přečte dočasný soubor 1 GB a hned se smaže:\n{list}\n\n" +
                    "Podle rychlosti disků to může trvat několik minut.";
-        if (Confirm?.Invoke(text) == true) Run(measure: true);
+        // A copy may have started while the question was open.
+        if (Confirm?.Invoke(text) == true && !owner.CopyRunning) Run(measure: true);
     }
 
     void Run(bool measure)
@@ -197,7 +215,8 @@ public sealed class HardwareViewModel : ObservableObject
     {
         owner.SetPortName(connector.Id, name);
         foreach (var alt in connector.AltIds) owner.SetPortName(alt, "");   // one name per socket, under its id
-        RebuildNamed();
+        renameTimer.Stop();
+        renameTimer.Start();
     }
 
     static void Dispatch(Action action) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(action);

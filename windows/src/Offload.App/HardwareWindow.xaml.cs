@@ -12,5 +12,11 @@ public partial class HardwareWindow : Window
         Closed += (_, _) => vm.WindowClosed();   // a running measurement stops at once and deletes its temporary file
     }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        WindowSizing.FitToWorkArea(this);
+    }
+
     void Close_Click(object sender, RoutedEventArgs e) => Close();
 }

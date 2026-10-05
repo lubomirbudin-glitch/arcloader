@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Windows.Threading;
 using Offload.Core;
 using Offload.Core.Desktop;
 
@@ -15,6 +16,15 @@ public sealed partial class MainViewModel
     ExternalTools resolvedTools = new();
     bool scanning, rescan, useCustomDate;
     DateTime? customDate = DateTime.Today;
+    // Cards ejected from this window: the scan does not touch their letters until Windows reports a new arrival
+    // there (or the user presses refresh) — a reader that cannot eject media would otherwise mount the card again.
+    readonly HashSet<string> ejectedRoots = new(StringComparer.OrdinalIgnoreCase);
+    // Every ~5 s off the UI thread: missing destinations (a NAS that came back) and the LUT are checked again.
+    readonly DispatcherTimer healthTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    // The LUT's existence, checked off the UI thread (CanStart is evaluated 3×/s and must never touch a disk).
+    string? lutCheckedPath;
+    bool? lutExists;
+    bool lutChecking, lutRecheck;
 
     public ObservableCollection<SourceItemViewModel> Sources { get; } = [];
     public ObservableCollection<DestinationViewModel> Destinations { get; } = [];
@@ -30,13 +40,52 @@ public sealed partial class MainViewModel
     void InitSetup()
     {
         Proxy = new ProxyOptionsViewModel(Settings.Proxy, this);
-        RefreshVolumesCommand = new RelayCommand(RefreshVolumes);
+        RefreshVolumesCommand = new RelayCommand(RefreshAll);
         AddSourceCommand = new RelayCommand(AddManualSource);
         AddDestinationCommand = new RelayCommand(AddDestination);
         foreach (var path in Options.Sources) AddManualSourcePath(path);
         RebuildDestinations();
         RefreshTools();
         RefreshVolumes();
+        RefreshLut();
+        healthTimer.Tick += (_, _) => HealthCheck();
+        healthTimer.Start();
+    }
+
+    /// The refresh button: volumes (also the letters of ejected cards — the user asks for them), every destination
+    /// and the LUT, all off the UI thread.
+    void RefreshAll()
+    {
+        ejectedRoots.Clear();
+        RefreshVolumes();
+        foreach (var d in Destinations) d.Probe();
+        RefreshLut();
+    }
+
+    void HealthCheck()
+    {
+        if (closing) return;
+        foreach (var d in Destinations.Where(d => !d.Exists && !d.IsChecking)) d.Probe();
+        RefreshLut();
+    }
+
+    /// Windows reported volumes arriving (WM_DEVICECHANGE): a card put into the slot of an ejected one is scanned again.
+    public void VolumesArrived(IReadOnlyList<string> roots)
+    {
+        foreach (var r in roots) ejectedRoots.Remove(r);
+    }
+
+    internal void CardEjected(string source)
+    {
+        try
+        {
+            if (Path.GetPathRoot(Path.GetFullPath(source)) is { Length: > 0 } root) ejectedRoots.Add(root);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // Not a drive path — nothing to keep away from the scan.
+        }
+        RefreshVolumes();   // the ejected letter is skipped: the card leaves the list without being mounted again
     }
 
     // ── Karty ──────────────────────────────────────────────────────────────
@@ -53,7 +102,8 @@ public sealed partial class MainViewModel
         }
         scanning = true;
         var dests = Settings.DestRoots.ToList();
-        Task.Run(() => Volumes.Scan(dests)).ContinueWith(t =>
+        var skip = ejectedRoots.ToList();
+        Task.Run(() => Volumes.Scan(dests, skip)).ContinueWith(t =>
         {
             scanning = false;
             try
@@ -101,6 +151,8 @@ public sealed partial class MainViewModel
             destSig = dsig;
             RebuildDestinations();
         }
+        foreach (var j in Jobs) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
+        RefreshLut();   // the LUT may sit on a disk that just came or went
     }
 
     internal bool IsCurrent(DestinationViewModel row) => Destinations.Contains(row);
@@ -206,13 +258,63 @@ public sealed partial class MainViewModel
     public bool AnalyzeClips
     {
         get => Settings.AnalyzeClips;
-        set { Settings.AnalyzeClips = value; SettingsChanged(); RaiseMany(nameof(AnalyzeClips), nameof(LutProblem), nameof(ToolsWarning)); SetupChanged?.Invoke(); }
+        set
+        {
+            Settings.AnalyzeClips = value;
+            SettingsChanged();
+            RaiseMany(nameof(AnalyzeClips), nameof(LutProblem), nameof(ToolsWarning));
+            SetupChanged?.Invoke();
+            RefreshLut();
+        }
     }
 
     // ── Proxy a dekodéry ───────────────────────────────────────────────────
 
-    /// A missing LUT blocks the start (red); missing ffmpeg only warns (orange).
-    public string? LutProblem => ProxyPreflight.Blocking(Settings.Proxy, Settings.AnalyzeClips);
+    /// A missing LUT blocks the start (red); missing ffmpeg only warns (orange). From the cached check — no disk here.
+    public string? LutProblem => ProxyPreflight.Blocking(Settings.Proxy, Settings.AnalyzeClips, CachedLutExists);
+
+    bool? CachedLutExists =>
+        ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is string lut && string.Equals(lut, lutCheckedPath, StringComparison.OrdinalIgnoreCase)
+            ? lutExists
+            : null;
+
+    /// Checks the LUT off the UI thread; a request during a check runs once more afterwards.
+    void RefreshLut()
+    {
+        if (lutChecking)
+        {
+            lutRecheck = true;
+            return;
+        }
+        if (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is not string lut)
+        {
+            SetLutState(null, null);
+            return;
+        }
+        lutChecking = true;
+        Task.Run(() => File.Exists(lut)).ContinueWith(t =>
+        {
+            lutChecking = false;
+            if (t.IsCompletedSuccessfully) SetLutState(lut, t.Result);
+            else AppLog.Write($"LUT check: {t.Exception?.GetBaseException().Message}");
+            if (lutRecheck)
+            {
+                lutRecheck = false;
+                RefreshLut();
+            }
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// A new answer about the LUT: the red text and the start button follow it.
+    void SetLutState(string? lut, bool? exists)
+    {
+        var before = LutProblem;
+        lutCheckedPath = lut;
+        lutExists = exists;
+        if (LutProblem == before) return;
+        RaiseMany(nameof(LutProblem), nameof(CanStart));
+        SetupChanged?.Invoke();
+    }
     public string? ToolsWarning => ProxyPreflight.Warning(Settings.Proxy, Settings.AnalyzeClips, resolvedTools);
 
     internal void ProxyChanged()
@@ -220,6 +322,7 @@ public sealed partial class MainViewModel
         SettingsChanged();
         RaiseMany(nameof(LutProblem), nameof(ToolsWarning));
         SetupChanged?.Invoke();
+        RefreshLut();
     }
 
     void RefreshTools()

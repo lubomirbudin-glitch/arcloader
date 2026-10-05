@@ -52,7 +52,9 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+        WindowSizing.FitToWorkArea(this);
         watcher.Attach(this);
+        watcher.Arrived += vm.VolumesArrived;
         watcher.Changed += vm.RefreshVolumes;
         Closed += (_, _) => watcher.Dispose();
     }

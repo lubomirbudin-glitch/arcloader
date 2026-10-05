@@ -19,7 +19,7 @@ public sealed class JobItemViewModel : ObservableObject
     IReadOnlyList<DestinationLine>? destinationLines;
     string? filesText;
     List<string> chainLines = [];
-    bool chainRequested, ejected, ejecting;
+    bool chainRequested, ejected, ejecting, openingReport;
 
     public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject)
     {
@@ -82,6 +82,8 @@ public sealed class JobItemViewModel : ObservableObject
     public bool IsFinished => Phase.IsFinished();
     public bool SafeToEject => progress.Status.SafeToEject;
     public bool? CopySucceeded => progress.Status.CopySucceeded;
+    /// Failed or copied with errors; a cancelled job is not an error.
+    public bool IsError => progress.IsError;
     public CardTone Tone => progress.Tone;
     public string StatusText => progress.StatusText;
     public double Progress => progress.PhaseProgress;
@@ -143,7 +145,11 @@ public sealed class JobItemViewModel : ObservableObject
     }
 
     public bool ShowSafe => SafeToEject && !Ejected;
-    public bool ShowEjectButton => ShowSafe && CanEject;
+    /// Only while the copied card is in its drive per the last scan (pulled out or replaced by another card: hidden).
+    public bool ShowEjectButton => ShowSafe && CanEject && owner.CardInDrive(this);
+
+    /// A volume scan finished (a finished card is not refreshed every tick).
+    internal void VolumesChanged() => Raise(nameof(ShowEjectButton));
     public string SafeText => Texts.SafeToEject(Job.Plan?.CardPaths.Count ?? 0);
     // Cancelled (unlike the Mac): no red "N souborů selhalo" and no rate of a copy that was cut short — one orange line.
     bool IsCancelled => Phase == JobPhase.Cancelled;
@@ -154,16 +160,31 @@ public sealed class JobItemViewModel : ObservableObject
     public bool HasReport => Job.Report != null;
     public bool CanCancel => IsRunning || Phase == JobPhase.Waiting;
 
-    void OpenReport()
+    /// The report from the first destination that has it (one may be disconnected), looked up off the UI thread.
+    async void OpenReport()
     {
-        if (Job.Plan is not { } plan) return;
-        var path = Path.Combine(plan.CardPaths[0], Layout.ReportDirName, $"{plan.CardName}_report.html");
-        if (!File.Exists(path))
+        if (Job.Plan is not { } plan || openingReport) return;
+        openingReport = true;
+        try
         {
-            owner.ShowMessage($"Report nenalezen: {path}");
-            return;
+            var cards = plan.CardPaths;
+            var name = plan.CardName;
+            var path = await Task.Run(() => QueueRules.FirstReport(cards, name));
+            if (path == null)
+            {
+                owner.ShowMessage("Report nenalezen na žádném cíli:\n" + string.Join("\n", cards.Select(c => QueueRules.ReportPath(c, name))));
+                return;
+            }
+            if (Shell.Open(path) is string error) owner.ShowMessage(error);
         }
-        if (Shell.Open(path) is string error) owner.ShowMessage(error);
+        catch (Exception e)
+        {
+            owner.ShowMessage($"Report nejde otevřít: {e.Message}");
+        }
+        finally
+        {
+            openingReport = false;
+        }
     }
 
     void Reveal()

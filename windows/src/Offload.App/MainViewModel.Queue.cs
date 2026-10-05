@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Media;
 using System.Windows;
 using System.Windows.Input;
@@ -12,7 +13,7 @@ public sealed partial class MainViewModel
 {
     readonly JobQueue queue = new(m => AppLog.Write(m));
     readonly DispatcherTimer ticker = new() { Interval = TimeSpan.FromMilliseconds(330) };
-    bool closing, closeRaised, waitNoticeShown, shownHasFinished;
+    bool closing, closeRaised, waitNoticeShown, shownHasFinished, shownCopyRunning, starting;
 
     public ObservableCollection<JobItemViewModel> Jobs { get; } = [];
     public RelayCommand StartCommand { get; private set; } = null!;
@@ -39,13 +40,48 @@ public sealed partial class MainViewModel
 
     public string CardsText => Texts.Cards(selected.Count);
     public string DestinationsText => Texts.Destinations(Settings.DestRoots.Count) + (Settings.Proxy.Enabled ? " · proxy" : "");
-    public bool CanStart => !closing && selected.Count > 0 && Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists) && LutProblem == null;
+    /// In memory only (evaluated 3×/s): the LUT and the destinations come from checks made off the UI thread.
+    public bool CanStart => !starting && ReadyToStart;
+    bool ReadyToStart => !closing && selected.Count > 0 && Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists) && LutProblem == null;
     public bool HasJobs => Jobs.Count > 0;
     public bool HasFinished => Jobs.Any(j => j.IsFinished);
 
-    void Start()
+    /// The LUT is checked once more right before the start (it may sit on a disk that just went away) — off the UI
+    /// thread, at most 5 s; meanwhile the start button is disabled.
+    async void Start()
     {
         if (!CanStart) return;
+        starting = true;
+        Raise(nameof(CanStart));
+        try
+        {
+            while (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is string lut)
+            {
+                var check = Task.Run(() => File.Exists(lut));
+                bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
+                bool exists = answered && check.IsCompletedSuccessfully && check.Result;
+                if (!answered) AppLog.Write($"LUT check before start: no answer from {lut} in 5 s");
+                if (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) != lut) continue;   // changed meanwhile
+                SetLutState(lut, exists);
+                if (!exists) return;   // the red text says why
+                break;
+            }
+            if (ReadyToStart) StartJobs();   // anything may have changed while the LUT was checked
+        }
+        catch (Exception e)
+        {
+            AppLog.Write($"start: {e}");
+            ShowMessage($"Offload se nepodařilo spustit: {e.Message}");
+        }
+        finally
+        {
+            starting = false;
+            Raise(nameof(CanStart));
+        }
+    }
+
+    void StartJobs()
+    {
         var sources = volumes.Select(v => v.Path).Concat(manualSources).Where(selected.Contains).ToList();
         foreach (var src in sources)
         {
@@ -80,8 +116,19 @@ public sealed partial class MainViewModel
             shownHasFinished = HasFinished;
             Raise(nameof(HasFinished));
         }
+        if (CopyRunning != shownCopyRunning)
+        {
+            shownCopyRunning = CopyRunning;
+            openHardware?.CopyStateChanged();
+        }
         CommandManager.InvalidateRequerySuggested();
     }
+
+    /// A copy writes or verifies the destinations — no speed measurement now (it writes 1 GB to them).
+    internal bool CopyRunning => QueueRules.MeasureBlocked(Jobs.Select(j => j.Phase));
+
+    /// The copied card is in its drive per the last scan (not pulled out, not replaced by another card).
+    internal bool CardInDrive(JobItemViewModel item) => QueueRules.CardInDrive(item.Job.Config.Source, item.Runner.SourceIdentity, volumes);
 
     JobItemViewModel? Find(IQueuedJob job) => Jobs.FirstOrDefault(j => ReferenceEquals(j.Runner, job));
 
@@ -97,7 +144,7 @@ public sealed partial class MainViewModel
         if (Find(job) is { } item)
         {
             item.Refresh();
-            bool error = item.Phase == JobPhase.Failed || item.CopySucceeded == false;
+            bool error = item.IsError;   // a job the user cancelled is no error
             if (!closing)
             {
                 if (error) SystemSounds.Hand.Play();
@@ -152,22 +199,31 @@ public sealed partial class MainViewModel
         }
         closeRaised = true;
         ticker.Stop();
+        healthTimer.Stop();
         queue.Dispose();
         SaveNow();
         return true;
     }
 
+    /// Ejects only the card that was copied: the card in the drive now is identified off the UI thread and compared
+    /// with the one recorded when the copy started; never while another job still needs the card.
     internal async void Eject(JobItemViewModel item)
     {
+        if (item.Ejecting || item.Ejected) return;   // a double click must not start a second eject
+        var source = item.Job.Config.Source;
+        var copied = item.Runner.SourceIdentity;
+        bool inUse = QueueRules.CardInUse(source, Jobs.Where(j => !ReferenceEquals(j, item)).Select(j => (j.Job.Config.Source, j.Phase)));
         try
         {
             item.Ejecting = true;
-            var result = await Task.Run(() => CardEject.Eject(item.Job.Config.Source));
+            var result = await Task.Run(() => QueueRules.EjectProblem(copied, CardIdentity.Of(source), inUse) is string problem
+                ? new EjectResult(false, problem)
+                : CardEject.Eject(source));
             item.Ejecting = false;
             if (result.Ok)
             {
                 item.Ejected = true;
-                RefreshVolumes();
+                CardEjected(source);
             }
             else
             {
