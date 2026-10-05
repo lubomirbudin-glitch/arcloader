@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán HW (USB diagnostika), průběh
 
+- Úkol 5 — doporučení: zařízení pod svými možnostmi (port vs. kabel), sdílený řadič, volné rychlé a pomalé porty, odhad rychlosti offloadu
 - Úkol 4 — kde sedí disk: sběrnice (USB/SATA/NVMe…), řadič, port, rychlost linky, UASP
 - Úkol 3 — topologie USB: řadiče, huby, porty, fyzické konektory (USB 2 + USB 3 dvojče), externí huby
 - Úkol 2 — rychlost linky a schopnost zařízení (USB 2.0 / USB 3 5 Gb/s / 10 Gb/s+), oprava pasti „Speed=High" u USB 3
