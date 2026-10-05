@@ -135,7 +135,16 @@ public sealed class OffloadJob
     /// After this the card is no longer needed, so the app can start the next card while stage 2 runs.
     public bool RunCopy(Action<string>? log = null)
     {
-        lock (gate) started = true;
+        lock (gate)
+        {
+            started = true;
+            // Cancelled before it began: stay Cancelled, never prepare or copy.
+            if (IsCancelled)
+            {
+                state = state with { Phase = JobPhase.Cancelled };
+                return false;
+            }
+        }
         using var awake = NativeIO.KeepAwake();
         try
         {

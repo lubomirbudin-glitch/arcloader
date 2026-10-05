@@ -204,4 +204,18 @@ public class JobProgressTests
         t.Join();
         Assert.Equal(JobPhase.Cancelled, job.Status().Phase);
     }
+
+    [Fact]
+    public void CancelledThenRunCopy_StaysCancelled_CopiesNothing()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestFs.WriteRandom(Path.Combine(card, "A.bin"), 1 << 20, 1);
+        var d1 = dir.Sub("d1");
+        var job = new OffloadJob(new JobConfig(card, [d1]) { AnalyzeClips = false });
+        job.Cancel();
+        Assert.False(job.RunCopy());
+        Assert.Equal(JobPhase.Cancelled, job.Status().Phase);
+        Assert.Empty(Directory.GetFileSystemEntries(d1));
+    }
 }
