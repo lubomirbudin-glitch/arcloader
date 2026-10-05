@@ -1,0 +1,9 @@
+<UserControl x:Class="Offload.App.SetupPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel x:Name="Root" Background="{DynamicResource LayerFillColorDefaultBrush}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="Sections" Margin="18" />
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>
