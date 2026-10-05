@@ -52,9 +52,47 @@ final class JobItem: ObservableObject, Identifiable {
         lock.lock(); copied = id; lock.unlock()
     }
 
+    @Published private(set) var chainLines: [String] = []
+    private var links: [RoleLink]?
+    private var connectors: [UsbConnector]?
+    private var portNames: [String: String] = [:]
+    private var chainRequested = false
+
     func refresh() {
         objectWillChange.send()
         progress.update(job.status(), now: Date())
+        updateChain()
+    }
+
+    /// Where the card and each destination are connected — resolved once, off the main thread, when copying starts.
+    func resolveChainIfNeeded(portNames names: [String: String]) {
+        guard !chainRequested, let plan = job.plan, status.phase == .copying else { return }
+        chainRequested = true
+        let config = job.config
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            var l = [RoleLink(role: "Karta", link: DriveLinks.resolve(plan.source))]
+            l += plan.destRoots.enumerated().map { RoleLink(role: "Cíl \($0.offset + 1)", link: DriveLinks.resolve($0.element)) }
+            let c = UsbScanner.scan().connectors
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.links = l
+                self.connectors = c
+                self.portNames = names
+                self.progress.attachBrakeMeter(BrakeMeter(chunkBytes: Int64(config.chunkMB) << 20, bufferCount: config.buffers,
+                                                          linkMBps: l.map(ChainView.linkCeiling)))
+            }
+        }
+    }
+
+    /// The chain with live throughput and the brake (spec 8a.3) while copying or verifying; unchanged lines are kept.
+    private func updateChain() {
+        var lines: [String] = []
+        if let links, status.phase == .copying || status.phase == .verifying {
+            let rates = [status.phase == .copying ? progress.readRate / 1e6 : 0] + progress.destRates.map { $0 / 1e6 }
+            let chain = ChainView.build(links, mbps: rates, connectors: connectors, portNames: portNames)
+            lines = ChainView.lines(chain, brake: status.phase == .copying ? progress.brake : nil)
+        }
+        if lines != chainLines { chainLines = lines }
     }
 
     var safeText: String { Texts.safeToEject(plan?.cardPaths.count ?? 0) }
@@ -138,7 +176,37 @@ final class AppModel: ObservableObject {
     }
 
     private func tick() {
-        for j in jobs where !j.isFinished { j.refresh() }
+        for j in jobs where !j.isFinished {
+            j.refresh()
+            j.resolveChainIfNeeded(portNames: settings.portNames)
+        }
+        // A copy started or ended: the Hardware window's measure button and hint follow.
+        let running = copyRunning
+        if running != shownCopyRunning {
+            shownCopyRunning = running
+            hardware.objectWillChange.send()
+        }
+    }
+
+    private var _hardware: HardwareModel?
+    /// Created on first use (the Hardware section or window); `waitForHardware` never creates it.
+    var hardware: HardwareModel {
+        if let h = _hardware { return h }
+        let h = HardwareModel(app: self)
+        _hardware = h
+        return h
+    }
+
+    /// Before the process exits: a running measurement stops and deletes its temporary file.
+    func waitForHardware() { _hardware?.stopAndWait(timeout: 10) }
+    private var shownCopyRunning = false
+
+    /// Who takes part in the HW test: the ticked cards and the destinations; with neither, every volume (byDrive).
+    /// No disk is touched: destinations come from the probed status (one still being checked counts).
+    func hardwareRoles() -> (cards: [String], destinations: [String], byDrive: Bool) {
+        let cards = (volumes.map(\.path) + manualSources).filter { selectedSources.contains($0) }
+        let dests = settings.destRoots.filter { destStatus[$0].map { $0.exists || $0.checking } ?? true }
+        return cards.count + dests.count > 0 ? (cards, dests, false) : ([], [], true)
     }
 
     var dateString: String {

@@ -39,10 +39,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ | ✅ kód, neověřeno s nástroji |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
-| **Test USB portů na vyžádání + doporučení** | 🔨 CLI (`offload ports`), GUI ⏳ | ✅ CLI + GUI |
+| **Test USB portů na vyžádání + doporučení** | ✅ CLI (`offload ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
 | **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test) |
-| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | 🔨 CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku, GUI ⏳ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
+| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ✅ CLI + GUI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; řetěz připojení, % linky a úzké hrdlo na kartě úlohy (GUI čeká ruční test) | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
 
@@ -75,7 +75,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Rozpracované soubory** mají na Windows kromě tečky na začátku i atribut „skrytý“.
 - **CLI na Windows je v `bin\`**, protože `Offload.exe` a `offload.exe` by ve stejné složce kolidovaly
   (NTFS nerozlišuje velikost písmen).
-- **HW diagnostika:** na Macu zatím jen CLI (`offload ports`, „brzdí: Dn“ ve stavovém řádku kopie), GUI v úkolu 17.
 - **USB rychlosti a porty:** 10 vs 20 Gb/s se nerozlišuje (Windows to bez neověřeného IOCTL nehlásí) — zobrazuje se
   „10 Gb/s a víc“; fyzickou polohu portu Windows neznají spolehlivě, porty pojmenuje uživatel.
 - **Blackmagic RAW (`braw-decode`):** Windows `--info` navíc vydává `gamma`, `gamut` a `colorScienceGen` a LUT se volí
@@ -107,8 +106,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Thunderbolt čtečky CFexpress:** Windows je hlásí jako NVMe disk, takže je aplikace sama nenabídne jako kartu
   (nabízí jen vyměnitelná média a USB/SD disky) — kartu v takové čtečce přidejte tlačítkem „Složka…“.
 - **GUI navíc na Windows:** zkratka Ctrl+Enter pro spuštění, tlačítko „Průzkumník“, upozornění „Doporučeno NTFS“
-  u cíle na exFAT/FAT32 (Mac doporučuje APFS), okno Hardware s kontrolou USB portů na vyžádání (Ctrl+U) a vlastními
-  názvy portů — jen na Windows.
+  u cíle na exFAT/FAT32 (Mac doporučuje APFS) — jen na Windows.
 - **Složka jako argument:** aplikace přijme složku jako argument, takže ji lze přetáhnout na `Offload.exe`.
   `--no-hw-prompt` se přijímá, ale nic nedělá (kontrola USB portů se při startu nespouští).
 - **R3D/ARRI bez proxy** zatím nemají náhledy (stejně jako na Macu).

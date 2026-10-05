@@ -18,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// "Pokračovat" after closing the window: a click on the Dock icon brings the window back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { true }
+
+    /// A running hardware measurement stops and deletes its temporary file before the process exits (≤ 10 s).
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { model?.waitForHardware() }
+    }
 }
 
 @main
@@ -35,6 +40,24 @@ struct OffloadApp: App {
         .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandMenu("Nástroje") { HardwareMenuItem() }
         }
+        // One Hardware window: opening it again only brings it to the front (no second run).
+        Window("Hardware — USB porty a disky", id: "hardware") {
+            HardwareView(hw: model.hardware)
+                .environmentObject(model)
+        }
+        .defaultSize(width: 860, height: 700)
+    }
+}
+
+/// Nástroje › Prověřit USB porty… (⌘U — like Ctrl+U on Windows; free in an app without a Format menu).
+/// A View, so it can use `openWindow` (macOS 13+).
+struct HardwareMenuItem: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Prověřit USB porty…") { openWindow(id: "hardware") }
+            .keyboardShortcut("u", modifiers: .command)
     }
 }

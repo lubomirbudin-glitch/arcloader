@@ -37,6 +37,7 @@ struct SetupPanel: View {
                     StructureSection()
                     ProxySection()
                     ToolsSection()
+                    HardwareSection(hw: model.hardware)
                 }
                 .padding(18)
             }
@@ -44,6 +45,20 @@ struct SetupPanel: View {
             StartBar()
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+struct HardwareSection: View {
+    @ObservedObject var hw: HardwareModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SectionHeader(title: "Hardware", systemImage: "cable.connector",
+                          trailing: AnyView(Button("Prověřit…") { openWindow(id: "hardware") }.buttonStyle(.borderless)
+                              .help("Prověřit USB porty (⌘U)")))
+            Text(hw.summary).font(.caption).foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -433,6 +448,16 @@ struct JobCard: View {
             if item.isRunning {
                 ProgressView(value: item.phaseProgress)
                 Text(item.detailText).font(.callout.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                if !item.chainLines.isEmpty {
+                    VStack(alignment: .leading, spacing: 1) {
+                        ForEach(Array(item.chainLines.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(line.hasPrefix("Úzké hrdlo") ? Color.orange : Color.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                        }
+                    }
+                }
             }
             if s.safeToEject && !item.ejected {
                 HStack {
