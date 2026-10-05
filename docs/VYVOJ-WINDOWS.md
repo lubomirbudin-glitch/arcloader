@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
 
+- Úkol 10 — CLI: volby proxy (--proxy, --lut, --proxy-codec, --frame-aspect …) a souhrn klipů
 - Úkol 9 — fáze 2 úlohy: analýza klipů, 3 snímky, proxy na všechny cíle, PDF; selhání nikdy nezmění výsledek kopie
 - Úkol 8 — PDF report přes Microsoft Edge (headless), A4 na šířku, funguje i z příkazové řádky
 - Úkol 7 — HTML report: tři snímky na klip s popisky TC, stránka A4 na šířku pro tisk

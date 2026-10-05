@@ -76,6 +76,11 @@ sealed class ProgressDisplay : IDisposable
                 lastWritten = s.WrittenBytes;
                 lastVerified = s.VerifiedBytes;
             }
+            else if (st.Phase is JobPhase.Analyzing or JobPhase.Proxies)
+            {
+                line = $"{st.Phase.ToString().ToLowerInvariant()} {st.ClipIndex + 1}/{st.ClipCount}  {st.ClipFraction * 100,3:0}%  {st.ClipName}";
+                if (st.SafeToEject) line += "  (card safe to eject)";
+            }
             else
             {
                 line = st.Phase.ToString().ToLowerInvariant();
