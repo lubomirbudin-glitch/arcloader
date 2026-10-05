@@ -16,6 +16,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | naplánováno |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | naplánováno |
 
+## 2026-10-05 — plán HW (USB diagnostika), průběh
+
+- Úkol 1 — přístup ke stromu zařízení a USB hubům bez admin práv (cfgmgr32, IOCTL)
+
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
 
 - Závěrečná kontrola plánu 2 — opravy: přesný prostřední snímek, `%` v názvu, poslední snímek u delšího zvuku, enkodér v reportu, zrušitelné náhledy, R3D/ARRI bez falešné chyby náhledu, proxy zůstane hotová i při selhání kopie na další cíl, test HEVC a záložního enkodéru, `tools\bin` jen pro vývojový build, build skript přeskočí malé shimy z PATH (`cea9059`)
