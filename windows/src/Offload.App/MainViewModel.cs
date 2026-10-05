@@ -1,4 +1,4 @@
-using System.Windows.Threading;
+﻿using System.Windows.Threading;
 using Offload.Core.Desktop;
 
 namespace Offload.App;
@@ -19,6 +19,7 @@ public sealed partial class MainViewModel : ObservableObject
             saveTimer.Stop();
             SaveNow();
         };
+        InitSetup();
     }
 
     public StartupOptions Options { get; }
