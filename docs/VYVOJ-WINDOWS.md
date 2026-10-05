@@ -23,6 +23,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 - Úkol 2 — náhledy BRAW: počáteční snímek se zaokrouhluje (prostřední a poslední snímek už nevycházejí o jeden dřív)
 - Úkol 3 — BRAW: gama, gamut a generace barev z dekodéru v metadatech klipu; LUT jen pro Blackmagic Design Film Gen 5, Video / Extended Video bez LUTu
 - Úkol 4 — projekt braw-decode (samostatný bin\braw-decode.exe): argumenty jako na Macu, JSON --info, přesná velikost snímku RGB48; testovací projekt na něj odkazuje, takže `braw-decode.exe` leží ve výstupu testů a `ExternalTools` v testech najde BRAW dekodér — test „BRAW nepodporováno“ musí použít seam bez hledání
+- Úkol 5 — COM vrstva Blackmagic RAW v C# (volání přes vtable, BSTR/BOOL/VARIANT jako ve Windows SDK, callback jako nativní COM objekt); ověřeno s knihovnou z DaVinci Resolve
 
 ## 2026-10-05 — drobnosti po plánu 5
 
