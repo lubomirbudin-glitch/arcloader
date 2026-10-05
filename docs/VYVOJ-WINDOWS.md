@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 4 (GUI), průběh
 
+- Závěrečné opravy — settings.json s dvojitým klíčem, názvy portů lišícími se jen velikostí písmen nebo s null v seznamu cílů už nezastaví start aplikace (vadná položka nebo sekce se vynechá); testy nezávislé na proměnné OFFLOAD_SETTINGS_DIR a deterministický test zrušení kopie
 - Úkol 10 — balíček Offload-win-x64.zip (Offload.exe + bin\offload.exe + ffmpeg), návod k aplikaci a checklist ručního testu
 - Úkol 9 — Hardware v GUI: kontrola USB portů jen na vyžádání (menu Nástroje › „Prověřit USB porty…“, Ctrl+U, tlačítko v sekci Hardware; při startu se už neptá), okno Hardware (připojení, doporučení, měření s potvrzením a okamžitým zastavením, USB porty s vlastními názvy), vždy jen jeden test naráz, sekce Hardware s posledním testem
 - Úkol 8 — spuštění a fronta: karty úloh s průběhem, rychlostmi, odhadem času a řetězem připojení s úzkým hrdlem, zelený pruh a vysunutí karty, report a Průzkumník, zrušení, zavření okna během kopie, zvuk a blikání v hlavním panelu

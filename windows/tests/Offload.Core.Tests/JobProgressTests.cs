@@ -187,22 +187,40 @@ public class JobProgressTests
         using var dir = new TempDir();
         var card = dir.Sub("card");
         TestFs.WriteRandom(Path.Combine(card, "A.bin"), 8 << 20, 1);
-        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")]) { AnalyzeClips = false },
-            new OffloadOptions { ChunkSize = 64 * 1024, BufferCount = 4, AllowSameDevice = true, AllowSourceVolume = true });
-        var t = new Thread(() => job.RunCopy());
-        t.Start();
-        // Cancel only once RunCopy has begun (cancelling before it is the legitimate never-started case).
-        while (t.IsAlive && job.Status().Phase == JobPhase.Waiting) Thread.Yield();
-        job.Cancel();
-        bool finished = false;
-        while (t.IsAlive)
+        TestFs.WriteRandom(Path.Combine(card, "B.bin"), 1 << 20, 2);
+        // Deterministic cancel point: the copy thread waits before its first file until the test has cancelled,
+        // so the copy can never finish first (the old busy-wait failed when 8 MB copied before Cancel).
+        using var atFirstFile = new ManualResetEventSlim();
+        using var cancelled = new ManualResetEventSlim();
+        var options = new OffloadOptions
         {
+            ChunkSize = 64 * 1024, BufferCount = 4, AllowSameDevice = true, AllowSourceVolume = true,
+            BeforeFileCopy = i =>
+            {
+                if (i != 0) return;
+                atFirstFile.Set();
+                cancelled.Wait(TimeSpan.FromSeconds(30));
+            },
+        };
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")]) { AnalyzeClips = false }, options);
+        var t = new Thread(() => job.RunCopy()) { IsBackground = true };
+        t.Start();
+        Assert.True(atFirstFile.Wait(TimeSpan.FromSeconds(30)), "the copy never reached its first file");
+        Assert.Equal(JobPhase.Copying, job.Status().Phase);
+        job.Cancel();
+        cancelled.Set();
+        bool finished = false;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        while (!t.Join(0))
+        {
+            Assert.True(DateTime.UtcNow < deadline, "the cancelled copy did not end within 60 s");
             var ph = job.Status().Phase;
-            if (finished) Assert.True(ph.IsFinished());
+            if (finished) Assert.True(ph.IsFinished(), $"phase went back to {ph} after a finished phase");
             finished |= ph.IsFinished();
+            Thread.Yield();
         }
-        t.Join();
         Assert.Equal(JobPhase.Cancelled, job.Status().Phase);
+        Assert.False(job.Status().SafeToEject);
     }
 
     [Fact]

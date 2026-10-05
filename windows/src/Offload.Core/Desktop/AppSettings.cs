@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Offload.Core.Desktop;
@@ -17,9 +16,13 @@ public sealed class AppSettings
     public Dictionary<string, string> PortNames
     {
         get => _portNames;
-        set => _portNames = value == null
-            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, string>(value, StringComparer.OrdinalIgnoreCase);
+        set
+        {
+            // Built by hand: keys that differ only in case (a hand-edited file) must not throw — the last one wins.
+            var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (id, name) in value ?? []) names[id] = name;
+            _portNames = names;
+        }
     }
     private Dictionary<string, string> _portNames = new(StringComparer.OrdinalIgnoreCase);
 }
@@ -36,12 +39,12 @@ public static class SettingsStore
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// Missing or corrupt file → defaults. Each top-level section is read on its own: a section that does not
-    /// parse (a newer codec name, a wrong type) falls back to its defaults and the others are kept.
+    /// Missing or corrupt file → defaults; never throws (a settings file must never stop the app from starting).
+    /// Each top-level section is read on its own: a section that does not parse (a newer codec name, a wrong type)
+    /// falls back to its defaults and the others are kept. A key given twice: the last one wins.
     public static AppSettings Load(string path)
     {
         var s = new AppSettings();
-        JsonObject? root;
         try
         {
             if (!File.Exists(path)) return s;
@@ -49,33 +52,44 @@ public static class SettingsStore
             // Skip UTF-8 BOM if present (EF BB BF), which Windows PowerShell and old Notepad write
             if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
                 bytes = bytes[3..];
-            root = JsonNode.Parse(bytes) as JsonObject;
-        }
-        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
-        {
-            return s;
-        }
-        if (root == null) return s;
+            using var doc = JsonDocument.Parse(bytes);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return s;
+            var root = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            foreach (var p in doc.RootElement.EnumerateObject()) root[p.Name] = p.Value;   // a duplicate key: last wins
 
-        T? Get<T>(string key)
-        {
-            try
+            void Section(string key, Action<JsonElement> read)
             {
-                return root[key] is JsonNode n ? n.Deserialize<T>(Json) : default;
+                if (!root.TryGetValue(key, out var e) || e.ValueKind == JsonValueKind.Null) return;
+                try
+                {
+                    read(e);
+                }
+                catch (Exception)
+                {
+                    // This section keeps its defaults.
+                }
             }
-            catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or NotSupportedException)
-            {
-                return default;
-            }
-        }
 
-        if (Get<List<string>>("destRoots") is { } roots) s.DestRoots = roots;
-        if (Get<bool?>("verify") is bool verify) s.Verify = verify;
-        if (Get<bool?>("analyzeClips") is bool analyze) s.AnalyzeClips = analyze;
-        if (Get<ProxySettings>("proxy") is { } proxy) s.Proxy = proxy;
-        if (Get<ExternalTools>("tools") is { } tools) s.Tools = tools;
-        if (Get<Dictionary<string, string>>("portNames") is { } names) s.PortNames = names;
-        return Normalize(s);
+            Section("destRoots", e => s.DestRoots = e.EnumerateArray()
+                .Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList());
+            Section("verify", e => s.Verify = e.GetBoolean());
+            Section("analyzeClips", e => s.AnalyzeClips = e.GetBoolean());
+            Section("proxy", e => s.Proxy = e.Deserialize<ProxySettings>(Json) ?? new ProxySettings());
+            Section("tools", e => s.Tools = e.Deserialize<ExternalTools>(Json) ?? new ExternalTools());
+            Section("portNames", e =>
+            {
+                var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var p in e.EnumerateObject())
+                    if (p.Value.ValueKind == JsonValueKind.String) names[p.Name] = p.Value.GetString()!;
+                s.PortNames = names;
+            });
+            return Normalize(s);
+        }
+        catch (Exception)
+        {
+            // Unreadable, not JSON, or anything unexpected: defaults.
+            return new AppSettings();
+        }
     }
 
     internal static AppSettings Normalize(AppSettings s)

@@ -64,6 +64,59 @@ public class SettingsStoreTests
         Assert.Equal("vpředu", s.PortNames["a#1"]);
     }
 
+    // Final review 1: a hand-edited file must never stop the app from starting.
+    [Fact]
+    public void DuplicateTopLevelKey_LastWins_NeverThrows()
+    {
+        using var dir = new TempDir();
+        var s = LoadJson(dir, """{"verify":false,"verify":true,"destRoots":["D:\\A"],"analyzeClips":false}""");
+        Assert.True(s.Verify);
+        Assert.Equal([@"D:\A"], s.DestRoots);
+        Assert.False(s.AnalyzeClips);
+    }
+
+    [Fact]
+    public void PortNames_KeysDifferingOnlyInCase_LastWins()
+    {
+        using var dir = new TempDir();
+        var s = LoadJson(dir, """{"portNames":{"USB#1":"a","usb#1":"b","X#2":null,"Y#3":7,"Z#4":"c"},"verify":false}""");
+        Assert.Equal("b", s.PortNames["USB#1"]);
+        Assert.Equal("c", s.PortNames["z#4"]);
+        Assert.Equal(2, s.PortNames.Count);
+        Assert.False(s.Verify);
+    }
+
+    [Fact]
+    public void PortNamesSetter_CaseCollision_DoesNotThrow()
+    {
+        var s = new AppSettings { PortNames = new Dictionary<string, string> { ["A#1"] = "x", ["a#1"] = "y" } };
+        Assert.Equal("y", s.PortNames["A#1"]);
+        Assert.Single(s.PortNames);
+    }
+
+    [Fact]
+    public void DestRoots_NullAndNonStringEntries_Dropped()
+    {
+        using var dir = new TempDir();
+        Assert.Equal([@"D:\A"], LoadJson(dir, """{"destRoots":[null,"D:\\A"]}""").DestRoots);
+        Assert.Equal([@"D:\A", @"E:\B"], LoadJson(dir, """{"destRoots":["D:\\A",5,{"x":1},"E:\\B"]}""").DestRoots);
+    }
+
+    [Theory]
+    [InlineData("""{"proxy":{"height":720,"height":540}}""")]
+    [InlineData("""[1,2,3]""")]
+    [InlineData("""null""")]
+    [InlineData("""{"destRoots":"D:\\A","portNames":[1],"tools":5,"proxy":null}""")]
+    [InlineData("""{"verify":tru""")]
+    public void OddFiles_NeverThrow(string json)
+    {
+        using var dir = new TempDir();
+        var s = LoadJson(dir, json);
+        Assert.NotNull(s.Proxy);
+        Assert.NotNull(s.Tools);
+        Assert.NotNull(s.DestRoots);
+    }
+
     [Fact]
     public void OutOfRange_Clamped()
     {
@@ -139,12 +192,18 @@ public class SettingsStoreTests
             Assert.Equal(@"X:\iso", AppData.Folder);
             Assert.Equal(@"X:\iso\settings.json", SettingsStore.DefaultPath);
             Assert.Equal(@"X:\iso\hwtest.json", Hardware.HwTest.DefaultPath);
+            // Unset (also when the shell running the tests has it set): %APPDATA%\Offload.
+            Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", null);
+            Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Offload"), AppData.Folder);
+            Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", "");
+            Assert.EndsWith(@"\Offload", AppData.Folder);
         }
         finally
         {
             Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", old);
         }
-        Assert.EndsWith(@"\Offload", AppData.Folder);
+        Assert.Equal(old is { Length: > 0 } ? old : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Offload"),
+            AppData.Folder);
     }
 
     [Fact]

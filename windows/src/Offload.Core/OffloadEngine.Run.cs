@@ -36,6 +36,7 @@ public sealed partial class OffloadEngine
                     sourceErrors[i] = "cancelled";
                     continue;
                 }
+                Options.BeforeFileCopy?.Invoke(i);
                 lock (gate)
                 {
                     fileIndex = i;
