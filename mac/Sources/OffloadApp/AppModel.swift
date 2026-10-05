@@ -11,17 +11,6 @@ struct AppSettings: Codable, Equatable {
     var tools = ExternalTools()
 }
 
-struct VolumeItem: Identifiable, Hashable {
-    var id: String { path }
-    let name: String
-    let path: String
-    let total: Int64
-    let free: Int64
-    let format: String
-    let looksLikeCard: Bool
-    let isDestination: Bool
-}
-
 /// One card in the queue; mirrors the job's status for SwiftUI.
 final class JobItem: ObservableObject, Identifiable {
     let id = UUID()
