@@ -1,39 +1,55 @@
-// braw-decode — minimal Blackmagic RAW decoder for the offload proxy pipeline.
+// braw-decode — minimal Blackmagic RAW decoder for the offload proxy pipeline (same CLI as the Windows braw-decode.exe).
 //
 //   braw-decode --info [--scale S] clip.braw
-//       prints JSON: width, height (of the processed image at scale S), sourceWidth, sourceHeight,
-//       fps, frames, timecode, camera
+//       one JSON line: width, height (of the processed image at scale S), sourceWidth, sourceHeight, fps, frames,
+//       timecode, camera, and when the SDK reports them gamma, gamut, colorScienceGen
 //   braw-decode [--scale S] [--start N] [--count N] clip.braw
 //       writes frames to stdout as raw interleaved RGB 16-bit little endian (ffmpeg: -f rawvideo -pix_fmt rgb48le)
 //
 //   S = full | half | quarter | eighth
 //
+// Exit codes (as on Windows): 0 OK (also when the reader closed the pipe early), 2 usage, 3 library/codec missing,
+// 4 clip cannot be opened, 5 a frame failed. Every exit-3/4 line names the library in use: an old one cannot open
+// clips from newer cameras, and Offload's note at the clip says so. stderr is UTF-8 (paths come through as given).
 // Frames are decoded in the clip's own gamma/gamut (as recorded); the LUT is applied later by ffmpeg.
 // Build: Tools/braw-decode/build.sh (links against BlackmagicRawAPI.framework at runtime via the dispatch loader).
 
 #include "BlackmagicRawAPI.h"
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <mach-o/dyld.h>
+#include <algorithm>
 #include <atomic>
+#include <cerrno>
+#include <climits>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <mutex>
+#include <libgen.h>
 #include <string>
 #include <unistd.h>
 #include <vector>
 
+static const char* kFramework = "BlackmagicRawAPI.framework";
+
+// Keep in sync with OffloadKit BrawLibrary.searchDirs (BrawLibraryTests checks the folders are here).
 static const char* kLibrarySearchPaths[] = {
-    // next to this executable (bundled), then the SDK, then the free Blackmagic RAW Player
+    // next to this executable (bundled), then the SDK, then the free Blackmagic RAW Player, then DaVinci Resolve
     "@exe",
     "/Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries",
     "/Applications/Blackmagic RAW/Blackmagic RAW Player.app/Contents/Frameworks",
-    "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries",
+    "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Frameworks",
 };
+
+static const char* kUsage = "usage: braw-decode [--info] [--scale full|half|quarter|eighth] [--start N] [--count N] clip.braw";
+
+// The framework that was loaded (named in every exit-3/4 line).
+static std::string gLibrary = kFramework;
 
 static std::string toStd(CFStringRef s) {
     if (!s) return "";
-    char buf[256];
+    char buf[1024];
     if (CFStringGetCString(s, buf, sizeof buf, kCFStringEncodingUTF8)) return buf;
     return "";
 }
@@ -72,7 +88,7 @@ public:
             result = decodeJob->Submit();
         }
         if (result != S_OK) {
-            fprintf(stderr, "braw-decode: read/decode setup failed (0x%08x)\n", (unsigned)result);
+            fprintf(stderr, "braw-decode: read/decode setup failed (0x%08X)\n", (unsigned)result);
             errors++;
             if (decodeJob) decodeJob->Release();
         }
@@ -97,7 +113,7 @@ public:
             slot.data.assign((uint8_t*)res, (uint8_t*)res + size);
             slot.ok = true;
         } else {
-            fprintf(stderr, "braw-decode: process failed (0x%08x)\n", (unsigned)result);
+            fprintf(stderr, "braw-decode: process failed (0x%08X)\n", (unsigned)result);
             errors++;
         }
         job->Release();
@@ -115,34 +131,110 @@ public:
     ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
+// The folder of this executable with symlinks resolved — where "@exe" looks (as the SDK's dispatch does).
+static std::string exeDir() {
+    char path[PATH_MAX], resolved[PATH_MAX];
+    uint32_t size = sizeof path;
+    if (_NSGetExecutablePath(path, &size) != 0 || !realpath(path, resolved)) return ".";
+    return dirname(resolved);
+}
+
 static IBlackmagicRawFactory* loadFactory() {
     for (const char* p : kLibrarySearchPaths) {
         IBlackmagicRawFactory* f = nullptr;
+        std::string dir;
         if (strcmp(p, "@exe") == 0) {
+            dir = exeDir();
             f = CreateBlackmagicRawFactoryInstanceFromExeRelativePath(CFSTR("."));
         } else {
+            dir = p;
             CFStringRef path = CFStringCreateWithCString(nullptr, p, kCFStringEncodingUTF8);
             f = CreateBlackmagicRawFactoryInstanceFromPath(path);
             CFRelease(path);
         }
-        if (f) return f;
+        if (f) {
+            gLibrary = dir + "/" + kFramework;
+            return f;
+        }
     }
     return nullptr;
 }
 
-static BlackmagicRawResolutionScale parseScale(const char* s) {
-    if (!strcmp(s, "half")) return blackmagicRawResolutionScaleHalf;
-    if (!strcmp(s, "quarter")) return blackmagicRawResolutionScaleQuarter;
-    if (!strcmp(s, "eighth")) return blackmagicRawResolutionScaleEighth;
-    return blackmagicRawResolutionScaleFull;
+// Ask the created object for IBlackmagicRawFactory (QueryInterface is IUnknown's first slot on every object): a
+// framework of another SDK generation whose object lacks it is a clear exit 3, never a call into the wrong slot.
+// Takes over (and releases) the created reference. Same as Windows BrawRuntime.FromCreated.
+static IBlackmagicRawFactory* asFactory(IBlackmagicRawFactory* created) {
+    IBlackmagicRawFactory* factory = nullptr;
+    HRESULT r = created->QueryInterface(IID_IBlackmagicRawFactory, (LPVOID*)&factory);
+    created->Release();
+    if (r != S_OK || !factory) {
+        if (factory) factory->Release();
+        fprintf(stderr, "braw-decode: %s: the created object is not an IBlackmagicRawFactory (0x%08X)\n", gLibrary.c_str(),
+                (unsigned)r);
+        return nullptr;
+    }
+    return factory;
 }
 
+struct Options {
+    bool info = false;
+    BlackmagicRawResolutionScale scale = blackmagicRawResolutionScaleFull;
+    uint64_t start = 0;
+    uint64_t count = UINT64_MAX;   // UINT64_MAX = to the end of the clip
+    const char* path = nullptr;
+};
+
+static bool parseScale(const char* s, BlackmagicRawResolutionScale& out) {
+    if (!strcmp(s, "full")) out = blackmagicRawResolutionScaleFull;
+    else if (!strcmp(s, "half")) out = blackmagicRawResolutionScaleHalf;
+    else if (!strcmp(s, "quarter")) out = blackmagicRawResolutionScaleQuarter;
+    else if (!strcmp(s, "eighth")) out = blackmagicRawResolutionScaleEighth;
+    else return false;
+    return true;
+}
+
+// Digits only (strtoull alone takes "-1", "12abc" and "").
+static bool parseNumber(const char* s, uint64_t& out) {
+    if (!*s) return false;
+    for (const char* c = s; *c; c++)
+        if (*c < '0' || *c > '9') return false;
+    errno = 0;
+    out = strtoull(s, nullptr, 10);
+    return errno == 0;
+}
+
+// Strict like the Windows decoder: Offload never passes anything else, so a typo fails loudly (exit 2).
+static bool parseArgs(int argc, char** argv, Options& o) {
+    for (int i = 1; i < argc; i++) {
+        const char* a = argv[i];
+        const char* value = i + 1 < argc ? argv[i + 1] : nullptr;
+        if (!strcmp(a, "--info")) {
+            o.info = true;
+        } else if (!strcmp(a, "--scale")) {
+            if (!value || !parseScale(value, o.scale)) return false;
+            i++;
+        } else if (!strcmp(a, "--start")) {
+            if (!value || !parseNumber(value, o.start)) return false;
+            i++;
+        } else if (!strcmp(a, "--count")) {
+            if (!value || !parseNumber(value, o.count)) return false;
+            i++;
+        } else if (!strncmp(a, "--", 2)) {
+            return false;
+        } else {
+            o.path = a;
+        }
+    }
+    return o.path != nullptr;
+}
+
+// false when the reader went away (EPIPE — SIGPIPE is ignored, see main).
 static bool writeAll(const uint8_t* p, size_t n) {
     while (n > 0) {
         ssize_t w = write(STDOUT_FILENO, p, n);
         if (w < 0) {
             if (errno == EINTR) continue;
-            return false;  // ffmpeg closed the pipe
+            return false;
         }
         p += w;
         n -= (size_t)w;
@@ -150,39 +242,114 @@ static bool writeAll(const uint8_t* p, size_t n) {
     return true;
 }
 
-int main(int argc, char** argv) {
-    bool info = false;
-    const char* scaleArg = "full";
-    uint64_t start = 0, count = UINT64_MAX;
-    const char* path = nullptr;
-    for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--info")) info = true;
-        else if (!strcmp(argv[i], "--scale") && i + 1 < argc) scaleArg = argv[++i];
-        else if (!strcmp(argv[i], "--start") && i + 1 < argc) start = strtoull(argv[++i], nullptr, 10);
-        else if (!strcmp(argv[i], "--count") && i + 1 < argc) count = strtoull(argv[++i], nullptr, 10);
-        else path = argv[i];
+// ffmpeg has what it wanted (a thumbnail needs one frame) and closed the pipe: a success, not a failure.
+[[noreturn]] static void readerGone() {
+    fprintf(stderr, "braw-decode: stdout closed by the reader, stopping\n");
+    _exit(0);
+}
+
+static std::string fourcc(uint32_t v) {
+    char s[5] = {(char)(v >> 24), (char)(v >> 16), (char)(v >> 8), (char)v, 0};
+    return s;
+}
+
+static void attributeWarning(const char* key, uint32_t attribute, const char* what) {
+    fprintf(stderr, "braw-decode: %s: clip attribute '%s' %s\n", key, fourcc(attribute).c_str(), what);
+}
+
+// Gamma and gamut are strings. An attribute the SDK does not return is left out silently; one of another variant
+// type is a warning on stderr and left out too — never a failure of --info (Windows ruling T6-attr).
+static bool attributeText(IBlackmagicRawClipProcessingAttributes* attrs, BlackmagicRawClipProcessingAttribute attribute,
+                          const char* key, std::string& out) {
+    Variant v;
+    VariantInit(&v);
+    bool ok = false;
+    if (attrs->GetClipAttribute(attribute, &v) == S_OK) {
+        if (v.vt == blackmagicRawVariantTypeString) {
+            out = toStd(v.bstrVal);
+            ok = true;
+        } else if (v.vt != blackmagicRawVariantTypeEmpty) {
+            attributeWarning(key, attribute, "is a number, expected a string");
+        }
     }
-    if (!path) {
-        fprintf(stderr, "usage: braw-decode [--info] [--scale full|half|quarter|eighth] [--start N] [--count N] clip.braw\n");
+    VariantClear(&v);
+    return ok;
+}
+
+// The colour science generation is a u16; any integer type is taken.
+static bool attributeNumber(IBlackmagicRawClipProcessingAttributes* attrs, BlackmagicRawClipProcessingAttribute attribute,
+                            const char* key, int& out) {
+    Variant v;
+    VariantInit(&v);
+    bool ok = false;
+    if (attrs->GetClipAttribute(attribute, &v) == S_OK) {
+        ok = true;
+        switch (v.vt) {
+        case blackmagicRawVariantTypeU8: out = (int)(v.uiVal & 0xFF); break;
+        case blackmagicRawVariantTypeS16: out = v.iVal; break;
+        case blackmagicRawVariantTypeU16: out = v.uiVal; break;
+        case blackmagicRawVariantTypeS32: out = v.intVal; break;
+        case blackmagicRawVariantTypeU32:
+            if (v.uintVal > (uint32_t)INT_MAX) {
+                attributeWarning(key, attribute, "is out of range");
+                ok = false;
+            } else {
+                out = (int)v.uintVal;
+            }
+            break;
+        case blackmagicRawVariantTypeEmpty: ok = false; break;
+        case blackmagicRawVariantTypeString:
+            attributeWarning(key, attribute, "is a string, expected a number");
+            ok = false;
+            break;
+        default:
+            attributeWarning(key, attribute, "has an unexpected variant type");
+            ok = false;
+            break;
+        }
+    }
+    VariantClear(&v);
+    return ok;
+}
+
+int main(int argc, char** argv) {
+    // A reader that goes away must be a failed write we can see (EPIPE → exit 0 with a note), not a death by SIGPIPE.
+    signal(SIGPIPE, SIG_IGN);
+
+    Options o;
+    if (!parseArgs(argc, argv, o)) {
+        fprintf(stderr, "%s\n", kUsage);
         return 2;
     }
 
-    IBlackmagicRawFactory* factory = loadFactory();
-    if (!factory) {
-        fprintf(stderr, "braw-decode: BlackmagicRawAPI.framework not found (install Blackmagic RAW Player or SDK)\n");
+    IBlackmagicRawFactory* created = loadFactory();
+    if (!created) {
+        fprintf(stderr, "braw-decode: %s not found (install Blackmagic RAW Player, the Blackmagic RAW SDK or DaVinci Resolve)\n",
+                kFramework);
         return 3;
     }
+    IBlackmagicRawFactory* factory = asFactory(created);
+    if (!factory) return 3;
     IBlackmagicRaw* codec = nullptr;
     IBlackmagicRawClip* clip = nullptr;
-    if (factory->CreateCodec(&codec) != S_OK) {
-        fprintf(stderr, "braw-decode: CreateCodec failed\n");
+    HRESULT r = factory->CreateCodec(&codec);
+    if (r != S_OK || !codec) {
+        fprintf(stderr, "braw-decode: CreateCodec failed (0x%08X; library %s)\n", (unsigned)r, gLibrary.c_str());
         return 3;
     }
-    CFStringRef cfPath = CFStringCreateWithCString(nullptr, path, kCFStringEncodingUTF8);
-    HRESULT r = codec->OpenClip(cfPath, &clip);
-    CFRelease(cfPath);
-    if (r != S_OK) {
-        fprintf(stderr, "braw-decode: cannot open %s\n", path);
+
+    // The configuration is read on the first OpenClip, so the pipeline is set before it (CPU).
+    IBlackmagicRawConfiguration* config = nullptr;
+    if (codec->QueryInterface(IID_IBlackmagicRawConfiguration, (LPVOID*)&config) == S_OK && config) {
+        config->SetPipeline(blackmagicRawPipelineCPU, nullptr, nullptr);
+        config->Release();
+    }
+
+    CFStringRef cfPath = CFStringCreateWithCString(nullptr, o.path, kCFStringEncodingUTF8);
+    r = cfPath ? codec->OpenClip(cfPath, &clip) : E_FAIL;
+    if (cfPath) CFRelease(cfPath);
+    if (r != S_OK || !clip) {
+        fprintf(stderr, "braw-decode: cannot open %s (0x%08X; library %s)\n", o.path, (unsigned)r, gLibrary.c_str());
         return 4;
     }
 
@@ -194,17 +361,15 @@ int main(int argc, char** argv) {
     clip->GetFrameRate(&fps);
     clip->GetFrameCount(&frames);
 
-    IBlackmagicRawConfiguration* config = nullptr;
-    if (codec->QueryInterface(IID_IBlackmagicRawConfiguration, (LPVOID*)&config) == S_OK && config) {
-        config->SetPipeline(blackmagicRawPipelineCPU, nullptr, nullptr);
-        config->Release();
+    Callback cb;
+    cb.scale = o.scale;
+    r = codec->SetCallback(&cb);
+    if (r != S_OK) {
+        fprintf(stderr, "braw-decode: SetCallback failed (0x%08X; library %s)\n", (unsigned)r, gLibrary.c_str());
+        return 3;
     }
 
-    Callback cb;
-    cb.scale = parseScale(scaleArg);
-    codec->SetCallback(&cb);
-
-    if (info) {
+    if (o.info) {
         // Decode frame 0 at the requested scale: the processed size is the truth, not width/scale.
         std::vector<FrameSlot> slots(1);
         cb.slots = &slots;
@@ -215,22 +380,40 @@ int main(int argc, char** argv) {
             if (job->Submit() != S_OK) job->Release();
             codec->FlushJobs();
         }
+        // What the clip was shot in — Offload picks the LUT by it (LutResolver.braw).
+        std::string gamma, gamut;
+        int gen = 0;
+        bool hasGamma = false, hasGamut = false, hasGen = false;
+        IBlackmagicRawClipProcessingAttributes* attrs = nullptr;
+        if (clip->CloneClipProcessingAttributes(&attrs) == S_OK && attrs) {
+            hasGamma = attributeText(attrs, blackmagicRawClipProcessingAttributeGamma, "gamma", gamma);
+            hasGamut = attributeText(attrs, blackmagicRawClipProcessingAttributeGamut, "gamut", gamut);
+            hasGen = attributeNumber(attrs, blackmagicRawClipProcessingAttributeColorScienceGen, "colorScienceGen", gen);
+            attrs->Release();
+        }
         CFStringRef tc = nullptr, cam = nullptr;
         clip->GetTimecodeForFrame(0, &tc);
         clip->GetCameraType(&cam);
-        printf("{\"width\":%u,\"height\":%u,\"sourceWidth\":%u,\"sourceHeight\":%u,\"fps\":%.6f,\"frames\":%llu,"
-               "\"timecode\":\"%s\",\"camera\":\"%s\"}\n",
-               slots[0].ok ? slots[0].width : width, slots[0].ok ? slots[0].height : height, width, height, fps,
-               (unsigned long long)frames, jsonEscape(toStd(tc)).c_str(), jsonEscape(toStd(cam)).c_str());
+        char head[256];
+        snprintf(head, sizeof head, "{\"width\":%u,\"height\":%u,\"sourceWidth\":%u,\"sourceHeight\":%u,\"fps\":%.6f,\"frames\":%llu,",
+                 slots[0].ok ? slots[0].width : width, slots[0].ok ? slots[0].height : height, width, height, fps,
+                 (unsigned long long)frames);
+        std::string json = head;
+        json += "\"timecode\":\"" + jsonEscape(toStd(tc)) + "\",\"camera\":\"" + jsonEscape(toStd(cam)) + "\"";
+        if (hasGamma) json += ",\"gamma\":\"" + jsonEscape(gamma) + "\"";
+        if (hasGamut) json += ",\"gamut\":\"" + jsonEscape(gamut) + "\"";
+        if (hasGen) json += ",\"colorScienceGen\":" + std::to_string(gen);
+        json += "}\n";
         if (tc) CFRelease(tc);
         if (cam) CFRelease(cam);
+        if (!writeAll((const uint8_t*)json.data(), json.size())) readerGone();
     } else {
         // Decode in small batches: jobs run in parallel inside the SDK, output stays in frame order.
         const uint64_t batch = 8;
-        uint64_t end = count == UINT64_MAX ? frames : std::min(frames, start + count);
+        uint64_t end = std::min(frames, o.start + std::min(o.count, UINT64_MAX - o.start));
         std::vector<FrameSlot> slots(batch);
         cb.slots = &slots;
-        for (uint64_t b = start; b < end; b += batch) {
+        for (uint64_t b = o.start; b < end; b += batch) {
             uint64_t n = std::min(batch, end - b);
             for (auto& s : slots) s.ok = false;
             cb.base = b;
@@ -246,7 +429,7 @@ int main(int argc, char** argv) {
                     fprintf(stderr, "braw-decode: frame %llu failed\n", (unsigned long long)(b + i));
                     _exit(5);
                 }
-                if (!writeAll(slots[i].data.data(), slots[i].data.size())) _exit(0);
+                if (!writeAll(slots[i].data.data(), slots[i].data.size())) readerGone();
             }
         }
     }
@@ -254,6 +437,5 @@ int main(int argc, char** argv) {
     clip->Release();
     codec->Release();
     factory->Release();
-    fflush(stdout);
     _exit(cb.errors > 0 ? 5 : 0);
 }

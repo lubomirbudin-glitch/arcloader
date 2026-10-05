@@ -925,7 +925,8 @@ převezme — s ověřením, že framework svou vlastní IID vrací (D.19 ř. 1;
 - **Zavřená roura:** `signal(SIGPIPE, SIG_IGN)` na začátku `main`; zápis, který selže (EPIPE), vypíše
   `braw-decode: stdout closed by the reader, stopping` a skončí **kódem 0** — i u `--info` (JSON se nově píše přes `write`, ne `printf`).
 - Hledání knihovny beze změny pořadí: vedle `braw-decode`, SDK (`/Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries`),
-  Player (`…/Blackmagic RAW Player.app/Contents/Frameworks`), DaVinci Resolve (`/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries`).
+  Player (`…/Blackmagic RAW Player.app/Contents/Frameworks`), DaVinci Resolve (`/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Frameworks`
+  — ověřeno 2026-10-06, D.19 ř. 2; dřívější `Contents/Libraries` neexistuje).
   Swift `BrawLibrary` má stejný seznam (test porovná se zdrojem C++).
 
 ### D.15 LUT podle gamy klipu
@@ -1011,6 +1012,17 @@ Nejistoty (ověřit na Macu; výsledek do commitu úkolu a sem):
 | 4 | `trap '' PIPE` v testovacím skriptu se přenese na `/bin/dd` | ano (ignorovaný signál přežije `exec`) | `BrawFeederTests.testConsumerEndsFirst…` |
 | 5 | CPU pipeline nastavená před `OpenClip` nezpomalí proxy | dosud se nastavovala bez účinku, tedy běžela výchozí pipeline SDK | se vzorkem změřit `time` proxy 8K/12K klipu před úkolem 27 a po něm; výrazné zpomalení zapsat do VYVOJ-MAC — volba jiné pipeline (Metal) je samostatné rozhodnutí pro obě verze |
 | 6 | Film Gen 4 | bez LUTu (provizorně) | rozhodnutí uživatele; se vzorkem z kamery Gen 4 |
+
+Výsledky ověření na Macu (2026-10-06, MacBook Pro Intel, macOS 26, Blackmagic RAW Player 4.3 a DaVinci Resolve s knihovnou 4.3,
+vzorek `profile.braw` z Blackmagic RAW Speed Test — URSA Mini Pro 4.6K, 4 snímky):
+
+1. `QueryInterface(IID_IBlackmagicRawFactory)` vrací továrnu — chybějící i neplatný klip dává kód 4 (Player i Resolve); kontrola zůstává.
+2. Player: `/Applications/Blackmagic RAW/Blackmagic RAW Player.app/Contents/Frameworks` (potvrzeno). Resolve:
+   `/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Frameworks` — **ne** `Contents/Libraries`; opraveno v `kLibrarySearchPaths`
+   i `BrawLibrary.searchDirs` (a v očekávání `BrawLibraryTests`). SDK nenainstalováno — cesta neověřena.
+3. `gama` a `gamt` jsou řetězce, `csgn` celé číslo; stderr bez varování. Vzorek: „Blackmagic Design Film“, „Blackmagic Design“, **4**.
+5. CPU pipeline před `OpenClip`: 4 snímky 4608×2592 plně 0,40 s, ve čtvrtině 0,06 s — před úkolem 27 i po něm stejně (8K/12K vzorek
+   není k dispozici).
 
 ### D.20 Mapa změn souborů a pokrytí
 
