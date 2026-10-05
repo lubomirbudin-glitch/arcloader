@@ -10,6 +10,11 @@
 přes IOKit, připojení disků přes DiskArbitration, doporučení, měření, řetěz a brzda při kopii, `offload ports`,
 okno Hardware z menu ⌘U) — se shodnými výstupy na disku a novým XCTest targetem.
 
+**Doplněk (úkoly 18–25, spec oddíl „Doplněk 2026-10-05“):** funkce, které Windows verze dostala po sepsání tohoto plánu —
+barvy proxy BT.709 a náhledy JFIF (18), ochrana proti zaseknutí ffmpeg (19), složka pro proxy navíc (20), vestavěné LUTy
+s automatickým výběrem podle kamery (21–22), jejich CLI (23) a GUI (24), LUTy a ikona v balíčku (25). Dokumentace a verze
+0.2.0 uzavírají plán úkolem 26 (dřívější úkol 18).
+
 **Architecture:** Logika bez UI patří do `OffloadKit` (`Sources/OffloadKit/`, nové podsložky `Desktop/` a `Hardware/`
 jako Windows `Offload.Core/Desktop` a `Offload.Core/Hardware`), aby šla testovat XCTestem. Platformní části
 (IOKit, DiskArbitration, NSWorkspace) jsou tenké vrstvy v samostatných souborech (`IORegistry.swift`,
@@ -18,7 +23,9 @@ jako Windows `Offload.Core/Desktop` a `Offload.Core/Hardware`), aby šla testova
 používá stejné modely.
 
 **Tech Stack:** Swift 5.9 (swift-tools-version 5.9), SwiftUI + AppKit, macOS 13+, Foundation, IOKit, DiskArbitration,
-WebKit (beze změny), swift-argument-parser (beze změny), XCTest, ffmpeg/ffprobe (Homebrew nebo `mac/Tools/bin`).
+WebKit (beze změny), swift-argument-parser (beze změny), XCTest, ffmpeg/ffprobe (Homebrew nebo `mac/Tools/bin`). Doplněk: Foundation `XMLParser`
+(Sony XML), `renamex_np` (Darwin), `iconutil` (build); sdílené soubory `shared/luts/` a `shared/icon/` (commitnuté — Python
+k sestavení netřeba).
 
 **Spec:** [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../specs/2026-10-05-offload-mac-parity-design.md)
 
@@ -36,7 +43,7 @@ WebKit (beze změny), swift-argument-parser (beze změny), XCTest, ffmpeg/ffprob
 
 ## Review Focus
 
-Pět chyb, které by uživatele kously nejvíc — a test, který je hlídá:
+Chyby, které by uživatele kously nejvíc — a test, který je hlídá:
 
 1. **Zrušené ověření označí dobrou kopii jako chybnou, nebo naopak karta „lze vysunout“, i když není ověřená.**
    → Úkol 3 `ReportTests.testCancelledVerifyWrittenOrVerifiedFilesAreNotFailures`, `testBuildNotVerifiedCountsWrittenAndVerifiedAsOK`;
@@ -51,6 +58,21 @@ Pět chyb, které by uživatele kously nejvíc — a test, který je hlídá:
 5. **Měření HW zapíše na kartu nebo po zrušení nechá na disku 1 GB dočasný soubor.**
    → Úkol 15 `HwTestTests.testMeasureDestinationOnCardVolumeSkipped`, `testMeasureCancelledDuringWriteStopsAtOnceNoBenchFileLeft`;
    `BenchTests.testWriteCancelledWhileWritingThrowsAndDeletesTempFile`.
+
+Doplněk (úkoly 18–25):
+
+6. **Kopie do složky pro proxy přepíše starší soubor stejného jména** (druhý offload téže karty, stejný den).
+   → Úkol 20 `ProxyFolderTests.testExistingNameGetsSuffixNeverOverwrites`, `testAllNamesTakenErrorAfterCap`,
+   `testCopyFileWithoutReplaceRefusesAnExistingFile`.
+7. **Klip dostane špatný LUT nebo LUT ve špatném rozsahu** (Rec.709 klip s log LUTem, BRAW bez přepočtu rozsahu,
+   LUT se tiše neuplatní). → Úkol 21 `LutResolverTests.testSonyRec709NoLut`; úkol 18
+   `FilterGraphTests.testFullRangeSourcePreMappedBeforeBuiltinLut`; úkol 22 `LutRenderTests.testNeedsPreMapOnlyBuiltinLutOnFullRangeSource`,
+   `testSLog3GreyProxyIs042`.
+8. **Proxy s posunutými barvami** (BT.601 matice nebo neoznačený soubor — červená vyjde (255, 23, 0)).
+   → Úkol 18 `ColorTests.testProxyRedIsBT709MatrixAndTagged`, `testThumbnailRedIsJFIFBT601`.
+9. **Zaseknutý ffmpeg drží frontu navždy** (hardwarový dekodér visí, žádná další karta se nezpracuje).
+   → Úkol 19 `FFmpegWatchTests.testStalledWithHwaccelSoftwareRetrySucceedsAndIsLogged`, `testStalledTwiceFailsWithTheNote`,
+   `testSoftwareCodecStallsNoRetryNoteWithoutSoftwareClaim`, `testCancelledWhileStuckNoRetry`, `testFeederDataIsProgress`.
 
 ---
 
@@ -6900,7 +6922,7 @@ Run: `swift build && swift test && scripts/build-app.sh && open build/Offload.ap
 
 `docs/VYVOJ-MAC.md`: `- Úkol 17 — GUI Hardware: menu Nástroje › Prověřit USB porty… (⌘U) jen na vyžádání, okno Hardware (připojení, doporučení, měření s dotazem a okamžitým zastavením, USB porty s vlastními názvy), sekce Hardware s posledním testem, řetěz připojení a úzké hrdlo na kartě úlohy`
 
-`docs/ROZDILY.md` (tento úkol rozdíl zavírá — upravit hned, ne až v úkolu 18): řádky „Test USB portů na vyžádání
+`docs/ROZDILY.md` (tento úkol rozdíl zavírá — upravit hned, ne až v úkolu 26): řádky „Test USB portů na vyžádání
 + doporučení“ a „Propustnost článků HW při kopii“ Mac `✅ CLI + GUI` (řetěz připojení, % linky, úzké hrdlo na kartě
 úlohy, okno Hardware ⌘U); v „Záměrných rozdílech“ smazat odrážku o HW diagnostice jen na Windows / jen CLI na Macu;
 v „GUI navíc na Windows“ odebrat okno Hardware s kontrolou USB portů a vlastními názvy portů (je i na Macu, ⌘U).
@@ -6909,7 +6931,4323 @@ Run: `git add -A mac/Sources docs && git commit -m "Mac: Hardware window on dema
 
 ---
 
-### Task 18: Dokumentace, verze a ROZDILY
+### Task 18: Filter graph a barvy proxy (BT.709) a náhledů (JFIF)
+
+Doplněk ke spec — oddíl D.4. Port `windows/src/Offload.Core/FilterGraph.cs` (`ToRec709`, `TagRec709`, `ToJfif`, `PreMap`,
+`Thumbnail`, `Proxy`) a `Encoders.Rec709Args`. Pre-map pro vestavěné LUTy je tu jen jako čistá funkce s testem; použije
+ho až úkol 22.
+
+**Files:**
+- Create: `mac/Sources/OffloadKit/FilterGraph.swift`
+- Modify: `mac/Sources/OffloadKit/Proxy.swift` (`thumbnails` — filtr z `FilterGraph.thumbnail`; `render` — řetěz z `FilterGraph.proxy` + `FilterGraph.rec709Args`; smazat `thumbnailFilter(applyLUT:)` z úkolu 6)
+- Modify: `mac/Tests/OffloadKitTests/ThumbnailTests.swift` (jeden řádek — referenční filtr)
+- Create: `mac/Tests/OffloadKitTests/FilterGraphTests.swift`, `mac/Tests/OffloadKitTests/ColorTests.swift`
+- Modify: `docs/VYVOJ-MAC.md`, `docs/ROZDILY.md`
+
+**Interfaces:**
+- Consumes: `ProxySettings`, `ProxyCodec.pixelFormat` (internal), `ProxyRenderer.thumbnails(_:cardPath:info:applyLUT:isCancelled:)` (úkol 6), `ProxyRenderer.render(_:cardPath:info:output:progress:isCancelled:)`, `TestMedia` (úkol 1).
+- Produces:
+  - `enum FilterGraph { static let preMap: String; static let toRec709: String; static let tagRec709: String; static let toJFIF: String; static let rec709Args: [String]; static func lut(_ file: String, premap: Bool) -> String; static func thumbnail(lutFile: String?, premap: Bool) -> String; static func proxy(_ s: ProxySettings, outHeight: Int, alreadyCropped: Bool, lutFile: String?, premap: Bool, burnIn: [String]) -> String }`
+  - `ProxyRenderer.thumbnailFilter(applyLUT:)` **zaniká** (nahrazuje ho `FilterGraph.thumbnail`).
+
+- [ ] **Step 1: Padající testy** — `mac/Tests/OffloadKitTests/FilterGraphTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class FilterGraphTests: XCTestCase {
+    func testThumbnailIsJFIF() {
+        XCTAssertEqual(FilterGraph.thumbnail(lutFile: nil, premap: false),
+                       "scale=-2:180:flags=bicubic,scale=out_color_matrix=bt601:out_range=pc,format=yuvj420p")
+        XCTAssertEqual(FilterGraph.thumbnail(lutFile: "/t/look.cube", premap: false),
+                       "scale=-2:180:flags=bicubic,format=rgb48le,lut3d=file=/t/look.cube:interp=tetrahedral,"
+                           + "scale=out_color_matrix=bt601:out_range=pc,format=yuvj420p")
+        // No LUT → no pre-map either.
+        XCTAssertEqual(FilterGraph.thumbnail(lutFile: nil, premap: true), FilterGraph.thumbnail(lutFile: nil, premap: false))
+    }
+
+    // Review focus 7 (pre-map): a built-in LUT on a full-range source gets the lutrgb pre-map right before lut3d.
+    func testFullRangeSourcePreMappedBeforeBuiltinLut() {
+        XCTAssertEqual(FilterGraph.thumbnail(lutFile: "/t/lut-a.cube", premap: true),
+                       "scale=-2:180:flags=bicubic,format=rgb48le," + FilterGraph.preMap
+                           + ",lut3d=file=/t/lut-a.cube:interp=tetrahedral,scale=out_color_matrix=bt601:out_range=pc,format=yuvj420p")
+        XCTAssertTrue(FilterGraph.preMap.hasPrefix("lutrgb=r='"))
+        XCTAssertTrue(FilterGraph.preMap.contains("(val*1023/65535-64)/876*65535"))
+        XCTAssertEqual(FilterGraph.preMap.components(separatedBy: "clip(").count - 1, 3)   // r, g and b
+    }
+
+    func testProxyFullChain() {
+        var s = ProxySettings()
+        s.frameAspect = 1.66
+        s.frameScale = 0.9
+        XCTAssertEqual(
+            FilterGraph.proxy(s, outHeight: 720, alreadyCropped: false, lutFile: "/t/look.cube", premap: false,
+                              burnIn: ["drawbox=x=0:y=ih-42:w=iw:h=42:color=black@0.55:t=fill"]),
+            "crop=w='trunc(min(iw*0.9,ih*0.9*1.66)/2)*2':h='trunc(min(iw*0.9,ih*0.9*1.66)/1.66/2)*2',"
+                + "scale=-2:720:flags=bicubic,setsar=1,format=rgb48le,lut3d=file=/t/look.cube:interp=tetrahedral,"
+                + "drawbox=x=0:y=ih-42:w=iw:h=42:color=black@0.55:t=fill,"
+                + "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709")
+    }
+
+    func testProxyBuiltinLutOnFullRangePreMapBeforeLut() {
+        XCTAssertEqual(
+            FilterGraph.proxy(ProxySettings(), outHeight: 720, alreadyCropped: false, lutFile: "/t/lut-x.cube", premap: true, burnIn: []),
+            "scale=-2:720:flags=bicubic,setsar=1,format=rgb48le," + FilterGraph.preMap + ",lut3d=file=/t/lut-x.cube:interp=tetrahedral,"
+                + "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709")
+    }
+
+    func testProxyAlreadyCroppedProResNoLut() {
+        var s = ProxySettings()
+        s.frameAspect = 2.39
+        s.codec = .proresProxy
+        XCTAssertEqual(
+            FilterGraph.proxy(s, outHeight: 1080, alreadyCropped: true, lutFile: nil, premap: false, burnIn: []),
+            "scale=-2:1080:flags=bicubic,setsar=1,scale=out_color_matrix=bt709:out_range=tv,format=yuv422p10le,"
+                + "setparams=color_primaries=bt709:color_trc=bt709")
+    }
+
+    func testRec709EncoderAndContainerTags() {
+        XCTAssertEqual(FilterGraph.rec709Args,
+                       ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"])
+    }
+}
+```
+
+`mac/Tests/OffloadKitTests/ColorTests.swift` (ffmpeg; bez něj se přeskočí):
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class ColorTests: XCTestCase {
+    private func run(_ ffmpeg: String, _ args: [String]) throws {
+        try ToolProcess.run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y"] + args)
+    }
+
+    /// RGB of a flat first frame (a pixel in the middle), decoded with the given YCbCr matrix and range.
+    private func flatRGB(_ ffmpeg: String, _ file: String, matrix: String, range: String, dir: String) throws -> (r: Int, g: Int, b: Int) {
+        let raw = dir + "/rgb-\(UUID().uuidString).raw"
+        try run(ffmpeg, ["-i", file, "-frames:v", "1", "-vf", "scale=in_color_matrix=\(matrix):in_range=\(range),format=rgb24",
+                         "-f", "rawvideo", raw])
+        let b = [UInt8](try Data(contentsOf: URL(fileURLWithPath: raw)))
+        let i = b.count / 6 * 3
+        return (Int(b[i]), Int(b[i + 1]), Int(b[i + 2]))
+    }
+
+    private func videoClip(_ rel: String) -> Clip {
+        Clip(name: (rel as NSString).deletingPathExtension, path: rel, format: .video, segments: [rel], bytes: 1, isCameraProxy: false)
+    }
+
+    /// Pure red twice: RGB (PNG in MOV — like the BRAW decoder's RGB) and BT.709 legal-range YUV (H.264).
+    private func redCard(_ ffmpeg: String, _ dir: TempDir) throws -> String {
+        let card = dir.sub("card")
+        try run(ffmpeg, ["-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25", "-pix_fmt", "rgb24", "-c:v", "png", card + "/rgb.mov"])
+        try run(ffmpeg, ["-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25",
+                         "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+                         "-c:v", "libx264", "-colorspace", "bt709", "-color_range", "tv", card + "/yuv.mov"])
+        return card
+    }
+
+    // How a LUT reaches the renderer. Here (task 18) through settings.lutPath; task 22 switches these three helpers
+    // to the per-clip `lut:` parameter — the tests themselves stay the same.
+    private func renderer(_ settings: ProxySettings, lut: String?) -> ProxyRenderer {
+        var s = settings
+        s.lutPath = lut
+        return ProxyRenderer(settings: s, tools: TestMedia.tools)
+    }
+
+    private func render(_ r: ProxyRenderer, _ clip: Clip, card: String, to out: String, lut: String?) throws {
+        try r.render(clip, cardPath: card, info: try r.probe(clip, cardPath: card), output: out,
+                     progress: { _ in }, isCancelled: { false })
+    }
+
+    private func thumbnails(_ r: ProxyRenderer, _ clip: Clip, card: String, lut: String?) throws -> [Thumbnail] {
+        try r.thumbnails(clip, cardPath: card, info: try r.probe(clip, cardPath: card), applyLUT: lut != nil)
+    }
+
+    // Review focus 8 — pure red through the proxy path (RGB source like the BRAW decoder, and BT.709 video; with and
+    // without a LUT; VideoToolbox H.264 and ProRes) is converted with the BT.709 matrix to legal range and tagged
+    // BT.709, so a player decoding it as BT.709 sees red. The BT.601 matrix would leave G ≈ 23.
+    func testProxyRedIsBT709MatrixAndTagged() throws {
+        let (ffmpeg, ffprobe) = try TestMedia.requireFFmpeg()
+        let dir = tempDir()
+        let card = try redCard(ffmpeg, dir)
+        let cube = dir.path + "/look.cube"
+        TestMedia.identityLUT(cube)
+        var failures: [String] = []
+        for codec in [ProxyCodec.h264, .proresLT] {
+            for name in ["rgb.mov", "yuv.mov"] {
+                for withLut in [false, true] {
+                    var s = ProxySettings()
+                    s.enabled = true
+                    s.height = 180
+                    s.codec = codec
+                    s.burnFilename = false
+                    s.burnTimecode = false
+                    let lut = withLut ? cube : nil
+                    let out = dir.path + "/\(codec.rawValue)-\(name)-\(withLut).mov"
+                    try render(renderer(s, lut: lut), videoClip(name), card: card, to: out, lut: lut)
+                    let tags = try ToolProcess.run(ffprobe, ["-v", "error", "-select_streams", "v:0", "-show_entries",
+                                                             "stream=color_space,color_transfer,color_primaries,color_range",
+                                                             "-of", "default=nw=1", out])
+                        .split(whereSeparator: \.isNewline).joined(separator: " ")
+                    let (red, green, blue) = try flatRGB(ffmpeg, out, matrix: "bt709", range: "tv", dir: dir.path)
+                    if tags != "color_range=tv color_space=bt709 color_transfer=bt709 color_primaries=bt709"
+                        || red < 240 || green > 8 || blue > 8 {
+                        failures.append("\(codec.rawValue) \(name) lut=\(withLut): [\(tags)] rgb=(\(red),\(green),\(blue))")
+                    }
+                }
+            }
+        }
+        XCTAssertEqual(failures, [])
+    }
+
+    // JPEG (JFIF) is BT.601 full range for every browser and PDF viewer: a BT.709 red clip's thumbnail must decode as
+    // red that way (keeping the BT.709 matrix gives R ≈ 230).
+    func testThumbnailRedIsJFIFBT601() throws {
+        let (ffmpeg, _) = try TestMedia.requireFFmpeg()
+        let dir = tempDir()
+        let card = try redCard(ffmpeg, dir)
+        let cube = dir.path + "/look.cube"
+        TestMedia.identityLUT(cube)
+        for name in ["yuv.mov", "rgb.mov"] {
+            for lut in [nil, cube] as [String?] {
+                let thumbs = try thumbnails(renderer(ProxySettings(), lut: lut), videoClip(name), card: card, lut: lut)
+                let jpg = dir.path + "/t-\(name)-\(lut != nil).jpg"
+                try XCTUnwrap(thumbs.first).jpeg.write(to: URL(fileURLWithPath: jpg))
+                let (red, green, blue) = try flatRGB(ffmpeg, jpg, matrix: "bt601", range: "pc", dir: dir.path)
+                XCTAssertTrue(red >= 242 && green <= 8 && blue <= 8, "\(name) lut=\(lut != nil): rgb=(\(red),\(green),\(blue))")
+            }
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Ověřit selhání** — Run: `swift test --filter "FilterGraphTests|ColorTests"` → nesestaví se (`cannot find 'FilterGraph' in scope`).
+Kdo chce vidět i skutečnou chybu barev: dočasně zakomentovat `FilterGraphTests` — `testProxyRedIsBT709MatrixAndTagged`
+selže s `[color_range=unknown …]` nebo `rgb=(…,23,…)` (dnešní Mac proxy neoznačuje a po kroku v RGB bere BT.601).
+
+- [ ] **Step 3: `mac/Sources/OffloadKit/FilterGraph.swift`**:
+
+```swift
+import Foundation
+
+/// ffmpeg filter graphs for report thumbnails and proxies — port of Windows `FilterGraph.cs` (same chains, same order).
+/// The Mac passes absolute paths from the renderer's temp folder: $TMPDIR has no ":", ",", "'" or "\" that a filter
+/// graph would need escaped (Windows uses relative names because of "C:\").
+enum FilterGraph {
+    /// Full-range RGB (the BRAW decoder, video tagged color_range=pc) → the legal-expanded convention the built-in
+    /// LUTs expect (code = x·876 + 64). On rgb48le: v16 → ((v16/65535·1023 − 64)/876)·65535, clipped.
+    static let preMap = "lutrgb=r='clip((val*1023/65535-64)/876*65535,0,65535)'"
+        + ":g='clip((val*1023/65535-64)/876*65535,0,65535)':b='clip((val*1023/65535-64)/876*65535,0,65535)'"
+
+    /// Proxies: explicit BT.709 matrix to legal range — swscale would otherwise pick BT.601 after an RGB step (LUT,
+    /// RGB decoder) or keep whatever the source had.
+    static let toRec709 = "scale=out_color_matrix=bt709:out_range=tv"
+    /// The frames are tagged BT.709 too: ffmpeg 8 takes primaries and transfer for the stream from the frames.
+    static let tagRec709 = "setparams=color_primaries=bt709:color_trc=bt709"
+    /// Encoder and container tags of every proxy (VideoToolbox and prores_ks write them into the bitstream, MOV into `colr`).
+    static let rec709Args = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
+
+    /// Thumbnails: JPEG (JFIF) is BT.601 full range for every browser and PDF viewer, whatever the source was.
+    static let toJFIF = "scale=out_color_matrix=bt601:out_range=pc"
+
+    /// RGB48 → (pre-map) → 3D LUT. `premap` only for a built-in LUT on a full-range source.
+    static func lut(_ file: String, premap: Bool) -> String {
+        "format=rgb48le," + (premap ? preMap + "," : "") + "lut3d=file=\(file):interp=tetrahedral"
+    }
+
+    /// Small JPEG for the report, with the LUT (if any) so log footage is readable.
+    static func thumbnail(lutFile: String?, premap: Bool) -> String {
+        var vf = ["scale=-2:180:flags=bicubic"]
+        if let lutFile { vf.append(lut(lutFile, premap: premap)) }
+        vf += [toJFIF, "format=yuvj420p"]
+        return vf.joined(separator: ",")
+    }
+
+    /// Proxy chain: frame-lines crop → scale → LUT → burn-in → BT.709 legal range → pixel format → BT.709 tags.
+    static func proxy(_ s: ProxySettings, outHeight: Int, alreadyCropped: Bool, lutFile: String?, premap: Bool,
+                      burnIn: [String]) -> String {
+        var vf: [String] = []
+        if let aspect = s.frameAspect, !alreadyCropped {
+            // Crop to the frame lines first, sized from whatever resolution the decoder delivers.
+            let sc = min(max(s.frameScale, 0.1), 1.0)
+            vf.append("crop=w='trunc(min(iw*\(sc),ih*\(sc)*\(aspect))/2)*2':h='trunc(min(iw*\(sc),ih*\(sc)*\(aspect))/\(aspect)/2)*2'")
+        }
+        vf += ["scale=-2:\(outHeight):flags=bicubic", "setsar=1"]
+        if let lutFile { vf.append(lut(lutFile, premap: premap)) }
+        vf += burnIn
+        vf += [toRec709, "format=\(s.codec.pixelFormat)", tagRec709]
+        return vf.joined(separator: ",")
+    }
+}
+```
+
+- [ ] **Step 4: `Proxy.swift`**
+
+1. Smazat celou funkci `thumbnailFilter(applyLUT:)` (úkol 6).
+2. V `thumbnails(…)` nahradit řádek `let filter = thumbnailFilter(applyLUT: applyLUT)` řádkem:
+
+```swift
+        let filter = FilterGraph.thumbnail(lutFile: hasLUT && applyLUT ? lutCopy : nil, premap: false)
+```
+
+3. V `render(…)` nahradit celý blok od `var vf: [String] = []` po `vf.append("format=\(settings.codec.pixelFormat)")` (včetně) tímto:
+
+```swift
+        let vf = FilterGraph.proxy(settings, outHeight: outHeight, alreadyCropped: src.alreadyCropped,
+                                   lutFile: hasLUT ? lutCopy : nil, premap: false,
+                                   burnIn: burnIn(clip: clip, info: info, height: outHeight))
+```
+
+a řádek `args += ["-vf", vf.joined(separator: ",")] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps)` tímto:
+
+```swift
+        args += ["-vf", vf] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps) + FilterGraph.rec709Args
+```
+
+4. `mac/Tests/OffloadKitTests/ThumbnailTests.swift` (úkol 6, `testMiddleFrameMatchesCaption24fps`, funkce `reference`) —
+referenční snímek musí jít stejným filtrem jako náhled; nahradit řádek
+`"-vf", "select='eq(n,\(n))',\(r.thumbnailFilter(applyLUT: false))",` řádkem:
+
+```swift
+                                         "-vf", "select='eq(n,\(n))',\(FilterGraph.thumbnail(lutFile: nil, premap: false))",
+```
+
+- [ ] **Step 5: Testy projdou** — Run: `swift test --filter "FilterGraphTests|ColorTests|ThumbnailTests|StageTwoTests"` → 0 chyb
+(s ffmpeg nic přeskočeno); pak `swift test`.
+
+**Ověřit na Macu (Doplněk D.10, řádky 1–2):** jestli `testProxyRedIsBT709MatrixAndTagged` hlásí u `h264` špatné značky,
+jde o `h264_videotoolbox` — výsledek ručního příkazu z D.10 zapsat do commitu; oprava patří do `FilterGraph`/argumentů
+enkodéru (např. `-movflags +write_colr`), ne do testu.
+
+- [ ] **Step 6: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 18 — barvy proxy výslovně BT.709 (matice, legální rozsah, značky ve VideoToolbox/ProRes i v MOV), náhledy JPEG výslovně BT.601 v plném rozsahu (JFIF); filter graph jako samostatný testovaný modul`
+
+`docs/ROZDILY.md` — v „Záměrných rozdílech“ smazat odrážku „**Barvy proxy:** …“ (obě verze se teď chovají stejně;
+popis barev je v FORMATY/README, ne mezi rozdíly).
+
+Run: `git add -A mac/Sources mac/Tests docs && git commit -m "Mac: proxies explicitly BT.709 and tagged, JPEG thumbnails BT.601 (JFIF)"`
+
+---
+
+### Task 19: Ochrana proti zaseknutí ffmpeg (VideoToolbox jen H.264/HEVC, hlídač 60 s, opakování po hwaccel)
+
+Doplněk ke spec — oddíl D.5. Port **konečné** Windows verze (`windows/src/Offload.Core/ProxyRenderer.cs`, commit `a3f047c` na
+`windows-followups`: `UseHardwareDecoding`, `DefaultStallTimeout`, `KillWait`, `Log`, `Render`/`RenderOnce`, hlídač a pumpa
+dekodéru v `RunFfmpeg`, `StallNote`, `FfmpegStalledException`, `ProxyRetryException`, `ProgressWatch`; testy
+`ProxyWatchdogTests.cs`). Důvod na Windows: ffmpeg 8.1 s `-hwaccel auto` se na FFV1 navždy zasekl (Vulkan
+VK_ERROR_DEVICE_LOST) a úloha visela.
+
+**Files:**
+- Create: `mac/Sources/OffloadKit/FFmpegWatch.swift` (`FFmpegStall`, `ProxyRetryFailed`, `ProgressWatch`)
+- Modify: `mac/Sources/OffloadKit/Proxy.swift` (`ProxyRenderer`: `defaultStallTimeout`, `killWait`, `stallTimeout`, `log`, `usesHardwareDecode`, `stallNote`, `frameSource(…, hwaccel:)`, `thumbnails` (jen volání `frameSource`), `render` → `render` + `renderOnce`, `runFFmpeg(…, stallAfter:)` s pumpou dekodéru, nový `stop`)
+- Modify: `mac/Sources/OffloadKit/Job.swift` (`analyzeAndRender`: `renderer.log = log`)
+- Create: `mac/Tests/OffloadKitTests/FFmpegWatchTests.swift`
+- Modify: `docs/VYVOJ-MAC.md`, `docs/ROZDILY.md`
+
+**Interfaces:**
+- Consumes: `FilterGraph.proxy`, `FilterGraph.rec709Args` (úkol 18), `Timecode.isValid` (úkol 5), `TempDir`, `TestFS` (úkol 1).
+- Produces:
+  - `struct FFmpegStall: Error, CustomStringConvertible { let note: String }`, `struct ProxyRetryFailed: Error, CustomStringConvertible { let note: String }` — `description` je poznámka u klipu
+  - `final class ProgressWatch { init(now: Date = Date()); @discardableResult func advanced(_ line: String, now: Date = Date()) -> Bool; func dataFlowed(now: Date = Date()); var hasAdvanced: Bool { get }; func idleSeconds(now: Date = Date()) -> TimeInterval; func isStalled(limit: TimeInterval, now: Date = Date()) -> Bool }`
+  - `static let ProxyRenderer.defaultStallTimeout: TimeInterval = 60`, `static let ProxyRenderer.killWait: TimeInterval = 10`, `var ProxyRenderer.stallTimeout: TimeInterval` (testy zkracují), `var ProxyRenderer.log: ((String) -> Void)?`
+  - `static func ProxyRenderer.usesHardwareDecode(_ codec: String?) -> Bool`
+  - `static func ProxyRenderer.stallNote(_ seconds: TimeInterval, retriedInSoftware: Bool) -> String`
+  - `private func ProxyRenderer.frameSource(_:cardPath:info:singleFrameAt:hwaccel:)` (místo `forRender:` z úkolu 6)
+  - `func ProxyRenderer.runFFmpeg(_:_:feeder:duration:progress:isCancelled:stallAfter: TimeInterval? = nil)` — hlídá jen render proxy
+  - `render(…)` — signatura beze změny; pravidla v tabulce níže
+
+Pravidla (1:1 s konečným Windows `Render`/`RunFfmpeg`):
+
+- **Pokrok** = nová, **vyšší** hodnota `frame=` nebo `out_time_us=` z `-progress pipe:1` (úvodní `frame=0`, `out_time_us=N/A`
+  a záporné časy pokrok nejsou), závěrečné `progress=end`, **nebo data, která dekodér RAW (braw-decode) poslal do ffmpeg**.
+  Každý pokrok vynuluje hodinky.
+- **Lhůta:** 60 s bez pokroku; **do prvního pokroku 3× tolik (180 s)** — načtení vstupu, rozběh dekodéru, lookahead enkodéru.
+- **Ukončení:** zaseknutý (nebo zrušený) ffmpeg dostane SIGTERM (`Process.terminate`), čeká se **nejvýš 10 s**, pak SIGKILL;
+  když ani pak neskončí (proces uvízlý v ovladači GPU), zapíše se do logu `ffmpeg (pid N) did not end 10 s after kill`
+  a úloha jede dál — nikdy se nečeká bez limitu.
+
+| První běh | Druhý běh (bez hwaccel) | Výsledek / poznámka u klipu |
+|---|---|---|
+| hotovo | — | hotovo |
+| zaseknutí **bez** hwaccel | — (neopakuje se) | `ffmpeg se zasekl (60 s bez nového snímku); proxy nevznikla` |
+| chyba ffmpeg bez hwaccel | — | ta chyba |
+| zaseknutí nebo chyba **s** hwaccel | hotovo | hotovo; log `proxy <klip>: with hardware decoding: <1. chyba> — retrying in software`, `proxy <klip>: software decoding succeeded` |
+| zaseknutí s hwaccel | zaseknutí | `ffmpeg se zasekl (60 s bez nového snímku) i bez hardwarového dekódování; proxy nevznikla` |
+| zaseknutí s hwaccel | chyba ffmpeg | `ffmpeg se zasekl (60 s bez nového snímku); bez hardwarového dekódování selhal: <2. chyba>` |
+| chyba s hwaccel | chyba nebo zaseknutí | `<2. chyba>; s hardwarovým dekódováním předtím: <1. chyba>` |
+| zrušeno (kdykoli; kontroluje se i těsně před opakováním) | — | „cancelled“, nikdy se neopakuje |
+
+Po neúspěšném opakování navíc log `proxy <klip>: software decoding failed too: <2. chyba>`. Chyba se v úloze zapíše jako
+`proxyNote` (`"\(error)"`) a proxy je `failed`; úloha pokračuje dalším klipem. Náhledy hlídané nejsou (jako Windows —
+jeden snímek, vždy softwarově).
+
+- [ ] **Step 1: Padající testy** — `mac/Tests/OffloadKitTests/FFmpegWatchTests.swift` (bez ffmpeg — „ffmpeg“ je skript):
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class FFmpegWatchTests: XCTestCase {
+    func testHardwareDecodeOnlyForH264AndHEVC() {
+        for (codec, expected) in [("h264", true), ("hevc", true), ("HEVC", true), ("h264 High", true), ("hevc Main 10", true),
+                                  ("ffv1", false), ("prores HQ", false), ("mjpeg", false), ("dnxhd", false), ("", false)] {
+            XCTAssertEqual(ProxyRenderer.usesHardwareDecode(codec), expected, codec)
+        }
+        XCTAssertFalse(ProxyRenderer.usesHardwareDecode(nil))
+    }
+
+    func testProgressWatchOnlyARisingFrameOrTimeCounts() {
+        let w = ProgressWatch()
+        // The opening block says nothing has been written yet (encoder lookahead, input probing).
+        XCTAssertFalse(w.advanced("frame=0"))
+        XCTAssertFalse(w.advanced("fps=0.00"))
+        XCTAssertFalse(w.advanced("out_time_us=N/A"))
+        XCTAssertFalse(w.advanced("out_time_us=-9223372036854775807"))
+        XCTAssertFalse(w.advanced("progress=continue"))
+        XCTAssertFalse(w.hasAdvanced)
+        XCTAssertTrue(w.advanced("frame=1"))
+        XCTAssertTrue(w.advanced("out_time_us=40000"))
+        // ffmpeg keeps printing the same block every half second while it is stuck.
+        XCTAssertFalse(w.advanced("frame=1"))
+        XCTAssertFalse(w.advanced("out_time_us=40000"))
+        XCTAssertFalse(w.advanced("progress=continue"))
+        XCTAssertTrue(w.advanced("frame=2"))
+        XCTAssertTrue(w.advanced("progress=end"))
+        XCTAssertTrue(w.hasAdvanced)
+    }
+
+    // Before the first progress 3× the limit applies; data piped in by a RAW decoder is progress too.
+    func testGraceUntilTheFirstProgressAndFeederDataCounts() {
+        let t0 = Date()
+        let w = ProgressWatch(now: t0)
+        XCTAssertFalse(w.isStalled(limit: 60, now: t0.addingTimeInterval(179)))
+        XCTAssertTrue(w.isStalled(limit: 60, now: t0.addingTimeInterval(181)))
+        w.dataFlowed(now: t0.addingTimeInterval(10))
+        XCTAssertTrue(w.hasAdvanced)
+        XCTAssertEqual(w.idleSeconds(now: t0.addingTimeInterval(40)), 30, accuracy: 0.001)
+        XCTAssertFalse(w.isStalled(limit: 60, now: t0.addingTimeInterval(69)))
+        XCTAssertTrue(w.isStalled(limit: 60, now: t0.addingTimeInterval(71)))
+    }
+
+    func testStallNotesAreTheWindowsTexts() {
+        XCTAssertEqual(ProxyRenderer.stallNote(60, retriedInSoftware: false), "ffmpeg se zasekl (60 s bez nového snímku)")
+        XCTAssertEqual(ProxyRenderer.stallNote(60, retriedInSoftware: true),
+                       "ffmpeg se zasekl (60 s bez nového snímku) i bez hardwarového dekódování; proxy nevznikla")
+        XCTAssertEqual(ProxyRenderer.defaultStallTimeout, 60)
+        XCTAssertEqual(ProxyRenderer.killWait, 10)
+    }
+
+    private enum Mode: String { case ok, stall, fail, slowStart }
+
+    private struct Fake {
+        let path: String
+        let calls: String
+        /// One line per run: the arguments it got.
+        var invocations: [String] {
+            ((try? String(contentsOfFile: calls, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
+        }
+    }
+
+    /// A stand-in "ffmpeg": logs its arguments, then — depending on whether it got -hwaccel — stalls (no progress,
+    /// sleeps), fails (exit 1, "boom hw" / "boom sw" on stderr), starts slowly (2 s without progress) or prints `steps`
+    /// rising progress blocks 0.3 s apart and creates its output (the last argument).
+    private func fakeFFmpeg(_ dir: TempDir, hw: Mode, sw: Mode, steps: Int = 2) -> Fake {
+        let path = dir.path + "/fake-ffmpeg"
+        let calls = dir.path + "/calls.txt"
+        let script = """
+        #!/bin/sh
+        echo "$*" >> '\(calls)'
+        case " $* " in *" -hwaccel "*) MODE=\(hw.rawValue); WHO=hw;; *) MODE=\(sw.rawValue); WHO=sw;; esac
+        [ "$MODE" = stall ] && exec sleep 30
+        if [ "$MODE" = fail ]; then echo "boom $WHO" >&2; exit 1; fi
+        [ "$MODE" = slowStart ] && sleep 2
+        i=0
+        while [ $i -lt \(steps) ]; do i=$((i+1)); echo "frame=$i"; echo "out_time_us=${i}00000"; sleep 0.3; done
+        for last; do :; done
+        : > "$last"
+        """
+        try! script.write(toFile: path, atomically: true, encoding: .utf8)
+        try! FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
+        return Fake(path: path, calls: calls)
+    }
+
+    private func script(_ dir: TempDir, _ name: String, _ body: String) -> String {
+        let path = dir.path + "/" + name
+        try! ("#!/bin/sh\n" + body + "\n").write(toFile: path, atomically: true, encoding: .utf8)
+        try! FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
+        return path
+    }
+
+    private func clip() -> Clip {
+        Clip(name: "a", path: "a.mov", format: .video, segments: ["a.mov"], bytes: 1, isCameraProxy: false)
+    }
+
+    private func info(_ codec: String = "h264 High") -> ClipInfo {
+        var info = ClipInfo()
+        info.codec = codec
+        info.frameRate = "25/1"
+        info.duration = 1
+        return info
+    }
+
+    private final class Lines {
+        private let lock = NSLock()
+        private var all: [String] = []
+        func add(_ s: String) { lock.lock(); all.append(s); lock.unlock() }
+        var lines: [String] { lock.lock(); defer { lock.unlock() }; return all }
+    }
+
+    private func renderer(_ fake: Fake, stall: TimeInterval = 1, log: Lines? = nil) -> ProxyRenderer {
+        let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools(ffmpeg: fake.path))
+        r.stallTimeout = stall
+        if let log { r.log = { log.add($0) } }
+        return r
+    }
+
+    private func render(_ r: ProxyRenderer, _ dir: TempDir, codec: String = "h264 High",
+                        isCancelled: @escaping () -> Bool = { false }) throws -> String {
+        let card = dir.sub("card")
+        try r.render(clip(), cardPath: card, info: info(codec), output: card + "/_PROXY/a.mov", progress: { _ in }, isCancelled: isCancelled)
+        return card + "/_PROXY/a.mov"
+    }
+
+    // Review focus 9: a stalled VideoToolbox decode never blocks the queue — stopped, rendered once more in software.
+    func testStalledWithHwaccelSoftwareRetrySucceedsAndIsLogged() throws {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .stall, sw: .ok)
+        let log = Lines()
+        let t0 = Date()
+        let out = try render(renderer(fake, log: log), dir)
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 20)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: out))
+        let calls = fake.invocations
+        XCTAssertEqual(calls.count, 2, "\(calls)")
+        XCTAssertTrue(calls[0].contains("-hwaccel videotoolbox"), calls[0])
+        XCTAssertFalse(calls[1].contains("-hwaccel"), calls[1])
+        XCTAssertEqual(TestFS.files(in: dir.path + "/card/_PROXY"), ["a.mov"])   // no .part left behind
+        XCTAssertTrue(log.lines.contains { $0.contains("with hardware decoding: ffmpeg se zasekl") && $0.contains("retrying in software") }, "\(log.lines)")
+        XCTAssertTrue(log.lines.contains("proxy a: software decoding succeeded"), "\(log.lines)")
+    }
+
+    // Review focus 9: stuck with and without hardware decoding → the Windows note, no proxy, no .part.
+    func testStalledTwiceFailsWithTheNote() {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .stall, sw: .stall)
+        let log = Lines()
+        XCTAssertThrowsError(try render(renderer(fake, log: log), dir)) { e in
+            XCTAssertEqual("\(e)", "ffmpeg se zasekl (1 s bez nového snímku) i bez hardwarového dekódování; proxy nevznikla")
+        }
+        XCTAssertEqual(fake.invocations.count, 2)
+        XCTAssertEqual(TestFS.files(in: dir.path + "/card/_PROXY"), [])
+        XCTAssertTrue(log.lines.contains { $0.contains("software decoding failed too") }, "\(log.lines)")
+    }
+
+    func testStalledWithHwaccelThenSoftwareFailsSaysBoth() {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .stall, sw: .fail)
+        XCTAssertThrowsError(try render(renderer(fake), dir)) { e in
+            XCTAssertTrue("\(e)".hasPrefix("ffmpeg se zasekl (1 s bez nového snímku); bez hardwarového dekódování selhal: ffmpeg failed (exit 1)"), "\(e)")
+        }
+        XCTAssertEqual(fake.invocations.count, 2)
+    }
+
+    func testHwaccelFailsSoftwareFailsNoteNamesBoth() {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .fail, sw: .fail)
+        XCTAssertThrowsError(try render(renderer(fake), dir)) { e in
+            let note = "\(e)"
+            XCTAssertTrue(note.hasPrefix("ffmpeg failed (exit 1)"), note)
+            XCTAssertTrue(note.contains("; s hardwarovým dekódováním předtím: ffmpeg failed (exit 1)"), note)
+        }
+        XCTAssertEqual(fake.invocations.count, 2)
+    }
+
+    // A software codec that stalls is not retried (there is nothing to switch off) — and the note does not claim it was.
+    func testSoftwareCodecStallsNoRetryNoteWithoutSoftwareClaim() {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .ok, sw: .stall)
+        XCTAssertThrowsError(try render(renderer(fake), dir, codec: "ffv1")) { e in
+            XCTAssertEqual("\(e)", "ffmpeg se zasekl (1 s bez nového snímku); proxy nevznikla")
+        }
+        XCTAssertEqual(fake.invocations.count, 1)
+    }
+
+    func testHwaccelFailureRetriedInSoftware() throws {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .fail, sw: .ok)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try render(renderer(fake), dir)))
+        XCTAssertEqual(fake.invocations.count, 2)
+    }
+
+    func testSoftwareFailureIsNotRetried() {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .ok, sw: .fail)
+        XCTAssertThrowsError(try render(renderer(fake), dir, codec: "prores HQ")) { e in
+            XCTAssertTrue(e is ToolError, "\(e)")
+        }
+        XCTAssertEqual(fake.invocations.count, 1)
+    }
+
+    func testSoftwareCodecNoHwaccelAtAll() throws {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .stall, sw: .ok)
+        _ = try render(renderer(fake), dir, codec: "ffv1")
+        XCTAssertEqual(fake.invocations.count, 1)
+        XCTAssertFalse(fake.invocations[0].contains("-hwaccel"))
+    }
+
+    // Cancelling while ffmpeg is stuck stops at once and is never retried.
+    func testCancelledWhileStuckNoRetry() {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .stall, sw: .ok)
+        let t0 = Date()
+        XCTAssertThrowsError(try render(renderer(fake, stall: 30), dir, isCancelled: { !fake.invocations.isEmpty })) { e in
+            XCTAssertTrue("\(e)".contains("cancelled"), "\(e)")
+        }
+        XCTAssertEqual(fake.invocations.count, 1)
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 20)
+    }
+
+    // Cancelled while the hardware-decoded attempt failed: no software retry.
+    func testCancelledAfterAHwaccelFailureNoRetry() {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .fail, sw: .ok)
+        XCTAssertThrowsError(try render(renderer(fake), dir, isCancelled: { !fake.invocations.isEmpty }))
+        XCTAssertEqual(fake.invocations.count, 1)
+    }
+
+    func testSlowButMovingRenderIsNotStopped() throws {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .ok, sw: .ok, steps: 6)   // 1.8 s in all, but a new frame every 0.3 s
+        _ = try render(renderer(fake), dir)
+        XCTAssertEqual(fake.invocations.count, 1)
+        XCTAssertTrue(fake.invocations[0].contains("-hwaccel videotoolbox"))
+    }
+
+    // Review: a slow first frame (2 s, limit 1 s) is within the 3× grace before the first progress.
+    func testSlowFirstFrameWithinGraceNotKilled() throws {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .slowStart, sw: .ok)
+        _ = try render(renderer(fake), dir)
+        XCTAssertEqual(fake.invocations.count, 1)
+    }
+
+    // Data a RAW decoder pipes into ffmpeg is progress: a consumer that prints nothing but takes data every 0.5 s for
+    // 3.5 s (longer than the 3 s grace) is not killed.
+    func testFeederDataIsProgress() throws {
+        let dir = tempDir()
+        let consumer = script(dir, "consumer", "cat > /dev/null")
+        let feederPath = script(dir, "feeder", "i=0\nwhile [ $i -lt 7 ]; do i=$((i+1)); echo data; sleep 0.5; done")
+        let feeder = Process()
+        feeder.executableURL = URL(fileURLWithPath: feederPath)
+        let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools())
+        try r.runFFmpeg(consumer, [], feeder: feeder, duration: nil, progress: nil, isCancelled: { false }, stallAfter: 1)
+    }
+
+    func testNoFeederDataAtAllKilledAfterTheGrace() {
+        let dir = tempDir()
+        let consumer = script(dir, "consumer", "cat > /dev/null")
+        let feeder = Process()
+        feeder.executableURL = URL(fileURLWithPath: script(dir, "feeder", "exec sleep 60"))
+        let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools())
+        let t0 = Date()
+        XCTAssertThrowsError(try r.runFFmpeg(consumer, [], feeder: feeder, duration: nil, progress: nil, isCancelled: { false },
+                                             stallAfter: 1)) { e in
+            XCTAssertEqual("\(e)", "ffmpeg se zasekl (1 s bez nového snímku)")
+        }
+        XCTAssertTrue((2.8...20).contains(Date().timeIntervalSince(t0)), "\(Date().timeIntervalSince(t0))")
+    }
+
+    func testThumbnailsNeverUseHardwareDecode() throws {
+        let dir = tempDir()
+        let fake = fakeFFmpeg(dir, hw: .stall, sw: .ok)
+        let thumbs = try renderer(fake).thumbnails(clip(), cardPath: dir.sub("card"), info: info())
+        XCTAssertEqual(thumbs.count, 3)
+        XCTAssertFalse(fake.invocations.contains { $0.contains("-hwaccel") }, "\(fake.invocations)")
+    }
+}
+```
+
+- [ ] **Step 2: Ověřit selhání** — Run: `swift test --filter FFmpegWatchTests` → nesestaví se (`cannot find 'ProgressWatch'`,
+`'FFmpegStall'`, `has no member 'usesHardwareDecode'`, `'stallTimeout'`, `'stallNote'`, `'killWait'`, `'log'`).
+
+- [ ] **Step 3: `mac/Sources/OffloadKit/FFmpegWatch.swift`**:
+
+```swift
+import Foundation
+
+/// ffmpeg made no progress for too long and was killed (port of Windows `FfmpegStalledException`).
+/// `note` is the text shown at the clip.
+struct FFmpegStall: Error, CustomStringConvertible {
+    let note: String
+
+    var description: String { note }
+}
+
+/// The hardware-decoded attempt and the software retry both failed; the note names both (Windows `ProxyRetryException`).
+struct ProxyRetryFailed: Error, CustomStringConvertible {
+    let note: String
+
+    var description: String { note }
+}
+
+/// Watches a render: only a `frame=` or `out_time_us=` value above any seen before (or the final `progress=end`) is
+/// progress — a stuck ffmpeg keeps printing the same block every half second, and the opening "frame=0",
+/// "out_time_us=N/A" or negative times say nothing has been written yet. Data a RAW decoder pipes into ffmpeg is
+/// progress too. Until the first progress the limit is 3× as long. Lines and data arrive on other threads — a lock.
+final class ProgressWatch {
+    private let lock = NSLock()
+    private var frame: Int64 = 0
+    private var outTime: Int64 = 0
+    private var lastAdvance: Date
+    private var advancedOnce = false
+
+    init(now: Date = Date()) {
+        lastAdvance = now
+    }
+
+    @discardableResult
+    func advanced(_ line: String, now: Date = Date()) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let moved: Bool
+        if line.hasPrefix("frame=") {
+            moved = ProgressWatch.rose(&frame, line.dropFirst("frame=".count))
+        } else if line.hasPrefix("out_time_us=") {
+            moved = ProgressWatch.rose(&outTime, line.dropFirst("out_time_us=".count))
+        } else {
+            moved = line == "progress=end"
+        }
+        if moved { mark(now) }
+        return moved
+    }
+
+    /// A chunk the RAW decoder piped into ffmpeg (a slow decoder is not stuck).
+    func dataFlowed(now: Date = Date()) {
+        lock.lock()
+        mark(now)
+        lock.unlock()
+    }
+
+    var hasAdvanced: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return advancedOnce
+    }
+
+    func idleSeconds(now: Date = Date()) -> TimeInterval {
+        lock.lock()
+        defer { lock.unlock() }
+        return now.timeIntervalSince(lastAdvance)
+    }
+
+    /// No progress for `limit` — or for 3× `limit` before the first progress (input probing, a RAW decoder starting
+    /// up, the encoder's lookahead).
+    func isStalled(limit: TimeInterval, now: Date = Date()) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return now.timeIntervalSince(lastAdvance) > limit * (advancedOnce ? 1 : 3)
+    }
+
+    private func mark(_ now: Date) {
+        lastAdvance = now
+        advancedOnce = true
+    }
+
+    private static func rose(_ max: inout Int64, _ value: Substring) -> Bool {
+        guard let v = Int64(value.trimmingCharacters(in: .whitespaces)), v > max else { return false }
+        max = v
+        return true
+    }
+}
+```
+
+- [ ] **Step 4: `Proxy.swift` (`ProxyRenderer`)**
+
+1. Pod `let tempDir: String` přidat:
+
+```swift
+    /// A proxy render with no progress for this long is stuck (3× as long before the first progress): ffmpeg is killed
+    /// and, when it decoded in hardware, the clip is retried once in software.
+    static let defaultStallTimeout: TimeInterval = 60
+    /// How long a killed ffmpeg is waited for: a process stuck in a GPU driver may never end — the job must go on.
+    static let killWait: TimeInterval = 10
+    /// Tests shorten it.
+    var stallTimeout: TimeInterval = ProxyRenderer.defaultStallTimeout
+    /// Where retries and unkillable processes are reported (the job's log).
+    var log: ((String) -> Void)?
+```
+
+2. Pod `seekSeconds(_:_:)` (úkol 5) přidat:
+
+```swift
+    /// Hardware decoding only where it helps and is safe: H.264 and HEVC (`ClipInfo.codec` starts with the ffprobe
+    /// codec name). Everything else (FFV1, ProRes, MJPEG, DNx …) decodes in software — same rule as Windows, where
+    /// ffmpeg 8.1 with -hwaccel hung forever on FFV1.
+    static func usesHardwareDecode(_ codec: String?) -> Bool {
+        let c = (codec ?? "").lowercased()
+        return c.hasPrefix("h264") || c.hasPrefix("hevc")
+    }
+
+    /// The note at a clip whose ffmpeg stalled (texts shared with Windows `StallNote`).
+    static func stallNote(_ seconds: TimeInterval, retriedInSoftware: Bool) -> String {
+        "ffmpeg se zasekl (\(String(format: "%.0f", seconds)) s bez nového snímku)"
+            + (retriedInSoftware ? " i bez hardwarového dekódování; proxy nevznikla" : "")
+    }
+```
+
+3. `frameSource` (úkol 6) nahradit celou:
+
+```swift
+    private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, singleFrameAt: Double?, hwaccel: Bool) throws -> FrameSource {
+        let path = cardPath + "/" + clip.path
+        if clip.format == .video {
+            // VideoToolbox only for H.264/HEVC proxies (usesHardwareDecode); thumbnails always decode in software.
+            return FrameSource(inputArgs: hwaccel ? ["-hwaccel", "videotoolbox", "-i", path] : ["-i", path])
+        }
+        guard let b = backends[clip.format] else { throw ToolError(tool: clip.format.label, status: -1, message: "no decoder") }
+        return try b.source(path, info: info, settings: settings, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt)
+    }
+```
+
+4. V `thumbnails(…)` nahradit `forRender: false` za `hwaccel: false` (náhledy hlídač nemají, argumenty beze změny).
+
+5. Celou funkci `render(…)` nahradit funkcemi `render` a `renderOnce`:
+
+```swift
+    /// Renders the proxy. A render that stalls (no progress for `stallTimeout`) is killed. With hardware decoding the clip
+    /// is then retried once in software — as is one that failed with it; without, the stall fails the proxy. Cancelling
+    /// never retries. Notes and log lines as on Windows.
+    public func render(_ clip: Clip, cardPath: String, info: ClipInfo, output: String,
+                       progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
+        guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
+        let hw = clip.format == .video && ProxyRenderer.usesHardwareDecode(info.codec)
+        let first: Error
+        do {
+            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, hwaccel: hw, output: output,
+                           progress: progress, isCancelled: isCancelled)
+            return
+        } catch let e as FFmpegStall where !hw && !isCancelled() {
+            throw FFmpegStall(note: e.note + "; proxy nevznikla")
+        } catch where hw && (error is FFmpegStall || error is ToolError) && !isCancelled() {
+            first = error   // hardware decoding stalled or failed: once more in software
+        }
+        if isCancelled() { throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled") }
+        log?("proxy \(clip.name): with hardware decoding: \(first) — retrying in software")
+        do {
+            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, hwaccel: false, output: output,
+                           progress: progress, isCancelled: isCancelled)
+            log?("proxy \(clip.name): software decoding succeeded")
+        } catch where (error is FFmpegStall || error is ToolError) && !isCancelled() {
+            log?("proxy \(clip.name): software decoding failed too: \(error)")
+            switch (first, error) {
+            case (is FFmpegStall, is FFmpegStall):
+                throw ProxyRetryFailed(note: ProxyRenderer.stallNote(stallTimeout, retriedInSoftware: true))
+            case (is FFmpegStall, _):
+                throw ProxyRetryFailed(note: "\(first); bez hardwarového dekódování selhal: \(error)")
+            default:
+                throw ProxyRetryFailed(note: "\(error); s hardwarovým dekódováním předtím: \(first)")
+            }
+        }
+    }
+
+    private func renderOnce(_ ffmpeg: String, _ clip: Clip, cardPath: String, info: ClipInfo, hwaccel: Bool, output: String,
+                            progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
+        let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: nil, hwaccel: hwaccel)
+        defer { src.removeIntermediates() }
+        let outHeight = min(settings.height, info.height ?? settings.height) & ~1
+        let vf = FilterGraph.proxy(settings, outHeight: outHeight, alreadyCropped: src.alreadyCropped,
+                                   lutFile: hasLUT ? lutCopy : nil, premap: false,
+                                   burnIn: burnIn(clip: clip, info: info, height: outHeight))
+        var args = ["-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
+        args += ["-map", "0:v:0"]
+        if settings.audio && info.audioChannels > 0 && src.audioFromInput {
+            args += ["-map", "0:a:0?"] + settings.codec.audioArgs
+        }
+        args += ["-vf", vf] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps) + FilterGraph.rec709Args
+        if let tc = info.timecode, Timecode.isValid(tc) { args += ["-timecode", tc] }
+
+        let dir = (output as NSString).deletingLastPathComponent
+        try IO.mkdirs(dir)
+        let part = dir + "/." + (output as NSString).lastPathComponent + ".part"
+        args += ["-f", "mov", part]
+        do {
+            try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: info.duration, progress: progress,
+                          isCancelled: isCancelled, stallAfter: stallTimeout)
+            guard rename(part, output) == 0 else { throw IOError("rename", output) }
+        } catch {
+            unlink(part)
+            throw error
+        }
+    }
+```
+
+6. `runFFmpeg` nahradit celou a přidat `stop`:
+
+```swift
+    /// `stallAfter` (renders only, with -progress pipe:1 in the args): ffmpeg is killed and `FFmpegStall` thrown when it
+    /// has reported no new frame or output time and taken no data from the feeder for that long (3× before the first
+    /// progress). Cancelling is checked first and wins.
+    func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, duration: Double?,
+                   progress: ((Double) -> Void)?, isCancelled: () -> Bool, stallAfter: TimeInterval? = nil) throws {
+        let p = ToolProcess(ffmpeg, args)
+        p.captureStderr()
+        let watch = ProgressWatch()
+        var pump: Thread?
+        if let feeder {
+            // The decoder's frames go through a pump: every chunk ffmpeg takes is progress (a slow RAW decoder is not stuck).
+            let fromFeeder = Pipe(), toFFmpeg = Pipe()
+            feeder.standardOutput = fromFeeder
+            feeder.standardError = FileHandle.nullDevice
+            p.process.standardInput = toFFmpeg
+            // A write after ffmpeg died must fail with EPIPE, not take the app down with SIGPIPE.
+            _ = fcntl(toFFmpeg.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+            pump = Thread {
+                // Plain read(2)/write(2): read returns whatever the decoder has written so far. FileHandle.read(upToCount:)
+                // on a pipe waits for the whole count (or EOF) — a slow decoder would look stuck.
+                let inFD = fromFeeder.fileHandleForReading.fileDescriptor
+                let outFD = toFFmpeg.fileHandleForWriting.fileDescriptor
+                let size = 4 << 20
+                let buffer = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 16)
+                defer { buffer.deallocate() }
+                pumping: while true {
+                    let n = Darwin.read(inFD, buffer, size)
+                    if n < 0 && errno == EINTR { continue }
+                    if n <= 0 { break }   // the decoder is done (EOF) or gone
+                    var sent = 0
+                    while sent < n {
+                        let w = Darwin.write(outFD, buffer + sent, n - sent)
+                        if w < 0 && errno == EINTR { continue }
+                        if w <= 0 { break pumping }   // ffmpeg is gone (EPIPE, no signal thanks to F_SETNOSIGPIPE)
+                        sent += w
+                    }
+                    watch.dataFlowed()
+                }
+                try? toFFmpeg.fileHandleForWriting.close()
+            }
+        } else {
+            p.process.standardInput = FileHandle.nullDevice
+        }
+        p.onStdoutLine { line in
+            watch.advanced(line)
+            guard let progress, let d = duration, d > 0, line.hasPrefix("out_time_us="),
+                  let us = Double(line.dropFirst("out_time_us=".count)) else { return }
+            progress(min(1, us / 1_000_000 / d))
+        }
+        try feeder?.run()
+        do {
+            try p.process.run()
+        } catch {
+            feeder?.terminate()
+            throw error
+        }
+        pump?.start()
+        while p.process.isRunning {
+            if isCancelled() {
+                stop(p, feeder)
+                throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled")
+            }
+            if let limit = stallAfter, watch.isStalled(limit: limit) {
+                stop(p, feeder)
+                throw FFmpegStall(note: ProxyRenderer.stallNote(limit, retriedInSoftware: false))
+            }
+            usleep(200_000)
+        }
+        if let feeder, feeder.isRunning { feeder.terminate() }
+        feeder?.waitUntilExit()
+        guard p.process.terminationStatus == 0 else {
+            throw ToolError(tool: "ffmpeg", status: p.process.terminationStatus, message: p.stderrText)
+        }
+        if let feeder, feeder.terminationStatus != 0, feeder.terminationReason == .exit {
+            throw ToolError(tool: (feeder.executableURL?.lastPathComponent ?? "decoder"), status: feeder.terminationStatus, message: "")
+        }
+    }
+
+    /// SIGTERM, at most `killWait` for ffmpeg to end, then SIGKILL — never an unbounded wait (a process stuck in a GPU
+    /// driver may survive even that; the job goes on without it and the log says so).
+    private func stop(_ p: ToolProcess, _ feeder: Process?) {
+        let pid = p.process.processIdentifier
+        p.process.terminate()
+        if let feeder, feeder.isRunning { feeder.terminate() }
+        let deadline = Date().addingTimeInterval(ProxyRenderer.killWait)
+        while p.process.isRunning && Date() < deadline { usleep(50_000) }
+        guard p.process.isRunning else { return }
+        kill(pid, SIGKILL)
+        if let feeder, feeder.isRunning { kill(feeder.processIdentifier, SIGKILL) }
+        usleep(500_000)
+        if p.process.isRunning { log?("ffmpeg (pid \(pid)) did not end \(Int(ProxyRenderer.killWait)) s after kill") }
+    }
+```
+
+- [ ] **Step 5: `Job.swift`** — v `analyzeAndRender` hned za řádek `let renderer = ProxyRenderer(settings: config.proxy, tools: tools)` přidat:
+
+```swift
+        renderer.log = log   // software retries and unkillable ffmpeg processes go to the job's log
+```
+
+- [ ] **Step 6: Testy projdou** — Run: `swift test --filter "FFmpegWatchTests|ThumbnailTests|StageTwoTests|ColorTests"` → 0 chyb
+(FFmpegWatchTests trvají desítky sekund — skripty spí a do prvního pokroku platí trojnásobná lhůta); pak `swift test`.
+
+**Ověřit na Macu (Doplněk D.10, řádek 11):** `F_SETNOSIGPIPE` se přeloží (makro z `<fcntl.h>`), pumpa dostane EOF, když
+dekodér skončí (Foundation po spuštění zavře rodičovskou kopii zapisovacího konce roury), a `testFeederDataIsProgress`
+projde; jinak výsledek do commitu, oprava do `runFFmpeg`, ne do testu.
+
+- [ ] **Step 7: Ruční kontrola (volitelná, s ffmpeg)** — skutečné zaseknutí VideoToolbox se reprodukovat nedá; ověřit, že
+render H.264 jede s hwaccel a ProRes/FFV1 bez: `swift build -c release && .build/release/offload <karta s H.264 a ProRes klipy> -d <USB disk> --proxy`
+a během renderu `ps -o args= -p $(pgrep -n ffmpeg)` → u H.264 klipu `-hwaccel videotoolbox`, u ProRes ne. FFV1 (kodek,
+který na Windows zasekl ffmpeg): `mkdir -p /tmp/ffv1card && ffmpeg -f lavfi -i testsrc2=s=320x180:r=25:d=1 -c:v ffv1 -pix_fmt yuv422p10le /tmp/ffv1card/a.mkv`
+a `.build/release/offload /tmp/ffv1card -d <USB disk> --proxy` → proxy hotová do minuty. BRAW (je-li `braw-decode`):
+proxy z 8K klipu se nezastaví ani při pomalém prvním snímku.
+
+- [ ] **Step 8: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 19 — ffmpeg se nezasekne navždy (jako Windows): VideoToolbox dekódování jen pro H.264/HEVC; render proxy bez pokroku 60 s (nový snímek nebo data z dekodéru RAW; do prvního pokroku 180 s) se ukončí (SIGTERM, nejvýš 10 s, pak SIGKILL); po hardwarovém dekódování jedno opakování softwarově, jinak poznámka „ffmpeg se zasekl (60 s bez nového snímku); proxy nevznikla“; zrušení se neopakuje; opakování a jeho výsledek v logu`
+
+`docs/ROZDILY.md` — tabulka „Technologie“: přidat řádek
+`| Dekódování pro proxy | VideoToolbox (-hwaccel videotoolbox) jen pro H.264/HEVC | -hwaccel auto jen pro H.264/HEVC |`
+(hlídač, lhůty, opakování a texty jsou na obou stejné — mezi rozdíly nepatří). Pokud Windows práce přidala do
+„Záměrných rozdílů“ odrážku, že hlídač je jen na Windows, smazat ji.
+
+Run: `git add -A mac/Sources mac/Tests docs && git commit -m "Mac: VideoToolbox decode only for H.264/HEVC, ffmpeg stall watchdog with grace, bounded kill and a software retry after hwaccel"`
+
+---
+
+### Task 20: Složka pro proxy navíc — jádro (`proxy.extraFolder`)
+
+Doplněk ke spec — oddíl D.2. Port `windows/src/Offload.Core/ProxyCopy.cs`, kopie do složky v `OffloadJob.cs`,
+`ProxySettings.ExtraFolder` (`Media.cs`), `ProxyPreflight.ExtraFolder*` (`Desktop/AppSettings.cs`) a řádek proxy
+v `HtmlReport.cs`. CLI je v úkolu 23, GUI v úkolu 24.
+
+**Files:**
+- Create: `mac/Sources/OffloadKit/ProxyCopy.swift`
+- Modify: `mac/Sources/OffloadKit/Proxy.swift` (`ProxySettings.extraFolder`, dekódování)
+- Modify: `mac/Sources/OffloadKit/Job.swift` (kopie do složky v části proxy; smazat `private func copyFile`, volání přes `ProxyCopy.copyFile`)
+- Modify: `mac/Sources/OffloadKit/HTMLReport.swift` (řádek „Proxy: …“)
+- Modify: `mac/Sources/OffloadKit/Desktop/AppSettings.swift` (`SettingsStore.normalize`; `ProxyPreflight.extraFolderInUse`, `extraFolderBlocking`, `isDirectory`)
+- Create: `mac/Tests/OffloadKitTests/ProxyFolderTests.swift`
+- Modify: `docs/VYVOJ-MAC.md`, `docs/ROZDILY.md`, `docs/FORMATY.md`
+
+**Interfaces:**
+- Consumes: `Reports.sample` (úkol 3), `OffloadJob.init(config:options:)` (úkol 4), `TestMedia`, `TestFS` (úkol 1), `SettingsStore`, `ProxyPreflight` (úkol 10).
+- Produces:
+  - `public var ProxySettings.extraFolder: String?` (JSON `extraFolder`, chybí = vypnuto)
+  - `public enum ProxyCopy { struct Taken: Error; static func copyFile(_ src: String, to dst: String, replace: Bool = true) throws; static func renameNoReplace(_ from: String, _ to: String) throws; public static func toExtraFolder(_ source: String, extraFolder: String, date: String, cardName: String, fileName: String, maxAttempts: Int = 1000) -> (path: String?, error: String?) }`
+  - `ProxyPreflight.extraFolderInUse(_ p: ProxySettings) -> String?`, `extraFolderBlocking(_ p: ProxySettings, folderExists: Bool?) -> String?`, `extraFolderBlocking(_ p: ProxySettings) -> String?` (čte disk — jen CLI), `isDirectory(_ path: String) -> Bool`
+  - Poznámka u klipu `kopie do <složka> selhala: <důvod>`; v HTML `· také ve složce <span class="mono">…</span>`
+
+- [ ] **Step 1: Padající testy** — `mac/Tests/OffloadKitTests/ProxyFolderTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+/// The extra copy of each proxy into the user's proxy folder: `<folder>/<date>/<card>/<name>.mov`, never overwriting.
+final class ProxyFolderTests: XCTestCase {
+    private func proxy(_ dir: TempDir, seed: UInt64 = 1) -> String {
+        let path = dir.path + "/d1/2026-10-05/A001/_PROXY/C0001.mov"
+        TestFS.writeRandom(path, size: 5000, seed: seed)
+        return path
+    }
+
+    private func data(_ path: String) -> Data? { try? Data(contentsOf: URL(fileURLWithPath: path)) }
+
+    func testCopiesIntoDateAndCardFolder() {
+        let dir = tempDir()
+        let src = proxy(dir)
+        let extra = dir.sub("proxies")
+        let (path, error) = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001", fileName: "C0001.mov")
+        XCTAssertNil(error)
+        XCTAssertEqual(path, extra + "/2026-10-05/A001/C0001.mov")
+        XCTAssertEqual(data(src), data(extra + "/2026-10-05/A001/C0001.mov"))
+        XCTAssertEqual(TestFS.files(in: extra), ["2026-10-05/A001/C0001.mov"])   // no .part left
+    }
+
+    // Review focus 6: an existing file is never overwritten — the copy gets _2, _3 …
+    func testExistingNameGetsSuffixNeverOverwrites() {
+        let dir = tempDir()
+        let src = proxy(dir)
+        let extra = dir.sub("proxies")
+        let target = extra + "/2026-10-05/A001"
+        let old = TestFS.writeRandom(target + "/C0001.mov", size: 100, seed: 9)
+        let second = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001", fileName: "C0001.mov")
+        let third = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001", fileName: "C0001.mov")
+        XCTAssertNil(second.error)
+        XCTAssertNil(third.error)
+        XCTAssertEqual(second.path, target + "/C0001_2.mov")
+        XCTAssertEqual(third.path, target + "/C0001_3.mov")
+        XCTAssertEqual(data(target + "/C0001.mov"), old)
+        XCTAssertEqual(data(target + "/C0001_3.mov"), data(src))
+    }
+
+    func testMissingFolderErrorNotThrowNothingCreated() {
+        let dir = tempDir()
+        let src = proxy(dir)
+        let extra = dir.path + "/disconnected"
+        let (path, error) = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001", fileName: "C0001.mov")
+        XCTAssertNil(path)
+        XCTAssertEqual(error, "složka není dostupná")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: extra))
+    }
+
+    func testFailedCopyErrorAndNoTempLeft() throws {
+        let dir = tempDir()
+        let src = proxy(dir)
+        let extra = dir.sub("proxies")
+        let target = extra + "/2026-10-05/A001"
+        TestFS.writeRandom(target + "/.C0001.mov.part", size: 10, seed: 3)   // left behind by a crash
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: src)   // the source cannot be read
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: src) }
+        let (path, error) = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001", fileName: "C0001.mov")
+        XCTAssertNil(path)
+        XCTAssertFalse((error ?? "").isEmpty)
+        XCTAssertEqual(TestFS.files(in: target), [])
+    }
+
+    // Review focus 6: a folder full of taken names ends with an error, never an endless loop or an overwrite.
+    func testAllNamesTakenErrorAfterCap() throws {
+        let dir = tempDir()
+        let src = proxy(dir)
+        let extra = dir.sub("proxies")
+        dir.sub("proxies", "2026-10-05", "A001", "C0001.mov")      // folders with the proxy's names
+        for n in 2...3 { dir.sub("proxies", "2026-10-05", "A001", "C0001_\(n).mov") }
+        let (path, error) = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001",
+                                                    fileName: "C0001.mov", maxAttempts: 3)
+        XCTAssertNil(path)
+        XCTAssertEqual(error, "žádné volné jméno (C0001.mov … C0001_3.mov)")
+        XCTAssertEqual(TestFS.files(in: extra), [])
+    }
+
+    func testStaleTempReplaced() {
+        let dir = tempDir()
+        let src = proxy(dir)
+        let extra = dir.sub("proxies")
+        TestFS.writeRandom(extra + "/2026-10-05/A001/.C0001.mov.part", size: 10, seed: 3)
+        let (path, error) = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001", fileName: "C0001.mov")
+        XCTAssertNil(error)
+        XCTAssertEqual(path, extra + "/2026-10-05/A001/C0001.mov")
+        XCTAssertEqual(TestFS.files(in: extra + "/2026-10-05/A001"), ["C0001.mov"])
+    }
+
+    // Mac: renamex_np(RENAME_EXCL) — a file that appears between the check and the rename is never replaced.
+    func testCopyFileWithoutReplaceRefusesAnExistingFile() throws {
+        let dir = tempDir()
+        let src = proxy(dir)
+        let dst = dir.path + "/out/C0001.mov"
+        let old = TestFS.writeRandom(dst, size: 7, seed: 5)
+        XCTAssertThrowsError(try ProxyCopy.copyFile(src, to: dst, replace: false)) { XCTAssertTrue($0 is ProxyCopy.Taken, "\($0)") }
+        XCTAssertEqual(data(dst), old)
+        XCTAssertEqual(TestFS.files(in: dir.path + "/out"), ["C0001.mov"])
+        try ProxyCopy.copyFile(src, to: dst)   // replace: true (copies to other destinations, the PDF) still replaces
+        XCTAssertEqual(data(dst), data(src))
+    }
+
+    func testPreflightBlocksOnlyAMissingFolderInUse() {
+        var p = ProxySettings()
+        p.enabled = true
+        p.extraFolder = "/Volumes/Proxy"
+        XCTAssertEqual(ProxyPreflight.extraFolderInUse(p), "/Volumes/Proxy")
+        XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: nil))   // not checked yet
+        XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: true))
+        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p, folderExists: false), "Složka pro proxy není dostupná: /Volumes/Proxy")
+        p.enabled = false
+        XCTAssertNil(ProxyPreflight.extraFolderInUse(p))
+        XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: false))
+        p.enabled = true
+        p.extraFolder = nil
+        XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: false))
+    }
+
+    func testPreflightChecksTheDisk() {
+        let dir = tempDir()
+        var p = ProxySettings()
+        p.enabled = true
+        p.extraFolder = dir.path
+        XCTAssertNil(ProxyPreflight.extraFolderBlocking(p))
+        p.extraFolder = dir.path + "/nope"
+        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p), "Složka pro proxy není dostupná: \(dir.path)/nope")
+    }
+
+    func testSettingsExtraFolderTrimmedBlankIsNilAbsentWhenUnset() throws {
+        func load(_ json: String) -> AppSettings { SettingsStore.decode(Data(json.utf8)) }
+        XCTAssertNil(load(#"{"proxy":{"enabled":true}}"#).proxy.extraFolder)
+        XCTAssertNil(load(#"{"proxy":{"enabled":true,"extraFolder":"  "}}"#).proxy.extraFolder)
+        XCTAssertEqual(load(#"{"proxy":{"extraFolder":" /Volumes/P "}}"#).proxy.extraFolder, "/Volumes/P")
+        var s = AppSettings()
+        s.proxy.extraFolder = "/Volumes/Proxy"
+        XCTAssertEqual(SettingsStore.decode(SettingsStore.encode(s)).proxy.extraFolder, "/Volumes/Proxy")
+        let empty = String(decoding: try XCTUnwrap(SettingsStore.encode(AppSettings())), as: UTF8.self)
+        XCTAssertFalse(empty.contains("extraFolder"))
+    }
+
+    func testHTMLProxyLineNamesTheFolder() {
+        var r = Reports.sample()
+        r.clips = [ClipEntry(clip: Clip(name: "C0001", path: "C0001.mov", format: .video, segments: ["C0001.mov"],
+                                        bytes: 1, isCameraProxy: false))]
+        var p = ProxySettings()
+        p.enabled = true
+        r.proxy = p
+        XCTAssertFalse(HTMLReport.render(r).contains("také ve složce"))
+        p.extraFolder = "/Volumes/Proxy & co"
+        r.proxy = p
+        XCTAssertTrue(HTMLReport.render(r).contains(
+            "<span class=\"mono\">_PROXY/</span> · také ve složce <span class=\"mono\">/Volumes/Proxy &amp; co</span></p>"))
+    }
+
+    // MARK: Whole job (ffmpeg)
+
+    private func options() -> OffloadOptions {
+        var o = OffloadOptions()
+        o.chunkSize = 1 << 20
+        o.bufferCount = 4
+        o.allowSameDevice = true
+        o.allowSourceVolume = true
+        return o
+    }
+
+    private func job(_ dir: TempDir, extra: String) throws -> OffloadJob {
+        let card = dir.sub("A001")
+        try TestMedia.makeClip(card + "/C0001.mov", seconds: 1)
+        var config = JobConfig(source: card, destRoots: [dir.sub("d1")])
+        config.date = "2026-10-05"
+        config.proxy.enabled = true
+        config.proxy.height = 360
+        config.proxy.extraFolder = extra
+        config.tools = TestMedia.tools
+        return OffloadJob(config: config, options: options())
+    }
+
+    // Every proxy also lands in <folder>/<date>/<card>/; an older file of the same name stays, the copy gets _2.
+    func testJobCopiesEveryProxyIntoTheFolder() throws {
+        _ = try TestMedia.requireFFmpeg()
+        let dir = tempDir()
+        let extra = dir.sub("proxies")
+        TestFS.writeRandom(extra + "/2026-10-05/A001/C0001.mov", size: 100, seed: 4)   // from an earlier run
+        let job = try job(dir, extra: extra)
+        let report = try XCTUnwrap(job.run())
+        XCTAssertEqual(job.status().phase, .done)
+        XCTAssertEqual(report.clips.count, 1)
+        let clip = try XCTUnwrap(report.clips.first)
+        XCTAssertEqual(clip.proxyStatus, .done)
+        XCTAssertNil(clip.proxyNote)
+        let backup = try XCTUnwrap(job.plan).cardPaths[0] + "/_PROXY/C0001.mov"
+        XCTAssertEqual(data(backup), data(extra + "/2026-10-05/A001/C0001_2.mov"))
+        XCTAssertEqual(data(extra + "/2026-10-05/A001/C0001.mov")?.count, 100)
+        XCTAssertEqual(report.proxy?.extraFolder, extra)
+    }
+
+    // The folder went away mid-job (disconnected disk): a note, never a failed proxy or job.
+    func testFolderGoneIsANoteOnly() throws {
+        _ = try TestMedia.requireFFmpeg()
+        let dir = tempDir()
+        let extra = dir.path + "/unplugged"
+        let job = try job(dir, extra: extra)
+        var log: [String] = []
+        let report = try XCTUnwrap(job.run { log.append($0) })
+        let s = job.status()
+        XCTAssertEqual(s.phase, .done)
+        XCTAssertEqual(s.proxiesDone, 1)
+        XCTAssertEqual(s.proxiesFailed, 0)
+        let clip = try XCTUnwrap(report.clips.first)
+        XCTAssertEqual(clip.proxyStatus, .done)
+        XCTAssertEqual(clip.proxyNote, "kopie do \(extra) selhala: složka není dostupná")
+        XCTAssertTrue(log.contains { $0.contains("C0001") && $0.contains(extra) }, "\(log)")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: extra))
+    }
+}
+```
+
+- [ ] **Step 2: Ověřit selhání** — Run: `swift test --filter ProxyFolderTests` → nesestaví se (`cannot find 'ProxyCopy'`,
+`value of type 'ProxySettings' has no member 'extraFolder'`, `'extraFolderInUse'`).
+
+- [ ] **Step 3: `mac/Sources/OffloadKit/ProxyCopy.swift`**:
+
+```swift
+import Darwin
+import Foundation
+
+/// Safe copies of finished files (proxies, the PDF report): a temporary `.<name>.part` next to the target, then a rename.
+/// Port of Windows `ProxyCopy.cs`.
+public enum ProxyCopy {
+    /// The target name is taken (`copyFile(…, replace: false)` found something there).
+    struct Taken: Error {}
+
+    /// Copies `src` to `dst` via `.<name>.part`; a failure leaves no temporary file behind.
+    /// `replace: false` never overwrites: an existing `dst` throws `Taken`.
+    static func copyFile(_ src: String, to dst: String, replace: Bool = true) throws {
+        let dir = (dst as NSString).deletingLastPathComponent
+        try IO.mkdirs(dir)
+        let part = dir + "/." + (dst as NSString).lastPathComponent + ".part"
+        unlink(part)
+        do {
+            try FileManager.default.copyItem(atPath: src, toPath: part)
+            if replace {
+                guard rename(part, dst) == 0 else { throw IOError("rename", dst) }
+            } else {
+                try renameNoReplace(part, dst)
+            }
+        } catch {
+            unlink(part)
+            throw error
+        }
+    }
+
+    /// rename(2) that never replaces: `renamex_np(RENAME_EXCL)` where the filesystem supports it (APFS, HFS+);
+    /// where it does not (ENOTSUP/EINVAL — possibly exFAT, FAT32, SMB), a check right before a plain rename.
+    static func renameNoReplace(_ from: String, _ to: String) throws {
+        if renamex_np(from, to, UInt32(RENAME_EXCL)) == 0 { return }
+        let e = errno
+        if e == EEXIST { throw Taken() }
+        guard e == ENOTSUP || e == EINVAL else { throw IOError("rename", to, e) }
+        if FileManager.default.fileExists(atPath: to) { throw Taken() }
+        guard rename(from, to) == 0 else { throw IOError("rename", to) }
+    }
+
+    /// The extra copy of a proxy into the user's proxy folder: `<extraFolder>/<date>/<cardName>/<fileName>`, or
+    /// `<name>_2.mov`, `_3` … when the name is taken there — never overwrites. Never throws: a missing folder
+    /// (disconnected disk) or a failed copy comes back as the error text. At most `maxAttempts` names
+    /// (`_2` … `_1000`) are tried; then it gives up with an error.
+    public static func toExtraFolder(_ source: String, extraFolder: String, date: String, cardName: String,
+                                     fileName: String, maxAttempts: Int = 1000) -> (path: String?, error: String?) {
+        guard ProxyPreflight.isDirectory(extraFolder) else { return (nil, "složka není dostupná") }
+        let dir = URL(fileURLWithPath: extraFolder).appendingPathComponent(date).appendingPathComponent(cardName).path
+        let stem = (fileName as NSString).deletingPathExtension
+        let ext = (fileName as NSString).pathExtension
+        func name(_ n: Int) -> String { n == 1 ? fileName : "\(stem)_\(n)" + (ext.isEmpty ? "" : "." + ext) }
+        do {
+            for n in 1...max(1, maxAttempts) {
+                let target = dir + "/" + name(n)
+                if FileManager.default.fileExists(atPath: target) { continue }
+                do {
+                    try copyFile(source, to: target, replace: false)
+                    return (target, nil)
+                } catch is Taken {
+                    // Taken between the check and the rename: try the next number.
+                }
+            }
+            return (nil, "žádné volné jméno (\(name(1)) … \(name(max(1, maxAttempts))))")
+        } catch let e as IOError {
+            return (nil, e.description)
+        } catch {
+            return (nil, error.localizedDescription)
+        }
+    }
+}
+```
+
+- [ ] **Step 4: `Proxy.swift` (`ProxySettings`)** — pod `public var copyToAllDestinations = true` přidat:
+
+```swift
+    /// Optional: every proxy is also copied to `<folder>/<date>/<card>/` (never overwriting). nil = off (key absent).
+    public var extraFolder: String?
+```
+
+a do `init(from:)` za řádek s `copyToAllDestinations`:
+
+```swift
+        extraFolder = try c.decodeIfPresent(String.self, forKey: .extraFolder)
+```
+
+(Syntetizované `encode(to:)` vynechá `nil` — klíč pak v JSON chybí, jako na Windows.)
+
+- [ ] **Step 5: `Job.swift`**
+
+1. Smazat `private func copyFile(_:to:)` (úkol 7). V `writePDFReports` nahradit `try? copyFile(first, to: …)` za
+   `try? ProxyCopy.copyFile(first, to: …)` (zbytek řádku beze změny) a v části proxy
+   `try copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel)` za
+   `try ProxyCopy.copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel)`.
+2. V části proxy hned **za** blok `if config.proxy.copyToAllDestinations { … }` (úkol 7) vložit:
+
+```swift
+                if let extra = config.proxy.extraFolder {
+                    // The user's proxy folder: also never fails the proxy (the disk may have been disconnected).
+                    let (_, error) = ProxyCopy.toExtraFolder(plan.cardPaths[d] + "/" + rel, extraFolder: extra, date: plan.date,
+                                                             cardName: plan.cardName, fileName: name + ".mov")
+                    if let error {
+                        let note = "kopie do \(extra) selhala: \(error)"
+                        entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note
+                        log?("proxy \(clip.name): copy to \(extra) failed: \(error)")
+                    }
+                }
+```
+
+- [ ] **Step 6: `HTMLReport.swift`** — nahradit celý blok `if let p = r.proxy, p.enabled { … }` (uvnitř `if !r.clips.isEmpty`):
+
+```swift
+            if let p = r.proxy, p.enabled {
+                let lut = p.lutPath.map { ($0 as NSString).lastPathComponent } ?? "bez LUT"
+                let frame = p.frameLabel.map { ", výřez \($0)" } ?? ""
+                let extra = p.extraFolder.map { " · také ve složce <span class=\"mono\">\(esc($0))</span>" } ?? ""
+                h += "<p class=\"sub\">Proxy: \(esc(p.codec.label)), \(p.height)p\(frame), LUT: \(esc(lut)) → <span class=\"mono\">\(Layout.proxyDirName)/</span>\(extra)</p>\n"
+            }
+```
+
+- [ ] **Step 7: `Desktop/AppSettings.swift`**
+
+V `SettingsStore.normalize` před `return s` přidat:
+
+```swift
+        if let f = s.proxy.extraFolder?.trimmingCharacters(in: .whitespaces) { s.proxy.extraFolder = f.isEmpty ? nil : f }
+```
+
+Do `ProxyPreflight` přidat:
+
+```swift
+    /// The extra proxy folder the next start copies into (only when proxies are rendered), or nil.
+    public static func extraFolderInUse(_ p: ProxySettings) -> String? { p.enabled ? p.extraFolder : nil }
+
+    /// Why the start must wait: the proxy folder is set but missing (a disconnected disk).
+    /// `folderExists` nil = not checked yet (does not block). The app passes its background answer.
+    public static func extraFolderBlocking(_ p: ProxySettings, folderExists: Bool?) -> String? {
+        guard let f = extraFolderInUse(p), folderExists == false else { return nil }
+        return "Složka pro proxy není dostupná: \(f)"
+    }
+
+    /// The same, asking the disk now — the CLI only (the app never touches a disk on the main thread).
+    public static func extraFolderBlocking(_ p: ProxySettings) -> String? {
+        extraFolderBlocking(p, folderExists: extraFolderInUse(p).map(isDirectory))
+    }
+
+    public static func isDirectory(_ path: String) -> Bool {
+        var isDir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
+    }
+```
+
+- [ ] **Step 8: Testy projdou** — Run: `swift test --filter "ProxyFolderTests|StageTwoTests|SettingsStoreTests"` → 0 chyb; pak `swift test`.
+
+**Ověřit na Macu (Doplněk D.10, řádek 3):** `renamex_np`/`RENAME_EXCL` se v Swiftu sestaví (makro z `<stdio.h>`); když
+překladač `RENAME_EXCL` nezná, nahradit `UInt32(0x00000004)` s komentářem. Chování na exFAT ověřit ručně (krok 9).
+
+- [ ] **Step 9: Ruční kontrola na exFAT** (cílová složka pro proxy bývá na externím disku):
+
+```sh
+hdiutil create -size 200m -fs ExFAT -volname PXEXF /tmp/pxexf.dmg && hdiutil attach /tmp/pxexf.dmg
+swift test --filter ProxyFolderTests/testJobCopiesEveryProxyIntoTheFolder   # na APFS
+```
+
+a pak stejný test s `extra` na `/Volumes/PXEXF` (dočasně v testu nahradit `dir.sub("proxies")` za
+`"/Volumes/PXEXF/proxies"` a složku předem vytvořit — **změnu testu necommitovat**): kopie `C0001_2.mov` vznikne, původní
+soubor zůstane. Výsledek (jaké `errno` vrátil `renamex_np` na exFAT) zapsat do commitu. `hdiutil detach /Volumes/PXEXF`.
+
+- [ ] **Step 10: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 20 — složka pro proxy navíc (jádro): každá hotová proxy i do <složka>/<datum>/<karta>/ (při shodě jména _2, _3…, nikdy nepřepíše, nejvýš 1000 jmen), nedostupná složka nebo chyba kopie = jen poznámka u klipu; v reportu „· také ve složce …“`
+
+`docs/ROZDILY.md` — řádek „**Složka pro proxy navíc**“: Mac `🔨 jádro (CLI a GUI ⏳)`.
+`docs/FORMATY.md` — u `proxy.extraFolder` místo „zatím jen Windows … Mac ho zatím nezná a ignoruje“: obě verze; cesta
+podle systému (`/Volumes/…` na Macu, `E:\…` na Windows), na druhé platformě se jen zobrazí v reportu.
+
+Run: `git add -A mac/Sources mac/Tests docs && git commit -m "Mac: extra proxy folder (copy, never overwrite, note on failure, report line)"`
+
+---
+
+### Task 21: Vestavěné LUTy — katalog, výběr LUTu podle klipu, nastavení
+
+Doplněk ke spec — oddíl D.3.1–D.3.3. Port `windows/src/Offload.Core/Luts.cs` (`LutCatalog`, `LutMode`, `LutUse`, `SonyXml`,
+`LutResolver`, `LutOption`), `ClipInfo.ColorRange` a výrobce + model kamery z `FFProbe` (`ClipDetector.cs`),
+`ArriBackend.ColorSpace`/`IsAlexa35` a pravidla nastavení z `Desktop/AppSettings.cs` (`Normalize`, `ProxyPreflight.LutInUse`).
+Čisté funkce — do renderu a reportu se LUT dostane v úkolu 22.
+
+**Files:**
+- Create: `mac/Sources/OffloadKit/Luts.swift`
+- Modify: `mac/Sources/OffloadKit/Media.swift` (`ClipInfo.colorRange`; `FFProbe.parse`, `FFProbe.camera`)
+- Modify: `mac/Sources/OffloadKit/Proxy.swift` (celá `ProxySettings` — nové klíče `lutMode`, `lutBuiltin`, `lutFallback`)
+- Modify: `mac/Sources/OffloadKit/RawBackends.swift` (`ARRIRAWBackend.colorSpace(lut:info:)` statická, `isAlexa35`)
+- Modify: `mac/Sources/OffloadKit/Desktop/AppSettings.swift` (`SettingsStore.decode`/`normalize` s katalogem; `ProxyPreflight.lutInUse` jen pro vlastní LUT)
+- Modify: `mac/Tests/OffloadKitTests/SettingsStoreTests.swift` (`testRoundTrip`, jeden řádek)
+- Create: `mac/Tests/OffloadKitTests/LutTestSupport.swift`, `LutCatalogTests.swift`, `LutResolverTests.swift`, `LutOptionTests.swift`, `LutSettingsTests.swift`
+- Modify: `docs/VYVOJ-MAC.md`
+
+**Interfaces:**
+- Consumes: `Clip`, `ClipInfo`, `ProxySettings`, `SettingsStore`, `ProxyPreflight` (úkoly 10, 20), `TempDir`, `TestFS` (úkol 1).
+- Produces:
+  - `public struct BuiltinLut: Codable, Equatable { id, name, maker, file, curve, gamut: String; path: String }`
+  - `public struct LutCatalog { folder: String?; luts: [BuiltinLut]; init(folder:luts:); func find(_ id: String?) -> BuiltinLut?; static let shared: LutCatalog; static var defaultFolder: String?; static func findFolder(executable: URL?, resourcePath: String?) -> String?; static func load(_ folder: String?) -> LutCatalog; static func isValidCube(_ path: String) -> Bool }`
+  - `public enum LutMode: String, Codable, CaseIterable { case auto, builtin, custom, off = "none" }`
+  - `public struct LutUse: Codable, Equatable { source, id: String?, name, reason; file: String? (mimo JSON); isBuiltin; init(source:id:name:reason:file:); static func off(_ reason: String) -> LutUse }`
+  - `public enum SonyXML { static func read(_ clipFullPath: String) -> (gamma: String?, primaries: String?)? }`
+  - `public enum LutResolver { static func effectiveMode(_ s: ProxySettings) -> LutMode; static func resolve(_ clip: Clip, info: ClipInfo?, clipFullPath: String, settings: ProxySettings, catalog: LutCatalog) -> LutUse; static func detect(_ clip: Clip, info: ClipInfo?, clipFullPath: String) -> (id: String?, reason: String) }`
+  - `public enum LutOption { struct Parsed: Equatable { mode, builtin, path, fallback, error }; static func parse(_ value: String?, fallback: String?, catalog: LutCatalog) -> Parsed }`
+  - `ProxySettings.lutMode: LutMode?`, `.lutBuiltin: String?`, `.lutFallback: String?`; `ClipInfo.colorRange: String?`
+  - `FFProbe.parse(_ data: Data) throws -> ClipInfo`, `FFProbe.camera(make:model:) -> String?`
+  - `static func ARRIRAWBackend.colorSpace(lut: String?, info: ClipInfo) -> String`, `static func ARRIRAWBackend.isAlexa35(_ camera: String?) -> Bool`
+  - `SettingsStore.decode(_ data: Data?, catalog: LutCatalog = .shared)`, `SettingsStore.normalize(_:catalog:)`
+  - testy: `TestMedia.lutFolder`, `TestMedia.luts`, `TestMedia.customLut(_:) -> LutUse`
+
+Pozn. k názvům: režim „bez LUT“ je ve Swiftu `LutMode.off` (JSON hodnota zůstává `"none"`) a `LutUse.off(_:)` (zdroj `"none"`) —
+`case none` u výčtu, který se používá jako `LutMode?`, by se pletl s `Optional.none` (`settings.proxy.lutMode == .none`
+by tiše znamenalo „nenastaveno“).
+
+- [ ] **Step 1: Pomocníci testů** — `mac/Tests/OffloadKitTests/LutTestSupport.swift`:
+
+```swift
+import Foundation
+@testable import OffloadKit
+
+extension TestMedia {
+    /// The repo's shared/luts — tests never depend on where xctest runs from (its executable is Xcode's xctest).
+    static let lutFolder: String = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // OffloadKitTests
+        .deletingLastPathComponent()   // Tests
+        .deletingLastPathComponent()   // mac
+        .deletingLastPathComponent()   // repo
+        .appendingPathComponent("shared/luts").path
+
+    static let luts = LutCatalog.load(lutFolder)
+
+    /// A custom .cube as the resolver hands it over.
+    static func customLut(_ path: String) -> LutUse {
+        LutUse(source: "custom", id: nil, name: (path as NSString).lastPathComponent, reason: "vlastní LUT", file: path)
+    }
+}
+```
+
+- [ ] **Step 2: Padající testy**
+
+`mac/Tests/OffloadKitTests/LutCatalogTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class LutCatalogTests: XCTestCase {
+    func testRepoCatalogHas11ValidLuts() {
+        let cat = TestMedia.luts
+        XCTAssertEqual(cat.folder, TestMedia.lutFolder)
+        XCTAssertEqual(cat.luts.count, 11)
+        for l in cat.luts { XCTAssertTrue(LutCatalog.isValidCube(l.path), l.id) }
+        XCTAssertEqual(cat.find("sony-slog3-sgamut3cine")?.name, "Sony S-Log3 / S-Gamut3.Cine → Rec.709")
+        XCTAssertEqual(cat.find("bmd-film-gen5")?.path, TestMedia.lutFolder + "/Blackmagic_FilmGen5_WideGamutGen5_to_Rec709.cube")
+        XCTAssertNil(cat.find("nope"))
+        XCTAssertNil(cat.find(nil))
+    }
+
+    func testMissingOrBrokenIsEmpty() throws {
+        let dir = tempDir()
+        XCTAssertTrue(LutCatalog.load(dir.path + "/missing").luts.isEmpty)
+        XCTAssertTrue(LutCatalog.load(nil).luts.isEmpty)
+        try "{not json".write(toFile: dir.path + "/luts.json", atomically: true, encoding: .utf8)
+        XCTAssertTrue(LutCatalog.load(dir.path).luts.isEmpty)
+        try #"[{"id":"x","name":"X","maker":"M","file":"x.cube","curve":"c","gamut":"g"}]"#
+            .write(toFile: dir.path + "/luts.json", atomically: true, encoding: .utf8)
+        XCTAssertTrue(LutCatalog.load(dir.path).luts.isEmpty)   // the listed file does not exist
+        XCTAssertNil(LutCatalog.load(dir.path).folder)
+    }
+
+    func testEntryWithoutIdIsDroppedTheRestKept() throws {
+        let dir = tempDir()
+        TestMedia.identityLUT(dir.path + "/a.cube")
+        try #"[{"name":"no id","file":"a.cube"},{"id":"a","name":"A","file":"a.cube"}]"#
+            .write(toFile: dir.path + "/luts.json", atomically: true, encoding: .utf8)
+        XCTAssertEqual(LutCatalog.load(dir.path).luts.map(\.id), ["a"])
+    }
+
+    func testIsValidCube() throws {
+        let dir = tempDir()
+        let ok = dir.path + "/ok.cube"
+        try "TITLE \"t\"\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n"
+            .write(toFile: ok, atomically: true, encoding: .utf8)
+        XCTAssertTrue(LutCatalog.isValidCube(ok))
+        let bad = dir.path + "/bad.cube"
+        try "LUT_3D_SIZE 2\n0 0 0\n".write(toFile: bad, atomically: true, encoding: .utf8)
+        XCTAssertFalse(LutCatalog.isValidCube(bad))
+        XCTAssertFalse(LutCatalog.isValidCube(dir.path + "/missing.cube"))
+    }
+
+    func testFindFolderAppBundleCLIAndDevBuildOnly() {
+        let dir = tempDir()
+        func lutsAt(_ folder: String) { TestFS.writeRandom(folder + "/luts.json", size: 2, seed: 1) }
+        // Offload.app: Contents/Resources/luts — for the app and for the CLI in Contents/Resources/bin.
+        let res = dir.sub("Offload.app", "Contents", "Resources")
+        lutsAt(res + "/luts")
+        XCTAssertEqual(LutCatalog.findFolder(executable: URL(fileURLWithPath: dir.path + "/Offload.app/Contents/MacOS/Offload"),
+                                             resourcePath: res), res + "/luts")
+        XCTAssertEqual(LutCatalog.findFolder(executable: URL(fileURLWithPath: res + "/bin/offload"), resourcePath: res + "/bin"),
+                       res + "/luts")
+        // swift build / swift run: <repo>/mac/.build/<triple>/debug/offload → <repo>/shared/luts.
+        let repo = dir.sub("repo")
+        lutsAt(repo + "/shared/luts")
+        XCTAssertEqual(LutCatalog.findFolder(executable: URL(fileURLWithPath: repo + "/mac/.build/arm64-apple-macosx/debug/offload"),
+                                             resourcePath: nil), repo + "/shared/luts")
+        // An installed tool never picks up a repo it happens to sit in.
+        XCTAssertNil(LutCatalog.findFolder(executable: URL(fileURLWithPath: repo + "/mac/build/bin/offload"), resourcePath: nil))
+        XCTAssertNil(LutCatalog.findFolder(executable: nil, resourcePath: nil))
+    }
+}
+```
+
+`mac/Tests/OffloadKitTests/LutResolverTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class LutResolverTests: XCTestCase {
+    private let cat = TestMedia.luts
+
+    private func videoClip(_ path: String = "XDROOT/Clip/C0001.MP4") -> Clip {
+        Clip(name: ((path as NSString).lastPathComponent as NSString).deletingPathExtension, path: path, format: .video,
+             segments: [path], bytes: 1, isCameraProxy: false)
+    }
+
+    private func rawClip(_ format: ClipFormat, _ path: String) -> Clip {
+        Clip(name: "R", path: path, format: format, segments: [path], bytes: 1, isCameraProxy: false)
+    }
+
+    private func info(camera: String? = nil, log: String? = nil) -> ClipInfo {
+        var i = ClipInfo()
+        i.camera = camera
+        i.logEncoding = log
+        return i
+    }
+
+    /// A clip file and its Sony sidecar "<clip>M01.XML" (NonRealTimeMeta, with the namespace a camera writes).
+    private func sonyXML(_ dir: TempDir, _ clipRel: String, gamma: String, primaries: String) -> String {
+        let clip = dir.path + "/" + clipRel
+        try! FileManager.default.createDirectory(atPath: (clip as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        try! "x".write(toFile: clip, atomically: true, encoding: .utf8)
+        try! """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <NonRealTimeMeta xmlns="urn:schemas-professionalDisc:nonRealTimeMeta:ver.2.10">
+          <AcquisitionRecord><Group name="CameraUnitMetadataSet">
+            <Item name="CaptureGammaEquation" value="\(gamma)"/>
+            <Item name="CaptureColorPrimaries" value="\(primaries)"/>
+          </Group></AcquisitionRecord>
+        </NonRealTimeMeta>
+        """.write(toFile: (clip as NSString).deletingPathExtension + "M01.XML", atomically: true, encoding: .utf8)
+        return clip
+    }
+
+    private func auto(fallback: String? = nil) -> ProxySettings {
+        var s = ProxySettings()
+        s.enabled = true
+        s.lutMode = .auto
+        s.lutFallback = fallback
+        return s
+    }
+
+    func testSonySLog3FromXML() {
+        for (gamma, primaries, id) in [("s-log3-cine", "S-Gamut3Cine", "sony-slog3-sgamut3cine"),
+                                       ("s-log3", "S-Gamut3", "sony-slog3-sgamut3"),
+                                       ("s-log3-cine", "", "sony-slog3-sgamut3cine")] {
+            let dir = tempDir()
+            let clip = sonyXML(dir, "XDROOT/Clip/C0001.MP4", gamma: gamma, primaries: primaries)
+            let use = LutResolver.resolve(videoClip(), info: ClipInfo(), clipFullPath: clip, settings: auto(), catalog: cat)
+            XCTAssertEqual(use.source, "auto", gamma)
+            XCTAssertEqual(use.id, id, gamma)
+            XCTAssertTrue(use.reason.contains(gamma), use.reason)
+            XCTAssertFalse(use.reason.hasSuffix("/"), use.reason)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: use.file ?? ""), id)
+        }
+    }
+
+    // Review focus 7: a clip the camera recorded in Rec.709 never gets a log LUT, not even the fallback.
+    func testSonyRec709NoLut() {
+        let dir = tempDir()
+        let clip = sonyXML(dir, "PRIVATE/M4ROOT/CLIP/C0002.MP4", gamma: "rec709", primaries: "rec709")
+        let use = LutResolver.resolve(videoClip("PRIVATE/M4ROOT/CLIP/C0002.MP4"), info: ClipInfo(), clipFullPath: clip,
+                                      settings: auto(fallback: "sony-slog3-sgamut3cine"), catalog: cat)
+        XCTAssertEqual(use.source, "none")
+        XCTAssertNil(use.file)
+        XCTAssertTrue(use.reason.contains("rec709"), use.reason)
+    }
+
+    // S-Log2 / S-Log is log, just without a built-in LUT — only the rest is "not log".
+    func testSonyOtherGammaNoLutWithHonestReason() {
+        for (gamma, reason) in [("s-log2", "Sony XML: s-log2 (bez vestavěného LUTu)"), ("S-Log", "Sony XML: S-Log (bez vestavěného LUTu)"),
+                                ("hlg2", "Sony XML: hlg2 (není log)"), ("s-cinetone", "Sony XML: s-cinetone (není log)")] {
+            let dir = tempDir()
+            let clip = sonyXML(dir, "XDROOT/Clip/C0003.MP4", gamma: gamma, primaries: "rec709")
+            let use = LutResolver.resolve(videoClip(), info: ClipInfo(), clipFullPath: clip,
+                                          settings: auto(fallback: "sony-slog3-sgamut3cine"), catalog: cat)
+            XCTAssertEqual(use.source, "none", gamma)
+            XCTAssertEqual(use.reason, reason)
+        }
+    }
+
+    func testSonyUpperCaseAndHyphenatedPrimaries() {
+        let dir = tempDir()
+        let clip = sonyXML(dir, "XDROOT/Clip/C0004.MP4", gamma: "S-LOG3-CINE", primaries: "s-gamut3-cine")
+        XCTAssertEqual(LutResolver.resolve(videoClip(), info: ClipInfo(), clipFullPath: clip, settings: auto(), catalog: cat).id,
+                       "sony-slog3-sgamut3cine")
+    }
+
+    func testSonyXMLMissingOrBroken() throws {
+        let dir = tempDir()
+        XCTAssertNil(SonyXML.read(dir.path + "/C0001.MP4"))
+        try "<NonRealTimeMeta><Item".write(toFile: dir.path + "/C0001M01.XML", atomically: true, encoding: .utf8)
+        XCTAssertNil(SonyXML.read(dir.path + "/C0001.MP4"))
+    }
+
+    func testArriFromCameraModel() {
+        for (camera, id) in [("ARRI ALEXA 35", "arri-logc4-awg4"), ("ALEXA Mini LF", "arri-logc3-awg3"), ("AMIRA", "arri-logc3-awg3"),
+                             ("ALEXA Mini LF 35mm", "arri-logc3-awg3"), ("ALEXA35", "arri-logc4-awg4")] {
+            let use = LutResolver.resolve(videoClip("A001C001.mov"), info: info(camera: camera), clipFullPath: "/nonexistent/A001C001.mov",
+                                          settings: auto(), catalog: cat)
+            XCTAssertEqual(use.id, id, camera)
+            let raw = LutResolver.resolve(rawClip(.arriraw, "A/A.ari"), info: info(camera: camera), clipFullPath: "/nonexistent/A",
+                                          settings: auto(), catalog: cat)
+            XCTAssertEqual(raw.id, id, "ARRIRAW " + camera)
+        }
+    }
+
+    func testArrirawUsesLogEncoding() {
+        let clip = rawClip(.arriraw, "A1/A1.ari")
+        XCTAssertEqual(LutResolver.resolve(clip, info: info(log: "LogC4"), clipFullPath: "/x/A1", settings: auto(), catalog: cat).id, "arri-logc4-awg4")
+        XCTAssertEqual(LutResolver.resolve(clip, info: info(camera: "ALEXA Mini"), clipFullPath: "/x/A1", settings: auto(), catalog: cat).id, "arri-logc3-awg3")
+    }
+
+    func testArriColorSpace() {
+        let cases: [(String?, String?, String?, String)] = [
+            ("ARRI_LogC4-to-Gamma24_Rec709.cube", nil, nil, "AWG4/D65/LogC4"),
+            ("show_LogC3_709.cube", "LogC4", nil, "AWG3/D65/LogC3"),
+            (nil, "LogC4", nil, "AWG4/D65/LogC4"),
+            (nil, nil, "ALEXA Mini", "AWG3/D65/LogC3"),
+            (nil, nil, "ALEXA 35", "AWG4/D65/LogC4"),
+        ]
+        for (lut, log, camera, expected) in cases {
+            XCTAssertEqual(ARRIRAWBackend.colorSpace(lut: lut, info: info(camera: camera, log: log)), expected)
+        }
+    }
+
+    func testBrawAndR3D() {
+        XCTAssertEqual(LutResolver.resolve(rawClip(.braw, "B.braw"), info: nil, clipFullPath: "/x/B.braw", settings: auto(), catalog: cat).id,
+                       "bmd-film-gen5")
+        XCTAssertEqual(LutResolver.resolve(rawClip(.r3d, "R.RDC/R_001.R3D"), info: nil, clipFullPath: "/x/R", settings: auto(), catalog: cat).id,
+                       "red-log3g10-rwg")
+    }
+
+    func testUnknownCameraUsesTheFallback() {
+        let clip = videoClip("DCIM/100CANON/MVI_0001.MP4")
+        let none = LutResolver.resolve(clip, info: info(camera: "Canon EOS R5"), clipFullPath: "/x/x.mp4", settings: auto(), catalog: cat)
+        XCTAssertEqual(none.source, "none")
+        XCTAssertEqual(none.reason, "kamera nerozpoznána")
+        let fb = LutResolver.resolve(clip, info: ClipInfo(), clipFullPath: "/x/x.mp4", settings: auto(fallback: "canon-clog3-cinemagamut"), catalog: cat)
+        XCTAssertEqual(fb.source, "fallback")
+        XCTAssertEqual(fb.id, "canon-clog3-cinemagamut")
+        XCTAssertEqual(fb.reason, "kamera nerozpoznána — záložní LUT")
+    }
+
+    func testModesBuiltinCustomOff() {
+        let clip = videoClip()
+        var b = ProxySettings()
+        b.lutMode = .builtin
+        b.lutBuiltin = "dji-dlog-dgamut"
+        let builtin = LutResolver.resolve(clip, info: nil, clipFullPath: "/x", settings: b, catalog: cat)
+        XCTAssertEqual([builtin.source, builtin.id, builtin.reason], ["builtin", "dji-dlog-dgamut", "vybraný v nastavení"])
+        var c = ProxySettings()
+        c.lutMode = .custom
+        c.lutPath = "/Users/x/luts/show.cube"
+        let custom = LutResolver.resolve(clip, info: nil, clipFullPath: "/x", settings: c, catalog: cat)
+        XCTAssertEqual(custom, LutUse(source: "custom", id: nil, name: "show.cube", reason: "vlastní LUT", file: "/Users/x/luts/show.cube"))
+        var n = ProxySettings()
+        n.lutMode = .off
+        let off = LutResolver.resolve(clip, info: nil, clipFullPath: "/x", settings: n, catalog: cat)
+        XCTAssertEqual([off.source, off.name, off.reason], ["none", "bez LUT", "vypnuto v nastavení"])
+        // No mode stored (older settings): a lutPath means custom, otherwise automatic.
+        var old = ProxySettings()
+        old.lutPath = "/l.cube"
+        XCTAssertEqual(LutResolver.resolve(clip, info: nil, clipFullPath: "/x", settings: old, catalog: cat).source, "custom")
+        XCTAssertEqual(LutResolver.effectiveMode(ProxySettings()), .auto)
+    }
+
+    func testEmptyLutPathIsNotCustom() {
+        var s = ProxySettings()
+        s.lutPath = ""
+        XCTAssertEqual(LutResolver.effectiveMode(s), .auto)
+        s.lutMode = .custom
+        XCTAssertEqual(LutResolver.resolve(videoClip(), info: nil, clipFullPath: "/x", settings: s, catalog: cat).reason,
+                       "vlastní LUT není vybraný")
+    }
+
+    func testBuiltinIdMissingFromTheCatalog() {
+        var s = ProxySettings()
+        s.lutMode = .builtin
+        s.lutBuiltin = "gone"
+        XCTAssertEqual(LutResolver.resolve(videoClip(), info: nil, clipFullPath: "/x", settings: s, catalog: cat).reason,
+                       "vestavěný LUT nenalezen")
+    }
+
+    func testAutoWithoutCatalogNoLut() {
+        let dir = tempDir()
+        let clip = sonyXML(dir, "XDROOT/Clip/C0001.MP4", gamma: "s-log3-cine", primaries: "S-Gamut3Cine")
+        let use = LutResolver.resolve(videoClip(), info: nil, clipFullPath: clip, settings: auto(), catalog: LutCatalog.load(nil))
+        XCTAssertEqual(use.source, "none")
+        XCTAssertEqual(use.reason, "vestavěné LUTy chybí")
+    }
+
+    func testLutUseJSONHasNoFile() throws {
+        var s = ProxySettings()
+        s.lutMode = .builtin
+        s.lutBuiltin = "dji-dlog-dgamut"
+        let use = LutResolver.resolve(videoClip(), info: nil, clipFullPath: "/x", settings: s, catalog: cat)
+        XCTAssertNotNil(use.file)
+        let json = String(decoding: try JSONEncoder().encode(use), as: UTF8.self)
+        XCTAssertFalse(json.contains("file"))
+        XCTAssertFalse(json.contains(".cube"))
+        XCTAssertTrue(json.contains(#""source":"builtin""#))
+        let back = try JSONDecoder().decode(LutUse.self, from: Data(json.utf8))
+        XCTAssertEqual(back.id, "dji-dlog-dgamut")
+        XCTAssertNil(back.file)
+    }
+
+    func testFFProbeReadsColorRangeAndMakePlusModel() throws {
+        let range = try FFProbe.parse(Data(#"{"streams":[{"codec_type":"video","codec_name":"h264","width":1920,"height":1080,"color_range":"pc"}],"format":{}}"#.utf8))
+        XCTAssertEqual(range.colorRange, "pc")
+        let arri = try FFProbe.parse(Data(#"{"streams":[{"codec_type":"video","codec_name":"prores"}],"format":{"tags":{"com.apple.quicktime.make":"ARRI","com.apple.quicktime.model":"ALEXA 35"}}}"#.utf8))
+        XCTAssertEqual(arri.camera, "ARRI ALEXA 35")
+        XCTAssertEqual(FFProbe.camera(make: "ARRI", model: "ARRI ALEXA 35"), "ARRI ALEXA 35")
+        XCTAssertEqual(FFProbe.camera(make: " Sony ", model: nil), "Sony")
+        XCTAssertEqual(FFProbe.camera(make: "", model: "ILME-FX6"), "ILME-FX6")
+        XCTAssertNil(FFProbe.camera(make: nil, model: "  "))
+    }
+}
+```
+
+`mac/Tests/OffloadKitTests/LutOptionTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class LutOptionTests: XCTestCase {
+    private let cat = TestMedia.luts
+
+    private func parsed(_ mode: LutMode, builtin: String? = nil, path: String? = nil, fallback: String? = nil) -> LutOption.Parsed {
+        LutOption.Parsed(mode: mode, builtin: builtin, path: path, fallback: fallback, error: nil)
+    }
+
+    func testParse() {
+        XCTAssertEqual(LutOption.parse(nil, fallback: nil, catalog: cat), parsed(.auto))
+        XCTAssertEqual(LutOption.parse("AUTO", fallback: "dji-dlog-dgamut", catalog: cat), parsed(.auto, fallback: "dji-dlog-dgamut"))
+        XCTAssertEqual(LutOption.parse("none", fallback: nil, catalog: cat), parsed(.off))
+        XCTAssertEqual(LutOption.parse("sony-slog3-sgamut3", fallback: nil, catalog: cat), parsed(.builtin, builtin: "sony-slog3-sgamut3"))
+        XCTAssertEqual(LutOption.parse("/Users/x/show.cube", fallback: nil, catalog: cat), parsed(.custom, path: "/Users/x/show.cube"))
+        XCTAssertEqual(LutOption.parse("look.CUBE", fallback: nil, catalog: cat), parsed(.custom, path: "look.CUBE"))
+        XCTAssertEqual(LutOption.parse("luts/x", fallback: nil, catalog: cat).mode, .custom)
+        XCTAssertTrue(LutOption.parse("nope", fallback: nil, catalog: cat).error?.hasPrefix("Unknown LUT 'nope'. Use auto, none, a .cube path or one of: arri-logc3-awg3, ") == true)
+        XCTAssertTrue(LutOption.parse("auto", fallback: "nope", catalog: cat).error?.hasPrefix("Unknown fallback LUT 'nope'. Built-in: ") == true)
+        XCTAssertNil(LutOption.parse("auto", fallback: "none", catalog: cat).fallback)
+        XCTAssertNil(LutOption.parse("auto", fallback: "None", catalog: cat).error)
+    }
+}
+```
+
+`mac/Tests/OffloadKitTests/LutSettingsTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class LutSettingsTests: XCTestCase {
+    private func load(_ json: String, _ catalog: LutCatalog = TestMedia.luts) -> AppSettings {
+        SettingsStore.decode(Data(json.utf8), catalog: catalog)
+    }
+
+    // Settings from before the built-in LUTs: a lutPath stays the user's own LUT, without one the choice is automatic.
+    func testOldSettingsMigrate() {
+        let old = load(#"{"proxy":{"enabled":true,"lutPath":"/Users/x/show.cube"}}"#)
+        XCTAssertEqual(old.proxy.lutMode, .custom)
+        XCTAssertEqual(old.proxy.lutPath, "/Users/x/show.cube")
+        let fresh = load(#"{"proxy":{"enabled":true}}"#)
+        XCTAssertEqual(fresh.proxy.lutMode, .auto)
+        XCTAssertNil(fresh.proxy.lutFallback)
+    }
+
+    func testRoundTripAndUnknownBuiltinDropped() throws {
+        var s = AppSettings()
+        s.proxy.lutMode = .builtin
+        s.proxy.lutBuiltin = "dji-dlog-dgamut"
+        s.proxy.lutFallback = "sony-slog3-sgamut3cine"
+        let data = try XCTUnwrap(SettingsStore.encode(s))
+        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains(#""lutMode":"builtin""#))
+        let back = SettingsStore.decode(data, catalog: TestMedia.luts)
+        XCTAssertEqual(back.proxy.lutMode, .builtin)
+        XCTAssertEqual(back.proxy.lutBuiltin, "dji-dlog-dgamut")
+        XCTAssertEqual(back.proxy.lutFallback, "sony-slog3-sgamut3cine")
+        let bad = load(#"{"proxy":{"lutMode":"builtin","lutBuiltin":"nope","lutFallback":"nope"}}"#)
+        XCTAssertNil(bad.proxy.lutBuiltin)
+        XCTAssertNil(bad.proxy.lutFallback)
+        XCTAssertEqual(bad.proxy.lutMode, .auto)
+        XCTAssertEqual(load(#"{"proxy":{"lutMode":"none"}}"#).proxy.lutMode, .off)
+        XCTAssertEqual(load(#"{"proxy":{"lutMode":"future"},"verify":false}"#).proxy.lutMode, .auto)   // unknown → as if absent
+    }
+
+    // An empty catalog (luts folder missing in a broken install) must not erase saved choices.
+    func testEmptyCatalogKeepsBuiltinChoices() {
+        let s = load(#"{"proxy":{"lutMode":"builtin","lutBuiltin":"dji-dlog-dgamut","lutFallback":"sony-slog3-sgamut3cine"}}"#,
+                     LutCatalog.load(nil))
+        XCTAssertEqual(s.proxy.lutMode, .builtin)
+        XCTAssertEqual(s.proxy.lutBuiltin, "dji-dlog-dgamut")
+        XCTAssertEqual(s.proxy.lutFallback, "sony-slog3-sgamut3cine")
+    }
+
+    // Built-in LUTs ship with the app: only the user's own .cube can be missing and block the start.
+    func testMissingLutBlocksOnlyInCustomMode() {
+        var p = ProxySettings()
+        p.enabled = true
+        p.lutMode = .auto
+        p.lutPath = "/gone.cube"
+        XCTAssertNil(ProxyPreflight.lutInUse(p, analyzeClips: true))
+        XCTAssertNil(ProxyPreflight.blocking(p, analyzeClips: true, lutExists: false))
+        p.lutMode = .custom
+        XCTAssertEqual(ProxyPreflight.lutInUse(p, analyzeClips: true), "/gone.cube")
+        XCTAssertEqual(ProxyPreflight.blocking(p, analyzeClips: true, lutExists: false), "LUT nenalezen: gone.cube — vyberte jiný nebo ho odeberte.")
+    }
+}
+```
+
+`mac/Tests/OffloadKitTests/SettingsStoreTests.swift` (úkol 10), `testRoundTrip` — normalizace teď doplní chybějící režim
+(`lutPath` → „vlastní“), takže výchozí hodnota s `lutPath` musí mít režim nastavený. Za řádek
+`s.proxy.lutPath = "/Users/x/look.cube"` přidat:
+
+```swift
+        s.proxy.lutMode = .custom   // what normalize derives from an old lutPath (task 21)
+```
+
+- [ ] **Step 3: Ověřit selhání** — Run: `swift test --filter "LutCatalogTests|LutResolverTests|LutOptionTests|LutSettingsTests"` →
+nesestaví se (`cannot find 'LutCatalog'`, `'LutResolver'`, `'LutMode'`, `has no member 'colorRange'`, `'parse'`).
+
+- [ ] **Step 4: `mac/Sources/OffloadKit/Luts.swift`**:
+
+```swift
+import Foundation
+
+/// One built-in LUT from shared/luts/luts.json. `path` is filled in when the catalog is loaded.
+public struct BuiltinLut: Codable, Equatable {
+    public var id: String
+    public var name: String
+    public var maker: String
+    public var file: String
+    public var curve: String
+    public var gamut: String
+    /// Full path of the .cube (not in luts.json).
+    public var path = ""
+
+    enum CodingKeys: String, CodingKey { case id, name, maker, file, curve, gamut }
+
+    /// Lenient like Windows: a missing field is empty; an entry without id or file is dropped by `LutCatalog.load`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func text(_ k: CodingKeys) -> String { (try? c.decodeIfPresent(String.self, forKey: k)) ?? "" }
+        id = text(.id)
+        name = text(.name)
+        maker = text(.maker)
+        file = text(.file)
+        curve = text(.curve)
+        gamut = text(.gamut)
+    }
+}
+
+/// The built-in LUTs shipped in Offload.app/Contents/Resources/luts or, in a development build, the repo's shared/luts.
+public struct LutCatalog {
+    public let folder: String?
+    public let luts: [BuiltinLut]
+
+    public init(folder: String?, luts: [BuiltinLut]) {
+        self.folder = folder
+        self.luts = luts
+    }
+
+    public func find(_ id: String?) -> BuiltinLut? {
+        guard let id else { return nil }
+        return luts.first { $0.id == id }
+    }
+
+    /// Loaded once, on first use (a few small local files in the app bundle). Never fails: no folder → empty catalog.
+    public static let shared = LutCatalog.load(defaultFolder)
+
+    public static var defaultFolder: String? {
+        findFolder(executable: Bundle.main.executableURL?.resolvingSymlinksInPath(), resourcePath: Bundle.main.resourcePath)
+    }
+
+    /// The app bundle's Resources/luts; next to the executable (luts/, or ../luts/ for the CLI in Contents/Resources/bin);
+    /// and only for a SwiftPM build (the executable under ".build/") the repo's shared/luts — an installed copy never
+    /// picks up a repository it happens to sit in.
+    static func findFolder(executable: URL?, resourcePath: String?) -> String? {
+        func ok(_ dir: String) -> Bool { FileManager.default.fileExists(atPath: dir + "/luts.json") }
+        var candidates: [String] = []
+        if let resourcePath { candidates.append(resourcePath + "/luts") }
+        if let executable {
+            let dir = executable.deletingLastPathComponent()
+            candidates.append(dir.appendingPathComponent("luts").path)
+            candidates.append(dir.deletingLastPathComponent().appendingPathComponent("luts").path)
+        }
+        if let hit = candidates.first(where: ok) { return hit }
+        guard let executable, executable.path.contains("/.build/") else { return nil }
+        var d = executable.deletingLastPathComponent()
+        for _ in 0..<8 {
+            d = d.deletingLastPathComponent()
+            let repo = d.appendingPathComponent("shared/luts").path
+            if ok(repo) { return repo }
+        }
+        return nil
+    }
+
+    /// Never throws: a missing or broken folder gives an empty catalog; entries whose file is missing are left out.
+    public static func load(_ folder: String?) -> LutCatalog {
+        guard let folder, let data = FileManager.default.contents(atPath: folder + "/luts.json"),
+              let list = try? JSONDecoder().decode([BuiltinLut].self, from: data) else {
+            return LutCatalog(folder: nil, luts: [])
+        }
+        let ok = list
+            .filter { !$0.id.trimmingCharacters(in: .whitespaces).isEmpty && !$0.file.trimmingCharacters(in: .whitespaces).isEmpty }
+            .map { l -> BuiltinLut in
+                var l = l
+                l.path = folder + "/" + l.file
+                return l
+            }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        return LutCatalog(folder: ok.isEmpty ? nil : folder, luts: ok)
+    }
+
+    /// A 3D .cube whose data rows match its LUT_3D_SIZE.
+    public static func isValidCube(_ path: String) -> Bool {
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return false }
+        var size = 0, rows = 0
+        for raw in text.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("LUT_3D_SIZE") {
+                guard let n = Int(line.dropFirst("LUT_3D_SIZE".count).trimmingCharacters(in: .whitespaces)) else { return false }
+                size = n
+            } else if let c = line.first, c.isASCII, c.isNumber || c == "-" || c == "." {
+                rows += 1
+            }
+        }
+        return size >= 2 && rows == size * size * size
+    }
+}
+
+/// Which LUT source applies (`proxy.lutMode`). JSON values "auto", "builtin", "custom", "none" — shared with Windows.
+/// `off` (not `none`): a `LutMode?` compared with `.none` would silently mean Optional.none.
+public enum LutMode: String, Codable, CaseIterable {
+    case auto, builtin, custom
+    case off = "none"
+}
+
+/// The LUT a clip got, and why — goes into the report (key "lut"). `file` is the .cube to apply (never serialised).
+public struct LutUse: Codable, Equatable {
+    public let source: String
+    public let id: String?
+    public let name: String
+    public let reason: String
+    public var file: String?
+
+    enum CodingKeys: String, CodingKey { case source, id, name, reason }
+
+    public init(source: String, id: String?, name: String, reason: String, file: String? = nil) {
+        self.source = source
+        self.id = id
+        self.name = name
+        self.reason = reason
+        self.file = file
+    }
+
+    public var isBuiltin: Bool { id != nil }
+
+    /// No LUT, with the reason for the report (source "none").
+    public static func off(_ reason: String) -> LutUse { LutUse(source: "none", id: nil, name: "bez LUT", reason: reason) }
+}
+
+/// Sony XAVC sidecar "<clip>M01.XML" (NonRealTimeMeta): the gamma and primaries the camera recorded in.
+public enum SonyXML {
+    public static func read(_ clipFullPath: String) -> (gamma: String?, primaries: String?)? {
+        let clip = URL(fileURLWithPath: clipFullPath)
+        let xml = clip.deletingLastPathComponent().appendingPathComponent(clip.deletingPathExtension().lastPathComponent + "M01.XML")
+        guard FileManager.default.fileExists(atPath: xml.path), let parser = XMLParser(contentsOf: xml) else { return nil }
+        let items = ItemCollector()
+        parser.delegate = items
+        guard parser.parse() else { return nil }
+        return ((items.values["CaptureGammaEquation"] ?? nil), (items.values["CaptureColorPrimaries"] ?? nil))
+    }
+
+    /// The first element carrying each `name` attribute, and its `value` attribute (namespace-agnostic).
+    private final class ItemCollector: NSObject, XMLParserDelegate {
+        var values: [String: String?] = [:]
+
+        func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
+                    qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+            if let name = attributeDict["name"], values.index(forKey: name) == nil { values[name] = .some(attributeDict["value"]) }
+        }
+    }
+}
+
+/// Which LUT a clip gets (LUT design §3; port of Windows `LutResolver`). Pure rules over metadata; never throws.
+public enum LutResolver {
+    /// The stored mode, or for older settings: a non-empty lutPath means custom, otherwise automatic.
+    public static func effectiveMode(_ s: ProxySettings) -> LutMode {
+        s.lutMode ?? ((s.lutPath ?? "").isEmpty ? .auto : .custom)
+    }
+
+    public static func resolve(_ clip: Clip, info: ClipInfo?, clipFullPath: String, settings s: ProxySettings,
+                               catalog: LutCatalog) -> LutUse {
+        switch effectiveMode(s) {
+        case .off:
+            return .off("vypnuto v nastavení")
+        case .custom:
+            guard let path = s.lutPath, !path.isEmpty else { return .off("vlastní LUT není vybraný") }
+            return LutUse(source: "custom", id: nil, name: (path as NSString).lastPathComponent, reason: "vlastní LUT", file: path)
+        case .builtin:
+            return builtin(catalog, s.lutBuiltin, source: "builtin", reason: "vybraný v nastavení") ?? .off("vestavěný LUT nenalezen")
+        case .auto:
+            break
+        }
+        if catalog.luts.isEmpty { return .off("vestavěné LUTy chybí") }
+        let (id, reason) = detect(clip, info: info, clipFullPath: clipFullPath)
+        if id == "" { return .off(reason) }   // recognised, but not log footage
+        if let id { return builtin(catalog, id, source: "auto", reason: reason) ?? .off("vestavěný LUT nenalezen") }
+        return builtin(catalog, s.lutFallback, source: "fallback", reason: "kamera nerozpoznána — záložní LUT")
+            ?? .off("kamera nerozpoznána")
+    }
+
+    private static func builtin(_ catalog: LutCatalog, _ id: String?, source: String, reason: String) -> LutUse? {
+        guard let lut = catalog.find(id) else { return nil }
+        return LutUse(source: source, id: lut.id, name: lut.name, reason: reason, file: lut.path)
+    }
+
+    /// (id, reason): id nil = not recognised, "" = recognised as non-log (no LUT).
+    static func detect(_ clip: Clip, info: ClipInfo?, clipFullPath: String) -> (id: String?, reason: String) {
+        switch clip.format {
+        case .braw:
+            return ("bmd-film-gen5", "Blackmagic RAW (gama Film Gen 5)")
+        case .r3d:
+            return ("red-log3g10-rwg", "RED R3D (IPP2 Log3G10)")
+        case .arriraw:
+            return ARRIRAWBackend.colorSpace(lut: nil, info: info ?? ClipInfo()).contains("LogC4")
+                ? ("arri-logc4-awg4", "ARRIRAW (LogC4)") : ("arri-logc3-awg3", "ARRIRAW (LogC3)")
+        default:
+            break
+        }
+        if let xml = SonyXML.read(clipFullPath) {
+            let gamma = xml.gamma ?? "", primaries = xml.primaries ?? ""
+            let g = gamma.lowercased(), p = primaries.lowercased()
+            if g.hasPrefix("s-log3") {
+                let cine = p.contains("cine") || (p.isEmpty && g.hasSuffix("cine"))
+                var reason = "Sony XML: \(gamma) / \(primaries)"
+                while reason.hasSuffix(" ") || reason.hasSuffix("/") { reason.removeLast() }
+                return (cine ? "sony-slog3-sgamut3cine" : "sony-slog3-sgamut3", reason)
+            }
+            // S-Log2 / S-Log is log too, there is just no built-in LUT for it; the rest (rec709, hlg, s-cinetone) is not log.
+            if g.hasPrefix("s-log") { return ("", "Sony XML: \(gamma) (bez vestavěného LUTu)") }
+            if !g.isEmpty { return ("", "Sony XML: \(gamma) (není log)") }
+        }
+        let camera = (info?.camera ?? "").uppercased()
+        if camera.contains("ALEXA") || camera.contains("AMIRA") {
+            return ARRIRAWBackend.isAlexa35(camera)
+                ? ("arri-logc4-awg4", "ARRI kamera (předpoklad LogC4)") : ("arri-logc3-awg3", "ARRI kamera (předpoklad LogC3)")
+        }
+        return (nil, "kamera nerozpoznána")
+    }
+}
+
+/// `--lut` / `--lut-fallback` of the CLI: auto, none, a built-in id, or a path to a .cube (anything ending in ".cube"
+/// or containing a path separator).
+public enum LutOption {
+    public struct Parsed: Equatable {
+        public var mode: LutMode
+        public var builtin: String?
+        public var path: String?
+        public var fallback: String?
+        public var error: String?
+    }
+
+    public static func parse(_ value: String?, fallback: String?, catalog: LutCatalog) -> Parsed {
+        let ids = catalog.luts.map(\.id).joined(separator: ", ")
+        var fb: String?
+        if let fallback, fallback.lowercased() != "none" {
+            guard catalog.find(fallback) != nil else {
+                return Parsed(mode: .auto, error: "Unknown fallback LUT '\(fallback)'. Built-in: \(ids)")
+            }
+            fb = fallback
+        }
+        guard let value, value.lowercased() != "auto" else { return Parsed(mode: .auto, fallback: fb) }
+        if value.lowercased() == "none" { return Parsed(mode: .off, fallback: fb) }
+        if value.lowercased().hasSuffix(".cube") || value.contains("/") || value.contains("\\") {
+            return Parsed(mode: .custom, path: value, fallback: fb)
+        }
+        return catalog.find(value) != nil
+            ? Parsed(mode: .builtin, builtin: value, fallback: fb)
+            : Parsed(mode: .auto, fallback: fb, error: "Unknown LUT '\(value)'. Use auto, none, a .cube path or one of: \(ids)")
+    }
+}
+```
+
+(`Parsed` má syntetizovaný členský inicializátor; volitelné vlastnosti v něm mají výchozí `nil`, takže
+`Parsed(mode: .auto, error: …)` i `Parsed(mode:builtin:path:fallback:error:)` v testu fungují bez dalšího kódu.)
+
+- [ ] **Step 5: `Media.swift`**
+
+V `ClipInfo` za `squeeze` přidat:
+
+```swift
+    /// "tv" (legal) or "pc" (full) as ffprobe reports it; full-range sources need a pre-map before built-in LUTs.
+    public var colorRange: String?
+```
+
+`enum FFProbe` nahradit celý:
+
+```swift
+enum FFProbe {
+    static func probe(_ ffprobe: String, _ path: String) throws -> ClipInfo {
+        let out = try ToolProcess.run(ffprobe, ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", path])
+        return try parse(Data(out.utf8))
+    }
+
+    static func parse(_ data: Data) throws -> ClipInfo {
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ToolError(tool: "ffprobe", status: 0, message: "unreadable output")
+        }
+        let streams = json["streams"] as? [[String: Any]] ?? []
+        let format = json["format"] as? [String: Any] ?? [:]
+        var info = ClipInfo()
+        if let v = streams.first(where: { $0["codec_type"] as? String == "video" && ($0["disposition"] as? [String: Any])?["attached_pic"] as? Int != 1 }) {
+            let name = v["codec_name"] as? String
+            let profile = v["profile"] as? String
+            info.codec = [name, profile].compactMap { $0 }.joined(separator: " ")
+            // ffmpeg reports codecs it cannot decode (ARRIRAW, X-OCN …) as "unknown", 0×0.
+            if name != nil && name != "unknown" {
+                info.width = (v["width"] as? Int).flatMap { $0 > 0 ? $0 : nil }
+                info.height = (v["height"] as? Int).flatMap { $0 > 0 ? $0 : nil }
+            }
+            if let r = v["avg_frame_rate"] as? String, r != "0/0" { info.frameRate = r } else { info.frameRate = v["r_frame_rate"] as? String }
+            info.frames = (v["nb_frames"] as? String).flatMap(Int.init)
+            info.timecode = (v["tags"] as? [String: Any])?["timecode"] as? String
+            info.colorRange = v["color_range"] as? String
+            if info.duration == nil { info.duration = (v["duration"] as? String).flatMap(Double.init) }
+        }
+        info.audioChannels = streams.filter { $0["codec_type"] as? String == "audio" }.reduce(0) { $0 + ($1["channels"] as? Int ?? 0) }
+        if let d = (format["duration"] as? String).flatMap(Double.init) { info.duration = d }
+        let ftags = format["tags"] as? [String: Any] ?? [:]
+        if info.timecode == nil {
+            info.timecode = (ftags["timecode"] as? String)
+                ?? streams.lazy.compactMap { ($0["tags"] as? [String: Any])?["timecode"] as? String }.first
+        }
+        info.camera = camera(make: ftags["com.apple.quicktime.make"] as? String, model: ftags["com.apple.quicktime.model"] as? String)
+            ?? (ftags["product_name"] as? String) ?? (ftags["company_name"] as? String)
+        return info
+    }
+
+    /// Make and model together ("ARRI" + "ALEXA 35" → "ARRI ALEXA 35"), unless the model already starts with the make.
+    static func camera(make: String?, model: String?) -> String? {
+        let mk = make?.trimmingCharacters(in: .whitespaces), md = model?.trimmingCharacters(in: .whitespaces)
+        let m = (mk?.isEmpty ?? true) ? nil : mk, n = (md?.isEmpty ?? true) ? nil : md
+        guard let m, let n else { return m ?? n }
+        return n.lowercased().hasPrefix(m.lowercased()) ? n : m + " " + n
+    }
+}
+```
+
+- [ ] **Step 6: `Proxy.swift`** — `public struct ProxySettings` nahradit celou (přibývá `lutMode`, `lutBuiltin`, `lutFallback`;
+`extraFolder` je z úkolu 20):
+
+```swift
+public struct ProxySettings: Codable, Equatable {
+    public var enabled = false
+    public var height = 1080
+    public var codec: ProxyCodec = .h264
+    public var bitrateMbps = 10
+    /// The user's own .cube (mode custom), applied after downscaling (cheap at proxy resolution).
+    public var lutPath: String?
+    /// Which LUT source applies; nil = not stored (older settings): a lutPath means custom, otherwise automatic.
+    public var lutMode: LutMode?
+    /// Built-in LUT id used in builtin mode.
+    public var lutBuiltin: String?
+    /// Built-in LUT id used in auto mode when the camera is not recognised (nil = no LUT).
+    public var lutFallback: String?
+    public var burnFilename = true
+    public var burnTimecode = true
+    public var audio = true
+    /// Skip the low-res files cameras record themselves (Sony SUB, PROXY folders).
+    public var skipCameraProxies = true
+    /// Proxies are rendered once, onto the first destination, then copied to the others.
+    public var copyToAllDestinations = true
+    /// Optional: every proxy is also copied to `<folder>/<date>/<card>/` (never overwriting). nil = off (key absent).
+    public var extraFolder: String?
+    /// Crop to the frame lines: aspect ratio of the frame (e.g. 1.66) and how much of the image
+    /// it covers (0.9 = 90 %, i.e. 10 % overscan around it). nil = full image.
+    public var frameAspect: Double?
+    public var frameScale: Double = 1.0
+
+    public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = ProxySettings()
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
+        height = try c.decodeIfPresent(Int.self, forKey: .height) ?? d.height
+        codec = (try? c.decodeIfPresent(ProxyCodec.self, forKey: .codec)) ?? d.codec
+        bitrateMbps = try c.decodeIfPresent(Int.self, forKey: .bitrateMbps) ?? d.bitrateMbps
+        lutPath = try c.decodeIfPresent(String.self, forKey: .lutPath)
+        // An unknown mode (a newer version) reads as "not stored" — normalize then derives it like for old settings.
+        lutMode = try? c.decodeIfPresent(LutMode.self, forKey: .lutMode)
+        lutBuiltin = try c.decodeIfPresent(String.self, forKey: .lutBuiltin)
+        lutFallback = try c.decodeIfPresent(String.self, forKey: .lutFallback)
+        burnFilename = try c.decodeIfPresent(Bool.self, forKey: .burnFilename) ?? d.burnFilename
+        burnTimecode = try c.decodeIfPresent(Bool.self, forKey: .burnTimecode) ?? d.burnTimecode
+        audio = try c.decodeIfPresent(Bool.self, forKey: .audio) ?? d.audio
+        skipCameraProxies = try c.decodeIfPresent(Bool.self, forKey: .skipCameraProxies) ?? d.skipCameraProxies
+        copyToAllDestinations = try c.decodeIfPresent(Bool.self, forKey: .copyToAllDestinations) ?? d.copyToAllDestinations
+        extraFolder = try c.decodeIfPresent(String.self, forKey: .extraFolder)
+        frameAspect = try c.decodeIfPresent(Double.self, forKey: .frameAspect)
+        frameScale = try c.decodeIfPresent(Double.self, forKey: .frameScale) ?? d.frameScale
+    }
+
+    /// Centered crop rectangle (x, y, w, h) inside a w×h image, even-sized, or nil when no crop is set.
+    public func frameCrop(width W: Int, height H: Int) -> (x: Int, y: Int, w: Int, h: Int)? {
+        guard let aspect = frameAspect, aspect > 0, W > 0, H > 0 else { return nil }
+        let scale = min(max(frameScale, 0.1), 1.0)
+        var w = Double(W) * scale
+        var h = w / aspect
+        if h > Double(H) * scale {
+            h = Double(H) * scale
+            w = h * aspect
+        }
+        let cw = Int(w) & ~1, ch = Int(h) & ~1
+        return ((W - cw) / 2 & ~1, (H - ch) / 2 & ~1, cw, ch)
+    }
+
+    public var frameLabel: String? {
+        guard let a = frameAspect else { return nil }
+        return String(format: "%.2f", a) + (frameScale < 1 ? String(format: " · %.0f %%", frameScale * 100) : "")
+    }
+}
+```
+
+(Syntetizované `encode(to:)` vynechá `nil` klíče — `lutMode` zapíše vždy, jakmile ho nastaví normalizace nebo GUI.)
+
+- [ ] **Step 7: `RawBackends.swift` (`ARRIRAWBackend`)** — instanční `func colorSpace(for lut: String?, info: ClipInfo) -> String`
+nahradit statickými funkcemi a v `source(…)` volání `colorSpace(for: settings.lutPath, info: c)` nahradit
+`ARRIRAWBackend.colorSpace(lut: settings.lutPath, info: c)` (úkol 22 tu větev přepíše na `RawLook`):
+
+```swift
+    /// The LUT decides which log it needs when its name says so; otherwise the clip's own log encoding
+    /// from metadata, then the camera (ALEXA 35 family → LogC4, older ALEXAs → LogC3).
+    static func colorSpace(lut: String?, info: ClipInfo) -> String {
+        let name = ((lut ?? "") as NSString).lastPathComponent.lowercased()
+        if name.contains("logc4") { return "AWG4/D65/LogC4" }
+        if name.contains("logc3") || name.contains("logc ") || name.contains("logc_") || name.contains("logc-") { return "AWG3/D65/LogC3" }
+        if let log = info.logEncoding?.lowercased() { return log.contains("4") ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3" }
+        return isAlexa35(info.camera) ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3"
+    }
+
+    /// "ALEXA 35" / "ALEXA35" as a whole word — not "ALEXA Mini LF 35mm" or a serial number.
+    static func isAlexa35(_ camera: String?) -> Bool {
+        guard let camera else { return false }
+        return camera.range(of: #"\bALEXA\s*35\b"#, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+```
+
+- [ ] **Step 8: `Desktop/AppSettings.swift`**
+
+`SettingsStore.decode` — hlavička a poslední řádek:
+
+```swift
+    public static func decode(_ data: Data?, catalog: LutCatalog = .shared) -> AppSettings {
+```
+
+```swift
+        return normalize(s, catalog: catalog)
+```
+
+`SettingsStore.normalize` nahradit celou:
+
+```swift
+    static func normalize(_ input: AppSettings, catalog: LutCatalog = .shared) -> AppSettings {
+        var s = input
+        var roots: [String] = []
+        for r in s.destRoots.map({ $0.trimmingCharacters(in: .whitespaces) }) where !r.isEmpty {
+            if !roots.contains(where: { $0.caseInsensitiveCompare(r) == .orderedSame }) { roots.append(r) }
+        }
+        s.destRoots = roots
+        var names: [String: String] = [:]
+        for (id, name) in s.portNames {
+            let i = id.trimmingCharacters(in: .whitespaces), n = name.trimmingCharacters(in: .whitespaces)
+            if !i.isEmpty && !n.isEmpty { names[i] = n }
+        }
+        s.portNames = names
+        if !proxyHeights.contains(s.proxy.height) { s.proxy.height = 1080 }
+        s.proxy.bitrateMbps = min(max(s.proxy.bitrateMbps, 2), 50)
+        s.proxy.frameScale = s.proxy.frameScale.isFinite ? min(max(s.proxy.frameScale, 0.5), 1.0) : 1.0
+        if let a = s.proxy.frameAspect, !a.isFinite || a <= 0 { s.proxy.frameAspect = nil }
+        if let l = s.proxy.lutPath, l.trimmingCharacters(in: .whitespaces).isEmpty { s.proxy.lutPath = nil }
+        // Settings from before the built-in LUTs: a lutPath stays the user's own LUT, otherwise automatic.
+        if s.proxy.lutMode == nil { s.proxy.lutMode = s.proxy.lutPath != nil ? .custom : .auto }
+        if !catalog.luts.isEmpty {   // an empty catalog (luts folder missing) must not erase saved choices
+            if catalog.find(s.proxy.lutBuiltin) == nil { s.proxy.lutBuiltin = nil }
+            if catalog.find(s.proxy.lutFallback) == nil { s.proxy.lutFallback = nil }
+            if s.proxy.lutMode == .builtin && s.proxy.lutBuiltin == nil { s.proxy.lutMode = .auto }
+        }
+        if let f = s.proxy.extraFolder?.trimmingCharacters(in: .whitespaces) { s.proxy.extraFolder = f.isEmpty ? nil : f }
+        return s
+    }
+```
+
+`ProxyPreflight.lutInUse` nahradit:
+
+```swift
+    /// The user's own .cube the next start needs (only in custom mode — built-in LUTs ship with the app), or nil.
+    public static func lutInUse(_ p: ProxySettings, analyzeClips: Bool) -> String? {
+        (p.enabled || analyzeClips) && LutResolver.effectiveMode(p) == .custom ? p.lutPath : nil
+    }
+```
+
+- [ ] **Step 9: Testy projdou** — Run: `swift test --filter "Lut|SettingsStoreTests"` → 0 chyb; pak `swift test`.
+
+- [ ] **Step 10: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 21 — vestavěné LUTy: katalog (Offload.app/Contents/Resources/luts, při vývoji shared/luts), výběr LUTu podle klipu (Sony XML, ARRI výrobce + model, ARRIRAW, BRAW, RED, záložní LUT), nastavení lutMode/lutBuiltin/lutFallback (starý lutPath = vlastní LUT), ffprobe čte color_range a výrobce + model; chybějící LUT blokuje start jen u vlastního`
+
+Run: `git add -A mac/Sources mac/Tests docs && git commit -m "Mac: built-in LUT catalog, per-clip LUT rules, LUT settings and options"`
+
+---
+
+### Task 22: LUT pro každý klip v proxy a náhledech, přepočet rozsahu, LUT v reportu
+
+Doplněk ke spec — oddíl D.3.4–D.3.5. Port `ProxyRenderer.cs` (`PrepareLut`, `LookFor`, `NeedsPreMap`, `Thumbnails(…, lut)`,
+`Render(…, lut, …)`), `RawBackends.cs` (`RawLook`, `FrameSource.FullRange`, `R3dBackend.Args`, `ArriBackend.Args`),
+výběr LUTu v `OffloadJob.cs` a LUT v `HtmlReport.cs`.
+
+**Files:**
+- Modify: `mac/Sources/OffloadKit/Proxy.swift` — nahradit vše od komentáře `/// How frames reach ffmpeg` do konce souboru (`FrameSource`, nový `RawLook`, `RawBackend`, `ProxyRenderer`)
+- Modify (celý soubor): `mac/Sources/OffloadKit/RawBackends.swift`
+- Modify: `mac/Sources/OffloadKit/Report.swift` (`ClipEntry.lut`, `CodingKeys`)
+- Modify: `mac/Sources/OffloadKit/Job.swift` (`luts`, `init(config:options:luts:)`, celé `analyzeAndRender`, `tryThumbnails`)
+- Modify: `mac/Sources/OffloadKit/HTMLReport.swift` (CSS `.note`, celý blok klipů)
+- Modify: `mac/Tests/OffloadKitTests/ColorTests.swift` (tři pomocné funkce z úkolu 18)
+- Create: `mac/Tests/OffloadKitTests/LutRenderTests.swift`, `mac/Tests/OffloadKitTests/LutReportTests.swift`
+- Modify: `docs/VYVOJ-MAC.md`, `docs/ROZDILY.md`, `docs/FORMATY.md`
+
+**Interfaces:**
+- Consumes: `LutUse`, `LutResolver`, `LutCatalog`, `ARRIRAWBackend.colorSpace(lut:info:)` (úkol 21), `FilterGraph` (úkol 18), `FFmpegStall`, `ProxyRetryFailed`, `ProgressWatch`, `ProxyRenderer.stallNote`, `usesHardwareDecode(_:)`, `killWait`, `log` (úkol 19), `ProxyCopy` (úkol 20), `Timecode`, `FramePosition` (úkol 5), `Thumbnail`, `BRAWBackend.startFrame` (úkol 6), `OffloadReport.isGood` (úkol 3).
+- Produces:
+  - `struct FrameSource { …; var fullRange = false; … }`, `struct RawLook: Equatable { let log: Bool; let arriColorSpace: String? }`
+  - `protocol RawBackend { func source(_ path: String, info: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools, tempDir: String, singleFrameAt: Double?) throws -> FrameSource; … }`
+  - `public func ProxyRenderer.thumbnails(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil, isCancelled: () -> Bool = { false }) throws -> [Thumbnail]` (místo `applyLUT:`)
+  - `public func ProxyRenderer.render(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil, output: String, progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws`
+  - `func ProxyRenderer.prepareLUT(_ lut: LutUse?) throws -> String?`, `static func ProxyRenderer.lookFor(_ lut: LutUse?, info: ClipInfo) -> RawLook`, `static func ProxyRenderer.needsPreMap(_ lut: LutUse?, source: FrameSource, info: ClipInfo) -> Bool`
+  - `static func R3DBackend.args(input: String, outDir: String, info: ClipInfo, settings: ProxySettings, look: RawLook) -> [String]`
+  - `static func ARRIRAWBackend.args(input: String, output: String, info: ClipInfo, settings: ProxySettings, look: RawLook, parametersFile: String) -> (args: [String], parameters: Data?, cropped: Bool)`
+  - `public var ClipEntry.lut: LutUse?` (JSON `lut`), `let OffloadJob.luts: LutCatalog`, `init(config: JobConfig, options: OffloadOptions, luts: LutCatalog = .shared)`
+  - zanikají: `ProxyRenderer.hasLUT`, `lutCopy`, `isValidTimecode`, parametr `applyLUT`
+
+- [ ] **Step 1: Padající testy** — `mac/Tests/OffloadKitTests/LutRenderTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class LutRenderTests: XCTestCase {
+    private func builtin(_ id: String) -> LutUse { LutUse(source: "auto", id: id, name: "n", reason: "r", file: "/t/\(id).cube") }
+
+    // Review focus 7: the pre-map only for a built-in LUT on a full-range source (BRAW RGB, video tagged pc).
+    func testNeedsPreMapOnlyBuiltinLutOnFullRangeSource() {
+        let braw = FrameSource(inputArgs: ["-i", "-"], fullRange: true)
+        let video = FrameSource(inputArgs: ["-i", "a.mov"])
+        var pc = ClipInfo()
+        pc.colorRange = "pc"
+        var tv = ClipInfo()
+        tv.colorRange = "tv"
+        XCTAssertTrue(ProxyRenderer.needsPreMap(builtin("bmd-film-gen5"), source: braw, info: ClipInfo()))
+        XCTAssertTrue(ProxyRenderer.needsPreMap(builtin("sony-slog3-sgamut3"), source: video, info: pc))
+        XCTAssertFalse(ProxyRenderer.needsPreMap(builtin("sony-slog3-sgamut3"), source: video, info: tv))
+        XCTAssertFalse(ProxyRenderer.needsPreMap(builtin("sony-slog3-sgamut3"), source: video, info: ClipInfo()))
+        XCTAssertFalse(ProxyRenderer.needsPreMap(TestMedia.customLut("/t/look.cube"), source: braw, info: ClipInfo()))   // custom: as is
+        XCTAssertFalse(ProxyRenderer.needsPreMap(nil, source: braw, info: pc))
+    }
+
+    // RAW decoders hand over log only when a LUT follows; ARRI's target space follows a built-in ARRI LUT.
+    func testLookForLogWhenAnyLutArriSpaceFromBuiltin() {
+        var info = ClipInfo()
+        info.camera = "ALEXA Mini"
+        XCTAssertEqual(ProxyRenderer.lookFor(nil, info: info), RawLook(log: false, arriColorSpace: nil))
+        XCTAssertEqual(ProxyRenderer.lookFor(.off("x"), info: info), RawLook(log: false, arriColorSpace: nil))
+        XCTAssertEqual(ProxyRenderer.lookFor(builtin("arri-logc4-awg4"), info: info), RawLook(log: true, arriColorSpace: "AWG4/D65/LogC4"))
+        XCTAssertEqual(ProxyRenderer.lookFor(builtin("arri-logc3-awg3"), info: info), RawLook(log: true, arriColorSpace: "AWG3/D65/LogC3"))
+        XCTAssertEqual(ProxyRenderer.lookFor(builtin("red-log3g10-rwg"), info: info), RawLook(log: true, arriColorSpace: nil))
+        XCTAssertEqual(ProxyRenderer.lookFor(TestMedia.customLut("/l/show_LogC4_709.cube"), info: info),
+                       RawLook(log: true, arriColorSpace: "AWG4/D65/LogC4"))
+        XCTAssertEqual(ProxyRenderer.lookFor(TestMedia.customLut("/l/look.cube"), info: info),
+                       RawLook(log: true, arriColorSpace: "AWG3/D65/LogC3"))
+    }
+
+    func testR3DArgsPickResolutionAndLogOnlyWithLut() {
+        var info = ClipInfo()
+        info.height = 4320
+        var s = ProxySettings()
+        s.height = 1080
+        XCTAssertEqual(R3DBackend.args(input: "/c/A.R3D", outDir: "/t/r3d", info: info, settings: s, look: RawLook(log: true, arriColorSpace: nil)),
+                       ["--i", "/c/A.R3D", "--outDir", "/t/r3d", "--o", "intermediate", "--format", "201", "--PRcodec", "2", "--res", "4",
+                        "--useMeta", "--colorSciVersion", "3", "--colorSpace", "25", "--gammaCurve", "34"])
+        XCTAssertFalse(R3DBackend.args(input: "a", outDir: "b", info: info, settings: s, look: RawLook(log: false, arriColorSpace: nil))
+            .contains("--gammaCurve"))
+        info.height = 2160
+        XCTAssertTrue(R3DBackend.args(input: "a", outDir: "b", info: info, settings: s, look: RawLook(log: false, arriColorSpace: nil)).contains("3"))
+        info.height = 1080
+        XCTAssertTrue(R3DBackend.args(input: "a", outDir: "b", info: info, settings: s, look: RawLook(log: false, arriColorSpace: nil)).contains("1"))
+    }
+
+    func testArriArgsCropOnSensorRec709WithoutLut() throws {
+        var info = ClipInfo()
+        info.width = 4608
+        info.height = 3164
+        var s = ProxySettings()
+        s.frameAspect = 1.66
+        s.height = 1080
+        let a = ARRIRAWBackend.args(input: "/c/c.mxf", output: "/t/i.mxf", info: info, settings: s,
+                                    look: RawLook(log: false, arriColorSpace: nil), parametersFile: "/t/p.json")
+        XCTAssertTrue(a.cropped)
+        XCTAssertEqual(a.args, ["process", "--input", "/c/c.mxf", "--video-codec", "prores422lt", "--deflip", "--output", "/t/i.mxf",
+                                "--parameters", "/t/p.json", "--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"])
+        let p = try XCTUnwrap(try JSONSerialization.jsonObject(with: try XCTUnwrap(a.parameters)) as? [String: [String: Int]])
+        XCTAssertEqual(p["inputCrop"], ["displayXOffsetOverride": 0, "displayYOffsetOverride": 194,
+                                        "displayWidthOverride": 4608, "displayHeightOverride": 2774])
+        XCTAssertEqual(p["outputScaling"], ["targetWidth": 1794, "targetHeight": 1080])
+    }
+
+    func testArriArgsWithoutCropDesqueezeAndLog() {
+        var info = ClipInfo()
+        info.camera = "ALEXA 35"
+        var s = ProxySettings()
+        s.height = 720
+        let a = ARRIRAWBackend.args(input: "in", output: "out", info: info, settings: s,
+                                    look: ProxyRenderer.lookFor(TestMedia.customLut("look.cube"), info: info), parametersFile: "p.json")
+        XCTAssertFalse(a.cropped)
+        XCTAssertNil(a.parameters)
+        XCTAssertEqual(a.args, ["process", "--input", "in", "--video-codec", "prores422lt", "--deflip", "--output", "out",
+                                "--desqueeze", "--output-height", "720", "--target-colorspace", "AWG4/D65/LogC4"])
+        XCTAssertTrue(ARRIRAWBackend.args(input: "in", output: "out", info: ClipInfo(), settings: ProxySettings(),
+                                          look: RawLook(log: true, arriColorSpace: "AWG4/D65/LogC4"), parametersFile: "p").args.contains("AWG4/D65/LogC4"))
+    }
+
+    /// Mean Y (8-bit code values as stored) of the first frame, via signalstats.
+    private func meanLuma(_ ffmpeg: String, _ video: String, _ dir: String) throws -> Double {
+        let stats = dir + "/yavg-\(UUID().uuidString).txt"
+        try ToolProcess.run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", video,
+                                     "-vf", "signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=\(stats)",
+                                     "-frames:v", "1", "-f", "null", "-"])
+        let text = try String(contentsOfFile: stats, encoding: .utf8)
+        let line = try XCTUnwrap(text.split(whereSeparator: \.isNewline).first { $0.hasPrefix("lavfi.signalstats.YAVG=") })
+        return try XCTUnwrap(Double(line.dropFirst("lavfi.signalstats.YAVG=".count)))
+    }
+
+    private func greyClip(_ ffmpeg: String, _ path: String, y: Int) throws {
+        try ToolProcess.run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-f", "lavfi",
+                                     "-i", "color=c=0x696969:s=320x180:d=1:r=25", "-vf", "format=yuv420p,lutyuv=y=\(y):u=128:v=128",
+                                     "-c:v", "libx264", "-color_range", "tv", path])
+    }
+
+    // Review focus 7 — real ffmpeg (H.264 source → VideoToolbox decode): an S-Log3 grey clip with its Sony XML renders a
+    // proxy whose grey is ~0.42; a brighter level proves the LUT is really applied.
+    func testSLog3GreyProxyIs042() throws {
+        let (ffmpeg, _) = try TestMedia.requireFFmpeg()
+        let dir = tempDir()
+        let card = dir.sub("card")
+        let clipDir = dir.sub("card", "XDROOT", "Clip")
+        // S-Log3 grey = 10-bit code 420 → 8-bit legal Y ≈ 105; neutral chroma.
+        try greyClip(ffmpeg, clipDir + "/C0001.MP4", y: 105)
+        try greyClip(ffmpeg, clipDir + "/C0002.MP4", y: 150)
+        try #"<NonRealTimeMeta><Item name="CaptureGammaEquation" value="s-log3-cine"/><Item name="CaptureColorPrimaries" value="S-Gamut3Cine"/></NonRealTimeMeta>"#
+            .write(toFile: clipDir + "/C0001M01.XML", atomically: true, encoding: .utf8)
+        var s = ProxySettings()
+        s.enabled = true
+        s.height = 180
+        s.lutMode = .auto
+        s.burnFilename = false
+        s.burnTimecode = false
+        let r = ProxyRenderer(settings: s, tools: TestMedia.tools)
+        func clip(_ name: String) -> Clip {
+            Clip(name: name, path: "XDROOT/Clip/\(name).MP4", format: .video, segments: ["XDROOT/Clip/\(name).MP4"], bytes: 1, isCameraProxy: false)
+        }
+        let info = try r.probe(clip("C0001"), cardPath: card)
+        let lut = LutResolver.resolve(clip("C0001"), info: info, clipFullPath: clipDir + "/C0001.MP4", settings: s, catalog: TestMedia.luts)
+        XCTAssertEqual(lut.id, "sony-slog3-sgamut3cine")
+        try r.render(clip("C0001"), cardPath: card, info: info, lut: lut, output: dir.path + "/p.mov", progress: { _ in }, isCancelled: { false })
+        XCTAssertEqual((try meanLuma(ffmpeg, dir.path + "/p.mov", dir.path) - 16) / 219, 0.42, accuracy: 0.03)
+        // Grey maps almost onto itself, so also a level the LUT clearly moves: Y=150 (≈ 0.61 without a LUT) comes out
+        // well above 0.75 through it. Fails if the LUT is dropped.
+        let bright = try r.probe(clip("C0002"), cardPath: card)
+        try r.render(clip("C0002"), cardPath: card, info: bright, lut: lut, output: dir.path + "/p2.mov", progress: { _ in }, isCancelled: { false })
+        XCTAssertGreaterThanOrEqual((try meanLuma(ffmpeg, dir.path + "/p2.mov", dir.path) - 16) / 219, 0.75)
+        try r.render(clip("C0002"), cardPath: card, info: bright, lut: nil, output: dir.path + "/p3.mov", progress: { _ in }, isCancelled: { false })
+        let plain = (try meanLuma(ffmpeg, dir.path + "/p3.mov", dir.path) - 16) / 219
+        XCTAssertTrue((0.58...0.64).contains(plain), "\(plain)")
+    }
+
+    func testBuiltinLutIsCopiedOncePerIdAndCustomOnlyInCustomMode() throws {
+        let dir = tempDir()
+        let cube = dir.path + "/my look.cube"
+        TestMedia.identityLUT(cube)
+        var s = ProxySettings()
+        s.lutPath = cube
+        s.lutMode = .auto   // a saved custom path does not count outside custom mode
+        let auto = ProxyRenderer(settings: s, tools: ExternalTools())
+        XCTAssertNil(try auto.prepareLUT(TestMedia.customLut(cube)))
+        let lut = try XCTUnwrap(TestMedia.luts.find("dji-dlog-dgamut"))
+        let use = LutUse(source: "builtin", id: lut.id, name: lut.name, reason: "r", file: lut.path)
+        let first = try XCTUnwrap(try auto.prepareLUT(use))
+        XCTAssertEqual(first, auto.tempDir + "/lut-dji-dlog-dgamut.cube")
+        XCTAssertEqual(try auto.prepareLUT(use), first)
+        s.lutMode = .custom
+        let custom = ProxyRenderer(settings: s, tools: ExternalTools())
+        XCTAssertEqual(try custom.prepareLUT(TestMedia.customLut(cube)), custom.tempDir + "/look.cube")   // a plain path, no space
+        XCTAssertNil(try custom.prepareLUT(nil))
+        XCTAssertNil(try custom.prepareLUT(.off("x")))
+    }
+}
+```
+
+`mac/Tests/OffloadKitTests/LutReportTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class LutReportTests: XCTestCase {
+    private func report(lut: LutUse?, proxy: ProxySettings? = nil) -> OffloadReport {
+        var r = Reports.sample()
+        var e = ClipEntry(clip: Clip(name: "C0001", path: "C0001.MP4", format: .video, segments: ["C0001.MP4"], bytes: 1, isCameraProxy: false))
+        e.lut = lut
+        r.clips = [e]
+        r.proxy = proxy
+        return r
+    }
+
+    func testClipShowsLutAndJSONKey() throws {
+        let r = report(lut: LutUse(source: "auto", id: "sony-slog3-sgamut3cine", name: "Sony S-Log3 / S-Gamut3.Cine → Rec.709",
+                                   reason: "Sony XML: s-log3-cine / S-Gamut3Cine", file: "/x/lut.cube"))
+        XCTAssertTrue(HTMLReport.render(r).contains(
+            "<div class=\"note\">LUT: Sony S-Log3 / S-Gamut3.Cine → Rec.709 (Sony XML: s-log3-cine / S-Gamut3Cine)</div>"))
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: try r.jsonData()) as? [String: Any])
+        let clip = try XCTUnwrap((obj["clips"] as? [[String: Any]])?.first)
+        let lut = try XCTUnwrap(clip["lut"] as? [String: Any])
+        XCTAssertEqual(lut.keys.sorted(), ["id", "name", "reason", "source"])
+        XCTAssertEqual(lut["source"] as? String, "auto")
+    }
+
+    func testNoLutReasonShownUnlessSwitchedOff() throws {
+        XCTAssertTrue(HTMLReport.render(report(lut: .off("kamera nerozpoznána"))).contains("<div class=\"note\">LUT: bez LUT (kamera nerozpoznána)</div>"))
+        XCTAssertFalse(HTMLReport.render(report(lut: .off("vypnuto v nastavení"))).contains("LUT: bez LUT"))
+        XCTAssertFalse(HTMLReport.render(report(lut: nil)).contains("class=\"note\""))
+        let none = try XCTUnwrap(try JSONSerialization.jsonObject(with: try report(lut: .off("x")).jsonData()) as? [String: Any])
+        let lut = try XCTUnwrap(((none["clips"] as? [[String: Any]])?.first)?["lut"] as? [String: Any])
+        XCTAssertNil(lut["id"])   // omitted, like Windows (null is not written)
+    }
+
+    func testProxyLineSaysHowTheLutIsChosen() {
+        var p = ProxySettings()
+        p.enabled = true
+        p.frameAspect = 1.66
+        p.lutMode = .auto
+        XCTAssertTrue(HTMLReport.render(report(lut: nil, proxy: p)).contains("Proxy: H.264, 1080p, výřez 1.66, LUT: automaticky podle kamery"))
+        p.lutMode = .builtin
+        p.lutBuiltin = "dji-dlog-dgamut"
+        // The name comes from LutCatalog.shared — empty under xctest, so the id shows (the app shows the name).
+        let builtin = HTMLReport.render(report(lut: nil, proxy: p))
+        XCTAssertTrue(builtin.contains("LUT: dji-dlog-dgamut") || builtin.contains("LUT: DJI D-Log / D-Gamut → Rec.709"))
+        p.lutMode = .custom
+        p.lutPath = "/Users/x/show.cube"
+        XCTAssertTrue(HTMLReport.render(report(lut: nil, proxy: p)).contains("LUT: show.cube"))
+        p.lutMode = .off
+        XCTAssertTrue(HTMLReport.render(report(lut: nil, proxy: p)).contains("LUT: bez LUT"))
+    }
+
+    private func options() -> OffloadOptions {
+        var o = OffloadOptions()
+        o.chunkSize = 1 << 20
+        o.bufferCount = 4
+        o.allowSameDevice = true
+        o.allowSourceVolume = true
+        return o
+    }
+
+    // The LUT is chosen per clip (the Sony XML read from the destination copy) and recorded in the report.
+    func testJobRecordsLutPerClip() throws {
+        _ = try TestMedia.requireFFmpeg()
+        let dir = tempDir()
+        let card = dir.sub("A001")
+        try TestMedia.makeClip(card + "/PRIVATE/M4ROOT/CLIP/C0001.MP4", seconds: 2, timecode: "01:00:00:00")
+        try TestMedia.makeClip(card + "/PRIVATE/M4ROOT/CLIP/C0002.MP4", seconds: 2, timecode: "01:00:10:00")
+        try #"<NonRealTimeMeta><Item name="CaptureGammaEquation" value="s-log3-cine"/><Item name="CaptureColorPrimaries" value="S-Gamut3Cine"/></NonRealTimeMeta>"#
+            .write(toFile: card + "/PRIVATE/M4ROOT/CLIP/C0001M01.XML", atomically: true, encoding: .utf8)
+        var config = JobConfig(source: card, destRoots: [dir.sub("d1")])
+        config.date = "2026-10-05"
+        config.proxy.enabled = true
+        config.proxy.height = 360
+        config.tools = TestMedia.tools
+        let job = OffloadJob(config: config, options: options(), luts: TestMedia.luts)
+        let report = try XCTUnwrap(job.run())
+        XCTAssertEqual(job.status().phase, .done)
+        let c1 = try XCTUnwrap(report.clips.first { $0.clip.name == "C0001" })
+        XCTAssertEqual(c1.lut?.source, "auto")
+        XCTAssertEqual(c1.lut?.id, "sony-slog3-sgamut3cine")
+        XCTAssertEqual(c1.proxyStatus, .done)
+        XCTAssertEqual(c1.thumbnails.count, 3)
+        let c2 = try XCTUnwrap(report.clips.first { $0.clip.name == "C0002" })
+        XCTAssertEqual(c2.lut?.source, "none")
+        XCTAssertEqual(c2.lut?.reason, "kamera nerozpoznána")
+        let json = try String(contentsOfFile: try XCTUnwrap(job.plan).cardPaths[0] + "/_REPORT/offload_report.json", encoding: .utf8)
+        XCTAssertTrue(json.contains("\"lut\""))
+    }
+}
+```
+
+`mac/Tests/OffloadKitTests/ColorTests.swift` (úkol 18) — tři pomocné funkce nahradit (LUT teď jde po klipech; testy
+samotné beze změny):
+
+```swift
+    // How a LUT reaches the renderer: per clip (task 22); custom mode so the renderer copies the .cube.
+    private func renderer(_ settings: ProxySettings, lut: String?) -> ProxyRenderer {
+        var s = settings
+        s.lutPath = lut
+        s.lutMode = lut == nil ? .off : .custom
+        return ProxyRenderer(settings: s, tools: TestMedia.tools)
+    }
+
+    private func render(_ r: ProxyRenderer, _ clip: Clip, card: String, to out: String, lut: String?) throws {
+        try r.render(clip, cardPath: card, info: try r.probe(clip, cardPath: card), lut: lut.map(TestMedia.customLut), output: out,
+                     progress: { _ in }, isCancelled: { false })
+    }
+
+    private func thumbnails(_ r: ProxyRenderer, _ clip: Clip, card: String, lut: String?) throws -> [Thumbnail] {
+        try r.thumbnails(clip, cardPath: card, info: try r.probe(clip, cardPath: card), lut: lut.map(TestMedia.customLut))
+    }
+```
+
+- [ ] **Step 2: Ověřit selhání** — Run: `swift test --filter "LutRenderTests|LutReportTests|ColorTests"` → nesestaví se
+(`extra argument 'fullRange'`, `cannot find 'RawLook'`, `has no member 'needsPreMap'`, `'lut'`, `extra argument 'luts'`).
+
+- [ ] **Step 3: `Proxy.swift`** — nahradit vše od řádku `/// How frames reach ffmpeg: straight from a file, or piped from a vendor RAW decoder.`
+do konce souboru (ProxyCodec a ProxySettings nad tím zůstávají):
+
+```swift
+/// How frames reach ffmpeg: straight from a file, or piped from a vendor RAW decoder.
+struct FrameSource {
+    var inputArgs: [String]
+    var feeder: Process?
+    var audioFromInput = true
+    /// The decoder already cropped to the frame lines (ARRI does it before debayering).
+    var alreadyCropped = false
+    /// Full-range RGB (braw-decode) — a built-in LUT then needs `FilterGraph.preMap` first.
+    var fullRange = false
+    /// Intermediate files to delete once ffmpeg is done.
+    var cleanup: [String] = []
+
+    func removeIntermediates() {
+        for p in cleanup { try? FileManager.default.removeItem(atPath: p) }
+    }
+}
+
+/// What a RAW decoder hands ffmpeg: camera log (a LUT follows) or its own Rec.709 look. `arriColorSpace` is the ARRI
+/// target space matching the LUT (nil = from the clip's metadata). BRAW always decodes in the clip's gamma; Canon has
+/// no decoder.
+struct RawLook: Equatable {
+    let log: Bool
+    let arriColorSpace: String?
+}
+
+/// Per-format decoding for formats ffmpeg cannot read itself.
+protocol RawBackend {
+    var format: ClipFormat { get }
+    var missingHint: String { get }
+    func isAvailable(_ tools: ExternalTools) -> Bool
+    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo
+    /// `singleFrameAt` (seconds) asks for just one frame — used for report thumbnails.
+    func source(_ path: String, info: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
+                tempDir: String, singleFrameAt: Double?) throws -> FrameSource
+}
+
+/// Where a report thumbnail is taken: frame number, its time, and whether it is the clip's last frame.
+struct FramePosition: Equatable {
+    let seconds: Double
+    let frame: Int
+    let fromEnd: Bool
+}
+
+/// Probes clips, makes the report thumbnails (first, middle, last frame) and renders proxies — each clip with its own
+/// LUT (`LutUse`). Works in its own temp folder. One renderer serves one job, on one thread.
+public final class ProxyRenderer {
+    public let settings: ProxySettings
+    public let tools: ExternalTools
+    let backends: [ClipFormat: RawBackend]
+    let tempDir: String
+    /// A proxy render with no progress for this long is stuck (3× as long before the first progress): ffmpeg is killed
+    /// and, when it decoded in hardware, the clip is retried once in software.
+    static let defaultStallTimeout: TimeInterval = 60
+    /// How long a killed ffmpeg is waited for: a process stuck in a GPU driver may never end — the job must go on.
+    static let killWait: TimeInterval = 10
+    /// Tests shorten it.
+    var stallTimeout: TimeInterval = ProxyRenderer.defaultStallTimeout
+    /// Where retries and unkillable processes are reported (the job's log).
+    var log: ((String) -> Void)?
+    /// The custom LUT (custom mode) was copied to `tempDir/look.cube`.
+    private let hasCustomLUT: Bool
+    /// Built-in LUT ids already copied into `tempDir`.
+    private var builtinLUTs: Set<String> = []
+
+    public init(settings: ProxySettings, tools: ExternalTools) {
+        self.settings = settings
+        self.tools = tools
+        backends = Dictionary(uniqueKeysWithValues: RawBackends.all.map { ($0.format, $0) })
+        let dir = NSTemporaryDirectory() + "offload-" + UUID().uuidString.prefix(8)
+        tempDir = dir
+        try? IO.mkdirs(dir)
+        // Filter graphs are picky about quoting: LUTs are used from a plain path in the temp folder. The custom LUT is
+        // copied up front, built-in ones per clip (prepareLUT).
+        var custom = false
+        if LutResolver.effectiveMode(settings) == .custom, let lut = settings.lutPath, !lut.isEmpty,
+           FileManager.default.fileExists(atPath: lut) {
+            custom = (try? FileManager.default.copyItem(atPath: lut, toPath: dir + "/look.cube")) != nil
+        }
+        hasCustomLUT = custom
+    }
+
+    deinit { try? FileManager.default.removeItem(atPath: tempDir) }
+
+    /// nil when the clip can be rendered, otherwise the reason it cannot.
+    public func unsupportedReason(_ clip: Clip) -> String? {
+        guard tools.ffmpeg != nil else { return "ffmpeg not found" }
+        switch clip.format {
+        case .video: return nil
+        case .unknown: return "unknown format"
+        default:
+            guard let b = backends[clip.format] else { return "\(clip.format.label): no decoder available" }
+            return b.isAvailable(tools) ? nil : b.missingHint
+        }
+    }
+
+    /// MXF is a container for many codecs; ARRIRAW/ARRICORE inside it only the ARRI tool can read.
+    /// Returns the clip reclassified as ARRIRAW when ffmpeg cannot decode it but art-cmd can.
+    public func reclassifyUndecodableMXF(_ clip: Clip, cardPath: String) -> (Clip, ClipInfo)? {
+        guard clip.format == .video, (clip.path as NSString).pathExtension.lowercased() == "mxf",
+              let arri = backends[.arriraw], arri.isAvailable(tools),
+              let info = try? arri.probe(cardPath + "/" + clip.path, tools: tools), info.width != nil else { return nil }
+        var c = clip
+        c.format = .arriraw
+        return (c, info)
+    }
+
+    public func probe(_ clip: Clip, cardPath: String) throws -> ClipInfo {
+        let path = cardPath + "/" + clip.path
+        if clip.format == .video {
+            guard let ffprobe = tools.ffprobe else { throw ToolError(tool: "ffprobe", status: -1, message: "ffprobe not found") }
+            return try FFProbe.probe(ffprobe, path)
+        }
+        guard let b = backends[clip.format], b.isAvailable(tools) else {
+            throw ToolError(tool: clip.format.label, status: -1, message: unsupportedReason(clip) ?? "")
+        }
+        return try b.probe(path, tools: tools)
+    }
+
+    // MARK: Thumbnail positions
+
+    /// First, middle and last frame; only the first when the length is unknown or the clip has one frame.
+    static func framePositions(_ info: ClipInfo) -> [FramePosition] {
+        let first = FramePosition(seconds: 0, frame: 0, fromEnd: false)
+        guard let duration = info.duration, duration > 0, let fps = Timecode.fps(info.frameRate) else { return [first] }
+        let frames = info.frames ?? Int((duration * fps).rounded())
+        guard frames > 1 else { return [first] }
+        let middle = frames / 2, last = frames - 1
+        var all = [first]
+        if middle > 0 { all.append(FramePosition(seconds: Double(middle) / fps, frame: middle, fromEnd: false)) }
+        if last > middle { all.append(FramePosition(seconds: Double(last) / fps, frame: last, fromEnd: true)) }
+        return all
+    }
+
+    /// Caption under a thumbnail: the source timecode of that frame, else its number.
+    static func label(_ info: ClipInfo, _ p: FramePosition) -> String {
+        if let tc = info.timecode, Timecode.isValid(tc), let fps = Timecode.fps(info.frameRate) {
+            return Timecode.add(tc, frames: p.frame, fps: fps)
+        }
+        return "#\(p.frame)"
+    }
+
+    /// Where ffmpeg's input seek (-ss before -i) lands for a thumbnail position. A frame in the middle is sought
+    /// half a frame early: its exact time rounded up would skip to the next frame (23.976, 24, 29.97 fps).
+    /// The last frame is sought a second before it and decoded to the end of the video stream — never relative
+    /// to the container end, which is later when the audio runs longer than the picture.
+    static func seekSeconds(_ info: ClipInfo, _ p: FramePosition) -> String {
+        var at = p.seconds
+        if p.fromEnd {
+            at = max(0, p.seconds - 1)
+        } else if p.frame > 0, let fps = Timecode.fps(info.frameRate) {
+            at = (Double(p.frame) - 0.5) / fps
+        }
+        return String(format: "%.6f", at)
+    }
+
+    /// Hardware decoding only where it helps and is safe: H.264 and HEVC (`ClipInfo.codec` starts with the ffprobe
+    /// codec name). Everything else (FFV1, ProRes, MJPEG, DNx …) decodes in software — same rule as Windows, where
+    /// ffmpeg 8.1 with -hwaccel hung forever on FFV1.
+    static func usesHardwareDecode(_ codec: String?) -> Bool {
+        let c = (codec ?? "").lowercased()
+        return c.hasPrefix("h264") || c.hasPrefix("hevc")
+    }
+
+    /// The note at a clip whose ffmpeg stalled (texts shared with Windows `StallNote`).
+    static func stallNote(_ seconds: TimeInterval, retriedInSoftware: Bool) -> String {
+        "ffmpeg se zasekl (\(String(format: "%.0f", seconds)) s bez nového snímku)"
+            + (retriedInSoftware ? " i bez hardwarového dekódování; proxy nevznikla" : "")
+    }
+
+    // MARK: LUT per clip
+
+    /// The .cube for this clip as a plain path in the temp folder, or nil for no LUT. The custom LUT was copied in init
+    /// (nil when it was missing); a built-in one is copied on first use, once per id.
+    func prepareLUT(_ lut: LutUse?) throws -> String? {
+        guard let lut, let file = lut.file else { return nil }
+        guard let id = lut.id else { return hasCustomLUT ? tempDir + "/look.cube" : nil }
+        let copy = tempDir + "/lut-\(id).cube"
+        if !builtinLUTs.contains(id) {
+            try? FileManager.default.removeItem(atPath: copy)
+            try FileManager.default.copyItem(atPath: file, toPath: copy)
+            builtinLUTs.insert(id)
+        }
+        return copy
+    }
+
+    /// RAW decoders hand over log whenever a LUT follows; ARRI's target space must match a built-in ARRI LUT.
+    static func lookFor(_ lut: LutUse?, info: ClipInfo) -> RawLook {
+        guard let lut, let file = lut.file else { return RawLook(log: false, arriColorSpace: nil) }
+        switch lut.id {
+        case "arri-logc4-awg4"?: return RawLook(log: true, arriColorSpace: "AWG4/D65/LogC4")
+        case "arri-logc3-awg3"?: return RawLook(log: true, arriColorSpace: "AWG3/D65/LogC3")
+        case nil: return RawLook(log: true, arriColorSpace: ARRIRAWBackend.colorSpace(lut: file, info: info))
+        default: return RawLook(log: true, arriColorSpace: nil)
+        }
+    }
+
+    /// Built-in LUTs expect legal-range input: full-range sources (BRAW, video tagged "pc") are pre-mapped first.
+    /// A custom .cube is applied as it is.
+    static func needsPreMap(_ lut: LutUse?, source: FrameSource, info: ClipInfo) -> Bool {
+        lut?.isBuiltin == true && (source.fullRange || info.colorRange == "pc")
+    }
+
+    private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, look: RawLook, singleFrameAt: Double?,
+                             hwaccel: Bool) throws -> FrameSource {
+        let path = cardPath + "/" + clip.path
+        if clip.format == .video {
+            // VideoToolbox only for H.264/HEVC proxies (usesHardwareDecode); thumbnails always decode in software.
+            return FrameSource(inputArgs: hwaccel ? ["-hwaccel", "videotoolbox", "-i", path] : ["-i", path])
+        }
+        guard let b = backends[clip.format] else { throw ToolError(tool: clip.format.label, status: -1, message: "no decoder") }
+        return try b.source(path, info: info, settings: settings, look: look, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt)
+    }
+
+    // MARK: Thumbnails and proxies
+
+    /// First, middle and last frame as small JPEGs with captions, with the clip's LUT so log footage is readable.
+    /// `lut` nil = no LUT (thumbnails taken from a finished proxy, which already has it). When `isCancelled` turns
+    /// true the clip simply gets no thumbnails. One bad position does not cost the others; if none works, the last
+    /// error is thrown.
+    public func thumbnails(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil,
+                           isCancelled: () -> Bool = { false }) throws -> [Thumbnail] {
+        guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "ffmpeg not found") }
+        let lutFile = try prepareLUT(lut)
+        let look = ProxyRenderer.lookFor(lutFile != nil ? lut : nil, info: info)   // log only when a LUT really follows
+        let video = clip.format == .video
+        var result: [Thumbnail] = []
+        var lastError: Error?
+        for pos in ProxyRenderer.framePositions(info) {
+            if isCancelled() { return [] }
+            let out = tempDir + "/thumb-\(UUID().uuidString).jpg"
+            defer { unlink(out) }
+            do {
+                let src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: pos.seconds, hwaccel: false)
+                defer { src.removeIntermediates() }
+                // The pre-map depends on the source (BRAW, full-range video).
+                let filter = FilterGraph.thumbnail(lutFile: lutFile, premap: ProxyRenderer.needsPreMap(lut, source: src, info: info))
+                var args = ["-hide_banner", "-loglevel", "error", "-y"]
+                if video { args += ["-ss", ProxyRenderer.seekSeconds(info, pos)] }
+                args += src.inputArgs
+                // Last frame: decode the final second and keep overwriting the image — the last write is the last frame.
+                args += video && pos.fromEnd ? ["-map", "0:v:0", "-vf", filter, "-update", "1"] : ["-frames:v", "1", "-vf", filter]
+                args += ["-q:v", "5", out]
+                try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: nil, progress: nil, isCancelled: isCancelled)
+                guard FileManager.default.fileExists(atPath: out) else {
+                    throw ToolError(tool: "ffmpeg", status: 0, message: "no frame")
+                }
+                result.append(Thumbnail(jpeg: try Data(contentsOf: URL(fileURLWithPath: out)), label: ProxyRenderer.label(info, pos)))
+            } catch {
+                if isCancelled() { return [] }
+                lastError = error
+            }
+        }
+        if result.isEmpty, let lastError { throw lastError }
+        return result
+    }
+
+    /// Renders the proxy. A render that stalls (no progress for `stallTimeout`) is killed. With hardware decoding the clip
+    /// is then retried once in software — as is one that failed with it; without, the stall fails the proxy. Cancelling
+    /// never retries. Notes and log lines as on Windows.
+    public func render(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil, output: String,
+                       progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
+        guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
+        let lutFile = try prepareLUT(lut)
+        let look = ProxyRenderer.lookFor(lutFile != nil ? lut : nil, info: info)
+        let hw = clip.format == .video && ProxyRenderer.usesHardwareDecode(info.codec)
+        let first: Error
+        do {
+            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, lut: lut, lutFile: lutFile, look: look, hwaccel: hw,
+                           output: output, progress: progress, isCancelled: isCancelled)
+            return
+        } catch let e as FFmpegStall where !hw && !isCancelled() {
+            throw FFmpegStall(note: e.note + "; proxy nevznikla")
+        } catch where hw && (error is FFmpegStall || error is ToolError) && !isCancelled() {
+            first = error   // hardware decoding stalled or failed: once more in software
+        }
+        if isCancelled() { throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled") }
+        log?("proxy \(clip.name): with hardware decoding: \(first) — retrying in software")
+        do {
+            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, lut: lut, lutFile: lutFile, look: look, hwaccel: false,
+                           output: output, progress: progress, isCancelled: isCancelled)
+            log?("proxy \(clip.name): software decoding succeeded")
+        } catch where (error is FFmpegStall || error is ToolError) && !isCancelled() {
+            log?("proxy \(clip.name): software decoding failed too: \(error)")
+            switch (first, error) {
+            case (is FFmpegStall, is FFmpegStall):
+                throw ProxyRetryFailed(note: ProxyRenderer.stallNote(stallTimeout, retriedInSoftware: true))
+            case (is FFmpegStall, _):
+                throw ProxyRetryFailed(note: "\(first); bez hardwarového dekódování selhal: \(error)")
+            default:
+                throw ProxyRetryFailed(note: "\(error); s hardwarovým dekódováním předtím: \(first)")
+            }
+        }
+    }
+
+    private func renderOnce(_ ffmpeg: String, _ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse?, lutFile: String?,
+                            look: RawLook, hwaccel: Bool, output: String,
+                            progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
+        let src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: nil, hwaccel: hwaccel)
+        defer { src.removeIntermediates() }
+        let outHeight = min(settings.height, info.height ?? settings.height) & ~1
+        let vf = FilterGraph.proxy(settings, outHeight: outHeight, alreadyCropped: src.alreadyCropped, lutFile: lutFile,
+                                   premap: ProxyRenderer.needsPreMap(lut, source: src, info: info),
+                                   burnIn: burnIn(clip: clip, info: info, height: outHeight))
+        var args = ["-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
+        args += ["-map", "0:v:0"]
+        if settings.audio && info.audioChannels > 0 && src.audioFromInput {
+            args += ["-map", "0:a:0?"] + settings.codec.audioArgs
+        }
+        args += ["-vf", vf] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps) + FilterGraph.rec709Args
+        if let tc = info.timecode, Timecode.isValid(tc) { args += ["-timecode", tc] }
+
+        let dir = (output as NSString).deletingLastPathComponent
+        try IO.mkdirs(dir)
+        let part = dir + "/." + (output as NSString).lastPathComponent + ".part"
+        args += ["-f", "mov", part]
+        do {
+            try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: info.duration, progress: progress,
+                          isCancelled: isCancelled, stallAfter: stallTimeout)
+            guard rename(part, output) == 0 else { throw IOError("rename", output) }
+        } catch {
+            unlink(part)
+            throw error
+        }
+    }
+
+    /// Bottom bar: clip name left, source timecode right.
+    func burnIn(clip: Clip, info: ClipInfo, height: Int) -> [String] {
+        guard settings.burnFilename || settings.burnTimecode else { return [] }
+        let font = ["/System/Library/Fonts/Menlo.ttc", "/System/Library/Fonts/Monaco.ttf"].first { FileManager.default.fileExists(atPath: $0) }
+        guard let font else { return [] }
+        let size = max(12, height * 3 / 100)
+        let margin = max(8, height * 2 / 100)
+        var f = ["drawbox=x=0:y=ih-\(size * 2):w=iw:h=\(size * 2):color=black@0.55:t=fill"]
+        let common = "fontfile=\(font):fontcolor=white:fontsize=\(size):y=h-\(size * 3 / 2)"
+        if settings.burnFilename {
+            let label = tempDir + "/label-\(UUID().uuidString.prefix(8)).txt"
+            try? Data(clip.name.utf8).write(to: URL(fileURLWithPath: label))
+            // expansion=none: the name is literal text — a "%" in it would otherwise be a drawtext expansion.
+            f.append("drawtext=\(common):textfile=\(label):expansion=none:x=\(margin)")
+        }
+        if settings.burnTimecode, let rate = info.frameRate {
+            let tc = info.timecode.flatMap { Timecode.isValid($0) ? $0 : nil } ?? "00:00:00:00"
+            let escaped = tc.replacingOccurrences(of: ":", with: "\\:").replacingOccurrences(of: ";", with: "\\;")
+            f.append("drawtext=\(common):timecode='\(escaped)':rate=\(rate):x=w-tw-\(margin)")
+        }
+        return f
+    }
+
+    /// `stallAfter` (renders only, with -progress pipe:1 in the args): ffmpeg is killed and `FFmpegStall` thrown when it
+    /// has reported no new frame or output time and taken no data from the feeder for that long (3× before the first
+    /// progress). Cancelling is checked first and wins.
+    func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, duration: Double?,
+                   progress: ((Double) -> Void)?, isCancelled: () -> Bool, stallAfter: TimeInterval? = nil) throws {
+        let p = ToolProcess(ffmpeg, args)
+        p.captureStderr()
+        let watch = ProgressWatch()
+        var pump: Thread?
+        if let feeder {
+            // The decoder's frames go through a pump: every chunk ffmpeg takes is progress (a slow RAW decoder is not stuck).
+            let fromFeeder = Pipe(), toFFmpeg = Pipe()
+            feeder.standardOutput = fromFeeder
+            feeder.standardError = FileHandle.nullDevice
+            p.process.standardInput = toFFmpeg
+            // A write after ffmpeg died must fail with EPIPE, not take the app down with SIGPIPE.
+            _ = fcntl(toFFmpeg.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+            pump = Thread {
+                // Plain read(2)/write(2): read returns whatever the decoder has written so far. FileHandle.read(upToCount:)
+                // on a pipe waits for the whole count (or EOF) — a slow decoder would look stuck.
+                let inFD = fromFeeder.fileHandleForReading.fileDescriptor
+                let outFD = toFFmpeg.fileHandleForWriting.fileDescriptor
+                let size = 4 << 20
+                let buffer = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 16)
+                defer { buffer.deallocate() }
+                pumping: while true {
+                    let n = Darwin.read(inFD, buffer, size)
+                    if n < 0 && errno == EINTR { continue }
+                    if n <= 0 { break }   // the decoder is done (EOF) or gone
+                    var sent = 0
+                    while sent < n {
+                        let w = Darwin.write(outFD, buffer + sent, n - sent)
+                        if w < 0 && errno == EINTR { continue }
+                        if w <= 0 { break pumping }   // ffmpeg is gone (EPIPE, no signal thanks to F_SETNOSIGPIPE)
+                        sent += w
+                    }
+                    watch.dataFlowed()
+                }
+                try? toFFmpeg.fileHandleForWriting.close()
+            }
+        } else {
+            p.process.standardInput = FileHandle.nullDevice
+        }
+        p.onStdoutLine { line in
+            watch.advanced(line)
+            guard let progress, let d = duration, d > 0, line.hasPrefix("out_time_us="),
+                  let us = Double(line.dropFirst("out_time_us=".count)) else { return }
+            progress(min(1, us / 1_000_000 / d))
+        }
+        try feeder?.run()
+        do {
+            try p.process.run()
+        } catch {
+            feeder?.terminate()
+            throw error
+        }
+        pump?.start()
+        while p.process.isRunning {
+            if isCancelled() {
+                stop(p, feeder)
+                throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled")
+            }
+            if let limit = stallAfter, watch.isStalled(limit: limit) {
+                stop(p, feeder)
+                throw FFmpegStall(note: ProxyRenderer.stallNote(limit, retriedInSoftware: false))
+            }
+            usleep(200_000)
+        }
+        if let feeder, feeder.isRunning { feeder.terminate() }
+        feeder?.waitUntilExit()
+        guard p.process.terminationStatus == 0 else {
+            throw ToolError(tool: "ffmpeg", status: p.process.terminationStatus, message: p.stderrText)
+        }
+        if let feeder, feeder.terminationStatus != 0, feeder.terminationReason == .exit {
+            throw ToolError(tool: (feeder.executableURL?.lastPathComponent ?? "decoder"), status: feeder.terminationStatus, message: "")
+        }
+    }
+
+    /// SIGTERM, at most `killWait` for ffmpeg to end, then SIGKILL — never an unbounded wait (a process stuck in a GPU
+    /// driver may survive even that; the job goes on without it and the log says so).
+    private func stop(_ p: ToolProcess, _ feeder: Process?) {
+        let pid = p.process.processIdentifier
+        p.process.terminate()
+        if let feeder, feeder.isRunning { feeder.terminate() }
+        let deadline = Date().addingTimeInterval(ProxyRenderer.killWait)
+        while p.process.isRunning && Date() < deadline { usleep(50_000) }
+        guard p.process.isRunning else { return }
+        kill(pid, SIGKILL)
+        if let feeder, feeder.isRunning { kill(feeder.processIdentifier, SIGKILL) }
+        usleep(500_000)
+        if p.process.isRunning { log?("ffmpeg (pid \(pid)) did not end \(Int(ProxyRenderer.killWait)) s after kill") }
+    }
+}
+```
+
+(`FramePosition` z úkolu 5 je součástí nahrazovaného úseku — v kódu výše je beze změny.)
+
+- [ ] **Step 4: `mac/Sources/OffloadKit/RawBackends.swift`** — celý nový obsah:
+
+```swift
+import Foundation
+
+/// Vendor decoders for formats ffmpeg cannot read. When a LUT is applied they hand ffmpeg the camera's log
+/// (`RawLook.log`; BRAW always decodes in the clip's gamma), so the same LUT / scale / burn-in chain fits every
+/// camera; without a LUT, RED and ARRI deliver their own Rec.709 look.
+enum RawBackends {
+    static let all: [RawBackend] = [BRAWBackend(), R3DBackend(), ARRIRAWBackend(), CanonRawBackend()]
+
+    /// ffmpeg wants a rational frame rate; cameras report floats.
+    static func rational(_ fps: Double) -> String {
+        for (v, r) in [(23.976, "24000/1001"), (29.97, "30000/1001"), (47.952, "48000/1001"), (59.94, "60000/1001"), (119.88, "120000/1001")]
+            where abs(fps - v) < 0.01 { return r }
+        return fps == fps.rounded() ? String(Int(fps)) : String(format: "%.3f", fps)
+    }
+
+    static func newestFile(in dir: String, ext: String) -> String? {
+        let fm = FileManager.default
+        let items = (try? fm.contentsOfDirectory(atPath: dir)) ?? []
+        return items.filter { ($0 as NSString).pathExtension.lowercased() == ext }
+            .map { dir + "/" + $0 }
+            .max { ((try? fm.attributesOfItem(atPath: $0)[.modificationDate] as? Date) ?? .distantPast)
+                < ((try? fm.attributesOfItem(atPath: $1)[.modificationDate] as? Date) ?? .distantPast) }
+    }
+
+    static func freshDir(_ tempDir: String, _ name: String) throws -> String {
+        let d = tempDir + "/" + name + "-" + UUID().uuidString.prefix(6)
+        try IO.mkdirs(d)
+        return d
+    }
+}
+
+// MARK: - Blackmagic RAW (braw-decode helper → raw RGB48 frames on a pipe)
+
+struct BRAWBackend: RawBackend {
+    let format = ClipFormat.braw
+    let missingHint = "Blackmagic RAW: chybí braw-decode nebo Blackmagic RAW Player/SDK"
+
+    func isAvailable(_ tools: ExternalTools) -> Bool { tools.brawDecoder != nil }
+
+    private struct Info: Decodable {
+        let width: Int, height: Int, sourceWidth: Int, sourceHeight: Int
+        let fps: Double, frames: Int, timecode: String, camera: String
+    }
+
+    private func info(_ path: String, scale: String, tools: ExternalTools) throws -> Info {
+        let out = try ToolProcess.run(tools.brawDecoder!, ["--info", "--scale", scale, path])
+        return try JSONDecoder().decode(Info.self, from: Data(out.utf8))
+    }
+
+    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo {
+        let i = try info(path, scale: "eighth", tools: tools)
+        var c = ClipInfo()
+        c.codec = "Blackmagic RAW"
+        c.width = i.sourceWidth
+        c.height = i.sourceHeight
+        c.frameRate = RawBackends.rational(i.fps)
+        c.frames = i.frames
+        c.duration = i.fps > 0 ? Double(i.frames) / i.fps : nil
+        c.timecode = i.timecode.isEmpty ? nil : i.timecode
+        c.camera = i.camera.isEmpty ? nil : i.camera
+        return c
+    }
+
+    /// Smallest decode scale that still covers the target height — decoding less is much faster.
+    private func scale(sourceHeight: Int, target: Int) -> String {
+        for (name, div) in [("eighth", 8), ("quarter", 4), ("half", 2)] where sourceHeight / div >= target { return name }
+        return "full"
+    }
+
+    /// The frame braw-decode starts at for a thumbnail `seconds` into the clip. Rounded: `seconds` comes from the
+    /// exact rational rate (24000/1001), braw-decode reports a rounded fps (23.976) — truncating would land a frame early.
+    static func startFrame(seconds: Double, fps: Double, frames: Int) -> Int {
+        let rate = fps > 0 ? fps : 25
+        return min(max(0, frames - 1), max(0, Int((seconds * rate).rounded())))
+    }
+
+    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
+                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+        let target = singleFrameAt == nil ? settings.height : 180
+        let s = scale(sourceHeight: c.height ?? 2160, target: target)
+        let dims = try info(path, scale: s, tools: tools)
+        var args = ["--scale", s]
+        if let t = singleFrameAt {
+            args += ["--start", String(BRAWBackend.startFrame(seconds: t, fps: dims.fps, frames: dims.frames)), "--count", "1"]
+        }
+        let feeder = Process()
+        feeder.executableURL = URL(fileURLWithPath: tools.brawDecoder!)
+        feeder.arguments = args + [path]
+        // braw-decode hands over full-range RGB (RGBU16) in the clip's own gamma: a built-in LUT needs the pre-map first.
+        return FrameSource(inputArgs: ["-f", "rawvideo", "-pix_fmt", "rgb48le", "-s", "\(dims.width)x\(dims.height)",
+                                       "-r", c.frameRate ?? "25", "-i", "-"],
+                           feeder: feeder, audioFromInput: false, fullRange: true)
+    }
+}
+
+// MARK: - RED (REDline → ProRes LT intermediate)
+
+struct R3DBackend: RawBackend {
+    let format = ClipFormat.r3d
+    let missingHint = "RED R3D: nainstalujte REDCINE-X PRO (REDline)"
+
+    func isAvailable(_ tools: ExternalTools) -> Bool { tools.redline != nil }
+
+    /// `--printMeta 1` prints "Key: value" lines; the key names differ between versions, so match loosely.
+    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo {
+        let out = try ToolProcess.run(tools.redline!, ["--i", path, "--printMeta", "1"])
+        var meta: [String: String] = [:]
+        for line in out.split(separator: "\n") {
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            let k = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+            let v = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            if meta[k] == nil { meta[k] = v }
+        }
+        func find(_ needles: [String]) -> String? {
+            for n in needles { if let hit = meta.first(where: { $0.key.contains(n) })?.value, !hit.isEmpty { return hit } }
+            return nil
+        }
+        var c = ClipInfo()
+        c.codec = "REDCODE RAW"
+        c.width = find(["frame width", "width"]).flatMap { Int($0.filter(\.isNumber)) }
+        c.height = find(["frame height", "height"]).flatMap { Int($0.filter(\.isNumber)) }
+        if let fps = find(["record fps", "timebase", "fps", "frame rate"]).flatMap({ Double($0.split(separator: " ").first ?? "") }) {
+            c.frameRate = RawBackends.rational(fps)
+            if let n = find(["total frames", "frame count", "frames"]).flatMap({ Int($0.filter(\.isNumber)) }) {
+                c.frames = n
+                c.duration = Double(n) / fps
+            }
+        }
+        c.timecode = find(["abs tc", "absolute timecode", "timecode", "edge tc"])
+        c.camera = find(["camera model", "camera"])
+        return c
+    }
+
+    /// REDline arguments: the smallest decode resolution that covers the proxy height; log (IPP2, REDWideGamutRGB /
+    /// Log3G10) only when a LUT follows, otherwise RED's own Rec.709 look.
+    static func args(input: String, outDir: String, info c: ClipInfo, settings: ProxySettings, look: RawLook) -> [String] {
+        let h = c.height ?? 4320
+        let res = h / 4 >= settings.height ? "4" : (h / 2 >= settings.height ? "3" : "1")
+        var args = ["--i", input, "--outDir", outDir, "--o", "intermediate", "--format", "201", "--PRcodec", "2", "--res", res, "--useMeta"]
+        if look.log { args += ["--colorSciVersion", "3", "--colorSpace", "25", "--gammaCurve", "34"] }
+        return args
+    }
+
+    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
+                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+        guard singleFrameAt == nil else {
+            // Thumbnails come from the finished proxy instead (one REDline run per clip is enough).
+            throw ToolError(tool: "REDline", status: -1, message: "thumbnail from proxy")
+        }
+        let dir = try RawBackends.freshDir(tempDir, "r3d")
+        try ToolProcess.run(tools.redline!, R3DBackend.args(input: path, outDir: dir, info: c, settings: settings, look: look))
+        guard let mov = RawBackends.newestFile(in: dir, ext: "mov") else {
+            throw ToolError(tool: "REDline", status: -1, message: "no output in \(dir)")
+        }
+        return FrameSource(inputArgs: ["-i", mov], cleanup: [dir])
+    }
+}
+
+// MARK: - ARRIRAW (ARRI Reference Tool CLI → ProRes LT MXF intermediate)
+
+struct ARRIRAWBackend: RawBackend {
+    let format = ClipFormat.arriraw
+    let missingHint = "ARRIRAW: nainstalujte ARRI Reference Tool (art-cmd)"
+
+    func isAvailable(_ tools: ExternalTools) -> Bool { tools.artCmd != nil }
+
+    /// `art-cmd export` writes the clip's metadata as JSON: lists of metadata sets per clip, plus one entry per frame.
+    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo {
+        let json = NSTemporaryDirectory() + "art-meta-\(UUID().uuidString).json"
+        defer { try? FileManager.default.removeItem(atPath: json) }
+        // art-cmd writes art.log into the working directory — never let that be the card or a destination.
+        try ToolProcess.run(tools.artCmd!, ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look"],
+                            cwd: NSTemporaryDirectory())
+        guard var root = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: json))) as? [String: Any] else {
+            throw ToolError(tool: "art-cmd", status: -1, message: "unreadable metadata")
+        }
+        // Only the first frame matters (start timecode); the rest would just slow the walk down.
+        if var fb = root["frameBasedMetadata"] as? [String: Any], let frames = fb["frames"] as? [Any] {
+            fb["frames"] = Array(frames.prefix(1))
+            root["frameBasedMetadata"] = fb
+        }
+        var flat: [String: Any] = [:]
+        func walk(_ v: Any, _ prefix: String) {
+            if let d = v as? [String: Any] { for (k, x) in d { walk(x, prefix + k + ".") } }
+            else if let a = v as? [Any] { for x in a { walk(x, prefix) } }
+            else if flat[String(prefix.dropLast())] == nil { flat[String(prefix.dropLast())] = v }
+        }
+        walk(root, "")
+        func value(_ suffix: String) -> Any? { flat.first { $0.key.hasSuffix(suffix) }?.value }
+        func int(_ suffix: String) -> Int? { (value(suffix) as? NSNumber)?.intValue ?? (value(suffix) as? String).flatMap { Int($0) } }
+
+        var c = ClipInfo()
+        c.codec = (value("videoCodec") as? String) ?? "ARRIRAW"
+        c.width = int("storedSize.width") ?? int("displayRect.width")
+        c.height = int("storedSize.height") ?? int("displayRect.height")
+        if let rate = value("nativePictureEssenceDescriptor.file.sampleRate") as? String {
+            c.frameRate = rate.hasSuffix("/1") ? String(rate.dropLast(2)) : rate
+        }
+        c.frames = int("clipDuration")
+        let parts = (c.frameRate ?? "").split(separator: "/").compactMap { Double($0) }
+        let fps = parts.count == 2 ? parts[0] / parts[1] : parts.first
+        if let n = c.frames, let fps, fps > 0 { c.duration = Double(n) / fps }
+        c.timecode = value("frames.timecode") as? String
+        c.camera = value("cameraModel") as? String
+        c.logEncoding = value("sceneColorEncodingTransferCurve") as? String
+        // Lens squeeze; ARRI writes it as a factor or in thousandths depending on the field.
+        if let raw = flat.first(where: { $0.key.lowercased().contains("squeeze") && ($0.value as? NSNumber) != nil })?.value as? NSNumber {
+            let v = raw.doubleValue > 10 ? raw.doubleValue / 1000 : raw.doubleValue
+            if v > 1.01 { c.squeeze = v }
+        }
+        c.audioChannels = flat.keys.contains { $0.hasSuffix("nativeSoundEssenceDescriptorList.blockAlign") } ? 2 : 0
+        return c
+    }
+
+    /// The LUT decides which log it needs when its name says so; otherwise the clip's own log encoding
+    /// from metadata, then the camera (ALEXA 35 family → LogC4, older ALEXAs → LogC3).
+    static func colorSpace(lut: String?, info: ClipInfo) -> String {
+        let name = ((lut ?? "") as NSString).lastPathComponent.lowercased()
+        if name.contains("logc4") { return "AWG4/D65/LogC4" }
+        if name.contains("logc3") || name.contains("logc ") || name.contains("logc_") || name.contains("logc-") { return "AWG3/D65/LogC3" }
+        if let log = info.logEncoding?.lowercased() { return log.contains("4") ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3" }
+        return isAlexa35(info.camera) ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3"
+    }
+
+    /// "ALEXA 35" / "ALEXA35" as a whole word — not "ALEXA Mini LF 35mm" or a serial number.
+    static func isAlexa35(_ camera: String?) -> Bool {
+        guard let camera else { return false }
+        return camera.range(of: #"\bALEXA\s*35\b"#, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// art-cmd arguments and, for a frame-lines crop, the parameters JSON (written to `parametersFile`).
+    /// Frame lines are defined on the desqueezed picture: the crop is computed there, then mapped back to sensor pixels
+    /// and done before debayer/scaling (full detail inside the frame lines). Size and desqueeze go into the same file
+    /// (art-cmd refuses --desqueeze / --output-height with it, and --output-height would stretch the crop back).
+    static func args(input: String, output: String, info c: ClipInfo, settings: ProxySettings, look: RawLook,
+                     parametersFile: String) -> (args: [String], parameters: Data?, cropped: Bool) {
+        var args = ["process", "--input", input, "--video-codec", "prores422lt", "--deflip", "--output", output]
+        var parameters: Data?
+        let sq = c.squeeze ?? 1
+        if let w = c.width, let h = c.height, let fc = settings.frameCrop(width: Int(Double(w) * sq), height: h) {
+            let crop = (x: Int(Double(fc.x) / sq) & ~1, y: fc.y, w: Int(Double(fc.w) / sq) & ~1, h: fc.h)
+            let outH = settings.height & ~1  // same height for every proxy, whatever the crop
+            let outW = Int((Double(outH) * Double(crop.w) * sq / Double(crop.h) / 2).rounded()) * 2
+            let params: [String: Any] = [
+                "inputCrop": ["displayXOffsetOverride": crop.x, "displayYOffsetOverride": crop.y,
+                              "displayWidthOverride": crop.w, "displayHeightOverride": crop.h],
+                "outputScaling": ["targetWidth": outW, "targetHeight": outH],
+            ]
+            parameters = try? JSONSerialization.data(withJSONObject: params)
+        }
+        if parameters != nil {
+            args += ["--parameters", parametersFile]
+        } else {
+            args += ["--desqueeze", "--output-height", String(settings.height)]
+        }
+        if look.log {
+            args += ["--target-colorspace", look.arriColorSpace ?? colorSpace(lut: nil, info: c)]
+        } else {
+            args += ["--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"]
+        }
+        return (args, parameters, parameters != nil)
+    }
+
+    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
+                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+        guard singleFrameAt == nil else { throw ToolError(tool: "art-cmd", status: -1, message: "thumbnail from proxy") }
+        let dir = try RawBackends.freshDir(tempDir, "ari")
+        let out = dir + "/intermediate.mxf"
+        let file = dir + "/parameters.json"
+        let a = ARRIRAWBackend.args(input: path, output: out, info: c, settings: settings, look: look, parametersFile: file)
+        if let json = a.parameters { try json.write(to: URL(fileURLWithPath: file)) }
+        try ToolProcess.run(tools.artCmd!, a.args, cwd: dir)
+        guard FileManager.default.fileExists(atPath: out) else { throw ToolError(tool: "art-cmd", status: -1, message: "no output") }
+        return FrameSource(inputArgs: ["-i", out], alreadyCropped: a.cropped, cleanup: [dir])
+    }
+}
+
+// MARK: - Canon Cinema RAW Light — no command-line decoder exists for macOS
+
+struct CanonRawBackend: RawBackend {
+    let format = ClipFormat.canonRaw
+    let missingHint = "Canon Cinema RAW Light: pro macOS neexistuje dekodér pro příkazovou řádku — zkopírováno a ověřeno, proxy přeskočeno"
+
+    func isAvailable(_ tools: ExternalTools) -> Bool { false }
+    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo { throw ToolError(tool: "Canon RAW", status: -1, message: missingHint) }
+    func source(_ path: String, info: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
+                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+        throw ToolError(tool: "Canon RAW", status: -1, message: missingHint)
+    }
+}
+```
+
+- [ ] **Step 5: `Report.swift` (`ClipEntry`)** — za `thumbnails` přidat vlastnost a rozšířit `CodingKeys`:
+
+```swift
+    /// The LUT applied to this clip's proxy and thumbnails, and why (JSON "lut"; absent when nil, like Windows).
+    public var lut: LutUse?
+
+    enum CodingKeys: String, CodingKey {
+        case clip, info, probeError, proxyStatus, proxyPath, proxyNote, proxySeconds, lut
+    }
+```
+
+(staré `CodingKeys` nahradit; `thumbnails` v nich dál nejsou.)
+
+- [ ] **Step 6: `Job.swift`**
+
+1. K vlastnostem `OffloadJob` (úkol 4) přidat a interní `init` nahradit:
+
+```swift
+    /// The built-in LUTs the job chooses from (tests pass the repo's shared/luts).
+    let luts: LutCatalog
+
+    /// Tests pass their own engine options (allowSourceVolume, beforeFileCopy …) and LUT catalog.
+    init(config: JobConfig, options: OffloadOptions, luts: LutCatalog = .shared) {
+        self.config = config
+        self.luts = luts
+        engine = OffloadEngine(options: options)
+    }
+```
+
+2. Celé `analyzeAndRender(plan:report:log:)` nahradit (obsahuje úpravy úkolů 3, 7, 19 a 20):
+
+```swift
+    private func analyzeAndRender(plan: OffloadPlan, report input: OffloadReport, log: ((String) -> Void)?) -> OffloadReport {
+        var report = input
+        let tools = config.tools.resolved()
+        let renderer = ProxyRenderer(settings: config.proxy, tools: tools)
+        renderer.log = log   // software retries and unkillable ffmpeg processes go to the job's log
+        let clips = ClipDetector.detect(plan.scan.files)
+        guard !clips.isEmpty else { return report }
+
+        let verified = report.verified
+        let fileIndex = Dictionary(uniqueKeysWithValues: report.files.enumerated().map { ($0.element.path, $0.offset) })
+        /// First destination that holds a good copy of every segment — clips are read from disk, never from the card.
+        func goodDest(_ clip: Clip) -> Int? {
+            report.destinations.indices.first { d in
+                clip.segments.allSatisfy { seg in
+                    fileIndex[seg].map { OffloadReport.isGood(report.files[$0].destinations[d], verified: verified) } ?? false
+                }
+            }
+        }
+
+        var entries = clips.map(ClipEntry.init)
+        update {
+            $0.phase = .analyzing
+            $0.clipCount = entries.count
+        }
+        for i in entries.indices {
+            if isCancelled { break }
+            let clip = entries[i].clip
+            update {
+                $0.clipIndex = i
+                $0.clipName = clip.name
+                $0.clipFraction = 0
+            }
+            guard let d = goodDest(clip) else {
+                entries[i].probeError = "no verified copy"
+                continue
+            }
+            if let reason = renderer.unsupportedReason(clip), clip.format != .video {
+                entries[i].probeError = reason
+                continue
+            }
+            do {
+                var info = try renderer.probe(clip, cardPath: plan.cardPaths[d])
+                if clip.format == .video && info.width == nil {
+                    if let (arri, arriInfo) = renderer.reclassifyUndecodableMXF(clip, cardPath: plan.cardPaths[d]) {
+                        entries[i].clip = arri
+                        info = arriInfo
+                    } else {
+                        entries[i].info = info
+                        entries[i].probeError = "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy"
+                        continue
+                    }
+                }
+                entries[i].info = info
+                // The Sony XML is read from the destination: it sits next to the clip on the card, so it was copied too.
+                entries[i].lut = LutResolver.resolve(entries[i].clip, info: info,
+                                                     clipFullPath: plan.cardPaths[d] + "/" + entries[i].clip.path,
+                                                     settings: config.proxy, catalog: luts)
+                // RED and ARRI raw cannot give a single frame directly; their thumbnails come from the proxy later.
+                if entries[i].clip.format != .r3d && entries[i].clip.format != .arriraw {
+                    entries[i].thumbnails = tryThumbnails(renderer, entries[i].clip, cardPath: plan.cardPaths[d], info: info,
+                                                          lut: entries[i].lut, log: log)
+                }
+            } catch {
+                entries[i].probeError = "\(error)"
+                log?("probe \(clip.name): \(error)")
+            }
+        }
+        report.clips = entries
+        report.proxy = config.proxy
+        rewriteReports(report, plan: plan)
+
+        guard config.proxy.enabled, !isCancelled else { return report }
+        update {
+            $0.phase = .proxies
+            $0.clipCount = entries.count
+        }
+        var usedNames = Set<String>()
+        for i in entries.indices {
+            if isCancelled { break }
+            let clip = entries[i].clip  // may have been reclassified during analysis (MXF → ARRIRAW)
+            update {
+                $0.clipIndex = i
+                $0.clipName = clip.name
+                $0.clipFraction = 0
+            }
+            if clip.isCameraProxy && config.proxy.skipCameraProxies {
+                entries[i].proxyStatus = .skipped
+                continue
+            }
+            if let reason = renderer.unsupportedReason(clip) ?? (entries[i].info != nil && entries[i].info?.width == nil ? entries[i].probeError : nil) {
+                entries[i].proxyStatus = .unsupported
+                entries[i].proxyNote = reason
+                continue
+            }
+            guard let d = goodDest(clip), let info = entries[i].info else {
+                entries[i].proxyStatus = .failed
+                entries[i].proxyNote = entries[i].probeError ?? "no verified copy"
+                update { $0.proxiesFailed += 1 }
+                continue
+            }
+            var name = clip.name
+            var n = 2
+            while usedNames.contains(name.lowercased()) { name = "\(clip.name)_\(n)"; n += 1 }
+            usedNames.insert(name.lowercased())
+            let rel = Layout.proxyDirName + "/" + name + ".mov"
+
+            let t0 = Date()
+            do {
+                try renderer.render(clip, cardPath: plan.cardPaths[d], info: info, lut: entries[i].lut,
+                                    output: plan.cardPaths[d] + "/" + rel,
+                                    progress: { f in self.update { $0.clipFraction = f } },
+                                    isCancelled: { self.isCancelled })
+                entries[i].proxyStatus = .done
+                entries[i].proxyPath = rel
+                if config.proxy.copyToAllDestinations {
+                    // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.
+                    for (o, other) in plan.cardPaths.enumerated() where o != d {
+                        do {
+                            try ProxyCopy.copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel)
+                        } catch {
+                            let note = "kopie na \(other) selhala: \(error)"
+                            entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note
+                            log?("proxy \(clip.name): copy to \(other) failed: \(error)")
+                        }
+                    }
+                }
+                if let extra = config.proxy.extraFolder {
+                    // The user's proxy folder: also never fails the proxy (the disk may have been disconnected).
+                    let (_, error) = ProxyCopy.toExtraFolder(plan.cardPaths[d] + "/" + rel, extraFolder: extra, date: plan.date,
+                                                             cardName: plan.cardName, fileName: name + ".mov")
+                    if let error {
+                        let note = "kopie do \(extra) selhala: \(error)"
+                        entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note
+                        log?("proxy \(clip.name): copy to \(extra) failed: \(error)")
+                    }
+                }
+                if entries[i].thumbnails.isEmpty {
+                    // RAW formats rendered via an intermediate: take the thumbnails from the finished proxy (it has the LUT).
+                    let proxyClip = Clip(name: name, path: rel, format: .video, segments: [rel], bytes: 0, isCameraProxy: false)
+                    entries[i].thumbnails = tryThumbnails(renderer, proxyClip, cardPath: plan.cardPaths[d], info: info,
+                                                          lut: nil, log: log)
+                }
+                entries[i].proxySeconds = Date().timeIntervalSince(t0)
+                update { $0.proxiesDone += 1 }
+            } catch {
+                entries[i].proxyStatus = .failed
+                entries[i].proxyNote = "\(error)"
+                update { $0.proxiesFailed += 1 }
+                log?("proxy \(clip.name): \(error)")
+            }
+        }
+        report.clips = entries
+        rewriteReports(report, plan: plan)
+        return report
+    }
+```
+
+3. `tryThumbnails` (úkol 7) nahradit:
+
+```swift
+    private func tryThumbnails(_ renderer: ProxyRenderer, _ clip: Clip, cardPath: String, info: ClipInfo,
+                               lut: LutUse?, log: ((String) -> Void)?) -> [Thumbnail] {
+        do {
+            return try renderer.thumbnails(clip, cardPath: cardPath, info: info, lut: lut, isCancelled: { self.isCancelled })
+        } catch {
+            if !isCancelled { log?("thumbnails \(clip.name): \(error)") }
+            return []
+        }
+    }
+```
+
+- [ ] **Step 7: `HTMLReport.swift`**
+
+1. V hlavním CSS nahradit `.clipname{font-weight:600}.path{color:var(--muted);font-size:12px}` za
+   `.clipname{font-weight:600}.path,.note{color:var(--muted);font-size:12px}`.
+2. Celý blok `if !r.clips.isEmpty { … }` nahradit:
+
+```swift
+        if !r.clips.isEmpty {
+            h += "<h2>Klipy</h2><div class=\"panel\"><table>\n"
+            h += "<tr><th></th><th>Klip</th><th>Formát</th><th>Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Délka</th><th>TC</th><th class=\"num\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n"
+            for c in r.clips {
+                let img = c.thumbnails.isEmpty ? "<div class=\"nothumb\"></div>"
+                    : "<div class=\"thumbs\">" + c.thumbnails.map { t in
+                        "<figure><img class=\"thumb\" src=\"data:image/jpeg;base64,\(t.jpeg.base64EncodedString())\" alt=\"\"><figcaption>\(esc(t.label))</figcaption></figure>"
+                    }.joined() + "</div>"
+                let i = c.info
+                var codecParts: [String] = []
+                if c.clip.format != .video { codecParts.append(c.clip.format.label) }
+                if let codec = i?.codec, !codecParts.contains(codec) { codecParts.append(codec) }
+                let codec = codecParts.joined(separator: " · ")
+                let (pc, pl) = proxyLabel(c)
+                var notes: [String] = []
+                for n in [c.probeError, c.proxyNote].compactMap({ $0 }) where !notes.contains(n) { notes.append(n) }
+                let note = notes.joined(separator: " · ")
+                var noteHTML = note.isEmpty ? "" : "<div class=\"path err\">\(esc(note))</div>"
+                // Which LUT and why — also "bez LUT (reason)", unless the user switched LUTs off.
+                if let lu = c.lut, lu.source != "none" {
+                    noteHTML += "<div class=\"note\">LUT: \(esc(lu.name)) (\(esc(lu.reason)))</div>"
+                } else if let ln = c.lut, ln.reason != "vypnuto v nastavení" {
+                    noteHTML += "<div class=\"note\">LUT: bez LUT (\(esc(ln.reason)))</div>"
+                }
+                h += "<tr><td>\(img)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))\(c.clip.isCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "")</div>"
+                h += "<div class=\"path\">\(esc(c.clip.path))</div>\(noteHTML)</td>"
+                h += "<td class=\"wrap\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num\">\(esc(i?.fpsLabel ?? ""))</td>"
+                h += "<td class=\"num\">\(esc(i?.durationLabel ?? ""))</td><td class=\"mono\">\(esc(i?.timecode ?? ""))</td>"
+                h += "<td class=\"num\">\(i.map { $0.audioChannels > 0 ? "\($0.audioChannels) ch" : "—" } ?? "")</td>"
+                h += "<td class=\"num\">\(formatBytes(c.clip.bytes))</td><td class=\"\(pc)\">\(pl)</td></tr>\n"
+            }
+            h += "</table></div>\n"
+            if let p = r.proxy, p.enabled {
+                let lut: String
+                switch LutResolver.effectiveMode(p) {
+                case .auto: lut = "automaticky podle kamery"
+                case .builtin: lut = LutCatalog.shared.find(p.lutBuiltin)?.name ?? p.lutBuiltin ?? "bez LUT"
+                case .custom: lut = p.lutPath.flatMap { $0.isEmpty ? nil : ($0 as NSString).lastPathComponent } ?? "bez LUT"
+                case .off: lut = "bez LUT"
+                }
+                let frame = p.frameLabel.map { ", výřez \($0)" } ?? ""
+                let extra = p.extraFolder.map { " · také ve složce <span class=\"mono\">\(esc($0))</span>" } ?? ""
+                h += "<p class=\"sub\">Proxy: \(esc(p.codec.label)), \(p.height)p\(frame), LUT: \(esc(lut)) → <span class=\"mono\">\(Layout.proxyDirName)/</span>\(extra)</p>\n"
+            }
+        }
+```
+
+- [ ] **Step 8: Testy projdou** — Run: `swift test --filter "LutRenderTests|LutReportTests|ColorTests|ThumbnailTests|StageTwoTests|FFmpegWatchTests|ProxyFolderTests|HTMLReportTests"` → 0 chyb; pak `swift test`.
+
+Pokud `testSLog3GreyProxyIs042` vyjde mimo 0,42 ± 0,03: vypsat `ffprobe -show_streams` zdrojového klipu (`color_range`)
+a zkusit totéž bez VideoToolbox (dočasně `usesHardwareDecode` → `false`) — rozdíl znamená, že VT dekodér mění rozsah
+(Doplněk D.10, řádek 4); výsledek do commitu, oprava do `needsPreMap`/filtru, ne do testu.
+
+- [ ] **Step 9: Ruční kontrola** (vzorky z kamer, jsou-li): `swift build -c release && .build/release/offload <karta> -d <USB disk> --proxy`
+→ v HTML reportu u každého klipu řádek „LUT: … (důvod)“, proxy z log záznamu vypadají jako Rec.709; Sony klip natočený
+v Rec.709 „LUT: bez LUT (Sony XML: rec709 (není log))“. BRAW (je-li `braw-decode`): šedá v proxy přirozená, ne vybledlá
+(bez pre-map by byla posunutá). Na vzorcích ověřit i rozsah R3D/ARRIRAW mezisouborů (spec LUTů §6 bod 5).
+
+- [ ] **Step 10: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 22 — LUT pro každý klip v proxy i náhledech; BRAW a plnorozsahové video přepočtené na konvenci vestavěných LUTů (lutrgb), RED a ARRIRAW vydají log jen s LUTem; v reportu u klipu „LUT: … (důvod)“ a klíč lut, v řádku Proxy způsob výběru LUTu`
+
+`docs/ROZDILY.md` — řádek „**Vestavěné LUTy + automatický výběr podle kamery**“: Mac `🔨 jádro (CLI a GUI ⏳)`.
+`docs/FORMATY.md` — u `clips[].lut` místo „Windows od plánu 5, Mac zatím ignoruje“ jen „(obě verze)“; u `proxy` zrušit
+poznámku, že Mac nové klíče LUTu ignoruje (je-li tam).
+
+Run: `git add -A mac/Sources mac/Tests docs && git commit -m "Mac: per-clip LUT in proxies and thumbnails, full-range pre-map, RAW log only with a LUT, LUT in the report"`
+
+---
+
+### Task 23: CLI — `--lut auto|none|<id>|<cesta>`, `--lut-fallback`, `offload luts`, `--proxy-folder`
+
+Doplněk ke spec — oddíly D.2 a D.3.6. Port `windows/src/Offload.Cli/CopyCommand.cs` (volby LUTu a složky pro proxy,
+výpis „LUT: …“ a „proxy also → …“) a `LutsCommand.cs`.
+
+**Files:**
+- Modify: `mac/Sources/offload/main.swift` (`Offload.configuration`, `Copy` — volby a začátek `run()`, nový `Copy.lutLine`, nový `Luts`)
+- Modify: `docs/VYVOJ-MAC.md`, `docs/ROZDILY.md`
+
+**Interfaces:**
+- Consumes: `LutOption.parse`, `LutCatalog.shared`, `LutResolver.effectiveMode` (úkol 21), `ProxyPreflight.extraFolderInUse`, `ProxyPreflight.isDirectory` (úkol 20), `abs(_:)` (main.swift).
+- Produces: `offload copy … [--lut auto|none|<id>|<cesta.cube>] [--lut-fallback <id>|none] [--proxy-folder <složka>]`,
+  subcommand `offload luts`, `static func Copy.lutLine(_ p: ProxySettings) -> String`.
+  **Změna chování:** bez `--lut` je teď režim `auto` (LUT podle kamery), dřív žádný LUT — stejně jako Windows.
+
+- [ ] **Step 1: Test-first** — parsování voleb je pokryté `LutOptionTests` (úkol 21), pravidla složky `ProxyFolderTests`
+(úkol 20). CLI se ověřuje ručně (krok 4). Run: `swift test` → zelené.
+
+- [ ] **Step 2: `main.swift`**
+
+`Offload.configuration` — podpříkazy (po úkolu 16):
+
+```swift
+        subcommands: [Copy.self, Verify.self, Bench.self, Ports.self, Luts.self],
+```
+
+V `struct Copy` nahradit volbu `lut` a za `noBurnIn` přidat dvě nové:
+
+```swift
+    @Option(help: "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path.")
+    var lut: String?
+```
+
+```swift
+    @Option(help: "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto.")
+    var lutFallback: String?
+
+    @Option(help: "Also copy every proxy to <folder>/<date>/<card name>/ (with --proxy; never overwrites).")
+    var proxyFolder: String?
+```
+
+V `Copy.run()` nahradit vše od začátku funkce až **po** řádek `// Connection chain: informational only — resolving it never fails the copy.`
+(ten a vše za ním z úkolu 16 zůstává):
+
+```swift
+    func run() throws {
+        var config = JobConfig(source: abs(source), destRoots: dest.map(abs))
+        config.cardName = name
+        config.date = date
+        config.chunkMB = chunkMb
+        config.buffers = buffers
+        config.verify = !noVerify
+        config.allowSameDevice = allowSameDevice
+        config.analyzeClips = !noAnalyze
+        config.proxy.enabled = proxy
+        let choice = LutOption.parse(lut, fallback: lutFallback, catalog: LutCatalog.shared)
+        if let e = choice.error { throw ValidationError(e) }
+        config.proxy.lutMode = choice.mode
+        config.proxy.lutBuiltin = choice.builtin
+        config.proxy.lutPath = choice.path.map(abs)
+        config.proxy.lutFallback = choice.fallback
+        if let p = config.proxy.lutPath, !FileManager.default.fileExists(atPath: p) {
+            throw ValidationError("LUT not found: \(p)")
+        }
+        config.proxy.height = proxyHeight
+        guard let codec = ProxyCodec(rawValue: proxyCodec) else {
+            throw ValidationError("Unknown proxy codec \(proxyCodec)")
+        }
+        config.proxy.codec = codec
+        config.proxy.bitrateMbps = proxyBitrate
+        config.proxy.frameAspect = frameAspect
+        config.proxy.frameScale = frameScale / 100
+        config.proxy.burnFilename = !noBurnIn
+        config.proxy.burnTimecode = !noBurnIn
+        config.proxy.extraFolder = proxyFolder.map(abs)
+        if config.proxy.extraFolder != nil && !proxy {
+            fputs("Note: --proxy-folder has no effect without --proxy.\n", stderr)
+        }
+        if let folder = ProxyPreflight.extraFolderInUse(config.proxy), !ProxyPreflight.isDirectory(folder) {
+            throw ValidationError("Proxy folder not found: \(folder)")
+        }
+        // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all (Windows LutOption.PlanLine).
+        if proxy || config.analyzeClips { print("LUT: " + Copy.lutLine(config.proxy)) }
+
+        let job = OffloadJob(config: config)
+        let plan = try job.prepare()
+        print("Card \(plan.cardName): \(plan.scan.files.count) files, \(formatBytes(plan.scan.totalBytes))")
+        for p in plan.cardPaths { print("  → \(p)") }
+        if let extra = ProxyPreflight.extraFolderInUse(config.proxy) {
+            let target = URL(fileURLWithPath: extra).appendingPathComponent(plan.date).appendingPathComponent(plan.cardName).path
+            print("  proxy also → \(target)")
+        }
+        let tools = config.tools.resolved()
+        if config.analyzeClips || proxy {
+            print("  ffmpeg: \(tools.ffmpeg ?? "NOT FOUND")")
+        }
+```
+
+Do `struct Copy` (za `run()`) přidat:
+
+```swift
+    /// The "LUT: …" line before the copy (same wording as Windows).
+    static func lutLine(_ p: ProxySettings) -> String {
+        switch LutResolver.effectiveMode(p) {
+        case .off: return "none"
+        case .custom: return p.lutPath ?? ""
+        case .builtin: return p.lutBuiltin ?? ""
+        case .auto: return "auto" + (p.lutFallback.map { " (fallback \($0))" } ?? "")
+        }
+    }
+```
+
+Za `struct Ports` (úkol 16) přidat:
+
+```swift
+struct Luts: ParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "List the built-in LUTs (ids for --lut and --lut-fallback).")
+
+    func run() throws {
+        let cat = LutCatalog.shared
+        if cat.luts.isEmpty { fputs("No built-in LUTs found (luts folder missing).\n", stderr) }
+        for l in cat.luts { print("\(l.id) — \(l.name)") }
+    }
+}
+```
+
+- [ ] **Step 3: Build** — Run: `swift build`.
+
+- [ ] **Step 4: Ruční ověření** (vývojový build najde LUTy v `shared/luts` repa — `LutCatalog.findFolder`, cesta s `/.build/`):
+  1. `.build/debug/offload luts` → 11 řádků, první `arri-logc3-awg3 — ARRI LogC3 / AWG3 → Rec.709`; exit 0.
+  2. `.build/debug/offload copy /tmp -d /tmp/x --lut nope --dry-run; echo "exit $?"` →
+     `Error: Unknown LUT 'nope'. Use auto, none, a .cube path or one of: arri-logc3-awg3, …` a nápověda; exit 64
+     (ArgumentParser `ValidationError`, stejně jako stávající „LUT not found“).
+  3. `.build/debug/offload copy /tmp -d /tmp/x --lut auto --lut-fallback nope --dry-run` → `Error: Unknown fallback LUT 'nope'. Built-in: …`.
+  4. `.build/debug/offload copy /tmp -d /tmp/x --proxy --proxy-folder /nonexistent --dry-run` → `Error: Proxy folder not found: /nonexistent`.
+  5. `.build/debug/offload copy <karta> -d /Volumes/<USB disk> --proxy-folder /tmp --dry-run` → na stderr
+     `Note: --proxy-folder has no effect without --proxy.`, `LUT: auto`, žádný řádek „proxy also“.
+  6. `.build/debug/offload copy <karta> -d /Volumes/<USB disk> --proxy --proxy-folder /tmp/px --lut-fallback dji-dlog-dgamut --dry-run`
+     (složku `/tmp/px` předem vytvořit) → `LUT: auto (fallback dji-dlog-dgamut)`, `  proxy also → /tmp/px/<datum>/<karta>`.
+  7. Ostrý běh s `--proxy --proxy-folder /tmp/px` na kartě s klipem → `/tmp/px/<datum>/<karta>/<klip>.mov`; druhý běh
+     stejné karty → `<klip>_2.mov`, první soubor beze změny (`shasum`).
+
+- [ ] **Step 5: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 23 — CLI: --lut auto|none|<id>|<cesta> (bez volby automaticky podle kamery), --lut-fallback, offload luts, --proxy-folder (neexistující složka s --proxy = chyba před startem, bez --proxy jen poznámka)`
+
+`docs/ROZDILY.md` — řádky „Vestavěné LUTy …“ a „Složka pro proxy navíc“: Mac `🔨 jádro + CLI, GUI ⏳`.
+
+Run: `git add -A mac/Sources docs && git commit -m "Mac CLI: --lut auto|none|id|path, --lut-fallback, offload luts, --proxy-folder"`
+
+---
+
+### Task 24: GUI — výběr LUTu, záložní LUT, „Kopírovat proxy i do složky“
+
+Doplněk ke spec — oddíly D.2 a D.3.7. Port `windows/src/Offload.App/ProxyOptionsViewModel.cs`, `SetupPanel.xaml` (řádky
+LUT a složka pro proxy) a kontrol před startem z `MainViewModel.Setup.cs`/`MainViewModel.Queue.cs` (`ProxyFolderProblem`,
+`RefreshProxyFolder`, kontrola LUT a složky těsně před startem s limitem 5 s).
+
+**Files:**
+- Modify: `mac/Sources/OffloadApp/AppModel.swift` (`AppModel`: nové vlastnosti, `save`, `refreshDestinations`, `proxyFolderProblem`, `canStart`, `start` + `startJobs`, `answer(within:_:)`, `pickLUT`, `lutChoice`, `setLutChoice`, `pickProxyFolder`)
+- Modify: `mac/Sources/OffloadApp/Views.swift` (celá `ProxySection`)
+- Modify: `docs/VYVOJ-MAC.md`, `docs/ROZDILY.md`
+
+**Interfaces:**
+- Consumes: `LutCatalog.shared`, `LutResolver.effectiveMode`, `LutMode` (úkol 21), `ProxyPreflight.extraFolderInUse`, `extraFolderBlocking(_:folderExists:)`, `isDirectory` (úkol 20), `ProxyPreflight.lutInUse`, `blocking` (úkoly 10, 21), `AppModel` z úkolů 11 a 17.
+- Produces (aplikace): `AppModel.luts: LutCatalog`, `folderExists: Bool?`, `starting: Bool`, `proxyFolderProblem: String?`,
+  `lutChoice: String` (`"auto"`, id vestavěného, `"none"`, `"custom"`), `setLutChoice(_:)`, `@discardableResult pickLUT() -> Bool`,
+  `pickProxyFolder()`, `nonisolated static func answer(within:_:) -> Bool`.
+
+- [ ] **Step 1: Test-first** — logika je v OffloadKit a testovaná (`LutSettingsTests`, `LutResolverTests`, `ProxyFolderTests`).
+GUI se ověřuje ručně (krok 5). Run: `swift test` → zelené.
+
+- [ ] **Step 2: `AppModel.swift` (`AppModel`)**
+
+1. K vlastnostem (za `@Published private(set) var terminating = false`) přidat:
+
+```swift
+    @Published private(set) var folderExists: Bool?
+    /// The LUT and proxy folder are being checked right before a start (at most 5 s each).
+    @Published private(set) var starting = false
+    /// The built-in LUTs (the app bundle's Resources/luts; already loaded by SettingsStore.decode at launch).
+    let luts = LutCatalog.shared
+    private var folderChecked: String?
+    private var probedFolder: String?
+```
+
+2. `save()` nahradit:
+
+```swift
+    private func save() {
+        if let data = SettingsStore.encode(settings) { UserDefaults.standard.set(data, forKey: SettingsStore.defaultsKey) }
+        let t = settings.tools.resolved()
+        if t != tools { tools = t }
+        if settings.destRoots != probedRoots
+            || ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips) != probedLut
+            || ProxyPreflight.extraFolderInUse(settings.proxy) != probedFolder {
+            refreshDestinations()
+        }
+    }
+```
+
+3. `refreshDestinations()` nahradit (kontroluje i složku pro proxy, na stejné frontě jako cíle):
+
+```swift
+    /// Free space / filesystem / existence of every destination, whether the custom LUT and the proxy folder exist —
+    /// every 5 s, after a change and from the refresh button. Never on the main thread.
+    func refreshDestinations() {
+        if probing {
+            probeAgain = true   // runs once the check in flight returns (it may hang on a network disk)
+            return
+        }
+        probing = true
+        let roots = settings.destRoots
+        let lut = ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips)
+        let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
+        probedRoots = roots
+        probedLut = lut
+        probedFolder = folder
+        destQueue.async { [weak self] in
+            var found: [String: DestinationStatus] = [:]
+            for r in roots { found[r] = AppModel.probe(r) }
+            let lutOK = lut.map { FileManager.default.fileExists(atPath: $0) }
+            let folderOK = folder.map { ProxyPreflight.isDirectory($0) }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.destStatus = found
+                self.lutExists = lutOK
+                self.lutChecked = lut
+                self.folderExists = folderOK
+                self.folderChecked = folder
+                self.probing = false
+                if self.probeAgain {
+                    self.probeAgain = false
+                    self.refreshDestinations()
+                }
+            }
+        }
+    }
+```
+
+4. Za `lutProblem` přidat:
+
+```swift
+    /// A missing proxy folder (disconnected disk) blocks the start — from the last background check; nil until checked.
+    var proxyFolderProblem: String? {
+        let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
+        return ProxyPreflight.extraFolderBlocking(settings.proxy, folderExists: folder == folderChecked ? folderExists : nil)
+    }
+```
+
+5. `canStart` nahradit:
+
+```swift
+    var canStart: Bool {
+        !terminating && !starting && !selectedSources.isEmpty && !settings.destRoots.isEmpty
+            && settings.destRoots.allSatisfy { destStatus[$0]?.exists == true }
+            && lutProblem == nil && proxyFolderProblem == nil
+    }
+```
+
+6. `start()` (úkol 11) přejmenovat na `private func startJobs()` a smazat v ní první řádek `guard canStart else { return }`
+   (zbytek těla beze změny). Nad ni přidat nové `start()` a pomocnou `answer`:
+
+```swift
+    /// The custom LUT and the proxy folder are checked once more right before the start (they may sit on a disk that
+    /// just went away) — off the main thread, at most 5 s each; meanwhile the start button is disabled.
+    func start() {
+        guard canStart else { return }
+        let lut = ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips)
+        let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
+        guard lut != nil || folder != nil else { return startJobs() }
+        starting = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let lutOK = lut.map { path in AppModel.answer(within: 5) { FileManager.default.fileExists(atPath: path) } }
+            let folderOK = folder.map { path in AppModel.answer(within: 5) { ProxyPreflight.isDirectory(path) } }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.starting = false
+                // Settings may have changed meanwhile: only an answer for what is still in use counts.
+                if let lut, lut == ProxyPreflight.lutInUse(self.settings.proxy, analyzeClips: self.settings.analyzeClips) {
+                    self.lutExists = lutOK
+                    self.lutChecked = lut
+                }
+                if let folder, folder == ProxyPreflight.extraFolderInUse(self.settings.proxy) {
+                    self.folderExists = folderOK
+                    self.folderChecked = folder
+                }
+                if self.canStart { self.startJobs() }   // otherwise the red text says why
+            }
+        }
+    }
+
+    /// `check` on its own thread; false when it has not answered within `seconds` (a hung network disk).
+    nonisolated static func answer(within seconds: Double, _ check: @escaping () -> Bool) -> Bool {
+        final class Box: @unchecked Sendable { var value = false }
+        let box = Box()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            box.value = check()
+            done.signal()
+        }
+        return done.wait(timeout: .now() + seconds) == .success && box.value
+    }
+```
+
+7. `pickLUT()` nahradit a přidat výběr LUTu a složky:
+
+```swift
+    /// The .cube dialog; a picked file switches to custom mode. False when cancelled (nothing changes).
+    @discardableResult
+    func pickLUT() -> Bool {
+        let panel = NSOpenPanel()
+        panel.title = "Vyber LUT (.cube)"
+        panel.allowedContentTypes = [.init(filenameExtension: "cube")!]
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        settings.proxy.lutPath = url.path
+        settings.proxy.lutMode = .custom
+        return true
+    }
+
+    /// The LUT picker's value: "auto", a built-in id, "none" or "custom". An unknown built-in id shows as auto (like Windows).
+    var lutChoice: String {
+        switch LutResolver.effectiveMode(settings.proxy) {
+        case .auto: return "auto"
+        case .off: return "none"
+        case .custom: return "custom"
+        case .builtin:
+            let id = settings.proxy.lutBuiltin ?? ""
+            return luts.find(id) != nil ? id : "auto"
+        }
+    }
+
+    func setLutChoice(_ choice: String) {
+        switch choice {
+        case "auto":
+            settings.proxy.lutMode = .auto
+        case "none":
+            settings.proxy.lutMode = .off
+        case "custom":
+            if (settings.proxy.lutPath ?? "").isEmpty {
+                // Not inside the Picker's own update: the panel opens right after; Cancel keeps the previous choice.
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    if !self.pickLUT() { self.objectWillChange.send() }
+                }
+                return
+            }
+            settings.proxy.lutMode = .custom
+        default:
+            settings.proxy.lutBuiltin = choice
+            settings.proxy.lutMode = .builtin
+        }
+    }
+
+    func pickProxyFolder() {
+        guard let path = pickFolder(title: "Vyber složku pro proxy") else { return }
+        settings.proxy.extraFolder = path
+    }
+```
+
+- [ ] **Step 3: `Views.swift`** — `struct ProxySection` nahradit celou:
+
+```swift
+struct ProxySection: View {
+    @EnvironmentObject var model: AppModel
+
+    private var lutMode: LutMode { LutResolver.effectiveMode(model.settings.proxy) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(title: "Proxy", systemImage: "film.stack")
+            Toggle("Renderovat proxy po ověření", isOn: $model.settings.proxy.enabled)
+            if model.settings.proxy.enabled {
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                    GridRow {
+                        Text("Kodek").foregroundStyle(.secondary)
+                        Picker("", selection: $model.settings.proxy.codec) {
+                            ForEach(ProxyCodec.allCases) { Text($0.label).tag($0) }
+                        }.labelsHidden()
+                    }
+                    GridRow {
+                        Text("Výška").foregroundStyle(.secondary)
+                        Picker("", selection: $model.settings.proxy.height) {
+                            ForEach([540, 720, 1080, 2160], id: \.self) { Text("\($0)p").tag($0) }
+                        }.labelsHidden().pickerStyle(.segmented)
+                    }
+                    if model.settings.proxy.codec == .h264 || model.settings.proxy.codec == .hevc {
+                        GridRow {
+                            Text("Datový tok").foregroundStyle(.secondary)
+                            Stepper("\(model.settings.proxy.bitrateMbps) Mb/s", value: $model.settings.proxy.bitrateMbps, in: 2...50)
+                        }
+                    }
+                    GridRow {
+                        Text("Výřez").foregroundStyle(.secondary)
+                        HStack {
+                            Picker("", selection: $model.settings.proxy.frameAspect) {
+                                Text("celý obraz").tag(Double?.none)
+                                ForEach([1.33, 1.66, 1.78, 1.85, 2.0, 2.39], id: \.self) { a in
+                                    Text(String(format: "%.2f", a)).tag(Double?.some(a))
+                                }
+                            }.labelsHidden().frame(maxWidth: 130)
+                            if model.settings.proxy.frameAspect != nil {
+                                Stepper("\(Int((model.settings.proxy.frameScale * 100).rounded())) % obrazu",
+                                        value: $model.settings.proxy.frameScale, in: 0.5...1.0, step: 0.01)
+                                    .help("Velikost frame lines vůči obrazu – 90 % = 10 % overscan")
+                            }
+                        }
+                    }
+                    GridRow {
+                        Text("LUT").foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Picker("", selection: Binding(get: { model.lutChoice }, set: { model.setLutChoice($0) })) {
+                                Text("Automaticky podle kamery").tag("auto")
+                                ForEach(model.luts.luts, id: \.id) { Text($0.name).tag($0.id) }
+                                Text("Bez LUT").tag("none")
+                                Text("Vlastní…").tag("custom")
+                            }.labelsHidden()
+                            if lutMode == .auto {
+                                Text("Když kameru nepoznám:").font(.caption).foregroundStyle(.secondary)
+                                Picker("", selection: Binding(get: { model.settings.proxy.lutFallback ?? "none" },
+                                                              set: { model.settings.proxy.lutFallback = $0 == "none" ? nil : $0 })) {
+                                    Text("Bez LUT").tag("none")
+                                    ForEach(model.luts.luts, id: \.id) { Text($0.name).tag($0.id) }
+                                }.labelsHidden()
+                            }
+                            if lutMode == .custom {
+                                HStack {
+                                    Text(model.settings.proxy.lutPath.map { ($0 as NSString).lastPathComponent } ?? "nevybráno")
+                                        .lineLimit(1).truncationMode(.middle)
+                                        .help(model.settings.proxy.lutPath ?? "")
+                                    Spacer()
+                                    Button("Vybrat…") { model.pickLUT() }
+                                }
+                            }
+                        }
+                    }
+                }
+                Toggle("Burn-in názvu klipu", isOn: $model.settings.proxy.burnFilename)
+                Toggle("Burn-in timecodu", isOn: $model.settings.proxy.burnTimecode)
+                Toggle("Zvuk", isOn: $model.settings.proxy.audio)
+                Toggle("Přeskočit proxy nahrané kamerou (SUB/PROXY)", isOn: $model.settings.proxy.skipCameraProxies)
+                Toggle("Kopírovat proxy na všechny cíle", isOn: $model.settings.proxy.copyToAllDestinations)
+                Text("Kopírovat proxy i do složky").font(.caption).foregroundStyle(.secondary).padding(.top, 4)
+                HStack {
+                    Text(model.settings.proxy.extraFolder.map { ($0 as NSString).lastPathComponent } ?? "nevybráno")
+                        .lineLimit(1).truncationMode(.middle)
+                        .foregroundStyle(model.settings.proxy.extraFolder == nil ? .secondary : .primary)
+                        .help(model.settings.proxy.extraFolder ?? "")
+                    Spacer()
+                    Button("Vybrat…") { model.pickProxyFolder() }
+                    if model.settings.proxy.extraFolder != nil {
+                        Button { model.settings.proxy.extraFolder = nil } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.borderless).help("Nekopírovat do složky")
+                    }
+                }
+            }
+            // Outside the proxy block (as on Windows): a missing custom LUT also blocks a start with proxies off
+            // when clip analysis (thumbnails) uses it — the reason must stay visible.
+            if let p = model.lutProblem { Text(p).font(.caption).foregroundStyle(.red) }
+            if let p = model.proxyFolderProblem { Text(p).font(.caption).foregroundStyle(.red) }
+        }
+    }
+}
+```
+
+(Kořen svazku jako složka pro proxy, např. `/Volumes/PROXY`, má `lastPathComponent` „PROXY“ — Windows ukazuje u kořene
+celou cestu; na Macu název svazku stačí, plná cesta je v nápovědě.)
+
+- [ ] **Step 4: Build** — Run: `swift build && swift test && scripts/build-app.sh` → bez chyb. Hlášku izolace v uzávěrech
+řešit jako v úkolu 11 (krok 5).
+
+- [ ] **Step 5: Ruční test** — `open build/Offload.app` (nastavení zálohovat: `defaults read cz.budin.offload settings > /tmp/offload-settings-backup.txt`):
+  1. **Starý vlastní LUT přežije aktualizaci:** s nastavením z verze 0.1.0, kde byl vybraný `.cube`, ukáže LUT „Vlastní…“
+     s názvem souboru (migrace `lutPath` → `custom`); bez LUTu „Automaticky podle kamery“ a pod ním „Když kameru nepoznám: Bez LUT“.
+  2. Seznam LUT: „Automaticky podle kamery“, 11 vestavěných (název z `luts.json`), „Bez LUT“, „Vlastní…“. „Vlastní…“
+     bez vybraného souboru otevře dialog; „Zrušit“ vrátí předchozí volbu.
+  3. Vybrat vestavěný LUT, aplikaci zavřít a otevřít → volba zůstane (`defaults read cz.budin.offload settings` → `"lutMode":"builtin"`).
+  4. „Kopírovat proxy i do složky“ → „Vybrat…“ složku na USB disku → název složky (plná cesta v nápovědě). USB disk
+     odpojit → do 5 s červeně „Složka pro proxy není dostupná: /Volumes/…“ a „Spustit offload“ neaktivní; připojit → zmizí.
+     Křížek složku zruší.
+  5. Odpojit disk se složkou těsně před kliknutím na „Spustit offload“ (než to stihne pětisekundová kontrola) → start se
+     neprovede, objeví se červený text (kontrola těsně před startem).
+  6. Ostrý offload karty s proxy a složkou → proxy v `_PROXY` na cílech i v `<složka>/<datum>/<karta>/`; v reportu
+     u klipů „LUT: … (důvod)“ a v řádku Proxy „· také ve složce …“.
+
+- [ ] **Step 6: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 24 — GUI: výběr LUTu (automaticky / vestavěný / bez / vlastní) se záložním LUTem „Když kameru nepoznám:“, „Kopírovat proxy i do složky“; nedostupná složka nebo chybějící vlastní LUT blokuje start (ověřuje se na pozadí každých 5 s i těsně před startem, nejvýš 5 s)`
+
+`docs/VYVOJ-MAC.md` oddíl „Naplánováno“: smazat odrážky „Složka pro proxy navíc …“ a „Vestavěné LUTy …“.
+
+`docs/ROZDILY.md`:
+- řádky „**Vestavěné LUTy + automatický výběr podle kamery**“ a „**Složka pro proxy navíc**“: Mac `✅ CLI + GUI (GUI čeká ruční test)`;
+- v „Záměrných rozdílech“ smazat odrážku „**Složka pro proxy navíc** (zatím jen Windows, pro Mac naplánováno) …“ a odrážku
+  „**Vestavěné LUTy** …“ přepsat na obě verze — ponechat jen omezení, která platí pro obě (Canon/Panasonic/DJI/Fuji se zatím
+  automaticky nepoznají, D-Log M bez LUTu, ARRI v Rec.709 dostane LUT podle modelu, rozsah R3D/ARRIRAW mezisouborů a ProRes
+  z ALEXA 35 ověřit na vzorcích), smazat větu „Mac nová nastavení … ignoruje a dál používá jen `proxy.lutPath`“.
+
+Run: `git add -A mac/Sources docs && git commit -m "Mac GUI: LUT choice with fallback, extra proxy folder, start blocked by a missing folder or custom LUT"`
+
+---
+
+### Task 25: Balíček — vestavěné LUTy a ikona v `Offload.app`
+
+Doplněk ke spec — oddíly D.3.1 a D.6. LUTy (`shared/luts/*.cube` + `luts.json`) do `Contents/Resources/luts/`, ikona
+z `shared/icon/Offload.iconset` přes `iconutil` do `Contents/Resources/Offload.icns`, `CFBundleIconFile` v Info.plist.
+Python k sestavení **není** potřeba — `.cube` i PNG ikony jsou v repu commitnuté.
+
+**Files:**
+- Modify (celý soubor): `mac/scripts/build-app.sh`
+- Modify: `docs/VYVOJ-MAC.md`, `docs/ROZDILY.md`
+
+**Interfaces:**
+- Consumes: `shared/luts/luts.json`, `shared/luts/*.cube`, `shared/icon/Offload.iconset/icon_{16,32,128,256,512}x…{,@2x}.png`, `LutCatalog.findFolder` (úkol 21 — CLI v `Contents/Resources/bin` najde `../luts`).
+- Produces: `build/Offload.app/Contents/Resources/luts/` (12 souborů), `build/Offload.app/Contents/Resources/Offload.icns`, Info.plist `CFBundleIconFile = Offload`.
+
+- [ ] **Step 1: Ověřit, že dnes chybí** — Run: `scripts/build-app.sh && ls build/Offload.app/Contents/Resources/luts; build/Offload.app/Contents/Resources/bin/offload luts; echo "exit $?"`
+Expected: `ls: … No such file or directory`, `No built-in LUTs found (luts folder missing).`, exit 0; Info.plist bez `CFBundleIconFile`.
+
+Předem ověřit iconset (Doplněk D.10, řádek 7): `sips -g pixelWidth -g pixelHeight ../shared/icon/Offload.iconset/*.png` →
+16, 32, 32, 64, 128, 256, 256, 512, 512, 1024 podle jmen (`icon_16x16@2x.png` = 32 px …).
+
+- [ ] **Step 2: `mac/scripts/build-app.sh`** — celý nový obsah:
+
+```zsh
+#!/bin/zsh
+# Builds build/Offload.app: SwiftUI app + offload CLI + bundled ffmpeg/ffprobe/braw-decode, the built-in LUTs and the icon.
+# The LUTs and the icon come from the repo's shared/ folder (committed; Python is needed only to regenerate them).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+SHARED=../shared
+if [[ ! -f $SHARED/luts/luts.json ]]; then
+    echo "error: $SHARED/luts/luts.json missing — build from a full clone of the repo (mac/ and shared/)"
+    exit 1
+fi
+swift build -c release --product OffloadApp
+swift build -c release --product offload
+[[ -x Tools/bin/braw-decode ]] || Tools/braw-decode/build.sh
+
+APP=build/Offload.app
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/bin" "$APP/Contents/Resources/luts"
+cp .build/release/OffloadApp "$APP/Contents/MacOS/Offload"
+cp .build/release/offload "$APP/Contents/Resources/bin/offload"
+for t in ffmpeg ffprobe braw-decode; do
+    [[ -x Tools/bin/$t ]] && cp Tools/bin/$t "$APP/Contents/Resources/bin/" || echo "warning: Tools/bin/$t missing"
+done
+# Built-in LUTs: the app finds Resources/luts, the CLI in Resources/bin finds ../luts (LutCatalog.findFolder).
+cp $SHARED/luts/luts.json $SHARED/luts/*.cube "$APP/Contents/Resources/luts/"
+# App icon from the shared iconset (16–512 px, @1x and @2x).
+if [[ -d $SHARED/icon/Offload.iconset ]]; then
+    iconutil -c icns $SHARED/icon/Offload.iconset -o "$APP/Contents/Resources/Offload.icns"
+else
+    echo "warning: $SHARED/icon/Offload.iconset missing — the app has no icon"
+fi
+VERSION=$(sed -n 's/.*static let string = "\(.*\)".*/\1/p' Sources/OffloadKit/Report.swift)
+cat > "$APP/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleName</key><string>Offload</string>
+  <key>CFBundleDisplayName</key><string>Offload</string>
+  <key>CFBundleIdentifier</key><string>cz.budin.offload</string>
+  <key>CFBundleExecutable</key><string>Offload</string>
+  <key>CFBundleIconFile</key><string>Offload</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$VERSION</string>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSPrincipalClass</key><string>NSApplication</string>
+  <key>NSRemovableVolumesUsageDescription</key><string>Offload čte záznam z paměťových karet.</string>
+  <key>NSNetworkVolumesUsageDescription</key><string>Offload může zapisovat na síťové disky.</string>
+</dict></plist>
+PLIST
+codesign --force --deep --sign - "$APP" 2>/dev/null || true
+echo "built $APP"
+```
+
+- [ ] **Step 3: Build a ověření**
+
+Run: `scripts/build-app.sh && ls build/Offload.app/Contents/Resources/luts | wc -l && build/Offload.app/Contents/Resources/bin/offload luts | head -2 && plutil -p build/Offload.app/Contents/Info.plist | grep CFBundleIconFile && ls -l build/Offload.app/Contents/Resources/Offload.icns`
+Expected: `12`; `arri-logc3-awg3 — ARRI LogC3 / AWG3 → Rec.709`, `arri-logc4-awg4 — ARRI LogC4 / AWG4 → Rec.709`;
+`"CFBundleIconFile" => "Offload"`; soubor `.icns` (desítky až stovky kB).
+
+Ruční: `open build/Offload.app` → ikona (karta s fajfkou na modro-tyrkysovém čtverci) v Docku, v přepínači ⌘⇥ a ve Finderu;
+v sekci Proxy seznam LUT s 11 vestavěnými. Pokud Dock ukazuje starou/obecnou ikonu: `touch build/Offload.app && killall Dock`.
+Symlink CLI mimo balíček (`ln -s "$PWD/build/Offload.app/Contents/Resources/bin/offload" /usr/local/bin/offload`) →
+`offload luts` vypíše 11 LUTů (`resolvingSymlinksInPath`; Doplněk D.10, řádek 6).
+
+- [ ] **Step 4: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 25 — balíček: vestavěné LUTy v Offload.app/Contents/Resources/luts (CLI je najde z Resources/bin), ikona aplikace Offload.icns z shared/icon/Offload.iconset (iconutil), CFBundleIconFile`
+
+`docs/ROZDILY.md` — tabulka „Technologie“: přidat řádek `| Ikona aplikace | Offload.icns z shared/icon/Offload.iconset (iconutil) | Offload.ico ze shared/icon (exe i okna) |`
+a řádek `| Vestavěné LUTy v balíčku | Offload.app/Contents/Resources/luts | Offload\luts |`.
+
+Run: `git add -A mac/scripts docs && git commit -m "Mac: bundle the built-in LUTs and the app icon"`
+
+---
+
+### Task 26: Dokumentace, verze a ROZDILY
+
+(Dřívější úkol 18 — přečíslovaný, protože úkoly 18–25 doplňku musí proběhnout před uzavřením dokumentace a verzí 0.2.0.)
 
 **Files:**
 - Modify: `mac/Sources/OffloadKit/Report.swift` (`OffloadVersion.string`)
@@ -6956,23 +11294,48 @@ swift test                    # XCTest (Tests/OffloadKitTests); ffmpeg testy se 
   a ve stavovém řádku „brzdí: D1“.
 - Omezení: zařízení 10 Gb/s běžící na 5 Gb/s se nepozná (macOS neprozradí schopnost bez BOS deskriptoru);
   fyzickou polohu portu macOS nezná — porty si pojmenujte.
+
+## LUTy, proxy a složka pro proxy
+
+- Proxy i náhledy v reportu dostanou LUT podle kamery každého klipu: 11 vestavěných LUTů Log → Rec.709
+  (`Offload.app/Contents/Resources/luts`, sdílené s Windows ve `shared/luts`). Aplikace: *Proxy › LUT* — Automaticky podle
+  kamery (+ „Když kameru nepoznám:“), vestavěný LUT, Bez LUT, Vlastní… (`.cube`). Použitý LUT a důvod je v reportu u klipu.
+- CLI: `offload luts` (seznam id), `offload copy … --proxy --lut auto|none|<id>|<cesta.cube> [--lut-fallback <id>|none]`;
+  bez `--lut` platí `auto`.
+- Složka pro proxy navíc: *Proxy › Kopírovat proxy i do složky* nebo `--proxy-folder <složka>` — každá proxy i do
+  `<složka>/<datum>/<karta>/` (při shodě jména `_2`, `_3`…, nic se nepřepíše); nedostupná složka zablokuje start.
+- Proxy jsou BT.709 v legálním rozsahu a tak i označené, náhledy JPEG BT.601 (JFIF). VideoToolbox dekóduje jen H.264/HEVC;
+  render proxy bez pokroku 60 s (nový snímek nebo data z dekodéru RAW; do prvního pokroku 180 s) se ukončí — po hardwarovém
+  dekódování se jednou zkusí znovu softwarově, jinak proxy selže s poznámkou „ffmpeg se zasekl (60 s bez nového snímku);
+  proxy nevznikla“ (po neúspěšném opakování „… i bez hardwarového dekódování; proxy nevznikla“).
+- Python k sestavení netřeba: `.cube` i ikona jsou v repu. Jen kdo mění `shared/luts/generate.py` nebo
+  `shared/icon/make_icon.py`, potřebuje Python (návod v `shared/luts/README.md` a `shared/icon/README.md`).
 ~~~
 
 a do úvodu odkaz na návrh a plán: `Návrh dorovnání s Windows: docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`.
 
 - [ ] **Step 4: `docs/ROZDILY.md`**
   - „Stav k …“ datum; tabulka Přehled: Mac verze `0.2.0`.
-  - Funkce a stav: zkontrolovat, že úkoly 7, 16 a 17 už nastavily „Náhledy v reportu“, „Test USB portů…“ a „Propustnost článků HW…“ na Mac ✅ (jinak doplnit).
-  - Technologie: nové řádky „USB topologie | IOKit (IORegistry) | cfgmgr32 + IOCTL hubů“, „Kde sedí svazek | DiskArbitration + IORegistry | IOCTL_STORAGE_QUERY_PROPERTY“, „Identita karty | UUID svazku | GUID svazku + sériové číslo FS“, „Nastavení“ Mac `UserDefaults` (stejné schéma vč. `portNames`).
-  - Záměrné rozdíly: ověřit, že odrážka o HW diagnostice zmizela (úkol 17); „USB rychlosti a porty“ přepsat na obě platformy (Mac: schopnost 10 Gb/s z bcdUSB nepozná; bez párovacího klíče je USB 2 polovina portu „neznámý typ“); přidat „Thunderbolt: Mac hlásí externí PCIe/NVMe disky jako ‚Thunderbolt‘; v Kartách se zobrazí, pokud macOS hlásí svazek jako externí (ověřit `volumeIsInternal` u Thunderbolt disku: `diskutil info /Volumes/X` → Device Location); Windows je bere jako NVMe a nenabízí (Složka…)“; „Verze v reportu“: Mac `0.2.0`.
-- [ ] **Step 5: `docs/FORMATY.md`** — tabulka JSON, řádek `version`: `` `0.2.0` (Mac), `0.1.0-win` (Windows) ``.
-- [ ] **Step 6: `docs/VYVOJ-MAC.md`** — oddíl „Naplánováno“: smazat odrážku „Totéž chování jako ve Windows verzi“ (hotovo), přidat „LUTy Log → Rec.709 (plán 5, obě platformy)“; do průběhu: `- Úkol 18 — verze 0.2.0, README (testy, Hardware), ROZDILY a FORMATY podle stavu po dorovnání`. Nadpis průběhu přejmenovat na `## <datum> — verze 0.2.0: dorovnání s Windows (plán mac-parity)`.
+  - Funkce a stav: zkontrolovat, že úkoly 7, 16, 17 a 24 už nastavily „Náhledy v reportu“, „Test USB portů…“,
+    „Propustnost článků HW…“, „Vestavěné LUTy…“ a „Složka pro proxy navíc“ na Mac ✅ (jinak doplnit).
+  - Technologie: nové řádky „USB topologie | IOKit (IORegistry) | cfgmgr32 + IOCTL hubů“, „Kde sedí svazek | DiskArbitration + IORegistry | IOCTL_STORAGE_QUERY_PROPERTY“, „Identita karty | UUID svazku | GUID svazku + sériové číslo FS“, „Nastavení“ Mac `UserDefaults` (stejné schéma vč. `portNames`, `proxy.lutMode/lutBuiltin/lutFallback/extraFolder`); ověřit řádky z úkolů 19 („Dekódování pro proxy“) a 25 („Ikona aplikace“, „Vestavěné LUTy v balíčku“).
+  - Záměrné rozdíly: ověřit, že odrážky o HW diagnostice (úkol 17), „Barvy proxy“ (úkol 18) a „Složka pro proxy navíc“
+    (úkol 24) zmizely a „Vestavěné LUTy“ platí pro obě verze (úkol 24); „USB rychlosti a porty“ přepsat na obě platformy (Mac: schopnost 10 Gb/s z bcdUSB nepozná; bez párovacího klíče je USB 2 polovina portu „neznámý typ“); přidat „Thunderbolt: Mac hlásí externí PCIe/NVMe disky jako ‚Thunderbolt‘; v Kartách se zobrazí, pokud macOS hlásí svazek jako externí (ověřit `volumeIsInternal` u Thunderbolt disku: `diskutil info /Volumes/X` → Device Location); Windows je bere jako NVMe a nenabízí (Složka…)“; „Enkodér proxy v reportu“ beze změny (Mac `proxyEncoder` nepíše); „Verze v reportu“: Mac `0.2.0`.
+- [ ] **Step 5: `docs/FORMATY.md`** — tabulka JSON, řádek `version`: `` `0.2.0` (Mac), `0.1.0-win` (Windows) ``; ověřit, že
+  `clips[].lut` a `proxy.extraFolder` už nejsou „jen Windows“ (úkoly 20 a 22) a že v řádku `proxy` nezůstalo „jen Windows,
+  volitelně `extraFolder`“ (→ „volitelně `extraFolder`“).
+- [ ] **Step 6: `docs/VYVOJ-MAC.md`** — oddíl „Naplánováno“: smazat odrážky „Totéž chování jako ve Windows verzi“ a
+  „Podklady pro sestavení na Macu jsou připravené …“ (hotovo); odrážky o LUTech a složce pro proxy smazal už úkol 24 —
+  oddíl obsahuje jen to, co opravdu zbývá. Do průběhu: `- Úkol 26 — verze 0.2.0, README (testy, Hardware, LUTy a složka pro proxy), ROZDILY a FORMATY podle stavu po dorovnání`. Nadpis průběhu přejmenovat na `## <datum> — verze 0.2.0: dorovnání s Windows (plán mac-parity)`.
 - [ ] **Step 7: Závěrečné ověření**
 
 Run: `swift build -c release && swift test && scripts/build-app.sh`
-Expected: vše zelené; `build/Offload.app/Contents/Info.plist` má `CFBundleShortVersionString` `0.2.0`; `build/Offload.app/Contents/Resources/bin/offload --version` → `0.2.0`.
+Expected: vše zelené; `build/Offload.app/Contents/Info.plist` má `CFBundleShortVersionString` `0.2.0` a `CFBundleIconFile`
+`Offload`; `build/Offload.app/Contents/Resources/bin/offload --version` → `0.2.0`; `… /bin/offload luts | wc -l` → `11`.
 
 Křížové ověření formátu (s Windows PC nebo kopií výstupu z něj): `offload verify <karta zkopírovaná Windows verzí>` → `OK`; Windows `bin\offload.exe verify <karta zkopírovaná Macem>` → `OK`; `ascmhl verify <karta>` (pip `ascmhl`) → bez chyb.
+Report z Macu s LUTy otevřít ve Windows verzi není potřeba (HTML je samostatný); `offload_report.json` z Macu i Windows
+mají u klipů stejný tvar `lut` (`{source, id?, name, reason}`).
 
 - [ ] **Step 8: Commit**
 
