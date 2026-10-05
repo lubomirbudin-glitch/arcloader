@@ -291,6 +291,19 @@ public class BrawDecodeTests
         Assert.Equal($"{kernel32} has no CreateBlackmagicRawFactoryInstance", error);
     }
 
+    /// Final fix M4: the created object is asked for IBlackmagicRawFactory (IUnknown slot 0, valid on any COM object)
+    /// instead of being trusted to have its vtable; one that says no is an exit-3 error, and its reference is released.
+    [Fact]
+    public void Runtime_CreatedObjectWithoutTheFactoryInterface_IsAnErrorNotACrash()
+    {
+        using var other = new BrawCallback(new RecordingSink(), _ => { });   // a COM object that is no factory
+        nint p = other.Pointer;
+        Com.AddRef(p);                                                      // the reference "the export" handed out
+        Assert.Null(BrawRuntime.FromCreated(p, @"C:\BM\BlackmagicRawAPI.dll", out var error));
+        Assert.Equal(@"C:\BM\BlackmagicRawAPI.dll: the created object is not an IBlackmagicRawFactory (0x80004002)", error);
+        Assert.Equal(1, other.RefCount);                                    // released
+    }
+
     [BrawLibraryFact]
     public void Sdk_FactoryCodecConfigurationCallback()
     {

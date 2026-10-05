@@ -388,10 +388,27 @@ internal static unsafe class BrawRuntime
                 return null;
             }
         }
-        nint factory = ((delegate* unmanaged[Stdcall]<nint>)create)();
-        if (factory == 0)
+        nint created = ((delegate* unmanaged[Stdcall]<nint>)create)();
+        if (created == 0)
         {
             error = $"{dllPath}: CreateBlackmagicRawFactoryInstance returned null";
+            return null;
+        }
+        return FromCreated(created, dllPath, out error);
+    }
+
+    /// The factory interface of the object the export created; takes over (and releases) that reference. Only
+    /// QueryInterface is called on it — IUnknown slot 0, the same on every COM object — so a library whose object has
+    /// a different vtable layout (another SDK generation) is an error here, never a call into the wrong slot.
+    internal static BrawFactory? FromCreated(nint created, string dllPath, out string? error)
+    {
+        error = null;
+        int hr = Com.QueryInterface(created, Iid.Factory, out var factory);
+        Com.Release(created);
+        if (hr != Com.S_OK || factory == 0)
+        {
+            Com.Release(factory);
+            error = $"{dllPath}: the created object is not an IBlackmagicRawFactory ({Com.Hex(hr)})";
             return null;
         }
         return new BrawFactory(factory);
