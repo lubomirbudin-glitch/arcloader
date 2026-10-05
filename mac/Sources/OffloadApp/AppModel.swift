@@ -3,14 +3,6 @@ import Combine
 import OffloadKit
 import SwiftUI
 
-struct AppSettings: Codable, Equatable {
-    var destRoots: [String] = []
-    var verify = true
-    var analyzeClips = true
-    var proxy = ProxySettings()
-    var tools = ExternalTools()
-}
-
 /// One card in the queue; mirrors the job's status for SwiftUI.
 final class JobItem: ObservableObject, Identifiable {
     let id = UUID()
@@ -98,16 +90,12 @@ final class AppModel: ObservableObject {
 
     private let copyQueue = DispatchQueue(label: "app.copy", qos: .userInitiated)
     private let postQueue = DispatchQueue(label: "app.post", qos: .utility)
+    private let probeQueue = DispatchQueue(label: "app.probe", qos: .userInitiated)
     private var timer: Timer?
     private var observers: [NSObjectProtocol] = []
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: "settings"),
-           let s = try? JSONDecoder().decode(AppSettings.self, from: data) {
-            settings = s
-        } else {
-            settings = AppSettings()
-        }
+        settings = SettingsStore.decode(UserDefaults.standard.data(forKey: SettingsStore.defaultsKey))
         tools = settings.tools.resolved()
         refreshVolumes()
         let nc = NSWorkspace.shared.notificationCenter
@@ -122,7 +110,7 @@ final class AppModel: ObservableObject {
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(settings) { UserDefaults.standard.set(data, forKey: "settings") }
+        if let data = SettingsStore.encode(settings) { UserDefaults.standard.set(data, forKey: SettingsStore.defaultsKey) }
         let t = settings.tools.resolved()
         if t != tools { tools = t }
     }
@@ -141,49 +129,19 @@ final class AppModel: ObservableObject {
 
     // MARK: Volumes
 
+    /// Scans the mounted volumes on a background queue (a card is read to see whether it looks like one).
     func refreshVolumes() {
-        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsInternalKey, .volumeIsEjectableKey, .volumeIsRemovableKey,
-                                      .volumeTotalCapacityKey, .volumeAvailableCapacityKey, .volumeIsRootFileSystemKey]
-        let urls = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
-        var found: [VolumeItem] = []
-        for url in urls {
-            guard let v = try? url.resourceValues(forKeys: Set(keys)) else { continue }
-            if v.volumeIsRootFileSystem == true { continue }
-            let external = v.volumeIsInternal == false || v.volumeIsEjectable == true || v.volumeIsRemovable == true
-            guard external, url.path.hasPrefix("/Volumes/") else { continue }
-            let path = url.path
-            let isDest = settings.destRoots.contains { $0 == path || $0.hasPrefix(path + "/") }
-            found.append(VolumeItem(name: v.volumeName ?? url.lastPathComponent, path: path,
-                                    total: Int64(v.volumeTotalCapacity ?? 0), free: Int64(v.volumeAvailableCapacity ?? 0),
-                                    format: filesystemName(path), looksLikeCard: !isDest && looksLikeCameraCard(path),
-                                    isDestination: isDest))
+        let roots = settings.destRoots
+        probeQueue.async { [weak self] in
+            let found = Volumes.scan(destRoots: roots)
+            DispatchQueue.main.async { self?.applyVolumes(found) }
         }
-        let newCards = found.filter { $0.looksLikeCard && !volumes.contains($0) }.map(\.path)
-        volumes = found.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        selectedSources.formUnion(newCards)
-        selectedSources = selectedSources.filter { p in volumes.contains { $0.path == p && !$0.isDestination } || manualSources.contains(p) }
     }
 
-    private func filesystemName(_ path: String) -> String {
-        var fs = statfs()
-        guard statfs(path, &fs) == 0 else { return "" }
-        return withUnsafeBytes(of: fs.f_fstypename) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
-    }
-
-    /// Typical structure of camera media: known top-level folders, or clips at most two levels deep
-    /// (ARRI/RED/Blackmagic keep each clip or reel in its own folder).
-    private func looksLikeCameraCard(_ path: String) -> Bool {
-        let markers: Set<String> = ["DCIM", "PRIVATE", "CLIP", "CONTENTS", "XDROOT", "M4ROOT", "AVF_INFO", "CANONMSC", "BRAW", "MISC"]
-        let mediaExt: Set<String> = ["braw", "r3d", "rdm", "rdc", "mxf", "mov", "mp4", "ari", "crm"]
-        let fm = FileManager.default
-        guard let items = try? fm.contentsOfDirectory(atPath: path) else { return false }
-        if items.contains(where: { markers.contains($0.uppercased()) }) { return true }
-        func hasMedia(_ names: [String]) -> Bool { names.contains { mediaExt.contains(($0 as NSString).pathExtension.lowercased()) } }
-        if hasMedia(items) { return true }
-        for dir in items.prefix(50) where !dir.hasPrefix(".") {
-            if let sub = try? fm.contentsOfDirectory(atPath: path + "/" + dir), hasMedia(sub) { return true }
-        }
-        return false
+    private func applyVolumes(_ found: [VolumeItem]) {
+        selectedSources = Volumes.selectionAfterRefresh(previousPaths: volumes.map(\.path), found: found,
+                                                        selected: selectedSources, manual: manualSources)
+        volumes = found
     }
 
     func addManualSource() {
