@@ -14,6 +14,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | Analýza klipů, 3 snímky, proxy, PDF | hotovo (plán 2) — QSV/AMF a ostrý test na médiu neověřeno |
 | RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: plán 3 |
 | braw-decode | plán 3 |
+| HW diagnostika USB | hotovo (CLI `offload ports`); dotaz při startu a sekce v GUI v plánu 4 |
 | GUI `Offload.exe` | plán 4 |
 
 ## Build a testy
@@ -32,8 +33,20 @@ Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 offload E:\ -d D:\Zaloha -d F:\Zaloha          # karta E: na dva disky, ověření, report
 offload verify D:\Zaloha\2026-10-04\A001        # znovu ověřit hotovou kopii
 offload bench --read E:\ --write D:\ --gb 2     # rychlost karty a disků
+offload ports                                 # porty, kde a jak rychle jsou disky připojené, doporučení
+offload ports --measure --card E:\ --dest D:\   # + změřit skutečnou rychlost
 offload E:\ -d D:\Zaloha -d F:\Zaloha --proxy --lut look.cube --frame-aspect 1.85   # + proxy s LUT a výřezem
 ```
+
+`offload ports` pojmenuje každý USB konektor jedním popiskem, který platí všude (řádek disku, seznam portů,
+doporučení): „port 6“ (číslo USB 2 poloviny konektoru), port za hubem „port 7 › 2“, při více řadičích s řadičem
+„Intel USB 3.20 xHCI · port 3“. U portu je písmeno disku, který v něm je („← E:“). Cíl na stejném svazku jako karta
+se neměří (na kartu se nikdy nezapisuje); Ctrl+C při `--measure` dokončí měření aktuálního zařízení a smaže jeho
+dočasný soubor.
+
+Stavový řádek `offload copy` ukazuje, který článek brzdí („brzdí: D1“, „brzdí: card“, „(linka plná)“) — podle toho,
+kolik bloků čeká na zápis na každý disk, ne podle okamžité rychlosti (karta i disky jedou v kopii stejným tempem).
+Seznam „Připojení:“ nad ním ukazuje, co je co („D1 = Cíl 1: WD Elements 25A2 — USB 3 (5 Gb/s), port 6“).
 
 Na Windows se čte i zapisuje mimo systémovou cache (`FILE_FLAG_NO_BUFFERING`), po zápisu
 `FlushFileBuffers`; ověření tak čte data z disku, ne z RAM. Svazky, které to neumí (některé síťové),

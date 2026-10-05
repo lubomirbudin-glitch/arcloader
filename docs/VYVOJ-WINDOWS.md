@@ -13,8 +13,20 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 1 | jádro kopírování, ověření, reporty JSON/TXT/HTML/xxh64/MHL, CLI | hotovo (čeká ostrý test na kartě) |
 | 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | hotovo (čeká ostrý test na skutečném médiu) |
 | 3 | `braw-decode.exe` (C++, Blackmagic RAW SDK pro Windows) | naplánováno |
-| HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | naplánováno |
+| HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI) |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | naplánováno |
+
+## 2026-10-05 — plán HW (USB diagnostika), průběh
+
+- Závěrečné opravy — jeden popisek portu všude (řádek disku, seznam portů, doporučení; port hubu jako „port 7 › 2“, řadič v názvu jen při více řadičích), řadiče podle identity místo názvu, USB 3 hub/dok = obě poloviny sloučené podle čísla portu, neznámý typ portu ≠ „jen USB 2.0“, síťový disk a české názvy sběrnic, sdílený hub + rada rozdělit čtečku a disky na různé řadiče, „brzdí“ ve stavovém řádku podle zásoby nezapsaných bloků (ne podle okamžité rychlosti) a před názvem souboru, `offload ports`: cíl na svazku karty se neměří ani nepřijme, Ctrl+C při měření dokončí aktuální zařízení a smaže jeho dočasný soubor, štítek písmene disku u portu, skenování pokračuje i při chybě jednoho řadiče
+- Úkol 8 — CLI `offload ports [--measure]`, řetěz připojení a úzké hrdlo v `offload copy`
+- Úkol 7 — test HW: rychlý (topologie, linky) a s měřením (čtení karty, zápis + čtení cílů), uložení výsledku
+- Úkol 6 — řetěz článků během kopie: rychlost, % linky, součet na řadiči, úzké hrdlo
+- Úkol 5 — doporučení: zařízení pod svými možnostmi (port vs. kabel), sdílený řadič, volné rychlé a pomalé porty, odhad rychlosti offloadu
+- Úkol 4 — kde sedí disk: sběrnice (USB/SATA/NVMe…), řadič, port, rychlost linky, UASP
+- Úkol 3 — topologie USB: řadiče, huby, porty, fyzické konektory (USB 2 + USB 3 dvojče), externí huby
+- Úkol 2 — rychlost linky a schopnost zařízení (USB 2.0 / USB 3 5 Gb/s / 10 Gb/s+), oprava pasti „Speed=High" u USB 3
+- Úkol 1 — přístup ke stromu zařízení a USB hubům bez admin práv (cfgmgr32, IOCTL)
 
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
 
