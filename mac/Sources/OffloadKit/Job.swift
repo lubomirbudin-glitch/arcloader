@@ -78,9 +78,13 @@ public final class OffloadJob {
         self.init(config: config, options: OffloadJob.engineOptions(config))
     }
 
-    /// Tests pass their own engine options (allowSourceVolume, beforeFileCopy …).
-    init(config: JobConfig, options: OffloadOptions) {
+    /// The built-in LUTs the job chooses from (tests pass the repo's shared/luts).
+    let luts: LutCatalog
+
+    /// Tests pass their own engine options (allowSourceVolume, beforeFileCopy …) and LUT catalog.
+    init(config: JobConfig, options: OffloadOptions, luts: LutCatalog = .shared) {
         self.config = config
+        self.luts = luts
         engine = OffloadEngine(options: options)
     }
 
@@ -258,10 +262,14 @@ public final class OffloadJob {
                     }
                 }
                 entries[i].info = info
+                // The Sony XML is read from the destination: it sits next to the clip on the card, so it was copied too.
+                entries[i].lut = LutResolver.resolve(entries[i].clip, info: info,
+                                                     clipFullPath: plan.cardPaths[d] + "/" + entries[i].clip.path,
+                                                     settings: config.proxy, catalog: luts)
                 // RED and ARRI raw cannot give a single frame directly; their thumbnails come from the proxy later.
                 if entries[i].clip.format != .r3d && entries[i].clip.format != .arriraw {
                     entries[i].thumbnails = tryThumbnails(renderer, entries[i].clip, cardPath: plan.cardPaths[d], info: info,
-                                                          applyLUT: true, log: log)
+                                                          lut: entries[i].lut, log: log)
                 }
             } catch {
                 entries[i].probeError = "\(error)"
@@ -309,7 +317,8 @@ public final class OffloadJob {
 
             let t0 = Date()
             do {
-                try renderer.render(clip, cardPath: plan.cardPaths[d], info: info, output: plan.cardPaths[d] + "/" + rel,
+                try renderer.render(clip, cardPath: plan.cardPaths[d], info: info, lut: entries[i].lut,
+                                    output: plan.cardPaths[d] + "/" + rel,
                                     progress: { f in self.update { $0.clipFraction = f } },
                                     isCancelled: { self.isCancelled })
                 entries[i].proxyStatus = .done
@@ -337,10 +346,10 @@ public final class OffloadJob {
                     }
                 }
                 if entries[i].thumbnails.isEmpty {
-                    // RAW formats rendered via an intermediate: take the thumbnails from the finished proxy.
+                    // RAW formats rendered via an intermediate: take the thumbnails from the finished proxy (it has the LUT).
                     let proxyClip = Clip(name: name, path: rel, format: .video, segments: [rel], bytes: 0, isCameraProxy: false)
                     entries[i].thumbnails = tryThumbnails(renderer, proxyClip, cardPath: plan.cardPaths[d], info: info,
-                                                          applyLUT: false, log: log)
+                                                          lut: nil, log: log)
                 }
                 entries[i].proxySeconds = Date().timeIntervalSince(t0)
                 update { $0.proxiesDone += 1 }
@@ -378,9 +387,9 @@ public final class OffloadJob {
     }
 
     private func tryThumbnails(_ renderer: ProxyRenderer, _ clip: Clip, cardPath: String, info: ClipInfo,
-                               applyLUT: Bool, log: ((String) -> Void)?) -> [Thumbnail] {
+                               lut: LutUse?, log: ((String) -> Void)?) -> [Thumbnail] {
         do {
-            return try renderer.thumbnails(clip, cardPath: cardPath, info: info, applyLUT: applyLUT, isCancelled: { self.isCancelled })
+            return try renderer.thumbnails(clip, cardPath: cardPath, info: info, lut: lut, isCancelled: { self.isCancelled })
         } catch {
             if !isCancelled { log?("thumbnails \(clip.name): \(error)") }
             return []

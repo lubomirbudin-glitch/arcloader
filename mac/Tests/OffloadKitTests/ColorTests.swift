@@ -30,21 +30,21 @@ final class ColorTests: XCTestCase {
         return card
     }
 
-    // How a LUT reaches the renderer. Here (task 18) through settings.lutPath; task 22 switches these three helpers
-    // to the per-clip `lut:` parameter — the tests themselves stay the same.
+    // How a LUT reaches the renderer: per clip (task 22); custom mode so the renderer copies the .cube.
     private func renderer(_ settings: ProxySettings, lut: String?) -> ProxyRenderer {
         var s = settings
         s.lutPath = lut
+        s.lutMode = lut == nil ? .off : .custom
         return ProxyRenderer(settings: s, tools: TestMedia.tools)
     }
 
     private func render(_ r: ProxyRenderer, _ clip: Clip, card: String, to out: String, lut: String?) throws {
-        try r.render(clip, cardPath: card, info: try r.probe(clip, cardPath: card), output: out,
+        try r.render(clip, cardPath: card, info: try r.probe(clip, cardPath: card), lut: lut.map(TestMedia.customLut), output: out,
                      progress: { _ in }, isCancelled: { false })
     }
 
     private func thumbnails(_ r: ProxyRenderer, _ clip: Clip, card: String, lut: String?) throws -> [Thumbnail] {
-        try r.thumbnails(clip, cardPath: card, info: try r.probe(clip, cardPath: card), applyLUT: lut != nil)
+        try r.thumbnails(clip, cardPath: card, info: try r.probe(clip, cardPath: card), lut: lut.map(TestMedia.customLut))
     }
 
     // Review focus 8 — pure red through the proxy path (RGB source like the BRAW decoder, and BT.709 video; with and

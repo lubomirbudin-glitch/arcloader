@@ -1,7 +1,8 @@
 import Foundation
 
-/// Vendor decoders for formats ffmpeg cannot read. All of them hand ffmpeg footage in the camera's
-/// log encoding, so the same LUT / scale / burn-in chain applies to every camera.
+/// Vendor decoders for formats ffmpeg cannot read. When a LUT is applied they hand ffmpeg the camera's log
+/// (`RawLook.log`; BRAW always decodes in the clip's gamma), so the same LUT / scale / burn-in chain fits every
+/// camera; without a LUT, RED and ARRI deliver their own Rec.709 look.
 enum RawBackends {
     static let all: [RawBackend] = [BRAWBackend(), R3DBackend(), ARRIRAWBackend(), CanonRawBackend()]
 
@@ -73,7 +74,7 @@ struct BRAWBackend: RawBackend {
         return min(max(0, frames - 1), max(0, Int((seconds * rate).rounded())))
     }
 
-    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, tools: ExternalTools,
+    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
                 tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
         let target = singleFrameAt == nil ? settings.height : 180
         let s = scale(sourceHeight: c.height ?? 2160, target: target)
@@ -85,9 +86,10 @@ struct BRAWBackend: RawBackend {
         let feeder = Process()
         feeder.executableURL = URL(fileURLWithPath: tools.brawDecoder!)
         feeder.arguments = args + [path]
+        // braw-decode hands over full-range RGB (RGBU16) in the clip's own gamma: a built-in LUT needs the pre-map first.
         return FrameSource(inputArgs: ["-f", "rawvideo", "-pix_fmt", "rgb48le", "-s", "\(dims.width)x\(dims.height)",
                                        "-r", c.frameRate ?? "25", "-i", "-"],
-                           feeder: feeder, audioFromInput: false)
+                           feeder: feeder, audioFromInput: false, fullRange: true)
     }
 }
 
@@ -129,21 +131,24 @@ struct R3DBackend: RawBackend {
         return c
     }
 
-    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, tools: ExternalTools,
+    /// REDline arguments: the smallest decode resolution that covers the proxy height; log (IPP2, REDWideGamutRGB /
+    /// Log3G10) only when a LUT follows, otherwise RED's own Rec.709 look.
+    static func args(input: String, outDir: String, info c: ClipInfo, settings: ProxySettings, look: RawLook) -> [String] {
+        let h = c.height ?? 4320
+        let res = h / 4 >= settings.height ? "4" : (h / 2 >= settings.height ? "3" : "1")
+        var args = ["--i", input, "--outDir", outDir, "--o", "intermediate", "--format", "201", "--PRcodec", "2", "--res", res, "--useMeta"]
+        if look.log { args += ["--colorSciVersion", "3", "--colorSpace", "25", "--gammaCurve", "34"] }
+        return args
+    }
+
+    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
                 tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
         guard singleFrameAt == nil else {
             // Thumbnails come from the finished proxy instead (one REDline run per clip is enough).
             throw ToolError(tool: "REDline", status: -1, message: "thumbnail from proxy")
         }
         let dir = try RawBackends.freshDir(tempDir, "r3d")
-        let h = c.height ?? 4320
-        let res = h / 4 >= settings.height ? "4" : (h / 2 >= settings.height ? "3" : "1")
-        var args = ["--i", path, "--outDir", dir, "--o", "intermediate", "--format", "201", "--PRcodec", "2", "--res", res, "--useMeta"]
-        if settings.lutPath != nil {
-            // The LUT expects log: IPP2, REDWideGamutRGB / Log3G10.
-            args += ["--colorSciVersion", "3", "--colorSpace", "25", "--gammaCurve", "34"]
-        }
-        try ToolProcess.run(tools.redline!, args)
+        try ToolProcess.run(tools.redline!, R3DBackend.args(input: path, outDir: dir, info: c, settings: settings, look: look))
         guard let mov = RawBackends.newestFile(in: dir, ext: "mov") else {
             throw ToolError(tool: "REDline", status: -1, message: "no output in \(dir)")
         }
@@ -223,21 +228,17 @@ struct ARRIRAWBackend: RawBackend {
         return camera.range(of: #"\bALEXA\s*35\b"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, tools: ExternalTools,
-                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
-        guard singleFrameAt == nil else { throw ToolError(tool: "art-cmd", status: -1, message: "thumbnail from proxy") }
-        let dir = try RawBackends.freshDir(tempDir, "ari")
-        let out = dir + "/intermediate.mxf"
-        var args = ["process", "--input", path, "--video-codec", "prores422lt", "--deflip", "--output", out]
-        var cropped = false
+    /// art-cmd arguments and, for a frame-lines crop, the parameters JSON (written to `parametersFile`).
+    /// Frame lines are defined on the desqueezed picture: the crop is computed there, then mapped back to sensor pixels
+    /// and done before debayer/scaling (full detail inside the frame lines). Size and desqueeze go into the same file
+    /// (art-cmd refuses --desqueeze / --output-height with it, and --output-height would stretch the crop back).
+    static func args(input: String, output: String, info c: ClipInfo, settings: ProxySettings, look: RawLook,
+                     parametersFile: String) -> (args: [String], parameters: Data?, cropped: Bool) {
+        var args = ["process", "--input", input, "--video-codec", "prores422lt", "--deflip", "--output", output]
+        var parameters: Data?
         let sq = c.squeeze ?? 1
-        // Frame lines are defined on the desqueezed picture: compute the crop there, then map it back to sensor pixels.
-        if let w = c.width, let h = c.height,
-           let fc = settings.frameCrop(width: Int(Double(w) * sq), height: h) {
+        if let w = c.width, let h = c.height, let fc = settings.frameCrop(width: Int(Double(w) * sq), height: h) {
             let crop = (x: Int(Double(fc.x) / sq) & ~1, y: fc.y, w: Int(Double(fc.w) / sq) & ~1, h: fc.h)
-            // Crop on the sensor image before debayer/scaling: full detail inside the frame lines.
-            // Size and desqueeze go into the same file (art-cmd refuses --desqueeze / --output-height with it,
-            // and --output-height would stretch the crop back to the sensor's aspect).
             let outH = settings.height & ~1  // same height for every proxy, whatever the crop
             let outW = Int((Double(outH) * Double(crop.w) * sq / Double(crop.h) / 2).rounded()) * 2
             let params: [String: Any] = [
@@ -245,25 +246,36 @@ struct ARRIRAWBackend: RawBackend {
                               "displayWidthOverride": crop.w, "displayHeightOverride": crop.h],
                 "outputScaling": ["targetWidth": outW, "targetHeight": outH],
             ]
-            let file = dir + "/parameters.json"
-            try JSONSerialization.data(withJSONObject: params).write(to: URL(fileURLWithPath: file))
-            args += ["--parameters", file]
-            cropped = true
+            parameters = try? JSONSerialization.data(withJSONObject: params)
+        }
+        if parameters != nil {
+            args += ["--parameters", parametersFile]
         } else {
             args += ["--desqueeze", "--output-height", String(settings.height)]
         }
-        if settings.lutPath != nil {
-            args += ["--target-colorspace", ARRIRAWBackend.colorSpace(lut: settings.lutPath, info: c)]
+        if look.log {
+            args += ["--target-colorspace", look.arriColorSpace ?? colorSpace(lut: nil, info: c)]
         } else {
             args += ["--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"]
         }
-        try ToolProcess.run(tools.artCmd!, args, cwd: dir)
+        return (args, parameters, parameters != nil)
+    }
+
+    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
+                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+        guard singleFrameAt == nil else { throw ToolError(tool: "art-cmd", status: -1, message: "thumbnail from proxy") }
+        let dir = try RawBackends.freshDir(tempDir, "ari")
+        let out = dir + "/intermediate.mxf"
+        let file = dir + "/parameters.json"
+        let a = ARRIRAWBackend.args(input: path, output: out, info: c, settings: settings, look: look, parametersFile: file)
+        if let json = a.parameters { try json.write(to: URL(fileURLWithPath: file)) }
+        try ToolProcess.run(tools.artCmd!, a.args, cwd: dir)
         guard FileManager.default.fileExists(atPath: out) else { throw ToolError(tool: "art-cmd", status: -1, message: "no output") }
-        return FrameSource(inputArgs: ["-i", out], alreadyCropped: cropped, cleanup: [dir])
+        return FrameSource(inputArgs: ["-i", out], alreadyCropped: a.cropped, cleanup: [dir])
     }
 }
 
-// MARK: - Canon Cinema RAW Light — no command-line decoder exists for macOS (Intel)
+// MARK: - Canon Cinema RAW Light — no command-line decoder exists for macOS
 
 struct CanonRawBackend: RawBackend {
     let format = ClipFormat.canonRaw
@@ -271,7 +283,7 @@ struct CanonRawBackend: RawBackend {
 
     func isAvailable(_ tools: ExternalTools) -> Bool { false }
     func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo { throw ToolError(tool: "Canon RAW", status: -1, message: missingHint) }
-    func source(_ path: String, info: ClipInfo, settings: ProxySettings, tools: ExternalTools,
+    func source(_ path: String, info: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
                 tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
         throw ToolError(tool: "Canon RAW", status: -1, message: missingHint)
     }

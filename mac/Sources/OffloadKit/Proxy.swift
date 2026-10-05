@@ -129,12 +129,22 @@ struct FrameSource {
     var audioFromInput = true
     /// The decoder already cropped to the frame lines (ARRI does it before debayering).
     var alreadyCropped = false
+    /// Full-range RGB (braw-decode) — a built-in LUT then needs `FilterGraph.preMap` first.
+    var fullRange = false
     /// Intermediate files to delete once ffmpeg is done.
     var cleanup: [String] = []
 
     func removeIntermediates() {
         for p in cleanup { try? FileManager.default.removeItem(atPath: p) }
     }
+}
+
+/// What a RAW decoder hands ffmpeg: camera log (a LUT follows) or its own Rec.709 look. `arriColorSpace` is the ARRI
+/// target space matching the LUT (nil = from the clip's metadata). BRAW always decodes in the clip's gamma; Canon has
+/// no decoder.
+struct RawLook: Equatable {
+    let log: Bool
+    let arriColorSpace: String?
 }
 
 /// Per-format decoding for formats ffmpeg cannot read itself.
@@ -144,7 +154,7 @@ protocol RawBackend {
     func isAvailable(_ tools: ExternalTools) -> Bool
     func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo
     /// `singleFrameAt` (seconds) asks for just one frame — used for report thumbnails.
-    func source(_ path: String, info: ClipInfo, settings: ProxySettings, tools: ExternalTools,
+    func source(_ path: String, info: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
                 tempDir: String, singleFrameAt: Double?) throws -> FrameSource
 }
 
@@ -155,12 +165,13 @@ struct FramePosition: Equatable {
     let fromEnd: Bool
 }
 
+/// Probes clips, makes the report thumbnails (first, middle, last frame) and renders proxies — each clip with its own
+/// LUT (`LutUse`). Works in its own temp folder. One renderer serves one job, on one thread.
 public final class ProxyRenderer {
     public let settings: ProxySettings
     public let tools: ExternalTools
     let backends: [ClipFormat: RawBackend]
     let tempDir: String
-
     /// A proxy render with no progress for this long is stuck (3× as long before the first progress): ffmpeg is killed
     /// and, when it decoded in hardware, the clip is retried once in software.
     static let defaultStallTimeout: TimeInterval = 60
@@ -170,24 +181,29 @@ public final class ProxyRenderer {
     var stallTimeout: TimeInterval = ProxyRenderer.defaultStallTimeout
     /// Where retries and unkillable processes are reported (the job's log).
     var log: ((String) -> Void)?
+    /// The custom LUT (custom mode) was copied to `tempDir/look.cube`.
+    private let hasCustomLUT: Bool
+    /// Built-in LUT ids already copied into `tempDir`.
+    private var builtinLUTs: Set<String> = []
 
     public init(settings: ProxySettings, tools: ExternalTools) {
         self.settings = settings
         self.tools = tools
         backends = Dictionary(uniqueKeysWithValues: RawBackends.all.map { ($0.format, $0) })
-        tempDir = NSTemporaryDirectory() + "offload-" + UUID().uuidString.prefix(8)
-        try? IO.mkdirs(tempDir)
-        // Filter graphs are picky about quoting; a copy at a plain path avoids every escaping problem.
-        if let lut = settings.lutPath, !lut.isEmpty {
-            try? FileManager.default.removeItem(atPath: lutCopy)
-            try? FileManager.default.copyItem(atPath: lut, toPath: lutCopy)
+        let dir = NSTemporaryDirectory() + "offload-" + UUID().uuidString.prefix(8)
+        tempDir = dir
+        try? IO.mkdirs(dir)
+        // Filter graphs are picky about quoting: LUTs are used from a plain path in the temp folder. The custom LUT is
+        // copied up front, built-in ones per clip (prepareLUT).
+        var custom = false
+        if LutResolver.effectiveMode(settings) == .custom, let lut = settings.lutPath, !lut.isEmpty,
+           FileManager.default.fileExists(atPath: lut) {
+            custom = (try? FileManager.default.copyItem(atPath: lut, toPath: dir + "/look.cube")) != nil
         }
+        hasCustomLUT = custom
     }
 
     deinit { try? FileManager.default.removeItem(atPath: tempDir) }
-
-    var lutCopy: String { tempDir + "/look.cube" }
-    var hasLUT: Bool { FileManager.default.fileExists(atPath: lutCopy) }
 
     /// nil when the clip can be rendered, otherwise the reason it cannot.
     public func unsupportedReason(_ clip: Clip) -> String? {
@@ -223,6 +239,8 @@ public final class ProxyRenderer {
         }
         return try b.probe(path, tools: tools)
     }
+
+    // MARK: Thumbnail positions
 
     /// First, middle and last frame; only the first when the length is unknown or the clip has one frame.
     static func framePositions(_ info: ClipInfo) -> [FramePosition] {
@@ -273,22 +291,61 @@ public final class ProxyRenderer {
             + (retriedInSoftware ? " i bez hardwarového dekódování; proxy nevznikla" : "")
     }
 
-    private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, singleFrameAt: Double?, hwaccel: Bool) throws -> FrameSource {
+    // MARK: LUT per clip
+
+    /// The .cube for this clip as a plain path in the temp folder, or nil for no LUT. The custom LUT was copied in init
+    /// (nil when it was missing); a built-in one is copied on first use, once per id.
+    func prepareLUT(_ lut: LutUse?) throws -> String? {
+        guard let lut, let file = lut.file else { return nil }
+        guard let id = lut.id else { return hasCustomLUT ? tempDir + "/look.cube" : nil }
+        let copy = tempDir + "/lut-\(id).cube"
+        if !builtinLUTs.contains(id) {
+            try? FileManager.default.removeItem(atPath: copy)
+            try FileManager.default.copyItem(atPath: file, toPath: copy)
+            builtinLUTs.insert(id)
+        }
+        return copy
+    }
+
+    /// RAW decoders hand over log whenever a LUT follows; ARRI's target space must match a built-in ARRI LUT.
+    static func lookFor(_ lut: LutUse?, info: ClipInfo) -> RawLook {
+        guard let lut, let file = lut.file else { return RawLook(log: false, arriColorSpace: nil) }
+        switch lut.id {
+        case "arri-logc4-awg4"?: return RawLook(log: true, arriColorSpace: "AWG4/D65/LogC4")
+        case "arri-logc3-awg3"?: return RawLook(log: true, arriColorSpace: "AWG3/D65/LogC3")
+        case nil: return RawLook(log: true, arriColorSpace: ARRIRAWBackend.colorSpace(lut: file, info: info))
+        default: return RawLook(log: true, arriColorSpace: nil)
+        }
+    }
+
+    /// Built-in LUTs expect legal-range input: full-range sources (BRAW, video tagged "pc") are pre-mapped first.
+    /// A custom .cube is applied as it is.
+    static func needsPreMap(_ lut: LutUse?, source: FrameSource, info: ClipInfo) -> Bool {
+        lut?.isBuiltin == true && (source.fullRange || info.colorRange == "pc")
+    }
+
+    private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, look: RawLook, singleFrameAt: Double?,
+                             hwaccel: Bool) throws -> FrameSource {
         let path = cardPath + "/" + clip.path
         if clip.format == .video {
             // VideoToolbox only for H.264/HEVC proxies (usesHardwareDecode); thumbnails always decode in software.
             return FrameSource(inputArgs: hwaccel ? ["-hwaccel", "videotoolbox", "-i", path] : ["-i", path])
         }
         guard let b = backends[clip.format] else { throw ToolError(tool: clip.format.label, status: -1, message: "no decoder") }
-        return try b.source(path, info: info, settings: settings, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt)
+        return try b.source(path, info: info, settings: settings, look: look, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt)
     }
 
-    /// First, middle and last frame as small JPEGs with captions. When `isCancelled` turns true the clip simply
-    /// gets no thumbnails. One bad position does not cost the others; if none works, the last error is thrown.
-    public func thumbnails(_ clip: Clip, cardPath: String, info: ClipInfo, applyLUT: Bool = true,
+    // MARK: Thumbnails and proxies
+
+    /// First, middle and last frame as small JPEGs with captions, with the clip's LUT so log footage is readable.
+    /// `lut` nil = no LUT (thumbnails taken from a finished proxy, which already has it). When `isCancelled` turns
+    /// true the clip simply gets no thumbnails. One bad position does not cost the others; if none works, the last
+    /// error is thrown.
+    public func thumbnails(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil,
                            isCancelled: () -> Bool = { false }) throws -> [Thumbnail] {
         guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "ffmpeg not found") }
-        let filter = FilterGraph.thumbnail(lutFile: hasLUT && applyLUT ? lutCopy : nil, premap: false)
+        let lutFile = try prepareLUT(lut)
+        let look = ProxyRenderer.lookFor(lutFile != nil ? lut : nil, info: info)   // log only when a LUT really follows
         let video = clip.format == .video
         var result: [Thumbnail] = []
         var lastError: Error?
@@ -297,8 +354,10 @@ public final class ProxyRenderer {
             let out = tempDir + "/thumb-\(UUID().uuidString).jpg"
             defer { unlink(out) }
             do {
-                let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: pos.seconds, hwaccel: false)
+                let src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: pos.seconds, hwaccel: false)
                 defer { src.removeIntermediates() }
+                // The pre-map depends on the source (BRAW, full-range video).
+                let filter = FilterGraph.thumbnail(lutFile: lutFile, premap: ProxyRenderer.needsPreMap(lut, source: src, info: info))
                 var args = ["-hide_banner", "-loglevel", "error", "-y"]
                 if video { args += ["-ss", ProxyRenderer.seekSeconds(info, pos)] }
                 args += src.inputArgs
@@ -322,14 +381,16 @@ public final class ProxyRenderer {
     /// Renders the proxy. A render that stalls (no progress for `stallTimeout`) is killed. With hardware decoding the clip
     /// is then retried once in software — as is one that failed with it; without, the stall fails the proxy. Cancelling
     /// never retries. Notes and log lines as on Windows.
-    public func render(_ clip: Clip, cardPath: String, info: ClipInfo, output: String,
+    public func render(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil, output: String,
                        progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
         guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
+        let lutFile = try prepareLUT(lut)
+        let look = ProxyRenderer.lookFor(lutFile != nil ? lut : nil, info: info)
         let hw = clip.format == .video && ProxyRenderer.usesHardwareDecode(info.codec)
         let first: Error
         do {
-            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, hwaccel: hw, output: output,
-                           progress: progress, isCancelled: isCancelled)
+            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, lut: lut, lutFile: lutFile, look: look, hwaccel: hw,
+                           output: output, progress: progress, isCancelled: isCancelled)
             return
         } catch let e as FFmpegStall where !hw && !isCancelled() {
             throw FFmpegStall(note: e.note + "; proxy nevznikla")
@@ -339,8 +400,8 @@ public final class ProxyRenderer {
         if isCancelled() { throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled") }
         log?("proxy \(clip.name): with hardware decoding: \(first) — retrying in software")
         do {
-            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, hwaccel: false, output: output,
-                           progress: progress, isCancelled: isCancelled)
+            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, lut: lut, lutFile: lutFile, look: look, hwaccel: false,
+                           output: output, progress: progress, isCancelled: isCancelled)
             log?("proxy \(clip.name): software decoding succeeded")
         } catch where (error is FFmpegStall || error is ToolError) && !isCancelled() {
             log?("proxy \(clip.name): software decoding failed too: \(error)")
@@ -355,13 +416,14 @@ public final class ProxyRenderer {
         }
     }
 
-    private func renderOnce(_ ffmpeg: String, _ clip: Clip, cardPath: String, info: ClipInfo, hwaccel: Bool, output: String,
+    private func renderOnce(_ ffmpeg: String, _ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse?, lutFile: String?,
+                            look: RawLook, hwaccel: Bool, output: String,
                             progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
-        let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: nil, hwaccel: hwaccel)
+        let src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: nil, hwaccel: hwaccel)
         defer { src.removeIntermediates() }
         let outHeight = min(settings.height, info.height ?? settings.height) & ~1
-        let vf = FilterGraph.proxy(settings, outHeight: outHeight, alreadyCropped: src.alreadyCropped,
-                                   lutFile: hasLUT ? lutCopy : nil, premap: false,
+        let vf = FilterGraph.proxy(settings, outHeight: outHeight, alreadyCropped: src.alreadyCropped, lutFile: lutFile,
+                                   premap: ProxyRenderer.needsPreMap(lut, source: src, info: info),
                                    burnIn: burnIn(clip: clip, info: info, height: outHeight))
         var args = ["-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
         args += ["-map", "0:v:0"]
@@ -401,14 +463,12 @@ public final class ProxyRenderer {
             f.append("drawtext=\(common):textfile=\(label):expansion=none:x=\(margin)")
         }
         if settings.burnTimecode, let rate = info.frameRate {
-            let tc = info.timecode.flatMap { isValidTimecode($0) ? $0 : nil } ?? "00:00:00:00"
+            let tc = info.timecode.flatMap { Timecode.isValid($0) ? $0 : nil } ?? "00:00:00:00"
             let escaped = tc.replacingOccurrences(of: ":", with: "\\:").replacingOccurrences(of: ";", with: "\\;")
             f.append("drawtext=\(common):timecode='\(escaped)':rate=\(rate):x=w-tw-\(margin)")
         }
         return f
     }
-
-    func isValidTimecode(_ tc: String) -> Bool { Timecode.isValid(tc) }
 
     /// `stallAfter` (renders only, with -progress pipe:1 in the args): ffmpeg is killed and `FFmpegStall` thrown when it
     /// has reported no new frame or output time and taken no data from the feeder for that long (3× before the first

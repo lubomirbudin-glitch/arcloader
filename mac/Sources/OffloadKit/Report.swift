@@ -173,8 +173,11 @@ public struct ClipEntry: Codable {
     /// First, middle and last frame (JPEG + caption); embedded in the HTML/PDF report only.
     public var thumbnails: [Thumbnail] = []
 
+    /// The LUT applied to this clip's proxy and thumbnails, and why (JSON "lut"; absent when nil, like Windows).
+    public var lut: LutUse?
+
     enum CodingKeys: String, CodingKey {
-        case clip, info, probeError, proxyStatus, proxyPath, proxyNote, proxySeconds
+        case clip, info, probeError, proxyStatus, proxyPath, proxyNote, proxySeconds, lut
     }
 
     public init(clip: Clip) { self.clip = clip }

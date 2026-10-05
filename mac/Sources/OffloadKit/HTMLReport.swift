@@ -87,7 +87,7 @@ public enum HTMLReport {
         .thumb{width:128px;height:72px;object-fit:contain;background:#000;border-radius:4px;display:block}
         .nothumb{width:128px;height:72px;border-radius:4px;background:var(--line)}
         .thumbs{display:flex;gap:4px}.thumbs figure{margin:0}.thumbs figcaption{font:10px ui-monospace,Menlo,monospace;color:var(--muted);text-align:center}
-        .clipname{font-weight:600}.path{color:var(--muted);font-size:12px}
+        .clipname{font-weight:600}.path,.note{color:var(--muted);font-size:12px}
         details summary{cursor:pointer;padding:10px 0;font-weight:600}
         .err{white-space:normal;color:var(--bad)}
         footer{margin-top:40px;color:var(--muted);font-size:12px}
@@ -143,8 +143,15 @@ public enum HTMLReport {
                 var notes: [String] = []
                 for n in [c.probeError, c.proxyNote].compactMap({ $0 }) where !notes.contains(n) { notes.append(n) }
                 let note = notes.joined(separator: " · ")
+                var noteHTML = note.isEmpty ? "" : "<div class=\"path err\">\(esc(note))</div>"
+                // Which LUT and why — also "bez LUT (reason)", unless the user switched LUTs off.
+                if let lu = c.lut, lu.source != "none" {
+                    noteHTML += "<div class=\"note\">LUT: \(esc(lu.name)) (\(esc(lu.reason)))</div>"
+                } else if let ln = c.lut, ln.reason != "vypnuto v nastavení" {
+                    noteHTML += "<div class=\"note\">LUT: bez LUT (\(esc(ln.reason)))</div>"
+                }
                 h += "<tr><td>\(img)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))\(c.clip.isCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "")</div>"
-                h += "<div class=\"path\">\(esc(c.clip.path))</div>\(note.isEmpty ? "" : "<div class=\"path err\">\(esc(note))</div>")</td>"
+                h += "<div class=\"path\">\(esc(c.clip.path))</div>\(noteHTML)</td>"
                 h += "<td class=\"wrap\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num\">\(esc(i?.fpsLabel ?? ""))</td>"
                 h += "<td class=\"num\">\(esc(i?.durationLabel ?? ""))</td><td class=\"mono\">\(esc(i?.timecode ?? ""))</td>"
                 h += "<td class=\"num\">\(i.map { $0.audioChannels > 0 ? "\($0.audioChannels) ch" : "—" } ?? "")</td>"
@@ -152,7 +159,13 @@ public enum HTMLReport {
             }
             h += "</table></div>\n"
             if let p = r.proxy, p.enabled {
-                let lut = p.lutPath.map { ($0 as NSString).lastPathComponent } ?? "bez LUT"
+                let lut: String
+                switch LutResolver.effectiveMode(p) {
+                case .auto: lut = "automaticky podle kamery"
+                case .builtin: lut = LutCatalog.shared.find(p.lutBuiltin)?.name ?? p.lutBuiltin ?? "bez LUT"
+                case .custom: lut = p.lutPath.flatMap { $0.isEmpty ? nil : ($0 as NSString).lastPathComponent } ?? "bez LUT"
+                case .off: lut = "bez LUT"
+                }
                 let frame = p.frameLabel.map { ", výřez \($0)" } ?? ""
                 let extra = p.extraFolder.map { " · také ve složce <span class=\"mono\">\(esc($0))</span>" } ?? ""
                 h += "<p class=\"sub\">Proxy: \(esc(p.codec.label)), \(p.height)p\(frame), LUT: \(esc(lut)) → <span class=\"mono\">\(Layout.proxyDirName)/</span>\(extra)</p>\n"

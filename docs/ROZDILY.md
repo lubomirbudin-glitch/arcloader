@@ -40,7 +40,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
 | **Test USB portů na vyžádání + doporučení** | ✅ CLI (`offload ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
-| **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
+| **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | 🔨 jádro (CLI a GUI ⏳) | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | 🔨 jádro (CLI a GUI ⏳) | ✅ CLI + GUI (GUI čeká ruční test) |
 | **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ✅ CLI + GUI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; řetěz připojení, % linky a úzké hrdlo na kartě úlohy (GUI čeká ruční test) | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 
@@ -93,7 +93,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   přijdou do záložního LUTu „Když kameru nepoznám:“, výchozí Bez LUT); D-Log M nemá vestavěný LUT. ARRI se pozná podle
   modelu kamery, takže klip z ARRI nahraný přímo v Rec.709 by dostal LUT neprávem — uživatel zvolí „Bez LUT“.
   Na vzorcích se ještě ověří rozsah R3D/ARRIRAW mezisouborů a ProRes z ALEXA 35 (LogC4) — berou se jako legální video.
-  Mac nová nastavení `proxy.lutMode/lutBuiltin/lutFallback` ignoruje a dál používá jen `proxy.lutPath`.
+  Mac má zatím jádro (výběr LUTu po klipech, proxy, náhledy, report; mezisoubory ARRIRAW ověřené jako legální video);
+  `--lut`/`offload luts` v CLI a výběr v GUI jsou naplánované.
 - **Upozornění po dokončení:** Windows hraje zvuk a bliká tlačítkem v hlavním panelu místo notifikace Macu
   (nebalená aplikace umí toast jen po registraci).
 - **Vysunutí karty (obě verze):** karta ve čtečce se vysune jako médium, čtečka zůstane připojená; interní disky,
