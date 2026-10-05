@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán HW (USB diagnostika), průběh
 
+- Úkol 7 — test HW: rychlý (topologie, linky) a s měřením (čtení karty, zápis + čtení cílů), uložení výsledku
 - Úkol 6 — řetěz článků během kopie: rychlost, % linky, součet na řadiči, úzké hrdlo
 - Úkol 5 — doporučení: zařízení pod svými možnostmi (port vs. kabel), sdílený řadič, volné rychlé a pomalé porty, odhad rychlosti offloadu
 - Úkol 4 — kde sedí disk: sběrnice (USB/SATA/NVMe…), řadič, port, rychlost linky, UASP
