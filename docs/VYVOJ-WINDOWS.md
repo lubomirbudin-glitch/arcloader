@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 5 (vestavěné LUTy), průběh
 
+- Úkol 2 — katalog vestavěných LUTů (hledá Offload\luts, při vývoji shared\luts; chybějící nebo poškozený nic neshodí)
 - Úkol 1 — generátor vestavěných LUTů (11 kamer Log → Rec.709, měkké dotočení světel) a sdílené soubory .cube pro Mac i Windows
 
 ## 2026-10-05 — složka pro proxy
