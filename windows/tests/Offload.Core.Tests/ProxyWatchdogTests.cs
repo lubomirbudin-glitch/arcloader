@@ -205,9 +205,10 @@ public class ProxyWatchdogTests
     public void SlowFirstData_WithinGrace_NotKilled()
     {
         using var dir = new TempDir();
-        var src = SlowFeeder(dir.Path, delaySeconds: 3, out var consumer);
+        var src = SlowFeeder(dir.Path, delaySeconds: 6, out var consumer);
         using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
-        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(2));   // first data at 3 s: > 2 s, < 6 s
+        // first data at 6 s: > 5 s, < 15 s; after it the consumer has 5 s to end (2 s flaked under a loaded suite)
+        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
