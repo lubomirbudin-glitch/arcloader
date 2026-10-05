@@ -19,4 +19,19 @@ public class LutOptionTests
         Assert.StartsWith("Unknown fallback LUT", LutOption.Parse("auto", "nope", Cat).Error);
         Assert.Null(LutOption.Parse("auto", "none", Cat).Fallback);
     }
+
+    // The CLI prints the LUT line only when it matters: proxies or clip analysis (thumbnails) are on.
+    [Fact]
+    public void PlanLine_OnlyWithProxiesOrAnalysis()
+    {
+        var auto = new ProxySettings { LutMode = LutMode.Auto, LutFallback = "dji-dlog-dgamut" };
+        Assert.Null(LutOption.PlanLine(auto, analyzeClips: false));
+        Assert.Equal("LUT: auto (fallback dji-dlog-dgamut)", LutOption.PlanLine(auto, analyzeClips: true));
+        auto.Enabled = true;
+        Assert.Equal("LUT: auto (fallback dji-dlog-dgamut)", LutOption.PlanLine(auto, analyzeClips: false));
+        Assert.Equal("LUT: auto", LutOption.PlanLine(new ProxySettings { Enabled = true }, analyzeClips: false));
+        Assert.Equal("LUT: none", LutOption.PlanLine(new ProxySettings { Enabled = true, LutMode = LutMode.None }, analyzeClips: false));
+        Assert.Equal("LUT: sony-slog3-sgamut3", LutOption.PlanLine(new ProxySettings { LutMode = LutMode.Builtin, LutBuiltin = "sony-slog3-sgamut3" }, analyzeClips: true));
+        Assert.Equal(@"LUT: C:\luts\look.cube", LutOption.PlanLine(new ProxySettings { LutMode = LutMode.Custom, LutPath = @"C:\luts\look.cube" }, analyzeClips: true));
+    }
 }

@@ -171,4 +171,40 @@ public class QueueRulesTests
         Assert.True(WindowFit.Fit(0, 0, 900, 600, 1240, 860, 940, 640).Maximize);
         Assert.True(WindowFit.Fit(0, 0, 1366, 600, 1240, 860, 940, 640).Maximize);
     }
+
+    // ── follow-ups: start during a speed measurement, monitors, destinations ──
+
+    [Fact]
+    public void Start_BlockedWhileMeasuring()
+    {
+        Assert.Equal("Probíhá měření rychlosti — počkejte nebo ho zastavte", QueueRules.StartProblem(measuring: true));
+        Assert.Null(QueueRules.StartProblem(measuring: false));
+    }
+
+    [Fact]
+    public void WorkArea_FromDevicePixels()
+    {
+        // A second monitor right of a 1920 px one, 200 % scaling: device pixels / 2 = WPF units.
+        Assert.Equal((960, 0, 960, 520), WindowFit.FromDevice(1920, 0, 3840, 1040, 0.5, 0.5));
+        Assert.Equal((-1920, 0, 1920, 1040), WindowFit.FromDevice(-1920, 0, 0, 1040, 1, 1));
+    }
+
+    [Theory]
+    [InlineData(@"\\nas\share", null, true)]
+    [InlineData(@"Z:\", System.IO.DriveType.Network, true)]
+    [InlineData(@"F:\", System.IO.DriveType.Removable, true)]
+    [InlineData(@"D:\", System.IO.DriveType.Fixed, false)]
+    [InlineData(@"D:\Footage", System.IO.DriveType.Fixed, false)]
+    [InlineData(@"Q:\", null, false)]
+    public void Destination_MayDropOut_NetworkOrRemovable(string root, System.IO.DriveType? type, bool expected) =>
+        Assert.Equal(expected, DestinationHealth.MayDropOut(root, type));
+
+    [Fact]
+    public void Destination_Reprobe_MissingAlways_PresentOnlyWhenItMayDropOut()
+    {
+        Assert.False(DestinationHealth.ShouldReprobe(checking: true, exists: false, mayDropOut: true));   // first probe still running
+        Assert.True(DestinationHealth.ShouldReprobe(checking: false, exists: false, mayDropOut: false));
+        Assert.True(DestinationHealth.ShouldReprobe(checking: false, exists: true, mayDropOut: true));   // a NAS that may go away
+        Assert.False(DestinationHealth.ShouldReprobe(checking: false, exists: true, mayDropOut: false));  // an internal disk
+    }
 }

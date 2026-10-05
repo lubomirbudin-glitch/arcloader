@@ -80,13 +80,8 @@ static class CopyCommand
                 Console.Error.WriteLine($"Error: {e.Message}");
                 return 1;
             }
-            Console.WriteLine("LUT: " + config.Proxy.LutMode switch
-            {
-                LutMode.None => "none",
-                LutMode.Custom => config.Proxy.LutPath,
-                LutMode.Builtin => config.Proxy.LutBuiltin,
-                _ => "auto" + (config.Proxy.LutFallback != null ? $" (fallback {config.Proxy.LutFallback})" : ""),
-            });
+            // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all.
+            if (LutOption.PlanLine(config.Proxy, config.AnalyzeClips) is string lutLine) Console.WriteLine(lutLine);
             return Run(config, r.GetValue(dryRun));
         });
         return cmd;

@@ -119,6 +119,7 @@ public sealed class HardwareViewModel : ObservableObject
     {
         if (Busy) return;
         var (cards, dests, all) = owner.HardwareRoles();
+        var ejected = owner.EjectedRoots;
         var names = new Dictionary<string, string>(owner.Settings.PortNames, StringComparer.OrdinalIgnoreCase);
         cts = new CancellationTokenSource();
         var token = cts.Token;
@@ -129,11 +130,11 @@ public sealed class HardwareViewModel : ObservableObject
         var task = owner.RunHardware(() =>
         {
             if (waits) Dispatch(() => { if (!stopping) Status = running; });   // the previous run has ended
-            var (targets, byDriveNow) = MainViewModel.HardwareTargets(cards, dests, all);
+            var (targets, byDriveNow) = MainViewModel.HardwareTargets(cards, dests, all, ejected);
             // Never measure by drive letter: every disk would get a 1 GB file (the Measure button is off then anyway).
             var r = HwTest.Run(cards, targets, measure && !byDriveNow, portNames: names, rolesByDrive: byDriveNow, cancel: token);
             return (Result: r, ByDrive: byDriveNow);
-        }, cts);
+        }, cts, measure);
         task.ContinueWith(t =>
         {
             try

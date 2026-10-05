@@ -7,6 +7,11 @@ public sealed record WindowPlacement(bool Maximize, double Width, double Height,
 /// `center` (the owner window), kept inside the work area. All values in WPF device-independent units.
 public static class WindowFit
 {
+    /// A monitor's work area (device pixels, as GetMonitorInfo gives it) in WPF units: `toDipX/Y` are the window's
+    /// TransformFromDevice factors (1 / DPI scale).
+    public static (double Left, double Top, double Width, double Height) FromDevice(int left, int top, int right, int bottom, double toDipX, double toDipY) =>
+        (left * toDipX, top * toDipY, (right - left) * toDipX, (bottom - top) * toDipY);
+
     public static WindowPlacement Fit(double areaLeft, double areaTop, double areaWidth, double areaHeight,
         double width, double height, double minWidth, double minHeight, double? centerX = null, double? centerY = null)
     {

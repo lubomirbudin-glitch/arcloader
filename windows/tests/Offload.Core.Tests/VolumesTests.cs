@@ -105,4 +105,26 @@ public class VolumesTests
         Assert.Equal([Path.GetFullPath(dir.Path)], o.Sources);
         Assert.False(StartupOptions.Parse([]).NoHwPrompt);
     }
+
+    static VolumeItem Card(string path, string? identity, string? label = null) => new(path, path, 100, 50, "exFAT", true, false, identity, label);
+
+    // A fast card swap: the same letter, another card — the name typed for the old card must not stick.
+    [Fact]
+    public void NamesToDrop_GoneOrAnotherCardBehindTheLetter()
+    {
+        var before = new List<VolumeItem> { Card(@"F:\", "V1|AAAA"), Card(@"G:\", "V2|BBBB"), Card(@"H:\", "V3|CCCC"), Card(@"I:\", null) };
+        var after = new List<VolumeItem> { Card(@"f:\", "V1|AAAA"), Card(@"G:\", "V2|DDDD"), Card(@"I:\", "V4|EEEE") };
+        Assert.Equal([@"G:\", @"H:\"], Volumes.NamesToDrop(before, after).Order());
+    }
+
+    [Fact]
+    public void ReadyDiskRoots_SkippedLettersNeverTouched()
+    {
+        var system = Path.GetPathRoot(Environment.SystemDirectory)!;
+        var all = DriveInfo.GetDrives().Select(d => d.Name).ToList();
+        Assert.Empty(Volumes.ReadyDiskRoots(all));
+        // Every other letter skipped (no card is touched): only the system disk is left.
+        Assert.Equal([system], Volumes.ReadyDiskRoots(all.Where(r => !string.Equals(r, system, StringComparison.OrdinalIgnoreCase)).ToList()));
+        Assert.Empty(Volumes.ReadyDiskRoots([.. all.Where(r => !string.Equals(r, system, StringComparison.OrdinalIgnoreCase)), system.ToLowerInvariant()]));
+    }
 }

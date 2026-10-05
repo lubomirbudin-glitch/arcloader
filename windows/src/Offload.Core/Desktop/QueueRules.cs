@@ -25,6 +25,11 @@ public static class QueueRules
 {
     public const string OtherCardText = "karta v mechanice není ta, která se kopírovala";
     public const string InUseText = "z karty ještě kopíruje jiná úloha — vysuňte ji, až její kopie doběhne";
+    public const string MeasuringText = "Probíhá měření rychlosti — počkejte nebo ho zastavte";
+
+    /// Why Start is disabled for a reason the setup itself does not show, or null. A speed measurement writes 1 GB
+    /// to the destinations and reads the cards: no offload may start under it (the measurement in turn waits for copies).
+    public static string? StartProblem(bool measuring) => measuring ? MeasuringText : null;
 
     /// Why "Vysunout kartu" must not eject, or null. `copied` = the card recorded when the copy started,
     /// `current` = the card in the drive now (both `CardIdentity`), `cardInUse` = `CardInUse` for the other jobs.

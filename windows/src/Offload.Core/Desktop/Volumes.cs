@@ -3,9 +3,10 @@ using Offload.Core.Hardware;
 namespace Offload.Core.Desktop;
 
 /// A mounted volume offered in the Karty section (Mac `VolumeItem`). Name: "EOS_DIGITAL (F:)".
-/// `Identity` (`CardIdentity`) tells two cards in the same slot apart.
+/// `Identity` (`CardIdentity`) tells two cards in the same slot apart. `Label`: the volume label as scanned (the
+/// default card name — the UI thread never reads it from the disk).
 public sealed record VolumeItem(string Name, string Path, long Total, long Free, string Format, bool LooksLikeCard, bool IsDestination,
-    string? Identity = null);
+    string? Identity = null, string? Label = null);
 
 public static class Volumes
 {
@@ -69,7 +70,7 @@ public static class Volumes
                 var letter = root.TrimEnd((char)92);
                 var name = string.IsNullOrWhiteSpace(d.VolumeLabel) ? letter : $"{d.VolumeLabel} ({letter})";
                 found.Add(new VolumeItem(name, root, d.TotalSize, d.AvailableFreeSpace, d.DriveFormat,
-                    !isDest && LooksLikeCameraCard(root), isDest, CardIdentity.Of(root)));
+                    !isDest && LooksLikeCameraCard(root), isDest, CardIdentity.Of(root), d.VolumeLabel));
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -78,6 +79,41 @@ public static class Volumes
         }
         found.Sort((a, b) => Win32.StrCmpLogicalW(a.Name, b.Name));
         return found;
+    }
+
+    /// Every ready fixed or removable disk by its root (the Hardware test with no card and no destination chosen).
+    /// `skip` (ejected cards) is left out before anything asks the drive — even `IsReady` would mount the card again.
+    /// Touches the drives — never call it on the UI thread.
+    public static List<string> ReadyDiskRoots(IReadOnlyCollection<string> skip)
+    {
+        var roots = new List<string>();
+        foreach (var d in DriveInfo.GetDrives())
+        {
+            if (skip.Contains(d.Name, StringComparer.OrdinalIgnoreCase)) continue;
+            try
+            {
+                if (d.DriveType is DriveType.Fixed or DriveType.Removable && d.IsReady) roots.Add(d.RootDirectory.FullName);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Pulled out while we looked at it.
+            }
+        }
+        return roots;
+    }
+
+    /// The paths whose typed card name no longer belongs to the card there: the volume is gone, or another card is in
+    /// its drive (both identities known and different — a fast swap on the same letter).
+    public static List<string> NamesToDrop(IReadOnlyList<VolumeItem> before, IReadOnlyList<VolumeItem> after)
+    {
+        var drop = new List<string>();
+        foreach (var b in before)
+        {
+            var now = after.FirstOrDefault(a => string.Equals(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
+            if (now == null || (b.Identity != null && now.Identity != null && !string.Equals(b.Identity, now.Identity, StringComparison.OrdinalIgnoreCase)))
+                drop.Add(b.Path);
+        }
+        return drop;
     }
 
     /// The drive roots in a `DEV_BROADCAST_VOLUME.dbcv_unitmask` (bit 0 = A:).

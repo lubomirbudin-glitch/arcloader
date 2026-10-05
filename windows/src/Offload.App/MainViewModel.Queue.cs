@@ -32,7 +32,7 @@ public sealed partial class MainViewModel
         queue.JobFinished += j => Dispatch(() => OnJobFinished(j));
         ticker.Tick += (_, _) => Tick();
         ticker.Start();
-        SetupChanged += () => RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart));
+        SetupChanged += () => RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart), nameof(StartProblem));
         RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart));
     }
 
@@ -43,7 +43,9 @@ public sealed partial class MainViewModel
     /// In memory only (evaluated 3×/s): the LUT, the proxy folder and the destinations come from checks made off the UI thread.
     public bool CanStart => !starting && ReadyToStart;
     bool ReadyToStart => !closing && selected.Count > 0 && Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)
-        && LutProblem == null && ProxyFolderProblem == null;
+        && LutProblem == null && ProxyFolderProblem == null && StartProblem == null;
+    /// The hint under the start bar: why Start is off when the setup itself does not say it (a speed measurement runs).
+    public string? StartProblem => QueueRules.StartProblem(Measuring);
     public bool HasJobs => Jobs.Count > 0;
     public bool HasFinished => Jobs.Any(j => j.IsFinished);
 
@@ -108,7 +110,7 @@ public sealed partial class MainViewModel
                 Tools = SettingsStore.Clone(Settings.Tools),
             };
             bool isVolume = volumes.Any(v => string.Equals(v.Path, src, StringComparison.OrdinalIgnoreCase));
-            var item = new JobItemViewModel(this, new OffloadJob(config), name ?? SourceItemViewModel.SafeDefaultName(src),
+            var item = new JobItemViewModel(this, new OffloadJob(config), name ?? DefaultCardName(src),
                 canEject: isVolume && CardEject.CanEject(src));
             Jobs.Insert(0, item);
             selected.Remove(src);

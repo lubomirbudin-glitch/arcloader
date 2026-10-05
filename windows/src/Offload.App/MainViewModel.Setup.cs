@@ -77,7 +77,9 @@ public sealed partial class MainViewModel
     void HealthCheck()
     {
         if (closing) return;
-        foreach (var d in Destinations.Where(d => !d.Exists && !d.IsChecking)) d.Probe();
+        // Missing rows (a NAS that may come back) and present network/removable ones (a NAS that may drop out);
+        // a row whose probe is still running is skipped by Probe itself.
+        foreach (var d in Destinations.Where(d => d.ShouldReprobe)) d.Probe();
         RefreshLut();
         RefreshProxyFolder();
     }
@@ -144,12 +146,13 @@ public sealed partial class MainViewModel
     void ApplyVolumes(List<VolumeItem> found)
     {
         var next = Volumes.SelectionAfterRefresh(volumes.Select(v => v.Path), found, selected, manualSources);
-        var gone = volumes.Select(v => v.Path).Except(found.Select(v => v.Path), StringComparer.OrdinalIgnoreCase).ToList();
+        // Another card on the same drive letter (gone, or swapped faster than one scan) must not inherit the name.
+        var drop = Volumes.NamesToDrop(volumes, found);
         volumes = found;
         selected.Clear();
         selected.UnionWith(next);
-        foreach (var p in gone) cardNames.Remove(p);   // another card on the same drive letter must not inherit the name
-        var sig = string.Join("\n", found.Where(v => !v.IsDestination).Select(v => $"{v.Path}|{v.Name}|{v.Total - v.Free}|{v.Format}|{v.LooksLikeCard}|{selected.Contains(v.Path)}"))
+        foreach (var p in drop) cardNames.Remove(p);
+        var sig = string.Join("\n", found.Where(v => !v.IsDestination).Select(v => $"{v.Path}|{v.Identity}|{v.Name}|{v.Total - v.Free}|{v.Format}|{v.LooksLikeCard}|{selected.Contains(v.Path)}"))
             + "\n" + string.Join("\n", manualSources.Select(p => $"{p}|{selected.Contains(p)}"));
         if (sig != sourcesSig)
         {
@@ -178,9 +181,9 @@ public sealed partial class MainViewModel
         foreach (var v in volumes.Where(v => !v.IsDestination))
             Sources.Add(new SourceItemViewModel(this, v.Path, v.Name,
                 $"{Format.Bytes(v.Total - v.Free)} · {v.Format}{(v.LooksLikeCard ? "" : " · nevypadá jako karta")}",
-                v.LooksLikeCard ? SourceKind.Card : SourceKind.Drive));
+                v.LooksLikeCard ? SourceKind.Card : SourceKind.Drive, DefaultCardName(v.Path)));
         foreach (var p in manualSources)
-            Sources.Add(new SourceItemViewModel(this, p, Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p, p, SourceKind.Folder));
+            Sources.Add(new SourceItemViewModel(this, p, Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p, p, SourceKind.Folder, DefaultCardName(p)));
         Raise(nameof(HasSources));
         SetupChanged?.Invoke();
     }
@@ -207,6 +210,21 @@ public sealed partial class MainViewModel
     }
 
     internal string CardName(string path) => cardNames.GetValueOrDefault(path, "");
+
+    /// The card folder name when none is typed: the volume label from the last scan, a folder's own name — never read
+    /// from the disk here (UI thread). The job itself works out the same name off the UI thread.
+    internal string DefaultCardName(string path)
+    {
+        var label = volumes.FirstOrDefault(v => string.Equals(v.Path, path, StringComparison.OrdinalIgnoreCase))?.Label;
+        try
+        {
+            return Layout.DefaultCardName(path, label);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return "";
+        }
+    }
 
     internal void SetCardName(string path, string name) => cardNames[path] = name;
 

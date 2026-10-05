@@ -24,6 +24,18 @@ public static class Layout
 
     public static string CardPath(string root, string date, string cardName) => Path.Combine(root, date, cardName);
 
+    /// DefaultCardName without touching the disk: `label` is the volume label the scan already read (used only when
+    /// the source is a drive root). For the GUI, whose UI thread never waits on a disk.
+    public static string DefaultCardName(string source, string? label)
+    {
+        if (source.Length == 2 && source[1] == ':') source += "\\";   // "F:" alone means the current folder on F:
+        var full = Path.GetFullPath(source);
+        var root = Path.GetPathRoot(full);
+        if (root != null && string.Equals(full.TrimEnd('\\'), root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(label))
+            return Sanitize(label);
+        return Sanitize(Path.GetFileName(full.TrimEnd('\\')));
+    }
+
     /// Volume label when the source is a drive root, otherwise the folder name.
     public static string DefaultCardName(string source)
     {
