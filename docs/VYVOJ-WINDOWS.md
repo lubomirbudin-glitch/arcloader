@@ -12,13 +12,14 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 |---|---|---|
 | 1 | jádro kopírování, ověření, reporty JSON/TXT/HTML/xxh64/MHL, CLI | hotovo (čeká ostrý test na kartě) |
 | 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | hotovo (čeká ostrý test na skutečném médiu) |
-| 3 | `braw-decode.exe` (C++, Blackmagic RAW SDK pro Windows) | naplánováno |
+| 3 | dekodér BRAW v C# (COM `BlackmagicRawAPI.dll` z Blackmagic RAW SDK pro Windows; rozhodnuto 2026-10-05 místo C++ `braw-decode`) | naplánováno |
 | HW | test USB portů (CLI, v GUI na vyžádání), doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI + GUI) |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
 | 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | hotovo (čeká ruční test s klipy z kamer) |
 
 ## 2026-10-05 — plán 5 (vestavěné LUTy), průběh
 
+- Závěrečné opravy — proxy výslovně BT.709 (matice, legální rozsah, značky v souboru), náhledy JPEG výslovně BT.601 (JFIF); ARRI MOV se pozná podle výrobce + modelu; důvod u S-Log2 „bez vestavěného LUTu“; návrh, FORMATY, ROZDILY a README srovnané s kódem (rozsah R3D/ARRIRAW, `lut.source` vč. `fallback`, záložní LUT jen vestavěný, BRAW dekodér v C#)
 - Úkol 8 — dokumentace: ROZDILY, VYVOJ-MAC (LUTy naplánované pro Mac po plánu parity), README (GUI, ruční test), stav návrhu LUTů „hotovo na Windows“
 - Úkol 7 — GUI: výběr LUTu (automaticky / vestavěný / bez / vlastní) a záložní LUT
 - Úkol 6 — CLI --lut auto|none|<id>|<cesta>, --lut-fallback, výpis LUTů (`offload luts`); LUTy v balíčku

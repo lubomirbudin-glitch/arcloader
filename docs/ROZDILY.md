@@ -34,7 +34,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Analýza klipů, metadata | ✅ | ✅ |
 | Náhledy v reportu | 1 náhled ve 30 % délky → ⏳ **3 snímky** (první/prostřední/poslední) | ✅ 3 snímky |
 | Proxy (LUT, burn-in, frame lines, TC) | ✅ | ✅ ověřeno NVENC + software (libx264); QSV/AMF neověřeno (není HW); čeká ostrý test na skutečném médiu |
-| Blackmagic RAW | ✅ `braw-decode` | ⏳ plán 3 (port `braw-decode` pro Windows) |
+| Blackmagic RAW | ✅ `braw-decode` | ⏳ plán 3 (dekodér v C# nad Blackmagic RAW SDK pro Windows, rozhodnuto 2026-10-05) |
 | RED R3D (REDline) | ✅ | ✅ kód, neověřeno s nástroji |
 | ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ | ✅ kód, neověřeno s nástroji |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
@@ -98,7 +98,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   (klíč `lut` u klipu, FORMATY.md). Zatím se automaticky nepoznají Canon, Panasonic, DJI a Fuji (chybí vzorové klipy,
   přijdou do záložního LUTu „Když kameru nepoznám:“, výchozí Bez LUT); D-Log M nemá vestavěný LUT. ARRI se pozná podle
   modelu kamery, takže klip z ARRI nahraný přímo v Rec.709 by dostal LUT neprávem — uživatel zvolí „Bez LUT“.
+  Na vzorcích se ještě ověří rozsah R3D/ARRIRAW mezisouborů a ProRes z ALEXA 35 (LogC4) — berou se jako legální video.
   Mac nová nastavení `proxy.lutMode/lutBuiltin/lutFallback` ignoruje a dál používá jen `proxy.lutPath`.
+- **Barvy proxy:** Windows převádí do YUV výslovně maticí BT.709 v legálním rozsahu a proxy označí BT.709
+  (`color_space/primaries/transfer = bt709`, `color_range = tv`); náhledy JPEG výslovně BT.601 v plném rozsahu (JFIF).
+  Mac zatím nechá volbu matice na ffmpeg a proxy neoznačí (po kroku v RGB tak může vyjít BT.601) — naplánováno.
 - **Zrušená úloha v GUI:** karta úlohy na Windows ukáže jen oranžové „Zrušeno — karta není kompletně zálohovaná.“
   místo červeného „N souborů selhalo…“ a bez souhrnu rychlosti (rychlost useknuté kopie by klamala). Mac zatím
   ukazuje červený text i souhrn.

@@ -70,6 +70,11 @@ Hodnoty výčtů:
 - `clip.format`: `video`, `braw`, `r3d`, `arriraw`, `canonRaw`, `unknown`
 - `proxyStatus`: `none`, `skipped`, `unsupported`, `done`, `failed`
 - `proxy.codec`: `h264`, `hevc`, `proresProxy`, `proresLT`, `prores422`, `prores422HQ`
+- `proxy.lutMode`: `auto`, `builtin`, `custom`, `none`. Chybí-li (starší soubor): s neprázdným `lutPath` → `custom`
+  (vlastní LUT jako dřív), bez `lutPath` → `auto` se záložním „bez LUT“. `lutFallback` je id vestavěného LUTu nebo `null`.
+- `clips[].lut.source`: `auto` (rozpoznaná kamera), `fallback` (kamera nerozpoznaná, záložní LUT), `builtin` (vestavěný
+  LUT vybraný v nastavení), `custom` (vlastní `.cube`), `none` (bez LUTu — důvod v `reason`). `id` je id vestavěného
+  LUTu, u `custom` a `none` `null`.
 
 Náhledy klipů (JPEG) se do JSON neukládají — jsou jen v HTML a PDF.
 
