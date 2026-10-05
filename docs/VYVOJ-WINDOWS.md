@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 5 (vestavěné LUTy), průběh
 
+- Úkol 7 — GUI: výběr LUTu (automaticky / vestavěný / bez / vlastní) a záložní LUT
 - Úkol 6 — CLI --lut auto|none|<id>|<cesta>, --lut-fallback, výpis LUTů (`offload luts`); LUTy v balíčku
 - Úkol 5 — proxy a náhledy s LUTem vybraným pro každý klip; BRAW a plnorozsahové video přepočtené na konvenci vestavěných LUTů; RED a ARRIRAW vydají log, když se LUT použije
 - Úkol 4 — režim LUTu v nastavení (starý vlastní LUT zůstává), kontrola chybějícího LUTu jen pro vlastní, použitý LUT a důvod u klipu v reportu

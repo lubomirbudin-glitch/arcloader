@@ -53,6 +53,12 @@ public sealed partial class MainViewModel
         RefreshVolumes();
         RefreshLut();
         RefreshProxyFolder();
+        Task.Run(() => LutCatalog.Default).ContinueWith(t =>
+        {
+            if (closing) return;
+            if (t.IsCompletedSuccessfully) Proxy.CatalogLoaded(t.Result);
+            else AppLog.Write($"LUT catalog: {t.Exception?.GetBaseException().Message}");
+        }, TaskScheduler.FromCurrentSynchronizationContext());
         healthTimer.Tick += (_, _) => HealthCheck();
         healthTimer.Start();
     }

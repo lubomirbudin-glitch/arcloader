@@ -17,15 +17,100 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     {
         this.p = p;
         this.owner = owner;
-        PickLutCommand = new RelayCommand(PickLut);
-        ClearLutCommand = new RelayCommand(() => { p.LutPath = null; Changed(nameof(LutName), nameof(HasLut)); });
+        PickLutCommand = new RelayCommand(() => PickLut());
         PickFolderCommand = new RelayCommand(PickFolder);
         ClearFolderCommand = new RelayCommand(() => { p.ExtraFolder = null; Changed(FolderProperties); });
         BitrateDownCommand = new RelayCommand(() => BitrateMbps--, () => p.BitrateMbps > 2);
         BitrateUpCommand = new RelayCommand(() => BitrateMbps++, () => p.BitrateMbps < 50);
         ScaleDownCommand = new RelayCommand(() => ScalePercent--, () => ScalePercent > 50);
         ScaleUpCommand = new RelayCommand(() => ScalePercent++, () => ScalePercent < 100);
+        BuildLutLists();
     }
+
+    // The built-in LUTs are loaded off the UI thread (MainViewModel); until then only auto / none / custom are offered.
+    LutCatalog catalog = new(null, []);
+    IReadOnlyList<Option<string>> lutChoices = [];
+    IReadOnlyList<Option<string>> fallbackChoices = [];
+
+    public IReadOnlyList<Option<string>> LutChoices => lutChoices;
+    public IReadOnlyList<Option<string>> FallbackChoices => fallbackChoices;
+
+    void BuildLutLists()
+    {
+        var builtin = catalog.Luts.Select(l => new Option<string>(l.Id, l.Name)).ToList();
+        lutChoices = [new("auto", "Automaticky podle kamery"), .. builtin, new("none", "Bez LUT"), new("custom", "Vlastní…")];
+        fallbackChoices = [new("none", "Bez LUT"), .. builtin];
+    }
+
+    /// The catalog arrived (UI thread): the lists are rebuilt and the selections re-read.
+    public void CatalogLoaded(LutCatalog loaded)
+    {
+        catalog = loaded;
+        BuildLutLists();
+        RaiseMany(nameof(LutChoices), nameof(FallbackChoices), nameof(LutChoice), nameof(Fallback));
+    }
+
+    LutMode Mode => LutResolver.EffectiveMode(p);
+
+    /// Always an instance of LutChoices (ComboBox compares by reference); an unknown built-in id shows as auto.
+    public Option<string> LutChoice
+    {
+        get
+        {
+            var id = Mode switch
+            {
+                LutMode.Builtin => p.LutBuiltin,
+                LutMode.Custom => "custom",
+                LutMode.None => "none",
+                _ => "auto",
+            };
+            return LutChoices.FirstOrDefault(c => c.Value == id) ?? LutChoices[0];
+        }
+        set
+        {
+            if (value == null) return;
+            switch (value.Value)
+            {
+                case "auto": p.LutMode = LutMode.Auto; break;
+                case "none": p.LutMode = LutMode.None; break;
+                case "custom":
+                    if (string.IsNullOrEmpty(p.LutPath))
+                    {
+                        // The dialog must not open inside the ComboBox's own selection change; a cancel restores the old choice.
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                        {
+                            if (PickLut()) return;
+                            RaiseMany(nameof(LutChoice));
+                        });
+                        return;
+                    }
+                    p.LutMode = LutMode.Custom;
+                    break;
+                default:
+                    p.LutMode = LutMode.Builtin;
+                    p.LutBuiltin = value.Value;
+                    break;
+            }
+            Changed(LutProperties);
+        }
+    }
+
+    static readonly string[] LutProperties = [nameof(LutChoice), nameof(ShowFallback), nameof(ShowCustom), nameof(LutName), nameof(LutPath)];
+
+    public Option<string> Fallback
+    {
+        get => FallbackChoices.FirstOrDefault(c => c.Value == (p.LutFallback ?? "none")) ?? FallbackChoices[0];
+        set
+        {
+            if (value == null) return;
+            p.LutFallback = value.Value == "none" ? null : value.Value;
+            Changed(nameof(Fallback));
+        }
+    }
+
+    public bool ShowFallback => Mode == LutMode.Auto;
+    public bool ShowCustom => Mode == LutMode.Custom;
+    public string? LutPath => p.LutPath;
 
     public static IReadOnlyList<Option<ProxyCodec>> Codecs { get; } =
         Enum.GetValues<ProxyCodec>().Select(c => new Option<ProxyCodec>(c, c.Label())).ToList();
@@ -40,7 +125,6 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     ];
 
     public RelayCommand PickLutCommand { get; }
-    public RelayCommand ClearLutCommand { get; }
     public RelayCommand PickFolderCommand { get; }
     public RelayCommand ClearFolderCommand { get; }
     public RelayCommand BitrateDownCommand { get; }
@@ -94,8 +178,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
 
     public string ScaleText => $"{ScalePercent} % obrazu";
 
-    public string LutName => p.LutPath is string l ? Path.GetFileName(l) : "bez LUT";
-    public bool HasLut => p.LutPath != null;
+    public string LutName => p.LutPath is string l ? Path.GetFileName(l) : "nevybráno";
 
     public bool BurnFilename { get => p.BurnFilename; set { p.BurnFilename = value; Changed(nameof(BurnFilename)); } }
     public bool BurnTimecode { get => p.BurnTimecode; set { p.BurnTimecode = value; Changed(nameof(BurnTimecode)); } }
@@ -119,10 +202,13 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         Changed(FolderProperties);
     }
 
-    void PickLut()
+    /// The .cube dialog; a picked file switches to custom mode. False when cancelled (nothing changes).
+    bool PickLut()
     {
-        if (Dialogs.PickFile("Vyber LUT (.cube)", "LUT (*.cube)|*.cube") is not string path) return;
+        if (Dialogs.PickFile("Vyber LUT (.cube)", "LUT (*.cube)|*.cube") is not string path) return false;
         p.LutPath = path;
-        Changed(nameof(LutName), nameof(HasLut));
+        p.LutMode = LutMode.Custom;
+        Changed(LutProperties);
+        return true;
     }
 }
