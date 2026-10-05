@@ -209,6 +209,7 @@ public final class OffloadJob {
         var report = input
         let tools = config.tools.resolved()
         let renderer = ProxyRenderer(settings: config.proxy, tools: tools)
+        renderer.log = log   // software retries and unkillable ffmpeg processes go to the job's log
         let clips = ClipDetector.detect(plan.scan.files)
         guard !clips.isEmpty else { return report }
 

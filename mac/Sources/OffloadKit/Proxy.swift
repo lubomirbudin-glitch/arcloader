@@ -148,6 +148,16 @@ public final class ProxyRenderer {
     let backends: [ClipFormat: RawBackend]
     let tempDir: String
 
+    /// A proxy render with no progress for this long is stuck (3× as long before the first progress): ffmpeg is killed
+    /// and, when it decoded in hardware, the clip is retried once in software.
+    static let defaultStallTimeout: TimeInterval = 60
+    /// How long a killed ffmpeg is waited for: a process stuck in a GPU driver may never end — the job must go on.
+    static let killWait: TimeInterval = 10
+    /// Tests shorten it.
+    var stallTimeout: TimeInterval = ProxyRenderer.defaultStallTimeout
+    /// Where retries and unkillable processes are reported (the job's log).
+    var log: ((String) -> Void)?
+
     public init(settings: ProxySettings, tools: ExternalTools) {
         self.settings = settings
         self.tools = tools
@@ -236,11 +246,25 @@ public final class ProxyRenderer {
         return String(format: "%.6f", at)
     }
 
-    private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, singleFrameAt: Double?, forRender: Bool) throws -> FrameSource {
+    /// Hardware decoding only where it helps and is safe: H.264 and HEVC (`ClipInfo.codec` starts with the ffprobe
+    /// codec name). Everything else (FFV1, ProRes, MJPEG, DNx …) decodes in software — same rule as Windows, where
+    /// ffmpeg 8.1 with -hwaccel hung forever on FFV1.
+    static func usesHardwareDecode(_ codec: String?) -> Bool {
+        let c = (codec ?? "").lowercased()
+        return c.hasPrefix("h264") || c.hasPrefix("hevc")
+    }
+
+    /// The note at a clip whose ffmpeg stalled (texts shared with Windows `StallNote`).
+    static func stallNote(_ seconds: TimeInterval, retriedInSoftware: Bool) -> String {
+        "ffmpeg se zasekl (\(String(format: "%.0f", seconds)) s bez nového snímku)"
+            + (retriedInSoftware ? " i bez hardwarového dekódování; proxy nevznikla" : "")
+    }
+
+    private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, singleFrameAt: Double?, hwaccel: Bool) throws -> FrameSource {
         let path = cardPath + "/" + clip.path
         if clip.format == .video {
-            // Thumbnails decode one frame in software (exact seeking); proxies use VideoToolbox.
-            return FrameSource(inputArgs: forRender ? ["-hwaccel", "videotoolbox", "-i", path] : ["-i", path])
+            // VideoToolbox only for H.264/HEVC proxies (usesHardwareDecode); thumbnails always decode in software.
+            return FrameSource(inputArgs: hwaccel ? ["-hwaccel", "videotoolbox", "-i", path] : ["-i", path])
         }
         guard let b = backends[clip.format] else { throw ToolError(tool: clip.format.label, status: -1, message: "no decoder") }
         return try b.source(path, info: info, settings: settings, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt)
@@ -260,7 +284,7 @@ public final class ProxyRenderer {
             let out = tempDir + "/thumb-\(UUID().uuidString).jpg"
             defer { unlink(out) }
             do {
-                let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: pos.seconds, forRender: false)
+                let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: pos.seconds, hwaccel: false)
                 defer { src.removeIntermediates() }
                 var args = ["-hide_banner", "-loglevel", "error", "-y"]
                 if video { args += ["-ss", ProxyRenderer.seekSeconds(info, pos)] }
@@ -282,31 +306,65 @@ public final class ProxyRenderer {
         return result
     }
 
+    /// Renders the proxy. A render that stalls (no progress for `stallTimeout`) is killed. With hardware decoding the clip
+    /// is then retried once in software — as is one that failed with it; without, the stall fails the proxy. Cancelling
+    /// never retries. Notes and log lines as on Windows.
     public func render(_ clip: Clip, cardPath: String, info: ClipInfo, output: String,
                        progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
         guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
-        let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: nil, forRender: true)
+        let hw = clip.format == .video && ProxyRenderer.usesHardwareDecode(info.codec)
+        let first: Error
+        do {
+            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, hwaccel: hw, output: output,
+                           progress: progress, isCancelled: isCancelled)
+            return
+        } catch let e as FFmpegStall where !hw && !isCancelled() {
+            throw FFmpegStall(note: e.note + "; proxy nevznikla")
+        } catch where hw && (error is FFmpegStall || error is ToolError) && !isCancelled() {
+            first = error   // hardware decoding stalled or failed: once more in software
+        }
+        if isCancelled() { throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled") }
+        log?("proxy \(clip.name): with hardware decoding: \(first) — retrying in software")
+        do {
+            try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, hwaccel: false, output: output,
+                           progress: progress, isCancelled: isCancelled)
+            log?("proxy \(clip.name): software decoding succeeded")
+        } catch where (error is FFmpegStall || error is ToolError) && !isCancelled() {
+            log?("proxy \(clip.name): software decoding failed too: \(error)")
+            switch (first, error) {
+            case (is FFmpegStall, is FFmpegStall):
+                throw ProxyRetryFailed(note: ProxyRenderer.stallNote(stallTimeout, retriedInSoftware: true))
+            case (is FFmpegStall, _):
+                throw ProxyRetryFailed(note: "\(first); bez hardwarového dekódování selhal: \(error)")
+            default:
+                throw ProxyRetryFailed(note: "\(error); s hardwarovým dekódováním předtím: \(first)")
+            }
+        }
+    }
+
+    private func renderOnce(_ ffmpeg: String, _ clip: Clip, cardPath: String, info: ClipInfo, hwaccel: Bool, output: String,
+                            progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
+        let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: nil, hwaccel: hwaccel)
         defer { src.removeIntermediates() }
         let outHeight = min(settings.height, info.height ?? settings.height) & ~1
-
         let vf = FilterGraph.proxy(settings, outHeight: outHeight, alreadyCropped: src.alreadyCropped,
                                    lutFile: hasLUT ? lutCopy : nil, premap: false,
                                    burnIn: burnIn(clip: clip, info: info, height: outHeight))
-
         var args = ["-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
         args += ["-map", "0:v:0"]
         if settings.audio && info.audioChannels > 0 && src.audioFromInput {
             args += ["-map", "0:a:0?"] + settings.codec.audioArgs
         }
         args += ["-vf", vf] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps) + FilterGraph.rec709Args
-        if let tc = info.timecode, isValidTimecode(tc) { args += ["-timecode", tc] }
+        if let tc = info.timecode, Timecode.isValid(tc) { args += ["-timecode", tc] }
 
         let dir = (output as NSString).deletingLastPathComponent
         try IO.mkdirs(dir)
         let part = dir + "/." + (output as NSString).lastPathComponent + ".part"
         args += ["-f", "mov", part]
         do {
-            try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: info.duration, progress: progress, isCancelled: isCancelled)
+            try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: info.duration, progress: progress,
+                          isCancelled: isCancelled, stallAfter: stallTimeout)
             guard rename(part, output) == 0 else { throw IOError("rename", output) }
         } catch {
             unlink(part)
@@ -339,19 +397,51 @@ public final class ProxyRenderer {
 
     func isValidTimecode(_ tc: String) -> Bool { Timecode.isValid(tc) }
 
+    /// `stallAfter` (renders only, with -progress pipe:1 in the args): ffmpeg is killed and `FFmpegStall` thrown when it
+    /// has reported no new frame or output time and taken no data from the feeder for that long (3× before the first
+    /// progress). Cancelling is checked first and wins.
     func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, duration: Double?,
-                   progress: ((Double) -> Void)?, isCancelled: () -> Bool) throws {
+                   progress: ((Double) -> Void)?, isCancelled: () -> Bool, stallAfter: TimeInterval? = nil) throws {
         let p = ToolProcess(ffmpeg, args)
         p.captureStderr()
+        let watch = ProgressWatch()
+        var pump: Thread?
         if let feeder {
-            let pipe = Pipe()
-            feeder.standardOutput = pipe
+            // The decoder's frames go through a pump: every chunk ffmpeg takes is progress (a slow RAW decoder is not stuck).
+            let fromFeeder = Pipe(), toFFmpeg = Pipe()
+            feeder.standardOutput = fromFeeder
             feeder.standardError = FileHandle.nullDevice
-            p.process.standardInput = pipe
+            p.process.standardInput = toFFmpeg
+            // A write after ffmpeg died must fail with EPIPE, not take the app down with SIGPIPE.
+            _ = fcntl(toFFmpeg.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+            pump = Thread {
+                // Plain read(2)/write(2): read returns whatever the decoder has written so far. FileHandle.read(upToCount:)
+                // on a pipe waits for the whole count (or EOF) — a slow decoder would look stuck.
+                let inFD = fromFeeder.fileHandleForReading.fileDescriptor
+                let outFD = toFFmpeg.fileHandleForWriting.fileDescriptor
+                let size = 4 << 20
+                let buffer = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 16)
+                defer { buffer.deallocate() }
+                pumping: while true {
+                    let n = Darwin.read(inFD, buffer, size)
+                    if n < 0 && errno == EINTR { continue }
+                    if n <= 0 { break }   // the decoder is done (EOF) or gone
+                    var sent = 0
+                    while sent < n {
+                        let w = Darwin.write(outFD, buffer + sent, n - sent)
+                        if w < 0 && errno == EINTR { continue }
+                        if w <= 0 { break pumping }   // ffmpeg is gone (EPIPE, no signal thanks to F_SETNOSIGPIPE)
+                        sent += w
+                    }
+                    watch.dataFlowed()
+                }
+                try? toFFmpeg.fileHandleForWriting.close()
+            }
         } else {
             p.process.standardInput = FileHandle.nullDevice
         }
         p.onStdoutLine { line in
+            watch.advanced(line)
             guard let progress, let d = duration, d > 0, line.hasPrefix("out_time_us="),
                   let us = Double(line.dropFirst("out_time_us=".count)) else { return }
             progress(min(1, us / 1_000_000 / d))
@@ -363,12 +453,15 @@ public final class ProxyRenderer {
             feeder?.terminate()
             throw error
         }
+        pump?.start()
         while p.process.isRunning {
             if isCancelled() {
-                p.process.terminate()
-                feeder?.terminate()
-                p.process.waitUntilExit()
+                stop(p, feeder)
                 throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled")
+            }
+            if let limit = stallAfter, watch.isStalled(limit: limit) {
+                stop(p, feeder)
+                throw FFmpegStall(note: ProxyRenderer.stallNote(limit, retriedInSoftware: false))
             }
             usleep(200_000)
         }
@@ -380,5 +473,20 @@ public final class ProxyRenderer {
         if let feeder, feeder.terminationStatus != 0, feeder.terminationReason == .exit {
             throw ToolError(tool: (feeder.executableURL?.lastPathComponent ?? "decoder"), status: feeder.terminationStatus, message: "")
         }
+    }
+
+    /// SIGTERM, at most `killWait` for ffmpeg to end, then SIGKILL — never an unbounded wait (a process stuck in a GPU
+    /// driver may survive even that; the job goes on without it and the log says so).
+    private func stop(_ p: ToolProcess, _ feeder: Process?) {
+        let pid = p.process.processIdentifier
+        p.process.terminate()
+        if let feeder, feeder.isRunning { feeder.terminate() }
+        let deadline = Date().addingTimeInterval(ProxyRenderer.killWait)
+        while p.process.isRunning && Date() < deadline { usleep(50_000) }
+        guard p.process.isRunning else { return }
+        kill(pid, SIGKILL)
+        if let feeder, feeder.isRunning { kill(feeder.processIdentifier, SIGKILL) }
+        usleep(500_000)
+        if p.process.isRunning { log?("ffmpeg (pid \(pid)) did not end \(Int(ProxyRenderer.killWait)) s after kill") }
     }
 }

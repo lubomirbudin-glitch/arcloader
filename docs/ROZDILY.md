@@ -59,6 +59,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Paralelismus | GCD sériové fronty | vlákno + fronta na cíl (`SerialWorker`) |
 | xxHash64 | C knihovna xxhash | `System.IO.Hashing.XxHash64` |
 | HW enkodér proxy | VideoToolbox | NVENC → QSV → AMF → software (zjistí se automaticky) |
+| Dekódování pro proxy | VideoToolbox (-hwaccel videotoolbox) jen pro H.264/HEVC | -hwaccel auto jen pro H.264/HEVC |
 | PDF | WebKit tisk | Edge headless `--print-to-pdf` |
 | Detekce karet | `NSWorkspace` notifikace | `WM_DEVICECHANGE` |
 | Vysunutí | `unmountAndEjectDevice` | `FSCTL_LOCK/DISMOUNT_VOLUME` + `CM_Request_Device_Eject` |
