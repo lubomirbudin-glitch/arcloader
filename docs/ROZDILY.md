@@ -93,9 +93,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   modelu kamery, takže klip z ARRI nahraný přímo v Rec.709 by dostal LUT neprávem — uživatel zvolí „Bez LUT“.
   Na vzorcích se ještě ověří rozsah R3D/ARRIRAW mezisouborů a ProRes z ALEXA 35 (LogC4) — berou se jako legální video.
   Mac nová nastavení `proxy.lutMode/lutBuiltin/lutFallback` ignoruje a dál používá jen `proxy.lutPath`.
-- **Barvy proxy:** Windows převádí do YUV výslovně maticí BT.709 v legálním rozsahu a proxy označí BT.709
-  (`color_space/primaries/transfer = bt709`, `color_range = tv`); náhledy JPEG výslovně BT.601 v plném rozsahu (JFIF).
-  Mac zatím nechá volbu matice na ffmpeg a proxy neoznačí (po kroku v RGB tak může vyjít BT.601) — naplánováno.
 - **Upozornění po dokončení:** Windows hraje zvuk a bliká tlačítkem v hlavním panelu místo notifikace Macu
   (nebalená aplikace umí toast jen po registraci).
 - **Vysunutí karty (obě verze):** karta ve čtečce se vysune jako médium, čtečka zůstane připojená; interní disky,

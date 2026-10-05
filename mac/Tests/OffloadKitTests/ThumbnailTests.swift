@@ -57,7 +57,7 @@ final class ThumbnailTests: XCTestCase {
         func reference(_ n: Int) throws -> Double {
             let jpg = dir.path + "/ref-\(n).jpg"
             try ToolProcess.run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", file,
-                                         "-vf", "select='eq(n,\(n))',\(r.thumbnailFilter(applyLUT: false))",
+                                         "-vf", "select='eq(n,\(n))',\(FilterGraph.thumbnail(lutFile: nil, premap: false))",
                                          "-frames:v", "1", "-q:v", "5", jpg])
             return try meanGrey(ffmpeg, jpg, dir.path)
         }

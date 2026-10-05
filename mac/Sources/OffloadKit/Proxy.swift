@@ -246,20 +246,12 @@ public final class ProxyRenderer {
         return try b.source(path, info: info, settings: settings, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt)
     }
 
-    /// The report thumbnail filter: 180 px high, with the LUT so log footage is readable.
-    func thumbnailFilter(applyLUT: Bool) -> String {
-        var vf = ["scale=-2:180:flags=bicubic"]
-        if hasLUT && applyLUT { vf += ["format=rgb48le", "lut3d=file=\(lutCopy):interp=tetrahedral"] }
-        vf.append("format=yuvj420p")
-        return vf.joined(separator: ",")
-    }
-
     /// First, middle and last frame as small JPEGs with captions. When `isCancelled` turns true the clip simply
     /// gets no thumbnails. One bad position does not cost the others; if none works, the last error is thrown.
     public func thumbnails(_ clip: Clip, cardPath: String, info: ClipInfo, applyLUT: Bool = true,
                            isCancelled: () -> Bool = { false }) throws -> [Thumbnail] {
         guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "ffmpeg not found") }
-        let filter = thumbnailFilter(applyLUT: applyLUT)
+        let filter = FilterGraph.thumbnail(lutFile: hasLUT && applyLUT ? lutCopy : nil, premap: false)
         let video = clip.format == .video
         var result: [Thumbnail] = []
         var lastError: Error?
@@ -297,23 +289,16 @@ public final class ProxyRenderer {
         defer { src.removeIntermediates() }
         let outHeight = min(settings.height, info.height ?? settings.height) & ~1
 
-        var vf: [String] = []
-        if let aspect = settings.frameAspect, !src.alreadyCropped {
-            // Crop to the frame lines first, sized from whatever resolution the decoder delivers.
-            let s = min(max(settings.frameScale, 0.1), 1.0)
-            vf.append("crop=w='trunc(min(iw*\(s),ih*\(s)*\(aspect))/2)*2':h='trunc(min(iw*\(s),ih*\(s)*\(aspect))/\(aspect)/2)*2'")
-        }
-        vf += ["scale=-2:\(outHeight):flags=bicubic", "setsar=1"]
-        if hasLUT { vf += ["format=rgb48le", "lut3d=file=\(lutCopy):interp=tetrahedral"] }
-        vf += burnIn(clip: clip, info: info, height: outHeight)
-        vf.append("format=\(settings.codec.pixelFormat)")
+        let vf = FilterGraph.proxy(settings, outHeight: outHeight, alreadyCropped: src.alreadyCropped,
+                                   lutFile: hasLUT ? lutCopy : nil, premap: false,
+                                   burnIn: burnIn(clip: clip, info: info, height: outHeight))
 
         var args = ["-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
         args += ["-map", "0:v:0"]
         if settings.audio && info.audioChannels > 0 && src.audioFromInput {
             args += ["-map", "0:a:0?"] + settings.codec.audioArgs
         }
-        args += ["-vf", vf.joined(separator: ",")] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps)
+        args += ["-vf", vf] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps) + FilterGraph.rec709Args
         if let tc = info.timecode, isValidTimecode(tc) { args += ["-timecode", tc] }
 
         let dir = (output as NSString).deletingLastPathComponent
