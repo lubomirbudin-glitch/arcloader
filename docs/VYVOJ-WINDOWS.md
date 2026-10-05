@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — drobnosti po plánu 5
 
+- Proxy — hardwarové dekódování (`-hwaccel auto`) jen pro H.264 a HEVC, ostatní kodeky (FFV1, ProRes, MJPEG…) softwarově: ffmpeg 8.1 se na FFV1 s `-hwaccel auto` navždy zasekl (Vulkan VK_ERROR_DEVICE_LOST); hlídač: 60 s bez nového snímku → ffmpeg se ukončí a klip se jednou zkusí znovu bez hardwarového dekódování (stejně tak po chybě s ním), když se zasekne i podruhé, proxy selže s poznámkou „ffmpeg se zasekl …“ a úloha jede dál
 - Ikona aplikace — karta se zelenou fajfkou na modrotyrkysovém čtverci; zdroj a generátor ve `shared/icon` (sdílené s Macem, `make_icon.py`, `.ico`, iconset pro macOS); ikona `Offload.exe`, `bin\offload.exe` i oken (hlavní okno, Hardware)
 
 ## 2026-10-05 — plán 5 (vestavěné LUTy), průběh
