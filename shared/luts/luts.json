@@ -1,0 +1,90 @@
+[
+  {
+    "id": "arri-logc3-awg3",
+    "name": "ARRI LogC3 / AWG3 → Rec.709",
+    "maker": "ARRI",
+    "file": "ARRI_LogC3_AWG3_to_Rec709.cube",
+    "curve": "ARRI LogC3",
+    "gamut": "ARRI Wide Gamut 3"
+  },
+  {
+    "id": "arri-logc4-awg4",
+    "name": "ARRI LogC4 / AWG4 → Rec.709",
+    "maker": "ARRI",
+    "file": "ARRI_LogC4_AWG4_to_Rec709.cube",
+    "curve": "ARRI LogC4",
+    "gamut": "ARRI Wide Gamut 4"
+  },
+  {
+    "id": "sony-slog3-sgamut3cine",
+    "name": "Sony S-Log3 / S-Gamut3.Cine → Rec.709",
+    "maker": "Sony",
+    "file": "Sony_SLog3_SGamut3Cine_to_Rec709.cube",
+    "curve": "S-Log3",
+    "gamut": "S-Gamut3.Cine"
+  },
+  {
+    "id": "sony-slog3-sgamut3",
+    "name": "Sony S-Log3 / S-Gamut3 → Rec.709",
+    "maker": "Sony",
+    "file": "Sony_SLog3_SGamut3_to_Rec709.cube",
+    "curve": "S-Log3",
+    "gamut": "S-Gamut3"
+  },
+  {
+    "id": "bmd-film-gen5",
+    "name": "Blackmagic Film Gen 5 → Rec.709",
+    "maker": "Blackmagic Design",
+    "file": "Blackmagic_FilmGen5_WideGamutGen5_to_Rec709.cube",
+    "curve": "Blackmagic Film Generation 5",
+    "gamut": "Blackmagic Wide Gamut"
+  },
+  {
+    "id": "red-log3g10-rwg",
+    "name": "RED Log3G10 / REDWideGamutRGB → Rec.709",
+    "maker": "RED",
+    "file": "RED_Log3G10_RWG_to_Rec709.cube",
+    "curve": "Log3G10",
+    "gamut": "REDWideGamutRGB"
+  },
+  {
+    "id": "canon-clog2-cinemagamut",
+    "name": "Canon Log 2 / Cinema Gamut → Rec.709",
+    "maker": "Canon",
+    "file": "Canon_CLog2_CinemaGamut_to_Rec709.cube",
+    "curve": "Canon Log 2",
+    "gamut": "Cinema Gamut"
+  },
+  {
+    "id": "canon-clog3-cinemagamut",
+    "name": "Canon Log 3 / Cinema Gamut → Rec.709",
+    "maker": "Canon",
+    "file": "Canon_CLog3_CinemaGamut_to_Rec709.cube",
+    "curve": "Canon Log 3",
+    "gamut": "Cinema Gamut"
+  },
+  {
+    "id": "panasonic-vlog-vgamut",
+    "name": "Panasonic V-Log / V-Gamut → Rec.709",
+    "maker": "Panasonic",
+    "file": "Panasonic_VLog_VGamut_to_Rec709.cube",
+    "curve": "V-Log",
+    "gamut": "V-Gamut"
+  },
+  {
+    "id": "dji-dlog-dgamut",
+    "name": "DJI D-Log / D-Gamut → Rec.709",
+    "maker": "DJI",
+    "file": "DJI_DLog_DGamut_to_Rec709.cube",
+    "curve": "D-Log",
+    "gamut": "DJI D-Gamut"
+  },
+  {
+    "id": "fujifilm-flog2-fgamut",
+    "name": "Fujifilm F-Log2 / F-Gamut → Rec.709",
+    "maker": "Fujifilm",
+    "file": "Fujifilm_FLog2_FGamut_to_Rec709.cube",
+    "curve": "F-Log2",
+    "gamut": "F-Gamut"
+  }
+]

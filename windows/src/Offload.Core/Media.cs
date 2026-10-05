@@ -54,6 +54,8 @@ public sealed class ClipInfo
     [JsonPropertyName("logEncoding")] public string? LogEncoding { get; set; }
     /// Anamorphic squeeze of the lens (2.0 for 2x), when the format reports it.
     [JsonPropertyName("squeeze")] public double? Squeeze { get; set; }
+    /// "tv" (legal) or "pc" (full) as ffprobe reports it; full-range sources need a pre-map before built-in LUTs.
+    [JsonPropertyName("colorRange")] public string? ColorRange { get; set; }
 
     [JsonIgnore]
     public string FpsLabel
@@ -106,6 +108,8 @@ public sealed class ClipEntry
     [JsonPropertyName("proxyPath")] public string? ProxyPath { get; set; }
     [JsonPropertyName("proxyNote")] public string? ProxyNote { get; set; }
     [JsonPropertyName("proxySeconds")] public double? ProxySeconds { get; set; }
+    /// The LUT applied to this clip's proxy and thumbnails, and why.
+    [JsonPropertyName("lut"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public LutUse? Lut { get; set; }
     /// First, middle and last frame (JPEG + caption); embedded in the HTML/PDF report only.
     [JsonIgnore] public List<Thumbnail> Thumbnails { get; set; } = [];
 }
@@ -162,6 +166,12 @@ public sealed class ProxySettings
     [JsonPropertyName("bitrateMbps")] public int BitrateMbps { get; set; } = 10;
     /// .cube 3D LUT applied after downscaling (cheap at proxy resolution).
     [JsonPropertyName("lutPath")] public string? LutPath { get; set; }
+    /// Which LUT source applies; null = not stored (older settings): LutPath means custom, otherwise automatic.
+    [JsonPropertyName("lutMode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public LutMode? LutMode { get; set; }
+    /// Built-in LUT id used in Builtin mode.
+    [JsonPropertyName("lutBuiltin"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? LutBuiltin { get; set; }
+    /// Built-in LUT id used in Auto mode when the camera is not recognised.
+    [JsonPropertyName("lutFallback"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? LutFallback { get; set; }
     [JsonPropertyName("burnFilename")] public bool BurnFilename { get; set; } = true;
     [JsonPropertyName("burnTimecode")] public bool BurnTimecode { get; set; } = true;
     [JsonPropertyName("audio")] public bool Audio { get; set; } = true;

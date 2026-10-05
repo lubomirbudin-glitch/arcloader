@@ -193,14 +193,19 @@
                             </StackPanel>
                         </StackPanel>
                         <TextBlock Grid.Row="4" Text="LUT" Style="{StaticResource Caption}" VerticalAlignment="Center" />
-                        <DockPanel Grid.Row="4" Grid.Column="1" Margin="0,2">
-                            <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Margin="4,0,0,0" Command="{Binding ClearLutCommand}"
-                                    Visibility="{Binding HasLut, Converter={StaticResource BoolToVisible}}" ToolTip="Bez LUT">
-                                <TextBlock Style="{StaticResource Icon}" FontSize="12" Text="&#xE711;" />
-                            </Button>
-                            <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Vybrat…" Command="{Binding PickLutCommand}" />
-                            <TextBlock Text="{Binding LutName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        </DockPanel>
+                        <StackPanel Grid.Row="4" Grid.Column="1" Margin="0,2">
+                            <ComboBox ItemsSource="{Binding LutChoices}" SelectedItem="{Binding LutChoice}" DisplayMemberPath="Label"
+                                      AutomationProperties.AutomationId="LutChoice" />
+                            <DockPanel Margin="0,4,0,0" Visibility="{Binding ShowFallback, Converter={StaticResource BoolToVisible}}">
+                                <TextBlock DockPanel.Dock="Top" Text="Když kameru nepoznám:" Style="{StaticResource Caption}" />
+                                <ComboBox ItemsSource="{Binding FallbackChoices}" SelectedItem="{Binding Fallback}" DisplayMemberPath="Label"
+                                          AutomationProperties.AutomationId="LutFallbackChoice" />
+                            </DockPanel>
+                            <DockPanel Margin="0,4,0,0" Visibility="{Binding ShowCustom, Converter={StaticResource BoolToVisible}}">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Vybrat…" Command="{Binding PickLutCommand}" />
+                                <TextBlock Text="{Binding LutName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding LutPath}" />
+                            </DockPanel>
+                        </StackPanel>
                     </Grid>
                     <CheckBox Content="Burn-in názvu klipu" IsChecked="{Binding BurnFilename}" />
                     <CheckBox Content="Burn-in timecodu" IsChecked="{Binding BurnTimecode}" />

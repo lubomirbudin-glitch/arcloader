@@ -14,8 +14,10 @@ public sealed class ProxyRenderer : IDisposable
 
     readonly Dictionary<ClipFormat, IRawBackend> backends = RawBackends.All.ToDictionary(b => b.Format);
     readonly string workDir;
-    readonly bool hasLut;
+    readonly bool hasCustomLut;
     readonly bool hasFont;
+    /// Built-in LUT ids already copied into the work folder.
+    readonly HashSet<string> builtinLuts = new(StringComparer.Ordinal);
 
     public ProxySettings Settings { get; }
     public ExternalTools Tools { get; }
@@ -33,10 +35,11 @@ public sealed class ProxyRenderer : IDisposable
         Directory.CreateDirectory(workDir);
         try
         {
-            if (!string.IsNullOrEmpty(settings.LutPath) && File.Exists(settings.LutPath))
+            // The custom LUT is copied up front as before; built-in ones lazily, per clip (PrepareLut).
+            if (LutResolver.EffectiveMode(settings) == LutMode.Custom && !string.IsNullOrEmpty(settings.LutPath) && File.Exists(settings.LutPath))
             {
                 File.Copy(settings.LutPath, Path.Combine(workDir, FilterGraph.LutFile));
-                hasLut = true;
+                hasCustomLut = true;
             }
             if (FontCandidates.FirstOrDefault(File.Exists) is string font)
             {
@@ -122,14 +125,46 @@ public sealed class ProxyRenderer : IDisposable
             ? Timecode.Add(info.Timecode!, p.Frame, fps)
             : $"#{p.Frame}";
 
-    FrameSource SourceFor(Clip clip, string cardPath, ClipInfo info, double? singleFrameAt, bool forRender)
+    FrameSource SourceFor(Clip clip, string cardPath, ClipInfo info, RawLook look, double? singleFrameAt, bool forRender)
     {
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
             return new FrameSource { InputArgs = forRender ? ["-hwaccel", "auto", "-i", path] : ["-i", path] };
         if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, "no decoder");
-        return b.Source(path, info, Settings, Tools, workDir, singleFrameAt);
+        return b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt);
     }
+
+    /// The .cube for this clip by its name in the work folder, or null for no LUT. The custom LUT was copied
+    /// in the constructor (null when it was missing); a built-in one is copied on first use, once per id.
+    string? PrepareLut(LutUse? lut)
+    {
+        if (lut?.File is not string file) return null;
+        if (!lut.IsBuiltin) return hasCustomLut ? FilterGraph.LutFile : null;
+        var name = $"lut-{lut.Id}.cube";
+        if (!builtinLuts.Contains(lut.Id!))
+        {
+            File.Copy(file, Path.Combine(workDir, name), overwrite: true);
+            builtinLuts.Add(lut.Id!);
+        }
+        return name;
+    }
+
+    /// RAW decoders hand over log whenever a LUT follows; ARRI's target space must match a built-in ARRI LUT.
+    internal static RawLook LookFor(LutUse? lut, ClipInfo info)
+    {
+        if (lut?.File is not string file) return new RawLook(false, null);
+        return new RawLook(true, lut.Id switch
+        {
+            "arri-logc4-awg4" => "AWG4/D65/LogC4",
+            "arri-logc3-awg3" => "AWG3/D65/LogC3",
+            null => ArriBackend.ColorSpace(file, info),
+            _ => null,
+        });
+    }
+
+    /// Built-in LUTs expect legal-range input: full-range sources (BRAW, video tagged "pc") are pre-mapped first.
+    internal static bool NeedsPreMap(LutUse? lut, FrameSource src, ClipInfo info) =>
+        lut?.IsBuiltin == true && (src.FullRange || info.ColorRange == "pc");
 
     /// Where ffmpeg's input seek (-ss before -i) should land for a thumbnail position. A frame in the middle is
     /// sought half a frame early: its exact time rounded up would skip to the next frame (23.976, 24, 29.97 fps).
@@ -145,11 +180,13 @@ public sealed class ProxyRenderer : IDisposable
 
     /// First, middle and last frame as small JPEGs with the LUT applied, so log footage is readable.
     /// When `isCancelled` turns true the clip simply gets no thumbnails.
-    public List<Thumbnail> Thumbnails(Clip clip, string cardPath, ClipInfo info, bool applyLut = true, Func<bool>? isCancelled = null)
+    /// `lut` null = no LUT (thumbnails taken from a finished proxy, which already has it).
+    public List<Thumbnail> Thumbnails(Clip clip, string cardPath, ClipInfo info, LutUse? lut, Func<bool>? isCancelled = null)
     {
         var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, "ffmpeg not found");
         isCancelled ??= () => false;
-        var vf = FilterGraph.Thumbnail(hasLut && applyLut);
+        var lutFile = PrepareLut(lut);
+        var look = LookFor(lutFile != null ? lut : null, info);  // log only when a LUT really follows
         var result = new List<Thumbnail>();
         Exception? lastError = null;
         foreach (var pos in FramePositions(info))
@@ -159,7 +196,8 @@ public sealed class ProxyRenderer : IDisposable
             var output = Path.Combine(workDir, $"thumb-{Guid.NewGuid():N}.jpg");
             try
             {
-                src = SourceFor(clip, cardPath, info, pos.Seconds, forRender: false);
+                src = SourceFor(clip, cardPath, info, look, pos.Seconds, forRender: false);
+                var vf = FilterGraph.Thumbnail(lutFile, NeedsPreMap(lut, src, info));  // the pre-map depends on the source
                 bool video = clip.Format == ClipFormat.Video;
                 var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y" };
                 if (src.FeederExe == null) args.Add("-nostdin");
@@ -187,10 +225,11 @@ public sealed class ProxyRenderer : IDisposable
         return result;
     }
 
-    public void Render(Clip clip, string cardPath, ClipInfo info, string output, Action<double> progress, Func<bool> isCancelled)
+    public void Render(Clip clip, string cardPath, ClipInfo info, LutUse? lut, string output, Action<double> progress, Func<bool> isCancelled)
     {
         var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, "ffmpeg not found");
-        var src = SourceFor(clip, cardPath, info, null, forRender: true);
+        var lutFile = PrepareLut(lut);
+        var src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, forRender: true);
         string? label = null;
         try
         {
@@ -200,7 +239,7 @@ public sealed class ProxyRenderer : IDisposable
                 label = $"label-{Guid.NewGuid().ToString("N")[..8]}.txt";
                 File.WriteAllText(Path.Combine(workDir, label), clip.Name, new UTF8Encoding(false));
             }
-            var vf = FilterGraph.Proxy(Settings, outHeight, src.AlreadyCropped, hasLut, hasFont, label, info.Timecode, info.FrameRate);
+            var vf = FilterGraph.Proxy(Settings, outHeight, src.AlreadyCropped, lutFile, NeedsPreMap(lut, src, info), hasFont, label, info.Timecode, info.FrameRate);
 
             var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1" };
             if (src.FeederExe == null) args.Add("-nostdin");
@@ -213,6 +252,7 @@ public sealed class ProxyRenderer : IDisposable
             }
             args.AddRange(["-vf", vf]);
             args.AddRange(Encoders.VideoArgs(EncoderName!, Settings.Codec, Settings.BitrateMbps));
+            args.AddRange(Encoders.Rec709Args);
             if (Timecode.IsValid(info.Timecode)) args.AddRange(["-timecode", info.Timecode!]);
 
             var dir = Path.GetDirectoryName(output)!;

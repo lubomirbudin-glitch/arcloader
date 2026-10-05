@@ -114,15 +114,25 @@ public static class FFProbe
             info.FrameRate = Str(v, "avg_frame_rate") is string avg && avg != "0/0" ? avg : Str(v, "r_frame_rate");
             info.Frames = int.TryParse(Str(v, "nb_frames"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : null;
             info.Timecode = Str(Tags(v), "timecode");
+            info.ColorRange = Str(v, "color_range");
             info.Duration = Dbl(Str(v, "duration"));
         }
         info.AudioChannels = streams.Where(x => Str(x, "codec_type") == "audio").Sum(x => Int(x, "channels") ?? 0);
         if (Dbl(Str(format, "duration")) is double fd) info.Duration = fd;
         var ftags = Tags(format);
         info.Timecode ??= Str(ftags, "timecode") ?? streams.Select(x => Str(Tags(x), "timecode")).FirstOrDefault(t => t != null);
-        info.Camera = new[] { "com.apple.quicktime.make", "com.apple.quicktime.model", "product_name", "company_name" }
-            .Select(k => Str(ftags, k)).FirstOrDefault(x => x != null);
+        info.Camera = Camera(Str(ftags, "com.apple.quicktime.make"), Str(ftags, "com.apple.quicktime.model"))
+            ?? Str(ftags, "product_name") ?? Str(ftags, "company_name");
         return info;
+    }
+
+    /// Make and model together ("ARRI" + "ALEXA 35" → "ARRI ALEXA 35"), unless the model already starts with the make.
+    static string? Camera(string? make, string? model)
+    {
+        make = string.IsNullOrWhiteSpace(make) ? null : make.Trim();
+        model = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
+        if (make == null || model == null) return make ?? model;
+        return model.StartsWith(make, StringComparison.OrdinalIgnoreCase) ? model : make + " " + model;
     }
 
     static JsonElement Tags(JsonElement e) =>

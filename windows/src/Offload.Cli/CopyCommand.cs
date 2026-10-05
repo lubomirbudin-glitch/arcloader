@@ -20,7 +20,8 @@ static class CopyCommand
         var dryRun = new Option<bool>("--dry-run") { Description = "Only scan and check, do not copy." };
         var noAnalyze = new Option<bool>("--no-analyze") { Description = "Skip clip analysis (metadata + thumbnails in the report)." };
         var proxy = new Option<bool>("--proxy") { Description = "Render proxies after the copy is verified." };
-        var lut = new Option<string?>("--lut") { Description = "LUT (.cube) applied to proxies and thumbnails." };
+        var lut = new Option<string?>("--lut") { Description = "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path." };
+        var lutFallback = new Option<string?>("--lut-fallback") { Description = "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto." };
         var proxyHeight = new Option<int>("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
         var frameAspect = new Option<double?>("--frame-aspect") { Description = "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.", CustomParser = a => CliParse.Parse(a) };
         var frameScale = new Option<double>("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
@@ -31,7 +32,7 @@ static class CopyCommand
 
         var cmd = new Command("copy", "Copy a card to <dest>/<date>/<card name>/ on every destination and verify.");
         cmd.Arguments.Add(source);
-        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noAnalyze, proxy, lut, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder }) cmd.Options.Add(o);
+        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noAnalyze, proxy, lut, lutFallback, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder }) cmd.Options.Add(o);
         cmd.SetAction(r =>
         {
             JobConfig config;
@@ -48,13 +49,18 @@ static class CopyCommand
                 };
                 if (!ProxyCodecExtensions.TryParseWire(r.GetValue(proxyCodec)!, out var codec))
                     throw new ArgumentException($"Unknown proxy codec {r.GetValue(proxyCodec)}");
-                var lutPath = r.GetValue(lut) is string l ? CliPath.Full(l) : null;
+                var (lutMode, lutBuiltin, lutRaw, lutFb, lutErr) = LutOption.Parse(r.GetValue(lut), r.GetValue(lutFallback), LutCatalog.Default);
+                if (lutErr != null) throw new ArgumentException(lutErr);
+                var lutPath = lutRaw != null ? CliPath.Full(lutRaw) : null;
                 if (lutPath != null && !File.Exists(lutPath)) throw new ArgumentException($"LUT not found: {lutPath}");
                 config.AnalyzeClips = !r.GetValue(noAnalyze);
                 config.Proxy = new ProxySettings
                 {
                     Enabled = r.GetValue(proxy),
+                    LutMode = lutMode,
+                    LutBuiltin = lutBuiltin,
                     LutPath = lutPath,
+                    LutFallback = lutFb,
                     Height = r.GetValue(proxyHeight),
                     Codec = codec,
                     BitrateMbps = r.GetValue(proxyBitrate),
@@ -74,6 +80,13 @@ static class CopyCommand
                 Console.Error.WriteLine($"Error: {e.Message}");
                 return 1;
             }
+            Console.WriteLine("LUT: " + config.Proxy.LutMode switch
+            {
+                LutMode.None => "none",
+                LutMode.Custom => config.Proxy.LutPath,
+                LutMode.Builtin => config.Proxy.LutBuiltin,
+                _ => "auto" + (config.Proxy.LutFallback != null ? $" (fallback {config.Proxy.LutFallback})" : ""),
+            });
             return Run(config, r.GetValue(dryRun));
         });
         return cmd;

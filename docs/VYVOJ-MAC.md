@@ -9,6 +9,13 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 - Složka pro proxy navíc (`proxy.extraFolder`, `--proxy-folder`) — jako ve Windows verzi, doplnit do plánu parity.
 
+- Vestavěné LUTy (sdílené `shared/luts/`) a automatický výběr podle kamery — stejná pravidla jako
+  `windows/src/Offload.Core/Luts.cs` (`LutResolver`); přibalit `shared/luts` do `Offload.app/Contents/Resources/luts`;
+  klíče `proxy.lutMode`, `proxy.lutBuiltin`, `proxy.lutFallback` a u klipu `lut` ([FORMATY.md](FORMATY.md));
+  pro zdroje v plném rozsahu přidat před vestavěný LUT předpočet `lutrgb` (jako Windows). Je to navazující práce **po**
+  plánu parity [`mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](../mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md);
+  návrh [`2026-10-05-offload-luts-design.md`](../windows/docs/superpowers/specs/2026-10-05-offload-luts-design.md).
+
 - **Podklady pro sestavení na Macu jsou připravené (2026-10-05):** návrh
   [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
   plán po úkolech s testy [`mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](../mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md)

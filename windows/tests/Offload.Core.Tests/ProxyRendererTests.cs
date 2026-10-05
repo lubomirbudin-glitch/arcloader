@@ -3,6 +3,7 @@ namespace Offload.Core.Tests;
 public class ProxyRendererTests
 {
     static ExternalTools Tools => new ExternalTools().Resolved();
+    static LutUse CustomLut(string path) => new("custom", null, "look.cube", "vlastní LUT") { File = path };
     static Clip VideoClip(string rel) => new() { Name = Path.GetFileNameWithoutExtension(rel), Path = rel, Format = ClipFormat.Video, Segments = [rel], Bytes = 1 };
 
     [Fact]
@@ -48,6 +49,169 @@ public class ProxyRendererTests
         Assert.Equal("unknown format", some.UnsupportedReason(new Clip { Name = "u", Path = "u", Format = ClipFormat.Unknown, Segments = ["u"] }));
     }
 
+    // Review focus 3
+    [Fact]
+    public void FullRangeSource_PreMapped()
+    {
+        Assert.Equal("scale=-2:180:flags=bicubic,format=rgb48le," + FilterGraph.PreMap + ",lut3d=file=lut-a.cube:interp=tetrahedral,scale=out_color_matrix=bt601:out_range=pc,format=yuvj420p",
+            FilterGraph.Thumbnail("lut-a.cube", premap: true));
+        Assert.Equal("scale=-2:180:flags=bicubic,format=rgb48le,lut3d=file=look.cube:interp=tetrahedral,scale=out_color_matrix=bt601:out_range=pc,format=yuvj420p",
+            FilterGraph.Thumbnail("look.cube", premap: false));
+        Assert.Equal("scale=-2:180:flags=bicubic,scale=out_color_matrix=bt601:out_range=pc,format=yuvj420p", FilterGraph.Thumbnail(null, premap: true));
+        Assert.Contains("(val*1023/65535-64)/876*65535", FilterGraph.PreMap);
+    }
+
+    [Fact]
+    public void NeedsPreMap_OnlyBuiltinLutOnFullRangeSource()
+    {
+        var builtin = new LutUse("auto", "bmd-film-gen5", "n", "r") { File = "a.cube" };
+        var braw = new FrameSource { InputArgs = ["-i", "-"], FullRange = true };
+        var video = new FrameSource { InputArgs = ["-i", "a.mov"] };
+        Assert.True(ProxyRenderer.NeedsPreMap(builtin, braw, new ClipInfo()));
+        Assert.True(ProxyRenderer.NeedsPreMap(builtin, video, new ClipInfo { ColorRange = "pc" }));
+        Assert.False(ProxyRenderer.NeedsPreMap(builtin, video, new ClipInfo { ColorRange = "tv" }));
+        Assert.False(ProxyRenderer.NeedsPreMap(builtin, video, new ClipInfo()));
+        Assert.False(ProxyRenderer.NeedsPreMap(CustomLut("look.cube"), braw, new ClipInfo()));
+        Assert.False(ProxyRenderer.NeedsPreMap(null, braw, new ClipInfo { ColorRange = "pc" }));
+    }
+
+    [Fact]
+    public void LookFor_LogWhenAnyLut_ArriSpaceFromBuiltin()
+    {
+        var info = new ClipInfo { Camera = "ALEXA Mini" };
+        Assert.Equal(new RawLook(false, null), ProxyRenderer.LookFor(null, info));
+        Assert.Equal(new RawLook(false, null), ProxyRenderer.LookFor(LutUse.None("x"), info));
+        Assert.Equal(new RawLook(true, "AWG4/D65/LogC4"), ProxyRenderer.LookFor(new LutUse("auto", "arri-logc4-awg4", "n", "r") { File = "a.cube" }, info));
+        Assert.Equal(new RawLook(true, "AWG3/D65/LogC3"), ProxyRenderer.LookFor(new LutUse("auto", "arri-logc3-awg3", "n", "r") { File = "a.cube" }, info));
+        Assert.Equal(new RawLook(true, null), ProxyRenderer.LookFor(new LutUse("auto", "red-log3g10-rwg", "n", "r") { File = "a.cube" }, info));
+        Assert.Equal(new RawLook(true, "AWG4/D65/LogC4"), ProxyRenderer.LookFor(CustomLut(@"C:\l\show_LogC4_709.cube"), info));
+        Assert.Equal(new RawLook(true, "AWG3/D65/LogC3"), ProxyRenderer.LookFor(CustomLut(@"C:\l\look.cube"), info));
+    }
+
+    static void RunFfmpeg(params string[] args) =>
+        ToolProcess.Run(TestMedia.Ffmpeg!, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", .. args]);
+
+    /// Mean Y (8-bit code values, as stored) of the first frame, via signalstats.
+    static double MeanLuma(string video)
+    {
+        var dir = Path.GetDirectoryName(video)!;
+        var stats = $"yavg-{Guid.NewGuid():N}.txt";
+        ToolProcess.Run(TestMedia.Ffmpeg!, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", video,
+            "-vf", $"signalstats,metadata=print:key=lavfi.signalstats.YAVG:file={stats}", "-frames:v", "1", "-f", "null", "-"], dir);
+        var line = File.ReadAllLines(Path.Combine(dir, stats)).First(l => l.StartsWith("lavfi.signalstats.YAVG=", StringComparison.Ordinal));
+        return double.Parse(line["lavfi.signalstats.YAVG=".Length..], System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    // Review focus 3 — real ffmpeg: an S-Log3 grey clip with its Sony XML renders a proxy whose grey is ~0.42.
+    [FfmpegFact]
+    public void Proxy_SLog3Grey_Is042()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var clipDir = Path.Combine(card, "XDROOT", "Clip");
+        Directory.CreateDirectory(clipDir);
+        var clipPath = Path.Combine(clipDir, "C0001.MP4");
+        // S-Log3 grey = 10-bit code 420 → 8-bit legal Y ≈ 105; neutral chroma.
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=0x696969:s=320x180:d=1:r=25", "-vf", "format=yuv420p,lutyuv=y=105:u=128:v=128",
+            "-c:v", "libx264", "-color_range", "tv", clipPath);
+        File.WriteAllText(Path.Combine(clipDir, "C0001M01.XML"),
+            """<NonRealTimeMeta><Item name="CaptureGammaEquation" value="s-log3-cine"/><Item name="CaptureColorPrimaries" value="S-Gamut3Cine"/></NonRealTimeMeta>""");
+        var settings = new ProxySettings { Enabled = true, Height = 180, LutMode = LutMode.Auto, BurnFilename = false, BurnTimecode = false };
+        using var r = new ProxyRenderer(settings, Tools);
+        var clip = new Clip { Name = "C0001", Path = "XDROOT/Clip/C0001.MP4", Format = ClipFormat.Video, Segments = ["XDROOT/Clip/C0001.MP4"], Bytes = 1 };
+        var info = r.Probe(clip, card);
+        var lut = LutResolver.Resolve(clip, info, clipPath, settings, LutCatalog.Default);
+        Assert.Equal("sony-slog3-sgamut3cine", lut.Id);
+        var outPath = Path.Combine(dir.Path, "p.mov");
+        r.Render(clip, card, info, lut, outPath, _ => { }, () => false);
+        var y = MeanLuma(outPath);
+        var code = (y - 16) / 219.0;
+        Assert.InRange(code, 0.39, 0.45);
+
+        // Grey maps almost onto itself, so also check a level the LUT clearly moves: S-Log3 Y=150 (code ≈ 0.61
+        // without a LUT) comes out well above 0.75 through it. Fails if the LUT is dropped.
+        var brightPath = Path.Combine(clipDir, "C0002.MP4");
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=0x969696:s=320x180:d=1:r=25", "-vf", "format=yuv420p,lutyuv=y=150:u=128:v=128",
+            "-c:v", "libx264", "-color_range", "tv", brightPath);
+        var bright = new Clip { Name = "C0002", Path = "XDROOT/Clip/C0002.MP4", Format = ClipFormat.Video, Segments = ["XDROOT/Clip/C0002.MP4"], Bytes = 1 };
+        var brightOut = Path.Combine(dir.Path, "p2.mov");
+        r.Render(bright, card, r.Probe(bright, card), lut, brightOut, _ => { }, () => false);
+        Assert.True((MeanLuma(brightOut) - 16) / 219.0 >= 0.75);
+        var plainOut = Path.Combine(dir.Path, "p3.mov");
+        r.Render(bright, card, r.Probe(bright, card), null, plainOut, _ => { }, () => false);
+        Assert.InRange((MeanLuma(plainOut) - 16) / 219.0, 0.58, 0.64);
+    }
+
+    /// RGB of a flat first frame, decoded with the given YCbCr matrix and range.
+    static (int R, int G, int B) FlatRgb(string file, string matrix, string range)
+    {
+        var raw = Path.Combine(Path.GetDirectoryName(file)!, $"rgb-{Guid.NewGuid():N}.raw");
+        ToolProcess.Run(TestMedia.Ffmpeg!, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", file, "-frames:v", "1",
+            "-vf", $"scale=in_color_matrix={matrix}:in_range={range},format=rgb24", "-f", "rawvideo", raw]);
+        var b = File.ReadAllBytes(raw);
+        int i = b.Length / 6 * 3;  // a pixel in the middle
+        return (b[i], b[i + 1], b[i + 2]);
+    }
+
+    // Final review 8 — real ffmpeg: pure red through the proxy path (RGB source like the BRAW decoder, and BT.709
+    // video; with and without a LUT; H.264 and ProRes) is converted with the BT.709 matrix to legal range and tagged
+    // BT.709, so a player decoding it as BT.709 sees red. The BT.601 matrix would leave G ≈ 23.
+    [FfmpegFact]
+    public void Proxy_Red_Bt709MatrixAndTags()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25", "-pix_fmt", "rgb24", "-c:v", "png", Path.Combine(card, "rgb.mov"));
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25", "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+            "-c:v", "libx264", "-colorspace", "bt709", "-color_range", "tv", Path.Combine(card, "yuv.mov"));
+        var cube = Path.Combine(dir.Path, "look.cube");
+        TestMedia.IdentityLut(cube);
+        var failures = new List<string>();
+        foreach (var codec in new[] { ProxyCodec.H264, ProxyCodec.ProresLT })
+        foreach (var name in new[] { "rgb.mov", "yuv.mov" })
+        foreach (var withLut in new[] { false, true })
+        {
+            var settings = new ProxySettings { Enabled = true, Height = 180, Codec = codec, BurnFilename = false, BurnTimecode = false,
+                LutMode = withLut ? LutMode.Custom : LutMode.None, LutPath = withLut ? cube : null };
+            using var r = new ProxyRenderer(settings, Tools);
+            var clip = VideoClip(name);
+            var outPath = Path.Combine(dir.Path, $"{codec}-{name}-{withLut}.mov");
+            r.Render(clip, card, r.Probe(clip, card), withLut ? CustomLut(cube) : null, outPath, _ => { }, () => false);
+            var tags = string.Join(" ", ToolProcess.Run(TestMedia.Ffprobe!, ["-v", "error", "-select_streams", "v:0", "-show_entries",
+                "stream=color_space,color_transfer,color_primaries,color_range", "-of", "default=nw=1", outPath])
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
+            var (red, green, blue) = FlatRgb(outPath, "bt709", "tv");
+            if (tags != "color_range=tv color_space=bt709 color_transfer=bt709 color_primaries=bt709" || red < 240 || green > 8 || blue > 8)
+                failures.Add($"{codec} {name} lut={withLut}: [{tags}] rgb=({red},{green},{blue})");
+        }
+        Assert.True(failures.Count == 0, string.Join("; ", failures));
+    }
+
+    // Final review 8 — JPEG (JFIF) is BT.601 full range for every browser and PDF viewer: a BT.709 red clip's
+    // thumbnail must decode as red that way (keeping the BT.709 matrix gives R ≈ 230).
+    [FfmpegFact]
+    public void Thumbnail_Red_JfifBt601()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25", "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+            "-c:v", "libx264", "-colorspace", "bt709", "-color_range", "tv", Path.Combine(card, "yuv.mov"));
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25", "-pix_fmt", "rgb24", "-c:v", "png", Path.Combine(card, "rgb.mov"));
+        var cube = Path.Combine(dir.Path, "look.cube");
+        TestMedia.IdentityLut(cube);
+        using var r = new ProxyRenderer(new ProxySettings { LutMode = LutMode.Custom, LutPath = cube }, Tools);
+        foreach (var name in new[] { "yuv.mov", "rgb.mov" })
+        foreach (var lut in new[] { null, CustomLut(cube) })
+        {
+            var clip = VideoClip(name);
+            var thumbs = r.Thumbnails(clip, card, r.Probe(clip, card), lut);
+            var jpg = Path.Combine(dir.Path, $"t-{name}-{lut != null}.jpg");
+            File.WriteAllBytes(jpg, thumbs[0].Jpeg);
+            var (red, green, blue) = FlatRgb(jpg, "bt601", "pc");
+            Assert.True(red >= 242 && green <= 8 && blue <= 8, $"{name} lut={lut != null}: rgb=({red},{green},{blue})");
+        }
+    }
+
     [FfmpegFact]
     public void Thumbnails_ThreeJpegsWithTimecodeLabels()
     {
@@ -58,7 +222,7 @@ public class ProxyRendererTests
         using var r = new ProxyRenderer(new ProxySettings { LutPath = Path.Combine(dir.Path, "look.cube") }, Tools);
         var clip = VideoClip("CLIP/C0001.mov");
         var info = r.Probe(clip, card);
-        var thumbs = r.Thumbnails(clip, card, info);
+        var thumbs = r.Thumbnails(clip, card, info, CustomLut(Path.Combine(dir.Path, "look.cube")));
         Assert.Equal(3, thumbs.Count);
         Assert.All(thumbs, t => Assert.Equal(new byte[] { 0xFF, 0xD8 }, t.Jpeg[..2]));
         Assert.Equal("01:00:00:00", thumbs[0].Label);
@@ -91,7 +255,7 @@ public class ProxyRendererTests
         var info = r.Probe(clip, card);
         var middle = ProxyRenderer.FramePositions(info)[1];
         Assert.Equal(25, middle.Frame);
-        var thumbs = r.Thumbnails(clip, card, info);
+        var thumbs = r.Thumbnails(clip, card, info, null);
         Assert.Equal(3, thumbs.Count);
         var thumb = Path.Combine(dir.Path, "thumb.jpg");
         File.WriteAllBytes(thumb, thumbs[1].Jpeg);
@@ -102,7 +266,7 @@ public class ProxyRendererTests
         {
             var jpg = Path.Combine(dir.Path, $"ref-{n}.jpg");
             ToolProcess.Run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", file,
-                "-vf", $"select='eq(n,{n})',{FilterGraph.Thumbnail(false)}", "-frames:v", "1", "-q:v", "5", jpg]);
+                "-vf", $"select='eq(n,{n})',{FilterGraph.Thumbnail(null, premap: false)}", "-frames:v", "1", "-q:v", "5", jpg]);
             return MeanGrey(ffmpeg, jpg, dir.Path);
         }
         double exact = Reference(25), next = Reference(26), previous = Reference(24);
@@ -122,7 +286,7 @@ public class ProxyRendererTests
         using var r = new ProxyRenderer(new ProxySettings(), Tools);
         var clip = VideoClip("long-audio.mov");
         var info = r.Probe(clip, card);
-        var thumbs = r.Thumbnails(clip, card, info);
+        var thumbs = r.Thumbnails(clip, card, info, null);
         Assert.Equal(3, thumbs.Count);
         Assert.Equal(ProxyRenderer.Label(info, ProxyRenderer.FramePositions(info)[2]), thumbs[2].Label);
     }
@@ -136,7 +300,7 @@ public class ProxyRendererTests
         TestMedia.MakeClip(Path.Combine(card, "one.mov"), seconds: 0.04, audio: false);
         using var r = new ProxyRenderer(new ProxySettings(), Tools);
         var clip = VideoClip("one.mov");
-        var thumbs = r.Thumbnails(clip, card, r.Probe(clip, card));
+        var thumbs = r.Thumbnails(clip, card, r.Probe(clip, card), null);
         Assert.Single(thumbs);
     }
 
@@ -155,7 +319,7 @@ public class ProxyRendererTests
         var info = r.Probe(clip, card);
         var output = Path.Combine(card, "_PROXY", "Záběr 'A' 01.mov");
         var progress = new List<double>();
-        r.Render(clip, card, info, output, f => { lock (progress) progress.Add(f); }, () => false);
+        r.Render(clip, card, info, CustomLut(Path.Combine(dir.Path, "look.cube")), output, f => { lock (progress) progress.Add(f); }, () => false);
         var p = FFProbe.Probe(TestMedia.Ffprobe!, output);
         Assert.Equal(360, p.Height);
         Assert.StartsWith("h264", p.Codec);
@@ -169,7 +333,7 @@ public class ProxyRendererTests
         TestMedia.MakeClip(Path.Combine(card, percent), seconds: 1, timecode: "10:00:00:00");
         var percentClip = VideoClip(percent);
         var percentOut = Path.Combine(card, "_PROXY", percent);
-        r.Render(percentClip, card, r.Probe(percentClip, card), percentOut, _ => { }, () => false);
+        r.Render(percentClip, card, r.Probe(percentClip, card), CustomLut(Path.Combine(dir.Path, "look.cube")), percentOut, _ => { }, () => false);
         Assert.True(new FileInfo(percentOut).Length > 0);
     }
 
@@ -183,7 +347,7 @@ public class ProxyRendererTests
         using var r = new ProxyRenderer(new ProxySettings { Height = 360, Codec = ProxyCodec.Hevc }, Tools);
         var clip = VideoClip("a.mov");
         var output = Path.Combine(card, "_PROXY", "a.mov");
-        r.Render(clip, card, r.Probe(clip, card), output, _ => { }, () => false);
+        r.Render(clip, card, r.Probe(clip, card), null, output, _ => { }, () => false);
         Assert.Equal("hevc", FFProbe.Probe(TestMedia.Ffprobe!, output).Codec!.Split(' ')[0]);
         var tag = ToolProcess.Run(TestMedia.Ffprobe!, ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_tag_string", "-of", "csv=p=0", output]);
         Assert.Equal("hvc1", tag.Trim());
@@ -199,7 +363,7 @@ public class ProxyRendererTests
         using var r = new ProxyRenderer(new ProxySettings(), Tools);
         var clip = VideoClip("a.mov");
         var info = r.Probe(clip, card);
-        Assert.Empty(r.Thumbnails(clip, card, info, isCancelled: () => true));
+        Assert.Empty(r.Thumbnails(clip, card, info, null, isCancelled: () => true));
     }
 
     [FfmpegFact]
@@ -211,7 +375,7 @@ public class ProxyRendererTests
         using var r = new ProxyRenderer(new ProxySettings { Height = 360, Codec = ProxyCodec.ProresProxy }, Tools);
         var clip = VideoClip("a.mov");
         var output = Path.Combine(card, "_PROXY", "a.mov");
-        r.Render(clip, card, r.Probe(clip, card), output, _ => { }, () => false);
+        r.Render(clip, card, r.Probe(clip, card), null, output, _ => { }, () => false);
         Assert.Equal("prores", FFProbe.Probe(TestMedia.Ffprobe!, output).Codec!.Split(' ')[0]);
     }
 
@@ -225,7 +389,7 @@ public class ProxyRendererTests
         var clip = VideoClip("long.mov");
         var output = Path.Combine(card, "_PROXY", "long.mov");
         int cancel = 0;
-        var e = Assert.Throws<ToolError>(() => r.Render(clip, card, r.Probe(clip, card), output, _ => Volatile.Write(ref cancel, 1), () => Volatile.Read(ref cancel) == 1));
+        var e = Assert.Throws<ToolError>(() => r.Render(clip, card, r.Probe(clip, card), null, output, _ => Volatile.Write(ref cancel, 1), () => Volatile.Read(ref cancel) == 1));
         Assert.Contains("cancelled", e.Message);
         Assert.False(File.Exists(output));
         Assert.Empty(Directory.GetFiles(Path.Combine(card, "_PROXY")));

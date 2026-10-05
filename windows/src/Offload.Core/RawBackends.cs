@@ -13,11 +13,17 @@ internal interface IRawBackend
     bool IsAvailable(ExternalTools tools);
     ClipInfo Probe(string path, ExternalTools tools, string workDir);
     /// `singleFrameAt` (seconds) asks for just one frame — used for report thumbnails.
-    FrameSource Source(string path, ClipInfo info, ProxySettings settings, ExternalTools tools, string workDir, double? singleFrameAt);
+    FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt);
 }
 
-/// Vendor decoders for formats ffmpeg cannot read. All of them hand ffmpeg footage in the camera's
-/// log encoding, so the same LUT / scale / burn-in chain applies to every camera.
+/// What a RAW decoder should hand ffmpeg: camera log (a LUT follows) or its own Rec.709 look.
+/// `ArriColorSpace` is the ARRI target space matching the LUT (null = from the clip's metadata).
+/// BRAW and Canon ignore it (BRAW always decodes in the clip's gamma).
+internal sealed record RawLook(bool Log, string? ArriColorSpace);
+
+/// Vendor decoders for formats ffmpeg cannot read. When a LUT is applied they hand ffmpeg the camera's log
+/// (RawLook.Log; BRAW always decodes in the clip's gamma), so the same LUT / scale / burn-in chain fits every
+/// camera; without a LUT, RED and ARRI deliver their own Rec.709 look.
 internal static class RawBackends
 {
     public static readonly IReadOnlyList<IRawBackend> All = [new BrawBackend(), new R3dBackend(), new ArriBackend(), new CanonRawBackend()];
@@ -89,7 +95,7 @@ internal sealed class BrawBackend : IRawBackend
 
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => ToClipInfo(Info(path, "eighth", tools));
 
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, ExternalTools tools, string workDir, double? singleFrameAt)
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)
     {
         int target = singleFrameAt == null ? settings.Height : 180;
         var scale = Scale(info.Height ?? 2160, target);
@@ -108,6 +114,7 @@ internal sealed class BrawBackend : IRawBackend
             FeederExe = tools.BrawDecoder,
             FeederArgs = args,
             AudioFromInput = false,
+            FullRange = true,
         };
     }
 }
@@ -161,25 +168,25 @@ internal sealed class R3dBackend : IRawBackend
         return c;
     }
 
-    public static List<string> Args(string input, string outDir, ClipInfo info, ProxySettings s)
+    public static List<string> Args(string input, string outDir, ClipInfo info, ProxySettings s, RawLook look)
     {
         int h = info.Height ?? 4320;
         var res = h / 4 >= s.Height ? "4" : (h / 2 >= s.Height ? "3" : "1");
         var args = new List<string> { "--i", input, "--outDir", outDir, "--o", "intermediate", "--format", "201", "--PRcodec", "2", "--res", res, "--useMeta" };
         // The LUT expects log: IPP2, REDWideGamutRGB / Log3G10.
-        if (s.LutPath != null) args.AddRange(["--colorSciVersion", "3", "--colorSpace", "25", "--gammaCurve", "34"]);
+        if (look.Log) args.AddRange(["--colorSciVersion", "3", "--colorSpace", "25", "--gammaCurve", "34"]);
         return args;
     }
 
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) =>
         ParseMeta(ToolProcess.Run(tools.Redline!, ["--i", path, "--printMeta", "1"]));
 
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, ExternalTools tools, string workDir, double? singleFrameAt)
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)
     {
         // Thumbnails come from the finished proxy instead (one REDline run per clip is enough).
         if (singleFrameAt != null) throw new ToolError("REDline", -1, "thumbnail from proxy");
         var dir = RawBackends.FreshDir(workDir, "r3d");
-        ToolProcess.Run(tools.Redline!, Args(path, dir, info, settings));
+        ToolProcess.Run(tools.Redline!, Args(path, dir, info, settings, look));
         var mov = RawBackends.NewestFile(dir, "mov") ?? throw new ToolError("REDline", -1, $"no output in {dir}");
         return new FrameSource { InputArgs = ["-i", mov], Cleanup = [dir] };
     }
@@ -264,10 +271,14 @@ internal sealed class ArriBackend : IRawBackend
         if (name.Contains("logc4")) return "AWG4/D65/LogC4";
         if (name.Contains("logc3") || name.Contains("logc ") || name.Contains("logc_") || name.Contains("logc-")) return "AWG3/D65/LogC3";
         if (info.LogEncoding?.ToLowerInvariant() is string log) return log.Contains('4') ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3";
-        return (info.Camera ?? "").ToLowerInvariant().Contains("35") ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3";
+        return IsAlexa35(info.Camera) ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3";
     }
 
-    public static (List<string> Args, string? ParametersJson, bool Cropped) Args(string input, string output, ClipInfo c, ProxySettings s, string parametersFile)
+    /// "ALEXA 35" / "ALEXA35" as a whole word, not "ALEXA Mini LF 35mm" or a serial number.
+    public static bool IsAlexa35(string? camera) =>
+        camera != null && System.Text.RegularExpressions.Regex.IsMatch(camera, @"\bALEXA\s*35\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    public static (List<string> Args, string? ParametersJson, bool Cropped) Args(string input, string output, ClipInfo c, ProxySettings s, RawLook look, string parametersFile)
     {
         var args = new List<string> { "process", "--input", input, "--video-codec", "prores422lt", "--deflip", "--output", output };
         string? json = null;
@@ -293,7 +304,7 @@ internal sealed class ArriBackend : IRawBackend
         {
             args.AddRange(["--desqueeze", "--output-height", s.Height.ToString(CultureInfo.InvariantCulture)]);
         }
-        if (s.LutPath != null) args.AddRange(["--target-colorspace", ColorSpace(s.LutPath, c)]);
+        if (look.Log) args.AddRange(["--target-colorspace", look.ArriColorSpace ?? ColorSpace(null, c)]);
         else args.AddRange(["--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"]);
         return (args, json, json != null);
     }
@@ -314,13 +325,13 @@ internal sealed class ArriBackend : IRawBackend
         }
     }
 
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, ExternalTools tools, string workDir, double? singleFrameAt)
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)
     {
         if (singleFrameAt != null) throw new ToolError("art-cmd", -1, "thumbnail from proxy");
         var dir = RawBackends.FreshDir(workDir, "ari");
         var output = Path.Combine(dir, "intermediate.mxf");
         var parameters = Path.Combine(dir, "parameters.json");
-        var (args, json, cropped) = Args(path, output, info, settings, parameters);
+        var (args, json, cropped) = Args(path, output, info, settings, look, parameters);
         if (json != null) File.WriteAllText(parameters, json);
         ToolProcess.Run(tools.ArtCmd!, args, dir);
         if (!File.Exists(output)) throw new ToolError("art-cmd", -1, "no output");
@@ -336,6 +347,6 @@ internal sealed class CanonRawBackend : IRawBackend
     public string MissingHint => "Canon Cinema RAW Light: pro Windows neexistuje dekodér pro příkazovou řádku — zkopírováno a ověřeno, proxy přeskočeno";
     public bool IsAvailable(ExternalTools tools) => false;
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => throw new ToolError("Canon RAW", -1, MissingHint);
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, ExternalTools tools, string workDir, double? singleFrameAt) =>
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt) =>
         throw new ToolError("Canon RAW", -1, MissingHint);
 }

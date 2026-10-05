@@ -54,6 +54,9 @@ public static class Encoders
         return args;
     }
 
+    /// Every proxy is BT.709 legal range (FilterGraph.ToRec709 / TagRec709); the encoder and container say so as well.
+    public static readonly string[] Rec709Args = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"];
+
     public static string[] AudioArgs(ProxyCodec codec) =>
         codec is ProxyCodec.H264 or ProxyCodec.Hevc ? ["-c:a", "aac", "-b:a", "192k"] : ["-c:a", "pcm_s16le"];
 
