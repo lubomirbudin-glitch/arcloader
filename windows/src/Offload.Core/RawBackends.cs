@@ -90,6 +90,14 @@ internal sealed class BrawBackend : IRawBackend
         Camera = string.IsNullOrEmpty(i.Camera) ? null : i.Camera,
     };
 
+    /// The frame braw-decode starts at for a thumbnail `seconds` into the clip. Rounded: `seconds` comes from the
+    /// exact rational rate (24000/1001), braw-decode reports the SDK's float (23.976) — truncating lands a frame early.
+    public static int StartFrame(double seconds, double fps, int frames)
+    {
+        double rate = fps > 0 ? fps : 25;
+        return Math.Min(Math.Max(0, frames - 1), Math.Max(0, (int)Math.Round(seconds * rate, MidpointRounding.AwayFromZero)));
+    }
+
     /// Smallest decode scale that still covers the target height — decoding less is much faster.
     public static string Scale(int sourceHeight, int target)
     {
@@ -111,8 +119,7 @@ internal sealed class BrawBackend : IRawBackend
         var args = new List<string> { "--scale", scale };
         if (singleFrameAt is double t)
         {
-            double fps = dims.Fps > 0 ? dims.Fps : 25;
-            int start = Math.Min(Math.Max(0, dims.Frames - 1), (int)(t * fps));
+            int start = StartFrame(t, dims.Fps, dims.Frames);
             args.AddRange(["--start", start.ToString(CultureInfo.InvariantCulture), "--count", "1"]);
         }
         args.Add(path);

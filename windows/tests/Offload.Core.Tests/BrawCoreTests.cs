@@ -60,4 +60,17 @@ public class BrawCoreTests
         File.WriteAllText(Path.Combine(dir.Path, "BlackmagicRawAPI.dll"), "x");
         Assert.True(new BrawBackend().IsAvailable(new ExternalTools { BrawDecoder = exe, NoSearch = true }));
     }
+
+    // Task 2 — thumbnails: braw-decode's fps is the SDK float (23.976) while positions use the exact rate.
+    [Fact]
+    public void StartFrame_IsRounded()
+    {
+        const double exact = 24000.0 / 1001;
+        Assert.Equal(25, BrawBackend.StartFrame(25 / exact, 23.976f, 50));
+        Assert.Equal(49, BrawBackend.StartFrame(49 / exact, 23.976f, 50));
+        Assert.Equal(49, BrawBackend.StartFrame(100, 25, 50));
+        Assert.Equal(25, BrawBackend.StartFrame(1, 0, 50));   // unknown fps → 25
+        Assert.Equal(0, BrawBackend.StartFrame(1, 25, 0));
+        Assert.Equal(0, BrawBackend.StartFrame(0, 23.976f, 50));
+    }
 }

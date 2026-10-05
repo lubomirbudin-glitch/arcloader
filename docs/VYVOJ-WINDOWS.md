@@ -20,6 +20,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 ## 2026-10-05 — plán 3: BRAW dekodér v C#
 
 - Úkol 1 — hledání knihovny Blackmagic RAW (vedle braw-decode, SDK, Player, DaVinci Resolve); bez knihovny je BRAW „nepodporovaný“ s nápovědou místo selhané proxy
+- Úkol 2 — náhledy BRAW: počáteční snímek se zaokrouhluje (prostřední a poslední snímek už nevycházejí o jeden dřív)
 
 ## 2026-10-05 — drobnosti po plánu 5
 
