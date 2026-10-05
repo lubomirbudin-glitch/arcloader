@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán HW (USB diagnostika), průběh
 
+- Úkol 2 — rychlost linky a schopnost zařízení (USB 2.0 / USB 3 5 Gb/s / 10 Gb/s+), oprava pasti „Speed=High" u USB 3
 - Úkol 1 — přístup ke stromu zařízení a USB hubům bez admin práv (cfgmgr32, IOCTL)
 
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
