@@ -135,6 +135,13 @@ protocol RawBackend {
                 tempDir: String, singleFrameAt: Double?) throws -> FrameSource
 }
 
+/// Where a report thumbnail is taken: frame number, its time, and whether it is the clip's last frame.
+struct FramePosition: Equatable {
+    let seconds: Double
+    let frame: Int
+    let fromEnd: Bool
+}
+
 public final class ProxyRenderer {
     public let settings: ProxySettings
     public let tools: ExternalTools
@@ -192,6 +199,41 @@ public final class ProxyRenderer {
             throw ToolError(tool: clip.format.label, status: -1, message: unsupportedReason(clip) ?? "")
         }
         return try b.probe(path, tools: tools)
+    }
+
+    /// First, middle and last frame; only the first when the length is unknown or the clip has one frame.
+    static func framePositions(_ info: ClipInfo) -> [FramePosition] {
+        let first = FramePosition(seconds: 0, frame: 0, fromEnd: false)
+        guard let duration = info.duration, duration > 0, let fps = Timecode.fps(info.frameRate) else { return [first] }
+        let frames = info.frames ?? Int((duration * fps).rounded())
+        guard frames > 1 else { return [first] }
+        let middle = frames / 2, last = frames - 1
+        var all = [first]
+        if middle > 0 { all.append(FramePosition(seconds: Double(middle) / fps, frame: middle, fromEnd: false)) }
+        if last > middle { all.append(FramePosition(seconds: Double(last) / fps, frame: last, fromEnd: true)) }
+        return all
+    }
+
+    /// Caption under a thumbnail: the source timecode of that frame, else its number.
+    static func label(_ info: ClipInfo, _ p: FramePosition) -> String {
+        if let tc = info.timecode, Timecode.isValid(tc), let fps = Timecode.fps(info.frameRate) {
+            return Timecode.add(tc, frames: p.frame, fps: fps)
+        }
+        return "#\(p.frame)"
+    }
+
+    /// Where ffmpeg's input seek (-ss before -i) lands for a thumbnail position. A frame in the middle is sought
+    /// half a frame early: its exact time rounded up would skip to the next frame (23.976, 24, 29.97 fps).
+    /// The last frame is sought a second before it and decoded to the end of the video stream — never relative
+    /// to the container end, which is later when the audio runs longer than the picture.
+    static func seekSeconds(_ info: ClipInfo, _ p: FramePosition) -> String {
+        var at = p.seconds
+        if p.fromEnd {
+            at = max(0, p.seconds - 1)
+        } else if p.frame > 0, let fps = Timecode.fps(info.frameRate) {
+            at = (Double(p.frame) - 0.5) / fps
+        }
+        return String(format: "%.6f", at)
     }
 
     private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, singleFrameAt: Double?) throws -> FrameSource {
@@ -273,7 +315,8 @@ public final class ProxyRenderer {
         if settings.burnFilename {
             let label = tempDir + "/label-\(UUID().uuidString.prefix(8)).txt"
             try? Data(clip.name.utf8).write(to: URL(fileURLWithPath: label))
-            f.append("drawtext=\(common):textfile=\(label):x=\(margin)")
+            // expansion=none: the name is literal text — a "%" in it would otherwise be a drawtext expansion.
+            f.append("drawtext=\(common):textfile=\(label):expansion=none:x=\(margin)")
         }
         if settings.burnTimecode, let rate = info.frameRate {
             let tc = info.timecode.flatMap { isValidTimecode($0) ? $0 : nil } ?? "00:00:00:00"
@@ -283,9 +326,7 @@ public final class ProxyRenderer {
         return f
     }
 
-    func isValidTimecode(_ tc: String) -> Bool {
-        tc.range(of: #"^\d{2}:\d{2}:\d{2}[:;.]\d{2}$"#, options: .regularExpression) != nil
-    }
+    func isValidTimecode(_ tc: String) -> Bool { Timecode.isValid(tc) }
 
     func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, duration: Double?,
                    progress: ((Double) -> Void)?, isCancelled: () -> Bool) throws {
