@@ -127,9 +127,17 @@ public static class SettingsStore
 /// Checks before a start that the proxy/thumbnail settings can work.
 public static class ProxyPreflight
 {
+    /// The LUT the next start needs (proxies or thumbnails use it), or null.
+    public static string? LutInUse(ProxySettings p, bool analyzeClips) => (p.Enabled || analyzeClips) ? p.LutPath : null;
+
     /// Why "Spustit offload" must stay disabled, or null. A missing LUT would break thumbnails and proxies.
+    /// Touches the disk — the GUI uses the overload with a cached answer instead.
     public static string? Blocking(ProxySettings p, bool analyzeClips) =>
-        (p.Enabled || analyzeClips) && p.LutPath is string lut && !File.Exists(lut)
+        Blocking(p, analyzeClips, LutInUse(p, analyzeClips) is string lut ? File.Exists(lut) : null);
+
+    /// The same from an answer checked off the UI thread: `lutExists` null = not checked yet (does not block).
+    public static string? Blocking(ProxySettings p, bool analyzeClips, bool? lutExists) =>
+        LutInUse(p, analyzeClips) is string lut && lutExists == false
             ? $"LUT nenalezen: {Path.GetFileName(lut)} — vyberte jiný nebo ho odeberte."
             : null;
 

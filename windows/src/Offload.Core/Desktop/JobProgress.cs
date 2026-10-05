@@ -82,6 +82,9 @@ public sealed class JobProgress
 
     public string StatusText => Status.Phase == JobPhase.Done && Status.CopySucceeded == false ? "Chyba" : Status.Phase.Label();
 
+    /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound or flash).
+    public bool IsError => Tone == CardTone.Error;
+
     public CardTone Tone => Status.Phase switch
     {
         JobPhase.Done => Status.CopySucceeded == false ? CardTone.Error : CardTone.Ok,

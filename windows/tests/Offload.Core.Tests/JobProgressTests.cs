@@ -104,6 +104,20 @@ public class JobProgressTests
         Assert.Equal(tone, p.Tone);
     }
 
+    // Final review 8: a job the user cancelled is no error (no error sound, no red flash).
+    [Theory]
+    [InlineData(JobPhase.Cancelled, false, false)]
+    [InlineData(JobPhase.Cancelled, null, false)]
+    [InlineData(JobPhase.Done, false, true)]
+    [InlineData(JobPhase.Failed, null, true)]
+    [InlineData(JobPhase.Done, true, false)]
+    public void IsError_NotForCancelled(JobPhase phase, bool? copySucceeded, bool error)
+    {
+        var p = new JobProgress(T0);
+        p.Update(new JobStatus { Phase = phase, CopySucceeded = copySucceeded }, T0);
+        Assert.Equal(error, p.IsError);
+    }
+
     [Fact]
     public void Brake_OnlyWhileCopying()
     {

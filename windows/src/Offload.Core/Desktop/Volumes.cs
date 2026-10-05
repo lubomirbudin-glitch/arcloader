@@ -3,7 +3,9 @@ using Offload.Core.Hardware;
 namespace Offload.Core.Desktop;
 
 /// A mounted volume offered in the Karty section (Mac `VolumeItem`). Name: "EOS_DIGITAL (F:)".
-public sealed record VolumeItem(string Name, string Path, long Total, long Free, string Format, bool LooksLikeCard, bool IsDestination);
+/// `Identity` (`CardIdentity`) tells two cards in the same slot apart.
+public sealed record VolumeItem(string Name, string Path, long Total, long Free, string Format, bool LooksLikeCard, bool IsDestination,
+    string? Identity = null);
 
 public static class Volumes
 {
@@ -47,12 +49,15 @@ public static class Volumes
                       || (type == DriveType.Fixed && bus is StorageBus.Usb or StorageBus.Sd or StorageBus.Mmc));
 
     /// Card candidates, sorted by name like Explorer does. Read-only; a drive pulled out mid-scan is skipped.
-    public static List<VolumeItem> Scan(IReadOnlyList<string> destRoots)
+    /// `skip`: roots not to touch at all — a card just ejected from a reader that cannot eject media stays in its
+    /// slot dismounted, and any access (even `IsReady`) would mount it again.
+    public static List<VolumeItem> Scan(IReadOnlyList<string> destRoots, IReadOnlyCollection<string>? skip = null)
     {
         var system = System.IO.Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\";
         var found = new List<VolumeItem>();
         foreach (var d in DriveInfo.GetDrives())
         {
+            if (skip != null && skip.Contains(d.Name, StringComparer.OrdinalIgnoreCase)) continue;
             try
             {
                 if (d.DriveType is not (DriveType.Removable or DriveType.Fixed) || !d.IsReady) continue;
@@ -64,7 +69,7 @@ public static class Volumes
                 var letter = root.TrimEnd((char)92);
                 var name = string.IsNullOrWhiteSpace(d.VolumeLabel) ? letter : $"{d.VolumeLabel} ({letter})";
                 found.Add(new VolumeItem(name, root, d.TotalSize, d.AvailableFreeSpace, d.DriveFormat,
-                    !isDest && LooksLikeCameraCard(root), isDest));
+                    !isDest && LooksLikeCameraCard(root), isDest, CardIdentity.Of(root)));
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -73,6 +78,15 @@ public static class Volumes
         }
         found.Sort((a, b) => Win32.StrCmpLogicalW(a.Name, b.Name));
         return found;
+    }
+
+    /// The drive roots in a `DEV_BROADCAST_VOLUME.dbcv_unitmask` (bit 0 = A:).
+    public static List<string> RootsFromUnitMask(uint mask)
+    {
+        var roots = new List<string>();
+        for (int i = 0; i < 26; i++)
+            if ((mask & (1u << i)) != 0) roots.Add($"{(char)('A' + i)}:\\");
+        return roots;
     }
 
     /// The selection after a rescan (Mac `refreshVolumes`): a card that just appeared is ticked; a source that

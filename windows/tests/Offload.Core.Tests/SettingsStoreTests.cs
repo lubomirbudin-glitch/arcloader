@@ -172,6 +172,23 @@ public class SettingsStoreTests
         Assert.Null(ProxyPreflight.Blocking(p, analyzeClips: true));
     }
 
+    // Final review 3: the GUI checks the LUT off the UI thread and passes the cached answer.
+    [Fact]
+    public void ProxyPreflight_CachedLutState()
+    {
+        var p = new ProxySettings { Enabled = true, LutPath = @"Z:\luts\look.cube" };
+        Assert.Equal(@"Z:\luts\look.cube", ProxyPreflight.LutInUse(p, analyzeClips: false));
+        Assert.Null(ProxyPreflight.Blocking(p, false, lutExists: null));    // not checked yet: Start checks once more
+        Assert.Null(ProxyPreflight.Blocking(p, false, lutExists: true));
+        Assert.Equal("LUT nenalezen: look.cube — vyberte jiný nebo ho odeberte.", ProxyPreflight.Blocking(p, false, lutExists: false));
+        p.Enabled = false;
+        Assert.Null(ProxyPreflight.LutInUse(p, analyzeClips: false));
+        Assert.Null(ProxyPreflight.Blocking(p, false, lutExists: false));
+        Assert.NotNull(ProxyPreflight.LutInUse(p, analyzeClips: true));
+        p.LutPath = null;
+        Assert.Null(ProxyPreflight.LutInUse(p, analyzeClips: true));
+    }
+
     [Fact]
     public void ProxyPreflight_MissingFfmpeg_WarnsOnly()
     {
