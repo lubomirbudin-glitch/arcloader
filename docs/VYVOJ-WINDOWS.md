@@ -15,10 +15,11 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 3 | `braw-decode.exe` (C++, Blackmagic RAW SDK pro Windows) | naplánováno |
 | HW | test USB portů (CLI, v GUI na vyžádání), doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI + GUI) |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
-| 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | naplánováno |
+| 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | hotovo (čeká ruční test s klipy z kamer) |
 
 ## 2026-10-05 — plán 5 (vestavěné LUTy), průběh
 
+- Úkol 8 — dokumentace: ROZDILY, VYVOJ-MAC (LUTy naplánované pro Mac po plánu parity), README (GUI, ruční test), stav návrhu LUTů „hotovo na Windows“
 - Úkol 7 — GUI: výběr LUTu (automaticky / vestavěný / bez / vlastní) a záložní LUT
 - Úkol 6 — CLI --lut auto|none|<id>|<cesta>, --lut-fallback, výpis LUTů (`offload luts`); LUTy v balíčku
 - Úkol 5 — proxy a náhledy s LUTem vybraným pro každý klip; BRAW a plnorozsahové video přepočtené na konvenci vestavěných LUTů; RED a ARRIRAW vydají log, když se LUT použije

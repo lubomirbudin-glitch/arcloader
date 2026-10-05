@@ -16,6 +16,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | braw-decode | plán 3 |
 | HW diagnostika USB | hotovo (CLI `offload ports`, v GUI okno Hardware a kontrola na vyžádání) |
 | GUI `Offload.exe` | hotovo (čeká ruční test s kartou) |
+| Vestavěné LUTy (plán 5) | hotovo (čeká ruční test s klipy z kamer) |
 
 ## Build a testy
 
@@ -40,6 +41,13 @@ klikněte na „Další informace“ → „Přesto spustit“.
 - **Proxy:** „Kopírovat proxy i do složky“ → „Vybrat…“: každá hotová proxy se kromě `_PROXY` na cílech zkopíruje
   i do `<složka>\<datum>\<karta>\` (nic se nepřepíše, shodné jméno dostane `_2`, `_3`…); křížek volbu zruší.
   Když složka není dostupná (odpojený disk), start nejde a v sekci Proxy je červeně „Složka pro proxy není dostupná“.
+- **LUT:** v sekci Proxy seznam „Automaticky podle kamery“ (výchozí) / vestavěné LUTy / „Bez LUT“ / „Vlastní…“ (`.cube`).
+  „Když kameru nepoznám:“ je záložní LUT pro klipy, které automatika nepozná (výchozí Bez LUT). Automaticky se pozná:
+  Sony podle sidecaru `M01.XML` (jen S-Log3 s S-Gamut3.Cine nebo S-Gamut3, jiná gama = bez LUTu), ARRI podle modelu
+  kamery (ALEXA 35 → LogC4, ostatní ALEXA/AMIRA → LogC3), ARRIRAW podle metadat, Blackmagic RAW (BRAW) → Film Gen 5,
+  RED → Log3G10. Canon, Panasonic, DJI a Fuji se zatím nepoznají (chybí vzorové klipy), D-Log M vestavěný LUT nemá —
+  takové klipy dostanou záložní LUT. U ARRI jde o předpoklad pro ProRes: klip nahraný přímo v Rec.709 by LUT dostal
+  neprávem, pak zvolte „Bez LUT“. Report ukáže u každého klipu použitý LUT a důvod.
 - **Spuštění:** tlačítko „Spustit offload“ nebo Ctrl+Enter. Každá karta má v pravém panelu kartu úlohy: průběh, rychlosti,
   odhad času, řetěz připojení (karta → řadič → disk) a „Úzké hrdlo“. Karty se kopírují za sebou, proxy předchozí karty
   se renderují souběžně s kopií další.
@@ -70,6 +78,7 @@ Vše níže zatím nikdo neověřil na skutečné kartě — GUI je jinak zkouš
       na každý cílový disk se zapíše a hned smaže dočasný soubor 1 GB (během kopírování měření nejde spustit)
 - [ ] 8. Proxy → „Kopírovat proxy i do složky“ → „Vybrat…“ (složka na jiném disku) → offload s proxy → proxy jsou
       v `_PROXY` na cílech i v `<složka>\<datum>\<karta>\`; po odpojení toho disku je start zablokovaný červeným textem
+- [ ] 9. Proxy z log klipu má přirozené barvy; v reportu je u klipu LUT a důvod
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 

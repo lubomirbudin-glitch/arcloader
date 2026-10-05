@@ -40,6 +40,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
 | **Test USB portů na vyžádání + doporučení** | ❌ | ✅ CLI + GUI |
+| **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test) |
 | **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 
@@ -92,6 +93,12 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   zkopíruje i do `<složka>\<datum>\<karta>\` (při shodě jména `_2`, `_3`…, nic se nepřepíše). Nastavení
   `proxy.extraFolder` v settings.json a v reportu (Mac neznámý klíč ignoruje), v CLI `--proxy-folder`. Nedostupná
   složka zablokuje start; zmizí-li během úlohy, je to jen poznámka u klipu.
+- **Vestavěné LUTy** (zatím jen Windows, pro Mac naplánováno; sdílené soubory v [`shared/luts/`](../shared/luts/)):
+  11 LUTů Log → Rec.709, `auto` vybere LUT podle kamery každého klipu a použitý LUT s důvodem je v reportu
+  (klíč `lut` u klipu, FORMATY.md). Zatím se automaticky nepoznají Canon, Panasonic, DJI a Fuji (chybí vzorové klipy,
+  přijdou do záložního LUTu „Když kameru nepoznám:“, výchozí Bez LUT); D-Log M nemá vestavěný LUT. ARRI se pozná podle
+  modelu kamery, takže klip z ARRI nahraný přímo v Rec.709 by dostal LUT neprávem — uživatel zvolí „Bez LUT“.
+  Mac nová nastavení `proxy.lutMode/lutBuiltin/lutFallback` ignoruje a dál používá jen `proxy.lutPath`.
 - **Zrušená úloha v GUI:** karta úlohy na Windows ukáže jen oranžové „Zrušeno — karta není kompletně zálohovaná.“
   místo červeného „N souborů selhalo…“ a bez souhrnu rychlosti (rychlost useknuté kopie by klamala). Mac zatím
   ukazuje červený text i souhrn.

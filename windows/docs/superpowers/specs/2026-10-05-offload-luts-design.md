@@ -1,6 +1,6 @@
 # Offload — vestavěné LUTy pro proxy a náhledy (Mac i Windows)
 
-Datum: 2026-10-05 · Stav: ke schválení · Plán 5 (Windows), Mac podle stejného návrhu
+Datum: 2026-10-05 · Stav: hotovo na Windows (plán 5); Mac naplánováno · Plán 5 (Windows), Mac podle stejného návrhu
 
 ## 1. Cíl
 
