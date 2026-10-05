@@ -37,6 +37,9 @@ klikněte na „Další informace“ → „Přesto spustit“.
 - **Karty:** karta vložená do čtečky se objeví sama a je zaškrtnutá; složku lze přidat tlačítkem „Složka…“ nebo přetažením
   složky na `Offload.exe`. Název složky v cíli lze upravit.
 - **Cíle:** tlačítkem „Přidat…“ (pamatují se; zobrazí volné místo a souborový systém, u disku exFAT/FAT32 aplikace upozorní „Doporučeno NTFS“).
+- **Proxy:** „Kopírovat proxy i do složky“ → „Vybrat…“: každá hotová proxy se kromě `_PROXY` na cílech zkopíruje
+  i do `<složka>\<datum>\<karta>\` (nic se nepřepíše, shodné jméno dostane `_2`, `_3`…); křížek volbu zruší.
+  Když složka není dostupná (odpojený disk), start nejde a v sekci Proxy je červeně „Složka pro proxy není dostupná“.
 - **Spuštění:** tlačítko „Spustit offload“ nebo Ctrl+Enter. Každá karta má v pravém panelu kartu úlohy: průběh, rychlosti,
   odhad času, řetěz připojení (karta → řadič → disk) a „Úzké hrdlo“. Karty se kopírují za sebou, proxy předchozí karty
   se renderují souběžně s kopií další.
@@ -65,6 +68,8 @@ Vše níže zatím nikdo neověřil na skutečné kartě — GUI je jinak zkouš
       v cílové složce. Karta, jejíž kopie se zavřením přerušila, **není zálohovaná** — offloadujte ji znovu celou.
 - [ ] 7. Okno Hardware (Ctrl+U): pojmenovat port, změřit rychlost — před měřením se aplikace zeptá; z karty se jen čte,
       na každý cílový disk se zapíše a hned smaže dočasný soubor 1 GB (během kopírování měření nejde spustit)
+- [ ] 8. Proxy → „Kopírovat proxy i do složky“ → „Vybrat…“ (složka na jiném disku) → offload s proxy → proxy jsou
+      v `_PROXY` na cílech i v `<složka>\<datum>\<karta>\`; po odpojení toho disku je start zablokovaný červeným textem
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 

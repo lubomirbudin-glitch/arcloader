@@ -7,6 +7,8 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- Složka pro proxy navíc (`proxy.extraFolder`, `--proxy-folder`) — jako ve Windows verzi, doplnit do plánu parity.
+
 - **Podklady pro sestavení na Macu jsou připravené (2026-10-05):** návrh
   [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
   plán po úkolech s testy [`mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](../mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md)

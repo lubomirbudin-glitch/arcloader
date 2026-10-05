@@ -25,6 +25,10 @@ public sealed partial class MainViewModel
     string? lutCheckedPath;
     bool? lutExists;
     bool lutChecking, lutRecheck;
+    // The same for the extra proxy folder (a disk that may be disconnected).
+    string? folderCheckedPath;
+    bool? folderExists;
+    bool folderChecking, folderRecheck;
 
     public ObservableCollection<SourceItemViewModel> Sources { get; } = [];
     public ObservableCollection<DestinationViewModel> Destinations { get; } = [];
@@ -48,18 +52,20 @@ public sealed partial class MainViewModel
         RefreshTools();
         RefreshVolumes();
         RefreshLut();
+        RefreshProxyFolder();
         healthTimer.Tick += (_, _) => HealthCheck();
         healthTimer.Start();
     }
 
-    /// The refresh button: volumes (also the letters of ejected cards — the user asks for them), every destination
-    /// and the LUT, all off the UI thread.
+    /// The refresh button: volumes (also the letters of ejected cards — the user asks for them), every destination,
+    /// the LUT and the proxy folder, all off the UI thread.
     void RefreshAll()
     {
         ejectedRoots.Clear();
         RefreshVolumes();
         foreach (var d in Destinations) d.Probe();
         RefreshLut();
+        RefreshProxyFolder();
     }
 
     void HealthCheck()
@@ -67,6 +73,7 @@ public sealed partial class MainViewModel
         if (closing) return;
         foreach (var d in Destinations.Where(d => !d.Exists && !d.IsChecking)) d.Probe();
         RefreshLut();
+        RefreshProxyFolder();
     }
 
     /// Windows reported volumes arriving (WM_DEVICECHANGE): a card put into the slot of an ejected one is scanned again.
@@ -153,6 +160,7 @@ public sealed partial class MainViewModel
         }
         foreach (var j in Jobs) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
         RefreshLut();   // the LUT may sit on a disk that just came or went
+        RefreshProxyFolder();   // and so may the proxy folder
     }
 
     internal bool IsCurrent(DestinationViewModel row) => Destinations.Contains(row);
@@ -317,12 +325,59 @@ public sealed partial class MainViewModel
     }
     public string? ToolsWarning => ProxyPreflight.Warning(Settings.Proxy, Settings.AnalyzeClips, resolvedTools);
 
+    /// A missing proxy folder (disconnected disk) blocks the start (red). From the cached check — no disk here.
+    public string? ProxyFolderProblem => ProxyPreflight.ExtraFolderBlocking(Settings.Proxy, CachedFolderExists);
+
+    bool? CachedFolderExists =>
+        ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is string f && string.Equals(f, folderCheckedPath, StringComparison.OrdinalIgnoreCase)
+            ? folderExists
+            : null;
+
+    /// Checks the proxy folder off the UI thread; a request during a check runs once more afterwards.
+    void RefreshProxyFolder()
+    {
+        if (folderChecking)
+        {
+            folderRecheck = true;
+            return;
+        }
+        if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is not string folder)
+        {
+            SetProxyFolderState(null, null);
+            return;
+        }
+        folderChecking = true;
+        Task.Run(() => Directory.Exists(folder)).ContinueWith(t =>
+        {
+            folderChecking = false;
+            if (t.IsCompletedSuccessfully) SetProxyFolderState(folder, t.Result);
+            else AppLog.Write($"proxy folder check: {t.Exception?.GetBaseException().Message}");
+            if (folderRecheck)
+            {
+                folderRecheck = false;
+                RefreshProxyFolder();
+            }
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// A new answer about the proxy folder: the red text and the start button follow it.
+    void SetProxyFolderState(string? folder, bool? exists)
+    {
+        var before = ProxyFolderProblem;
+        folderCheckedPath = folder;
+        folderExists = exists;
+        if (ProxyFolderProblem == before) return;
+        RaiseMany(nameof(ProxyFolderProblem), nameof(CanStart));
+        SetupChanged?.Invoke();
+    }
+
     internal void ProxyChanged()
     {
         SettingsChanged();
-        RaiseMany(nameof(LutProblem), nameof(ToolsWarning));
+        RaiseMany(nameof(LutProblem), nameof(ProxyFolderProblem), nameof(ToolsWarning));
         SetupChanged?.Invoke();
         RefreshLut();
+        RefreshProxyFolder();
     }
 
     void RefreshTools()

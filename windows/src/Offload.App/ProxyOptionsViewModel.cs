@@ -19,6 +19,8 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         this.owner = owner;
         PickLutCommand = new RelayCommand(PickLut);
         ClearLutCommand = new RelayCommand(() => { p.LutPath = null; Changed(nameof(LutName), nameof(HasLut)); });
+        PickFolderCommand = new RelayCommand(PickFolder);
+        ClearFolderCommand = new RelayCommand(() => { p.ExtraFolder = null; Changed(FolderProperties); });
         BitrateDownCommand = new RelayCommand(() => BitrateMbps--, () => p.BitrateMbps > 2);
         BitrateUpCommand = new RelayCommand(() => BitrateMbps++, () => p.BitrateMbps < 50);
         ScaleDownCommand = new RelayCommand(() => ScalePercent--, () => ScalePercent > 50);
@@ -39,6 +41,8 @@ public sealed class ProxyOptionsViewModel : ObservableObject
 
     public RelayCommand PickLutCommand { get; }
     public RelayCommand ClearLutCommand { get; }
+    public RelayCommand PickFolderCommand { get; }
+    public RelayCommand ClearFolderCommand { get; }
     public RelayCommand BitrateDownCommand { get; }
     public RelayCommand BitrateUpCommand { get; }
     public RelayCommand ScaleDownCommand { get; }
@@ -98,6 +102,22 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     public bool Audio { get => p.Audio; set { p.Audio = value; Changed(nameof(Audio)); } }
     public bool SkipCameraProxies { get => p.SkipCameraProxies; set { p.SkipCameraProxies = value; Changed(nameof(SkipCameraProxies)); } }
     public bool CopyToAllDestinations { get => p.CopyToAllDestinations; set { p.CopyToAllDestinations = value; Changed(nameof(CopyToAllDestinations)); } }
+
+    static readonly string[] FolderProperties = [nameof(ExtraFolderName), nameof(ExtraFolderPath), nameof(HasExtraFolder)];
+
+    /// "Kopírovat proxy i do složky": the folder's name (the full path is in the tooltip), or "nevybráno".
+    public string ExtraFolderName => p.ExtraFolder is string f
+        ? (Path.GetFileName(f.TrimEnd('\\')) is { Length: > 0 } n ? n : f)
+        : "nevybráno";
+    public string? ExtraFolderPath => p.ExtraFolder;
+    public bool HasExtraFolder => p.ExtraFolder != null;
+
+    void PickFolder()
+    {
+        if (Dialogs.PickFolder("Vyber složku pro proxy") is not string path) return;
+        p.ExtraFolder = path;
+        Changed(FolderProperties);
+    }
 
     void PickLut()
     {
