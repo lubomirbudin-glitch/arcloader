@@ -13,7 +13,15 @@ public sealed class AppSettings
     [JsonPropertyName("analyzeClips")] public bool AnalyzeClips { get; set; } = true;
     [JsonPropertyName("proxy")] public ProxySettings Proxy { get; set; } = new();
     [JsonPropertyName("tools")] public ExternalTools Tools { get; set; } = new();
-    [JsonPropertyName("portNames")] public Dictionary<string, string> PortNames { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    [JsonPropertyName("portNames")]
+    public Dictionary<string, string> PortNames
+    {
+        get => _portNames;
+        set => _portNames = value == null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(value, StringComparer.OrdinalIgnoreCase);
+    }
+    private Dictionary<string, string> _portNames = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public static class SettingsStore
@@ -37,7 +45,11 @@ public static class SettingsStore
         try
         {
             if (!File.Exists(path)) return s;
-            root = JsonNode.Parse(File.ReadAllBytes(path)) as JsonObject;
+            var bytes = File.ReadAllBytes(path);
+            // Skip UTF-8 BOM if present (EF BB BF), which Windows PowerShell and old Notepad write
+            if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+                bytes = bytes[3..];
+            root = JsonNode.Parse(bytes) as JsonObject;
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {

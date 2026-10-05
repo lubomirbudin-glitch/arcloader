@@ -146,4 +146,26 @@ public class SettingsStoreTests
         }
         Assert.EndsWith(@"\Offload", AppData.Folder);
     }
+
+    [Fact]
+    public void Utf8Bom_Preserved()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        var json = """{"verify":false,"destRoots":["D:\\X"]}""";
+        var bytes = new System.Text.UTF8Encoding(true).GetBytes(json);
+        File.WriteAllBytes(path, bytes);
+        var s = SettingsStore.Load(path);
+        Assert.False(s.Verify);
+        Assert.Equal([@"D:\X"], s.DestRoots);
+    }
+
+    [Fact]
+    public void Clone_PreservesPortNamesCaseInsensitivity()
+    {
+        var s = new AppSettings();
+        s.PortNames[@"A#1"] = "x";
+        var c = SettingsStore.Clone(s);
+        Assert.Equal("x", c.PortNames[@"a#1"]);
+    }
 }
