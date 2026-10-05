@@ -38,6 +38,16 @@ offload ports --measure --card E:\ --dest D:\   # + změřit skutečnou rychlost
 offload E:\ -d D:\Zaloha -d F:\Zaloha --proxy --lut look.cube --frame-aspect 1.85   # + proxy s LUT a výřezem
 ```
 
+`offload ports` pojmenuje každý USB konektor jedním popiskem, který platí všude (řádek disku, seznam portů,
+doporučení): „port 6“ (číslo USB 2 poloviny konektoru), port za hubem „port 7 › 2“, při více řadičích s řadičem
+„Intel USB 3.20 xHCI · port 3“. U portu je písmeno disku, který v něm je („← E:“). Cíl na stejném svazku jako karta
+se neměří (na kartu se nikdy nezapisuje); Ctrl+C při `--measure` dokončí měření aktuálního zařízení a smaže jeho
+dočasný soubor.
+
+Stavový řádek `offload copy` ukazuje, který článek brzdí („brzdí: D1“, „brzdí: card“, „(linka plná)“) — podle toho,
+kolik bloků čeká na zápis na každý disk, ne podle okamžité rychlosti (karta i disky jedou v kopii stejným tempem).
+Seznam „Připojení:“ nad ním ukazuje, co je co („D1 = Cíl 1: WD Elements 25A2 — USB 3 (5 Gb/s), port 6“).
+
 Na Windows se čte i zapisuje mimo systémovou cache (`FILE_FLAG_NO_BUFFERING`), po zápisu
 `FlushFileBuffers`; ověření tak čte data z disku, ne z RAM. Svazky, které to neumí (některé síťové),
 přejdou na běžný zápis a report to uvede.

@@ -40,7 +40,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ⏳ plán 4 |
 | **Test USB portů při startu + doporučení** | ❌ | ✅ CLI (GUI v plánu 4) |
-| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI (GUI v plánu 4) |
+| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; plný pohled po článcích (rychlost, % linky, součet na řadiči) v GUI (plán 4) |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
 
@@ -73,7 +73,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Rozpracované soubory** mají na Windows kromě tečky na začátku i atribut „skrytý“.
 - **CLI na Windows je v `bin\`**, protože `Offload.exe` a `offload.exe` by ve stejné složce kolidovaly
   (NTFS nerozlišuje velikost písmen).
-- **HW diagnostika (USB porty, propustnost článků)** je zatím jen na Windows — na přání uživatele.
+- **HW diagnostika (USB porty, propustnost článků)** je zatím jen na Windows — na přání uživatele. V CLI se z propustnosti
+  článků ukazuje jen to, který článek brzdí (stavový řádek `offload copy`); pohled na každý článek zvlášť bude v GUI (plán 4).
 - **USB rychlosti a porty:** 10 vs 20 Gb/s se nerozlišuje (Windows to bez neověřeného IOCTL nehlásí) — zobrazuje se
   „10 Gb/s a víc“; fyzickou polohu portu Windows neznají spolehlivě, porty pojmenuje uživatel.
 - **Report při zrušeném ověření:** když je `verified` = false, Windows počítá soubory „zapsáno“ i „ověřeno“ jako
