@@ -66,6 +66,13 @@ struct BRAWBackend: RawBackend {
         return "full"
     }
 
+    /// The frame braw-decode starts at for a thumbnail `seconds` into the clip. Rounded: `seconds` comes from the
+    /// exact rational rate (24000/1001), braw-decode reports a rounded fps (23.976) — truncating would land a frame early.
+    static func startFrame(seconds: Double, fps: Double, frames: Int) -> Int {
+        let rate = fps > 0 ? fps : 25
+        return min(max(0, frames - 1), max(0, Int((seconds * rate).rounded())))
+    }
+
     func source(_ path: String, info c: ClipInfo, settings: ProxySettings, tools: ExternalTools,
                 tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
         let target = singleFrameAt == nil ? settings.height : 180
@@ -73,8 +80,7 @@ struct BRAWBackend: RawBackend {
         let dims = try info(path, scale: s, tools: tools)
         var args = ["--scale", s]
         if let t = singleFrameAt {
-            let fps = dims.fps > 0 ? dims.fps : 25
-            args += ["--start", String(min(max(0, dims.frames - 1), Int(t * fps))), "--count", "1"]
+            args += ["--start", String(BRAWBackend.startFrame(seconds: t, fps: dims.fps, frames: dims.frames)), "--count", "1"]
         }
         let feeder = Process()
         feeder.executableURL = URL(fileURLWithPath: tools.brawDecoder!)

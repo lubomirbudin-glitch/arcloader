@@ -236,38 +236,72 @@ public final class ProxyRenderer {
         return String(format: "%.6f", at)
     }
 
-    private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, singleFrameAt: Double?) throws -> FrameSource {
+    private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, singleFrameAt: Double?, forRender: Bool) throws -> FrameSource {
         let path = cardPath + "/" + clip.path
         if clip.format == .video {
-            var args = ["-hwaccel", "videotoolbox"]
-            if let t = singleFrameAt { args += ["-ss", String(format: "%.3f", t)] }
-            return FrameSource(inputArgs: args + ["-i", path])
+            // Thumbnails decode one frame in software (exact seeking); proxies use VideoToolbox.
+            return FrameSource(inputArgs: forRender ? ["-hwaccel", "videotoolbox", "-i", path] : ["-i", path])
         }
         guard let b = backends[clip.format] else { throw ToolError(tool: clip.format.label, status: -1, message: "no decoder") }
         return try b.source(path, info: info, settings: settings, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt)
     }
 
-    /// Small JPEG for the report, with the LUT applied so log footage is readable.
-    public func thumbnail(_ clip: Clip, cardPath: String, info: ClipInfo, applyLUT: Bool = true) throws -> Data {
-        guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
-        let at = (info.duration ?? 0) * 0.3
-        let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: at)
-        defer { src.removeIntermediates() }
-        let out = tempDir + "/thumb-\(UUID().uuidString).jpg"
-        defer { unlink(out) }
+    /// The report thumbnail filter: 180 px high, with the LUT so log footage is readable.
+    func thumbnailFilter(applyLUT: Bool) -> String {
         var vf = ["scale=-2:180:flags=bicubic"]
         if hasLUT && applyLUT { vf += ["format=rgb48le", "lut3d=file=\(lutCopy):interp=tetrahedral"] }
         vf.append("format=yuvj420p")
-        let args = ["-hide_banner", "-loglevel", "error", "-y"] + src.inputArgs +
-            ["-frames:v", "1", "-vf", vf.joined(separator: ","), "-q:v", "5", out]
-        try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: nil, progress: nil, isCancelled: { false })
-        return try Data(contentsOf: URL(fileURLWithPath: out))
+        return vf.joined(separator: ",")
+    }
+
+    /// First, middle and last frame as small JPEGs with captions. When `isCancelled` turns true the clip simply
+    /// gets no thumbnails. One bad position does not cost the others; if none works, the last error is thrown.
+    public func thumbnails(_ clip: Clip, cardPath: String, info: ClipInfo, applyLUT: Bool = true,
+                           isCancelled: () -> Bool = { false }) throws -> [Thumbnail] {
+        guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "ffmpeg not found") }
+        let filter = thumbnailFilter(applyLUT: applyLUT)
+        let video = clip.format == .video
+        var result: [Thumbnail] = []
+        var lastError: Error?
+        for pos in ProxyRenderer.framePositions(info) {
+            if isCancelled() { return [] }
+            let out = tempDir + "/thumb-\(UUID().uuidString).jpg"
+            defer { unlink(out) }
+            do {
+                let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: pos.seconds, forRender: false)
+                defer { src.removeIntermediates() }
+                var args = ["-hide_banner", "-loglevel", "error", "-y"]
+                if video { args += ["-ss", ProxyRenderer.seekSeconds(info, pos)] }
+                args += src.inputArgs
+                // Last frame: decode the final second and keep overwriting the image — the last write is the last frame.
+                args += video && pos.fromEnd ? ["-map", "0:v:0", "-vf", filter, "-update", "1"] : ["-frames:v", "1", "-vf", filter]
+                args += ["-q:v", "5", out]
+                try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: nil, progress: nil, isCancelled: isCancelled)
+                guard FileManager.default.fileExists(atPath: out) else {
+                    throw ToolError(tool: "ffmpeg", status: 0, message: "no frame")
+                }
+                result.append(Thumbnail(jpeg: try Data(contentsOf: URL(fileURLWithPath: out)), label: ProxyRenderer.label(info, pos)))
+            } catch {
+                if isCancelled() { return [] }
+                lastError = error
+            }
+        }
+        if result.isEmpty, let lastError { throw lastError }
+        return result
+    }
+
+    /// Single thumbnail — kept only until `OffloadJob` uses `thumbnails` (Task 7 removes it).
+    public func thumbnail(_ clip: Clip, cardPath: String, info: ClipInfo, applyLUT: Bool = true) throws -> Data {
+        guard let first = try thumbnails(clip, cardPath: cardPath, info: info, applyLUT: applyLUT).first else {
+            throw ToolError(tool: "ffmpeg", status: 0, message: "no frame")
+        }
+        return first.jpeg
     }
 
     public func render(_ clip: Clip, cardPath: String, info: ClipInfo, output: String,
                        progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
         guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
-        let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: nil)
+        let src = try frameSource(clip, cardPath: cardPath, info: info, singleFrameAt: nil, forRender: true)
         defer { src.removeIntermediates() }
         let outHeight = min(settings.height, info.height ?? settings.height) & ~1
 

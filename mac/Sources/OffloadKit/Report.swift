@@ -150,6 +150,17 @@ public enum ProxyStatus: String, Codable {
     case none, skipped, unsupported, done, failed
 }
 
+/// One report thumbnail: a small JPEG and its caption (source timecode or "#frame"). Never written to the JSON.
+public struct Thumbnail: Equatable {
+    public let jpeg: Data
+    public let label: String
+
+    public init(jpeg: Data, label: String) {
+        self.jpeg = jpeg
+        self.label = label
+    }
+}
+
 public struct ClipEntry: Codable {
     public var clip: Clip
     public var info: ClipInfo?
