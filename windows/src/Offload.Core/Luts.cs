@@ -160,12 +160,26 @@ public static class LutResolver
     static LutUse? Builtin(LutCatalog cat, string? id, string source, string reason) =>
         cat.Find(id) is { } lut ? new LutUse(source, lut.Id, lut.Name, reason) { File = lut.Path } : null;
 
+    /// BRAW decodes in the gamma the clip was shot in: only "Blackmagic Design Film" Gen 5 matches the built-in LUT.
+    /// Video / Extended Video / Custom / HDR gammas are display-ready already; an older decoder without the gamma
+    /// in --info keeps the old assumption (Film Gen 5).
+    static (string? Id, string Reason) Braw(ClipInfo? info)
+    {
+        var gamma = info?.Gamma;
+        if (string.IsNullOrEmpty(gamma)) return ("bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)");
+        var label = info!.ColorScienceGen is int gen ? $"{gamma} Gen {gen}" : gamma;
+        if (!gamma.Equals("Blackmagic Design Film", StringComparison.OrdinalIgnoreCase))
+            return ("", $"Blackmagic RAW: {label} (není log)");
+        if (info.ColorScienceGen is int g && g < 5) return ("", $"Blackmagic RAW: {label} (bez vestavěného LUTu)");
+        return ("bmd-film-gen5", $"Blackmagic RAW: {label}");
+    }
+
     /// (id, reason): id null = not recognised, "" = recognised as non-log (no LUT).
     internal static (string? Id, string Reason) Detect(Clip clip, ClipInfo? info, string clipFullPath)
     {
         switch (clip.Format)
         {
-            case ClipFormat.Braw: return ("bmd-film-gen5", "Blackmagic RAW (gama Film Gen 5)");
+            case ClipFormat.Braw: return Braw(info);
             case ClipFormat.R3d: return ("red-log3g10-rwg", "RED R3D (IPP2 Log3G10)");
             case ClipFormat.Arriraw:
                 return ArriBackend.ColorSpace(null, info ?? new ClipInfo()).Contains("LogC4")

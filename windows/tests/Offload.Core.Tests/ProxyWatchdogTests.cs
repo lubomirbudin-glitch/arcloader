@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace Offload.Core.Tests;
 
@@ -205,9 +206,10 @@ public class ProxyWatchdogTests
     public void SlowFirstData_WithinGrace_NotKilled()
     {
         using var dir = new TempDir();
-        var src = SlowFeeder(dir.Path, delaySeconds: 3, out var consumer);
+        var src = SlowFeeder(dir.Path, delaySeconds: 6, out var consumer);
         using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
-        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(2));   // first data at 3 s: > 2 s, < 6 s
+        // first data at 6 s: > 5 s, < 15 s; after it the consumer has 5 s to end (2 s flaked under a loaded suite)
+        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -220,6 +222,163 @@ public class ProxyWatchdogTests
         var e = Assert.Throws<FfmpegStalledException>(() => r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(1)));
         Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku)", e.Message);
         Assert.InRange(sw.Elapsed.TotalSeconds, 2.8, 20);
+    }
+
+    /// A stand-in for braw-decode with a hung Blackmagic RAW SDK: frames never come; `--info` hangs too, or prints a
+    /// one-frame 320×180 clip.
+    static string FakeBrawDecode(string dir, bool hangInfo, string? attempts = null)
+    {
+        var path = Path.Combine(dir, "braw-decode.cmd");
+        File.WriteAllText(path, $$"""
+            @echo off
+            if "%~1"=="--info" goto {{(hangInfo ? "hang" : "info")}}
+            :hang
+            {{(attempts == null ? "" : $"echo x>>\"{attempts}\"")}}
+            ping -n 60 127.0.0.1 >nul
+            exit /b 0
+            :info
+            echo {"width":320,"height":180,"sourceWidth":320,"sourceHeight":180,"fps":25,"frames":1,"timecode":"","camera":""}
+            exit /b 0
+
+            """.ReplaceLineEndings("\r\n"));
+        return path;
+    }
+
+    // Ruling M3: `braw-decode --info` runs with a timeout — a hung SDK gives the clip a note instead of hanging the job.
+    [Fact]
+    public void BrawInfo_Hung_KilledAfterTheTimeout()
+    {
+        using var dir = new TempDir();
+        var tools = new ExternalTools { BrawDecoder = FakeBrawDecode(dir.Path, hangInfo: true), NoSearch = true };
+        var backend = new BrawBackend(_ => "BlackmagicRawAPI.dll", infoTimeout: TimeSpan.FromSeconds(2));
+        var sw = Stopwatch.StartNew();
+        var e = Assert.Throws<ToolError>(() => backend.Probe(Path.Combine(dir.Path, "A001.braw"), tools, dir.Path));
+        Assert.Equal("braw-decode failed (exit -1): neodpověděl do 2 s — ukončen", e.Message);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 1.9, 30);
+    }
+
+    [Fact]
+    public void BrawInfo_DefaultTimeout() => Assert.Equal(TimeSpan.FromSeconds(60), BrawBackend.DefaultInfoTimeout);
+
+    // Ruling M3: a BRAW thumbnail (the decoder piped into ffmpeg) runs under the stall watchdog like a proxy.
+    [Fact]
+    public void BrawThumbnail_DecoderHangs_KilledAsStalled()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var consumer = Path.Combine(dir.Path, "ffmpeg.cmd");   // reads its input to the end, prints no progress
+        File.WriteAllText(consumer, "@more >nul\r\n@exit /b 0\r\n");
+        var tools = new ExternalTools { Ffmpeg = consumer, BrawDecoder = FakeBrawDecode(dir.Path, hangInfo: false), NoSearch = true }.Resolved();
+        using var r = new ProxyRenderer(FakeSettings, tools) { StallTimeout = Stall };
+        var clip = new Clip { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
+        var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 1, Duration = 0.04 };
+        var sw = Stopwatch.StartNew();
+        var e = Assert.Throws<FfmpegStalledException>(() => r.Thumbnails(clip, card, info, null));
+        Assert.Equal("dekodér nebo ffmpeg se zasekl (1 s bez nového snímku)", e.Message);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
+    }
+
+    // Ruling T8-extra: a feeder that stalled is not tried again at the next positions (3 x the grace per clip otherwise).
+    [Fact]
+    public void BrawThumbnail_DecoderHangs_OnlyOneStallAttempt()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var attempts = Path.Combine(dir.Path, "attempts.txt");
+        var consumer = Path.Combine(dir.Path, "ffmpeg.cmd");
+        File.WriteAllText(consumer, "@more >nul\r\n@exit /b 0\r\n");
+        var tools = new ExternalTools { Ffmpeg = consumer, BrawDecoder = FakeBrawDecode(dir.Path, hangInfo: false, attempts), NoSearch = true }.Resolved();
+        var log = new List<string>();
+        using var r = new ProxyRenderer(FakeSettings, tools) { StallTimeout = Stall, Log = l => { lock (log) log.Add(l); } };
+        var clip = new Clip { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
+        var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 100, Duration = 4 };
+        Assert.Equal(3, ProxyRenderer.FramePositions(info).Count);
+        var sw = Stopwatch.StartNew();
+        var e = Assert.Throws<FfmpegStalledException>(() => r.Thumbnails(clip, card, info, null));
+        Assert.StartsWith("dekodér nebo ffmpeg se zasekl", e.Message);
+        Assert.Single(File.ReadAllLines(attempts));
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(60), $"took {sw.Elapsed}");
+        // Final fix M2: the stop is in the log (a clip with some thumbnails would otherwise not say why it lacks the rest).
+        lock (log) Assert.Contains("thumbnails A001: dekodér nebo ffmpeg se zasekl (1 s bez nového snímku); the remaining frames are skipped", log);
+    }
+
+    // Final fix M1: a hung `braw-decode --info` (timeout) is not tried again at the next positions either.
+    [Fact]
+    public void BrawThumbnail_InfoHangs_OnlyOneAttempt()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var attempts = Path.Combine(dir.Path, "attempts.txt");
+        var consumer = Path.Combine(dir.Path, "ffmpeg.cmd");
+        File.WriteAllText(consumer, "@more >nul\r\n@exit /b 0\r\n");
+        var tools = new ExternalTools { Ffmpeg = consumer, BrawDecoder = FakeBrawDecode(dir.Path, hangInfo: true, attempts), NoSearch = true }.Resolved();
+        var log = new List<string>();
+        using var r = new ProxyRenderer(FakeSettings, tools)
+        {
+            StallTimeout = Stall,
+            Backends = [new BrawBackend(_ => "BlackmagicRawAPI.dll", infoTimeout: TimeSpan.FromSeconds(1))],
+            Log = l => { lock (log) log.Add(l); },
+        };
+        var clip = new Clip { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
+        var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 100, Duration = 4 };
+        Assert.Equal(3, ProxyRenderer.FramePositions(info).Count);
+        var e = Assert.Throws<ToolError>(() => r.Thumbnails(clip, card, info, null));
+        Assert.Equal("braw-decode failed (exit -1): neodpověděl do 1 s — ukončen", e.Message);
+        Assert.Single(File.ReadAllLines(attempts));
+        lock (log) Assert.Contains("thumbnails A001: braw-decode failed (exit -1): neodpověděl do 1 s — ukončen; the remaining frames are skipped", log);
+    }
+
+    /// A RAW decoder that writes until a write fails (its stdout was closed), then notes it in `stopped` and exits
+    /// with `exitCode`; and a consumer that takes one line and ends, like ffmpeg with its one thumbnail frame.
+    /// WriteFile on the raw stdout handle: .NET Framework's console stream and FileStream both swallow a broken pipe.
+    static FrameSource WritesUntilCut(string dir, string stopped, int exitCode, out string consumer)
+    {
+        var script = $$"""
+            Add-Type -Namespace Fake -Name Std -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n); [DllImport("kernel32.dll")] public static extern bool WriteFile(IntPtr h, byte[] b, int n, out int written, IntPtr o);'
+            $out = [Fake.Std]::GetStdHandle(-11)
+            $line = [Text.Encoding]::ASCII.GetBytes(('x' * 1023) + "`n")
+            $n = 0
+            while ([Fake.Std]::WriteFile($out, $line, $line.Length, [ref]$n, [IntPtr]::Zero)) { }
+            [IO.File]::WriteAllText('{{stopped}}', 'stopped')
+            exit {{exitCode}}
+            """;
+        consumer = Path.Combine(dir, "consumer.cmd");
+        File.WriteAllText(consumer, "@set /p x=\r\n@exit /b 0\r\n");
+        return new FrameSource
+        {
+            InputArgs = ["-i", "-"],
+            FeederExe = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
+            FeederArgs = ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))],
+            AudioFromInput = false,
+        };
+    }
+
+    /// Task 6 note: ffmpeg may end before the decoder does (a thumbnail takes one frame; or ffmpeg failed). The pump
+    /// then closes the decoder's stdout, so the decoder sees the broken pipe and stops by itself (braw-decode exits 0)
+    /// instead of blocking on a full pipe until it is killed.
+    [Fact]
+    public void ConsumerEndsFirst_FeederSeesTheClosedPipe_ExitsByItself()
+    {
+        using var dir = new TempDir();
+        var stopped = Path.Combine(dir.Path, "stopped.txt");
+        var src = WritesUntilCut(dir.Path, stopped, exitCode: 0, out var consumer);
+        using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
+        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(30));
+        Assert.True(SpinWait.SpinUntil(() => File.Exists(stopped), TimeSpan.FromSeconds(10)), "the feeder never saw its stdout closed (it was killed)");
+    }
+
+    /// Fix round 1: a decoder that fails because the pump cut its stdout (ffmpeg already had what it wanted) is not the
+    /// clip's error — like a killed one, its exit code is ignored and ffmpeg's decides. (A decoder failing while ffmpeg
+    /// still reads stays an error: ProxyRendererTests.Feeder_Fails_ReportsFeederError.)
+    [Fact]
+    public void ConsumerEndsFirst_FeederFailsOnTheCutPipe_NotAnError()
+    {
+        using var dir = new TempDir();
+        var stopped = Path.Combine(dir.Path, "stopped.txt");
+        var src = WritesUntilCut(dir.Path, stopped, exitCode: 1, out var consumer);
+        using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
+        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(30));
+        Assert.True(SpinWait.SpinUntil(() => File.Exists(stopped), TimeSpan.FromSeconds(10)), "the feeder never saw its stdout closed (it was killed)");
     }
 
     // The real thing: an FFV1 clip (the codec that hung with -hwaccel auto) renders a proxy and never hangs.

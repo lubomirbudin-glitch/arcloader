@@ -13,6 +13,18 @@ public sealed class ProxyRenderer : IDisposable
     static readonly string[] FontCandidates = [@"C:\Windows\Fonts\consola.ttf", @"C:\Windows\Fonts\cour.ttf"];
 
     readonly Dictionary<ClipFormat, IRawBackend> backends = RawBackends.All.ToDictionary(b => b.Format);
+
+    /// Tests only: other RAW backends (e.g. BRAW with a fake library search or a short --info timeout); they
+    /// replace the default one of the same format.
+    internal IEnumerable<IRawBackend> Backends
+    {
+        get => backends.Values;
+        init
+        {
+            backends = new Dictionary<ClipFormat, IRawBackend>(backends);
+            foreach (var b in value) backends[b.Format] = b;
+        }
+    }
     readonly string workDir;
     readonly bool hasCustomLut;
     readonly bool hasFont;
@@ -105,7 +117,22 @@ public sealed class ProxyRenderer : IDisposable
         }
         if (!backends.TryGetValue(clip.Format, out var b) || !b.IsAvailable(Tools))
             throw new ToolError(clip.Format.Label(), -1, UnsupportedReason(clip) ?? "");
-        return b.Probe(path, Tools, workDir);
+        return Logged(() => b.Probe(path, Tools, workDir));
+    }
+
+    /// A decoder error turned into a note for the clip (RawDecoderException): the decoder's own words — its stderr,
+    /// e.g. the library it loaded — go to the job's log, the note to the clip.
+    T Logged<T>(Func<T> decode)
+    {
+        try
+        {
+            return decode();
+        }
+        catch (RawDecoderException e)
+        {
+            Log?.Invoke(e.DecoderError.Message);
+            throw;
+        }
     }
 
     /// MXF is a container for many codecs; ARRIRAW/ARRICORE inside it only the ARRI tool can read.
@@ -156,7 +183,7 @@ public sealed class ProxyRenderer : IDisposable
         if (clip.Format == ClipFormat.Video)
             return new FrameSource { InputArgs = hwaccel ? ["-hwaccel", "auto", "-i", path] : ["-i", path] };
         if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, "no decoder");
-        return b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt);
+        return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt));
     }
 
     /// The .cube for this clip by its name in the work folder, or null for no LUT. The custom LUT was copied
@@ -231,9 +258,27 @@ public sealed class ProxyRenderer : IDisposable
                 // Last frame: decode the final second and keep overwriting the image — the last write is the last frame.
                 args.AddRange(video && pos.FromEnd ? ["-map", "0:v:0", "-vf", vf, "-update", "1"] : ["-frames:v", "1", "-vf", vf]);
                 args.AddRange(["-q:v", "5", output]);
-                RunFfmpeg(ffmpeg, args, src, null, null, isCancelled);
+                // A RAW decoder piped in (BRAW) runs under the stall watchdog: data it hands ffmpeg is the progress, and a
+                // hung SDK must not hang the job. (A file input prints no progress here, so it is left alone.)
+                RunFfmpeg(ffmpeg, args, src, null, null, isCancelled, src.FeederExe != null ? StallTimeout : null);
                 if (!File.Exists(output)) throw new ToolError("ffmpeg", 0, "no frame");
                 result.Add(new Thumbnail(File.ReadAllBytes(output), Label(info, pos)));
+            }
+            catch (FfmpegStalledException e) when (src?.FeederExe != null)
+            {
+                if (isCancelled()) return [];
+                // A hung decoder would hang at the next positions too (3 x the grace per clip): stop here.
+                lastError = new FfmpegStalledException("dekodér nebo " + e.Message, e);
+                Log?.Invoke($"thumbnails {clip.Name}: {lastError.Message}; the remaining frames are skipped");
+                break;
+            }
+            catch (ToolError e) when (src == null && e.Status == -1 && IsBrawDecoder(e.Tool))
+            {
+                if (isCancelled()) return [];
+                // `braw-decode --info` timed out (or could not run at all): it would at the next positions too.
+                lastError = e;
+                Log?.Invoke($"thumbnails {clip.Name}: {e.Message}; the remaining frames are skipped");
+                break;
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
@@ -249,6 +294,10 @@ public sealed class ProxyRenderer : IDisposable
         if (result.Count == 0 && lastError != null) ExceptionDispatchInfo.Throw(lastError);
         return result;
     }
+
+    /// The tool name of a ToolError raised by braw-decode (its file name without the extension).
+    bool IsBrawDecoder(string tool) =>
+        Tools.BrawDecoder is string exe && string.Equals(tool, Path.GetFileNameWithoutExtension(exe), StringComparison.OrdinalIgnoreCase);
 
     /// Renders the proxy. A render that stalls (no progress for StallTimeout) is killed. With hardware decoding the
     /// clip is then retried once in software — as is one that failed with it; without, the stall fails the proxy.
@@ -356,6 +405,8 @@ public sealed class ProxyRenderer : IDisposable
         Thread? pump = null;
         Stream? input = null, sink = null;
         bool feederKilled = false;
+        // Set by the pump when ffmpeg stopped taking data and the feeder's stdout was closed under it.
+        int feederCut = 0;
         var watch = new ProgressWatch();
         long lastAdvance = Environment.TickCount64;
         int advanced = 0;
@@ -392,12 +443,28 @@ public sealed class ProxyRenderer : IDisposable
                         int n;
                         while ((n = from.Read(buffer, 0, buffer.Length)) > 0)
                         {
-                            to.Write(buffer, 0, n);
+                            try
+                            {
+                                to.Write(buffer, 0, n);
+                            }
+                            catch (Exception)
+                            {
+                                // ffmpeg went away first (a thumbnail needs one frame, or it failed). Marked before the
+                                // feeder's end is closed below, so its exit code is known to be a consequence.
+                                Volatile.Write(ref feederCut, 1);
+                                break;
+                            }
                             Advance();
                         }
                     }
                     catch (Exception) { }
-                    finally { try { to.Close(); } catch (Exception) { } }
+                    finally
+                    {
+                        try { to.Close(); } catch (Exception) { }
+                        // Close the decoder's end too, so a decoder still writing sees the broken pipe and stops by itself
+                        // (braw-decode exits 0) instead of blocking on a full pipe until it is killed.
+                        try { from.Close(); } catch (Exception) { }
+                    }
                 }) { IsBackground = true };
                 pump.Start();
             }
@@ -422,9 +489,15 @@ public sealed class ProxyRenderer : IDisposable
                 if (!feeder.WaitForExit(2000)) { feeder.Kill(); feederKilled = true; }
                 pump!.Join(2000);
             }
-            // A feeder that died on its own is the real cause; ffmpeg only saw a truncated stream.
-            if (feeder != null && !feederKilled && feeder.WaitForExit(0) && feeder.ExitCode != 0)
-                throw new ToolError(feeder.Name, feeder.ExitCode, feeder.StderrTail);
+            // A feeder that died on its own is the real cause; ffmpeg only saw a truncated stream. One that was killed,
+            // or whose stdout the pump closed because ffmpeg had stopped reading, is not: ffmpeg's exit code decides.
+            if (feeder != null && !feederKilled && Volatile.Read(ref feederCut) == 0 && feeder.WaitForExit(0) && feeder.ExitCode != 0)
+            {
+                var error = new ToolError(feeder.Name, feeder.ExitCode, feeder.StderrTail);
+                var explained = src.ExplainFeederError?.Invoke(error) ?? error;
+                if (explained is RawDecoderException) Log?.Invoke(error.Message);
+                throw explained;
+            }
             if (ff.ExitCode != 0) throw new ToolError("ffmpeg", ff.ExitCode, ff.StderrTail);
         }
         finally

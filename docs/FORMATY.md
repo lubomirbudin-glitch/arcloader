@@ -75,6 +75,9 @@ Hodnoty výčtů:
 - `clips[].lut.source`: `auto` (rozpoznaná kamera), `fallback` (kamera nerozpoznaná, záložní LUT), `builtin` (vestavěný
   LUT vybraný v nastavení), `custom` (vlastní `.cube`), `none` (bez LUTu — důvod v `reason`). `id` je id vestavěného
   LUTu, u `custom` a `none` `null`.
+- `clips[].info.gamma`, `gamut`, `colorScienceGen` (volitelné, zatím jen Windows): u Blackmagic RAW gama, gamut a generace
+  barevné vědy, ve kterých byl klip natočený (z `braw-decode --info`, např. `"Blackmagic Design Film"`, `5`). Podle nich se
+  volí LUT. Mac je zatím nezapisuje a při čtení ignoruje.
 
 Náhledy klipů (JPEG) se do JSON neukládají — jsou jen v HTML a PDF.
 

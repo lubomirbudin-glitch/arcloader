@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 
 namespace Offload.Core;
@@ -97,12 +98,18 @@ internal sealed class ToolProcess : IDisposable
         process.Dispose();
     }
 
-    /// Runs to completion and returns stdout.
-    public static string Run(string exe, IReadOnlyList<string> args, string? cwd = null)
+    /// Runs to completion and returns stdout. With `timeout`, a process still running after it is killed (with its
+    /// children) and a ToolError says so — a hung tool must never hang the job.
+    public static string Run(string exe, IReadOnlyList<string> args, string? cwd = null, TimeSpan? timeout = null)
     {
         using var p = new ToolProcess(exe, args, cwd, pipeStdin: false);
         var output = new StringBuilder();
         p.Start(line => { lock (output) output.Append(line).Append('\n'); });
+        if (timeout is TimeSpan limit && !p.WaitForExit((int)limit.TotalMilliseconds))
+        {
+            p.Kill();
+            throw new ToolError(p.Name, -1, $"neodpověděl do {limit.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s — ukončen");
+        }
         p.WaitForExit();
         if (p.ExitCode != 0) throw new ToolError(p.Name, p.ExitCode, p.StderrTail);
         lock (output) return output.ToString();

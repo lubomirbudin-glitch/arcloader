@@ -49,6 +49,13 @@ internal static class RawBackends
     }
 }
 
+/// A RAW decoder's error turned into a note for the clip. The decoder's own error (with its stderr) is the inner
+/// exception; ProxyRenderer writes it to the job's log.
+internal sealed class RawDecoderException(string note, ToolError decoderError) : Exception(note, decoderError)
+{
+    public ToolError DecoderError => decoderError;
+}
+
 // MARK: Blackmagic RAW (braw-decode → raw RGB48 frames on a pipe)
 
 internal sealed record BrawInfo(
@@ -59,13 +66,34 @@ internal sealed record BrawInfo(
     [property: JsonPropertyName("fps")] double Fps,
     [property: JsonPropertyName("frames")] int Frames,
     [property: JsonPropertyName("timecode")] string Timecode,
-    [property: JsonPropertyName("camera")] string Camera);
+    [property: JsonPropertyName("camera")] string Camera,
+    [property: JsonPropertyName("gamma")] string? Gamma = null,
+    [property: JsonPropertyName("gamut")] string? Gamut = null,
+    [property: JsonPropertyName("colorScienceGen")] int? ColorScienceGen = null);
 
 internal sealed class BrawBackend : IRawBackend
 {
     public ClipFormat Format => ClipFormat.Braw;
     public string MissingHint => "Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)";
-    public bool IsAvailable(ExternalTools tools) => tools.BrawDecoder != null;
+
+    /// How long `braw-decode --info` may take: opening a clip is quick; a hung SDK must never hang the job (the clip
+    /// then gets a note instead).
+    public static readonly TimeSpan DefaultInfoTimeout = TimeSpan.FromSeconds(60);
+
+    readonly Func<string, string?> _findLibrary;
+    readonly TimeSpan _infoTimeout;
+
+    /// `findLibrary` (decoder folder → library path) is injectable so tests do not depend on what is installed on the PC;
+    /// `infoTimeout` so tests need not wait a minute.
+    public BrawBackend(Func<string, string?>? findLibrary = null, TimeSpan? infoTimeout = null)
+    {
+        _findLibrary = findLibrary ?? BrawLibrary.Find;
+        _infoTimeout = infoTimeout ?? DefaultInfoTimeout;
+    }
+
+    /// braw-decode alone is not enough: without BlackmagicRawAPI.dll it can only fail.
+    public bool IsAvailable(ExternalTools tools) =>
+        tools.BrawDecoder is string exe && _findLibrary(Path.GetDirectoryName(exe) ?? "") != null;
 
     public static BrawInfo ParseInfo(string json) => JsonSerializer.Deserialize<BrawInfo>(json)
         ?? throw new ToolError("braw-decode", -1, "unreadable --info output");
@@ -80,7 +108,18 @@ internal sealed class BrawBackend : IRawBackend
         Duration = i.Fps > 0 ? i.Frames / i.Fps : null,
         Timecode = string.IsNullOrEmpty(i.Timecode) ? null : i.Timecode,
         Camera = string.IsNullOrEmpty(i.Camera) ? null : i.Camera,
+        Gamma = string.IsNullOrEmpty(i.Gamma) ? null : i.Gamma,
+        Gamut = string.IsNullOrEmpty(i.Gamut) ? null : i.Gamut,
+        ColorScienceGen = i.ColorScienceGen,
     };
+
+    /// The frame braw-decode starts at for a thumbnail `seconds` into the clip. Rounded: `seconds` comes from the
+    /// exact rational rate (24000/1001), braw-decode reports the SDK's float (23.976) — truncating lands a frame early.
+    public static int StartFrame(double seconds, double fps, int frames)
+    {
+        double rate = fps > 0 ? fps : 25;
+        return Math.Min(Math.Max(0, frames - 1), Math.Max(0, (int)Math.Round(seconds * rate, MidpointRounding.AwayFromZero)));
+    }
 
     /// Smallest decode scale that still covers the target height — decoding less is much faster.
     public static string Scale(int sourceHeight, int target)
@@ -90,8 +129,42 @@ internal sealed class BrawBackend : IRawBackend
         return "full";
     }
 
-    BrawInfo Info(string path, string scale, ExternalTools tools) =>
-        ParseInfo(ToolProcess.Run(tools.BrawDecoder!, ["--info", "--scale", scale, path]));
+    BrawInfo Info(string path, string scale, ExternalTools tools)
+    {
+        string output;
+        try
+        {
+            output = ToolProcess.Run(tools.BrawDecoder!, ["--info", "--scale", scale, path], timeout: _infoTimeout);
+        }
+        catch (ToolError e)
+        {
+            throw Explain(e, tools);
+        }
+        return ParseInfo(output);
+    }
+
+    /// braw-decode's exit codes 3 (library unusable), 4 (clip cannot be opened) and 5 (a frame failed) as a note
+    /// for the clip; the original error, with braw-decode's stderr, stays inside it for the log. Anything else
+    /// (a timeout, a usage error) is returned as it is.
+    internal Exception Explain(ToolError e, ExternalTools tools)
+    {
+        var dll = (tools.BrawDecoder is string exe ? _findLibrary(Path.GetDirectoryName(exe) ?? "") : null) ?? BrawLibrary.DllName;
+        var note = e.Status switch
+        {
+            3 => $"Blackmagic RAW: knihovnu {dll} nelze použít — nainstalujte aktuální Blackmagic RAW Player",
+            4 => $"Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna {dll} starší než kamera (nainstalujte aktuální Blackmagic RAW Player)",
+            5 => $"Blackmagic RAW: snímek klipu se nepodařilo dekódovat ({LastLine(e.Detail)})",
+            _ => null,
+        };
+        return note == null ? e : new RawDecoderException(note, e);
+    }
+
+    /// braw-decode's last stderr line without its "braw-decode: " prefix.
+    static string LastLine(string stderr)
+    {
+        var line = stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? "";
+        return line.StartsWith("braw-decode: ", StringComparison.Ordinal) ? line["braw-decode: ".Length..] : line;
+    }
 
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => ToClipInfo(Info(path, "eighth", tools));
 
@@ -103,8 +176,7 @@ internal sealed class BrawBackend : IRawBackend
         var args = new List<string> { "--scale", scale };
         if (singleFrameAt is double t)
         {
-            double fps = dims.Fps > 0 ? dims.Fps : 25;
-            int start = Math.Min(Math.Max(0, dims.Frames - 1), (int)(t * fps));
+            int start = StartFrame(t, dims.Fps, dims.Frames);
             args.AddRange(["--start", start.ToString(CultureInfo.InvariantCulture), "--count", "1"]);
         }
         args.Add(path);
@@ -115,6 +187,7 @@ internal sealed class BrawBackend : IRawBackend
             FeederArgs = args,
             AudioFromInput = false,
             FullRange = true,
+            ExplainFeederError = e => Explain(e, tools),
         };
     }
 }

@@ -9,6 +9,13 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 - Složka pro proxy navíc (`proxy.extraFolder`, `--proxy-folder`) — jako ve Windows verzi, doplnit do plánu parity.
 
+- Mac `braw-decode`: (1) `--info` má vydat `gamma`, `gamut` a `colorScienceGen` (atributy `gama`, `gamt`, `csgn` přes
+  `CloneClipProcessingAttributes`) — viz [FORMATY.md](FORMATY.md); pipeline nastavit **před** `OpenClip` (SDK čte konfiguraci
+  při prvním otevření klipu); pravidlo LUTu podle gamy jako `LutResolver.Braw` na Windows (Film Gen 5 → BMD LUT, ostatní
+  gamy bez LUTu, gama neuvedena → předpoklad Film Gen 5). (2) Náhledy BRAW: počáteční snímek `--start` zaokrouhlit
+  (`BrawBackend.StartFrame`), ne useknout — přesný zlomek 24000/1001 jinak vyjde o snímek dřív než SDK float 23.976.
+  Windows to má od plánu 3.
+
 - Vestavěné LUTy (sdílené `shared/luts/`) a automatický výběr podle kamery — stejná pravidla jako
   `windows/src/Offload.Core/Luts.cs` (`LutResolver`); přibalit `shared/luts` do `Offload.app/Contents/Resources/luts`;
   klíče `proxy.lutMode`, `proxy.lutBuiltin`, `proxy.lutFallback` a u klipu `lut` ([FORMATY.md](FORMATY.md));

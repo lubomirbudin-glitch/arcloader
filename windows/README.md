@@ -12,8 +12,8 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 |---|---|
 | Jádro + CLI (`bin\offload.exe`) | hotovo (plán 1) — ostrý test na skutečné kartě a měření rychlostí zatím chybí |
 | Analýza klipů, 3 snímky, proxy, PDF | hotovo (plán 2) — QSV/AMF a ostrý test na médiu neověřeno |
-| RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: plán 3 |
-| BRAW dekodér (C#, Blackmagic RAW SDK) | plán 3 |
+| RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: hotovo (plán 3), čeká ověření se vzorkem .braw / kartou |
+| BRAW dekodér (C#, Blackmagic RAW SDK) | hotovo (plán 3, `bin\braw-decode.exe`) — ověřeno jen s knihovnou z DaVinci Resolve, dekódování snímků a rozložení VARIANT (gama/gamut) čeká na vzorek .braw; Film Gen 4 zatím bez LUTu (provizorně); v GUI v seznamu nástrojů řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny `BlackmagicRawAPI.dll` (BRAW je pak jen zkopírovaný a ověřený, důvod je v poznámce u klipu) |
 | HW diagnostika USB | hotovo (CLI `offload ports`, v GUI okno Hardware a kontrola na vyžádání) |
 | GUI `Offload.exe` | hotovo (čeká ruční test s kartou) |
 | Vestavěné LUTy (plán 5) | hotovo (čeká ruční test s klipy z kamer) |
@@ -26,8 +26,48 @@ dotnet test
 powershell -ExecutionPolicy Bypass -File scripts\build.ps1   # → build\Offload\Offload.exe, build\Offload\bin\offload.exe, build\Offload-win-x64.zip
 ```
 
-Balíček `build\Offload-win-x64.zip` obsahuje složku `Offload` (`Offload.exe` + `bin\` s `offload.exe`, `ffmpeg.exe`, `ffprobe.exe`);
-stačí ho rozbalit kamkoli a spustit `Offload.exe`. Neobsahuje nic, co by se muselo instalovat.
+Balíček `build\Offload-win-x64.zip` obsahuje složku `Offload` (`Offload.exe` + `bin\` s `offload.exe`, `braw-decode.exe`, `ffmpeg.exe`, `ffprobe.exe`);
+stačí ho rozbalit kamkoli a spustit `Offload.exe`. Neobsahuje nic, co by se muselo instalovat. Knihovnu `BlackmagicRawAPI.dll`
+balíček neobsahuje — bez ní se BRAW jen zkopíruje a ověří, proxy a náhledy se přeskočí.
+
+### Vzorek BRAW (testy dekodéru Blackmagic RAW)
+
+Dekodér `bin\braw-decode.exe` potřebuje knihovnu `BlackmagicRawAPI.dll` — stačí nainstalovaný DaVinci Resolve,
+nebo zdarma „Blackmagic RAW“ (Player + SDK) z https://www.blackmagicdesign.com/products/blackmagicraw.
+Testy, které potřebují skutečný klip, se bez vzorku přeskočí. Vzorek:
+
+1. Na https://www.blackmagicdesign.com/products/blackmagicraw (nebo https://www.blackmagicdesign.com/event/blackmagicrawinstaller,
+   „Download RAW Samples“) stáhnout jeden ukázkový klip (zdarma, formulář se jménem a e-mailem), rozbalit.
+2. Nastavit proměnnou na plnou cestu ke klipu a pustit testy:
+
+       setx OFFLOAD_BRAW_SAMPLE "D:\Vzorky\BRAW\A001_01011200_C001.braw"
+       # nové okno PowerShellu
+       dotnet test tests\Offload.Core.Tests --filter "FullyQualifiedName~Braw"
+
+   (Jméno souboru je příklad; ukázkové klipy z 12K kamery mají stovky MB až jednotky GB.) Test celé cesty
+   (`Offload_ProbeThumbnailsProxy`: analýza, tři náhledy, proxy 540p) potřebuje navíc ffmpeg a ffprobe.
+
+**Ověření se vzorkem — co udělat, až klip bude** (na tomto PC zatím žádný .braw není, nic z toho neproběhlo):
+
+1. `setx OFFLOAD_BRAW_SAMPLE "<cesta ke klipu>.braw"`, nové okno PowerShellu, ve složce `windows`:
+   `dotnet test tests\Offload.Core.Tests --filter "FullyQualifiedName~Braw"` — očekává se vše PASS a **0 přeskočených** testů
+   (přeskočený test znamená, že chybí proměnná, knihovna `BlackmagicRawAPI.dll`, ffmpeg nebo ffprobe).
+2. Stále ve složce `windows`: `build\Offload\bin\braw-decode.exe --info --scale eighth $env:OFFLOAD_BRAW_SAMPLE`
+   (po `scripts\build.ps1`; nebo `tools\bin\braw-decode.exe`). **Nejdřív zkontrolovat stderr:** nečekaný typ VARIANT
+   u atributu se vypíše tam (např. `braw-decode: gamut: clip attribute 'gamt' is a number, expected a string`) a klíč
+   v JSON pak chybí; potichu chybí klíč jen tehdy, když selže samotné volání `GetClipAttribute`. Pak očima zkontrolovat
+   JSON: `gamma` (např. „Blackmagic Design Film“) a `gamut` jsou vyplněné, `colorScienceGen` je číslo (5 u Gen 5),
+   `width`/`height` odpovídají zmenšení, `frames`, `fps`, `timecode`, `camera` dávají smysl. Chybí-li `gamma`/`gamut`
+   s hláškou na stderr, je typ VARIANT jiný, než SDK dokumentuje — porovnat s IDL SDK; bez hlášky atribut SDK u klipu
+   nevrátilo. Do opravy se LUT chová jako dosud (gama neuvedena → předpoklad Film Gen 5).
+3. `offload copy <složka se vzorkem> <cíl> --proxy`: v reportu klip se **třemi snímky**, LUT „Blackmagic RAW: Blackmagic Design
+   Film Gen 5“ (u klipu v Gen 5), proxy `.mov` se vizuálně shoduje s Blackmagic RAW Playerem s LUTem Film → Rec.709
+   (barvy, kontrast, orientace, bez posunu o snímek; první/prostřední/poslední snímek v reportu odpovídají časům).
+4. Nainstaluje-li uživatel SDK nebo Player, ověřit, že `BrawLibrary.Find` najde jejich cestu (pořadí: vedle exe, SDK, Player, Resolve);
+   rovněž klip z kamery s gamou Video (bez LUTu) nebo Film Gen 4 (rozhodnout o LUTu).
+
+Při vývoji (GUI/CLI z `bin\Debug`) se `braw-decode.exe` hledá ve `windows\tools\bin`:
+`dotnet publish src\Offload.BrawDecode\Offload.BrawDecode.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:DebugType=none -o tools\bin`.
 
 ## Aplikace (GUI)
 
@@ -44,7 +84,7 @@ klikněte na „Další informace“ → „Přesto spustit“.
 - **LUT:** v sekci Proxy seznam „Automaticky podle kamery“ (výchozí) / vestavěné LUTy / „Bez LUT“ / „Vlastní…“ (`.cube`).
   „Když kameru nepoznám:“ je záložní LUT pro klipy, které automatika nepozná (výchozí Bez LUT). Automaticky se pozná:
   Sony podle sidecaru `M01.XML` (jen S-Log3 s S-Gamut3.Cine nebo S-Gamut3, jiná gama = bez LUTu), ARRI podle modelu
-  kamery (ALEXA 35 → LogC4, ostatní ALEXA/AMIRA → LogC3), ARRIRAW podle metadat, Blackmagic RAW (BRAW) → Film Gen 5 (až s dekodérem BRAW pro Windows, plán 3),
+  kamery (ALEXA 35 → LogC4, ostatní ALEXA/AMIRA → LogC3), ARRIRAW podle metadat, Blackmagic RAW (BRAW) podle gamy klipu (Film Gen 5 → vestavěný LUT; Film starší generace, Video, Extended Video a další gamy = bez LUTu; bez údaje o gamě se předpokládá Film Gen 5),
   RED → Log3G10. Canon, Panasonic, DJI a Fuji se zatím nepoznají (chybí vzorové klipy), D-Log M vestavěný LUT nemá —
   takové klipy dostanou záložní LUT. U ARRI jde o předpoklad pro ProRes: klip nahraný přímo v Rec.709 by LUT dostal
   neprávem, pak zvolte „Bez LUT“. Report ukáže u každého klipu použitý LUT a důvod. Na vzorcích z kamer se ještě
@@ -80,6 +120,7 @@ Vše níže zatím nikdo neověřil na skutečné kartě — GUI je jinak zkouš
 - [ ] 8. Proxy → „Kopírovat proxy i do složky“ → „Vybrat…“ (složka na jiném disku) → offload s proxy → proxy jsou
       v `_PROXY` na cílech i v `<složka>\<datum>\<karta>\`; po odpojení toho disku je start zablokovaný červeným textem
 - [ ] 9. Proxy z log klipu má přirozené barvy; v reportu je u klipu LUT a důvod
+- [ ] 10. BRAW klip: proxy, tři snímky v reportu, LUT podle gamy v reportu (viz „Vzorek BRAW“ výše)
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 

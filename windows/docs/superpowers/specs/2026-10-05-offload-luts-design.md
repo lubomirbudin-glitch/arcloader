@@ -1,6 +1,6 @@
 # Offload — vestavěné LUTy pro proxy a náhledy (Mac i Windows)
 
-Datum: 2026-10-05 · Stav: hotovo na Windows (plán 5); Mac naplánováno · Plán 5 (Windows), Mac podle stejného návrhu
+Datum: 2026-10-05 · Stav: hotovo na Windows (plán 5; BRAW dekodér plán 3 — čeká ověření se vzorkem .braw); Mac naplánováno · Plán 5 (Windows), Mac podle stejného návrhu
 
 ## 1. Cíl
 
@@ -161,3 +161,7 @@ Rozhodnuto 2026-10-05: dekodér BRAW pro Windows se napíše **v C#** (ne port C
 Blackmagic RAW SDK pro Windows (COM rozhraní `BlackmagicRawAPI.dll`); uživatel stáhne a nainstaluje SDK —
 Visual Studio C++ nástroje nejsou potřeba. Dekodér předá snímky ffmpegu stejně jako Mac `braw-decode` (surové
 snímky přes rouru) a metadata (gamma, gamut) pro `LutResolver`. Podrobnosti v plánu 3 (po instalaci SDK).
+
+**Stav (2026-10-05):** hotovo — samostatný `bin\braw-decode.exe`, gama/gamut/generace v `--info`, pravidlo `LutResolver.Braw`
+(Film Gen 5 → BMD LUT; Film Gen 4 zatím bez LUTu — provizorně, ke schválení; ostatní gamy bez LUTu; gama neuvedena → předpoklad
+Film Gen 5). Čeká ověření se vzorkem .braw (rozložení VARIANT u atributů klipu).

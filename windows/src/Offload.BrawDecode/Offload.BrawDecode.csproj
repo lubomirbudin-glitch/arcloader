@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>braw-decode</AssemblyName>
+    <RootNamespace>Offload.BrawDecode</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Trimmed on publish: ~13 MB instead of ~70 MB. Set here, not on the command line, so Offload.Core
+         (reflection-based JSON elsewhere) is not trim-analysed as a whole — only the code braw-decode reaches. -->
+    <PublishTrimmed>true</PublishTrimmed>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Offload.Core\Offload.Core.csproj" />
+    <InternalsVisibleTo Include="Offload.Core.Tests" />
+  </ItemGroup>
+</Project>

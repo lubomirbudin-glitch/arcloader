@@ -82,6 +82,28 @@ public class LutResolverTests
         Assert.Equal("red-log3g10-rwg", LutResolver.Resolve(r3d, null, @"Z:\R", Auto(), Cat).Id);
     }
 
+    static readonly Clip BrawClip = new() { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
+
+    [Theory]
+    [InlineData("Blackmagic Design Film", 5, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film Gen 5")]
+    [InlineData("Blackmagic Design Film", null, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film")]
+    [InlineData("Blackmagic Design Film", 4, "none", null, "Blackmagic RAW: Blackmagic Design Film Gen 4 (bez vestavěného LUTu)")]
+    [InlineData("Blackmagic Design Video", 5, "none", null, "Blackmagic RAW: Blackmagic Design Video Gen 5 (není log)")]
+    [InlineData("Blackmagic Design Extended Video", 5, "none", null, "Blackmagic RAW: Blackmagic Design Extended Video Gen 5 (není log)")]
+    [InlineData(null, null, "auto", "bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)")]
+    public void Braw_LutFromGamma(string? gamma, int? gen, string source, string? id, string reason)
+    {
+        var use = LutResolver.Resolve(BrawClip, new ClipInfo { Gamma = gamma, ColorScienceGen = gen }, @"Z:\A001.braw", Auto(), Cat);
+        Assert.Equal((source, id, reason), (use.Source, use.Id, use.Reason));
+    }
+
+    [Fact]
+    public void Braw_VideoGamma_IgnoresFallback()
+    {
+        var use = LutResolver.Resolve(BrawClip, new ClipInfo { Gamma = "Blackmagic Design Video" }, @"Z:\A001.braw", Auto("bmd-film-gen5"), Cat);
+        Assert.Equal("none", use.Source);   // recognised as display-ready, the fallback is only for unknown cameras
+    }
+
     // Review focus 1
     [Fact]
     public void Unknown_UsesFallback()
