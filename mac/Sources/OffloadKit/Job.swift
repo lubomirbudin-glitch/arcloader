@@ -63,27 +63,45 @@ public struct JobStatus {
 public final class OffloadJob {
     public let config: JobConfig
     public let engine: OffloadEngine
-    public private(set) var plan: OffloadPlan?
-    public private(set) var report: OffloadReport?
+    private var _plan: OffloadPlan?
+    private var _report: OffloadReport?
     private var state = JobStatus()
     private var cancelled = false
+    private var started = false
     private let lock = NSLock()
 
-    public init(config: JobConfig) {
+    /// Set on a worker thread, read by the app's main thread — always under the lock.
+    public var plan: OffloadPlan? { lock.lock(); defer { lock.unlock() }; return _plan }
+    public var report: OffloadReport? { lock.lock(); defer { lock.unlock() }; return _report }
+
+    public convenience init(config: JobConfig) {
+        self.init(config: config, options: OffloadJob.engineOptions(config))
+    }
+
+    /// Tests pass their own engine options (allowSourceVolume, beforeFileCopy …).
+    init(config: JobConfig, options: OffloadOptions) {
         self.config = config
+        engine = OffloadEngine(options: options)
+    }
+
+    static func engineOptions(_ config: JobConfig) -> OffloadOptions {
         var o = OffloadOptions()
         o.chunkSize = config.chunkMB << 20
         o.bufferCount = config.buffers
         o.verify = config.verify
         o.allowSameDevice = config.allowSameDevice
-        engine = OffloadEngine(options: o)
+        return o
+    }
+
+    private func setReport(_ r: OffloadReport) {
+        lock.lock(); _report = r; lock.unlock()
     }
 
     @discardableResult
     public func prepare() throws -> OffloadPlan {
-        if let plan { return plan }
+        if let p = plan { return p }
         let p = try engine.prepare(source: config.source, destRoots: config.destRoots, cardName: config.cardName, date: config.date)
-        plan = p
+        lock.lock(); _plan = p; lock.unlock()
         return p
     }
 
@@ -97,6 +115,8 @@ public final class OffloadJob {
     public func status() -> JobStatus {
         lock.lock()
         var s = state
+        let wasStarted = started
+        let wasCancelled = cancelled
         lock.unlock()
         if s.phase == .copying || s.phase == .verifying || s.phase == .flushing || s.phase == .reporting {
             let snap = engine.snapshot()
@@ -108,6 +128,8 @@ public final class OffloadJob {
             case .report, .done: s.phase = .reporting
             }
         }
+        // Cancelled while still queued: it never runs, so say so instead of "Čeká" forever.
+        if s.phase == .waiting && !wasStarted && wasCancelled { s.phase = .cancelled }
         return s
     }
 
@@ -127,6 +149,13 @@ public final class OffloadJob {
     /// After this the card is no longer needed, so the app can start the next card while stage 2 runs.
     @discardableResult
     public func runCopy() -> Bool {
+        lock.lock()
+        started = true
+        let cancelledBeforeStart = cancelled
+        if cancelledBeforeStart { state.phase = .cancelled }
+        lock.unlock()
+        // Cancelled before it began: stay Cancelled, never prepare or copy.
+        if cancelledBeforeStart { return false }
         let activity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .idleSystemSleepDisabled], reason: "Offloading camera card")
         defer { ProcessInfo.processInfo.endActivity(activity) }
@@ -134,7 +163,7 @@ public final class OffloadJob {
             let plan = try prepare()
             update { $0.phase = .copying }
             let report = try engine.run(plan)
-            self.report = report
+            setReport(report)
             update {
                 $0.safeToEject = report.safeToEject
                 $0.copySucceeded = report.success
@@ -167,7 +196,7 @@ public final class OffloadJob {
             options: [.userInitiated, .idleSystemSleepDisabled], reason: "Rendering proxies")
         defer { ProcessInfo.processInfo.endActivity(activity) }
         let final = analyzeAndRender(plan: plan, report: report, log: log)
-        self.report = final
+        setReport(final)
         update { $0.phase = .reporting }
         writePDFReports(final, plan: plan)
         let finalPhase: JobStatus.Phase = isCancelled ? .cancelled : .done
