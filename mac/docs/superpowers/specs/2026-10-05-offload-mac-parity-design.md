@@ -29,6 +29,8 @@ funkce a opravy, které uživatel chce i na Macu. Tento návrh říká **přesn�
 6. Výstupy na disku zůstávají shodné s Windows (FORMATY.md) — kopii z Macu ověří Windows a naopak.
 7.–11. Vestavěné LUTy podle kamery, složka pro proxy navíc, barvy proxy BT.709 / náhledy JFIF, ochrana proti zaseknutí
    ffmpeg a ikona aplikace — viz oddíl „Doplněk 2026-10-05“ na konci (úkoly 18–25).
+12. Blackmagic RAW jako Windows po plánu 3 (gama → LUT, BRAW jen s knihovnou, limit `--info`, české poznámky, náhledy pod
+   hlídačem) — oddíl „Doplněk 2“ na konci (úkoly 27–31; pořadí plánu 1–25, 27–31, 26).
 
 ## 2. Výchozí stav
 
@@ -504,7 +506,8 @@ nechá `.part` při selhání přejmenování; zavření aplikace uprostřed kop
 **Windows (jen zaznamenat, Windows se tímto plánem nemění):** `RawBackends.cs` BRAW `Source` počítá start
 `(int)(t * fps)`; `t = frame / fps_racionální` a `fps` z `braw-decode` je zaokrouhlené (23,976), takže
 `frame × 0,999999` se ořízne na `frame − 1` — prostřední/poslední snímek BRAW je o frame vedle. Mac používá
-zaokrouhlení (`BRAWBackend.startFrame`). Návrh: stejná oprava ve Windows plánu 3 (braw-decode).
+zaokrouhlení (`BRAWBackend.startFrame`). Návrh: stejná oprava ve Windows plánu 3 (braw-decode). *Stav: Windows opraveno
+v plánu 3 (`66412e4`, `BrawBackend.StartFrame`); Mac úkol 6.*
 
 ## 8. Testování
 
@@ -529,6 +532,8 @@ viz README-START). Testy, které potřebují ffmpeg, se bez něj přeskočí (`X
 | Připojení disků, doporučení, řetěz | `AdvisorTests.swift`, `ChainViewTests.swift` | `AdvisorTests.cs`, `ChainViewTests.cs`, `DriveLinksTests.cs` |
 | IOKit/DA (kouřové testy na skutečném Macu) | `MacHardwareTests.swift` | `HardwareFacts.cs`, `UsbNativeTests.cs` |
 | Bench, test HW | `BenchTests.swift`, `HwTestTests.swift` | `BenchTests.cs`, `HwTestTests.cs` |
+| Doplněk (LUTy, složka pro proxy, barvy, hlídač) | tabulka D.9 | — |
+| Doplněk 2 (BRAW: `braw-decode`, LUT podle gamy, poznámky, náhledy pod hlídačem; část jen s knihovnou nebo vzorkem `.braw`) | tabulka D.19 | `BrawCoreTests.cs`, `BrawDecodeTests.cs`, `BrawSampleTests.cs`, `ProxyWatchdogTests.cs` (BRAW) |
 
 Ruční ověření (na Macu, s hardwarem) je v každém úkolu plánu s přesnými kroky; souhrn v README-START.
 
@@ -661,7 +666,7 @@ Chybějící/poškozená složka → prázdný katalog (nikdy nespadne); položk
 | `custom` | `custom`, název souboru, „vlastní LUT“; bez cesty `none`, „vlastní LUT není vybraný“ |
 | `builtin` | `builtin`, id, „vybraný v nastavení“; neznámé id `none`, „vestavěný LUT nenalezen“ |
 | `auto`, prázdný katalog | `none`, „vestavěné LUTy chybí“ |
-| BRAW | `bmd-film-gen5`, „Blackmagic RAW (gama Film Gen 5)“ (braw-decode gamu klipu neprozradí — jako Windows) |
+| BRAW | úkol 21: `bmd-film-gen5`, „Blackmagic RAW (gama Film Gen 5)“; **úkol 28 (Doplněk 2, D.15) to nahradí výběrem podle gamy klipu** z `braw-decode --info` (jako Windows po plánu 3) |
 | R3D | `red-log3g10-rwg`, „RED R3D (IPP2 Log3G10)“ |
 | ARRIRAW | `colorSpace(lut: nil, info)` obsahuje LogC4 → `arri-logc4-awg4` „ARRIRAW (LogC4)“, jinak `arri-logc3-awg3` „ARRIRAW (LogC3)“ |
 | Sony `<klip>M01.XML` | `CaptureGammaEquation` začíná `s-log3` → `sony-slog3-sgamut3cine` (primaries obsahují „cine“, nebo chybí a gama končí „cine“) jinak `sony-slog3-sgamut3`, důvod „Sony XML: <gama> / <primaries>“ (bez koncových „ /“); `s-log…` jiné → bez LUTu „Sony XML: <gama> (bez vestavěného LUTu)“; jiná neprázdná gama → bez LUTu „Sony XML: <gama> (není log)“ — **ani záložní LUT** |
@@ -845,6 +850,176 @@ VK_ERROR_DEVICE_LOST) a úloha visela.
 | Ochrana proti zaseknutí ffmpeg (Windows `f7d49a1`, konečná podoba `a3f047c`) | úkol 19 |
 | Ikona aplikace (Windows `9915690`) | úkol 25 |
 | ROZDILY „Verze v reportu“ | úkol 26 |
-| Zůstává záměrně: `proxyEncoder` (Mac enkodér nevolí), Windows-only kontroly (oddíl 4), BRAW dekodér Windows (plán 3) | — |
-| VYVOJ-MAC Naplánováno: složka pro proxy, vestavěné LUTy | úkol 24 (odrážky smaže) |
-| VYVOJ-MAC Naplánováno: 3 snímky; „Totéž chování…“, „Podklady pro sestavení…“ | úkol 7; úkol 26 |
+| Zůstává záměrně: `proxyEncoder` (Mac enkodér nevolí), Windows-only kontroly (oddíl 4) | — |
+| BRAW po Windows plánu 3 (dekodér v C# hotový 2026-10-05) | Doplněk 2, úkoly 27–31 (D.20) |
+| VYVOJ-MAC Naplánováno: složka pro proxy, vestavěné LUTy, 3 snímky, „Totéž chování…“, „Podklady pro sestavení…“ | úkoly 7, 20–24; odrážky 2026-10-05 nahradil jeden odkaz na plán, ten smaže úkol 26 |
+
+## Doplněk 2 (2026-10-05): Blackmagic RAW po Windows plánu 3
+
+Windows verze dokončila plán 3 — dekodér BRAW v C# (`windows/src/Offload.BrawDecode/`, sloučeno v `4138680`, commity
+`ef53f0d..8e10416`; plán `windows/docs/superpowers/plans/2026-10-05-offload-windows-3-braw.md`, historie
+`docs/VYVOJ-WINDOWS.md` „plán 3“). Navenek se chová jako Mac `braw-decode`, ale přidal chování, které Mac nemá. Tento doplněk
+říká, co z toho Mac převezme a jak; implementují ho úkoly **27–31** plánu, dělané **po úkolu 25 a před úkolem 26**. Platí
+pravidla oddílů 1–10 a D.1–D.12. Mac `braw-decode` zůstává C++ nad `BlackmagicRawAPI.framework` (dispatch SDK přes `CFBundle`).
+
+### D.13 Co se převezme — přehled
+
+Každá položka ověřena proti Windows kódu (`Decoder.cs`, `InfoJson.cs`, `Options.cs`, `BrawApi.cs`, `Offload.Core/RawBackends.cs`,
+`Luts.cs`, `ProxyRenderer.cs`, `ToolProcess.cs`, `BrawLibrary.cs`) a proti dnešnímu Mac kódu (`Tools/braw-decode/braw-decode.cpp`,
+`RawBackends.swift`) a plánu (úkoly 6, 19, 21, 22).
+
+| # | Chování (Windows) | Mac dnes / po úkolech 1–25 | Kde |
+|---|---|---|---|
+| 1 | `--info` vydává `gamma`, `gamut`, `colorScienceGen` (atributy klipu `gama`, `gamt`, `csgn`); klíč chybí, když ho SDK nevrátí; nečitelný atribut = varování na stderr, kód zůstává 0 | nevydává | D.14, úkol 27 |
+| 2 | Pipeline (CPU) se nastaví **před** `OpenClip` — SDK čte konfiguraci při prvním otevření klipu | nastavuje se až po `OpenClip`, tedy bez účinku | D.14, úkol 27 |
+| 3 | LUT podle gamy (`LutResolver.Braw`) | vždy Film Gen 5 | D.15, úkol 28 |
+| 4 | Start náhledu BRAW zaokrouhlený (`BrawBackend.StartFrame`) | dnešní `RawBackends.swift:77` usekává; **plán to už řeší úkolem 6** (`BRAWBackend.startFrame`, `.rounded()` = od nuly jako `MidpointRounding.AwayFromZero`) | úkol 6, beze změny |
+| 5 | Hlášky kódů 3/4 jmenují načtenou knihovnu; Offload dělá z kódů 3/4/5 českou poznámku u klipu (texty z `RawBackends.cs`) a původní hlášku zapíše do logu — při `--info` i u dekodéru v rouře | hláška bez knihovny; kód bez poznámky; stderr dekodéru v rouře se zahazuje (`/dev/null`) | D.14, D.16, D.17; úkoly 27, 29, 30 |
+| 6 | `--info` s limitem 60 s, pak ukončen, poznámka „neodpověděl do 60 s — ukončen“ | bez limitu | D.16, úkol 29 |
+| 7 | Náhledy z dekodéru v rouře pod hlídačem; po prvním zaseknutí nebo limitu `--info` se další snímky klipu nezkoušejí a log to řekne; text „dekodér nebo ffmpeg se zasekl (… bez nového snímku)“ | náhledy nehlídané (úkol 19: „jen render proxy“) | D.17, úkol 30 |
+| 8 | Když ffmpeg přestane číst, pumpa zavře výstup dekodéru; jeho kód se pak ignoruje (rozhoduje ffmpeg); dekodér, který selže, zatímco ffmpeg čte, je chyba; `braw-decode` na zavřené rouře končí kódem 0 | **Zjištění:** Mac `braw-decode` kódem 0 nekončí — SIGPIPE není ignorovaný, proces zabije signál dřív, než `write` vrátí chybu (`_exit(0)` ve `writeAll` je mrtvý kód). Offload to přežije jen proto, že `runFFmpeg` posuzuje jen `terminationReason == .exit`. Pumpa z úkolu 19 zavírá jen vstup ffmpeg — dekodér pak visí na plné rouře, dokud ho `terminate()` nezabije | D.14 (SIGPIPE), D.17; úkoly 27, 30 |
+| 9 | stderr dekodéru v UTF-8 | **potvrzeno, beze změny kódu:** `fprintf` píše bajty cesty tak, jak přišly v `argv` (Foundation `Process` předává UTF-8), `ToolProcess` čte stderr jako UTF-8 | test `testStderrKeepsADiacriticPath` (úkol 27) |
+| 10 | Továrna: objekt z `CreateBlackmagicRawFactoryInstance` se přes `QueryInterface` zeptá na `IID_IBlackmagicRawFactory`; jinak kód 3 s jasnou hláškou | volá se přímo | D.14, úkol 27 — **platí i pro Mac**, viz níže |
+| 11 | Další, co je vidět nebo leží na disku: BRAW „nepodporovaný“ bez knihovny s nápovědou (text Windows); přísné argumenty (kód 2); hláška `stdout closed by the reader`; JSON `clips[].info.gamma/gamut/colorScienceGen`; po konci ffmpeg se na dekodér čeká nejvýš 2 s; chyba dekodéru má přednost před chybou ffmpeg | nic z toho | D.14–D.18 |
+
+**K bodu 10:** na Windows C# volá sloty vtable objektu z DLL bez typové kontroly, proto se ptá přes `QueryInterface` (slot 0
+IUnknown je stejný u každého COM objektu). Na Macu je `braw-decode` přeložený proti hlavičce SDK a dispatch vrací typovaný
+`IBlackmagicRawFactory*` — kompilátor rozložení vtable hlídá, ale jen proti **hlavičce v repu**; framework za běhu je ten, který
+uživatel nainstaloval (Player nebo Resolve jiné generace). Kontrola stojí pár řádků a dává čistý kód 3 místo pádu, proto se
+převezme — s ověřením, že framework svou vlastní IID vrací (D.19 ř. 1; jinak se kontrola vypustí a zapíše sem).
+
+### D.14 `braw-decode` (C++)
+
+- **CLI beze změny:** `--info [--scale S] klip`, `[--scale S] [--start N] [--count N] klip`. Nově **přísné** (jako Windows `Options.Parse`):
+  neznámá volba `--…`, chybějící nebo špatná hodnota `--scale` (jen `full|half|quarter|eighth`), `--start`/`--count` jiné než
+  číslice, chybějící klip → `usage: braw-decode [--info] [--scale full|half|quarter|eighth] [--start N] [--count N] clip.braw`
+  na stderr, kód 2 — ještě před hledáním knihovny (Offload nikdy nic jiného nepředává; překlep má selhat hlasitě).
+- **`--info`** — jeden řádek JSON, sdílené klíče bajtově jako dosud (`"fps"` na 6 desetinných míst), za `camera` volitelně
+  `"gamma":"…"`, `"gamut":"…"`, `"colorScienceGen":N`. Zdroj: `clip->CloneClipProcessingAttributes` → `GetClipAttribute`
+  s `blackmagicRawClipProcessingAttributeGamma` (`'gama'`, string), `…Gamut` (`'gamt'`, string), `…ColorScienceGen` (`'csgn'`, u16);
+  `Variant` s `VariantInit`/`VariantClear` (řetězec je `CFStringRef bstrVal`). Volání, které selže → klíč chybí, potichu.
+  Jiný typ hodnoty → klíč chybí a na stderr `braw-decode: gamut: clip attribute 'gamt' is a number, expected a string`
+  (u čísla `… is a string, expected a number`, `… is out of range`, `… has an unexpected variant type`); kód zůstává 0.
+- **Pipeline před `OpenClip`:** `QueryInterface(IID_IBlackmagicRawConfiguration)` → `SetPipeline(blackmagicRawPipelineCPU)` hned
+  po `CreateCodec`.
+- **Knihovna v hláškách:** `loadFactory` si pamatuje, odkud framework načetl (`<složka>/BlackmagicRawAPI.framework`; „@exe“ =
+  skutečná složka spustitelného souboru, `_NSGetExecutablePath` + `realpath`). Kódy a texty (HRESULT velkými písmeny jako
+  Windows `Com.Hex`):
+  - 3 `braw-decode: BlackmagicRawAPI.framework not found (install Blackmagic RAW Player, the Blackmagic RAW SDK or DaVinci Resolve)`
+  - 3 `braw-decode: <knihovna>: the created object is not an IBlackmagicRawFactory (0x…)` (bod 10)
+  - 3 `braw-decode: CreateCodec failed (0x…; library <knihovna>)`, `braw-decode: SetCallback failed (0x…; library <knihovna>)`
+  - 4 `braw-decode: cannot open <klip> (0x…; library <knihovna>)`
+  - 5 `braw-decode: frame N failed` (beze změny)
+- **Zavřená roura:** `signal(SIGPIPE, SIG_IGN)` na začátku `main`; zápis, který selže (EPIPE), vypíše
+  `braw-decode: stdout closed by the reader, stopping` a skončí **kódem 0** — i u `--info` (JSON se nově píše přes `write`, ne `printf`).
+- Hledání knihovny beze změny pořadí: vedle `braw-decode`, SDK (`/Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries`),
+  Player (`…/Blackmagic RAW Player.app/Contents/Frameworks`), DaVinci Resolve (`/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries`).
+  Swift `BrawLibrary` má stejný seznam (test porovná se zdrojem C++).
+
+### D.15 LUT podle gamy klipu
+
+`ClipInfo` dostane `gamma`, `gamut`, `colorScienceGen` (z `braw-decode --info`; prázdný řetězec = neuvedeno). `LutResolver.detect`
+pro BRAW volá `LutResolver.braw(info)` — 1:1 s Windows `LutResolver.Braw` (`label` = `<gama> Gen <n>`, bez generace jen `<gama>`):
+
+| Gama | Výsledek | Důvod u klipu |
+|---|---|---|
+| neuvedena (starší `braw-decode`, nebo ji SDK nevrátilo) | `auto`, `bmd-film-gen5` | `Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)` |
+| jiná než „Blackmagic Design Film“ (velikost písmen nerozhoduje) — Video, Extended Video, Custom, HDR … | bez LUTu, **ani záložní** | `Blackmagic RAW: <label> (není log)` |
+| „Blackmagic Design Film“, generace < 5 | bez LUTu | `Blackmagic RAW: <label> (bez vestavěného LUTu)` |
+| „Blackmagic Design Film“, generace ≥ 5 nebo neuvedená | `auto`, `bmd-film-gen5` | `Blackmagic RAW: <label>` |
+
+**Otevřené (jako Windows):** Film Gen 4 je zatím bez LUTu — provizorně, ke schválení uživatelem (vestavěný LUT je pro Gen 5;
+převod Gen 4 by potřeboval vlastní LUT nebo rozhodnutí, že Gen 5 LUT stačí). Změní-li se rozhodnutí, mění se v obou verzích.
+
+### D.16 BRAW jen s knihovnou, limit `--info`, české poznámky
+
+- **Dostupnost** (`BRAWBackend.isAvailable`): `braw-decode` **a** `BlackmagicRawAPI.framework` v některé složce z D.14 (hledá se od
+  skutečné složky dekodéru). Bez knihovny je BRAW „nepodporovaný“ — klip se zkopíruje a ověří, proxy a náhledy se přeskočí
+  s poznámkou `Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)` (text Windows;
+  dosavadní Mac text „… nebo Blackmagic RAW Player/SDK“ zaniká). GUI řádek nástroje „braw-decode“ dál ukazuje jen nalezený
+  dekodér (stejné otevřené místo jako Windows, VYVOJ-MAC „Naplánováno“).
+- **Limit `--info`:** `ToolProcess.run(…, timeout:)`; `BRAWBackend.defaultInfoTimeout = 60` s (testy zkracují). Po limitu SIGKILL
+  a chyba `braw-decode failed (exit -1): neodpověděl do 60 s — ukončen` (Windows ukončí celý strom procesů; `braw-decode` potomky nemá).
+- **Poznámky** (`BRAWBackend.explain` → `RawDecoderError`, `description` = poznámka; texty z Windows `BrawBackend.Explain`,
+  `<knihovna>` = nalezená cesta, jinak `BlackmagicRawAPI.framework`):
+  - 3 → `Blackmagic RAW: knihovnu <knihovna> nelze použít — nainstalujte aktuální Blackmagic RAW Player`
+  - 4 → `Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna <knihovna> starší než kamera (nainstalujte aktuální Blackmagic RAW Player)`
+  - 5 → `Blackmagic RAW: snímek klipu se nepodařilo dekódovat (<poslední řádek stderr bez „braw-decode: “>)`
+  - jiný kód (2, limit −1) → chyba beze změny.
+  Poznámka jde do `probeError`/`proxyNote` (`"\(error)"`), **původní** `ToolError` (`braw-decode failed (exit 4): braw-decode: cannot
+  open … (0x…; library …)`) do logu úlohy přes `ProxyRenderer.log` (`logged { }` kolem `probe` a `source` backendu — Windows `Logged`).
+- **`ToolProcess`:** stderr se čte přes `StderrTail` (posledních 4000 znaků) a po skončení procesu se neblokujícím čtením dočte —
+  chybová hláška nástroje, který hned skončí, je celá (dřív mohl obslužný blok roury zaostat za koncem procesu).
+
+### D.17 Náhledy BRAW pod hlídačem, pumpa a posouzení dekodéru
+
+- **Hlídač i pro náhledy s dekodérem v rouře** (`FrameSource.feeder != nil`): `runFFmpeg(…, stallAfter: stallTimeout)`; pokrok jsou
+  data z dekodéru (ffmpeg u náhledu `-progress` nepíše); 60 s, do prvních dat 180 s. Náhledy z video souborů hlídané nejsou
+  (beze změny, jako Windows).
+- **Zastavení po prvním zaseknutí:** chyba náhledu `dekodér nebo ffmpeg se zasekl (60 s bez nového snímku)`, další pozice klipu
+  se nezkoušejí (nejhůř 1 × 180 s místo 3 ×), log `thumbnails <klip>: dekodér nebo ffmpeg se zasekl (60 s bez nového snímku); the
+  remaining frames are skipped`. **Totéž po limitu `--info`** (chyba `braw-decode`, kód −1, vznikla ještě před spuštěním ffmpeg):
+  log `thumbnails <klip>: braw-decode failed (exit -1): neodpověděl do 60 s — ukončen; the remaining frames are skipped`.
+  Texty poznámek u proxy (D.5) beze změny.
+- **Pumpa:** když zápis do ffmpeg selže (ffmpeg skončil — náhled má svůj snímek, nebo selhal), pumpa si **nejdřív** označí „odříznuto“
+  (`Flag`) a pak zavře vstup ffmpeg **i výstup dekodéru**. `braw-decode` uvidí zavřenou rouru a skončí sám kódem 0.
+- **Po konci ffmpeg** se na dekodér čeká nejvýš 2 s (pak `terminate()`). Dekodér, který skončil sám s kódem ≠ 0 a nebyl odříznutý,
+  je chyba klipu — **před** chybou ffmpeg (ten viděl jen useknutý proud; Windows pořadí). `FrameSource.explainFeederError` z ní
+  udělá poznámku z D.16 a původní hláška (stderr dekodéru, nově zachycené) jde do logu. Ukončený signálem (2 s, zrušení, hlídač)
+  nebo odříznutý dekodér se neposuzuje — rozhoduje kód ffmpeg.
+
+### D.18 Formáty na disku
+
+- `offload_report.json`: u `clips[].info` volitelné `gamma`, `gamut` (řetězce), `colorScienceGen` (číslo) — jen když je dekodér zná;
+  stejné klíče jako Windows. FORMATY.md: „zatím jen Windows / Mac ignoruje“ zmizí (úkol 28).
+- HTML report: nové důvody LUTu u BRAW klipů (D.15), nové poznámky u klipu (D.16, D.17). Nastavení beze změny.
+- `braw-decode --info` JSON: viz D.14 (sdílené klíče beze změny — starší Offload ho dál přečte).
+
+### D.19 Testy a nejistoty
+
+| Oblast | Soubor testů | Potřebuje | Port z Windows |
+|---|---|---|---|
+| Hledání knihovny, stejné složky jako C++ | `BrawLibraryTests.swift` | nic | `BrawCoreTests.Library_*` |
+| Argumenty `braw-decode` (kód 2) | `BrawDecodeTests.swift` | sestavený `Tools/bin/braw-decode` | `BrawDecodeTests` (Options) |
+| Kód 4 s knihovnou v hlášce, UTF-8 stderr | `BrawDecodeTests.swift` | + knihovna Blackmagic RAW | `BrawDecodeTests` (chybějící klip) |
+| `--info` s gamou, snímky RGB48, dávky, konec klipu, zavřená roura = 0 | `BrawDecodeTests.swift` | + vzorek (`OFFLOAD_BRAW_SAMPLE`) | `BrawSampleTests` |
+| `--info` → `ClipInfo`, JSON klíče | `BrawBackendTests.swift` | nic | `BrawCoreTests.Info_GammaGamutGen_*` |
+| LUT podle gamy | `LutResolverTests.swift` | nic | `LutResolverTests.Braw_*` |
+| Dostupnost, poznámky 3/4/5, limit `--info`, log | `BrawBackendTests.swift`, `ToolProcessTests.swift` | nic (falešný dekodér = sh skript) | `BrawCoreTests` (I1), `ProxyWatchdogTests.BrawInfo_*` |
+| Náhledy pod hlídačem, jeden pokus, pumpa a odříznutý dekodér | `BrawFeederTests.swift` | nic | `ProxyWatchdogTests.BrawThumbnail_*`, `ConsumerEndsFirst_*`, `BrawCoreTests.Feeder_*` |
+| Celá cesta (analýza, LUT, 3 náhledy, proxy 540p) | `BrawSampleTests.swift` | + vzorek, ffmpeg | `BrawSampleTests.Offload_ProbeThumbnailsProxy` |
+
+Nejistoty (ověřit na Macu; výsledek do commitu úkolu a sem):
+
+| # | Co | Předpoklad | Jak ověřit |
+|---|---|---|---|
+| 1 | Framework vrátí na `QueryInterface(IID_IBlackmagicRawFactory)` sám sebe | ano (Windows ověřeno s knihovnou z Resolve) | úkol 27 krok 6: s knihovnou kód 4 u chybějícího klipu, ne 3 |
+| 2 | Cesty k frameworku | jako v dosavadním `braw-decode.cpp` | `ls -d …/BlackmagicRawAPI.framework` u Playeru, SDK a Resolve; `mdfind -name BlackmagicRawAPI.framework` |
+| 3 | Typy `Variant` u `gama`/`gamt`/`csgn` | string, string, u16 (komentáře v hlavičce) | jen se vzorkem: `braw-decode --info` — stderr bez varování, JSON s klíči |
+| 4 | `trap '' PIPE` v testovacím skriptu se přenese na `/bin/dd` | ano (ignorovaný signál přežije `exec`) | `BrawFeederTests.testConsumerEndsFirst…` |
+| 5 | CPU pipeline nastavená před `OpenClip` nezpomalí proxy | dosud se nastavovala bez účinku, tedy běžela výchozí pipeline SDK | se vzorkem změřit `time` proxy 8K/12K klipu před úkolem 27 a po něm; výrazné zpomalení zapsat do VYVOJ-MAC — volba jiné pipeline (Metal) je samostatné rozhodnutí pro obě verze |
+| 6 | Film Gen 4 | bez LUTu (provizorně) | rozhodnutí uživatele; se vzorkem z kamery Gen 4 |
+
+### D.20 Mapa změn souborů a pokrytí
+
+| Soubor | Úkoly |
+|---|---|
+| `Tools/braw-decode/braw-decode.cpp` | 27 |
+| `Sources/OffloadKit/BrawLibrary.swift` (nový) | 27 |
+| `Sources/OffloadKit/Media.swift` (`ClipInfo`) | 28 |
+| `Sources/OffloadKit/Luts.swift` (`LutResolver.braw`) | 28 |
+| `Sources/OffloadKit/RawBackends.swift` (`BRAWBackend`, `RawDecoderError`) | 28, 29 |
+| `Sources/OffloadKit/Tools.swift` (`StderrTail`, `ToolProcess`) | 29 |
+| `Sources/OffloadKit/Proxy.swift` (`FrameSource.explainFeederError`, `backends`, `logged`, `thumbnails`, `runFFmpeg`) | 29, 30 |
+| `Sources/OffloadKit/FFmpegWatch.swift` (`Flag`) | 30 |
+| `Tests/OffloadKitTests/{BrawTestSupport,BrawLibraryTests,BrawDecodeTests,BrawBackendTests,ToolProcessTests,BrawFeederTests,BrawSampleTests}.swift` (nové), `LutResolverTests.swift` | 27–31 |
+| `docs/FORMATY.md` | 28 |
+| `mac/README.md`, `docs/ROZDILY.md` | 31 |
+
+| Mezera Macu | Kde se zavírá |
+|---|---|
+| VYVOJ-MAC „Naplánováno“: Mac `braw-decode` (1) gama/gamut/generace, pipeline, LUT podle gamy | úkoly 27, 28 |
+| VYVOJ-MAC „Naplánováno“: (2) zaokrouhlený start náhledu BRAW | úkol 6 |
+| ROZDILY „Blackmagic RAW (`braw-decode`)“ v záměrných rozdílech; FORMATY `info.gamma…` „zatím jen Windows“ | úkoly 31, 28 |
+| Windows plán 3 závěrečné opravy I1, M1–M4 (poznámky, limit, jeden pokus, QueryInterface) | úkoly 27, 29, 30 |
+| Zůstává otevřené (jako Windows): Film Gen 4; GUI řádek „braw-decode“ bez ohledu na knihovnu; vše, co ověří jen vzorek | VYVOJ-MAC „Naplánováno“ |

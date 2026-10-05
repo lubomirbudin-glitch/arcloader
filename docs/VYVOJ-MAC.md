@@ -7,39 +7,22 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
-- Složka pro proxy navíc (`proxy.extraFolder`, `--proxy-folder`) — jako ve Windows verzi, doplnit do plánu parity.
-
-- Mac `braw-decode`: (1) `--info` má vydat `gamma`, `gamut` a `colorScienceGen` (atributy `gama`, `gamt`, `csgn` přes
-  `CloneClipProcessingAttributes`) — viz [FORMATY.md](FORMATY.md); pipeline nastavit **před** `OpenClip` (SDK čte konfiguraci
-  při prvním otevření klipu); pravidlo LUTu podle gamy jako `LutResolver.Braw` na Windows (Film Gen 5 → BMD LUT, ostatní
-  gamy bez LUTu, gama neuvedena → předpoklad Film Gen 5). (2) Náhledy BRAW: počáteční snímek `--start` zaokrouhlit
-  (`BrawBackend.StartFrame`), ne useknout — přesný zlomek 24000/1001 jinak vyjde o snímek dřív než SDK float 23.976.
-  Windows to má od plánu 3.
-
-- Vestavěné LUTy (sdílené `shared/luts/`) a automatický výběr podle kamery — stejná pravidla jako
-  `windows/src/Offload.Core/Luts.cs` (`LutResolver`); přibalit `shared/luts` do `Offload.app/Contents/Resources/luts`;
-  klíče `proxy.lutMode`, `proxy.lutBuiltin`, `proxy.lutFallback` a u klipu `lut` ([FORMATY.md](FORMATY.md));
-  pro zdroje v plném rozsahu přidat před vestavěný LUT předpočet `lutrgb` (jako Windows). Je to navazující práce **po**
-  plánu parity [`mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](../mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md);
-  návrh [`2026-10-05-offload-luts-design.md`](../windows/docs/superpowers/specs/2026-10-05-offload-luts-design.md).
-
-- **Podklady pro sestavení na Macu jsou připravené (2026-10-05):** návrh
+- **Dorovnání s Windows verzí — podklady pro Mac (2026-10-05, doplněno o BRAW po Windows plánu 3):** návrh
   [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
   plán po úkolech s testy [`mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](../mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md)
-  a návod jak začít [`mac/docs/superpowers/plans/README-START.md`](../mac/docs/superpowers/plans/README-START.md).
-  Pokrývá 3 snímky na klip, pravidla B1–B4, opravy z vývoje Windows verze, české texty, vysunutí jen kopírované karty,
-  USB diagnostiku (IOKit), `offload ports`, okno Hardware a řetěz připojení. LUTy přijdou v plánu 5 (společný návrh
-  [`2026-10-05-offload-luts-design.md`](../windows/docs/superpowers/specs/2026-10-05-offload-luts-design.md)).
+  (31 úkolů, pořadí 1–25, 27–31, 26) a návod jak začít [`mac/docs/superpowers/plans/README-START.md`](../mac/docs/superpowers/plans/README-START.md).
+  Pokrývá všechno, co Macu podle [ROZDILY.md](ROZDILY.md) chybí: 3 snímky na klip, B1–B4 (report při zrušeném ověření, zdroj
+  s `_REPORT`/`_PROXY`/`ascmhl`, dvakrát zadaný cíl, kontrola voleb), české texty, vysunutí jen kopírované karty, GUI bez
+  blokování na discích, USB diagnostiku (IOKit), `offload ports`, okno Hardware, barvy proxy BT.709, hlídač ffmpeg, složku pro
+  proxy, vestavěné LUTy s výběrem podle kamery, ikonu a Blackmagic RAW jako Windows (gama → LUT, BRAW jen s knihovnou, limit
+  `--info`, české poznámky, náhledy pod hlídačem). Průběh zapisují úkoly plánu níže; úkol 26 tuto odrážku smaže.
 
-- **3 snímky na klip v reportu** (první, prostřední, poslední frame) místo jednoho náhledu ve 30 % délky —
-  na žádost uživatele, aby Mac i Windows reporty vypadaly stejně. Změna v `Proxy.swift`, `Job.swift`,
-  `Report.swift`, `HTMLReport.swift`; navrženo ve specifikaci Windows verze (oddíl 6.5a). Sestavit a ověřit
-  se musí na Macu.
-
-- **Totéž chování jako ve Windows verzi** (zavedeno při závěrečné kontrole plánu 1 Windows, viz
-  [ROZDILY.md](ROZDILY.md)): report při zrušeném ověření (`verified` = false) nepočítá už zapsané/ověřené
-  soubory jako chybné; odmítnout zdroj, který obsahuje `_REPORT`/`_PROXY`/`ascmhl`; odmítnout dvakrát zadaný
-  cíl; ověřit volby (velikost bloku, počet bufferů, tvar data) před kopií.
+- **Mimo plán — zbývá i po něm:**
+  - Blackmagic RAW Film Gen 4: zatím bez LUTu (provizorně, jako Windows) — rozhodne uživatel; platí pro obě verze.
+  - Nastavení nástrojů: řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny Blackmagic RAW (stav BRAW je vidět z poznámky
+    u klipu) — otevřené i na Windows.
+  - Ověření se vzorkem `.braw` a ostrý test s kartou, REDline a art-cmd — ruční, postup v README-START (oddíly 6–7).
+  - Náhledy R3D/ARRI bez proxy, zrušení `ffprobe`, selhání kopie proxy v souhrnu CLI — otevřené i na Windows (návrh, oddíl 4).
 
 ## 2026-10-04 — přesun do `mac/`
 

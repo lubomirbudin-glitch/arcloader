@@ -15,6 +15,11 @@ barvy proxy BT.709 a náhledy JFIF (18), ochrana proti zaseknutí ffmpeg (19), s
 s automatickým výběrem podle kamery (21–22), jejich CLI (23) a GUI (24), LUTy a ikona v balíčku (25). Dokumentace a verze
 0.2.0 uzavírají plán úkolem 26 (dřívější úkol 18).
 
+**Doplněk 2 (úkoly 27–31, spec oddíl „Doplněk 2“, D.13–D.20):** Blackmagic RAW po Windows plánu 3 — `braw-decode` vydává
+gamu, gamut a generaci barev, pipeline před `OpenClip`, knihovna v hláškách, zavřená roura = kód 0 (27); LUT podle gamy klipu
+(28); BRAW jen s knihovnou, limit `--info` 60 s, české poznámky z kódů 3/4/5 (29); náhledy BRAW pod hlídačem, pumpa zavře výstup
+dekodéru (30); test celé cesty se vzorkem `.braw` a dokumentace (31). **Pořadí celého plánu: 1 → 25, 27 → 31, nakonec 26.**
+
 **Architecture:** Logika bez UI patří do `OffloadKit` (`Sources/OffloadKit/`, nové podsložky `Desktop/` a `Hardware/`
 jako Windows `Offload.Core/Desktop` a `Offload.Core/Hardware`), aby šla testovat XCTestem. Platformní části
 (IOKit, DiskArbitration, NSWorkspace) jsou tenké vrstvy v samostatných souborech (`IORegistry.swift`,
@@ -73,6 +78,14 @@ Doplněk (úkoly 18–25):
 9. **Zaseknutý ffmpeg drží frontu navždy** (hardwarový dekodér visí, žádná další karta se nezpracuje).
    → Úkol 19 `FFmpegWatchTests.testStalledWithHwaccelSoftwareRetrySucceedsAndIsLogged`, `testStalledTwiceFailsWithTheNote`,
    `testSoftwareCodecStallsNoRetryNoteWithoutSoftwareClaim`, `testCancelledWhileStuckNoRetry`, `testFeederDataIsProgress`.
+
+Doplněk 2 (úkoly 27–31):
+
+10. **BRAW klip dostane LUT, který k jeho gamě nepatří** (Video / Extended Video s log LUTem, nebo záložní LUT u rozpoznané gamy).
+    → Úkol 28 `LutResolverTests.testBrawLutFromGamma`, `testBrawVideoGammaIgnoresFallback`.
+11. **Zaseknutá knihovna Blackmagic RAW drží frontu** (`--info`, nebo dekodér v rouře u náhledu) a klip zkouší znovu a znovu.
+    → Úkol 29 `BrawBackendTests.testInfoHungKilledAfterTheTimeout`; úkol 30 `BrawFeederTests.testThumbnailDecoderHangsKilledAsStalled`,
+    `testThumbnailDecoderHangsOnlyOneStallAttempt`, `testThumbnailInfoHangsOnlyOneAttempt`.
 
 ---
 
@@ -2006,7 +2019,7 @@ Expected: v `…/_REPORT/<karta>_report.html` má každý video klip tři náhle
 
 `docs/VYVOJ-MAC.md`: `- Úkol 7 — report: tři snímky na klip s popiskem TC (HTML i PDF), R3D/ARRI z hotové proxy; proxy zůstane hotová i při selhání kopie na další cíl`
 
-`docs/VYVOJ-MAC.md` oddíl „Naplánováno“: smazat odrážku „3 snímky na klip v reportu“.
+`docs/VYVOJ-MAC.md` oddíl „Naplánováno“: beze změny (od 2026-10-05 je tam jen odkaz na tento plán a co žádný úkol neřeší).
 `docs/ROZDILY.md` — řádek „Náhledy v reportu“: Mac `✅ 3 snímky`.
 
 Run: `git add -A mac/Sources mac/Tests docs && git commit -m "Mac: three thumbnails in the report, proxy kept when copying it elsewhere fails"`
@@ -11133,7 +11146,7 @@ celou cestu; na Macu název svazku stačí, plná cesta je v nápovědě.)
 
 `docs/VYVOJ-MAC.md`: `- Úkol 24 — GUI: výběr LUTu (automaticky / vestavěný / bez / vlastní) se záložním LUTem „Když kameru nepoznám:“, „Kopírovat proxy i do složky“; nedostupná složka nebo chybějící vlastní LUT blokuje start (ověřuje se na pozadí každých 5 s i těsně před startem, nejvýš 5 s)`
 
-`docs/VYVOJ-MAC.md` oddíl „Naplánováno“: smazat odrážky „Složka pro proxy navíc …“ a „Vestavěné LUTy …“.
+`docs/VYVOJ-MAC.md` oddíl „Naplánováno“: beze změny (samostatné odrážky o složce pro proxy a LUTech nahradil 2026-10-05 odkaz na plán).
 
 `docs/ROZDILY.md`:
 - řádky „**Vestavěné LUTy + automatický výběr podle kamery**“ a „**Složka pro proxy navíc**“: Mac `✅ CLI + GUI (GUI čeká ruční test)`;
@@ -11247,7 +11260,8 @@ Run: `git add -A mac/scripts docs && git commit -m "Mac: bundle the built-in LUT
 
 ### Task 26: Dokumentace, verze a ROZDILY
 
-(Dřívější úkol 18 — přečíslovaný, protože úkoly 18–25 doplňku musí proběhnout před uzavřením dokumentace a verzí 0.2.0.)
+(Dřívější úkol 18 — přečíslovaný, protože úkoly 18–25 doplňku musí proběhnout před uzavřením dokumentace a verzí 0.2.0.
+Totéž platí pro úkoly 27–31 doplňku 2 níže: **dělají se před tímto úkolem**.)
 
 **Files:**
 - Modify: `mac/Sources/OffloadKit/Report.swift` (`OffloadVersion.string`)
@@ -11324,9 +11338,8 @@ a do úvodu odkaz na návrh a plán: `Návrh dorovnání s Windows: docs/superpo
 - [ ] **Step 5: `docs/FORMATY.md`** — tabulka JSON, řádek `version`: `` `0.2.0` (Mac), `0.1.0-win` (Windows) ``; ověřit, že
   `clips[].lut` a `proxy.extraFolder` už nejsou „jen Windows“ (úkoly 20 a 22) a že v řádku `proxy` nezůstalo „jen Windows,
   volitelně `extraFolder`“ (→ „volitelně `extraFolder`“).
-- [ ] **Step 6: `docs/VYVOJ-MAC.md`** — oddíl „Naplánováno“: smazat odrážky „Totéž chování jako ve Windows verzi“ a
-  „Podklady pro sestavení na Macu jsou připravené …“ (hotovo); odrážky o LUTech a složce pro proxy smazal už úkol 24 —
-  oddíl obsahuje jen to, co opravdu zbývá. Do průběhu: `- Úkol 26 — verze 0.2.0, README (testy, Hardware, LUTy a složka pro proxy), ROZDILY a FORMATY podle stavu po dorovnání`. Nadpis průběhu přejmenovat na `## <datum> — verze 0.2.0: dorovnání s Windows (plán mac-parity)`.
+- [ ] **Step 6: `docs/VYVOJ-MAC.md`** — oddíl „Naplánováno“: smazat odrážku „Dorovnání s Windows verzí — podklady pro Mac“
+  (plán je hotový); ponechat „Mimo plán“ bez položek, které mezitím někdo vyřešil — oddíl obsahuje jen to, co opravdu zbývá. Do průběhu: `- Úkol 26 — verze 0.2.0, README (testy, Hardware, LUTy a složka pro proxy), ROZDILY a FORMATY podle stavu po dorovnání`. Nadpis průběhu přejmenovat na `## <datum> — verze 0.2.0: dorovnání s Windows (plán mac-parity)`.
 - [ ] **Step 7: Závěrečné ověření**
 
 Run: `swift build -c release && swift test && scripts/build-app.sh`
@@ -11340,3 +11353,2101 @@ mají u klipů stejný tvar `lut` (`{source, id?, name, reason}`).
 - [ ] **Step 8: Commit**
 
 Run: `git add -A mac docs && git commit -m "Mac 0.2.0: docs, ROZDILY and FORMATY after the Windows parity work"`
+
+---
+
+## Doplněk 2 (úkoly 27–31): Blackmagic RAW po Windows plánu 3
+
+Spec oddíl „Doplněk 2“ (D.13–D.20). Windows dostal dekodér BRAW v C# (`windows/src/Offload.BrawDecode/`, commity
+`2bd6a4b..4138680`, plán `windows/docs/superpowers/plans/2026-10-05-offload-windows-3-braw.md`) a s ním chování, které
+Mac převezme: gama/gamut/generace v `--info` a LUT podle gamy, BRAW jen s knihovnou, časový limit `--info`, české
+poznámky z kódů 3/4/5, náhledy BRAW pod hlídačem, pumpa zavře výstup dekodéru. Zaokrouhlený start náhledu BRAW už je
+v úkolu 6 (`BRAWBackend.startFrame`), tady se nic nepřidává.
+
+**Pořadí:** úkoly 27–31 se dělají **po úkolu 25 a před úkolem 26** (26 uzavírá dokumentaci a verzi 0.2.0 — má vidět
+i BRAW). Platí Global Constraints nahoře; všechny příkazy ze složky `mac/`.
+
+**Které testy co potřebují** (jinak se přeskočí přes `XCTSkip`):
+
+| Potřebuje | Testy |
+|---|---|
+| nic (jen `swift test`) | `BrawLibraryTests`, `BrawBackendTests`, `ToolProcessTests`, `BrawFeederTests`, nové testy v `LutResolverTests` — falešný `braw-decode` a „ffmpeg“ jsou shell skripty |
+| sestavený `Tools/bin/braw-decode` | `BrawDecodeTests.testBadCommandLineIsExit2` |
+| + knihovna Blackmagic RAW (Player, SDK nebo Resolve) | `BrawDecodeTests.testMissingOrInvalidClipIsExit4AndNamesTheLibrary`, `testStderrKeepsADiacriticPath` |
+| + vzorek `.braw` (`OFFLOAD_BRAW_SAMPLE=<plná cesta>`, README-START „Vzorek BRAW“) | `BrawDecodeTests.testInfo…`, `testFrames…`, `testReaderClosesThePipe…`; s ffmpeg i `BrawSampleTests` |
+
+Pustit se vzorkem: `OFFLOAD_BRAW_SAMPLE=/cesta/A001_….braw swift test --filter Braw` — očekává se **0 přeskočených**.
+
+---
+
+### Task 27: braw-decode — gama, gamut a generace v `--info`, pipeline před `OpenClip`, knihovna v hláškách, zavřená roura
+
+Doplněk 2 ke spec — oddíl D.14. Port chování Windows `braw-decode.exe` (`Offload.BrawDecode/Decoder.cs`, `InfoJson.cs`,
+`Options.cs`, `BrawApi.cs` `FromCreated`; commity `d75955c`, `5a4b7ef`, `3f7a96f`, `d3d3bc2`, `5b375ce`) do C++ nástroje
+a `Offload.Core/BrawLibrary.cs` do Swiftu.
+
+**Files:**
+- Modify (celý soubor): `mac/Tools/braw-decode/braw-decode.cpp`
+- Create: `mac/Sources/OffloadKit/BrawLibrary.swift`
+- Create: `mac/Tests/OffloadKitTests/BrawTestSupport.swift`, `mac/Tests/OffloadKitTests/BrawLibraryTests.swift`, `mac/Tests/OffloadKitTests/BrawDecodeTests.swift`
+- Modify: `docs/VYVOJ-MAC.md`
+
+**Interfaces:**
+- Consumes: `TempDir`, `tempDir()` (úkol 1). Z `BlackmagicRawAPI.h` (beze změny): `IBlackmagicRawClip::CloneClipProcessingAttributes`,
+  `IBlackmagicRawClipProcessingAttributes::GetClipAttribute`, `blackmagicRawClipProcessingAttributeGamma` (`'gama'`, string),
+  `…Gamut` (`'gamt'`, string), `…ColorScienceGen` (`'csgn'`, u16), `struct Variant`, `VariantInit`, `VariantClear`, `IID_IBlackmagicRawFactory`.
+- Produces:
+  - `braw-decode` — argumenty beze změny; `--info` navíc `"gamma"`, `"gamut"` (řetězce) a `"colorScienceGen"` (číslo), **jen když
+    je SDK vrátí**; kódy 0 (i zavřená roura — na stderr `braw-decode: stdout closed by the reader, stopping`), 2 (chybný příkaz,
+    na stderr `usage: …`), 3 (`… not found …`, `<knihovna>: the created object is not an IBlackmagicRawFactory (0x…)`, `CreateCodec failed
+    (0x…; library <cesta>)`, `SetCallback failed (0x…; library <cesta>)`), 4 (`cannot open <klip> (0x…; library <cesta>)`), 5 (snímek).
+  - `public enum BrawLibrary { static let frameworkName: String; static func searchDirs(decoderDir: String) -> [String]; static func find(in dirs: [String]) -> String?; static func find(decoderDir: String) -> String? }`
+  - testy: `enum BrawTest { static let decoder: String?; static func requireDecoder() throws -> String; static func requireLibrary() throws -> String; static func requireSample() throws -> String; static func run(_ exe: String, _ args: [String]) throws -> (code: Int32, stdout: Data, stderr: String); static func json(_ data: Data) throws -> [String: Any] }`
+
+- [ ] **Step 1: Pomocníci testů** — `mac/Tests/OffloadKitTests/BrawTestSupport.swift`:
+
+```swift
+import Foundation
+import XCTest
+@testable import OffloadKit
+
+/// braw-decode tests: the decoder built into mac/Tools/bin, the Blackmagic RAW library where it looks, and a sample clip
+/// (OFFLOAD_BRAW_SAMPLE=<full path to a .braw>, see README-START „Vzorek BRAW“). A missing requirement skips the test.
+enum BrawTest {
+    static let decoder: String? = {
+        let p = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // OffloadKitTests
+            .deletingLastPathComponent()   // Tests
+            .deletingLastPathComponent()   // mac
+            .appendingPathComponent("Tools/bin/braw-decode").path
+        return FileManager.default.isExecutableFile(atPath: p) ? p : nil
+    }()
+
+    static func requireDecoder() throws -> String {
+        guard let d = decoder else { throw XCTSkip("mac/Tools/bin/braw-decode missing — run Tools/braw-decode/build.sh") }
+        return d
+    }
+
+    static func requireLibrary() throws -> String {
+        let exe = try requireDecoder()
+        guard let lib = BrawLibrary.find(decoderDir: (exe as NSString).deletingLastPathComponent) else {
+            throw XCTSkip("BlackmagicRawAPI.framework not found (Blackmagic RAW Player, SDK or DaVinci Resolve)")
+        }
+        return lib
+    }
+
+    static func requireSample() throws -> String {
+        _ = try requireLibrary()
+        guard let p = ProcessInfo.processInfo.environment["OFFLOAD_BRAW_SAMPLE"], FileManager.default.fileExists(atPath: p) else {
+            throw XCTSkip("OFFLOAD_BRAW_SAMPLE not set or the file does not exist")
+        }
+        return p
+    }
+
+    private final class Box {
+        var data = Data()
+    }
+
+    /// Runs `exe` to the end: exit code, stdout and stderr (read in parallel, so neither pipe fills up).
+    static func run(_ exe: String, _ args: [String]) throws -> (code: Int32, stdout: Data, stderr: String) {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: exe)
+        p.arguments = args
+        let out = Pipe(), err = Pipe()
+        p.standardOutput = out
+        p.standardError = err
+        try p.run()
+        let errBox = Box()
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.global().async {
+            errBox.data = err.fileHandleForReading.readDataToEndOfFile()
+            group.leave()
+        }
+        let outData = out.fileHandleForReading.readDataToEndOfFile()
+        group.wait()
+        p.waitUntilExit()
+        return (p.terminationStatus, outData, String(decoding: errBox.data, as: UTF8.self))
+    }
+
+    static func json(_ data: Data) throws -> [String: Any] {
+        guard let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ToolError(tool: "braw-decode", status: 0, message: "not a JSON object: \(String(decoding: data, as: UTF8.self))")
+        }
+        return o
+    }
+}
+```
+
+- [ ] **Step 2: Padající testy**
+
+`mac/Tests/OffloadKitTests/BrawLibraryTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class BrawLibraryTests: XCTestCase {
+    func testSearchOrderDecoderFolderFirstThenSdkPlayerResolve() {
+        XCTAssertEqual(BrawLibrary.searchDirs(decoderDir: "/Applications/Offload.app/Contents/Resources/bin"), [
+            "/Applications/Offload.app/Contents/Resources/bin",
+            "/Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries",
+            "/Applications/Blackmagic RAW/Blackmagic RAW Player.app/Contents/Frameworks",
+            "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries",
+        ])
+    }
+
+    func testFindFirstExistingFrameworkFolder() throws {
+        let dir = tempDir()
+        let a = dir.sub("a"), b = dir.sub("b")
+        XCTAssertNil(BrawLibrary.find(in: [a, b]))
+        // A plain file of that name is not the framework (a bundle is a folder).
+        try "x".write(toFile: a + "/BlackmagicRawAPI.framework", atomically: true, encoding: .utf8)
+        XCTAssertNil(BrawLibrary.find(in: [a, b]))
+        dir.sub("b", "BlackmagicRawAPI.framework")
+        XCTAssertEqual(BrawLibrary.find(in: [a, b]), b + "/BlackmagicRawAPI.framework")
+    }
+
+    // Offload and braw-decode must look in the same places (kLibrarySearchPaths in braw-decode.cpp).
+    func testSameFoldersAsTheDecoderSource() throws {
+        let cpp = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Tools/braw-decode/braw-decode.cpp")
+        let source = try String(contentsOf: cpp, encoding: .utf8)
+        for dir in BrawLibrary.searchDirs(decoderDir: "@exe") {
+            XCTAssertTrue(source.contains("\"\(dir)\""), dir)
+        }
+    }
+}
+```
+
+`mac/Tests/OffloadKitTests/BrawDecodeTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+/// The real braw-decode (mac/Tools/bin). The command line needs nothing else, exit codes the Blackmagic RAW library,
+/// the rest a sample clip (OFFLOAD_BRAW_SAMPLE).
+final class BrawDecodeTests: XCTestCase {
+    // Strict like Windows Options.Parse: checked before the library is looked for, so it runs on any Mac.
+    func testBadCommandLineIsExit2() throws {
+        let exe = try BrawTest.requireDecoder()
+        let bad: [[String]] = [[], ["--info"], ["--scale", "huge", "a.braw"], ["--scale"], ["--start", "abc", "a.braw"],
+                               ["--start", "-1", "a.braw"], ["--count", "1x", "a.braw"], ["--count", "", "a.braw"],
+                               ["--bogus", "a.braw"]]
+        for args in bad {
+            let r = try BrawTest.run(exe, args)
+            XCTAssertEqual(r.code, 2, "\(args)")
+            XCTAssertTrue(r.stderr.hasPrefix("usage: braw-decode"), "\(args): \(r.stderr)")
+            XCTAssertTrue(r.stdout.isEmpty, "\(args)")
+        }
+    }
+
+    // Windows final fix I1: exit 4 names the library in use (an old one cannot open clips from newer cameras).
+    func testMissingOrInvalidClipIsExit4AndNamesTheLibrary() throws {
+        let exe = try BrawTest.requireDecoder()
+        _ = try BrawTest.requireLibrary()
+        let dir = tempDir()
+        let invalid = dir.path + "/not-a-clip.braw"
+        try "x".write(toFile: invalid, atomically: true, encoding: .utf8)
+        for clip in [dir.path + "/missing.braw", invalid] {
+            let r = try BrawTest.run(exe, ["--info", clip])
+            XCTAssertEqual(r.code, 4, r.stderr)
+            XCTAssertTrue(r.stderr.contains("braw-decode: cannot open \(clip) (0x"), r.stderr)
+            XCTAssertTrue(r.stderr.contains("; library /"), r.stderr)
+            XCTAssertTrue(r.stderr.contains("/BlackmagicRawAPI.framework)"), r.stderr)
+        }
+    }
+
+    // Spec D.14 (Windows task 6, fix 2): stderr is UTF-8 — a path with diacritics comes back intact in the note.
+    func testStderrKeepsADiacriticPath() throws {
+        let exe = try BrawTest.requireDecoder()
+        _ = try BrawTest.requireLibrary()
+        let clip = tempDir().path + "/Natáčení den 1/Klip č. 1.braw"
+        let r = try BrawTest.run(exe, ["--info", clip])
+        XCTAssertEqual(r.code, 4, r.stderr)
+        XCTAssertTrue(r.stderr.contains(clip), r.stderr)
+    }
+
+    // MARK: with a sample clip
+
+    private func info(_ exe: String, _ sample: String, _ scale: String = "eighth") throws -> [String: Any] {
+        let r = try BrawTest.run(exe, ["--info", "--scale", scale, sample])
+        XCTAssertEqual(r.code, 0, r.stderr)
+        return try BrawTest.json(r.stdout)
+    }
+
+    private func frameBytes(_ i: [String: Any]) -> Int { (i["width"] as? Int ?? 0) * (i["height"] as? Int ?? 0) * 6 }
+
+    // Spec D.14: the SDK's Variant for 'gama'/'gamt'/'csgn' — only a sample proves the types.
+    func testInfoDescribesTheClipWithGammaGamutGen() throws {
+        let exe = try BrawTest.requireDecoder()
+        let sample = try BrawTest.requireSample()
+        let r = try BrawTest.run(exe, ["--info", "--scale", "eighth", sample])
+        XCTAssertEqual(r.code, 0, r.stderr)
+        // A variant of an unexpected type is a warning here and the key is missing — read stderr first.
+        XCTAssertFalse(r.stderr.contains("clip attribute"), r.stderr)
+        let i = try BrawTest.json(r.stdout)
+        let sw = i["sourceWidth"] as? Int ?? 0, sh = i["sourceHeight"] as? Int ?? 0, w = i["width"] as? Int ?? 0
+        XCTAssertTrue(sw >= 1920 && sh >= 1080, "\(sw)x\(sh)")
+        XCTAssertTrue((sw / 9...sw / 4).contains(w), "processed width \(w) of \(sw) at 1/8")
+        XCTAssertGreaterThan(i["fps"] as? Double ?? 0, 0)
+        XCTAssertGreaterThan(i["frames"] as? Int ?? 0, 0)
+        XCTAssertNotNil((i["timecode"] as? String)?.range(of: #"^\d\d:\d\d:\d\d[:;]\d\d$"#, options: .regularExpression))
+        XCTAssertFalse((i["camera"] as? String ?? "").isEmpty)
+        let gamma = i["gamma"] as? String ?? ""
+        XCTAssertFalse(gamma.isEmpty, "gamma missing")
+        XCTAssertFalse((i["gamut"] as? String ?? "").isEmpty, "gamut missing")
+        XCTAssertTrue((4...9).contains(i["colorScienceGen"] as? Int ?? 0), "\(i["colorScienceGen"] ?? "nil")")
+        // The LUT rule (task 28) compares the gamma with exactly this SDK string.
+        if gamma.localizedCaseInsensitiveContains("film") { XCTAssertEqual(gamma, "Blackmagic Design Film") }
+        let full = try info(exe, sample, "full")
+        XCTAssertEqual(full["width"] as? Int, sw)
+        XCTAssertEqual(full["height"] as? Int, sh)
+    }
+
+    func testFramesExactRGB48BytesInOrder() throws {
+        let exe = try BrawTest.requireDecoder()
+        let sample = try BrawTest.requireSample()
+        let frame = frameBytes(try info(exe, sample))
+        let two = try BrawTest.run(exe, ["--scale", "eighth", "--start", "0", "--count", "2", sample])
+        XCTAssertEqual(two.code, 0, two.stderr)
+        XCTAssertEqual(two.stdout.count, 2 * frame)
+        let second = try BrawTest.run(exe, ["--scale", "eighth", "--start", "1", "--count", "1", sample])
+        XCTAssertEqual(two.stdout.subdata(in: frame..<2 * frame), second.stdout)   // the same frame decodes to the same bytes
+        XCTAssertTrue(two.stdout.contains { $0 != 0 })                              // not a black buffer
+    }
+
+    /// More than one batch of 8: batches are written in frame order.
+    func testFramesAcrossBatchesInOrder() throws {
+        let exe = try BrawTest.requireDecoder()
+        let sample = try BrawTest.requireSample()
+        let i = try info(exe, sample)
+        try XCTSkipUnless((i["frames"] as? Int ?? 0) >= 10, "the sample needs at least 10 frames")
+        let frame = frameBytes(i)
+        let ten = try BrawTest.run(exe, ["--scale", "eighth", "--count", "10", sample])
+        XCTAssertEqual(ten.code, 0, ten.stderr)
+        XCTAssertEqual(ten.stdout.count, 10 * frame)
+        let ninth = try BrawTest.run(exe, ["--scale", "eighth", "--start", "9", "--count", "1", sample])
+        XCTAssertEqual(ten.stdout.subdata(in: 9 * frame..<10 * frame), ninth.stdout)
+    }
+
+    func testFramesClampedAtTheEnd() throws {
+        let exe = try BrawTest.requireDecoder()
+        let sample = try BrawTest.requireSample()
+        let i = try info(exe, sample)
+        let frames = i["frames"] as? Int ?? 0
+        let last = try BrawTest.run(exe, ["--scale", "eighth", "--start", String(frames - 1), "--count", "5", sample])
+        XCTAssertEqual(last.code, 0, last.stderr)
+        XCTAssertEqual(last.stdout.count, frameBytes(i))
+        let past = try BrawTest.run(exe, ["--scale", "eighth", "--start", String(frames), sample])
+        XCTAssertEqual(past.code, 0, past.stderr)
+        XCTAssertTrue(past.stdout.isEmpty)
+    }
+
+    /// Windows ruling M1: when the reader closes the pipe (ffmpeg has what it wanted) braw-decode stops promptly and
+    /// exits 0 — not killed by SIGPIPE, and not decoding the rest of the clip for nobody.
+    func testReaderClosesThePipeStopsWithExit0() throws {
+        let exe = try BrawTest.requireDecoder()
+        let sample = try BrawTest.requireSample()
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: exe)
+        p.arguments = ["--scale", "eighth", sample]   // the whole clip
+        let out = Pipe(), err = Pipe()
+        p.standardOutput = out
+        p.standardError = err
+        try p.run()
+        defer { if p.isRunning { p.terminate() } }
+        XCTAssertEqual(try out.fileHandleForReading.read(upToCount: 1024)?.count, 1024)   // decoding has started
+        try out.fileHandleForReading.close()                                                // "ffmpeg exited"
+        let deadline = Date().addingTimeInterval(60)
+        while p.isRunning && Date() < deadline { usleep(50_000) }
+        XCTAssertFalse(p.isRunning, "braw-decode kept running after its reader went away")
+        XCTAssertEqual(p.terminationReason, .exit, "ended by a signal — SIGPIPE not ignored?")
+        XCTAssertEqual(p.terminationStatus, 0)
+        let stderr = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        XCTAssertTrue(stderr.contains("braw-decode: stdout closed by the reader, stopping"), stderr)
+    }
+}
+```
+
+- [ ] **Step 3: Ověřit selhání** — Run: `swift test --filter "BrawLibraryTests|BrawDecodeTests"` → nesestaví se (`cannot find 'BrawLibrary'`).
+
+- [ ] **Step 4: `mac/Sources/OffloadKit/BrawLibrary.swift`**:
+
+```swift
+import Foundation
+
+/// Where the Blackmagic RAW library (BlackmagicRawAPI.framework) can be — the same folders, in the same order, as
+/// braw-decode looks in (kLibrarySearchPaths in Tools/braw-decode/braw-decode.cpp). Offload never ships it: it comes with
+/// the Blackmagic RAW SDK, the free Blackmagic RAW Player or DaVinci Resolve. Port of Windows `BrawLibrary`.
+public enum BrawLibrary {
+    public static let frameworkName = "BlackmagicRawAPI.framework"
+
+    /// Next to braw-decode first, then the SDK, the Player and DaVinci Resolve.
+    public static func searchDirs(decoderDir: String) -> [String] {
+        [
+            decoderDir,
+            "/Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries",
+            "/Applications/Blackmagic RAW/Blackmagic RAW Player.app/Contents/Frameworks",
+            "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries",
+        ]
+    }
+
+    /// The first `<dir>/BlackmagicRawAPI.framework` that is a folder (a bundle), or nil.
+    public static func find(in dirs: [String]) -> String? {
+        for dir in dirs {
+            let path = dir + "/" + frameworkName
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue { return path }
+        }
+        return nil
+    }
+
+    public static func find(decoderDir: String) -> String? { find(in: searchDirs(decoderDir: decoderDir)) }
+}
+```
+
+- [ ] **Step 5: `mac/Tools/braw-decode/braw-decode.cpp`** — celý nový obsah:
+
+```cpp
+// braw-decode — minimal Blackmagic RAW decoder for the offload proxy pipeline (same CLI as the Windows braw-decode.exe).
+//
+//   braw-decode --info [--scale S] clip.braw
+//       one JSON line: width, height (of the processed image at scale S), sourceWidth, sourceHeight, fps, frames,
+//       timecode, camera, and when the SDK reports them gamma, gamut, colorScienceGen
+//   braw-decode [--scale S] [--start N] [--count N] clip.braw
+//       writes frames to stdout as raw interleaved RGB 16-bit little endian (ffmpeg: -f rawvideo -pix_fmt rgb48le)
+//
+//   S = full | half | quarter | eighth
+//
+// Exit codes (as on Windows): 0 OK (also when the reader closed the pipe early), 2 usage, 3 library/codec missing,
+// 4 clip cannot be opened, 5 a frame failed. Every exit-3/4 line names the library in use: an old one cannot open
+// clips from newer cameras, and Offload's note at the clip says so. stderr is UTF-8 (paths come through as given).
+// Frames are decoded in the clip's own gamma/gamut (as recorded); the LUT is applied later by ffmpeg.
+// Build: Tools/braw-decode/build.sh (links against BlackmagicRawAPI.framework at runtime via the dispatch loader).
+
+#include "BlackmagicRawAPI.h"
+
+#include <CoreFoundation/CoreFoundation.h>
+#include <mach-o/dyld.h>
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
+#include <climits>
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <libgen.h>
+#include <string>
+#include <unistd.h>
+#include <vector>
+
+static const char* kFramework = "BlackmagicRawAPI.framework";
+
+// Keep in sync with OffloadKit BrawLibrary.searchDirs (BrawLibraryTests checks the folders are here).
+static const char* kLibrarySearchPaths[] = {
+    // next to this executable (bundled), then the SDK, then the free Blackmagic RAW Player, then DaVinci Resolve
+    "@exe",
+    "/Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries",
+    "/Applications/Blackmagic RAW/Blackmagic RAW Player.app/Contents/Frameworks",
+    "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries",
+};
+
+static const char* kUsage = "usage: braw-decode [--info] [--scale full|half|quarter|eighth] [--start N] [--count N] clip.braw";
+
+// The framework that was loaded (named in every exit-3/4 line).
+static std::string gLibrary = kFramework;
+
+static std::string toStd(CFStringRef s) {
+    if (!s) return "";
+    char buf[1024];
+    if (CFStringGetCString(s, buf, sizeof buf, kCFStringEncodingUTF8)) return buf;
+    return "";
+}
+
+static std::string jsonEscape(const std::string& s) {
+    std::string o;
+    for (char c : s) {
+        if (c == '"' || c == '\\') o += '\\';
+        if ((unsigned char)c >= 0x20) o += c;
+    }
+    return o;
+}
+
+struct FrameSlot {
+    std::vector<uint8_t> data;
+    uint32_t width = 0, height = 0;
+    bool ok = false;
+};
+
+class Callback : public IBlackmagicRawCallback {
+public:
+    BlackmagicRawResolutionScale scale = blackmagicRawResolutionScaleFull;
+    std::vector<FrameSlot>* slots = nullptr;
+    uint64_t base = 0;
+    std::atomic<int> errors{0};
+
+    void ReadComplete(IBlackmagicRawJob* readJob, HRESULT result, IBlackmagicRawFrame* frame) override {
+        IBlackmagicRawJob* decodeJob = nullptr;
+        void* user = nullptr;
+        readJob->GetUserData(&user);
+        if (result == S_OK) result = frame->SetResourceFormat(blackmagicRawResourceFormatRGBU16);
+        if (result == S_OK) result = frame->SetResolutionScale(scale);
+        if (result == S_OK) result = frame->CreateJobDecodeAndProcessFrame(nullptr, nullptr, &decodeJob);
+        if (result == S_OK) {
+            decodeJob->SetUserData(user);
+            result = decodeJob->Submit();
+        }
+        if (result != S_OK) {
+            fprintf(stderr, "braw-decode: read/decode setup failed (0x%08X)\n", (unsigned)result);
+            errors++;
+            if (decodeJob) decodeJob->Release();
+        }
+        readJob->Release();
+    }
+
+    void ProcessComplete(IBlackmagicRawJob* job, HRESULT result, IBlackmagicRawProcessedImage* img) override {
+        void* user = nullptr;
+        job->GetUserData(&user);
+        uint64_t index = (uint64_t)(uintptr_t)user;
+        if (result == S_OK && slots && index >= base && index - base < slots->size()) {
+            FrameSlot& slot = (*slots)[index - base];
+            uint32_t size = 0;
+            void* res = nullptr;
+            img->GetWidth(&slot.width);
+            img->GetHeight(&slot.height);
+            img->GetResourceSizeBytes(&size);
+            img->GetResource(&res);
+            // The SDK pads the buffer; stdout must carry exactly width*height RGB48 pixels.
+            size_t frameBytes = (size_t)slot.width * slot.height * 6;
+            if (size > frameBytes) size = (uint32_t)frameBytes;
+            slot.data.assign((uint8_t*)res, (uint8_t*)res + size);
+            slot.ok = true;
+        } else {
+            fprintf(stderr, "braw-decode: process failed (0x%08X)\n", (unsigned)result);
+            errors++;
+        }
+        job->Release();
+    }
+
+    void DecodeComplete(IBlackmagicRawJob*, HRESULT) override {}
+    void TrimProgress(IBlackmagicRawJob*, float) override {}
+    void TrimComplete(IBlackmagicRawJob*, HRESULT) override {}
+    void SidecarMetadataParseWarning(IBlackmagicRawClip*, CFStringRef, uint32_t, CFStringRef) override {}
+    void SidecarMetadataParseError(IBlackmagicRawClip*, CFStringRef, uint32_t, CFStringRef) override {}
+    void PreparePipelineComplete(void*, HRESULT) override {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, LPVOID*) override { return E_NOTIMPL; }
+    ULONG STDMETHODCALLTYPE AddRef() override { return 0; }
+    ULONG STDMETHODCALLTYPE Release() override { return 0; }
+};
+
+// The folder of this executable with symlinks resolved — where "@exe" looks (as the SDK's dispatch does).
+static std::string exeDir() {
+    char path[PATH_MAX], resolved[PATH_MAX];
+    uint32_t size = sizeof path;
+    if (_NSGetExecutablePath(path, &size) != 0 || !realpath(path, resolved)) return ".";
+    return dirname(resolved);
+}
+
+static IBlackmagicRawFactory* loadFactory() {
+    for (const char* p : kLibrarySearchPaths) {
+        IBlackmagicRawFactory* f = nullptr;
+        std::string dir;
+        if (strcmp(p, "@exe") == 0) {
+            dir = exeDir();
+            f = CreateBlackmagicRawFactoryInstanceFromExeRelativePath(CFSTR("."));
+        } else {
+            dir = p;
+            CFStringRef path = CFStringCreateWithCString(nullptr, p, kCFStringEncodingUTF8);
+            f = CreateBlackmagicRawFactoryInstanceFromPath(path);
+            CFRelease(path);
+        }
+        if (f) {
+            gLibrary = dir + "/" + kFramework;
+            return f;
+        }
+    }
+    return nullptr;
+}
+
+// Ask the created object for IBlackmagicRawFactory (QueryInterface is IUnknown's first slot on every object): a
+// framework of another SDK generation whose object lacks it is a clear exit 3, never a call into the wrong slot.
+// Takes over (and releases) the created reference. Same as Windows BrawRuntime.FromCreated.
+static IBlackmagicRawFactory* asFactory(IBlackmagicRawFactory* created) {
+    IBlackmagicRawFactory* factory = nullptr;
+    HRESULT r = created->QueryInterface(IID_IBlackmagicRawFactory, (LPVOID*)&factory);
+    created->Release();
+    if (r != S_OK || !factory) {
+        if (factory) factory->Release();
+        fprintf(stderr, "braw-decode: %s: the created object is not an IBlackmagicRawFactory (0x%08X)\n", gLibrary.c_str(),
+                (unsigned)r);
+        return nullptr;
+    }
+    return factory;
+}
+
+struct Options {
+    bool info = false;
+    BlackmagicRawResolutionScale scale = blackmagicRawResolutionScaleFull;
+    uint64_t start = 0;
+    uint64_t count = UINT64_MAX;   // UINT64_MAX = to the end of the clip
+    const char* path = nullptr;
+};
+
+static bool parseScale(const char* s, BlackmagicRawResolutionScale& out) {
+    if (!strcmp(s, "full")) out = blackmagicRawResolutionScaleFull;
+    else if (!strcmp(s, "half")) out = blackmagicRawResolutionScaleHalf;
+    else if (!strcmp(s, "quarter")) out = blackmagicRawResolutionScaleQuarter;
+    else if (!strcmp(s, "eighth")) out = blackmagicRawResolutionScaleEighth;
+    else return false;
+    return true;
+}
+
+// Digits only (strtoull alone takes "-1", "12abc" and "").
+static bool parseNumber(const char* s, uint64_t& out) {
+    if (!*s) return false;
+    for (const char* c = s; *c; c++)
+        if (*c < '0' || *c > '9') return false;
+    errno = 0;
+    out = strtoull(s, nullptr, 10);
+    return errno == 0;
+}
+
+// Strict like the Windows decoder: Offload never passes anything else, so a typo fails loudly (exit 2).
+static bool parseArgs(int argc, char** argv, Options& o) {
+    for (int i = 1; i < argc; i++) {
+        const char* a = argv[i];
+        const char* value = i + 1 < argc ? argv[i + 1] : nullptr;
+        if (!strcmp(a, "--info")) {
+            o.info = true;
+        } else if (!strcmp(a, "--scale")) {
+            if (!value || !parseScale(value, o.scale)) return false;
+            i++;
+        } else if (!strcmp(a, "--start")) {
+            if (!value || !parseNumber(value, o.start)) return false;
+            i++;
+        } else if (!strcmp(a, "--count")) {
+            if (!value || !parseNumber(value, o.count)) return false;
+            i++;
+        } else if (!strncmp(a, "--", 2)) {
+            return false;
+        } else {
+            o.path = a;
+        }
+    }
+    return o.path != nullptr;
+}
+
+// false when the reader went away (EPIPE — SIGPIPE is ignored, see main).
+static bool writeAll(const uint8_t* p, size_t n) {
+    while (n > 0) {
+        ssize_t w = write(STDOUT_FILENO, p, n);
+        if (w < 0) {
+            if (errno == EINTR) continue;
+            return false;
+        }
+        p += w;
+        n -= (size_t)w;
+    }
+    return true;
+}
+
+// ffmpeg has what it wanted (a thumbnail needs one frame) and closed the pipe: a success, not a failure.
+[[noreturn]] static void readerGone() {
+    fprintf(stderr, "braw-decode: stdout closed by the reader, stopping\n");
+    _exit(0);
+}
+
+static std::string fourcc(uint32_t v) {
+    char s[5] = {(char)(v >> 24), (char)(v >> 16), (char)(v >> 8), (char)v, 0};
+    return s;
+}
+
+static void attributeWarning(const char* key, uint32_t attribute, const char* what) {
+    fprintf(stderr, "braw-decode: %s: clip attribute '%s' %s\n", key, fourcc(attribute).c_str(), what);
+}
+
+// Gamma and gamut are strings. An attribute the SDK does not return is left out silently; one of another variant
+// type is a warning on stderr and left out too — never a failure of --info (Windows ruling T6-attr).
+static bool attributeText(IBlackmagicRawClipProcessingAttributes* attrs, BlackmagicRawClipProcessingAttribute attribute,
+                          const char* key, std::string& out) {
+    Variant v;
+    VariantInit(&v);
+    bool ok = false;
+    if (attrs->GetClipAttribute(attribute, &v) == S_OK) {
+        if (v.vt == blackmagicRawVariantTypeString) {
+            out = toStd(v.bstrVal);
+            ok = true;
+        } else if (v.vt != blackmagicRawVariantTypeEmpty) {
+            attributeWarning(key, attribute, "is a number, expected a string");
+        }
+    }
+    VariantClear(&v);
+    return ok;
+}
+
+// The colour science generation is a u16; any integer type is taken.
+static bool attributeNumber(IBlackmagicRawClipProcessingAttributes* attrs, BlackmagicRawClipProcessingAttribute attribute,
+                            const char* key, int& out) {
+    Variant v;
+    VariantInit(&v);
+    bool ok = false;
+    if (attrs->GetClipAttribute(attribute, &v) == S_OK) {
+        ok = true;
+        switch (v.vt) {
+        case blackmagicRawVariantTypeU8: out = (int)(v.uiVal & 0xFF); break;
+        case blackmagicRawVariantTypeS16: out = v.iVal; break;
+        case blackmagicRawVariantTypeU16: out = v.uiVal; break;
+        case blackmagicRawVariantTypeS32: out = v.intVal; break;
+        case blackmagicRawVariantTypeU32:
+            if (v.uintVal > (uint32_t)INT_MAX) {
+                attributeWarning(key, attribute, "is out of range");
+                ok = false;
+            } else {
+                out = (int)v.uintVal;
+            }
+            break;
+        case blackmagicRawVariantTypeEmpty: ok = false; break;
+        case blackmagicRawVariantTypeString:
+            attributeWarning(key, attribute, "is a string, expected a number");
+            ok = false;
+            break;
+        default:
+            attributeWarning(key, attribute, "has an unexpected variant type");
+            ok = false;
+            break;
+        }
+    }
+    VariantClear(&v);
+    return ok;
+}
+
+int main(int argc, char** argv) {
+    // A reader that goes away must be a failed write we can see (EPIPE → exit 0 with a note), not a death by SIGPIPE.
+    signal(SIGPIPE, SIG_IGN);
+
+    Options o;
+    if (!parseArgs(argc, argv, o)) {
+        fprintf(stderr, "%s\n", kUsage);
+        return 2;
+    }
+
+    IBlackmagicRawFactory* created = loadFactory();
+    if (!created) {
+        fprintf(stderr, "braw-decode: %s not found (install Blackmagic RAW Player, the Blackmagic RAW SDK or DaVinci Resolve)\n",
+                kFramework);
+        return 3;
+    }
+    IBlackmagicRawFactory* factory = asFactory(created);
+    if (!factory) return 3;
+    IBlackmagicRaw* codec = nullptr;
+    IBlackmagicRawClip* clip = nullptr;
+    HRESULT r = factory->CreateCodec(&codec);
+    if (r != S_OK || !codec) {
+        fprintf(stderr, "braw-decode: CreateCodec failed (0x%08X; library %s)\n", (unsigned)r, gLibrary.c_str());
+        return 3;
+    }
+
+    // The configuration is read on the first OpenClip, so the pipeline is set before it (CPU).
+    IBlackmagicRawConfiguration* config = nullptr;
+    if (codec->QueryInterface(IID_IBlackmagicRawConfiguration, (LPVOID*)&config) == S_OK && config) {
+        config->SetPipeline(blackmagicRawPipelineCPU, nullptr, nullptr);
+        config->Release();
+    }
+
+    CFStringRef cfPath = CFStringCreateWithCString(nullptr, o.path, kCFStringEncodingUTF8);
+    r = cfPath ? codec->OpenClip(cfPath, &clip) : E_FAIL;
+    if (cfPath) CFRelease(cfPath);
+    if (r != S_OK || !clip) {
+        fprintf(stderr, "braw-decode: cannot open %s (0x%08X; library %s)\n", o.path, (unsigned)r, gLibrary.c_str());
+        return 4;
+    }
+
+    uint32_t width = 0, height = 0;
+    float fps = 0;
+    uint64_t frames = 0;
+    clip->GetWidth(&width);
+    clip->GetHeight(&height);
+    clip->GetFrameRate(&fps);
+    clip->GetFrameCount(&frames);
+
+    Callback cb;
+    cb.scale = o.scale;
+    r = codec->SetCallback(&cb);
+    if (r != S_OK) {
+        fprintf(stderr, "braw-decode: SetCallback failed (0x%08X; library %s)\n", (unsigned)r, gLibrary.c_str());
+        return 3;
+    }
+
+    if (o.info) {
+        // Decode frame 0 at the requested scale: the processed size is the truth, not width/scale.
+        std::vector<FrameSlot> slots(1);
+        cb.slots = &slots;
+        cb.base = 0;
+        IBlackmagicRawJob* job = nullptr;
+        if (frames > 0 && clip->CreateJobReadFrame(0, &job) == S_OK) {
+            job->SetUserData((void*)(uintptr_t)0);
+            if (job->Submit() != S_OK) job->Release();
+            codec->FlushJobs();
+        }
+        // What the clip was shot in — Offload picks the LUT by it (LutResolver.braw).
+        std::string gamma, gamut;
+        int gen = 0;
+        bool hasGamma = false, hasGamut = false, hasGen = false;
+        IBlackmagicRawClipProcessingAttributes* attrs = nullptr;
+        if (clip->CloneClipProcessingAttributes(&attrs) == S_OK && attrs) {
+            hasGamma = attributeText(attrs, blackmagicRawClipProcessingAttributeGamma, "gamma", gamma);
+            hasGamut = attributeText(attrs, blackmagicRawClipProcessingAttributeGamut, "gamut", gamut);
+            hasGen = attributeNumber(attrs, blackmagicRawClipProcessingAttributeColorScienceGen, "colorScienceGen", gen);
+            attrs->Release();
+        }
+        CFStringRef tc = nullptr, cam = nullptr;
+        clip->GetTimecodeForFrame(0, &tc);
+        clip->GetCameraType(&cam);
+        char head[256];
+        snprintf(head, sizeof head, "{\"width\":%u,\"height\":%u,\"sourceWidth\":%u,\"sourceHeight\":%u,\"fps\":%.6f,\"frames\":%llu,",
+                 slots[0].ok ? slots[0].width : width, slots[0].ok ? slots[0].height : height, width, height, fps,
+                 (unsigned long long)frames);
+        std::string json = head;
+        json += "\"timecode\":\"" + jsonEscape(toStd(tc)) + "\",\"camera\":\"" + jsonEscape(toStd(cam)) + "\"";
+        if (hasGamma) json += ",\"gamma\":\"" + jsonEscape(gamma) + "\"";
+        if (hasGamut) json += ",\"gamut\":\"" + jsonEscape(gamut) + "\"";
+        if (hasGen) json += ",\"colorScienceGen\":" + std::to_string(gen);
+        json += "}\n";
+        if (tc) CFRelease(tc);
+        if (cam) CFRelease(cam);
+        if (!writeAll((const uint8_t*)json.data(), json.size())) readerGone();
+    } else {
+        // Decode in small batches: jobs run in parallel inside the SDK, output stays in frame order.
+        const uint64_t batch = 8;
+        uint64_t end = std::min(frames, o.start + std::min(o.count, UINT64_MAX - o.start));
+        std::vector<FrameSlot> slots(batch);
+        cb.slots = &slots;
+        for (uint64_t b = o.start; b < end; b += batch) {
+            uint64_t n = std::min(batch, end - b);
+            for (auto& s : slots) s.ok = false;
+            cb.base = b;
+            for (uint64_t i = 0; i < n; i++) {
+                IBlackmagicRawJob* job = nullptr;
+                if (clip->CreateJobReadFrame(b + i, &job) != S_OK) { cb.errors++; continue; }
+                job->SetUserData((void*)(uintptr_t)(b + i));
+                if (job->Submit() != S_OK) { job->Release(); cb.errors++; }
+            }
+            codec->FlushJobs();
+            for (uint64_t i = 0; i < n; i++) {
+                if (!slots[i].ok) {
+                    fprintf(stderr, "braw-decode: frame %llu failed\n", (unsigned long long)(b + i));
+                    _exit(5);
+                }
+                if (!writeAll(slots[i].data.data(), slots[i].data.size())) readerGone();
+            }
+        }
+    }
+
+    clip->Release();
+    codec->Release();
+    factory->Release();
+    _exit(cb.errors > 0 ? 5 : 0);
+}
+```
+
+Pozn.: chybové kódy HRESULT velkými písmeny (`0x80004005`) jako Windows `Com.Hex`; dřívější `0x%08x` v callbacku sjednocen.
+`v.uiVal & 0xFF` pro `U8`: `Variant` nemá 8bitový člen, malý endian (arm64 i x86_64) má nejnižší bajt na začátku unie.
+
+- [ ] **Step 6: Sestavit a testy projdou**
+
+Run: `Tools/braw-decode/build.sh && swift test --filter "BrawLibraryTests|BrawDecodeTests"`
+Expected: `built …/Tools/bin/braw-decode` bez varování; testy 0 chyb. Bez knihovny přeskočeno 7 (projde
+`testBadCommandLineIsExit2` a `BrawLibraryTests`), s knihovnou bez vzorku 5, se vzorkem 0.
+
+**Ověřit na Macu** (spec D.19, ř. 1–3), výsledek do commitu:
+1. QueryInterface továrny: s knihovnou `testMissingOrInvalidClipIsExit4AndNamesTheLibrary` dává 4, ne 3. Skončí-li kódem 3
+   s `the created object is not an IBlackmagicRawFactory`, framework svou vlastní IID nevrací — pak `asFactory` z `main`
+   vyhodit (vrátit přímé použití `created`) a zapsat to do spec D.14.
+2. Kde je framework: `ls -d "/Applications/Blackmagic RAW/Blackmagic RAW Player.app/Contents/Frameworks/BlackmagicRawAPI.framework"
+   "/Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries/BlackmagicRawAPI.framework"
+   "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/BlackmagicRawAPI.framework"` (co je nainstalované) —
+   cesta, která neexistuje, ale framework je jinde (`mdfind -name BlackmagicRawAPI.framework`), se opraví v `kLibrarySearchPaths`
+   i `BrawLibrary.searchDirs` najednou (hlídá `testSameFoldersAsTheDecoderSource`).
+3. Typy `Variant` u `gama`/`gamt`/`csgn`: se vzorkem `Tools/bin/braw-decode --info --scale eighth "$OFFLOAD_BRAW_SAMPLE"` —
+   **nejdřív stderr** (varování `clip attribute '…'` = jiný typ, než hlavička uvádí), pak JSON: `gamma` např. „Blackmagic
+   Design Film“, `colorScienceGen` 5 u Gen 5.
+
+- [ ] **Step 7: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 27 — braw-decode jako Windows: --info vydává gamma, gamut a colorScienceGen (atributy klipu, nečitelný atribut = varování na stderr), pipeline před OpenClip, hlášky kódů 3/4 jmenují načtenou knihovnu, továrna přes QueryInterface, zavřená roura = kód 0 s hláškou (SIGPIPE ignorován — dřív proces zabil signál), přísné argumenty (kód 2); BrawLibrary se stejnými složkami jako dekodér`
+
+Run: `git add -A mac/Tools/braw-decode mac/Sources mac/Tests docs && git commit -m "Mac braw-decode: gamma/gamut/gen in --info, pipeline before OpenClip, library named in errors, exit 0 on a closed pipe"`
+
+(`Tools/bin/` je v `.gitignore` — sestavený `braw-decode` se necommituje.)
+
+---
+
+### Task 28: Gama BRAW v metadatech klipu a LUT podle gamy
+
+Doplněk 2 ke spec — oddíly D.15 a D.18. Port `windows/src/Offload.Core/Luts.cs` (`LutResolver.Braw`), `Media.cs`
+(`ClipInfo.Gamma/Gamut/ColorScienceGen`) a `RawBackends.cs` (`BrawInfo`, `ToClipInfo`); testy `LutResolverTests.Braw_*`,
+`BrawCoreTests.Info_GammaGamutGen_ReachClipInfo`.
+
+**Files:**
+- Modify: `mac/Sources/OffloadKit/Media.swift` (`ClipInfo`)
+- Modify: `mac/Sources/OffloadKit/RawBackends.swift` (`BRAWBackend.Info`, `parseInfo`, `clipInfo`, `info`, `probe`)
+- Modify: `mac/Sources/OffloadKit/Luts.swift` (`LutResolver.braw`, `detect`)
+- Create: `mac/Tests/OffloadKitTests/BrawBackendTests.swift`
+- Modify: `mac/Tests/OffloadKitTests/LutResolverTests.swift` (dva nové testy ve třídě)
+- Modify: `docs/VYVOJ-MAC.md`, `docs/FORMATY.md`
+
+**Interfaces:**
+- Consumes: `LutResolver.resolve/detect`, `LutUse`, `TestMedia.luts` a soukromé pomocníky `LutResolverTests` (`rawClip`, `auto(fallback:)`, `cat`) (úkol 21); `BRAWBackend` (úkol 22).
+- Produces:
+  - `ClipInfo.gamma: String?`, `.gamut: String?`, `.colorScienceGen: Int?` (JSON klíče `gamma`, `gamut`, `colorScienceGen`; `nil` se nezapisuje)
+  - `struct BRAWBackend.Info: Decodable` (už ne `private`; nové volitelné `gamma`, `gamut`, `colorScienceGen`), `static func BRAWBackend.parseInfo(_ json: String) throws -> Info`, `static func BRAWBackend.clipInfo(_ i: Info) -> ClipInfo`
+  - `static func LutResolver.braw(_ info: ClipInfo?) -> (id: String?, reason: String)`
+
+Pravidla (1:1 s Windows `LutResolver.Braw`; `label` = `<gama> Gen <n>`, bez generace jen `<gama>`):
+
+| Gama z `braw-decode --info` | `id` | Důvod u klipu |
+|---|---|---|
+| chybí nebo prázdná (starší `braw-decode`) | `bmd-film-gen5` | `Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)` |
+| jiná než „Blackmagic Design Film“ (bez ohledu na velikost písmen) | `""` (bez LUTu, **ani záložní**) | `Blackmagic RAW: <label> (není log)` |
+| „Blackmagic Design Film“, generace < 5 | `""` | `Blackmagic RAW: <label> (bez vestavěného LUTu)` — Film Gen 4 provizorně, ke schválení |
+| „Blackmagic Design Film“, generace ≥ 5 nebo neuvedená | `bmd-film-gen5` | `Blackmagic RAW: <label>` |
+
+- [ ] **Step 1: Padající testy**
+
+`mac/Tests/OffloadKitTests/BrawBackendTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class BrawBackendTests: XCTestCase {
+    func testInfoGammaGamutGenReachClipInfo() throws {
+        let c = BRAWBackend.clipInfo(try BRAWBackend.parseInfo(
+            #"{"width":1440,"height":810,"sourceWidth":11520,"sourceHeight":6480,"fps":23.976000,"frames":240,"timecode":"01:02:03:04","camera":"URSA Mini Pro 12K","gamma":"Blackmagic Design Film","gamut":"Blackmagic Design","colorScienceGen":5}"#))
+        XCTAssertEqual(c.gamma, "Blackmagic Design Film")
+        XCTAssertEqual(c.gamut, "Blackmagic Design")
+        XCTAssertEqual(c.colorScienceGen, 5)
+        XCTAssertEqual(c.width, 11520)
+        XCTAssertEqual(c.frameRate, "24000/1001")
+        XCTAssertEqual(c.camera, "URSA Mini Pro 12K")
+        // braw-decode before task 27 prints no gamma: still parses.
+        let old = BRAWBackend.clipInfo(try BRAWBackend.parseInfo(
+            #"{"width":1,"height":1,"sourceWidth":1,"sourceHeight":1,"fps":25,"frames":1,"timecode":"","camera":""}"#))
+        XCTAssertNil(old.gamma)
+        XCTAssertNil(old.gamut)
+        XCTAssertNil(old.colorScienceGen)
+        // An empty string is "not reported" (as Windows ToClipInfo).
+        let empty = BRAWBackend.clipInfo(try BRAWBackend.parseInfo(
+            #"{"width":1,"height":1,"sourceWidth":1,"sourceHeight":1,"fps":25,"frames":1,"timecode":"","camera":"","gamma":"","gamut":""}"#))
+        XCTAssertNil(empty.gamma)
+        XCTAssertNil(empty.gamut)
+    }
+
+    // FORMATY: clips[].info.gamma / gamut / colorScienceGen — written only when known, the same keys as Windows.
+    func testClipInfoJSONKeys() throws {
+        var c = ClipInfo()
+        c.gamma = "Blackmagic Design Film"
+        c.gamut = "Blackmagic Design"
+        c.colorScienceGen = 5
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(c)) as? [String: Any] ?? [:]
+        XCTAssertEqual(json["gamma"] as? String, "Blackmagic Design Film")
+        XCTAssertEqual(json["gamut"] as? String, "Blackmagic Design")
+        XCTAssertEqual(json["colorScienceGen"] as? Int, 5)
+        let none = try JSONSerialization.jsonObject(with: JSONEncoder().encode(ClipInfo())) as? [String: Any] ?? [:]
+        XCTAssertNil(none["gamma"])
+        XCTAssertNil(none["gamut"])
+        XCTAssertNil(none["colorScienceGen"])
+        XCTAssertEqual(try JSONDecoder().decode(ClipInfo.self, from: JSONEncoder().encode(c)).colorScienceGen, 5)
+    }
+}
+```
+
+Do třídy `LutResolverTests` (`mac/Tests/OffloadKitTests/LutResolverTests.swift`, za `testBrawAndR3D`) přidat:
+
+```swift
+    // Review focus 10 (Windows LutResolverTests.Braw_LutFromGamma): the LUT follows the gamma the clip was shot in.
+    func testBrawLutFromGamma() {
+        let cases: [(gamma: String?, gen: Int?, source: String, id: String?, reason: String)] = [
+            ("Blackmagic Design Film", 5, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film Gen 5"),
+            ("blackmagic design film", 6, "auto", "bmd-film-gen5", "Blackmagic RAW: blackmagic design film Gen 6"),
+            ("Blackmagic Design Film", nil, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film"),
+            ("Blackmagic Design Film", 4, "none", nil, "Blackmagic RAW: Blackmagic Design Film Gen 4 (bez vestavěného LUTu)"),
+            ("Blackmagic Design Video", 5, "none", nil, "Blackmagic RAW: Blackmagic Design Video Gen 5 (není log)"),
+            ("Blackmagic Design Extended Video", 5, "none", nil, "Blackmagic RAW: Blackmagic Design Extended Video Gen 5 (není log)"),
+            (nil, nil, "auto", "bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)"),
+            ("", nil, "auto", "bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)"),
+        ]
+        for c in cases {
+            var info = ClipInfo()
+            info.gamma = c.gamma
+            info.colorScienceGen = c.gen
+            let use = LutResolver.resolve(rawClip(.braw, "A001.braw"), info: info, clipFullPath: "/x/A001.braw",
+                                          settings: auto(), catalog: cat)
+            XCTAssertEqual(use.source, c.source, c.reason)
+            XCTAssertEqual(use.id, c.id, c.reason)
+            XCTAssertEqual(use.reason, c.reason)
+        }
+        XCTAssertEqual(LutResolver.resolve(rawClip(.braw, "A001.braw"), info: nil, clipFullPath: "/x/A001.braw",
+                                           settings: auto(), catalog: cat).reason,
+                       "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)")
+    }
+
+    // Recognised as display-ready: the fallback LUT is only for cameras that were not recognised.
+    func testBrawVideoGammaIgnoresFallback() {
+        var info = ClipInfo()
+        info.gamma = "Blackmagic Design Video"
+        let use = LutResolver.resolve(rawClip(.braw, "A001.braw"), info: info, clipFullPath: "/x/A001.braw",
+                                      settings: auto(fallback: "bmd-film-gen5"), catalog: cat)
+        XCTAssertEqual(use.source, "none")
+        XCTAssertNil(use.file)
+    }
+```
+
+- [ ] **Step 2: Ověřit selhání** — Run: `swift test --filter "BrawBackendTests|LutResolverTests"` → nesestaví se
+(`value of type 'ClipInfo' has no member 'gamma'`, `type 'BRAWBackend' has no member 'parseInfo'`).
+
+- [ ] **Step 3: `Media.swift`** — v `ClipInfo` za `colorRange` (úkol 21) přidat:
+
+```swift
+    /// Blackmagic RAW: gamma, gamut and colour science generation the clip was recorded in (from braw-decode --info);
+    /// the LUT is chosen by them (LutResolver.braw). Not written when unknown.
+    public var gamma: String?
+    public var gamut: String?
+    public var colorScienceGen: Int?
+```
+
+- [ ] **Step 4: `RawBackends.swift` (`BRAWBackend`)** — `private struct Info`, `private func info` a `func probe` nahradit:
+
+```swift
+    /// One line of `braw-decode --info`. gamma / gamut / colorScienceGen only when the SDK reports them (braw-decode
+    /// since task 27, and Windows); an older decoder leaves them out.
+    struct Info: Decodable {
+        let width: Int, height: Int, sourceWidth: Int, sourceHeight: Int
+        let fps: Double, frames: Int, timecode: String, camera: String
+        let gamma: String?, gamut: String?, colorScienceGen: Int?
+    }
+
+    static func parseInfo(_ json: String) throws -> Info {
+        try JSONDecoder().decode(Info.self, from: Data(json.utf8))
+    }
+
+    static func clipInfo(_ i: Info) -> ClipInfo {
+        var c = ClipInfo()
+        c.codec = "Blackmagic RAW"
+        c.width = i.sourceWidth
+        c.height = i.sourceHeight
+        c.frameRate = RawBackends.rational(i.fps)
+        c.frames = i.frames
+        c.duration = i.fps > 0 ? Double(i.frames) / i.fps : nil
+        c.timecode = i.timecode.isEmpty ? nil : i.timecode
+        c.camera = i.camera.isEmpty ? nil : i.camera
+        c.gamma = i.gamma.flatMap { $0.isEmpty ? nil : $0 }
+        c.gamut = i.gamut.flatMap { $0.isEmpty ? nil : $0 }
+        c.colorScienceGen = i.colorScienceGen
+        return c
+    }
+
+    private func info(_ path: String, scale: String, tools: ExternalTools) throws -> Info {
+        try BRAWBackend.parseInfo(try ToolProcess.run(tools.brawDecoder!, ["--info", "--scale", scale, path]))
+    }
+
+    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo {
+        BRAWBackend.clipInfo(try info(path, scale: "eighth", tools: tools))
+    }
+```
+
+- [ ] **Step 5: `Luts.swift` (`LutResolver`)** — v `detect` nahradit `case .braw:` a jeho `return` za `case .braw: return braw(info)`
+a nad `detect` přidat:
+
+```swift
+    /// BRAW decodes in the gamma the clip was shot in: only "Blackmagic Design Film" Gen 5 matches the built-in LUT.
+    /// Video / Extended Video / Custom / HDR gammas are display-ready already; a decoder without the gamma in --info keeps
+    /// the old assumption (Film Gen 5). Film Gen 4 has no built-in LUT (provisional, as Windows). Port of `LutResolver.Braw`.
+    static func braw(_ info: ClipInfo?) -> (id: String?, reason: String) {
+        guard let gamma = info?.gamma, !gamma.isEmpty else {
+            return ("bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)")
+        }
+        let gen = info?.colorScienceGen
+        let label = gen.map { "\(gamma) Gen \($0)" } ?? gamma
+        if gamma.caseInsensitiveCompare("Blackmagic Design Film") != .orderedSame {
+            return ("", "Blackmagic RAW: \(label) (není log)")
+        }
+        if let gen, gen < 5 { return ("", "Blackmagic RAW: \(label) (bez vestavěného LUTu)") }
+        return ("bmd-film-gen5", "Blackmagic RAW: \(label)")
+    }
+```
+
+- [ ] **Step 6: Testy projdou** — Run: `swift test --filter "BrawBackendTests|LutResolverTests|LutReportTests"` → 0 chyb; pak `swift test`.
+(`testBrawAndR3D` z úkolu 21 kontroluje jen `id` — zůstává beze změny.)
+
+- [ ] **Step 7: `docs/FORMATY.md`** — u odrážky `clips[].info.gamma`, `gamut`, `colorScienceGen`: smazat „(volitelné, zatím jen
+Windows)“ → „(volitelné)“ a větu „Mac je zatím nezapisuje a při čtení ignoruje.“ nahradit „Zapisují je obě verze, jen když je
+dekodér zná.“
+
+- [ ] **Step 8: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 28 — BRAW: gama, gamut a generace barev z braw-decode v metadatech klipu (JSON info.gamma/gamut/colorScienceGen jako Windows); LUT jen pro Blackmagic Design Film Gen 5, Video / Extended Video a Film Gen 4 bez LUTu (ani záložního), bez údaje o gamě předpoklad Film Gen 5`
+
+Run: `git add -A mac/Sources mac/Tests docs && git commit -m "Mac: BRAW gamma/gamut/gen in the clip info; LUT chosen from the clip's gamma"`
+
+---
+
+### Task 29: BRAW jen s knihovnou, časový limit `--info`, české poznámky z kódů 3/4/5
+
+Doplněk 2 ke spec — oddíl D.16. Port `windows/src/Offload.Core/RawBackends.cs` (`BrawBackend`: `IsAvailable` s knihovnou,
+`DefaultInfoTimeout`, `Info`, `Explain`, `LastLine`, `RawDecoderException`), `ToolProcess.Run(…, timeout)`, `ProxyRenderer.Logged`;
+testy `BrawCoreTests` (knihovna, I1), `ProxyWatchdogTests.BrawInfo_*`.
+
+**Files:**
+- Modify: `mac/Sources/OffloadKit/Tools.swift` (nová `StderrTail`, celá `ToolProcess`)
+- Modify: `mac/Sources/OffloadKit/RawBackends.swift` (nová `RawDecoderError`, celý `BRAWBackend`)
+- Modify: `mac/Sources/OffloadKit/Proxy.swift` (`FrameSource.explainFeederError`; `ProxyRenderer.backends` jako `var`, `logged`, `probe`, `frameSource`)
+- Modify: `mac/Tests/OffloadKitTests/BrawTestSupport.swift` (falešný dekodér), `mac/Tests/OffloadKitTests/BrawBackendTests.swift` (nové testy)
+- Create: `mac/Tests/OffloadKitTests/ToolProcessTests.swift`
+- Modify: `docs/VYVOJ-MAC.md`
+
+**Interfaces:**
+- Consumes: `BrawLibrary` (úkol 27), `BRAWBackend.Info/parseInfo/clipInfo` (úkol 28), `BRAWBackend.startFrame` (úkol 6), `FrameSource`, `ProxyRenderer.log` (úkoly 19, 22).
+- Produces:
+  - `final class StderrTail { init(_ process: Process); var text: String { get }; func drain() -> String }`
+  - `ToolProcess.run(_:_:cwd:timeout: TimeInterval? = nil)`, `ToolProcess.drainStderr() -> String`
+  - `struct RawDecoderError: Error, CustomStringConvertible { let note: String; let decoderError: ToolError }` — `description` = `note`
+  - `BRAWBackend`: `missingHint` (text Windows), `static let defaultInfoTimeout: TimeInterval = 60`, `var findLibrary: (String) -> String?`, `var infoTimeout: TimeInterval` (memberwise `BRAWBackend(findLibrary:infoTimeout:)`), `static func decoderDir(_ exe: String) -> String`, `func explain(_ e: ToolError, tools: ExternalTools) -> Error`, `static func lastLine(_ stderr: String) -> String`
+  - `FrameSource.explainFeederError: ((ToolError) -> Error)?` (použije úkol 30)
+  - `ProxyRenderer.backends` je `var` (testy nahradí backend formátu)
+  - testy: `BrawTest.fakeDecoder(_:info:frames:) -> (path: String, calls: String)`, `printInfo(_:)`, `fail(_:_:)`, `hang`, `script(_:_:_:)`, `script(in:_:_:)`, `calls(_:)`, `brawClip`, `clipInfo(frames:)`, `final class LogLines`
+
+Poznámky u klipu (přesně jako Windows; `<knihovna>` = cesta k nalezenému `BlackmagicRawAPI.framework`, jinak jen jeho jméno):
+
+| Kód `braw-decode` | Poznámka |
+|---|---|
+| 3 | `Blackmagic RAW: knihovnu <knihovna> nelze použít — nainstalujte aktuální Blackmagic RAW Player` |
+| 4 | `Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna <knihovna> starší než kamera (nainstalujte aktuální Blackmagic RAW Player)` |
+| 5 | `Blackmagic RAW: snímek klipu se nepodařilo dekódovat (<poslední řádek stderr bez „braw-decode: “>)` |
+| jiný (2, časový limit −1) | chyba beze změny, např. `braw-decode failed (exit -1): neodpověděl do 60 s — ukončen` |
+
+Původní hláška (`braw-decode failed (exit 4): braw-decode: cannot open … (0x…; library …)`) jde do logu úlohy.
+
+- [ ] **Step 1: Falešný dekodér** — na konec `mac/Tests/OffloadKitTests/BrawTestSupport.swift` přidat:
+
+```swift
+extension BrawTest {
+    /// One-frame 320×180 clip as braw-decode --info prints it (no gamma — like an older decoder).
+    static let oneFrameInfo = #"{"width":320,"height":180,"sourceWidth":320,"sourceHeight":180,"fps":25,"frames":1,"timecode":"","camera":""}"#
+
+    static let brawClip = Clip(name: "A001", path: "A001.braw", format: .braw, segments: ["A001.braw"], bytes: 1, isCameraProxy: false)
+
+    static func clipInfo(frames: Int) -> ClipInfo {
+        var i = ClipInfo()
+        i.codec = "Blackmagic RAW"
+        i.width = 320
+        i.height = 180
+        i.frameRate = "25/1"
+        i.frames = frames
+        i.duration = Double(frames) / 25
+        return i
+    }
+
+    static func script(_ dir: TempDir, _ name: String, _ body: String) -> String { script(in: dir.path, name, body) }
+
+    /// An executable sh script `<folder>/<name>`.
+    static func script(in folder: String, _ name: String, _ body: String) -> String {
+        let path = folder + "/" + name
+        try! ("#!/bin/sh\n" + body + "\n").write(toFile: path, atomically: true, encoding: .utf8)
+        try! FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
+        return path
+    }
+
+    /// A stand-in braw-decode: a sh script named braw-decode (errors carry that tool name) in `<dir>/fake-braw/`. `info`
+    /// runs for `--info`, `frames` for frame decoding; every run first appends its first argument to `calls`.
+    static func fakeDecoder(_ dir: TempDir, info: String, frames: String) -> (path: String, calls: String) {
+        let sub = dir.sub("fake-braw")
+        let calls = sub + "/calls.txt"
+        let body = """
+        echo "$1" >> '\(calls)'
+        if [ "$1" = "--info" ]; then
+        \(info)
+        else
+        \(frames)
+        fi
+        """
+        return (script(in: sub, "braw-decode", body), calls)
+    }
+
+    static func printInfo(_ json: String = oneFrameInfo) -> String { "echo '\(json)'\nexit 0" }
+    static func fail(_ code: Int, _ line: String) -> String { "echo '\(line)' >&2\nexit \(code)" }
+    static let hang = "exec sleep 30"
+
+    /// The first argument of every run of a fake decoder ("--info" or "--scale").
+    static func calls(_ file: String) -> [String] {
+        ((try? String(contentsOfFile: file, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
+    }
+}
+
+/// Log lines collected from another thread.
+final class LogLines {
+    private let lock = NSLock()
+    private var all: [String] = []
+    func add(_ s: String) { lock.lock(); all.append(s); lock.unlock() }
+    var lines: [String] { lock.lock(); defer { lock.unlock() }; return all }
+}
+```
+
+- [ ] **Step 2: Padající testy**
+
+`mac/Tests/OffloadKitTests/ToolProcessTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class ToolProcessTests: XCTestCase {
+    // Spec D.16 (Windows ruling M3): a hung tool never hangs the job — killed after the timeout, the message says so.
+    func testTimeoutKillsAndSaysSo() {
+        let hang = BrawTest.script(tempDir(), "hang", "exec sleep 30")
+        let t0 = Date()
+        XCTAssertThrowsError(try ToolProcess.run(hang, [], timeout: 1)) { e in
+            XCTAssertEqual("\(e)", "hang failed (exit -1): neodpověděl do 1 s — ukončen")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 10)
+    }
+
+    func testWithinTheTimeoutStdoutAsBefore() throws {
+        let ok = BrawTest.script(tempDir(), "ok", "sleep 0.3\necho hello")
+        XCTAssertEqual(try ToolProcess.run(ok, [], timeout: 5), "hello\n")
+        XCTAssertEqual(try ToolProcess.run(ok, []), "hello\n")
+    }
+
+    // The error carries the whole stderr even when the tool ends at once (the pipe handler may lag behind the exit).
+    func testStderrCompleteInTheError() {
+        let fail = BrawTest.script(tempDir(), "fail", "echo 'first line' >&2\necho 'braw-decode: cannot open /x/Klip č. 1.braw' >&2\nexit 4")
+        for _ in 0..<20 {
+            XCTAssertThrowsError(try ToolProcess.run(fail, [])) { e in
+                XCTAssertEqual((e as? ToolError)?.status, 4)
+                XCTAssertEqual((e as? ToolError)?.message, "first line\nbraw-decode: cannot open /x/Klip č. 1.braw\n")
+            }
+        }
+    }
+}
+```
+
+Do `mac/Tests/OffloadKitTests/BrawBackendTests.swift` (úkol 28) do třídy přidat:
+
+```swift
+    private let lib = "/BM/BlackmagicRawAPI.framework"
+
+    // Windows task 1: braw-decode alone is not enough — without the library BRAW is copied and verified only.
+    func testAvailableOnlyWithDecoderAndLibrary() {
+        let dir = tempDir()
+        let exe = BrawTest.fakeDecoder(dir, info: BrawTest.printInfo(), frames: BrawTest.hang).path
+        var found: String?
+        var searched: String?
+        let backend = BRAWBackend(findLibrary: { searched = $0; return found })
+        XCTAssertFalse(backend.isAvailable(ExternalTools()))
+        XCTAssertNil(searched)   // no decoder: the library is not even looked for
+        XCTAssertFalse(backend.isAvailable(ExternalTools(brawDecoder: exe)))
+        XCTAssertEqual(searched, BRAWBackend.decoderDir(exe))
+        XCTAssertTrue(searched?.hasSuffix("/fake-braw") == true, searched ?? "nil")
+        found = lib
+        XCTAssertTrue(backend.isAvailable(ExternalTools(brawDecoder: exe)))
+    }
+
+    func testDefaultSearchFindsTheFrameworkNextToTheDecoder() {
+        let dir = tempDir()
+        let exe = BrawTest.fakeDecoder(dir, info: BrawTest.printInfo(), frames: BrawTest.hang).path
+        dir.sub("fake-braw", "BlackmagicRawAPI.framework")
+        XCTAssertTrue(BRAWBackend().isAvailable(ExternalTools(brawDecoder: exe)))
+    }
+
+    func testWithoutTheLibraryTheClipIsUnsupportedWithTheWindowsHint() {
+        let dir = tempDir()
+        let exe = BrawTest.fakeDecoder(dir, info: BrawTest.printInfo(), frames: BrawTest.hang).path
+        let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools(ffmpeg: "/bin/cat", brawDecoder: exe))
+        r.backends[.braw] = BRAWBackend(findLibrary: { _ in nil })
+        XCTAssertEqual(r.unsupportedReason(BrawTest.brawClip),
+                       "Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)")
+    }
+
+    // Windows final fix I1: exit codes 3/4/5 become a Czech note at the clip; the decoder's own line stays inside.
+    func testInfoDecoderExitCodeBecomesCzechNote() {
+        let cases: [(code: Int, line: String, note: String)] = [
+            (3, "braw-decode: CreateCodec failed (0x80004005; library /BM/BlackmagicRawAPI.framework)",
+             "Blackmagic RAW: knihovnu /BM/BlackmagicRawAPI.framework nelze použít — nainstalujte aktuální Blackmagic RAW Player"),
+            (4, "braw-decode: cannot open /card/A001.braw (0x80004005; library /BM/BlackmagicRawAPI.framework)",
+             "Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna /BM/BlackmagicRawAPI.framework starší než kamera (nainstalujte aktuální Blackmagic RAW Player)"),
+            (5, "braw-decode: frame 0 failed", "Blackmagic RAW: snímek klipu se nepodařilo dekódovat (frame 0 failed)"),
+        ]
+        for c in cases {
+            let dir = tempDir()
+            let exe = BrawTest.fakeDecoder(dir, info: BrawTest.fail(c.code, c.line), frames: BrawTest.fail(c.code, c.line)).path
+            XCTAssertThrowsError(try BRAWBackend(findLibrary: { _ in self.lib }).probe(dir.path + "/A001.braw",
+                                                                                     tools: ExternalTools(brawDecoder: exe))) { e in
+                guard let d = e as? RawDecoderError else { return XCTFail("\(c.code): \(e)") }
+                XCTAssertEqual("\(d)", c.note)
+                XCTAssertEqual(d.decoderError.status, Int32(c.code))
+                XCTAssertEqual(d.decoderError.message.trimmingCharacters(in: .whitespacesAndNewlines), c.line)
+            }
+        }
+    }
+
+    func testOtherExitCodesStayAsTheyAre() {
+        let dir = tempDir()
+        let exe = BrawTest.fakeDecoder(dir, info: BrawTest.fail(2, "usage: braw-decode"), frames: BrawTest.hang).path
+        XCTAssertThrowsError(try BRAWBackend(findLibrary: { _ in self.lib }).probe(dir.path + "/A001.braw",
+                                                                                 tools: ExternalTools(brawDecoder: exe))) { e in
+            XCTAssertTrue(e is ToolError, "\(e)")
+            XCTAssertEqual("\(e)", "braw-decode failed (exit 2): usage: braw-decode")
+        }
+    }
+
+    /// The library vanished after the check: the note names the framework by its file name.
+    func testNoteWithoutLibraryPathNamesTheFramework() {
+        let dir = tempDir()
+        let exe = BrawTest.fakeDecoder(dir, info: BrawTest.fail(3, "braw-decode: BlackmagicRawAPI.framework not found"),
+                                       frames: BrawTest.hang).path
+        XCTAssertThrowsError(try BRAWBackend(findLibrary: { _ in nil }).probe(dir.path + "/A001.braw",
+                                                                            tools: ExternalTools(brawDecoder: exe))) { e in
+            XCTAssertEqual("\(e)", "Blackmagic RAW: knihovnu BlackmagicRawAPI.framework nelze použít — nainstalujte aktuální Blackmagic RAW Player")
+        }
+    }
+
+    // Review focus 11 (Windows ruling M3): `braw-decode --info` runs with a timeout — a hung SDK gives the clip a note.
+    func testInfoHungKilledAfterTheTimeout() {
+        let dir = tempDir()
+        let exe = BrawTest.fakeDecoder(dir, info: BrawTest.hang, frames: BrawTest.hang).path
+        let t0 = Date()
+        XCTAssertThrowsError(try BRAWBackend(findLibrary: { _ in self.lib }, infoTimeout: 2)
+            .probe(dir.path + "/A001.braw", tools: ExternalTools(brawDecoder: exe))) { e in
+            XCTAssertEqual("\(e)", "braw-decode failed (exit -1): neodpověděl do 2 s — ukončen")
+        }
+        XCTAssertTrue((1.9...30).contains(Date().timeIntervalSince(t0)), "\(Date().timeIntervalSince(t0))")
+    }
+
+    func testInfoDefaultTimeoutIs60s() {
+        XCTAssertEqual(BRAWBackend.defaultInfoTimeout, 60)
+        XCTAssertEqual(BRAWBackend().infoTimeout, 60)
+    }
+
+    // The note goes to the clip, the decoder's own words to the job's log (Windows ProxyRenderer.Logged).
+    func testProbeDecoderExitCodeOriginalLogged() {
+        let dir = tempDir()
+        let line = "braw-decode: cannot open /card/A001.braw (0x80004005; library /BM/BlackmagicRawAPI.framework)"
+        let exe = BrawTest.fakeDecoder(dir, info: BrawTest.fail(4, line), frames: BrawTest.hang).path
+        let log = LogLines()
+        let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools(ffmpeg: "/bin/cat", brawDecoder: exe))
+        r.backends[.braw] = BRAWBackend(findLibrary: { _ in self.lib })
+        r.log = { log.add($0) }
+        XCTAssertThrowsError(try r.probe(BrawTest.brawClip, cardPath: dir.sub("card"))) { e in
+            XCTAssertTrue("\(e)".hasPrefix("Blackmagic RAW: klip nelze otevřít"), "\(e)")
+        }
+        XCTAssertTrue(log.lines.contains("braw-decode failed (exit 4): \(line)"), "\(log.lines)")
+    }
+```
+
+- [ ] **Step 3: Ověřit selhání** — Run: `swift test --filter "ToolProcessTests|BrawBackendTests"` → nesestaví se
+(`extra argument 'timeout'`, `cannot find 'RawDecoderError'`, `argument passed to call that takes no arguments` u `BRAWBackend(findLibrary:)`,
+`cannot assign to property: 'backends' is a 'let' constant`).
+
+- [ ] **Step 4: `Tools.swift`** — celou třídu `ToolProcess` nahradit (a nad ni přidat `StderrTail`):
+
+```swift
+/// The last 4000 characters a child process wrote to stderr. The pipe is read as data arrives (a chatty tool never
+/// blocks on a full pipe); `drain()` after the process ended picks up what the handler has not delivered yet —
+/// non-blocking, so a grandchild still holding the pipe cannot hang the caller. The handler reads under the same lock
+/// and never after `drain()`: a read racing drain's non-blocking one could hit EAGAIN, which `availableData` raises as
+/// an Objective-C exception (a crash, not a Swift error). Bytes are kept and decoded only in `text`, so a UTF-8
+/// character split between two reads (a path with diacritics) comes out whole.
+final class StderrTail {
+    private let pipe = Pipe()
+    private let lock = NSLock()
+    private var bytes = Data()
+    private var drained = false
+
+    init(_ process: Process) {
+        process.standardError = pipe
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
+            guard let self else { return }
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            guard !self.drained else { return }
+            let data = h.availableData
+            if data.isEmpty {
+                h.readabilityHandler = nil   // EOF: otherwise the handler keeps firing with empty data
+            } else {
+                self.appendLocked(data)
+            }
+        }
+    }
+
+    var text: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return String(String(decoding: bytes, as: UTF8.self).suffix(4000))
+    }
+
+    func drain() -> String {
+        let handle = pipe.fileHandleForReading
+        handle.readabilityHandler = nil   // outside the lock: a handler still waiting for it then sees `drained`
+        lock.lock()
+        if !drained {
+            drained = true
+            let fd = handle.fileDescriptor
+            _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+            var buffer = [UInt8](repeating: 0, count: 65536)
+            while true {
+                let n = buffer.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
+                if n < 0 && errno == EINTR { continue }
+                if n <= 0 { break }   // EOF, or nothing more right now (EAGAIN)
+                appendLocked(Data(buffer[0..<n]))
+            }
+        }
+        lock.unlock()
+        return text
+    }
+
+    /// Caller holds `lock`. At most 16 000 bytes are kept (≥ 4000 characters of UTF-8).
+    private func appendLocked(_ data: Data) {
+        bytes.append(data)
+        if bytes.count > 16_000 { bytes = Data(bytes.suffix(16_000)) }
+    }
+}
+
+/// Runs a child process, streams stdout lines to a handler, captures the stderr tail for error messages.
+final class ToolProcess {
+    let process = Process()
+    private var stderr: StderrTail?
+
+    init(_ executable: String, _ args: [String]) {
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = args
+    }
+
+    var stderrText: String { stderr?.text ?? "" }
+
+    func captureStderr() {
+        stderr = StderrTail(process)
+    }
+
+    /// After the process ended: the complete stderr tail.
+    func drainStderr() -> String { stderr?.drain() ?? "" }
+
+    func onStdoutLine(_ handler: @escaping (String) -> Void) {
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        var pending = ""
+        pipe.fileHandleForReading.readabilityHandler = { h in
+            let data = h.availableData
+            guard !data.isEmpty else { return }
+            pending += String(decoding: data, as: UTF8.self)
+            while let nl = pending.firstIndex(of: "\n") {
+                handler(String(pending[..<nl]))
+                pending = String(pending[pending.index(after: nl)...])
+            }
+        }
+    }
+
+    private final class Output {
+        var data = Data()
+        let done = DispatchSemaphore(value: 0)
+    }
+
+    /// Runs to completion and returns stdout (only when no line handler is installed). With `timeout`, a tool still
+    /// running after it is killed (SIGKILL) and a ToolError says so — a hung tool must never hang the job (Windows
+    /// `ToolProcess.Run(…, timeout)`; Windows kills the whole process tree, here the tool itself).
+    @discardableResult
+    static func run(_ executable: String, _ args: [String], cwd: String? = nil, timeout: TimeInterval? = nil) throws -> String {
+        let p = ToolProcess(executable, args)
+        if let cwd { p.process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
+        let name = (executable as NSString).lastPathComponent
+        let out = Pipe()
+        p.process.standardOutput = out
+        p.captureStderr()
+        try p.process.run()
+        // stdout on its own thread, so the wait below can give up on a tool that never ends.
+        let output = Output()
+        Thread {
+            output.data = out.fileHandleForReading.readDataToEndOfFile()
+            output.done.signal()
+        }.start()
+        if let timeout {
+            let deadline = Date().addingTimeInterval(timeout)
+            while p.process.isRunning && Date() < deadline { usleep(20_000) }
+            if p.process.isRunning {
+                kill(p.process.processIdentifier, SIGKILL)
+                throw ToolError(tool: name, status: -1, message: "neodpověděl do \(String(format: "%.0f", timeout)) s — ukončen")
+            }
+        }
+        p.process.waitUntilExit()
+        output.done.wait()
+        guard p.process.terminationStatus == 0 else {
+            throw ToolError(tool: name, status: p.process.terminationStatus, message: p.drainStderr())
+        }
+        return String(decoding: output.data, as: UTF8.self)
+    }
+}
+```
+
+- [ ] **Step 5: `RawBackends.swift`** — celý blok od `// MARK: - Blackmagic RAW` po `// MARK: - RED` nahradit:
+
+```swift
+// MARK: - Blackmagic RAW (braw-decode helper → raw RGB48 frames on a pipe)
+
+/// A RAW decoder's error turned into a note for the clip (Windows `RawDecoderException`). `description` is the note;
+/// the decoder's own error, with its stderr (e.g. the library it loaded), stays in `decoderError` for the job's log.
+struct RawDecoderError: Error, CustomStringConvertible {
+    let note: String
+    let decoderError: ToolError
+
+    var description: String { note }
+}
+
+struct BRAWBackend: RawBackend {
+    let format = ClipFormat.braw
+    let missingHint = "Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)"
+
+    /// How long `braw-decode --info` may take: opening a clip is quick; a hung SDK must never hang the job (the clip
+    /// then gets a note instead).
+    static let defaultInfoTimeout: TimeInterval = 60
+
+    /// Decoder folder → library path. Injectable so tests do not depend on what is installed on the Mac.
+    var findLibrary: (String) -> String? = { BrawLibrary.find(decoderDir: $0) }
+    /// Tests shorten it.
+    var infoTimeout: TimeInterval = BRAWBackend.defaultInfoTimeout
+
+    /// braw-decode alone is not enough: without BlackmagicRawAPI.framework it can only fail (exit 3).
+    func isAvailable(_ tools: ExternalTools) -> Bool {
+        guard let exe = tools.brawDecoder else { return false }
+        return findLibrary(BRAWBackend.decoderDir(exe)) != nil
+    }
+
+    /// The folder braw-decode looks in first ("@exe": its real path, symlinks resolved).
+    static func decoderDir(_ exe: String) -> String {
+        URL(fileURLWithPath: exe).resolvingSymlinksInPath().deletingLastPathComponent().path
+    }
+
+    /// One line of `braw-decode --info`. gamma / gamut / colorScienceGen only when the SDK reports them (braw-decode
+    /// since task 27, and Windows); an older decoder leaves them out.
+    struct Info: Decodable {
+        let width: Int, height: Int, sourceWidth: Int, sourceHeight: Int
+        let fps: Double, frames: Int, timecode: String, camera: String
+        let gamma: String?, gamut: String?, colorScienceGen: Int?
+    }
+
+    static func parseInfo(_ json: String) throws -> Info {
+        try JSONDecoder().decode(Info.self, from: Data(json.utf8))
+    }
+
+    static func clipInfo(_ i: Info) -> ClipInfo {
+        var c = ClipInfo()
+        c.codec = "Blackmagic RAW"
+        c.width = i.sourceWidth
+        c.height = i.sourceHeight
+        c.frameRate = RawBackends.rational(i.fps)
+        c.frames = i.frames
+        c.duration = i.fps > 0 ? Double(i.frames) / i.fps : nil
+        c.timecode = i.timecode.isEmpty ? nil : i.timecode
+        c.camera = i.camera.isEmpty ? nil : i.camera
+        c.gamma = i.gamma.flatMap { $0.isEmpty ? nil : $0 }
+        c.gamut = i.gamut.flatMap { $0.isEmpty ? nil : $0 }
+        c.colorScienceGen = i.colorScienceGen
+        return c
+    }
+
+    private func info(_ path: String, scale: String, tools: ExternalTools) throws -> Info {
+        let out: String
+        do {
+            out = try ToolProcess.run(tools.brawDecoder!, ["--info", "--scale", scale, path], timeout: infoTimeout)
+        } catch let e as ToolError {
+            throw explain(e, tools: tools)
+        }
+        return try BRAWBackend.parseInfo(out)
+    }
+
+    /// braw-decode's exit codes 3 (library unusable), 4 (clip cannot be opened) and 5 (a frame failed) as a note for
+    /// the clip; the original error, with braw-decode's stderr, stays inside it for the log. Anything else (a timeout,
+    /// a usage error) is returned as it is. Texts as Windows `BrawBackend.Explain`.
+    func explain(_ e: ToolError, tools: ExternalTools) -> Error {
+        let lib = tools.brawDecoder.flatMap { findLibrary(BRAWBackend.decoderDir($0)) } ?? BrawLibrary.frameworkName
+        let note: String
+        switch e.status {
+        case 3: note = "Blackmagic RAW: knihovnu \(lib) nelze použít — nainstalujte aktuální Blackmagic RAW Player"
+        case 4: note = "Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna \(lib) starší než kamera (nainstalujte aktuální Blackmagic RAW Player)"
+        case 5: note = "Blackmagic RAW: snímek klipu se nepodařilo dekódovat (\(BRAWBackend.lastLine(e.message)))"
+        default: return e
+        }
+        return RawDecoderError(note: note, decoderError: e)
+    }
+
+    /// braw-decode's last stderr line without its "braw-decode: " prefix.
+    static func lastLine(_ stderr: String) -> String {
+        let line = stderr.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty } ?? ""
+        return line.hasPrefix("braw-decode: ") ? String(line.dropFirst("braw-decode: ".count)) : line
+    }
+
+    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo {
+        BRAWBackend.clipInfo(try info(path, scale: "eighth", tools: tools))
+    }
+
+    /// Smallest decode scale that still covers the target height — decoding less is much faster.
+    private func scale(sourceHeight: Int, target: Int) -> String {
+        for (name, div) in [("eighth", 8), ("quarter", 4), ("half", 2)] where sourceHeight / div >= target { return name }
+        return "full"
+    }
+
+    /// The frame braw-decode starts at for a thumbnail `seconds` into the clip. Rounded: `seconds` comes from the
+    /// exact rational rate (24000/1001), braw-decode reports a rounded fps (23.976) — truncating would land a frame early.
+    static func startFrame(seconds: Double, fps: Double, frames: Int) -> Int {
+        let rate = fps > 0 ? fps : 25
+        return min(max(0, frames - 1), max(0, Int((seconds * rate).rounded())))
+    }
+
+    func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
+                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+        let target = singleFrameAt == nil ? settings.height : 180
+        let s = scale(sourceHeight: c.height ?? 2160, target: target)
+        let dims = try info(path, scale: s, tools: tools)
+        var args = ["--scale", s]
+        if let t = singleFrameAt {
+            args += ["--start", String(BRAWBackend.startFrame(seconds: t, fps: dims.fps, frames: dims.frames)), "--count", "1"]
+        }
+        let feeder = Process()
+        feeder.executableURL = URL(fileURLWithPath: tools.brawDecoder!)
+        feeder.arguments = args + [path]
+        // braw-decode hands over full-range RGB (RGBU16) in the clip's own gamma: a built-in LUT needs the pre-map first.
+        return FrameSource(inputArgs: ["-f", "rawvideo", "-pix_fmt", "rgb48le", "-s", "\(dims.width)x\(dims.height)",
+                                       "-r", c.frameRate ?? "25", "-i", "-"],
+                           feeder: feeder, audioFromInput: false, fullRange: true,
+                           explainFeederError: { self.explain($0, tools: tools) })
+    }
+}
+```
+
+(`RawBackends.all` dál vytváří `BRAWBackend()` — výchozí hledání knihovny a limit 60 s.)
+
+- [ ] **Step 6: `Proxy.swift`**
+
+1. Do `struct FrameSource` za `cleanup` přidat:
+
+```swift
+    /// Turns the feeder's own failure (it ended non-zero while ffmpeg still read) into the clip's note — a
+    /// `RawDecoderError`; nil = the feeder's ToolError as it is (Windows `FrameSource.ExplainFeederError`).
+    var explainFeederError: ((ToolError) -> Error)?
+```
+
+2. V `ProxyRenderer` nahradit `let backends: [ClipFormat: RawBackend]` za:
+
+```swift
+    /// One backend per RAW format. Tests replace one (e.g. BRAW with a fake library search or a short --info timeout).
+    var backends: [ClipFormat: RawBackend]
+```
+
+3. V `probe(_:cardPath:)` poslední řádek `return try b.probe(path, tools: tools)` nahradit
+`return try logged { try b.probe(path, tools: tools) }`; ve `frameSource(…)` poslední řádek nahradit
+`return try logged { try b.source(path, info: info, settings: settings, look: look, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt) }`
+a pod `frameSource` přidat:
+
+```swift
+    /// A decoder error turned into a note for the clip (`RawDecoderError`): the decoder's own words — its stderr, e.g.
+    /// the library it loaded — go to the job's log, the note to the clip (Windows `Logged`).
+    private func logged<T>(_ decode: () throws -> T) throws -> T {
+        do {
+            return try decode()
+        } catch let e as RawDecoderError {
+            log?("\(e.decoderError)")
+            throw e
+        }
+    }
+```
+
+- [ ] **Step 7: Testy projdou** — Run: `swift test --filter "ToolProcessTests|BrawBackendTests|LutResolverTests"` → 0 chyb
+(`testInfoHungKilledAfterTheTimeout` ~2 s); pak celé `swift test`.
+
+- [ ] **Step 8: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 29 — BRAW jen s knihovnou Blackmagic RAW (bez ní se klip jen zkopíruje a ověří, nápověda jako Windows); braw-decode --info s limitem 60 s (zaseknutá knihovna úlohu nezasekne, poznámka „neodpověděl do 60 s — ukončen“); kódy 3/4/5 → česká poznámka u klipu, původní hláška braw-decode do logu; ToolProcess čte stderr celé i u nástroje, který hned skončí`
+
+Run: `git add -A mac/Sources mac/Tests docs && git commit -m "Mac: BRAW only with the library, --info timeout, Czech notes for braw-decode exit codes"`
+
+---
+
+### Task 30: Náhledy BRAW pod hlídačem, pumpa zavře výstup dekodéru
+
+Doplněk 2 ke spec — oddíl D.17. Port `windows/src/Offload.Core/ProxyRenderer.cs` (`Thumbnails` s hlídačem pro dekodér
+v rouře a zastavením po prvním zaseknutí / limitu `--info`, `IsBrawDecoder`; `RunFfmpeg`: `feederCut`, pumpa zavře výstup
+dekodéru, čekání 2 s na dekodér, `ExplainFeederError`); commity `7c3019f`, `c3a04f4`, `222d833`, `9db140f`, `b967c94`, `d3d3bc2`;
+testy `ProxyWatchdogTests.BrawThumbnail_*`, `ConsumerEndsFirst_*`, `BrawCoreTests.Feeder_*`.
+
+**Files:**
+- Modify: `mac/Sources/OffloadKit/FFmpegWatch.swift` (nová `Flag`)
+- Modify: `mac/Sources/OffloadKit/Proxy.swift` (`thumbnails`, `isBrawDecoder`, `runFFmpeg`, volání v `renderOnce`)
+- Create: `mac/Tests/OffloadKitTests/BrawFeederTests.swift`
+- Modify: `docs/VYVOJ-MAC.md`
+
+**Interfaces:**
+- Consumes: `StderrTail`, `RawDecoderError`, `FrameSource.explainFeederError`, `BrawTest` (úkoly 27, 29), `FFmpegStall`, `ProgressWatch`, `stallTimeout`, `log` (úkol 19).
+- Produces:
+  - `final class Flag { func set(); var isSet: Bool { get } }`
+  - `func ProxyRenderer.runFFmpeg(_:_:feeder:explainFeederError: ((ToolError) -> Error)? = nil, duration:progress:isCancelled:stallAfter:)` — dosavadní volání (FFmpegWatchTests) platí beze změny
+  - `thumbnails(…)` — signatura beze změny; náhledy z dekodéru v rouře hlídané (`stallTimeout`)
+
+Pravidla (1:1 s Windows):
+
+- **Náhled s dekodérem v rouře** (BRAW) běží pod hlídačem jako proxy: pokrok = data z dekodéru (ffmpeg u náhledu `-progress`
+  nepíše); 60 s, do prvních dat 180 s. Video soubory hlídané nejsou (beze změny).
+- **Po prvním zaseknutí** se další pozice klipu nezkoušejí (jinak až 3 × 180 s na klip). Chyba náhledu
+  `dekodér nebo ffmpeg se zasekl (60 s bez nového snímku)`, log `thumbnails <klip>: dekodér nebo ffmpeg se zasekl (60 s bez
+  nového snímku); the remaining frames are skipped`. Totéž po vypršení limitu `braw-decode --info`: log `thumbnails <klip>:
+  braw-decode failed (exit -1): neodpověděl do 60 s — ukončen; the remaining frames are skipped`. Texty poznámek u proxy beze změny.
+- **ffmpeg skončí dřív než dekodér** (náhled potřebuje jeden snímek, nebo ffmpeg selhal): pumpa si označí „odříznuto“ a zavře
+  i výstup dekodéru — `braw-decode` uvidí zavřenou rouru a skončí sám (kód 0); na dekodér se čeká nejvýš 2 s, pak SIGTERM.
+- **Posouzení dekodéru po konci ffmpeg:** skončil sám s kódem ≠ 0, zatímco ffmpeg ještě četl → chyba klipu (a přednost před
+  chybou ffmpeg, který viděl jen useknutý proud), přes `explainFeederError` česká poznámka a původní hláška do logu. Ukončený
+  signálem (SIGTERM po 2 s, zrušení, hlídač) nebo odříznutý pumpou → jeho kód se ignoruje, rozhoduje ffmpeg.
+
+- [ ] **Step 1: Padající testy** — `mac/Tests/OffloadKitTests/BrawFeederTests.swift` (bez knihovny i ffmpeg — skripty):
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+final class BrawFeederTests: XCTestCase {
+    private let lib = "/BM/BlackmagicRawAPI.framework"
+
+    /// Stand-in ffmpeg that reads its input to the end and prints no progress.
+    private func consumer(_ dir: TempDir) -> String { BrawTest.script(dir, "ffmpeg", "cat > /dev/null") }
+
+    private func renderer(_ dir: TempDir, decoder: String, log: LogLines? = nil, infoTimeout: TimeInterval = 60) -> ProxyRenderer {
+        let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools(ffmpeg: consumer(dir), brawDecoder: decoder))
+        r.stallTimeout = 1
+        r.backends[.braw] = BRAWBackend(findLibrary: { _ in "/BM/BlackmagicRawAPI.framework" }, infoTimeout: infoTimeout)
+        if let log { r.log = { log.add($0) } }
+        return r
+    }
+
+    // Review focus 11 (Windows ruling M3): a BRAW thumbnail (decoder piped into ffmpeg) runs under the stall watchdog.
+    func testThumbnailDecoderHangsKilledAsStalled() {
+        let dir = tempDir()
+        let fake = BrawTest.fakeDecoder(dir, info: BrawTest.printInfo(), frames: BrawTest.hang)
+        let t0 = Date()
+        XCTAssertThrowsError(try renderer(dir, decoder: fake.path).thumbnails(BrawTest.brawClip, cardPath: dir.sub("card"),
+                                                                          info: BrawTest.clipInfo(frames: 1))) { e in
+            XCTAssertEqual("\(e)", "dekodér nebo ffmpeg se zasekl (1 s bez nového snímku)")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 30)
+    }
+
+    // Windows ruling T8-extra, final fix M2: one stall per clip, and the log says why the other frames are missing.
+    func testThumbnailDecoderHangsOnlyOneStallAttempt() {
+        let dir = tempDir()
+        let fake = BrawTest.fakeDecoder(dir, info: BrawTest.printInfo(), frames: BrawTest.hang)
+        let log = LogLines()
+        let info = BrawTest.clipInfo(frames: 100)
+        XCTAssertEqual(ProxyRenderer.framePositions(info).count, 3)
+        let t0 = Date()
+        XCTAssertThrowsError(try renderer(dir, decoder: fake.path, log: log).thumbnails(BrawTest.brawClip, cardPath: dir.sub("card"),
+                                                                                    info: info)) { e in
+            XCTAssertTrue("\(e)".hasPrefix("dekodér nebo ffmpeg se zasekl"), "\(e)")
+        }
+        XCTAssertEqual(BrawTest.calls(fake.calls).filter { $0 != "--info" }.count, 1)
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 60)
+        XCTAssertTrue(log.lines.contains("thumbnails A001: dekodér nebo ffmpeg se zasekl (1 s bez nového snímku); the remaining frames are skipped"),
+                      "\(log.lines)")
+    }
+
+    // Windows final fix M1: a hung `braw-decode --info` (timeout) is not tried again at the next positions either.
+    func testThumbnailInfoHangsOnlyOneAttempt() {
+        let dir = tempDir()
+        let fake = BrawTest.fakeDecoder(dir, info: BrawTest.hang, frames: BrawTest.hang)
+        let log = LogLines()
+        let info = BrawTest.clipInfo(frames: 100)
+        XCTAssertThrowsError(try renderer(dir, decoder: fake.path, log: log, infoTimeout: 1)
+            .thumbnails(BrawTest.brawClip, cardPath: dir.sub("card"), info: info)) { e in
+            XCTAssertEqual("\(e)", "braw-decode failed (exit -1): neodpověděl do 1 s — ukončen")
+        }
+        XCTAssertEqual(BrawTest.calls(fake.calls), ["--info"])
+        XCTAssertTrue(log.lines.contains("thumbnails A001: braw-decode failed (exit -1): neodpověděl do 1 s — ukončen; the remaining frames are skipped"),
+                      "\(log.lines)")
+    }
+
+    // Windows final fix I1: the decoder fails while ffmpeg reads its frames — the same Czech note, its own line logged.
+    func testFeederDecoderExitCodeBecomesCzechNoteOriginalLogged() {
+        let dir = tempDir()
+        let line = "braw-decode: cannot open /card/A001.braw (0x80004005; library /BM/BlackmagicRawAPI.framework)"
+        let fake = BrawTest.fakeDecoder(dir, info: BrawTest.printInfo(), frames: BrawTest.fail(4, line))
+        let log = LogLines()
+        XCTAssertThrowsError(try renderer(dir, decoder: fake.path, log: log).thumbnails(BrawTest.brawClip, cardPath: dir.sub("card"),
+                                                                                    info: BrawTest.clipInfo(frames: 1))) { e in
+            XCTAssertTrue(e is RawDecoderError, "\(e)")
+            XCTAssertTrue("\(e)".hasPrefix("Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna \(lib)"), "\(e)")
+        }
+        XCTAssertTrue(log.lines.contains("braw-decode failed (exit 4): \(line)"), "\(log.lines)")
+    }
+
+    // A decoder failing while ffmpeg still reads stays the error — with its stderr, no explanation without one.
+    func testFeederFailsWhileFFmpegReadsIsTheError() {
+        let dir = tempDir()
+        let feeder = Process()
+        feeder.executableURL = URL(fileURLWithPath: BrawTest.script(dir, "feeder", "echo boom >&2\nexit 3"))
+        let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools())
+        XCTAssertThrowsError(try r.runFFmpeg(consumer(dir), [], feeder: feeder, duration: nil, progress: nil,
+                                             isCancelled: { false }, stallAfter: 30)) { e in
+            XCTAssertEqual("\(e)", "feeder failed (exit 3): boom")
+        }
+    }
+
+    /// A decoder that writes until a write fails (SIGPIPE ignored, like braw-decode), then writes `stopped` and exits
+    /// `code`; and a consumer that takes 1 KiB and ends, like ffmpeg with its one thumbnail frame.
+    private func writesUntilCut(_ dir: TempDir, code: Int) -> (feeder: Process, consumer: String, stopped: String) {
+        let stopped = dir.path + "/stopped.txt"
+        let feeder = Process()
+        feeder.executableURL = URL(fileURLWithPath: BrawTest.script(dir, "feeder",
+            "trap '' PIPE\n/bin/dd if=/dev/zero bs=1024 2>/dev/null\necho stopped > '\(stopped)'\nexit \(code)"))
+        return (feeder, BrawTest.script(dir, "consumer", "head -c 1024 > /dev/null"), stopped)
+    }
+
+    // Windows task 7: ffmpeg ends first → the pump closes the decoder's stdout, the decoder sees the broken pipe and
+    // stops by itself instead of blocking on a full pipe until it is terminated.
+    func testConsumerEndsFirstFeederSeesTheClosedPipeExitsByItself() throws {
+        let dir = tempDir()
+        let (feeder, consumer, stopped) = writesUntilCut(dir, code: 0)
+        let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools())
+        try r.runFFmpeg(consumer, [], feeder: feeder, duration: nil, progress: nil, isCancelled: { false }, stallAfter: 30)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stopped), "the feeder never saw its stdout closed (it was terminated)")
+        XCTAssertEqual(feeder.terminationReason, .exit)
+    }
+
+    // Windows task 7, fix 1: a decoder that fails because the pump cut its stdout is not the clip's error — ffmpeg decides.
+    func testConsumerEndsFirstFeederFailsOnTheCutPipeNotAnError() throws {
+        let dir = tempDir()
+        let (feeder, consumer, stopped) = writesUntilCut(dir, code: 1)
+        let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools())
+        try r.runFFmpeg(consumer, [], feeder: feeder, duration: nil, progress: nil, isCancelled: { false }, stallAfter: 30)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stopped), "the feeder never saw its stdout closed (it was terminated)")
+        XCTAssertEqual(feeder.terminationStatus, 1)
+    }
+}
+```
+
+- [ ] **Step 2: Ověřit selhání** — Run: `swift test --filter BrawFeederTests` → sestaví se (testy volají jen API z úkolů 19–29),
+ale selžou: náhled čeká 30 s na falešný dekodér a končí „no frame“ místo zaseknutí po 3 s, `stopped.txt` chybí (dekodér byl
+ukončen), poznámka u klipu není česká a v logu chybí původní hláška.
+
+- [ ] **Step 3: `FFmpegWatch.swift`** — na konec přidat:
+
+```swift
+/// A one-way flag set on one thread and read on another (the pump marks a decoder pipe it cut).
+final class Flag {
+    private let lock = NSLock()
+    private var value = false
+
+    func set() {
+        lock.lock()
+        value = true
+        lock.unlock()
+    }
+
+    var isSet: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+```
+
+- [ ] **Step 4: `Proxy.swift` (`ProxyRenderer`)**
+
+1. Celou funkci `thumbnails(…)` nahradit:
+
+```swift
+    /// First, middle and last frame as small JPEGs with captions, with the clip's LUT so log footage is readable.
+    /// `lut` nil = no LUT (thumbnails taken from a finished proxy, which already has it). When `isCancelled` turns
+    /// true the clip simply gets no thumbnails. One bad position does not cost the others — except a hung RAW decoder
+    /// (a stall, or `braw-decode --info` timing out), which would hang at the next positions too: the rest is skipped and
+    /// the log says so. If none works, the last error is thrown.
+    public func thumbnails(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil,
+                           isCancelled: () -> Bool = { false }) throws -> [Thumbnail] {
+        guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "ffmpeg not found") }
+        let lutFile = try prepareLUT(lut)
+        let look = ProxyRenderer.lookFor(lutFile != nil ? lut : nil, info: info)   // log only when a LUT really follows
+        let video = clip.format == .video
+        var result: [Thumbnail] = []
+        var lastError: Error?
+        for pos in ProxyRenderer.framePositions(info) {
+            if isCancelled() { return [] }
+            let out = tempDir + "/thumb-\(UUID().uuidString).jpg"
+            defer { unlink(out) }
+            var src: FrameSource?
+            do {
+                let s = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: pos.seconds, hwaccel: false)
+                src = s
+                defer { s.removeIntermediates() }
+                // The pre-map depends on the source (BRAW, full-range video).
+                let filter = FilterGraph.thumbnail(lutFile: lutFile, premap: ProxyRenderer.needsPreMap(lut, source: s, info: info))
+                var args = ["-hide_banner", "-loglevel", "error", "-y"]
+                if video { args += ["-ss", ProxyRenderer.seekSeconds(info, pos)] }
+                args += s.inputArgs
+                // Last frame: decode the final second and keep overwriting the image — the last write is the last frame.
+                args += video && pos.fromEnd ? ["-map", "0:v:0", "-vf", filter, "-update", "1"] : ["-frames:v", "1", "-vf", filter]
+                args += ["-q:v", "5", out]
+                // A RAW decoder piped in (BRAW) runs under the stall watchdog: the data it hands ffmpeg is the progress, and
+                // a hung SDK must not hang the job. A file input prints no progress here, so it is left alone (as Windows).
+                try runFFmpeg(ffmpeg, args, feeder: s.feeder, explainFeederError: s.explainFeederError, duration: nil,
+                              progress: nil, isCancelled: isCancelled, stallAfter: s.feeder != nil ? stallTimeout : nil)
+                guard FileManager.default.fileExists(atPath: out) else {
+                    throw ToolError(tool: "ffmpeg", status: 0, message: "no frame")
+                }
+                result.append(Thumbnail(jpeg: try Data(contentsOf: URL(fileURLWithPath: out)), label: ProxyRenderer.label(info, pos)))
+            } catch let e as FFmpegStall where src?.feeder != nil {
+                if isCancelled() { return [] }
+                // A hung decoder would hang at the next positions too (3 × the grace per clip): stop here.
+                let stall = FFmpegStall(note: "dekodér nebo " + e.note)
+                lastError = stall
+                log?("thumbnails \(clip.name): \(stall); the remaining frames are skipped")
+                break
+            } catch let e as ToolError where src == nil && e.status == -1 && isBrawDecoder(e.tool) {
+                if isCancelled() { return [] }
+                // `braw-decode --info` timed out: it would at the next positions too.
+                lastError = e
+                log?("thumbnails \(clip.name): \(e); the remaining frames are skipped")
+                break
+            } catch {
+                if isCancelled() { return [] }
+                lastError = error
+            }
+        }
+        if result.isEmpty, let lastError { throw lastError }
+        return result
+    }
+
+    /// A ToolError raised by braw-decode (ToolProcess names errors by the executable's file name).
+    private func isBrawDecoder(_ tool: String) -> Bool {
+        tools.brawDecoder.map { ($0 as NSString).lastPathComponent == tool } ?? false
+    }
+```
+
+2. V `renderOnce` volání `runFFmpeg` nahradit:
+
+```swift
+            try runFFmpeg(ffmpeg, args, feeder: src.feeder, explainFeederError: src.explainFeederError, duration: info.duration,
+                          progress: progress, isCancelled: isCancelled, stallAfter: stallTimeout)
+```
+
+3. Celou funkci `runFFmpeg` nahradit (`stop` beze změny):
+
+```swift
+    /// `stallAfter`: ffmpeg is killed and `FFmpegStall` thrown when it has reported no new frame or output time and taken
+    /// no data from the feeder for that long (3× before the first progress) — every proxy, and thumbnails with a feeder.
+    /// Cancelling is checked first and wins. A feeder (RAW decoder) is judged as on Windows: one that ended non-zero on
+    /// its own while ffmpeg still read is the clip's error, before ffmpeg's (`explainFeederError` may turn it into the
+    /// note); one that was terminated, or whose stdout the pump closed because ffmpeg had stopped reading, is not.
+    func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, explainFeederError: ((ToolError) -> Error)? = nil,
+                   duration: Double?, progress: ((Double) -> Void)?, isCancelled: () -> Bool,
+                   stallAfter: TimeInterval? = nil) throws {
+        let p = ToolProcess(ffmpeg, args)
+        p.captureStderr()
+        let watch = ProgressWatch()
+        // Set by the pump when ffmpeg stopped taking data and the feeder's stdout was closed under it.
+        let feederCut = Flag()
+        var feederStderr: StderrTail?
+        var pump: Thread?
+        if let feeder {
+            // The decoder's frames go through a pump: every chunk ffmpeg takes is progress (a slow RAW decoder is not stuck).
+            let fromFeeder = Pipe(), toFFmpeg = Pipe()
+            feeder.standardOutput = fromFeeder
+            // Its stderr names the cause when it fails on its own (braw-decode: the clip and the library it loaded).
+            feederStderr = StderrTail(feeder)
+            p.process.standardInput = toFFmpeg
+            // A write after ffmpeg died must fail with EPIPE, not take the app down with SIGPIPE.
+            _ = fcntl(toFFmpeg.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+            pump = Thread {
+                // Plain read(2)/write(2): read returns whatever the decoder has written so far. FileHandle.read(upToCount:)
+                // on a pipe waits for the whole count (or EOF) — a slow decoder would look stuck.
+                let inFD = fromFeeder.fileHandleForReading.fileDescriptor
+                let outFD = toFFmpeg.fileHandleForWriting.fileDescriptor
+                let size = 4 << 20
+                let buffer = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 16)
+                defer { buffer.deallocate() }
+                pumping: while true {
+                    let n = Darwin.read(inFD, buffer, size)
+                    if n < 0 && errno == EINTR { continue }
+                    if n <= 0 { break }   // the decoder is done (EOF) or gone
+                    var sent = 0
+                    while sent < n {
+                        let w = Darwin.write(outFD, buffer + sent, n - sent)
+                        if w < 0 && errno == EINTR { continue }
+                        if w <= 0 {
+                            // ffmpeg went away first (a thumbnail needs one frame, or it failed). Marked before the
+                            // decoder's end is closed below, so its exit code is known to be a consequence.
+                            feederCut.set()
+                            break pumping
+                        }
+                        sent += w
+                    }
+                    watch.dataFlowed()
+                }
+                try? toFFmpeg.fileHandleForWriting.close()
+                // Close the decoder's end too: a decoder still writing sees the broken pipe and stops by itself
+                // (braw-decode exits 0) instead of blocking on a full pipe until it is terminated.
+                try? fromFeeder.fileHandleForReading.close()
+            }
+        } else {
+            p.process.standardInput = FileHandle.nullDevice
+        }
+        p.onStdoutLine { line in
+            watch.advanced(line)
+            guard let progress, let d = duration, d > 0, line.hasPrefix("out_time_us="),
+                  let us = Double(line.dropFirst("out_time_us=".count)) else { return }
+            progress(min(1, us / 1_000_000 / d))
+        }
+        try feeder?.run()
+        do {
+            try p.process.run()
+        } catch {
+            feeder?.terminate()
+            throw error
+        }
+        pump?.start()
+        while p.process.isRunning {
+            if isCancelled() {
+                stop(p, feeder)
+                throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled")
+            }
+            if let limit = stallAfter, watch.isStalled(limit: limit) {
+                stop(p, feeder)
+                throw FFmpegStall(note: ProxyRenderer.stallNote(limit, retriedInSoftware: false))
+            }
+            usleep(200_000)
+        }
+        if let feeder {
+            // ffmpeg is done. A decoder still writing gets the closed pipe from the pump and ends by itself; one that has
+            // not ended within 2 s (decoding a frame nobody wants) is terminated — its exit code then says nothing.
+            let deadline = Date().addingTimeInterval(2)
+            while feeder.isRunning && Date() < deadline { usleep(20_000) }
+            if feeder.isRunning { feeder.terminate() }
+            feeder.waitUntilExit()
+            if feeder.terminationReason == .exit, feeder.terminationStatus != 0, !feederCut.isSet {
+                let error = ToolError(tool: feeder.executableURL?.lastPathComponent ?? "decoder", status: feeder.terminationStatus,
+                                      message: feederStderr?.drain() ?? "")
+                let explained = explainFeederError?(error) ?? error
+                if explained is RawDecoderError { log?("\(error)") }   // the decoder's own words for the log
+                throw explained
+            }
+        }
+        guard p.process.terminationStatus == 0 else {
+            // drain: ffmpeg has ended, the whole stderr tail (the handler may lag behind the exit — task 29)
+            throw ToolError(tool: "ffmpeg", status: p.process.terminationStatus, message: p.drainStderr())
+        }
+    }
+```
+
+- [ ] **Step 5: Testy projdou** — Run: `swift test --filter "BrawFeederTests|FFmpegWatchTests|ThumbnailTests|BrawBackendTests"` → 0 chyb
+(desítky sekund — skripty spí); pak celé `swift test`.
+
+**Ověřit na Macu** (spec D.19, ř. 4): `trap '' PIPE` se přenese na `/bin/dd` (ignorovaný signál přežije `exec`) a `dd` po EPIPE
+skončí — jinak `testConsumerEndsFirst…` hlásí „it was terminated“; pak místo `dd` použít malý Swift/C pomocník a zapsat do commitu.
+Oprava patří do testu jen tehdy, když `feeder.terminationReason` je `.uncaughtSignal` kvůli SIGPIPE skriptu — ne do `runFFmpeg`.
+
+- [ ] **Step 6: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 30 — náhledy BRAW pod hlídačem jako proxy (zaseknutý dekodér se ukončí, klip náhled nedostane, úloha jede dál); po prvním zaseknutí nebo limitu --info se další snímky klipu nezkoušejí a log to řekne; když ffmpeg skončí dřív, pumpa zavře i výstup dekodéru (braw-decode skončí sám s kódem 0, odříznutý dekodér se neposuzuje); dekodér, který selže, zatímco ffmpeg čte, je chyba klipu s českou poznámkou`
+
+Run: `git add -A mac/Sources mac/Tests docs && git commit -m "Mac: BRAW thumbnails under the stall watchdog; the pump closes the decoder's stdout when ffmpeg ends first"`
+
+---
+
+### Task 31: BRAW se vzorkem — celá cesta, dokumentace
+
+Doplněk 2 ke spec — oddíly D.18–D.20. Port `BrawSampleTests.Offload_ProbeThumbnailsProxy` a README Windows „Vzorek BRAW“.
+
+**Files:**
+- Create: `mac/Tests/OffloadKitTests/BrawSampleTests.swift`
+- Modify: `mac/README.md`, `docs/ROZDILY.md`, `docs/VYVOJ-MAC.md`
+
+**Interfaces:**
+- Consumes: vše z úkolů 27–30; `LutResolver`, `TestMedia.luts`, `TestMedia.requireFFmpeg`, `FFProbe.probe`.
+- Produces: jen test a dokumentace.
+
+- [ ] **Step 1: Test celé cesty** — `mac/Tests/OffloadKitTests/BrawSampleTests.swift`:
+
+```swift
+import XCTest
+@testable import OffloadKit
+
+/// End to end through Offload with a real clip: probe (gamma), LUT from the gamma, three thumbnails, a short proxy.
+/// Needs braw-decode, the library, OFFLOAD_BRAW_SAMPLE and ffmpeg/ffprobe.
+final class BrawSampleTests: XCTestCase {
+    func testOffloadProbeThumbnailsProxy() throws {
+        let exe = try BrawTest.requireDecoder()
+        let sample = try BrawTest.requireSample()
+        let (ffmpeg, ffprobe) = try TestMedia.requireFFmpeg()
+        let name = (sample as NSString).lastPathComponent
+        let size = (try FileManager.default.attributesOfItem(atPath: sample)[.size] as? NSNumber)?.int64Value ?? 0
+        let clip = Clip(name: (name as NSString).deletingPathExtension, path: name, format: .braw, segments: [name],
+                        bytes: size, isCameraProxy: false)
+        let card = (sample as NSString).deletingLastPathComponent
+        var s = ProxySettings()
+        s.enabled = true
+        s.height = 540
+        let r = ProxyRenderer(settings: s, tools: ExternalTools(ffmpeg: ffmpeg, ffprobe: ffprobe, brawDecoder: exe))
+        XCTAssertNil(r.unsupportedReason(clip))
+        let info = try r.probe(clip, cardPath: card)
+        XCTAssertEqual(info.codec, "Blackmagic RAW")
+        XCTAssertNotNil(info.gamma)
+        let lut = LutResolver.resolve(clip, info: info, clipFullPath: sample, settings: s, catalog: TestMedia.luts)
+        XCTAssertTrue(lut.reason.hasPrefix("Blackmagic RAW: "), lut.reason)   // from the gamma, not the old assumption
+        let thumbs = try r.thumbnails(clip, cardPath: card, info: info, lut: lut)
+        XCTAssertEqual(thumbs.count, min(3, info.frames ?? 0))
+        for t in thumbs { XCTAssertGreaterThan(t.jpeg.count, 1000) }
+        let out = tempDir().path + "/proxy.mov"
+        try r.render(clip, cardPath: card, info: info, lut: lut, output: out, progress: { _ in }, isCancelled: { false })
+        let probed = try FFProbe.probe(ffprobe, out)
+        XCTAssertEqual(probed.height, 540)
+        XCTAssertEqual(probed.frames, info.frames)
+    }
+}
+```
+
+Run: `swift test --filter BrawSampleTests` → bez vzorku přeskočeno; se vzorkem (`OFFLOAD_BRAW_SAMPLE=… swift test --filter Braw`)
+vše PASS a 0 přeskočených.
+
+- [ ] **Step 2: Ruční ověření se vzorkem** (až bude `.braw`; README-START „Vzorek BRAW“ krok 3–5):
+`Tools/bin/braw-decode --info --scale eighth "$OFFLOAD_BRAW_SAMPLE"` — nejdřív stderr, pak JSON; `swift run offload <složka se vzorkem>
+-d <cíl> --proxy` → v reportu tři snímky, „LUT: Blackmagic Film Gen 5 → Rec.709 (Blackmagic RAW: Blackmagic Design Film Gen 5)“
+(u klipu v Gen 5), proxy `.mov` se vizuálně shoduje s Blackmagic RAW Playerem s LUTem Film → Rec.709 (barvy, orientace, bez posunu
+o snímek; první/prostřední/poslední snímek odpovídají časům). Výsledek (kamera, gama, generace, co nesedělo) do `docs/VYVOJ-MAC.md`.
+
+- [ ] **Step 3: `mac/README.md`** — v tabulce formátů řádek Blackmagic RAW: sloupec nástroje `braw-decode → ffmpeg (LUT podle
+gamy klipu)`, sloupec instalace `Blackmagic RAW Player, SDK nebo DaVinci Resolve (bez knihovny se BRAW jen zkopíruje a ověří)`;
+za oddíl „Build“ přidat:
+
+~~~markdown
+### Vzorek BRAW (testy dekodéru Blackmagic RAW)
+
+`Tools/braw-decode/build.sh` sestaví `Tools/bin/braw-decode` (stačí Xcode; `scripts/build-app.sh` ho sestaví jen když chybí —
+po změně `braw-decode.cpp` spustit ručně). Za běhu potřebuje knihovnu `BlackmagicRawAPI.framework` — Blackmagic RAW Player
+nebo SDK (zdarma, https://www.blackmagicdesign.com/products/blackmagicraw) nebo DaVinci Resolve. Testy se skutečným klipem:
+
+```sh
+OFFLOAD_BRAW_SAMPLE="$HOME/Vzorky/A001_01011200_C001.braw" swift test --filter Braw   # 0 přeskočených
+```
+
+Ukázkové klipy: stránka Blackmagic RAW → „Download RAW Samples“ (formulář, zdarma; stovky MB až jednotky GB).
+~~~
+
+- [ ] **Step 4: `docs/ROZDILY.md`**
+  - Funkce a stav, řádek „Blackmagic RAW“, sloupec Mac: `✅ braw-decode (C++, knihovna z SDK / Player / Resolve); čeká ověření se vzorkem .braw`.
+  - Technologie: přidat řádek `| Dekodér BRAW | braw-decode (C++ nad BlackmagicRawAPI.framework, CFBundle) | braw-decode.exe (C# nad COM BlackmagicRawAPI.dll) |`.
+  - Záměrné rozdíly: odrážku „**Blackmagic RAW (`braw-decode`):** Windows `--info` navíc vydává …“ nahradit:
+    `- **Blackmagic RAW:** obě verze vybírají LUT podle gamy klipu z braw-decode --info (Film Gen 5 → vestavěný LUT; Video, Extended Video a Film Gen 4 bez LUTu — Gen 4 provizorně, ke schválení). Liší se jen technika dekodéru (Mac C++ a framework, Windows C# a COM DLL) a ukončení po časovém limitu --info (Windows ukončí strom procesů, Mac proces braw-decode — ten potomky nemá).`
+
+- [ ] **Step 5: Záznam a commit**
+
+`docs/VYVOJ-MAC.md`: `- Úkol 31 — BRAW: test celé cesty se vzorkem (OFFLOAD_BRAW_SAMPLE: analýza s gamou, LUT podle gamy, tři náhledy, proxy 540p), README „Vzorek BRAW“, ROZDILY (BRAW na obou stejně)`; ověření se vzorkem
+zapsat zvlášť, až proběhne (kamera, gama, výsledek).
+
+Run: `git add -A mac/Tests mac/README.md docs && git commit -m "Mac: BRAW end-to-end sample test, README and ROZDILY"`
