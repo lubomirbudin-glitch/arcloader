@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán HW (USB diagnostika), průběh
 
+- Úkol 3 — topologie USB: řadiče, huby, porty, fyzické konektory (USB 2 + USB 3 dvojče), externí huby
 - Úkol 2 — rychlost linky a schopnost zařízení (USB 2.0 / USB 3 5 Gb/s / 10 Gb/s+), oprava pasti „Speed=High" u USB 3
 - Úkol 1 — přístup ke stromu zařízení a USB hubům bez admin práv (cfgmgr32, IOCTL)
 
