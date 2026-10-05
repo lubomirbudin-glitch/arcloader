@@ -277,6 +277,31 @@ public class ProxyWatchdogTests
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
     }
 
+    /// A RAW decoder that writes until a write fails (its stdout was closed), then notes it in `stopped` and exits
+    /// with `exitCode`; and a consumer that takes one line and ends, like ffmpeg with its one thumbnail frame.
+    /// WriteFile on the raw stdout handle: .NET Framework's console stream and FileStream both swallow a broken pipe.
+    static FrameSource WritesUntilCut(string dir, string stopped, int exitCode, out string consumer)
+    {
+        var script = $$"""
+            Add-Type -Namespace Fake -Name Std -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n); [DllImport("kernel32.dll")] public static extern bool WriteFile(IntPtr h, byte[] b, int n, out int written, IntPtr o);'
+            $out = [Fake.Std]::GetStdHandle(-11)
+            $line = [Text.Encoding]::ASCII.GetBytes(('x' * 1023) + "`n")
+            $n = 0
+            while ([Fake.Std]::WriteFile($out, $line, $line.Length, [ref]$n, [IntPtr]::Zero)) { }
+            Set-Content -LiteralPath '{{stopped}}' -Value stopped
+            exit {{exitCode}}
+            """;
+        consumer = Path.Combine(dir, "consumer.cmd");
+        File.WriteAllText(consumer, "@set /p x=\r\n@exit /b 0\r\n");
+        return new FrameSource
+        {
+            InputArgs = ["-i", "-"],
+            FeederExe = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
+            FeederArgs = ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))],
+            AudioFromInput = false,
+        };
+    }
+
     /// Task 6 note: ffmpeg may end before the decoder does (a thumbnail takes one frame; or ffmpeg failed). The pump
     /// then closes the decoder's stdout, so the decoder sees the broken pipe and stops by itself (braw-decode exits 0)
     /// instead of blocking on a full pipe until it is killed.
@@ -285,28 +310,23 @@ public class ProxyWatchdogTests
     {
         using var dir = new TempDir();
         var stopped = Path.Combine(dir.Path, "stopped.txt");
-        // Writes until a write fails, notes it and exits 0, like braw-decode. WriteFile on the raw stdout handle:
-        // .NET Framework's console stream and FileStream both swallow a broken pipe.
-        var script = $$"""
-            Add-Type -Namespace Fake -Name Std -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n); [DllImport("kernel32.dll")] public static extern bool WriteFile(IntPtr h, byte[] b, int n, out int written, IntPtr o);'
-            $out = [Fake.Std]::GetStdHandle(-11)
-            $line = [Text.Encoding]::ASCII.GetBytes(('x' * 1023) + "`n")
-            $n = 0
-            while ([Fake.Std]::WriteFile($out, $line, $line.Length, [ref]$n, [IntPtr]::Zero)) { }
-            Set-Content -LiteralPath '{{stopped}}' -Value stopped
-            exit 0
-            """;
-        var src = new FrameSource
-        {
-            InputArgs = ["-i", "-"],
-            FeederExe = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
-            FeederArgs = ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))],
-            AudioFromInput = false,
-        };
-        var consumer = Path.Combine(dir.Path, "consumer.cmd");   // takes one line and ends, like ffmpeg with its one frame
-        File.WriteAllText(consumer, "@set /p x=\r\n@exit /b 0\r\n");
+        var src = WritesUntilCut(dir.Path, stopped, exitCode: 0, out var consumer);
         using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
-        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(30));   // a feeder ending with 0 is no error
+        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(30));
+        Assert.True(SpinWait.SpinUntil(() => File.Exists(stopped), TimeSpan.FromSeconds(10)), "the feeder never saw its stdout closed (it was killed)");
+    }
+
+    /// Fix round 1: a decoder that fails because the pump cut its stdout (ffmpeg already had what it wanted) is not the
+    /// clip's error — like a killed one, its exit code is ignored and ffmpeg's decides. (A decoder failing while ffmpeg
+    /// still reads stays an error: ProxyRendererTests.Feeder_Fails_ReportsFeederError.)
+    [Fact]
+    public void ConsumerEndsFirst_FeederFailsOnTheCutPipe_NotAnError()
+    {
+        using var dir = new TempDir();
+        var stopped = Path.Combine(dir.Path, "stopped.txt");
+        var src = WritesUntilCut(dir.Path, stopped, exitCode: 1, out var consumer);
+        using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
+        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(30));
         Assert.True(SpinWait.SpinUntil(() => File.Exists(stopped), TimeSpan.FromSeconds(10)), "the feeder never saw its stdout closed (it was killed)");
     }
 

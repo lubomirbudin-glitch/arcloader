@@ -29,6 +29,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 - Úkol 7 (M3) — náhledy BRAW (dekodér v rouře do ffmpeg) běží pod hlídačem zaseknutí jako proxy: dekodér, který nepošle data, se ukončí (do prvních dat 3× limit) a klip náhled nedostane, úloha jede dál
 - Úkol 7 — když ffmpeg skončí dřív než dekodér (náhled potřebuje jeden snímek, nebo ffmpeg selhal), pumpa zavře i výstup dekodéru: braw-decode hned uvidí zavřenou rouru a skončí sám s kódem 0, místo aby visel na plné rouře do zabití po 2 s; dekodér, který sám skončí s chybou, je dál chyba klipu
 - Úkol 7 — braw-decode.exe v balíčku (bin\), test celé cesty s klipem (proxy, tři snímky, LUT podle gamy) přes OFFLOAD_BRAW_SAMPLE, návod na vzorek v README
+- Úkol 7, oprava 1 — dekodér, kterému pumpa zavřela výstup (ffmpeg už skončil), se posuzuje jako ukončený: jeho kód se ignoruje a rozhoduje kód ffmpeg (jiný dekodér než braw-decode může na zavřené rouře skončit chybou a náhled by se neprávem počítal jako selhaný); dekodér, který selže, zatímco ffmpeg ještě čte, je dál chyba klipu
 
 ## 2026-10-05 — drobnosti po plánu 5
 

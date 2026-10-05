@@ -358,6 +358,8 @@ public sealed class ProxyRenderer : IDisposable
         Thread? pump = null;
         Stream? input = null, sink = null;
         bool feederKilled = false;
+        // Set by the pump when ffmpeg stopped taking data and the feeder's stdout was closed under it.
+        int feederCut = 0;
         var watch = new ProgressWatch();
         long lastAdvance = Environment.TickCount64;
         int advanced = 0;
@@ -394,7 +396,17 @@ public sealed class ProxyRenderer : IDisposable
                         int n;
                         while ((n = from.Read(buffer, 0, buffer.Length)) > 0)
                         {
-                            to.Write(buffer, 0, n);
+                            try
+                            {
+                                to.Write(buffer, 0, n);
+                            }
+                            catch (Exception)
+                            {
+                                // ffmpeg went away first (a thumbnail needs one frame, or it failed). Marked before the
+                                // feeder's end is closed below, so its exit code is known to be a consequence.
+                                Volatile.Write(ref feederCut, 1);
+                                break;
+                            }
                             Advance();
                         }
                     }
@@ -402,9 +414,8 @@ public sealed class ProxyRenderer : IDisposable
                     finally
                     {
                         try { to.Close(); } catch (Exception) { }
-                        // ffmpeg went away first (a thumbnail needs one frame, or it failed): close the decoder's end too,
-                        // so a decoder still writing sees the broken pipe and stops by itself (braw-decode exits 0)
-                        // instead of blocking on a full pipe until it is killed.
+                        // Close the decoder's end too, so a decoder still writing sees the broken pipe and stops by itself
+                        // (braw-decode exits 0) instead of blocking on a full pipe until it is killed.
                         try { from.Close(); } catch (Exception) { }
                     }
                 }) { IsBackground = true };
@@ -431,8 +442,9 @@ public sealed class ProxyRenderer : IDisposable
                 if (!feeder.WaitForExit(2000)) { feeder.Kill(); feederKilled = true; }
                 pump!.Join(2000);
             }
-            // A feeder that died on its own is the real cause; ffmpeg only saw a truncated stream.
-            if (feeder != null && !feederKilled && feeder.WaitForExit(0) && feeder.ExitCode != 0)
+            // A feeder that died on its own is the real cause; ffmpeg only saw a truncated stream. One that was killed,
+            // or whose stdout the pump closed because ffmpeg had stopped reading, is not: ffmpeg's exit code decides.
+            if (feeder != null && !feederKilled && Volatile.Read(ref feederCut) == 0 && feeder.WaitForExit(0) && feeder.ExitCode != 0)
                 throw new ToolError(feeder.Name, feeder.ExitCode, feeder.StderrTail);
             if (ff.ExitCode != 0) throw new ToolError("ffmpeg", ff.ExitCode, ff.StderrTail);
         }
