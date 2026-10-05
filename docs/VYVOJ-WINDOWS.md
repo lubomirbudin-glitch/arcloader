@@ -17,6 +17,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
 | 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | hotovo (čeká ruční test s klipy z kamer) |
 
+## 2026-10-05 — drobnosti po plánu 5
+
+- Ikona aplikace — karta se zelenou fajfkou na modrotyrkysovém čtverci; zdroj a generátor ve `shared/icon` (sdílené s Macem, `make_icon.py`, `.ico`, iconset pro macOS); ikona `Offload.exe`, `bin\offload.exe` i oken (hlavní okno, Hardware)
+
 ## 2026-10-05 — plán 5 (vestavěné LUTy), průběh
 
 - Závěrečné opravy — proxy výslovně BT.709 (matice, legální rozsah, značky v souboru), náhledy JPEG výslovně BT.601 (JFIF); ARRI MOV se pozná podle výrobce + modelu; důvod u S-Log2 „bez vestavěného LUTu“; návrh, FORMATY, ROZDILY a README srovnané s kódem (rozsah R3D/ARRIRAW, `lut.source` vč. `fallback`, záložní LUT jen vestavěný, BRAW dekodér v C#)

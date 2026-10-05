@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>offload</AssemblyName>
     <RootNamespace>Offload.Cli</RootNamespace>
+    <ApplicationIcon>..\..\..\shared\icon\Offload.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.CommandLine" Version="2.0.12" />
