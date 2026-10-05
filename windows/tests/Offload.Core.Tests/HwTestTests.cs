@@ -14,6 +14,13 @@ public class HwTestTests
     }
 
     [Fact]
+    public void Roles_ByDrive_LabelsDestinationsWithDriveLetter()
+    {
+        List<(string Role, string Root)> expected = [("Karta", @"G:\"), ("E:", @"E:\"), ("D:", @"D:\")];
+        Assert.Equal(expected, HwTest.Roles([@"G:\"], [@"E:\", @"D:\"], rolesByDrive: true));
+    }
+
+    [Fact]
     public void QuickTest_NoMeasurement_NothingWritten()
     {
         using var dir = new TempDir();

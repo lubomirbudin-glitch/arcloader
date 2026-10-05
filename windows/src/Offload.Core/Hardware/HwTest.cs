@@ -16,10 +16,11 @@ public static class HwTest
     public static string DefaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Offload", "hwtest.json");
 
-    internal static List<(string Role, string Root)> Roles(IReadOnlyList<string> cards, IReadOnlyList<string> destinations)
+    internal static List<(string Role, string Root)> Roles(IReadOnlyList<string> cards, IReadOnlyList<string> destinations,
+        bool rolesByDrive = false)
     {
         var roles = cards.Select((c, i) => (cards.Count == 1 ? "Karta" : $"Karta {i + 1}", c)).ToList();
-        roles.AddRange(destinations.Select((d, i) => ($"Cíl {i + 1}", d)));
+        roles.AddRange(destinations.Select((d, i) => (rolesByDrive ? d.TrimEnd('\\') : $"Cíl {i + 1}", d)));
         return roles;
     }
 
@@ -28,9 +29,10 @@ public static class HwTest
         line.Seconds > 0 && double.IsFinite(line.Seconds) ? line.Bytes / line.Seconds / 1e6 : null;
 
     public static HwTestResult Run(IReadOnlyList<string> cards, IReadOnlyList<string> destinations, bool measure,
-        long bytesPerDevice = 1_000_000_000, IReadOnlyDictionary<string, string>? portNames = null)
+        long bytesPerDevice = 1_000_000_000, IReadOnlyDictionary<string, string>? portNames = null,
+        bool rolesByDrive = false)
     {
-        var roles = Roles(cards, destinations);
+        var roles = Roles(cards, destinations, rolesByDrive);
         var drives = roles.Select(r => new RoleLink(r.Role, DriveLinks.Resolve(r.Root))).ToList();
         var connectors = UsbScanner.Scan().Connectors;
         var measurements = new List<DriveMeasurement>();

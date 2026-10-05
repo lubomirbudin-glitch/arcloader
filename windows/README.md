@@ -14,6 +14,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | Analýza klipů, 3 snímky, proxy, PDF | hotovo (plán 2) — QSV/AMF a ostrý test na médiu neověřeno |
 | RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: plán 3 |
 | braw-decode | plán 3 |
+| HW diagnostika USB | hotovo (CLI `offload ports`); dotaz při startu a sekce v GUI v plánu 4 |
 | GUI `Offload.exe` | plán 4 |
 
 ## Build a testy
@@ -32,6 +33,8 @@ Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 offload E:\ -d D:\Zaloha -d F:\Zaloha          # karta E: na dva disky, ověření, report
 offload verify D:\Zaloha\2026-10-04\A001        # znovu ověřit hotovou kopii
 offload bench --read E:\ --write D:\ --gb 2     # rychlost karty a disků
+offload ports                                 # porty, kde a jak rychle jsou disky připojené, doporučení
+offload ports --measure --card E:\ --dest D:\   # + změřit skutečnou rychlost
 offload E:\ -d D:\Zaloha -d F:\Zaloha --proxy --lut look.cube --frame-aspect 1.85   # + proxy s LUT a výřezem
 ```
 

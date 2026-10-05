@@ -13,11 +13,12 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 1 | jádro kopírování, ověření, reporty JSON/TXT/HTML/xxh64/MHL, CLI | hotovo (čeká ostrý test na kartě) |
 | 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | hotovo (čeká ostrý test na skutečném médiu) |
 | 3 | `braw-decode.exe` (C++, Blackmagic RAW SDK pro Windows) | naplánováno |
-| HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | naplánováno |
+| HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI) |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | naplánováno |
 
 ## 2026-10-05 — plán HW (USB diagnostika), průběh
 
+- Úkol 8 — CLI `offload ports [--measure]`, řetěz připojení a úzké hrdlo v `offload copy`
 - Úkol 7 — test HW: rychlý (topologie, linky) a s měřením (čtení karty, zápis + čtení cílů), uložení výsledku
 - Úkol 6 — řetěz článků během kopie: rychlost, % linky, součet na řadiči, úzké hrdlo
 - Úkol 5 — doporučení: zařízení pod svými možnostmi (port vs. kabel), sdílený řadič, volné rychlé a pomalé porty, odhad rychlosti offloadu

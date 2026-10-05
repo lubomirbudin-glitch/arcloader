@@ -1,5 +1,6 @@
 using System.Globalization;
 using Offload.Core;
+using Offload.Core.Hardware;
 
 namespace Offload.Cli;
 
@@ -15,9 +16,12 @@ sealed class ProgressDisplay : IDisposable
     long[] lastVerified = [];
     JobPhase? lastPhase;
 
-    public ProgressDisplay(OffloadJob job)
+    readonly IReadOnlyList<RoleLink>? chain;
+
+    public ProgressDisplay(OffloadJob job, IReadOnlyList<RoleLink>? chain = null)
     {
         this.job = job;
+        this.chain = chain;
         timer = new Timer(_ => Tick(), null, 500, 500);
     }
 
@@ -29,6 +33,22 @@ sealed class ProgressDisplay : IDisposable
             done.WaitOne();
         }
         lock (gate) ConsoleLine.Clear();
+    }
+
+    // Which link of the chain sets the pace right now; optional, never throws.
+    string Bottleneck(ProgressSnapshot s, double dt)
+    {
+        try
+        {
+            if (chain == null || chain.Count != 1 + s.WrittenBytes.Length || lastWritten.Length != s.WrittenBytes.Length) return "";
+            var rates = new List<double> { (s.ReadBytes - lastRead) / dt / 1_000_000 };
+            rates.AddRange(s.WrittenBytes.Select((b, i) => (b - lastWritten[i]) / dt / 1_000_000));
+            return ChainView.Bottleneck(ChainView.Build(chain, rates)) is string slow ? $"  | brzdí: {slow}" : "";
+        }
+        catch (Exception)
+        {
+            return "";
+        }
     }
 
     void Tick()
@@ -62,6 +82,7 @@ sealed class ProgressDisplay : IDisposable
                         var dests = string.Join("  ", s.WrittenBytes.Select((b, i) => $"D{i + 1} {Rate(b, lastWritten[i])}"));
                         line = $"copy {s.FileIndex + 1}/{s.TotalFiles}  {Format.Bytes(s.ReadBytes)} / {Format.Bytes(s.TotalBytes)}  "
                              + $"{pct,3:0}%  card {Rate(s.ReadBytes, lastRead)} MB/s  {dests} MB/s  {Path.GetFileName(s.CurrentFile)}";
+                        line += Bottleneck(s, dt);
                         break;
                     case JobPhase.Verifying:
                         line = "verify  " + string.Join("  ", s.VerifiedBytes.Select((b, i) =>

@@ -1,5 +1,6 @@
 using System.CommandLine;
 using Offload.Core;
+using Offload.Core.Hardware;
 
 namespace Offload.Cli;
 
@@ -88,6 +89,23 @@ static class CopyCommand
         foreach (var p in plan.CardPaths) Console.WriteLine($"  → {p}");
         if (config.AnalyzeClips || config.Proxy.Enabled)
             Console.WriteLine($"  ffmpeg: {config.Tools.Resolved().Ffmpeg ?? "NOT FOUND"}");
+        // Connection chain: informational only, must never fail a copy.
+        List<RoleLink>? chainLinks = null;
+        try
+        {
+            var links = new List<RoleLink> { new("Karta", DriveLinks.Resolve(plan.Source)) };
+            links.AddRange(plan.DestRoots.Select((d, i) => new RoleLink($"Cíl {i + 1}", DriveLinks.Resolve(d))));
+            var lines = new List<string> { "  Připojení:" };
+            lines.AddRange(links.Select(l => $"    {l.Role}: {l.Link.Description}"));
+            lines.AddRange(Advisor.Advise(links, UsbScanner.Scan().Connectors)
+                .Where(a => a.Kind == AdviceKind.Warning).Select(a => $"  ! {a.Text}"));
+            foreach (var l in lines) Console.WriteLine(l);
+            chainLinks = links;
+        }
+        catch (Exception)
+        {
+            // Hardware info unavailable: just omit it.
+        }
         if (dryRun) return 0;
 
         Console.CancelKeyPress += (_, e) =>
@@ -98,7 +116,7 @@ static class CopyCommand
         };
 
         OffloadReport? report;
-        using (new ProgressDisplay(job)) report = job.Run(message => Console.Error.WriteLine(message));
+        using (new ProgressDisplay(job, chainLinks)) report = job.Run(message => Console.Error.WriteLine(message));
 
         var status = job.Status();
         if (report != null)
