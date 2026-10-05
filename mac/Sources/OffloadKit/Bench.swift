@@ -11,7 +11,8 @@ public enum Bench {
     }
 
     /// Sequential read of existing files (largest first) at several block sizes, bypassing the page cache.
-    public static func read(path: String, limit: Int64, blockSizes: [Int]) throws -> [Line] {
+    /// `isCancelled`: checked before every block — a cancelled read throws `CancellationError`.
+    public static func read(path: String, limit: Int64, blockSizes: [Int], isCancelled: () -> Bool = { false }) throws -> [Line] {
         var targets: [(String, Int64)] = []
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir) else { throw IOError("open", path, ENOENT) }
@@ -36,10 +37,12 @@ public enum Bench {
                 defer { close(fd) }
                 var off: Int64 = 0
                 while total < limit {
+                    if isCancelled() { throw CancellationError() }
                     let n = try IO.pread(fd, buf, bs, off, path: file)
                     if n == 0 { break }
                     off += Int64(n)
                     total += Int64(n)
+                    if n < bs { break }
                 }
                 if total >= limit { break outer }
             }
@@ -48,29 +51,37 @@ public enum Bench {
         return lines
     }
 
-    /// Writes a temporary file (no cache, flushed to the platter/flash), reads it back, deletes it.
-    public static func write(dir: String, size: Int64, blockSize: Int) throws -> [Line] {
+    /// Writes a temporary file (no cache, flushed to the media), reads it back, deletes it — also when cancelled.
+    /// `isCancelled`: checked before every block of the write and of the read-back (`CancellationError`).
+    public static func write(dir: String, size: Int64, blockSize: Int, isCancelled: () -> Bool = { false }) throws -> [Line] {
+        if isCancelled() { throw CancellationError() }
         let path = dir + "/.offload-bench-\(getpid())"
         defer { unlink(path) }
         let buf = IO.allocateAligned(blockSize)
         defer { free(buf) }
         arc4random_buf(buf, blockSize)
 
-        let wfd = try IO.openWrite(path)
-        IO.preallocate(wfd, size)
         let t0 = Date()
-        var off: Int64 = 0
-        while off < size {
-            let n = Int(min(Int64(blockSize), size - off))
-            try IO.pwrite(wfd, buf, n, off, path: path)
-            off += Int64(n)
+        let wfd = try IO.openWrite(path)
+        do {
+            IO.preallocate(wfd, size)
+            var off: Int64 = 0
+            while off < size {
+                if isCancelled() { throw CancellationError() }
+                let n = Int(min(Int64(blockSize), size - off))
+                try IO.pwrite(wfd, buf, n, off, path: path)
+                off += Int64(n)
+            }
+            try IO.fullSync(wfd, path: path)
+            close(wfd)
+        } catch {
+            close(wfd)
+            throw error
         }
-        try IO.fullSync(wfd, path: path)
-        close(wfd)
         let w = Line(label: "write \(blockLabel(blockSize))", bytes: size, seconds: Date().timeIntervalSince(t0))
 
         let t1 = Date()
-        let r = try hashFile(path, chunkSize: blockSize, buffer: buf)
+        let r = try hashFile(path, chunkSize: blockSize, buffer: buf, isCancelled: isCancelled)
         let rl = Line(label: "read  \(blockLabel(blockSize)) + xxh64", bytes: r.size, seconds: Date().timeIntervalSince(t1))
         return [w, rl]
     }
