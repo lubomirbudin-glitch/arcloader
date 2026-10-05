@@ -13,11 +13,13 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 1 | jádro kopírování, ověření, reporty JSON/TXT/HTML/xxh64/MHL, CLI | hotovo (čeká ostrý test na kartě) |
 | 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | hotovo (čeká ostrý test na skutečném médiu) |
 | 3 | `braw-decode.exe` (C++, Blackmagic RAW SDK pro Windows) | naplánováno |
-| HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI) |
-| 4 | WPF GUI, detekce a vysunutí karet, balíček | naplánováno |
+| HW | test USB portů (CLI, v GUI na vyžádání), doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI + GUI) |
+| 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
+| 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | naplánováno |
 
 ## 2026-10-05 — plán 4 (GUI), průběh
 
+- Úkol 10 — balíček Offload-win-x64.zip (Offload.exe + bin\offload.exe + ffmpeg), návod k aplikaci a checklist ručního testu
 - Úkol 9 — Hardware v GUI: kontrola USB portů jen na vyžádání (menu Nástroje › „Prověřit USB porty…“, Ctrl+U, tlačítko v sekci Hardware; při startu se už neptá), okno Hardware (připojení, doporučení, měření s potvrzením a okamžitým zastavením, USB porty s vlastními názvy), vždy jen jeden test naráz, sekce Hardware s posledním testem
 - Úkol 8 — spuštění a fronta: karty úloh s průběhem, rychlostmi, odhadem času a řetězem připojení s úzkým hrdlem, zelený pruh a vysunutí karty, report a Průzkumník, zrušení, zavření okna během kopie, zvuk a blikání v hlavním panelu
 - Úkol 7 — levý panel: karty (automaticky při vložení, ruční složka, název složky), cíle (volné místo, souborový systém, nepřipojený disk), datum a ověření, proxy, dekodéry

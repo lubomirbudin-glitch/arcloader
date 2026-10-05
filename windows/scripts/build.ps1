@@ -27,4 +27,8 @@ foreach ($t in 'ffmpeg.exe', 'ffprobe.exe') {
     }
     if ($src) { Copy-Item $src (Join-Path $out 'bin'); Write-Host "bundled $t from $src" } else { Write-Warning "$t not bundled - proxies and thumbnails will need it at runtime" }
 }
+$zip = Join-Path $root 'build\Offload-win-x64.zip'
+if (Test-Path $zip) { Remove-Item -Force $zip }
+Compress-Archive -Path $out -DestinationPath $zip
+Write-Host "zipped $zip"
 Write-Host "built $out"

@@ -38,9 +38,9 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | RED R3D (REDline) | ✅ | ✅ kód, neověřeno s nástroji |
 | ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ | ✅ kód, neověřeno s nástroji |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
-| GUI: detekce karet, fronta, vysunutí | ✅ | ⏳ plán 4 |
-| **Test USB portů při startu + doporučení** | ❌ | ✅ CLI (GUI v plánu 4) |
-| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; plný pohled po článcích (rychlost, % linky, součet na řadiči) v GUI (plán 4) |
+| GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
+| **Test USB portů na vyžádání + doporučení** | ❌ | ✅ CLI + GUI |
+| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
 
@@ -74,7 +74,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **CLI na Windows je v `bin\`**, protože `Offload.exe` a `offload.exe` by ve stejné složce kolidovaly
   (NTFS nerozlišuje velikost písmen).
 - **HW diagnostika (USB porty, propustnost článků)** je zatím jen na Windows — na přání uživatele. V CLI se z propustnosti
-  článků ukazuje jen to, který článek brzdí (stavový řádek `offload copy`); pohled na každý článek zvlášť bude v GUI (plán 4).
+  článků ukazuje jen to, který článek brzdí (stavový řádek `offload copy`); GUI ukazuje i řetěz připojení a úzké hrdlo
+  na kartě úlohy a okno Hardware.
 - **USB rychlosti a porty:** 10 vs 20 Gb/s se nerozlišuje (Windows to bez neověřeného IOCTL nehlásí) — zobrazuje se
   „10 Gb/s a víc“; fyzickou polohu portu Windows neznají spolehlivě, porty pojmenuje uživatel.
 - **Report při zrušeném ověření:** když je `verified` = false, Windows počítá soubory „zapsáno“ i „ověřeno“ jako
@@ -89,6 +90,15 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Zrušená úloha v GUI:** karta úlohy na Windows ukáže jen oranžové „Zrušeno — karta není kompletně zálohovaná.“
   místo červeného „N souborů selhalo…“ a bez souhrnu rychlosti (rychlost useknuté kopie by klamala). Mac zatím
   ukazuje červený text i souhrn.
+- **Upozornění po dokončení:** Windows hraje zvuk a bliká tlačítkem v hlavním panelu místo notifikace Macu
+  (nebalená aplikace umí toast jen po registraci).
+- **Vysunutí karty:** karta ve čtečce se vysune jako médium, čtečka zůstane připojená; interní disky a složky
+  se nevysouvají nikdy. Skutečné vysunutí zatím není vyzkoušené na kartě (položka 4 ručního testu).
+- **GUI navíc na Windows:** zkratka Ctrl+Enter pro spuštění, tlačítko „Průzkumník“, upozornění „Doporučeno NTFS“
+  u cíle na exFAT/FAT32 (Mac doporučuje APFS), okno Hardware s kontrolou USB portů na vyžádání (Ctrl+U) a vlastními
+  názvy portů — jen na Windows.
+- **Složka jako argument:** aplikace přijme složku jako argument, takže ji lze přetáhnout na `Offload.exe`.
+  `--no-hw-prompt` se přijímá, ale nic nedělá (kontrola USB portů se při startu nespouští).
 - **R3D/ARRI bez proxy** zatím nemají náhledy (stejně jako na Macu).
 - **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
   a ukazuje ho v řádku „Proxy: H.264 (h264_nvenc), …“ v HTML/PDF. Mac klíč nezná a ignoruje ho.
