@@ -64,6 +64,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Detekce karet | `NSWorkspace` notifikace | `WM_DEVICECHANGE` |
 | Vysunutí | `unmountAndEjectDevice` | `FSCTL_LOCK/DISMOUNT_VOLUME` + `CM_Request_Device_Eject` |
 | Nastavení | `UserDefaults` | `%APPDATA%\Offload\settings.json` (stejné schéma) |
+| Ikona aplikace | Offload.icns z shared/icon/Offload.iconset (iconutil) | Offload.ico ze shared/icon (exe i okna) |
+| Vestavěné LUTy v balíčku | Offload.app/Contents/Resources/luts | Offload\luts |
 
 ## Záměrné rozdíly
 

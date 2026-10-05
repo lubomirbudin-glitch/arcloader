@@ -1,19 +1,33 @@
 #!/bin/zsh
-# Builds build/Offload.app: SwiftUI app + offload CLI + bundled ffmpeg/ffprobe/braw-decode.
+# Builds build/Offload.app: SwiftUI app + offload CLI + bundled ffmpeg/ffprobe/braw-decode, the built-in LUTs and the icon.
+# The LUTs and the icon come from the repo's shared/ folder (committed; Python is needed only to regenerate them).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+SHARED=../shared
+if [[ ! -f $SHARED/luts/luts.json ]]; then
+    echo "error: $SHARED/luts/luts.json missing — build from a full clone of the repo (mac/ and shared/)"
+    exit 1
+fi
 swift build -c release --product OffloadApp
 swift build -c release --product offload
 [[ -x Tools/bin/braw-decode ]] || Tools/braw-decode/build.sh
 
 APP=build/Offload.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/bin"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/bin" "$APP/Contents/Resources/luts"
 cp .build/release/OffloadApp "$APP/Contents/MacOS/Offload"
 cp .build/release/offload "$APP/Contents/Resources/bin/offload"
 for t in ffmpeg ffprobe braw-decode; do
     [[ -x Tools/bin/$t ]] && cp Tools/bin/$t "$APP/Contents/Resources/bin/" || echo "warning: Tools/bin/$t missing"
 done
+# Built-in LUTs: the app finds Resources/luts, the CLI in Resources/bin finds ../luts (LutCatalog.findFolder).
+cp $SHARED/luts/luts.json $SHARED/luts/*.cube "$APP/Contents/Resources/luts/"
+# App icon from the shared iconset (16–512 px, @1x and @2x).
+if [[ -d $SHARED/icon/Offload.iconset ]]; then
+    iconutil -c icns $SHARED/icon/Offload.iconset -o "$APP/Contents/Resources/Offload.icns"
+else
+    echo "warning: $SHARED/icon/Offload.iconset missing — the app has no icon"
+fi
 VERSION=$(sed -n 's/.*static let string = "\(.*\)".*/\1/p' Sources/OffloadKit/Report.swift)
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -23,6 +37,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>Offload</string>
   <key>CFBundleIdentifier</key><string>cz.budin.offload</string>
   <key>CFBundleExecutable</key><string>Offload</string>
+  <key>CFBundleIconFile</key><string>Offload</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
