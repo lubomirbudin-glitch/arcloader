@@ -323,6 +323,15 @@ aplikace není sandboxovaná).
   porty obou druhů a USB 2 port nemá dvojče, jeho `supportsUsb3 = nil` (neznámé) — aplikace nikdy neoznačí polovinu
   USB 3 zásuvky jako „jen USB 2.0“. Hub jen s USB 2 porty → `false`. Párování je čistá funkce `UsbScanner.pair`
   (testovaná).
+- **Dvojčata přes řadiče (ověřeno úkolem 14 na MacBook Pro 2019 Intel, macOS 26):** USB 2 poloviny všech čtyř USB-C
+  zásuvek visí na řadiči PCH `XHC1`, USB 3 poloviny na řadičích Thunderbolt `XHC2`/`XHC3`. Obě poloviny se navzájem
+  jmenují cestou v registru (`UsbProtocolCompanion (3.x)` na USB 2 portu, `(2.0)`/`(1.x)` na USB 3 portu);
+  `UsbCPortNumber` má jen USB 3 polovina, nepáruje tedy nic. Skener páruje podle těchto cest (oboustranně), USB 2
+  polovinu s dvojčetem na jiném řadiči zařadí do kořenového hubu řadiče její USB 3 poloviny (jedna zásuvka, id
+  `<USB 3 řadič>#<číslo USB 2 portu>`); řadič bez vlastních zásuvek se nevypíše. Provoz disku jde dál přes skutečný
+  řadič nad zařízením (`UsbLink.controllerId`). U externího USB 3 hubu nemají porty polovin žádný údaj o dvojčeti —
+  `usbLink` je páruje stejně jako seznam portů (stejné číslo na druhé polovině hubu), takže disk na USB 2 polovině
+  USB 3 hubu nedostane „jen USB 2.0“.
 - Zařízení = dítě portu, které je `IOUSBHostDevice` (záloha `IOUSBDevice`). Vlastnosti: název `USB Product Name`
   (záloha `kUSBProductString`, jinak jméno v registru), `idVendor`, `idProduct`, `bcdUSB`, `locationID`,
   `bDeviceClass` (9 = hub → rekurze do jeho portů, max. hloubka 6). **Rychlost linky:** `UsbLinkSpeed` (bit/s:
@@ -543,12 +552,12 @@ Ruční ověření (na Macu, s hardwarem) je v každém úkolu plánu s přesný
 |---|---|---|
 | Třída řadiče | `AppleUSBXHCI` (podtřídy `AppleUSBXHCIPCI`, `AppleT8103USBXHCI` …), báze `AppleUSBHostController` | `ioreg -p IOService -w0 -r -c AppleUSBXHCI -d 1` |
 | Třída portu a číslo | `AppleUSBHostPort`, vlastnost `port` = Data LE | `ioreg -p IOService -l -w0 -r -c AppleUSBHostPort \| grep -E '"port"\|class'` |
-| Párování HS/SS | `UsbCPortNumber` u USB-C; jinak neznámé → `nil` | stejný výpis: hledat vlastnost se stejnou hodnotou u `…20…Port` a `…30…Port` jedné zásuvky (kandidáti `UsbCPortNumber`, `UsbCompanionPortPresent`, `kUSBHostPortPropertyCompanion…`) |
+| Párování HS/SS | `UsbCPortNumber` u USB-C; jinak neznámé → `nil`. **Ověřeno (Intel MBP 2019, macOS 26):** páruje `UsbProtocolCompanion (3.x)`/`(2.0)` (cesta dvojčete, i přes řadiče XHC1 ↔ XHC2/XHC3); `UsbCPortNumber` jen na USB 3 polovině | stejný výpis: hledat vlastnost se stejnou hodnotou u `…20…Port` a `…30…Port` jedné zásuvky (kandidáti `UsbCPortNumber`, `UsbCompanionPortPresent`, `kUSBHostPortPropertyCompanion…`) |
 | Typ konektoru | `UsbConnector` (ACPI `_UPC`: 9/10/11 USB-C, 255 interní) | výpis portů |
 | Zařízení je dítě portu | ano (`IOUSBHostDevice` pod `AppleUSB…Port`) | `ioreg -p IOService -w0 -r -c AppleUSBHostPort -d 2` |
-| Porty hubu pod ovladačem hubu | porty hubu visí pod `AppleUSB20Hub`/`AppleUSB30Hub…` (dítě `IOUSBHostDevice`), ne přímo pod zařízením; kód bere obojí | `ioreg -p IOService -w0 -r -c IOUSBHostDevice -d 3` s připojeným hubem |
+| Porty hubu pod ovladačem hubu | porty hubu visí pod `AppleUSB20Hub`/`AppleUSB30Hub…` (dítě `IOUSBHostDevice`), ne přímo pod zařízením; kód bere obojí. **Ověřeno:** ano, pod ovladačem; porty hubu nemají údaj o dvojčeti | `ioreg -p IOService -w0 -r -c IOUSBHostDevice -d 3` s připojeným hubem |
 | Hodnoty `port` a Apple Silicon | na `usb-drd*` jeden HS + jeden SS port, možná oba `port` = 1; kód přečísluje a spáruje | výpis portů (`ioreg … -c AppleUSBHostPort`) na Apple Silicon i Intel Macu |
-| Přípona „(Thunderbolt)“ | jen PCI řadič za Thunderbolt předkem | `ioreg -p IOService -w0 -t -r -c AppleUSBXHCI` |
+| Přípona „(Thunderbolt)“ | jen PCI řadič za Thunderbolt předkem. **Ověřeno (Intel):** XHC2/XHC3 (`AppleUSBXHCITR`) mají mezi předky jen `IOPCIDevice`/`IOPCI2PCIBridge` → bez přípony | `ioreg -p IOService -w0 -t -r -c AppleUSBXHCI` |
 | Rychlost linky | `UsbLinkSpeed` (bit/s), záloha `Device Speed` 0–5 | `ioreg -p IOUSB -l -w0 \| grep -E '"(USB Product Name\|UsbLinkSpeed\|Device Speed\|bcdUSB\|locationID)"'`; porovnat se `system_profiler SPUSBDataType -json` (`"speed"`) |
 | UAS | třída `IOUSBAttachedSCSI` mezi médiem a zařízením | `ioreg -l -w0 -r -c IOUSBHostDevice \| grep -iE 'AttachedSCSI\|MassStorage'` |
 | Protokol disku přes APFS | `DADiskCopyDescription` u `diskNsM` vrací `DeviceProtocol` fyzického disku | `diskutil info -plist /Volumes/X` (`BusProtocol`, `DeviceModel`), a v kódu kouřový test |

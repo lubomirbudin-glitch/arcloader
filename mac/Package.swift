@@ -13,7 +13,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "CXXHash", path: "Sources/CXXHash"),
-        .target(name: "OffloadKit", dependencies: ["CXXHash"]),
+        .target(name: "OffloadKit", dependencies: ["CXXHash"],
+                linkerSettings: [.linkedFramework("IOKit"), .linkedFramework("DiskArbitration")]),
         .executableTarget(name: "OffloadApp", dependencies: ["OffloadKit"]),
         .executableTarget(
             name: "offload",
