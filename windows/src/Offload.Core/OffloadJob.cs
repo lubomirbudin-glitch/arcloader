@@ -177,6 +177,8 @@ public sealed class OffloadJob
         }
         catch (Exception e)
         {
+            log?.Invoke($"stage 2 failed: {e.Message}");
+            WritePdfReports(report, plan, log);
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
         }
     }
@@ -243,7 +245,7 @@ public sealed class OffloadJob
         }
         report.Clips = entries;
         report.Proxy = Config.Proxy;
-        RewriteReports(report, plan);
+        RewriteReports(report, plan, log);
 
         if (!Config.Proxy.Enabled || IsCancelled) return report;
         Update(s => s with { Phase = JobPhase.Proxies, ClipCount = entries.Count });
@@ -307,7 +309,7 @@ public sealed class OffloadJob
             }
         }
         report.Clips = entries;
-        RewriteReports(report, plan);
+        RewriteReports(report, plan, log);
         return report;
     }
 
@@ -345,12 +347,12 @@ public sealed class OffloadJob
         }
     }
 
-    static void RewriteReports(OffloadReport report, OffloadPlan plan)
+    static void RewriteReports(OffloadReport report, OffloadPlan plan, Action<string>? log)
     {
         foreach (var path in plan.CardPaths)
         {
             try { report.Write(path, includeHashRecords: false); }
-            catch (Exception) { /* the first report is already there; this only adds clip details */ }
+            catch (Exception e) { log?.Invoke($"report rewrite {path}: {e.Message}"); /* the first report is already there; this only adds clip details */ }
         }
     }
 
@@ -360,7 +362,15 @@ public sealed class OffloadJob
         NativeIO.Mkdirs(dir);
         var part = Path.Combine(dir, "." + Path.GetFileName(dst) + ".part");
         NativeIO.Delete(part);
-        File.Copy(src, part);
-        NativeIO.Move(part, dst, replace: true);
+        try
+        {
+            File.Copy(src, part);
+            NativeIO.Move(part, dst, replace: true);
+        }
+        catch
+        {
+            NativeIO.Delete(part);
+            throw;
+        }
     }
 }

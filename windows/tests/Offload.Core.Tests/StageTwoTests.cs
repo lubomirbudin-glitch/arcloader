@@ -137,5 +137,22 @@ public class StageTwoTests
         Assert.True(s.SafeToEject);
         var proxyDir = Path.Combine(job.Plan!.CardPaths[0], "_PROXY");
         Assert.True(!Directory.Exists(proxyDir) || Directory.GetFiles(proxyDir, "*.part").Length == 0);
+        Assert.Equal(ProxyStatus.Failed, job.Report!.Clips.Single(c => c.Clip.Name == "long").ProxyStatus);
+        Assert.True(!Directory.Exists(proxyDir) || !File.Exists(Path.Combine(proxyDir, "long.mov")));
+    }
+
+    [FfmpegFact]
+    public void NoVerify_ProxiesFromWrittenCopy()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestMedia.MakeClip(Path.Combine(card, "clip.mov"), seconds: 1);
+        var options = Options();
+        options.Verify = false;
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")]) { Verify = false, Proxy = new ProxySettings { Enabled = true, Height = 360 } }, options);
+        var report = job.Run();
+        Assert.Equal(JobPhase.Done, job.Status().Phase);
+        Assert.False(job.Status().SafeToEject);
+        Assert.Equal(ProxyStatus.Done, Assert.Single(report!.Clips).ProxyStatus);
     }
 }
