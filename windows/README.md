@@ -39,8 +39,8 @@ Na Windows se čte i zapisuje mimo systémovou cache (`FILE_FLAG_NO_BUFFERING`),
 `FlushFileBuffers`; ověření tak čte data z disku, ne z RAM. Svazky, které to neumí (některé síťové),
 přejdou na běžný zápis a report to uvede.
 
-PDF tiskne Microsoft Edge v režimu bez okna (je ve Windows vždy). ffmpeg/ffprobe jsou v `bin\` vedle `offload.exe`
-(build gyan.dev, licence GPL — pro vlastní použití v pořádku, při dalším šíření je třeba přiložit licenci a zdroj ffmpeg).
+PDF tiskne Microsoft Edge v režimu bez okna (je ve Windows vždy). ffmpeg/ffprobe jsou v `bin\` vedle `offload.exe` (build skript je vezme z `windows\tools\bin`, jinak z PATH —
+na tomto PC build gyan.dev, licence GPL; při dalším šíření je třeba přiložit licenci a zdroj ffmpeg).
 
 ## ASC MHL a `ascmhl` na Windows
 

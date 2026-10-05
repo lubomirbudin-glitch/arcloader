@@ -32,7 +32,6 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-04 — plán 1 (jádro + CLI), průběh
 
-- Úkol 11 — balíček s ffmpeg/ffprobe, dokumentace
 Implementace po úkolech; každý úkol napsal subagent a zkontroloval nezávislý reviewer.
 - Závěrečná kontrola plánu 1 — opravy: JSON/TXT/HTML s konci řádků `\n`, nulování přesahu nebufferovaného zápisu, report při zrušeném ověření nepočítá hotové soubory jako chybné, odmítnutí zdroje, který je sám offload, dvakrát zadaného cíle a neplatných voleb (velikost bloku, buffery, datum), opravená dokumentace
 - Úkol 17 — build skript scripts\build.ps1 (self-contained offload.exe), README, MHL ověřený nástrojem ascmhl (`becfbad`)
