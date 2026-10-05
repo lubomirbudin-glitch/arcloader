@@ -121,7 +121,8 @@ public class JobQueueTests
         using var finished = new ManualResetEventSlim();
         q.JobFinished += _ => finished.Set();
         q.Enqueue(new JobQueue.Runner(job, null));
-        Assert.True(finished.Wait(TimeSpan.FromSeconds(30)));
+        // Completion, not speed: ~9 s alone, 27 s+ in the parallel full suite on a busy PC — 30 s was too tight.
+        Assert.True(finished.Wait(TimeSpan.FromSeconds(120)));
         Assert.Equal(JobPhase.Done, job.Status().Phase);
         Assert.True(File.Exists(Path.Combine(dir.Path, "d1", "2026-10-05", "card", "A001.MOV")));
     }

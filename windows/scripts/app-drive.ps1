@@ -1,7 +1,8 @@
 # Development helpers for the GUI: start Offload.exe, press its buttons (UI Automation), take screenshots.
 #   . .\scripts\app-drive.ps1
 #   $env:OFFLOAD_SETTINGS_DIR = 'D:\tmp\offload-settings'   # isolated settings for the run
-#   $p = Start-Offload -Exe .\src\Offload.App\bin\Debug\net10.0-windows\Offload.exe -Arguments '--no-hw-prompt'
+#   $p = Start-Offload -Exe .\src\Offload.App\bin\Debug\net10.0-windows\Offload.exe
+#   Invoke-OffloadButton $p 'HardwareButton'                 # USB check on demand (or Ctrl+U / Nástroje menu)
 #   Invoke-OffloadButton $p 'StartButton'
 #   Save-OffloadScreenshot $p 'D:\tmp\shot.png'
 #   Stop-Offload $p

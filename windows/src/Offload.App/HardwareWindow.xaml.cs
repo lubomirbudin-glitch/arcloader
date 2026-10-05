@@ -9,7 +9,7 @@ public partial class HardwareWindow : Window
         InitializeComponent();
         DataContext = vm;
         vm.Confirm = text => MessageBox.Show(this, text, "Offload", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
-        Closing += (_, _) => vm.Stop();   // a running measurement stops after the current disk
+        Closed += (_, _) => vm.WindowClosed();   // a running measurement stops at once and deletes its temporary file
     }
 
     void Close_Click(object sender, RoutedEventArgs e) => Close();

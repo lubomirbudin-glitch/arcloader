@@ -25,8 +25,15 @@ public partial class MainWindow : Window
             if (!closed && IsLoaded) Close();
         });
         vm.AttentionRequested += _ => NativeMethods.Flash(this);
+        // Spec 8a.2: the USB check is on demand only (menu Nástroje, Ctrl+U, the Hardware section) — no start-up question.
         vm.HardwareRequested += hw =>
         {
+            if (hardwareWindow is { } open && ReferenceEquals(open.DataContext, hw))
+            {
+                if (open.WindowState == WindowState.Minimized) open.WindowState = WindowState.Normal;
+                open.Activate();
+                return;
+            }
             hardwareWindow?.Close();
             var w = new HardwareWindow(hw) { Owner = this };
             w.Closed += (_, _) =>
@@ -36,22 +43,11 @@ public partial class MainWindow : Window
             hardwareWindow = w;
             w.Show();
         };
-        // On exit a measurement finishes the disk it is on, so its temporary file is deleted (the windows are gone).
+        // On exit a measurement stops and deletes its temporary file before the process ends (the windows are gone).
         Closed += (_, _) => vm.WaitForHardware();
-        // Spec 8a.2: asked at every start — once the window is drawn, so the question sits on top of it.
-        ContentRendered += (_, _) =>
-        {
-            if (vm.Options.NoHwPrompt || promptShown) return;
-            promptShown = true;
-            var answer = MessageBox.Show(this,
-                "Prověřit USB porty?\n\nZjistím, kde a jak rychle jsou připojené karty a disky, a poradím, kam co zapojit. Nic se nezapisuje.",
-                "Offload", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (answer == MessageBoxResult.Yes && !closed) vm.OpenHardware();
-        };
     }
 
     HardwareWindow? hardwareWindow;
-    bool promptShown;
 
     protected override void OnSourceInitialized(EventArgs e)
     {

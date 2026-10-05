@@ -19,10 +19,10 @@ static class PortsCommand
             using var cancel = new CancellationTokenSource();
             ConsoleCancelEventHandler onCtrlC = (_, e) =>
             {
-                // Stop after the device being measured: its temporary file must still be deleted.
+                // Stops the measurement at once; the process must stay until the temporary file is deleted.
                 e.Cancel = true;
                 if (cancel.IsCancellationRequested) return;
-                Console.Error.WriteLine("\nPřerušeno — dokončuji měření aktuálního zařízení a mažu jeho dočasný soubor…");
+                Console.Error.WriteLine("\nPřerušeno — zastavuji měření a mažu dočasný soubor…");
                 cancel.Cancel();
             };
             Console.CancelKeyPress += onCtrlC;

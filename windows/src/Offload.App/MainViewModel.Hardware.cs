@@ -8,7 +8,10 @@ namespace Offload.App;
 public sealed partial class MainViewModel
 {
     HwTestResult? lastHwTest;
-    Task? hardwareTask;
+    bool savedMeasured;
+    HardwareViewModel? openHardware;
+    // The runs form one chain: a run starts only after the previous one ended (one HW test at a time).
+    Task hardwareTask = Task.CompletedTask;
     CancellationTokenSource? hardwareCts;
 
     public RelayCommand OpenHardwareCommand { get; private set; } = null!;
@@ -19,6 +22,7 @@ public sealed partial class MainViewModel
     void InitHardware()
     {
         lastHwTest = HwTest.Load(HwTest.DefaultPath);
+        savedMeasured = lastHwTest?.Measurements.Count > 0;
         OpenHardwareCommand = new RelayCommand(OpenHardware);
     }
 
@@ -27,12 +31,30 @@ public sealed partial class MainViewModel
           Texts.Warnings(r.Advice.Count(a => a.Kind == AdviceKind.Warning))
         : "Zatím neproběhl";
 
+    /// On demand (spec 8a.2: menu Nástroje, Ctrl+U, the Hardware section). An open Hardware window is only
+    /// brought to the front — no second run.
     public void OpenHardware()
     {
+        if (openHardware is { } open)
+        {
+            HardwareRequested?.Invoke(open);
+            return;
+        }
         var hw = new HardwareViewModel(this);
+        openHardware = hw;
         HardwareRequested?.Invoke(hw);
         hw.RunQuick();
     }
+
+    /// The Hardware window of `hw` closed: its run is stopped, the next OpenHardware makes a new one.
+    internal void HardwareClosed(HardwareViewModel hw)
+    {
+        hw.Stop();
+        if (openHardware == hw) openHardware = null;
+    }
+
+    /// A previous run (e.g. of a closed window) is still finishing — a new one waits for it.
+    internal bool HardwareFinishing => !hardwareTask.IsCompleted;
 
     /// Who takes part in the test: the ticked cards and the destinations; with neither, every ready disk by letter
     /// (ByDrive — the drive list itself is read off the UI thread by `HardwareTargets`). No disk is touched here:
@@ -55,23 +77,24 @@ public sealed partial class MainViewModel
         return (all, true);
     }
 
-    /// A test is running (quick or measuring): remembered so that exiting the app lets a measurement finish the
-    /// disk it is on — its 1 GB temporary file is deleted only when that disk is done.
-    internal void HardwareStarted(Task task, CancellationTokenSource cts)
+    /// Runs `work` off the UI thread after the previous run has ended; exiting the app waits for the chain.
+    internal Task<T> RunHardware<T>(Func<T> work, CancellationTokenSource cts)
     {
+        var task = hardwareTask.ContinueWith(_ => work(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
         hardwareTask = task;
         hardwareCts = cts;
+        return task;
     }
 
-    /// On exit (the windows are already closed): stop a measurement and wait for the current disk's temporary file
-    /// to be deleted — bounded, so a hung disk never keeps the process alive for ever.
+    /// On exit (the windows are already closed): stop a measurement and let it delete its temporary file.
+    /// Cancelling is checked per 16 MB block, so this is quick; the bound only guards against a hung disk.
     public void WaitForHardware()
     {
-        if (hardwareTask is not { IsCompleted: false } task) return;
+        if (hardwareTask.IsCompleted) return;
         try
         {
             hardwareCts?.Cancel();
-            if (!task.Wait(TimeSpan.FromMinutes(3))) AppLog.Write("hwtest: still running at exit");
+            if (!hardwareTask.Wait(TimeSpan.FromSeconds(10))) AppLog.Write("hwtest: still running at exit");
         }
         catch (Exception e)
         {
@@ -83,6 +106,10 @@ public sealed partial class MainViewModel
     {
         lastHwTest = result;
         Raise(nameof(HardwareSummary));
+        // A quick test never replaces a saved measurement on disk (only the summary shows it).
+        bool measured = result.Measurements.Count > 0;
+        if (!measured && savedMeasured) return;
+        savedMeasured = measured;
         Task.Run(() =>
         {
             try

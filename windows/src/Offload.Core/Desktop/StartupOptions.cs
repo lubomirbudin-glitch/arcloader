@@ -1,6 +1,7 @@
 namespace Offload.Core.Desktop;
 
-/// Offload.exe arguments: `--no-hw-prompt` skips the start-up USB question (automation); every argument that is
+/// Offload.exe arguments: `--no-hw-prompt` is still accepted (older scripts) but has no effect — the USB check
+/// is on demand only since 2026-10-05 (spec 8a.2), there is no start-up question; every argument that is
 /// an existing folder becomes a ticked manual source (drag a folder onto Offload.exe).
 public sealed record StartupOptions(bool NoHwPrompt, IReadOnlyList<string> Sources)
 {

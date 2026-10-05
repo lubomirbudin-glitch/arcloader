@@ -41,8 +41,9 @@ public static class HwTest
         }
     }
 
-    /// cancel: checked before each device — the device being measured finishes (its temporary file is deleted),
-    /// the rest are skipped. A destination on a card's volume is never written to (no measurement, a warning).
+    /// cancel: stops the measurement at once — inside the device being measured too (its temporary file is
+    /// deleted, it counts as not measured) — and the rest are skipped. A destination on a card's volume is never
+    /// written to (no measurement, a warning).
     public static HwTestResult Run(IReadOnlyList<string> cards, IReadOnlyList<string> destinations, bool measure,
         long bytesPerDevice = 1_000_000_000, IReadOnlyDictionary<string, string>? portNames = null,
         bool rolesByDrive = false, CancellationToken cancel = default)
@@ -66,7 +67,7 @@ public static class HwTest
                 {
                     if (IsCard(role))
                     {
-                        var line = Bench.Read(root, bytesPerDevice, [16 << 20])[0];
+                        var line = Bench.Read(root, bytesPerDevice, [16 << 20], cancel)[0];
                         measurements.Add(new DriveMeasurement(role, root, MBps(line), null));
                     }
                     else if (onCard.ContainsKey(role))
@@ -75,9 +76,13 @@ public static class HwTest
                     }
                     else
                     {
-                        var lines = Bench.Write(root, bytesPerDevice, 16 << 20);
+                        var lines = Bench.Write(root, bytesPerDevice, 16 << 20, cancel);
                         measurements.Add(new DriveMeasurement(role, root, MBps(lines[1]), MBps(lines[0])));
                     }
+                }
+                catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+                {
+                    break;   // interrupted: not measured, the rest skipped
                 }
                 catch (Exception)
                 {

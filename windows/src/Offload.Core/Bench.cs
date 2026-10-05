@@ -12,7 +12,8 @@ public static class Bench
     }
 
     /// Sequential read of existing files (largest first) at several block sizes, bypassing the file cache.
-    public static IReadOnlyList<Line> Read(string path, long limit, IReadOnlyList<int> blockSizes)
+    /// ct: checked before every block — a cancelled read throws OperationCanceledException.
+    public static IReadOnlyList<Line> Read(string path, long limit, IReadOnlyList<int> blockSizes, CancellationToken ct = default)
     {
         List<string> targets;
         if (Directory.Exists(path))
@@ -35,6 +36,7 @@ public static class Bench
                 long off = 0;
                 while (total < limit)
                 {
+                    ct.ThrowIfCancellationRequested();
                     int n = reader.Read(buf.Span, off);
                     if (n == 0) break;
                     off += n;
@@ -49,8 +51,11 @@ public static class Bench
     }
 
     /// Writes a temporary file (unbuffered, flushed to the media), reads it back, deletes it.
-    public static IReadOnlyList<Line> Write(string dir, long size, int blockSize)
+    /// ct: checked before every block of the write and the read-back — a cancelled test throws
+    /// OperationCanceledException at once and the temporary file is still deleted.
+    public static IReadOnlyList<Line> Write(string dir, long size, int blockSize, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var path = Path.Combine(dir, $".offload-bench-{Environment.ProcessId}");
         using var buf = new AlignedBuffer(blockSize);
         Random.Shared.NextBytes(buf.Span);
@@ -61,6 +66,7 @@ public static class Bench
             {
                 for (long off = 0; off < size; off += blockSize)
                 {
+                    ct.ThrowIfCancellationRequested();
                     int n = (int)Math.Min(blockSize, size - off);
                     int padded = (n + AlignedBuffer.Alignment - 1) / AlignedBuffer.Alignment * AlignedBuffer.Alignment;
                     NativeIO.Write(h, buf.Span[..padded], off, path);
@@ -70,7 +76,7 @@ public static class Bench
             }
             var write = new Line($"write {BlockLabel(blockSize)}", size, sw.Elapsed.TotalSeconds);
             sw.Restart();
-            var (_, read) = Hashing.HashFile(path, buf);
+            var (_, read) = Hashing.HashFile(path, buf, ct: ct);
             return [write, new Line($"read  {BlockLabel(blockSize)} + xxh64", read, sw.Elapsed.TotalSeconds)];
         }
         finally

@@ -115,6 +115,21 @@ public class HwTestTests
         Assert.Null(HwTest.Load(path));
     }
 
+    // Fix round 1: cancelling stops inside the 1 GB test file, deletes it, and skips the remaining devices.
+    [Fact]
+    public void Measure_CancelledDuringWrite_StopsAtOnce_NoBenchFileLeft()
+    {
+        using var dir = new TempDir();
+        var dest1 = dir.Sub("dest1");
+        var dest2 = dir.Sub("dest2");
+        using var cts = BenchTests.CancelWhenBenchFileAppears(dest1);
+        var r = HwTest.Run([], [dest1, dest2], measure: true, bytesPerDevice: 512L << 20, cancel: cts.Token);
+        Assert.True(cts.IsCancellationRequested);
+        Assert.Empty(r.Measurements);   // the interrupted device is "not measured", the next one is skipped
+        Assert.Empty(Directory.GetFiles(dest1, "*", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetFiles(dest2, "*", SearchOption.AllDirectories));
+    }
+
     [Fact]
     public void SaveLoad_RoundTrip()
     {

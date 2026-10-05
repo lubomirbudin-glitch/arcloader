@@ -18,7 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 4 (GUI), průběh
 
-- Úkol 9 — Hardware v GUI: dotaz „Prověřit USB porty?“ při každém startu, okno Hardware (připojení, doporučení, měření s potvrzením, USB porty s vlastními názvy), sekce Hardware s posledním testem
+- Úkol 9 — Hardware v GUI: kontrola USB portů jen na vyžádání (menu Nástroje › „Prověřit USB porty…“, Ctrl+U, tlačítko v sekci Hardware; při startu se už neptá), okno Hardware (připojení, doporučení, měření s potvrzením a okamžitým zastavením, USB porty s vlastními názvy), vždy jen jeden test naráz, sekce Hardware s posledním testem
 - Úkol 8 — spuštění a fronta: karty úloh s průběhem, rychlostmi, odhadem času a řetězem připojení s úzkým hrdlem, zelený pruh a vysunutí karty, report a Průzkumník, zrušení, zavření okna během kopie, zvuk a blikání v hlavním panelu
 - Úkol 7 — levý panel: karty (automaticky při vložení, ruční složka, název složky), cíle (volné místo, souborový systém, nepřipojený disk), datum a ověření, proxy, dekodéry
 - Úkol 6 — projekt GUI Offload.App (WPF, Fluent, světlý/tmavý režim), okno se dvěma panely, build.ps1 přidá Offload.exe, skript pro ovládání a snímky GUI

@@ -39,14 +39,14 @@ public sealed class HardwareViewModel : ObservableObject
     readonly MainViewModel owner;
     CancellationTokenSource? cts;
     HwTestResult? result;
-    bool busy, showInternal, byDrive;
+    bool busy, showInternal, byDrive, stopping;
     string status = "";
 
     public HardwareViewModel(MainViewModel owner)
     {
         this.owner = owner;
         MeasureCommand = new RelayCommand(Measure, () => !Busy && !byDrive && result != null);
-        StopCommand = new RelayCommand(() => cts?.Cancel(), () => Busy);
+        StopCommand = new RelayCommand(Stop, () => Busy && !stopping);
         RerunCommand = new RelayCommand(RunQuick, () => !Busy);
     }
 
@@ -74,8 +74,18 @@ public sealed class HardwareViewModel : ObservableObject
 
     public void RunQuick() => Run(measure: false);
 
-    /// The window is closing: a running measurement stops after the current disk (its temporary file is deleted).
-    public void Stop() => cts?.Cancel();
+    /// The window closed: the run stops and the next "Prověřit USB porty…" opens a new window.
+    public void WindowClosed() => owner.HardwareClosed(this);
+
+    /// Zastavit, or the window closed: the run stops at once (a measurement deletes its temporary file);
+    /// "Zastavuji…" until the task has really ended.
+    public void Stop()
+    {
+        if (!Busy || stopping || cts is not { } c) return;
+        stopping = true;
+        c.Cancel();
+        Status = "Zastavuji…";
+    }
 
     void Measure()
     {
@@ -95,25 +105,28 @@ public sealed class HardwareViewModel : ObservableObject
         cts = new CancellationTokenSource();
         var token = cts.Token;
         Busy = true;
-        Status = measure ? "Měřím rychlost… (může trvat několik minut)" : "Zjišťuji připojení…";
-        var task = Task.Run(() =>
+        var running = measure ? "Měřím rychlost… (může trvat několik minut)" : "Zjišťuji připojení…";
+        bool waits = owner.HardwareFinishing;
+        Status = waits ? "Čekám, až doběhne předchozí test…" : running;
+        var task = owner.RunHardware(() =>
         {
+            if (waits) Dispatch(() => { if (!stopping) Status = running; });   // the previous run has ended
             var (targets, byDriveNow) = MainViewModel.HardwareTargets(cards, dests, all);
             // Never measure by drive letter: every disk would get a 1 GB file (the Measure button is off then anyway).
             var r = HwTest.Run(cards, targets, measure && !byDriveNow, portNames: names, rolesByDrive: byDriveNow, cancel: token);
             return (Result: r, ByDrive: byDriveNow);
-        });
-        owner.HardwareStarted(task, cts);
+        }, cts);
         task.ContinueWith(t =>
         {
             try
             {
                 Busy = false;
+                stopping = false;
                 if (t.IsCompletedSuccessfully)
                 {
                     result = t.Result.Result;
                     byDrive = t.Result.ByDrive;
-                    Status = token.IsCancellationRequested ? "Měření přerušeno — zobrazeno, co se stihlo změřit." : "";
+                    Status = token.IsCancellationRequested && measure ? "Měření přerušeno — zobrazeno, co se stihlo změřit." : "";
                     Rebuild();
                     if (!token.IsCancellationRequested) owner.HardwareTestFinished(result);
                 }
@@ -186,6 +199,8 @@ public sealed class HardwareViewModel : ObservableObject
         foreach (var alt in connector.AltIds) owner.SetPortName(alt, "");   // one name per socket, under its id
         RebuildNamed();
     }
+
+    static void Dispatch(Action action) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(action);
 
     static string Mb(double? v) => v is double x ? x.ToString("0", CultureInfo.InvariantCulture) + " MB/s" : "—";
 }
