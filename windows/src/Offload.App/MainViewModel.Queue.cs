@@ -40,14 +40,15 @@ public sealed partial class MainViewModel
 
     public string CardsText => Texts.Cards(selected.Count);
     public string DestinationsText => Texts.Destinations(Settings.DestRoots.Count) + (Settings.Proxy.Enabled ? " · proxy" : "");
-    /// In memory only (evaluated 3×/s): the LUT and the destinations come from checks made off the UI thread.
+    /// In memory only (evaluated 3×/s): the LUT, the proxy folder and the destinations come from checks made off the UI thread.
     public bool CanStart => !starting && ReadyToStart;
-    bool ReadyToStart => !closing && selected.Count > 0 && Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists) && LutProblem == null;
+    bool ReadyToStart => !closing && selected.Count > 0 && Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)
+        && LutProblem == null && ProxyFolderProblem == null;
     public bool HasJobs => Jobs.Count > 0;
     public bool HasFinished => Jobs.Any(j => j.IsFinished);
 
-    /// The LUT is checked once more right before the start (it may sit on a disk that just went away) — off the UI
-    /// thread, at most 5 s; meanwhile the start button is disabled.
+    /// The LUT and the proxy folder are checked once more right before the start (they may sit on a disk that just
+    /// went away) — off the UI thread, at most 5 s each; meanwhile the start button is disabled.
     async void Start()
     {
         if (!CanStart) return;
@@ -63,6 +64,17 @@ public sealed partial class MainViewModel
                 if (!answered) AppLog.Write($"LUT check before start: no answer from {lut} in 5 s");
                 if (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) != lut) continue;   // changed meanwhile
                 SetLutState(lut, exists);
+                if (!exists) return;   // the red text says why
+                break;
+            }
+            while (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is string folder)
+            {
+                var check = Task.Run(() => Directory.Exists(folder));
+                bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
+                bool exists = answered && check.IsCompletedSuccessfully && check.Result;
+                if (!answered) AppLog.Write($"proxy folder check before start: no answer from {folder} in 5 s");
+                if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) != folder) continue;   // changed meanwhile
+                SetProxyFolderState(folder, exists);
                 if (!exists) return;   // the red text says why
                 break;
             }

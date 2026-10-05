@@ -108,6 +108,7 @@ public static class SettingsStore
         p.FrameScale = double.IsFinite(p.FrameScale) ? Math.Clamp(p.FrameScale, 0.5, 1.0) : 1.0;
         if (p.FrameAspect is double a && (!double.IsFinite(a) || a <= 0)) p.FrameAspect = null;
         if (string.IsNullOrWhiteSpace(p.LutPath)) p.LutPath = null;
+        p.ExtraFolder = string.IsNullOrWhiteSpace(p.ExtraFolder) ? null : p.ExtraFolder.Trim();
         return s;
     }
 
@@ -140,6 +141,17 @@ public static class ProxyPreflight
         LutInUse(p, analyzeClips) is string lut && lutExists == false
             ? $"LUT nenalezen: {Path.GetFileName(lut)} — vyberte jiný nebo ho odeberte."
             : null;
+
+    /// The extra proxy folder the next start copies into (only when proxies are rendered), or null.
+    public static string? ExtraFolderInUse(ProxySettings p) => p.Enabled ? p.ExtraFolder : null;
+
+    /// Why the start must wait: the proxy folder is set but missing (a disconnected disk). Touches the disk.
+    public static string? ExtraFolderBlocking(ProxySettings p) =>
+        ExtraFolderBlocking(p, ExtraFolderInUse(p) is string f ? Directory.Exists(f) : null);
+
+    /// The same from an answer checked off the UI thread: `folderExists` null = not checked yet (does not block).
+    public static string? ExtraFolderBlocking(ProxySettings p, bool? folderExists) =>
+        ExtraFolderInUse(p) is string f && folderExists == false ? $"Složka pro proxy není dostupná: {f}" : null;
 
     /// A warning that does not block (copy and verification still run), or null.
     public static string? Warning(ProxySettings p, bool analyzeClips, ExternalTools resolved) =>

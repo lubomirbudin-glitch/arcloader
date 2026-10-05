@@ -200,7 +200,8 @@ public static class HtmlReport
             var lut = p.LutPath != null ? Path.GetFileName(p.LutPath) : "bez LUT";
             var frame = p.FrameLabel is string fl ? $", výřez {fl}" : "";
             var encoder = r.ProxyEncoder is string enc ? $" ({enc})" : "";
-            h.Append($"<p class=\"sub\">Proxy: {Esc(p.Codec.Label() + encoder)}, {p.Height}p{frame}, LUT: {Esc(lut)} → <span class=\"mono\">{Layout.ProxyDirName}/</span></p>\n");
+            var extra = p.ExtraFolder is string x ? $" · také ve složce <span class=\"mono\">{Esc(x)}</span>" : "";
+            h.Append($"<p class=\"sub\">Proxy: {Esc(p.Codec.Label() + encoder)}, {p.Height}p{frame}, LUT: {Esc(lut)} → <span class=\"mono\">{Layout.ProxyDirName}/</span>{extra}</p>\n");
         }
     }
 }

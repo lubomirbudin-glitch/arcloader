@@ -40,6 +40,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
 | **Test USB portů na vyžádání + doporučení** | ❌ | ✅ CLI + GUI |
+| **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test) |
 | **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
@@ -87,6 +88,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   i s `--allow-same-device`. Naplánováno i pro Mac.
 - **Kontrola voleb před kopií:** Windows ověří velikost bloku (násobek 4096, nejvýše 1 GiB), počet bufferů (≥ 2)
   a tvar data `RRRR-MM-DD` ještě před vytvořením čehokoli. Naplánováno i pro Mac.
+- **Složka pro proxy navíc** (zatím jen Windows, pro Mac naplánováno): každá hotová proxy se kromě `_PROXY` na cílech
+  zkopíruje i do `<složka>\<datum>\<karta>\` (při shodě jména `_2`, `_3`…, nic se nepřepíše). Nastavení
+  `proxy.extraFolder` v settings.json a v reportu (Mac neznámý klíč ignoruje), v CLI `--proxy-folder`. Nedostupná
+  složka zablokuje start; zmizí-li během úlohy, je to jen poznámka u klipu.
 - **Zrušená úloha v GUI:** karta úlohy na Windows ukáže jen oranžové „Zrušeno — karta není kompletně zálohovaná.“
   místo červeného „N souborů selhalo…“ a bez souhrnu rychlosti (rychlost useknuté kopie by klamala). Mac zatím
   ukazuje červený text i souhrn.
