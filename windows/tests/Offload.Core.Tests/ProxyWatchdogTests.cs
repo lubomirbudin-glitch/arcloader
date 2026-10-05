@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace Offload.Core.Tests;
 
@@ -274,6 +275,39 @@ public class ProxyWatchdogTests
         var e = Assert.Throws<FfmpegStalledException>(() => r.Thumbnails(clip, card, info, null));
         Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku)", e.Message);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
+    }
+
+    /// Task 6 note: ffmpeg may end before the decoder does (a thumbnail takes one frame; or ffmpeg failed). The pump
+    /// then closes the decoder's stdout, so the decoder sees the broken pipe and stops by itself (braw-decode exits 0)
+    /// instead of blocking on a full pipe until it is killed.
+    [Fact]
+    public void ConsumerEndsFirst_FeederSeesTheClosedPipe_ExitsByItself()
+    {
+        using var dir = new TempDir();
+        var stopped = Path.Combine(dir.Path, "stopped.txt");
+        // Writes until a write fails, notes it and exits 0, like braw-decode. WriteFile on the raw stdout handle:
+        // .NET Framework's console stream and FileStream both swallow a broken pipe.
+        var script = $$"""
+            Add-Type -Namespace Fake -Name Std -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n); [DllImport("kernel32.dll")] public static extern bool WriteFile(IntPtr h, byte[] b, int n, out int written, IntPtr o);'
+            $out = [Fake.Std]::GetStdHandle(-11)
+            $line = [Text.Encoding]::ASCII.GetBytes(('x' * 1023) + "`n")
+            $n = 0
+            while ([Fake.Std]::WriteFile($out, $line, $line.Length, [ref]$n, [IntPtr]::Zero)) { }
+            Set-Content -LiteralPath '{{stopped}}' -Value stopped
+            exit 0
+            """;
+        var src = new FrameSource
+        {
+            InputArgs = ["-i", "-"],
+            FeederExe = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
+            FeederArgs = ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))],
+            AudioFromInput = false,
+        };
+        var consumer = Path.Combine(dir.Path, "consumer.cmd");   // takes one line and ends, like ffmpeg with its one frame
+        File.WriteAllText(consumer, "@set /p x=\r\n@exit /b 0\r\n");
+        using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
+        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(30));   // a feeder ending with 0 is no error
+        Assert.True(SpinWait.SpinUntil(() => File.Exists(stopped), TimeSpan.FromSeconds(10)), "the feeder never saw its stdout closed (it was killed)");
     }
 
     // The real thing: an FFV1 clip (the codec that hung with -hwaccel auto) renders a proxy and never hangs.

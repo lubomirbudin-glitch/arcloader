@@ -399,7 +399,14 @@ public sealed class ProxyRenderer : IDisposable
                         }
                     }
                     catch (Exception) { }
-                    finally { try { to.Close(); } catch (Exception) { } }
+                    finally
+                    {
+                        try { to.Close(); } catch (Exception) { }
+                        // ffmpeg went away first (a thumbnail needs one frame, or it failed): close the decoder's end too,
+                        // so a decoder still writing sees the broken pipe and stops by itself (braw-decode exits 0)
+                        // instead of blocking on a full pipe until it is killed.
+                        try { from.Close(); } catch (Exception) { }
+                    }
                 }) { IsBackground = true };
                 pump.Start();
             }
