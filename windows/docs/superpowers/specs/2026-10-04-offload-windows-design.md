@@ -362,9 +362,10 @@ Doplněno 2026-10-04 na žádost uživatele.
   → „pravděpodobně kabel nebo port“.
 - Rychlost linky je strop daný nejslabším z port + kabel + zařízení; skutečná rychlost je naměřená.
 
-### 8a.2 Test při startu
+### 8a.2 Test USB portů
 
-- **Při každém spuštění** se aplikace zeptá „Prověřit USB porty?“ (Ano / Ne).
+- **Na vyžádání** z menu *Nástroje → Prověřit USB porty…* (Ctrl+U) nebo tlačítkem v sekci *Hardware*.
+  Změna 2026-10-05 na žádost uživatele: původně se aplikace ptala při každém spuštění — to se nedělá.
 - **Rychlá část** (sekundy, nic nezapisuje): topologie, rychlosti linek, varování.
 - **Měření** (volitelné, na potvrzení): pro každé zapojené úložiště krátký test — čtení ~1 GB (karta/čtečka)
   nebo zápis + čtení ~1 GB do dočasného souboru (disky, smaže se). Na kartu se nikdy nezapisuje.
@@ -400,7 +401,7 @@ D2     F: Samsung T7     ── USB 3.2 Gen2 (10 Gb/s) ── řadič ASMedia   
 ### 8a.4 Zařazení
 
 Nový plán **„HW diagnostika“** (mezi plány 2 a 4): modul `Offload.Core/Hardware/` (topologie, mapování
-svazek → USB, měření, doporučení), `offload ports`, rozšíření stavového řádku CLI. GUI části (dotaz při startu,
+svazek → USB, měření, doporučení), `offload ports`, rozšíření stavového řádku CLI. GUI části (test na vyžádání z menu,
 sekce *Hardware*, řetěz na kartě úlohy) jsou v plánu 4.
 
 ## 9. CLI
