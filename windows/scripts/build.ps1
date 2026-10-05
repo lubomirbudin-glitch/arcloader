@@ -27,6 +27,10 @@ foreach ($t in 'ffmpeg.exe', 'ffprobe.exe') {
     }
     if ($src) { Copy-Item $src (Join-Path $out 'bin'); Write-Host "bundled $t from $src" } else { Write-Warning "$t not bundled - proxies and thumbnails will need it at runtime" }
 }
+# Built-in LUTs (shared with the Mac version).
+$luts = Join-Path (Split-Path -Parent $root) 'shared\luts'
+New-Item -ItemType Directory -Force (Join-Path $out 'luts') | Out-Null
+Copy-Item (Join-Path $luts '*.cube'), (Join-Path $luts 'luts.json') (Join-Path $out 'luts')
 $zip = Join-Path $root 'build\Offload-win-x64.zip'
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path $out -DestinationPath $zip

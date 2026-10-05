@@ -83,7 +83,16 @@ offload ports                                 # porty, kde a jak rychle jsou dis
 offload ports --measure --card E:\ --dest D:\   # + změřit skutečnou rychlost
 offload E:\ -d D:\Zaloha -d F:\Zaloha --proxy --lut look.cube --frame-aspect 1.85   # + proxy s LUT a výřezem
 offload E:\ -d D:\Zaloha --proxy --proxy-folder G:\Proxy   # proxy navíc do G:\Proxy\<datum>\<karta>\
+offload E:\ -d D:\Zaloha --proxy --lut sony-slog3-sgamut3   # vestavěný LUT podle id
+offload luts                                                # seznam vestavěných LUTů (id — název)
 ```
+
+`--lut auto|none|<id>|<cesta.cube>` (výchozí `auto`): `auto` vybere LUT podle kamery každého klipu, `none` žádný,
+`<id>` vestavěný LUT, cesta s `.cube` nebo lomítkem vlastní LUT. Seznam id vypíše `offload luts` — samostatný příkaz,
+protože `copy` vyžaduje kartu a cíl, takže `copy --lut list` by neprošlo parsováním. `--lut-fallback <id|none>` je LUT
+pro klipy, které `auto` nepozná (výchozí `none`). Neznámé id skončí chybou (exit 1). Vestavěné LUTy jsou v balíčku
+ve složce `luts\` vedle `Offload.exe` (11 souborů `.cube` + `luts.json`); chybějící složka nic neshodí, `auto` pak
+LUT nepoužije.
 
 `--proxy-folder <složka>` (jen s `--proxy`): každá hotová proxy se kromě `_PROXY` na cílech zkopíruje i do
 `<složka>\<datum>\<karta>\` (stejný název souboru; když už tam soubor je, uloží se jako `_2`, `_3`… — nic se nepřepíše).

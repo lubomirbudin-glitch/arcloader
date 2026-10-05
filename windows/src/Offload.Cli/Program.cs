@@ -5,7 +5,7 @@ namespace Offload.Cli;
 
 static class Program
 {
-    static readonly string[] Commands = ["copy", "verify", "bench", "ports"];
+    static readonly string[] Commands = ["copy", "verify", "bench", "ports", "luts"];
 
     static int Main(string[] args)
     {
@@ -17,6 +17,7 @@ static class Program
         root.Subcommands.Add(VerifyCommand.Create());
         root.Subcommands.Add(BenchCommand.Create());
         root.Subcommands.Add(PortsCommand.Create());
+        root.Subcommands.Add(LutsCommand.Create());
         return root.Parse(args).Invoke();
     }
 }

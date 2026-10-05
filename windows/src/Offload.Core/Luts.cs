@@ -188,3 +188,26 @@ public static class LutResolver
         return (null, "kamera nerozpoznána");
     }
 }
+
+/// `--lut` / `--lut-fallback` of the CLI: auto, none, a built-in id, or a path to a .cube (anything with ".cube" or a path separator).
+public static class LutOption
+{
+    public static (LutMode Mode, string? Builtin, string? Path, string? Fallback, string? Error) Parse(string? value, string? fallback, LutCatalog cat)
+    {
+        string? fb = null;
+        if (fallback != null && !fallback.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            if (cat.Find(fallback) == null) return (LutMode.Auto, null, null, null, $"Unknown fallback LUT '{fallback}'. Built-in: {Ids(cat)}");
+            fb = fallback;
+        }
+        if (value == null || value.Equals("auto", StringComparison.OrdinalIgnoreCase)) return (LutMode.Auto, null, null, fb, null);
+        if (value.Equals("none", StringComparison.OrdinalIgnoreCase)) return (LutMode.None, null, null, fb, null);
+        if (value.EndsWith(".cube", StringComparison.OrdinalIgnoreCase) || value.Contains('\\') || value.Contains('/'))
+            return (LutMode.Custom, null, value, fb, null);
+        return cat.Find(value) != null
+            ? (LutMode.Builtin, value, null, fb, null)
+            : (LutMode.Auto, null, null, fb, $"Unknown LUT '{value}'. Use auto, none, a .cube path or one of: {Ids(cat)}");
+    }
+
+    static string Ids(LutCatalog cat) => string.Join(", ", cat.Luts.Select(l => l.Id));
+}
