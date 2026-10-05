@@ -20,9 +20,17 @@ public static class FilterGraph
     static string Lut(string file, bool premap) =>
         "format=rgb48le," + (premap ? PreMap + "," : "") + $"lut3d=file={file}:interp=tetrahedral";
 
+    /// Proxies: explicit BT.709 matrix to legal range (swscale would otherwise pick BT.601 after an RGB step, or keep
+    /// whatever the source had), then the frames are tagged BT.709 so the encoder and the MOV say so too.
+    public const string ToRec709 = "scale=out_color_matrix=bt709:out_range=tv";
+    public const string TagRec709 = "setparams=color_primaries=bt709:color_trc=bt709";
+
+    /// Thumbnails: JPEG (JFIF) is BT.601 full range for every browser and PDF viewer, whatever the source was.
+    public const string ToJfif = "scale=out_color_matrix=bt601:out_range=pc";
+
     /// Small JPEG for the report, with the LUT applied so log footage is readable.
     public static string Thumbnail(string? lutFile, bool premap) =>
-        string.Join(",", new[] { "scale=-2:180:flags=bicubic", lutFile != null ? Lut(lutFile, premap) : null, "format=yuvj420p" }.Where(x => x != null));
+        string.Join(",", new[] { "scale=-2:180:flags=bicubic", lutFile != null ? Lut(lutFile, premap) : null, ToJfif, "format=yuvj420p" }.Where(x => x != null));
 
     /// Bottom bar: clip name left, source timecode right.
     public static List<string> BurnIn(ProxySettings s, int height, bool hasFont, string? labelFile, string? timecode, string? rate)
@@ -60,7 +68,9 @@ public static class FilterGraph
         vf.Add("setsar=1");
         if (lutFile != null) vf.Add(Lut(lutFile, premap));
         vf.AddRange(BurnIn(s, outHeight, hasFont, labelFile, timecode, rate));
+        vf.Add(ToRec709);
         vf.Add($"format={Encoders.PixelFormat(s.Codec)}");
+        vf.Add(TagRec709);
         return string.Join(",", vf);
     }
 }

@@ -252,6 +252,7 @@ public sealed class ProxyRenderer : IDisposable
             }
             args.AddRange(["-vf", vf]);
             args.AddRange(Encoders.VideoArgs(EncoderName!, Settings.Codec, Settings.BitrateMbps));
+            args.AddRange(Encoders.Rec709Args);
             if (Timecode.IsValid(info.Timecode)) args.AddRange(["-timecode", info.Timecode!]);
 
             var dir = Path.GetDirectoryName(output)!;

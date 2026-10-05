@@ -53,11 +53,11 @@ public class ProxyRendererTests
     [Fact]
     public void FullRangeSource_PreMapped()
     {
-        Assert.Equal("scale=-2:180:flags=bicubic,format=rgb48le," + FilterGraph.PreMap + ",lut3d=file=lut-a.cube:interp=tetrahedral,format=yuvj420p",
+        Assert.Equal("scale=-2:180:flags=bicubic,format=rgb48le," + FilterGraph.PreMap + ",lut3d=file=lut-a.cube:interp=tetrahedral,scale=out_color_matrix=bt601:out_range=pc,format=yuvj420p",
             FilterGraph.Thumbnail("lut-a.cube", premap: true));
-        Assert.Equal("scale=-2:180:flags=bicubic,format=rgb48le,lut3d=file=look.cube:interp=tetrahedral,format=yuvj420p",
+        Assert.Equal("scale=-2:180:flags=bicubic,format=rgb48le,lut3d=file=look.cube:interp=tetrahedral,scale=out_color_matrix=bt601:out_range=pc,format=yuvj420p",
             FilterGraph.Thumbnail("look.cube", premap: false));
-        Assert.Equal("scale=-2:180:flags=bicubic,format=yuvj420p", FilterGraph.Thumbnail(null, premap: true));
+        Assert.Equal("scale=-2:180:flags=bicubic,scale=out_color_matrix=bt601:out_range=pc,format=yuvj420p", FilterGraph.Thumbnail(null, premap: true));
         Assert.Contains("(val*1023/65535-64)/876*65535", FilterGraph.PreMap);
     }
 
@@ -140,6 +140,76 @@ public class ProxyRendererTests
         var plainOut = Path.Combine(dir.Path, "p3.mov");
         r.Render(bright, card, r.Probe(bright, card), null, plainOut, _ => { }, () => false);
         Assert.InRange((MeanLuma(plainOut) - 16) / 219.0, 0.58, 0.64);
+    }
+
+    /// RGB of a flat first frame, decoded with the given YCbCr matrix and range.
+    static (int R, int G, int B) FlatRgb(string file, string matrix, string range)
+    {
+        var raw = Path.Combine(Path.GetDirectoryName(file)!, $"rgb-{Guid.NewGuid():N}.raw");
+        ToolProcess.Run(TestMedia.Ffmpeg!, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", file, "-frames:v", "1",
+            "-vf", $"scale=in_color_matrix={matrix}:in_range={range},format=rgb24", "-f", "rawvideo", raw]);
+        var b = File.ReadAllBytes(raw);
+        int i = b.Length / 6 * 3;  // a pixel in the middle
+        return (b[i], b[i + 1], b[i + 2]);
+    }
+
+    // Final review 8 — real ffmpeg: pure red through the proxy path (RGB source like the BRAW decoder, and BT.709
+    // video; with and without a LUT; H.264 and ProRes) is converted with the BT.709 matrix to legal range and tagged
+    // BT.709, so a player decoding it as BT.709 sees red. The BT.601 matrix would leave G ≈ 23.
+    [FfmpegFact]
+    public void Proxy_Red_Bt709MatrixAndTags()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25", "-pix_fmt", "rgb24", "-c:v", "png", Path.Combine(card, "rgb.mov"));
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25", "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+            "-c:v", "libx264", "-colorspace", "bt709", "-color_range", "tv", Path.Combine(card, "yuv.mov"));
+        var cube = Path.Combine(dir.Path, "look.cube");
+        TestMedia.IdentityLut(cube);
+        var failures = new List<string>();
+        foreach (var codec in new[] { ProxyCodec.H264, ProxyCodec.ProresLT })
+        foreach (var name in new[] { "rgb.mov", "yuv.mov" })
+        foreach (var withLut in new[] { false, true })
+        {
+            var settings = new ProxySettings { Enabled = true, Height = 180, Codec = codec, BurnFilename = false, BurnTimecode = false,
+                LutMode = withLut ? LutMode.Custom : LutMode.None, LutPath = withLut ? cube : null };
+            using var r = new ProxyRenderer(settings, Tools);
+            var clip = VideoClip(name);
+            var outPath = Path.Combine(dir.Path, $"{codec}-{name}-{withLut}.mov");
+            r.Render(clip, card, r.Probe(clip, card), withLut ? CustomLut(cube) : null, outPath, _ => { }, () => false);
+            var tags = string.Join(" ", ToolProcess.Run(TestMedia.Ffprobe!, ["-v", "error", "-select_streams", "v:0", "-show_entries",
+                "stream=color_space,color_transfer,color_primaries,color_range", "-of", "default=nw=1", outPath])
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
+            var (red, green, blue) = FlatRgb(outPath, "bt709", "tv");
+            if (tags != "color_range=tv color_space=bt709 color_transfer=bt709 color_primaries=bt709" || red < 240 || green > 8 || blue > 8)
+                failures.Add($"{codec} {name} lut={withLut}: [{tags}] rgb=({red},{green},{blue})");
+        }
+        Assert.True(failures.Count == 0, string.Join("; ", failures));
+    }
+
+    // Final review 8 — JPEG (JFIF) is BT.601 full range for every browser and PDF viewer: a BT.709 red clip's
+    // thumbnail must decode as red that way (keeping the BT.709 matrix gives R ≈ 230).
+    [FfmpegFact]
+    public void Thumbnail_Red_JfifBt601()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25", "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+            "-c:v", "libx264", "-colorspace", "bt709", "-color_range", "tv", Path.Combine(card, "yuv.mov"));
+        RunFfmpeg("-f", "lavfi", "-i", "color=c=red:s=320x180:d=1:r=25", "-pix_fmt", "rgb24", "-c:v", "png", Path.Combine(card, "rgb.mov"));
+        var cube = Path.Combine(dir.Path, "look.cube");
+        TestMedia.IdentityLut(cube);
+        using var r = new ProxyRenderer(new ProxySettings { LutMode = LutMode.Custom, LutPath = cube }, Tools);
+        foreach (var name in new[] { "yuv.mov", "rgb.mov" })
+        foreach (var lut in new[] { null, CustomLut(cube) })
+        {
+            var clip = VideoClip(name);
+            var thumbs = r.Thumbnails(clip, card, r.Probe(clip, card), lut);
+            var jpg = Path.Combine(dir.Path, $"t-{name}-{lut != null}.jpg");
+            File.WriteAllBytes(jpg, thumbs[0].Jpeg);
+            var (red, green, blue) = FlatRgb(jpg, "bt601", "pc");
+            Assert.True(red >= 242 && green <= 8 && blue <= 8, $"{name} lut={lut != null}: rgb=({red},{green},{blue})");
+        }
     }
 
     [FfmpegFact]
