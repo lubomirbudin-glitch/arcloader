@@ -46,5 +46,10 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    public void ShowMessage(string text) => MessageRequested?.Invoke(text);
+    public void ShowMessage(string text)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess()) MessageRequested?.Invoke(text);
+        else dispatcher.BeginInvoke(() => MessageRequested?.Invoke(text));
+    }
 }

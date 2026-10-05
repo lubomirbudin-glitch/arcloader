@@ -7,9 +7,23 @@ namespace Offload.App;
 /// %APPDATA%\Offload\app.log - the app's own problems (job details are in each job's report).
 static class AppLog
 {
+    const long MaxBytes = 5 * 1024 * 1024;
     static readonly Lock Gate = new();
 
-    public static string Path => System.IO.Path.Combine(AppData.Folder, "app.log");
+    public static string Path
+    {
+        get
+        {
+            try
+            {
+                return System.IO.Path.Combine(AppData.Folder, "app.log");
+            }
+            catch
+            {
+                return System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Offload-app.log");
+            }
+        }
+    }
 
     public static void Write(string message)
     {
@@ -17,11 +31,14 @@ static class AppLog
         {
             lock (Gate)
             {
-                Directory.CreateDirectory(AppData.Folder);
-                File.AppendAllText(Path, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + "  " + message + Environment.NewLine);
+                var path = Path;
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+                var info = new FileInfo(path);
+                if (info.Exists && info.Length > MaxBytes) File.Move(path, path + ".1", overwrite: true);
+                File.AppendAllText(path, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + "  " + message + Environment.NewLine);
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch
         {
             // Logging must never fail the app.
         }

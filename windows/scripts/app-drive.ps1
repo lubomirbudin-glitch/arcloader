@@ -6,6 +6,7 @@
 #   Save-OffloadScreenshot $p 'D:\tmp\shot.png'
 #   Stop-Offload $p
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
+if (-not ('OffloadWin' -as [type])) {
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
@@ -16,13 +17,15 @@ public static class OffloadWin {
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 }
 '@
+}
 [OffloadWin]::SetProcessDPIAware() | Out-Null
 $AE = [System.Windows.Automation.AutomationElement]
 
 function Start-Offload([string]$Exe, [string]$Arguments = '', [int]$TimeoutSeconds = 30) {
     $p = if ($Arguments) { Start-Process $Exe -ArgumentList $Arguments -PassThru } else { Start-Process $Exe -PassThru }
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ($p.MainWindowHandle -eq 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $p.Refresh() }
+    while ($p.MainWindowHandle -eq 0 -and -not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $p.Refresh() }
+    if ($p.HasExited) { throw "Offload exited during start (code $($p.ExitCode))" }
     if ($p.MainWindowHandle -eq 0) { throw 'Offload window did not appear' }
     Start-Sleep -Milliseconds 1000
     $p
