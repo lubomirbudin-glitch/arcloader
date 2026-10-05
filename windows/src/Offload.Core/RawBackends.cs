@@ -65,7 +65,15 @@ internal sealed class BrawBackend : IRawBackend
 {
     public ClipFormat Format => ClipFormat.Braw;
     public string MissingHint => "Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)";
-    public bool IsAvailable(ExternalTools tools) => tools.BrawDecoder != null;
+
+    readonly Func<string, string?> _findLibrary;
+
+    /// `findLibrary` (decoder folder → library path) is injectable so tests do not depend on what is installed on the PC.
+    public BrawBackend(Func<string, string?>? findLibrary = null) => _findLibrary = findLibrary ?? BrawLibrary.Find;
+
+    /// braw-decode alone is not enough: without BlackmagicRawAPI.dll it can only fail.
+    public bool IsAvailable(ExternalTools tools) =>
+        tools.BrawDecoder is string exe && _findLibrary(Path.GetDirectoryName(exe) ?? "") != null;
 
     public static BrawInfo ParseInfo(string json) => JsonSerializer.Deserialize<BrawInfo>(json)
         ?? throw new ToolError("braw-decode", -1, "unreadable --info output");

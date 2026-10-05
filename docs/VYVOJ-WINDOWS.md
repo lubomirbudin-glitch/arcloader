@@ -17,6 +17,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
 | 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | hotovo (čeká ruční test s klipy z kamer) |
 
+## 2026-10-05 — plán 3: BRAW dekodér v C#
+
+- Úkol 1 — hledání knihovny Blackmagic RAW (vedle braw-decode, SDK, Player, DaVinci Resolve); bez knihovny je BRAW „nepodporovaný“ s nápovědou místo selhané proxy
+
 ## 2026-10-05 — drobnosti po plánu 5
 
 - Ručně přidaný kořen disku — popisek se znovu přečte při každém přidání (mimo UI vlákno), takže po výměně karty se nenabídne název předchozí karty
