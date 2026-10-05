@@ -7,6 +7,7 @@ internal static unsafe class DevNodes
 {
     public static List<string> Interfaces(Guid interfaceClass, string? deviceId)
     {
+        if (deviceId != null && deviceId.Length == 0) return [];
         for (int tries = 0; tries < 5; tries++)
         {
             if (UsbNative.CM_Get_Device_Interface_List_SizeW(out uint len, &interfaceClass, deviceId, 0) != UsbNative.CrSuccess || len <= 1) return [];
@@ -88,7 +89,7 @@ internal static unsafe class DevNodes
     /// The product's own name as the device reports it ("Elements 25A2"), else the Device Manager name.
     public static string BusName(uint devInst) => Str(devInst, DevKeys.BusReportedDesc) ?? Name(devInst);
 
-    public static bool IsHub(uint devInst) => Interfaces(UsbNative.HubInterface, Id(devInst)).Count > 0;
+    public static bool IsHub(uint devInst) => Id(devInst) is { Length: > 0 } id && Interfaces(UsbNative.HubInterface, id).Count > 0;
 
-    public static bool IsHostController(uint devInst) => Interfaces(UsbNative.HostControllerInterface, Id(devInst)).Count > 0;
+    public static bool IsHostController(uint devInst) => Id(devInst) is { Length: > 0 } id && Interfaces(UsbNative.HostControllerInterface, id).Count > 0;
 }

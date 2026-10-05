@@ -20,7 +20,7 @@ public unsafe class UsbNativeTests
     }
 
     [Fact]
-    public void IoctlCodes() 
+    public void IoctlCodes()
     {
         Assert.Equal(0x220448u, UsbNative.IoctlConnectionInfoEx);
         Assert.Equal(0x22045Cu, UsbNative.IoctlConnectionInfoExV2);
@@ -50,6 +50,14 @@ public unsafe class UsbNativeTests
         Assert.Null(DevNodes.Locate(@"USB\VID_FFFF&PID_FFFF\nope"));
         Assert.Empty(DevNodes.Interfaces(Guid.NewGuid(), null));
         Assert.Null(UsbHubIo.Open(@"\\?\usb#nope#{f18a0e88-c30c-11d0-8815-00a0c906bed8}"));
+    }
+
+    [Fact]
+    public void InvalidDevNode_IsNeitherHubNorHostController()
+    {
+        Assert.False(DevNodes.IsHub(0xFFFFFFF0));
+        Assert.False(DevNodes.IsHostController(0xFFFFFFF0));
+        Assert.Empty(DevNodes.Interfaces(UsbNative.HubInterface, ""));
     }
 
     [UsbFact]
