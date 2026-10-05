@@ -80,9 +80,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   na kartě úlohy a okno Hardware.
 - **USB rychlosti a porty:** 10 vs 20 Gb/s se nerozlišuje (Windows to bez neověřeného IOCTL nehlásí) — zobrazuje se
   „10 Gb/s a víc“; fyzickou polohu portu Windows neznají spolehlivě, porty pojmenuje uživatel.
-- **Report při zrušeném ověření:** když je `verified` = false, Windows počítá soubory „zapsáno“ i „ověřeno“ jako
-  v pořádku (zrušené ověření nevypíše už ověřené soubory jako chybné bez důvodu); „kartu lze vysunout“ platí
-  jen při `verified` = true. Totéž je naplánováno i pro Mac.
 - **Blackmagic RAW (`braw-decode`):** Windows `--info` navíc vydává `gamma`, `gamut` a `colorScienceGen` a LUT se volí
   podle gamy klipu (Film Gen 5 → vestavěný LUT; Video, Extended Video a starší generace = bez LUTu; Film Gen 4 zatím bez LUTu —
   provizorně, ke schválení). Mac zatím vždy předpokládá Film Gen 5. Chybný argument = kód 2; konfigurace pipeline se

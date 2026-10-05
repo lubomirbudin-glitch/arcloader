@@ -41,8 +41,14 @@ public struct OffloadReport: Codable {
 
     public var copySeconds: Double { copyFinished.timeIntervalSince(started) }
     public var verifySeconds: Double { finished.timeIntervalSince(copyFinished) }
+    /// A file state that counts as good: "verified" — or, when verification did not run to the end
+    /// (off or cancelled), also "written". Shared with Windows `OffloadReport.FailedFiles`.
+    static func isGood(_ state: String, verified: Bool) -> Bool {
+        state == FileState.verified.rawValue || (!verified && state == FileState.written.rawValue)
+    }
+
     public var failedFiles: [FileEntry] {
-        files.filter { f in f.sourceError != nil || f.destinations.contains { $0 != (verified ? "verified" : "written") } }
+        files.filter { f in f.sourceError != nil || f.destinations.contains { !OffloadReport.isGood($0, verified: verified) } }
     }
     public var success: Bool { failedFiles.isEmpty }
     /// Every file is on every destination and was read back with a matching hash.
@@ -50,7 +56,6 @@ public struct OffloadReport: Codable {
 
     static func build(plan: OffloadPlan, hashes: [UInt64?], sourceErrors: [String?], destResults: [[DestFileResult]],
                       verified: Bool, started: Date, copyFinished: Date, finished: Date) -> OffloadReport {
-        let okState: FileState = verified ? .verified : .written
         let files = plan.scan.files.enumerated().map { i, f in
             FileEntry(path: f.relPath, size: f.size,
                       modified: Date(timeIntervalSince1970: Double(f.mtime.tv_sec) + Double(f.mtime.tv_nsec) / 1e9),
@@ -60,8 +65,8 @@ public struct OffloadReport: Codable {
         }
         let dests = plan.destRoots.enumerated().map { d, root in
             Destination(root: root, cardPath: plan.cardPaths[d], filesystem: IO.filesystemType(root),
-                        filesOK: destResults[d].filter { $0.state == okState }.count,
-                        filesFailed: destResults[d].filter { $0.state != okState }.count)
+                        filesOK: destResults[d].filter { isGood($0.state.rawValue, verified: verified) }.count,
+                        filesFailed: destResults[d].filter { !isGood($0.state.rawValue, verified: verified) }.count)
         }
         return OffloadReport(cardName: plan.cardName, date: plan.date, source: plan.source,
                              sourceFilesystem: IO.filesystemType(plan.source),
@@ -111,16 +116,21 @@ public struct OffloadReport: Codable {
         return s
     }
 
+    /// Pretty JSON with sorted keys and second-precision ISO 8601 dates — the shared format (docs/FORMATY.md).
+    public func jsonData() throws -> Data {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        enc.dateEncodingStrategy = .iso8601
+        return try enc.encode(self)
+    }
+
     /// Writes all report files into `<card>/_REPORT`. The hash list and MHL are the record of the copy itself,
     /// so they are written once (`includeHashRecords`); the HTML/JSON are refreshed as clips get analysed.
     public func write(cardPath: String, includeHashRecords: Bool) throws {
         let dir = cardPath + "/" + Layout.reportDirName
         try IO.mkdirs(dir)
-        let enc = JSONEncoder()
-        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        enc.dateEncodingStrategy = .iso8601
         var outputs: [(String, Data)] = [
-            ("offload_report.json", try enc.encode(self)),
+            ("offload_report.json", try jsonData()),
             ("offload_report.txt", Data(summary.utf8)),
             ("\(cardName)_report.html", Data(HTMLReport.render(self).utf8)),
         ]

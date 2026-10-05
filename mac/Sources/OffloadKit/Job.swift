@@ -183,12 +183,14 @@ public final class OffloadJob {
         let clips = ClipDetector.detect(plan.scan.files)
         guard !clips.isEmpty else { return report }
 
-        let okState = report.verified ? "verified" : "written"
+        let verified = report.verified
         let fileIndex = Dictionary(uniqueKeysWithValues: report.files.enumerated().map { ($0.element.path, $0.offset) })
         /// First destination that holds a good copy of every segment — clips are read from disk, never from the card.
         func goodDest(_ clip: Clip) -> Int? {
             report.destinations.indices.first { d in
-                clip.segments.allSatisfy { seg in fileIndex[seg].map { report.files[$0].destinations[d] == okState } ?? false }
+                clip.segments.allSatisfy { seg in
+                    fileIndex[seg].map { OffloadReport.isGood(report.files[$0].destinations[d], verified: verified) } ?? false
+                }
             }
         }
 
