@@ -3,6 +3,7 @@ using System.IO.Pipes;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
+using System.Text.RegularExpressions;
 using Offload.BrawDecode;
 
 namespace Offload.Core.Tests;
@@ -381,12 +382,25 @@ public class BrawDecodeTests
         Assert.Empty(r.Stdout);
     }
 
+    /// Final fix I1: every exit-3/4 line names the library braw-decode loaded (an old one cannot open new clips).
+    [Fact]
+    public void Run_UnloadableLibrary_Exit3_NamesIt()
+    {
+        using var dir = new TempDir();
+        var dll = Path.Combine(dir.Path, "BlackmagicRawAPI.dll");
+        File.WriteAllText(dll, "not a library");
+        var r = Run(["--info", "a.braw"], [dir.Path]);
+        Assert.Equal(3, r.Code);
+        Assert.Equal($"braw-decode: cannot load {dll}", r.Stderr.TrimEnd());
+        Assert.Empty(r.Stdout);
+    }
+
     [BrawLibraryFact]
     public void Run_MissingClip_Exit4()
     {
         var r = Run(["--info", @"C:\nonexistent\A001.braw"]);
         Assert.Equal(4, r.Code);
-        Assert.Contains(@"cannot open C:\nonexistent\A001.braw (0x80004005)", r.Stderr);
+        Assert.Contains($@"cannot open C:\nonexistent\A001.braw (0x80004005; library {BrawLibraryFactAttribute.Library})", r.Stderr);
         Assert.Empty(r.Stdout);
     }
 
@@ -400,7 +414,7 @@ public class BrawDecodeTests
         {
             var r = Run(args);
             Assert.Equal(4, r.Code);
-            Assert.Matches(@"^braw-decode: cannot open .*A001\.braw \(0x[0-9A-F]{8}\)\r?\n$", r.Stderr);
+            Assert.Matches(@"^braw-decode: cannot open .*A001\.braw \(0x[0-9A-F]{8}; library " + Regex.Escape(BrawLibraryFactAttribute.Library!) + @"\)\r?\n$", r.Stderr);
             Assert.Empty(r.Stdout);
         }
     }
@@ -419,7 +433,7 @@ public class BrawDecodeTests
     {
         var r = RunExe("--info", @"C:\nonexistent\A001.braw");
         Assert.Equal(4, r.Code);
-        Assert.Equal(@"braw-decode: cannot open C:\nonexistent\A001.braw (0x80004005)", r.Stderr.TrimEnd());
+        Assert.Equal($@"braw-decode: cannot open C:\nonexistent\A001.braw (0x80004005; library {BrawLibraryFactAttribute.Library})", r.Stderr.TrimEnd());
         Assert.Empty(r.Stdout);
     }
 
@@ -429,7 +443,7 @@ public class BrawDecodeTests
     {
         var r = RunExe("--info", @"C:\nonexistent\Natáčení – 日本.braw");
         Assert.Equal(4, r.Code);
-        Assert.Equal(@"braw-decode: cannot open C:\nonexistent\Natáčení – 日本.braw (0x80004005)", r.Stderr.TrimEnd());
+        Assert.Equal($@"braw-decode: cannot open C:\nonexistent\Natáčení – 日本.braw (0x80004005; library {BrawLibraryFactAttribute.Library})", r.Stderr.TrimEnd());
     }
 
     /// Ruling M1: stdout is a FileStream over the raw handle, so a reader that went away (ffmpeg exited) is an error

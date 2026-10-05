@@ -9,6 +9,8 @@ namespace Offload.BrawDecode;
 /// 0 OK (also when the reader closed the pipe), 2 usage, 3 library/codec missing, 4 clip cannot be opened,
 /// 5 a frame failed to decode. A closed stdout (ffmpeg has the frames it wanted, e.g. a thumbnail) stops decoding
 /// at once and is a success: Offload treats a feeder that ends non-zero on its own as the job's error.
+/// Every exit-3/4 line names the library in use (BrawRuntime's errors already do): an old one cannot open clips
+/// from newer cameras, and Offload's note at the clip says so.
 internal static class Decoder
 {
     public const int Ok = 0, Usage = 2, NoLibrary = 3, CannotOpen = 4, FrameFailed = 5;
@@ -50,7 +52,7 @@ internal static class Decoder
             int hr = factory.CreateCodec(out codec);
             if (hr != Com.S_OK)
             {
-                Say(stderr, $"braw-decode: CreateCodec failed ({Com.Hex(hr)})");
+                Say(stderr, $"braw-decode: CreateCodec failed ({Com.Hex(hr)}; library {dll})");
                 return NoLibrary;
             }
             // The configuration is read on the first OpenClip, so the pipeline is set before it (CPU like the Mac).
@@ -62,13 +64,13 @@ internal static class Decoder
             hr = codec.OpenClip(o.Path, out clip);
             if (hr != Com.S_OK)
             {
-                Say(stderr, $"braw-decode: cannot open {o.Path} ({Com.Hex(hr)})");
+                Say(stderr, $"braw-decode: cannot open {o.Path} ({Com.Hex(hr)}; library {dll})");
                 return CannotOpen;
             }
             hr = codec.SetCallback(callback.Pointer);
             if (hr != Com.S_OK)
             {
-                Say(stderr, $"braw-decode: SetCallback failed ({Com.Hex(hr)})");
+                Say(stderr, $"braw-decode: SetCallback failed ({Com.Hex(hr)}; library {dll})");
                 return NoLibrary;
             }
             int code = o.Info ? Info(codec, clip, sink, stdout, stderr) : Frames(o, codec, clip, sink, stdout, stderr);

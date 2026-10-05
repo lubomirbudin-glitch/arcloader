@@ -49,6 +49,13 @@ internal static class RawBackends
     }
 }
 
+/// A RAW decoder's error turned into a note for the clip. The decoder's own error (with its stderr) is the inner
+/// exception; ProxyRenderer writes it to the job's log.
+internal sealed class RawDecoderException(string note, ToolError decoderError) : Exception(note, decoderError)
+{
+    public ToolError DecoderError => decoderError;
+}
+
 // MARK: Blackmagic RAW (braw-decode → raw RGB48 frames on a pipe)
 
 internal sealed record BrawInfo(
@@ -122,8 +129,42 @@ internal sealed class BrawBackend : IRawBackend
         return "full";
     }
 
-    BrawInfo Info(string path, string scale, ExternalTools tools) =>
-        ParseInfo(ToolProcess.Run(tools.BrawDecoder!, ["--info", "--scale", scale, path], timeout: _infoTimeout));
+    BrawInfo Info(string path, string scale, ExternalTools tools)
+    {
+        string output;
+        try
+        {
+            output = ToolProcess.Run(tools.BrawDecoder!, ["--info", "--scale", scale, path], timeout: _infoTimeout);
+        }
+        catch (ToolError e)
+        {
+            throw Explain(e, tools);
+        }
+        return ParseInfo(output);
+    }
+
+    /// braw-decode's exit codes 3 (library unusable), 4 (clip cannot be opened) and 5 (a frame failed) as a note
+    /// for the clip; the original error, with braw-decode's stderr, stays inside it for the log. Anything else
+    /// (a timeout, a usage error) is returned as it is.
+    internal Exception Explain(ToolError e, ExternalTools tools)
+    {
+        var dll = (tools.BrawDecoder is string exe ? _findLibrary(Path.GetDirectoryName(exe) ?? "") : null) ?? BrawLibrary.DllName;
+        var note = e.Status switch
+        {
+            3 => $"Blackmagic RAW: knihovnu {dll} nelze použít — nainstalujte aktuální Blackmagic RAW Player",
+            4 => $"Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna {dll} starší než kamera (nainstalujte aktuální Blackmagic RAW Player)",
+            5 => $"Blackmagic RAW: snímek klipu se nepodařilo dekódovat ({LastLine(e.Detail)})",
+            _ => null,
+        };
+        return note == null ? e : new RawDecoderException(note, e);
+    }
+
+    /// braw-decode's last stderr line without its "braw-decode: " prefix.
+    static string LastLine(string stderr)
+    {
+        var line = stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? "";
+        return line.StartsWith("braw-decode: ", StringComparison.Ordinal) ? line["braw-decode: ".Length..] : line;
+    }
 
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => ToClipInfo(Info(path, "eighth", tools));
 
@@ -146,6 +187,7 @@ internal sealed class BrawBackend : IRawBackend
             FeederArgs = args,
             AudioFromInput = false,
             FullRange = true,
+            ExplainFeederError = e => Explain(e, tools),
         };
     }
 }

@@ -7,6 +7,9 @@ internal sealed class FrameSource
     /// Decoder whose stdout is piped into ffmpeg's stdin (input "-"), or null.
     public string? FeederExe { get; init; }
     public IReadOnlyList<string> FeederArgs { get; init; } = [];
+    /// Turns the feeder's own failure (it ended non-zero while ffmpeg still read) into the clip's note — a
+    /// RawDecoderException; null or an unchanged error = the feeder's ToolError as it is.
+    public Func<ToolError, Exception>? ExplainFeederError { get; init; }
     public bool AudioFromInput { get; init; } = true;
     /// The decoder already cropped to the frame lines (ARRI does it before debayering).
     public bool AlreadyCropped { get; init; }

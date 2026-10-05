@@ -366,7 +366,7 @@ internal static unsafe class BrawRuntime
 {
     static readonly Dictionary<string, nint> Loaded = new(StringComparer.OrdinalIgnoreCase);
 
-    /// null + error text when the library cannot be loaded or has no factory export.
+    /// null + error text (naming the library) when the library cannot be loaded or has no factory export.
     public static BrawFactory? CreateFactory(string dllPath, out string? error)
     {
         error = null;
@@ -391,7 +391,7 @@ internal static unsafe class BrawRuntime
         nint factory = ((delegate* unmanaged[Stdcall]<nint>)create)();
         if (factory == 0)
         {
-            error = "CreateBlackmagicRawFactoryInstance returned null";
+            error = $"{dllPath}: CreateBlackmagicRawFactoryInstance returned null";
             return null;
         }
         return new BrawFactory(factory);

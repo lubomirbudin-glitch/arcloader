@@ -13,6 +13,18 @@ public sealed class ProxyRenderer : IDisposable
     static readonly string[] FontCandidates = [@"C:\Windows\Fonts\consola.ttf", @"C:\Windows\Fonts\cour.ttf"];
 
     readonly Dictionary<ClipFormat, IRawBackend> backends = RawBackends.All.ToDictionary(b => b.Format);
+
+    /// Tests only: other RAW backends (e.g. BRAW with a fake library search or a short --info timeout); they
+    /// replace the default one of the same format.
+    internal IEnumerable<IRawBackend> Backends
+    {
+        get => backends.Values;
+        init
+        {
+            backends = new Dictionary<ClipFormat, IRawBackend>(backends);
+            foreach (var b in value) backends[b.Format] = b;
+        }
+    }
     readonly string workDir;
     readonly bool hasCustomLut;
     readonly bool hasFont;
@@ -105,7 +117,22 @@ public sealed class ProxyRenderer : IDisposable
         }
         if (!backends.TryGetValue(clip.Format, out var b) || !b.IsAvailable(Tools))
             throw new ToolError(clip.Format.Label(), -1, UnsupportedReason(clip) ?? "");
-        return b.Probe(path, Tools, workDir);
+        return Logged(() => b.Probe(path, Tools, workDir));
+    }
+
+    /// A decoder error turned into a note for the clip (RawDecoderException): the decoder's own words — its stderr,
+    /// e.g. the library it loaded — go to the job's log, the note to the clip.
+    T Logged<T>(Func<T> decode)
+    {
+        try
+        {
+            return decode();
+        }
+        catch (RawDecoderException e)
+        {
+            Log?.Invoke(e.DecoderError.Message);
+            throw;
+        }
     }
 
     /// MXF is a container for many codecs; ARRIRAW/ARRICORE inside it only the ARRI tool can read.
@@ -156,7 +183,7 @@ public sealed class ProxyRenderer : IDisposable
         if (clip.Format == ClipFormat.Video)
             return new FrameSource { InputArgs = hwaccel ? ["-hwaccel", "auto", "-i", path] : ["-i", path] };
         if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, "no decoder");
-        return b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt);
+        return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt));
     }
 
     /// The .cube for this clip by its name in the work folder, or null for no LUT. The custom LUT was copied
@@ -452,7 +479,12 @@ public sealed class ProxyRenderer : IDisposable
             // A feeder that died on its own is the real cause; ffmpeg only saw a truncated stream. One that was killed,
             // or whose stdout the pump closed because ffmpeg had stopped reading, is not: ffmpeg's exit code decides.
             if (feeder != null && !feederKilled && Volatile.Read(ref feederCut) == 0 && feeder.WaitForExit(0) && feeder.ExitCode != 0)
-                throw new ToolError(feeder.Name, feeder.ExitCode, feeder.StderrTail);
+            {
+                var error = new ToolError(feeder.Name, feeder.ExitCode, feeder.StderrTail);
+                var explained = src.ExplainFeederError?.Invoke(error) ?? error;
+                if (explained is RawDecoderException) Log?.Invoke(error.Message);
+                throw explained;
+            }
             if (ff.ExitCode != 0) throw new ToolError("ffmpeg", ff.ExitCode, ff.StderrTail);
         }
         finally
