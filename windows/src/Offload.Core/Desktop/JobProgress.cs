@@ -48,12 +48,13 @@ public sealed class JobProgress
             }
             else
             {
-                ReadRate = Smooth(ReadRate, (bytes - lastBytes) / dt);
+                ReadRate = Smooth(ReadRate, Math.Max(0, (bytes - lastBytes) / dt));
                 var rates = new double[dests.Length];
-                for (int i = 0; i < dests.Length; i++) rates[i] = Smooth(DestRates[i], (dests[i] - lastDest[i]) / dt);
+                for (int i = 0; i < dests.Length; i++) rates[i] = Smooth(DestRates[i], Math.Max(0, (dests[i] - lastDest[i]) / dt));
                 DestRates = rates;
                 Eta = ReadRate > 1 ? (c.TotalBytes - bytes) / ReadRate : null;
             }
+            lastPhase = s.Phase;
             lastBytes = bytes;
             lastDest = dests.ToArray();
             lastTime = now;
@@ -61,14 +62,15 @@ public sealed class JobProgress
         Brake = s.Phase == JobPhase.Copying && s.Copy is { } cc && brakes != null
             ? brakes.Add((now - started).TotalSeconds, cc.ReadBytes, cc.WrittenBytes) ?? Brake
             : null;
-        lastPhase = s.Phase;
         Status = s;
     }
 
     static double Smooth(double old, double v) => old == 0 ? v : old * 0.6 + v * 0.4;
 
     /// 0…1 within the current phase.
-    public double PhaseProgress => Status switch
+    public double PhaseProgress => Math.Clamp(RawProgress, 0, 1);
+
+    double RawProgress => Status switch
     {
         { Phase: JobPhase.Copying, Copy: { TotalBytes: > 0 } c } => (double)c.ReadBytes / c.TotalBytes,
         { Phase: JobPhase.Verifying, Copy: { TotalBytes: > 0 } v } =>
@@ -93,7 +95,7 @@ public sealed class JobProgress
 
     public static string EtaText(double seconds)
     {
-        int i = (int)seconds;
+        int i = double.IsNaN(seconds) || seconds < 0 ? 0 : (int)Math.Min(seconds, int.MaxValue);
         return i >= 3600
             ? string.Create(CultureInfo.InvariantCulture, $"{i / 3600}:{i / 60 % 60:00}:{i % 60:00}")
             : string.Create(CultureInfo.InvariantCulture, $"{i / 60}:{i % 60:00}");

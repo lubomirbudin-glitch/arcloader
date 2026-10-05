@@ -60,6 +60,7 @@ public sealed class OffloadJob
 {
     readonly Lock gate = new();
     JobStatus state = new();
+    bool started;
 
     public JobConfig Config { get; }
     public OffloadEngine Engine { get; }
@@ -96,7 +97,8 @@ public sealed class OffloadJob
     public JobStatus Status()
     {
         JobStatus s;
-        lock (gate) s = state;
+        bool wasStarted;
+        lock (gate) { s = state; wasStarted = started; }
         if (s.Phase is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying or JobPhase.Reporting)
         {
             var snap = Engine.Snapshot();
@@ -113,7 +115,7 @@ public sealed class OffloadJob
             };
         }
         // Cancelled while still queued: it never runs, so say so instead of "Čeká" forever.
-        if (s.Phase == JobPhase.Waiting && IsCancelled) s = s with { Phase = JobPhase.Cancelled };
+        if (s.Phase == JobPhase.Waiting && !wasStarted && IsCancelled) s = s with { Phase = JobPhase.Cancelled };
         return s;
     }
 
@@ -133,6 +135,7 @@ public sealed class OffloadJob
     /// After this the card is no longer needed, so the app can start the next card while stage 2 runs.
     public bool RunCopy(Action<string>? log = null)
     {
+        lock (gate) started = true;
         using var awake = NativeIO.KeepAwake();
         try
         {

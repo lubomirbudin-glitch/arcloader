@@ -86,6 +86,7 @@ public class JobProgressTests
     [InlineData(59, "0:59")]
     [InlineData(600, "10:00")]
     [InlineData(3725, "1:02:05")]
+    [InlineData(-5, "0:00")]
     public void EtaText(double seconds, string text) => Assert.Equal(text, JobProgress.EtaText(seconds));
 
     [Theory]
@@ -166,6 +167,41 @@ public class JobProgressTests
         using var dir = new TempDir();
         var job = new OffloadJob(new JobConfig(dir.Sub("card"), [dir.Sub("d1")]));
         job.Cancel();
+        Assert.Equal(JobPhase.Cancelled, job.Status().Phase);
+    }
+
+    [Fact]
+    public void PhaseChangeInsideSkippedUpdate_ResetsRates()
+    {
+        var p = Copying();
+        p.Update(St(JobPhase.Verifying, Snap(1_000_000_000, [1_000_000_000, 1_000_000_000], [0, 0])), T0.AddSeconds(2.6));
+        p.Update(St(JobPhase.Verifying, Snap(1_000_000_000, [1_000_000_000, 1_000_000_000], [100_000_000, 100_000_000])), T0.AddSeconds(3.6));
+        Assert.True(p.ReadRate >= 0);
+        Assert.All(p.DestRates, r => Assert.True(r >= 0));
+        Assert.Equal(0, p.ReadRate);
+    }
+
+    [Fact]
+    public void StartedJob_CancelledDuringRun_NeverGoesBackFromFinished()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestFs.WriteRandom(Path.Combine(card, "A.bin"), 8 << 20, 1);
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")]) { AnalyzeClips = false },
+            new OffloadOptions { ChunkSize = 64 * 1024, BufferCount = 4, AllowSameDevice = true, AllowSourceVolume = true });
+        var t = new Thread(() => job.RunCopy());
+        t.Start();
+        // Cancel only once RunCopy has begun (cancelling before it is the legitimate never-started case).
+        while (t.IsAlive && job.Status().Phase == JobPhase.Waiting) Thread.Yield();
+        job.Cancel();
+        bool finished = false;
+        while (t.IsAlive)
+        {
+            var ph = job.Status().Phase;
+            if (finished) Assert.True(ph.IsFinished());
+            finished |= ph.IsFinished();
+        }
+        t.Join();
         Assert.Equal(JobPhase.Cancelled, job.Status().Phase);
     }
 }
