@@ -2,7 +2,9 @@ namespace Offload.Core.Tests;
 
 public class StageTwoTests
 {
-    static OffloadOptions Options() => new() { ChunkSize = 1 << 20, BufferCount = 4, AllowSameDevice = true, AllowSourceVolume = true };
+    /// Software encoder: these full jobs run beside other proxy tests, and parallel NVENC sessions can collide
+    /// (consumer GPUs limit them), which would fail a proxy for a reason that has nothing to do with the test.
+    static OffloadOptions Options() => new() { ChunkSize = 1 << 20, BufferCount = 4, AllowSameDevice = true, AllowSourceVolume = true, ProxyEncoder = "libx264" };
 
     static string SonyCard(TempDir dir)
     {
@@ -33,7 +35,7 @@ public class StageTwoTests
         Assert.True(s.SafeToEject);
         Assert.Equal(2, s.ProxiesDone);
         Assert.Equal(0, s.ProxiesFailed);
-        Assert.Contains(report!.ProxyEncoder, Encoders.H264); // final review B1
+        Assert.Equal("libx264", report!.ProxyEncoder); // final review B1; the encoder the test forced
         Assert.Equal(3, report!.Clips.Count);
         Assert.All(report.Clips, c => Assert.Equal(3, c.Thumbnails.Count));
         var sub = report.Clips.Single(c => c.Clip.IsCameraProxy);
@@ -240,8 +242,14 @@ public class StageTwoTests
             Proxy = new ProxySettings { Enabled = true, Height = 1080, Codec = ProxyCodec.Prores422HQ },
         }, Options());
         var run = Task.Run(() => job.Run());
-        while (job.Status().Phase != JobPhase.Proxies && !run.IsCompleted) await Task.Delay(20);
-        await Task.Delay(300);
+        // Wait for the render's own progress: from then on the cancel lands inside ffmpeg (no fixed 300 ms guess
+        // that a loaded PC could miss; a cancel before the clip starts would leave it without a proxy status).
+        var deadline = DateTime.UtcNow.AddSeconds(120);
+        while (job.Status() is var st && !(st.Phase == JobPhase.Proxies && st.ClipFraction > 0) && !run.IsCompleted)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "the proxy stage did not reach the clip within 120 s");
+            await Task.Delay(20);
+        }
         job.Cancel();
         await run;
         var s = job.Status();

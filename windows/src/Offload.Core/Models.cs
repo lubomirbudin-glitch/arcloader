@@ -17,6 +17,9 @@ public sealed class OffloadOptions
     internal bool ForceBuffered { get; set; }
     /// Tests only: called on the copy thread just before file i is read (a deterministic point to cancel at).
     internal Action<int>? BeforeFileCopy { get; set; }
+    /// Tests only: H.264/HEVC proxies with this encoder (e.g. libx264) instead of the probed one — parallel
+    /// NVENC sessions from concurrently running tests can collide.
+    internal string? ProxyEncoder { get; set; }
 }
 
 public enum FileState { Pending, Written, Verified, Failed }

@@ -73,6 +73,16 @@ public class ProxyWatchdogTests
     static ExternalTools FakeTools(string dir, bool softwareWorks) =>
         new ExternalTools { Ffmpeg = FakeFfmpeg(dir, softwareWorks), NoSearch = true }.Resolved();
 
+    /// Short, but with room for cmd.exe to parse its arguments on a loaded PC before the watchdog fires.
+    static readonly TimeSpan Stall = TimeSpan.FromSeconds(3);
+
+    /// The fake has logged its call with -hwaccel, i.e. it is past its argument loop and sleeping.
+    static bool LoggedHw(string dir)
+    {
+        try { return File.ReadAllLines(Path.Combine(dir, "calls.txt")).Contains("hw"); }
+        catch (IOException) { return false; }
+    }
+
     static ClipInfo H264Info => new() { Codec = "h264", Width = 320, Height = 180, Duration = 1, FrameRate = "25/1" };
 
     [Fact]
@@ -80,7 +90,7 @@ public class ProxyWatchdogTests
     {
         using var dir = new TempDir();
         var card = dir.Sub("card");
-        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: false)) { StallTimeout = TimeSpan.FromSeconds(1) };
+        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: false)) { StallTimeout = Stall };
         var output = Path.Combine(card, "_PROXY", "a.mov");
         var sw = Stopwatch.StartNew();
         var e = Assert.ThrowsAny<Exception>(() => r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { }, () => false));
@@ -97,7 +107,7 @@ public class ProxyWatchdogTests
     {
         using var dir = new TempDir();
         var card = dir.Sub("card");
-        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: true)) { StallTimeout = TimeSpan.FromSeconds(1) };
+        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: true)) { StallTimeout = Stall };
         var output = Path.Combine(card, "_PROXY", "a.mov");
         r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { }, () => false);
         Assert.True(File.Exists(output));
@@ -109,7 +119,7 @@ public class ProxyWatchdogTests
     {
         using var dir = new TempDir();
         var card = dir.Sub("card");
-        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: true)) { StallTimeout = TimeSpan.FromSeconds(1) };
+        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: true)) { StallTimeout = Stall };
         var output = Path.Combine(card, "_PROXY", "a.mov");
         r.Render(VideoClip("a.mov"), card, new ClipInfo { Codec = "ffv1", Width = 320, Height = 180, Duration = 1 }, null, output, _ => { }, () => false);
         Assert.True(File.Exists(output));
@@ -124,8 +134,7 @@ public class ProxyWatchdogTests
         using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: true)) { StallTimeout = TimeSpan.FromSeconds(30) };
         var output = Path.Combine(card, "_PROXY", "a.mov");
         var sw = Stopwatch.StartNew();
-        var e = Assert.Throws<ToolError>(() => r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { },
-            () => sw.Elapsed > TimeSpan.FromMilliseconds(500)));
+        var e = Assert.Throws<ToolError>(() => r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { }, () => LoggedHw(dir.Path)));
         Assert.Contains("cancelled", e.Message);
         Assert.Equal(["call", "hw"], File.ReadAllLines(Path.Combine(dir.Path, "calls.txt")));
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(20), $"took {sw.Elapsed}");
