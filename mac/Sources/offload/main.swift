@@ -8,7 +8,7 @@ struct Offload: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Camera card offload: read once, write to several disks, verify with xxh64.",
         version: OffloadVersion.string,
-        subcommands: [Copy.self, Verify.self, Bench.self, Ports.self],
+        subcommands: [Copy.self, Verify.self, Bench.self, Ports.self, Luts.self],
         defaultSubcommand: Copy.self)
 }
 
@@ -48,7 +48,7 @@ struct Copy: ParsableCommand {
     @Flag(help: "Render proxies after the copy is verified.")
     var proxy = false
 
-    @Option(help: "LUT (.cube) applied to proxies and thumbnails.")
+    @Option(help: "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path.")
     var lut: String?
 
     @Option(help: "Proxy height in pixels.")
@@ -69,6 +69,12 @@ struct Copy: ParsableCommand {
     @Flag(help: "No burn-in of clip name and timecode.")
     var noBurnIn = false
 
+    @Option(help: "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto.")
+    var lutFallback: String?
+
+    @Option(help: "Also copy every proxy to <folder>/<date>/<card name>/ (with --proxy; never overwrites).")
+    var proxyFolder: String?
+
     func run() throws {
         var config = JobConfig(source: abs(source), destRoots: dest.map(abs))
         config.cardName = name
@@ -79,11 +85,15 @@ struct Copy: ParsableCommand {
         config.allowSameDevice = allowSameDevice
         config.analyzeClips = !noAnalyze
         config.proxy.enabled = proxy
-        // An empty --lut "" is "no LUT" (not the current folder); without --lut the LUT is chosen per clip (auto).
-        if let lut, lut.trimmingCharacters(in: .whitespaces).isEmpty {
-            config.proxy.lutMode = .off
-        } else {
-            config.proxy.lutPath = lut.map(abs)
+        // An empty --lut "" is "no LUT" (LutOption.parse → none), not the current folder.
+        let choice = LutOption.parse(lut, fallback: lutFallback, catalog: LutCatalog.shared)
+        if let e = choice.error { throw ValidationError(e) }
+        config.proxy.lutMode = choice.mode
+        config.proxy.lutBuiltin = choice.builtin
+        config.proxy.lutPath = choice.path.map(abs)
+        config.proxy.lutFallback = choice.fallback
+        if let p = config.proxy.lutPath, !FileManager.default.fileExists(atPath: p) {
+            throw ValidationError("LUT not found: \(p)")
         }
         config.proxy.height = proxyHeight
         guard let codec = ProxyCodec(rawValue: proxyCodec) else {
@@ -95,14 +105,24 @@ struct Copy: ParsableCommand {
         config.proxy.frameScale = frameScale / 100
         config.proxy.burnFilename = !noBurnIn
         config.proxy.burnTimecode = !noBurnIn
-        if let lut = config.proxy.lutPath, !FileManager.default.fileExists(atPath: lut) {
-            throw ValidationError("LUT not found: \(lut)")
+        config.proxy.extraFolder = proxyFolder.map(abs)
+        if config.proxy.extraFolder != nil && !proxy {
+            fputs("Note: --proxy-folder has no effect without --proxy.\n", stderr)
         }
+        if let folder = ProxyPreflight.extraFolderInUse(config.proxy), !ProxyPreflight.isDirectory(folder) {
+            throw ValidationError("Proxy folder not found: \(folder)")
+        }
+        // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all (Windows LutOption.PlanLine).
+        if proxy || config.analyzeClips { print("LUT: " + Copy.lutLine(config.proxy)) }
 
         let job = OffloadJob(config: config)
         let plan = try job.prepare()
         print("Card \(plan.cardName): \(plan.scan.files.count) files, \(formatBytes(plan.scan.totalBytes))")
         for p in plan.cardPaths { print("  → \(p)") }
+        if let extra = ProxyPreflight.extraFolderInUse(config.proxy) {
+            let target = URL(fileURLWithPath: extra).appendingPathComponent(plan.date).appendingPathComponent(plan.cardName).path
+            print("  proxy also → \(target)")
+        }
         let tools = config.tools.resolved()
         if config.analyzeClips || proxy {
             print("  ffmpeg: \(tools.ffmpeg ?? "NOT FOUND")")
@@ -153,6 +173,16 @@ struct Copy: ParsableCommand {
         }
         if let e = status.error { print("ERROR: \(e)") }
         if status.phase != .done || report?.success != true { throw ExitCode(1) }
+    }
+
+    /// The "LUT: …" line before the copy (same wording as Windows).
+    static func lutLine(_ p: ProxySettings) -> String {
+        switch LutResolver.effectiveMode(p) {
+        case .off: return "none"
+        case .custom: return p.lutPath ?? ""
+        case .builtin: return p.lutBuiltin ?? ""
+        case .auto: return "auto" + (p.lutFallback.map { " (fallback \($0))" } ?? "")
+        }
     }
 }
 
@@ -304,6 +334,16 @@ struct Ports: ParsableCommand {
     }
 
     private func mb(_ v: Double?) -> String { v.map { String(format: "%.0f MB/s", $0) } ?? "—" }
+}
+
+struct Luts: ParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "List the built-in LUTs (ids for --lut and --lut-fallback).")
+
+    func run() throws {
+        let cat = LutCatalog.shared
+        if cat.luts.isEmpty { fputs("No built-in LUTs found (luts folder missing).\n", stderr) }
+        for l in cat.luts { print("\(l.id) — \(l.name)") }
+    }
 }
 
 func abs(_ p: String) -> String {
