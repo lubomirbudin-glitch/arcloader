@@ -22,5 +22,6 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
+        .testTarget(name: "OffloadKitTests", dependencies: ["OffloadKit"], path: "Tests/OffloadKitTests"),
     ]
 )
