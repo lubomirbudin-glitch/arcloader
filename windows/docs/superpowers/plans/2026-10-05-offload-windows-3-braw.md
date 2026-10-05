@@ -45,7 +45,9 @@ klipem se ověří až testy `[BrawSampleFact]` se vzorkem (Task 6, 7, 8).
 - Navenek stejné jako Mac: argumenty, klíče JSON a jejich pořadí, `fps` se 6 desetinnými místy, snímky přesně
   `šířka × výška × 6` bajtů, výstupní kódy 0/2/3/4/5, zavřená roura (ffmpeg skončil) = konec s kódem 0.
   Odchylky (záměrné): navíc `gamma`/`gamut`/`colorScienceGen`; chybný argument = kód 2 (Mac potichu bere výchozí).
-- Na stdout jen data (`Console.OpenStandardOutput()`), hlášky jen na stderr s prefixem `braw-decode: `.
+- Na stdout jen data — `FileStream` nad handlem z `GetStdHandle(STD_OUTPUT_HANDLE)` (rozhodnutí M1: na rozdíl od
+  `Console.OpenStandardOutput()` hlásí zavřenou rouru jako chybu, takže dekodér po konci ffmpeg přestane), hlášky jen
+  na stderr (UTF-8) s prefixem `braw-decode: `.
 - Výjimka nikdy neprojde do vlákna SDK (každá `[UnmanagedCallersOnly]` metoda má `try/catch`).
 - Každý `Create*`/`Clone*`/`QueryInterface` výsledek se uvolní právě jednou; callback objekt se uvolní až po uvolnění kodeku.
 - Každý commit: řádek nahoře v nové sekci `## 2026-10-05 — plán 3 (dekodér BRAW v C#), průběh` v `docs/VYVOJ-WINDOWS.md`

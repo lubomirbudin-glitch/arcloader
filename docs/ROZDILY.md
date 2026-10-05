@@ -92,8 +92,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Blackmagic RAW (`braw-decode`):** Windows `--info` navíc vydává `gamma`, `gamut` a `colorScienceGen` a LUT se volí
   podle gamy klipu (Film Gen 5 → vestavěný LUT; Video, Extended Video a starší generace = bez LUTu; Film Gen 4 zatím bez LUTu —
   provizorně, ke schválení). Mac zatím vždy předpokládá Film Gen 5. Chybný argument = kód 2; konfigurace pipeline se
-  nastavuje před `OpenClip` (SDK ji čte při prvním otevření klipu). `braw-decode.exe` nenajde-li knihovnu
-  `BlackmagicRawAPI.dll`, BRAW se jen zkopíruje a ověří (proxy a náhledy se přeskočí s nápovědou).
+  nastavuje před `OpenClip` (SDK ji čte při prvním otevření klipu). Bez knihovny `BlackmagicRawAPI.dll` se BRAW
+  jen zkopíruje a ověří — Offload proxy a náhledy přeskočí s nápovědou (`braw-decode` sám by skončil kódem 3).
 - **Složka pro proxy navíc** (zatím jen Windows, pro Mac naplánováno): každá hotová proxy se kromě `_PROXY` na cílech
   zkopíruje i do `<složka>\<datum>\<karta>\` (při shodě jména `_2`, `_3`…, nic se nepřepíše). Nastavení
   `proxy.extraFolder` v settings.json a v reportu (Mac neznámý klíč ignoruje), v CLI `--proxy-folder`. Nedostupná

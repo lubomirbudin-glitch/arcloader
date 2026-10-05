@@ -52,11 +52,14 @@ Testy, které potřebují skutečný klip, se bez vzorku přeskočí. Vzorek:
 1. `setx OFFLOAD_BRAW_SAMPLE "<cesta ke klipu>.braw"`, nové okno PowerShellu, ve složce `windows`:
    `dotnet test tests\Offload.Core.Tests --filter "FullyQualifiedName~Braw"` — očekává se vše PASS a **0 přeskočených** testů
    (přeskočený test znamená, že chybí proměnná, knihovna `BlackmagicRawAPI.dll`, ffmpeg nebo ffprobe).
-2. `build\Offload\bin\braw-decode.exe --info --scale eighth $env:OFFLOAD_BRAW_SAMPLE` (po `scripts\build.ps1`; nebo
-   `windows\tools\bin\braw-decode.exe`). Očima zkontrolovat JSON: `gamma` (např. „Blackmagic Design Film“) a `gamut` jsou vyplněné,
-   `colorScienceGen` je číslo (5 u Gen 5), `width`/`height` odpovídají zmenšení, `frames`, `fps`, `timecode`, `camera` dávají smysl.
-   Chybí-li `gamma`/`gamut`, je rozložení VARIANT jiné, než SDK dokumentuje: v `BrawClipProcessingAttributes.Text` vypsat
-   `v.VarType` na stderr a porovnat s IDL SDK; do opravy se LUT chová jako dosud (gama neuvedena → předpoklad Film Gen 5).
+2. Stále ve složce `windows`: `build\Offload\bin\braw-decode.exe --info --scale eighth $env:OFFLOAD_BRAW_SAMPLE`
+   (po `scripts\build.ps1`; nebo `tools\bin\braw-decode.exe`). **Nejdřív zkontrolovat stderr:** nečekaný typ VARIANT
+   u atributu se vypíše tam (např. `braw-decode: gamut: clip attribute 'gamt' is a number, expected a string`) a klíč
+   v JSON pak chybí; potichu chybí klíč jen tehdy, když selže samotné volání `GetClipAttribute`. Pak očima zkontrolovat
+   JSON: `gamma` (např. „Blackmagic Design Film“) a `gamut` jsou vyplněné, `colorScienceGen` je číslo (5 u Gen 5),
+   `width`/`height` odpovídají zmenšení, `frames`, `fps`, `timecode`, `camera` dávají smysl. Chybí-li `gamma`/`gamut`
+   s hláškou na stderr, je typ VARIANT jiný, než SDK dokumentuje — porovnat s IDL SDK; bez hlášky atribut SDK u klipu
+   nevrátilo. Do opravy se LUT chová jako dosud (gama neuvedena → předpoklad Film Gen 5).
 3. `offload copy <složka se vzorkem> <cíl> --proxy`: v reportu klip se **třemi snímky**, LUT „Blackmagic RAW: Blackmagic Design
    Film Gen 5“ (u klipu v Gen 5), proxy `.mov` se vizuálně shoduje s Blackmagic RAW Playerem s LUTem Film → Rec.709
    (barvy, kontrast, orientace, bez posunu o snímek; první/prostřední/poslední snímek v reportu odpovídají časům).
