@@ -290,14 +290,6 @@ public final class ProxyRenderer {
         return result
     }
 
-    /// Single thumbnail — kept only until `OffloadJob` uses `thumbnails` (Task 7 removes it).
-    public func thumbnail(_ clip: Clip, cardPath: String, info: ClipInfo, applyLUT: Bool = true) throws -> Data {
-        guard let first = try thumbnails(clip, cardPath: cardPath, info: info, applyLUT: applyLUT).first else {
-            throw ToolError(tool: "ffmpeg", status: 0, message: "no frame")
-        }
-        return first.jpeg
-    }
-
     public func render(_ clip: Clip, cardPath: String, info: ClipInfo, output: String,
                        progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
         guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }

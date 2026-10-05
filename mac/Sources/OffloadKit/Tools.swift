@@ -88,6 +88,7 @@ final class ToolProcess {
         process.standardError = pipe
         pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
             let data = h.availableData
+            if data.isEmpty { h.readabilityHandler = nil }   // EOF: otherwise the handler keeps firing with empty data
             guard let self, !data.isEmpty else { return }
             self.lock.lock()
             self.stderrTail = String((self.stderrTail + String(decoding: data, as: UTF8.self)).suffix(4000))
@@ -101,7 +102,10 @@ final class ToolProcess {
         var pending = ""
         pipe.fileHandleForReading.readabilityHandler = { h in
             let data = h.availableData
-            guard !data.isEmpty else { return }
+            guard !data.isEmpty else {
+                h.readabilityHandler = nil   // EOF: otherwise the handler keeps firing with empty data
+                return
+            }
             pending += String(decoding: data, as: UTF8.self)
             while let nl = pending.firstIndex(of: "\n") {
                 handler(String(pending[..<nl]))

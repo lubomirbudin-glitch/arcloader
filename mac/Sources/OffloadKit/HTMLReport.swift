@@ -52,7 +52,7 @@ public enum HTMLReport {
     /// `forPrint`: light colours only and the full file list expanded (for the PDF).
     static let darkCSS = "@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2e33;--ok:#4cc27c;--okbg:#14301f;--bad:#ff6b6b;--badbg:#3a1717;--warn:#f0b04a;--warnbg:#382a10;--accent:#8aa2ff}}"
     static let printCSS = "body{background:#fff;font-size:11px}main{padding:0;max-width:none}th,td{padding:5px 7px}tr{break-inside:avoid}h2{break-after:avoid}"
-        + ".stat b{font-size:17px}.thumb,.nothumb{width:112px;height:63px}"
+        + ".stat b{font-size:17px}.thumb,.nothumb{width:112px;height:63px}.thumbs figure img{width:96px;height:54px}"
 
     public static func render(_ r: OffloadReport, forPrint: Bool = false) -> String {
         let ok = r.success
@@ -86,6 +86,7 @@ public enum HTMLReport {
         td.clip{white-space:normal;min-width:180px;max-width:300px}.wrap{white-space:normal}
         .thumb{width:128px;height:72px;object-fit:contain;background:#000;border-radius:4px;display:block}
         .nothumb{width:128px;height:72px;border-radius:4px;background:var(--line)}
+        .thumbs{display:flex;gap:4px}.thumbs figure{margin:0}.thumbs figcaption{font:10px ui-monospace,Menlo,monospace;color:var(--muted);text-align:center}
         .clipname{font-weight:600}.path{color:var(--muted);font-size:12px}
         details summary{cursor:pointer;padding:10px 0;font-weight:600}
         .err{white-space:normal;color:var(--bad)}
@@ -129,8 +130,10 @@ public enum HTMLReport {
             h += "<h2>Klipy</h2><div class=\"panel\"><table>\n"
             h += "<tr><th></th><th>Klip</th><th>Formát</th><th>Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Délka</th><th>TC</th><th class=\"num\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n"
             for c in r.clips {
-                let img = c.thumbnail.map { "<img class=\"thumb\" src=\"data:image/jpeg;base64,\($0.base64EncodedString())\" alt=\"\">" }
-                    ?? "<div class=\"nothumb\"></div>"
+                let img = c.thumbnails.isEmpty ? "<div class=\"nothumb\"></div>"
+                    : "<div class=\"thumbs\">" + c.thumbnails.map { t in
+                        "<figure><img class=\"thumb\" src=\"data:image/jpeg;base64,\(t.jpeg.base64EncodedString())\" alt=\"\"><figcaption>\(esc(t.label))</figcaption></figure>"
+                    }.joined() + "</div>"
                 let i = c.info
                 var codecParts: [String] = []
                 if c.clip.format != .video { codecParts.append(c.clip.format.label) }

@@ -170,8 +170,8 @@ public struct ClipEntry: Codable {
     public var proxyPath: String?
     public var proxyNote: String?
     public var proxySeconds: Double?
-    /// JPEG; embedded in the HTML report only.
-    public var thumbnail: Data?
+    /// First, middle and last frame (JPEG + caption); embedded in the HTML/PDF report only.
+    public var thumbnails: [Thumbnail] = []
 
     enum CodingKeys: String, CodingKey {
         case clip, info, probeError, proxyStatus, proxyPath, proxyNote, proxySeconds

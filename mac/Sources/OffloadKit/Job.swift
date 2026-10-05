@@ -257,7 +257,11 @@ public final class OffloadJob {
                     }
                 }
                 entries[i].info = info
-                entries[i].thumbnail = try? renderer.thumbnail(entries[i].clip, cardPath: plan.cardPaths[d], info: info)
+                // RED and ARRI raw cannot give a single frame directly; their thumbnails come from the proxy later.
+                if entries[i].clip.format != .r3d && entries[i].clip.format != .arriraw {
+                    entries[i].thumbnails = tryThumbnails(renderer, entries[i].clip, cardPath: plan.cardPaths[d], info: info,
+                                                          applyLUT: true, log: log)
+                }
             } catch {
                 entries[i].probeError = "\(error)"
                 log?("probe \(clip.name): \(error)")
@@ -307,17 +311,25 @@ public final class OffloadJob {
                 try renderer.render(clip, cardPath: plan.cardPaths[d], info: info, output: plan.cardPaths[d] + "/" + rel,
                                     progress: { f in self.update { $0.clipFraction = f } },
                                     isCancelled: { self.isCancelled })
-                if config.proxy.copyToAllDestinations {
-                    for (o, other) in plan.cardPaths.enumerated() where o != d {
-                        try copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel)
-                    }
-                }
                 entries[i].proxyStatus = .done
                 entries[i].proxyPath = rel
-                if entries[i].thumbnail == nil {
-                    // RAW formats rendered via an intermediate: take the thumbnail from the finished proxy.
+                if config.proxy.copyToAllDestinations {
+                    // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.
+                    for (o, other) in plan.cardPaths.enumerated() where o != d {
+                        do {
+                            try copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel)
+                        } catch {
+                            let note = "kopie na \(other) selhala: \(error)"
+                            entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note
+                            log?("proxy \(clip.name): copy to \(other) failed: \(error)")
+                        }
+                    }
+                }
+                if entries[i].thumbnails.isEmpty {
+                    // RAW formats rendered via an intermediate: take the thumbnails from the finished proxy.
                     let proxyClip = Clip(name: name, path: rel, format: .video, segments: [rel], bytes: 0, isCameraProxy: false)
-                    entries[i].thumbnail = try? renderer.thumbnail(proxyClip, cardPath: plan.cardPaths[d], info: info, applyLUT: false)
+                    entries[i].thumbnails = tryThumbnails(renderer, proxyClip, cardPath: plan.cardPaths[d], info: info,
+                                                          applyLUT: false, log: log)
                 }
                 entries[i].proxySeconds = Date().timeIntervalSince(t0)
                 update { $0.proxiesDone += 1 }
@@ -354,11 +366,26 @@ public final class OffloadJob {
         }
     }
 
+    private func tryThumbnails(_ renderer: ProxyRenderer, _ clip: Clip, cardPath: String, info: ClipInfo,
+                               applyLUT: Bool, log: ((String) -> Void)?) -> [Thumbnail] {
+        do {
+            return try renderer.thumbnails(clip, cardPath: cardPath, info: info, applyLUT: applyLUT, isCancelled: { self.isCancelled })
+        } catch {
+            if !isCancelled { log?("thumbnails \(clip.name): \(error)") }
+            return []
+        }
+    }
+
     private func copyFile(_ src: String, to dst: String) throws {
         try IO.mkdirs((dst as NSString).deletingLastPathComponent)
         let part = (dst as NSString).deletingLastPathComponent + "/." + (dst as NSString).lastPathComponent + ".part"
         unlink(part)
-        try FileManager.default.copyItem(atPath: src, toPath: part)
-        guard rename(part, dst) == 0 else { throw IOError("rename", dst) }
+        do {
+            try FileManager.default.copyItem(atPath: src, toPath: part)
+            guard rename(part, dst) == 0 else { throw IOError("rename", dst) }
+        } catch {
+            unlink(part)
+            throw error
+        }
     }
 }

@@ -32,7 +32,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | CLI `copy` / `verify` / `bench` | ✅ | ✅ (čeká ostrý test na skutečné kartě) |
 | PDF report | ✅ (WebKit) | ✅ (Edge headless) |
 | Analýza klipů, metadata | ✅ | ✅ |
-| Náhledy v reportu | 1 náhled ve 30 % délky → ⏳ **3 snímky** (první/prostřední/poslední) | ✅ 3 snímky |
+| Náhledy v reportu | ✅ 3 snímky | ✅ 3 snímky |
 | Proxy (LUT, burn-in, frame lines, TC) | ✅ | ✅ ověřeno NVENC + software (libx264); QSV/AMF neověřeno (není HW); čeká ostrý test na skutečném médiu |
 | Blackmagic RAW | ✅ `braw-decode` | ✅ `braw-decode.exe` (C#, knihovna z SDK / Player / Resolve); čeká ověření se vzorkem .braw |
 | RED R3D (REDline) | ✅ | ✅ kód, neověřeno s nástroji |
