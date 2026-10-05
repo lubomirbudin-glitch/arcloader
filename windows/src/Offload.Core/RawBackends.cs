@@ -59,7 +59,10 @@ internal sealed record BrawInfo(
     [property: JsonPropertyName("fps")] double Fps,
     [property: JsonPropertyName("frames")] int Frames,
     [property: JsonPropertyName("timecode")] string Timecode,
-    [property: JsonPropertyName("camera")] string Camera);
+    [property: JsonPropertyName("camera")] string Camera,
+    [property: JsonPropertyName("gamma")] string? Gamma = null,
+    [property: JsonPropertyName("gamut")] string? Gamut = null,
+    [property: JsonPropertyName("colorScienceGen")] int? ColorScienceGen = null);
 
 internal sealed class BrawBackend : IRawBackend
 {
@@ -88,6 +91,9 @@ internal sealed class BrawBackend : IRawBackend
         Duration = i.Fps > 0 ? i.Frames / i.Fps : null,
         Timecode = string.IsNullOrEmpty(i.Timecode) ? null : i.Timecode,
         Camera = string.IsNullOrEmpty(i.Camera) ? null : i.Camera,
+        Gamma = string.IsNullOrEmpty(i.Gamma) ? null : i.Gamma,
+        Gamut = string.IsNullOrEmpty(i.Gamut) ? null : i.Gamut,
+        ColorScienceGen = i.ColorScienceGen,
     };
 
     /// The frame braw-decode starts at for a thumbnail `seconds` into the clip. Rounded: `seconds` comes from the

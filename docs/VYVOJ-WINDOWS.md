@@ -21,6 +21,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 - Úkol 1 — hledání knihovny Blackmagic RAW (vedle braw-decode, SDK, Player, DaVinci Resolve); bez knihovny je BRAW „nepodporovaný“ s nápovědou místo selhané proxy
 - Úkol 2 — náhledy BRAW: počáteční snímek se zaokrouhluje (prostřední a poslední snímek už nevycházejí o jeden dřív)
+- Úkol 3 — BRAW: gama, gamut a generace barev z dekodéru v metadatech klipu; LUT jen pro Blackmagic Design Film Gen 5, Video / Extended Video bez LUTu
 
 ## 2026-10-05 — drobnosti po plánu 5
 

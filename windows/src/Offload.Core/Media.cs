@@ -56,6 +56,10 @@ public sealed class ClipInfo
     [JsonPropertyName("squeeze")] public double? Squeeze { get; set; }
     /// "tv" (legal) or "pc" (full) as ffprobe reports it; full-range sources need a pre-map before built-in LUTs.
     [JsonPropertyName("colorRange")] public string? ColorRange { get; set; }
+    /// Blackmagic RAW: gamma, gamut and colour science generation the clip was recorded in (from braw-decode --info).
+    [JsonPropertyName("gamma")] public string? Gamma { get; set; }
+    [JsonPropertyName("gamut")] public string? Gamut { get; set; }
+    [JsonPropertyName("colorScienceGen")] public int? ColorScienceGen { get; set; }
 
     [JsonIgnore]
     public string FpsLabel

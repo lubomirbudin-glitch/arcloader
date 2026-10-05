@@ -73,4 +73,16 @@ public class BrawCoreTests
         Assert.Equal(0, BrawBackend.StartFrame(1, 25, 0));
         Assert.Equal(0, BrawBackend.StartFrame(0, 23.976f, 50));
     }
+
+    // Task 3 — gamma / gamut from --info
+    [Fact]
+    public void Info_GammaGamutGen_ReachClipInfo()
+    {
+        var i = BrawBackend.ParseInfo("""{"width":1440,"height":810,"sourceWidth":11520,"sourceHeight":6480,"fps":23.976000,"frames":240,"timecode":"01:02:03:04","camera":"URSA Mini Pro 12K","gamma":"Blackmagic Design Film","gamut":"Blackmagic Design","colorScienceGen":5}""");
+        var c = BrawBackend.ToClipInfo(i);
+        Assert.Equal(("Blackmagic Design Film", "Blackmagic Design", 5), (c.Gamma, c.Gamut, c.ColorScienceGen));
+        // The Mac decoder (and older builds) print no gamma: still parses.
+        var old = BrawBackend.ToClipInfo(BrawBackend.ParseInfo("""{"width":1,"height":1,"sourceWidth":1,"sourceHeight":1,"fps":25,"frames":1,"timecode":"","camera":""}"""));
+        Assert.Equal((null, null, null), (old.Gamma, old.Gamut, old.ColorScienceGen));
+    }
 }
