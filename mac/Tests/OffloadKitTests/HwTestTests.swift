@@ -65,6 +65,20 @@ final class HwTestTests: XCTestCase {
         XCTAssertEqual(r.advice.first?.kind, .warning)
     }
 
+    // A destination folder that does not exist yet would be created on the volume of its nearest existing folder —
+    // on the card's volume it is refused like an existing one (found with `offload ports --dest /Volumes/<card>/x`).
+    func testMissingDestinationOnCardVolumeIsTheSameVolume() {
+        let dir = tempDir()
+        let card = dir.sub("card")
+        let dest = card + "/new/x"
+        XCTAssertTrue(HwTest.sameVolume(card, dest))
+        XCTAssertTrue(HwTest.sameVolume(dest, card))
+        XCTAssertFalse(HwTest.sameVolume(card, "relative/missing"))
+        let r = HwTest.run(cards: [card], destinations: [dest], measure: false)
+        XCTAssertEqual(r.advice.filter { $0.kind == .warning && $0.text.hasPrefix("Cíl 1 je na stejném svazku jako Karta") }.count, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: card + "/new"))
+    }
+
     func testMeasureCancelledStopsBeforeNextDevice() {
         let dir = tempDir()
         let dest = dir.sub("dest")

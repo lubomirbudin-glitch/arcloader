@@ -369,7 +369,8 @@ skončí (jako Windows).
 `HwTest.run(cards:destinations:measure:bytesPerDevice:portNames:rolesByDrive:isCancelled:)` 1:1 s `HwTest.cs`:
 role „Karta“ / „Karta 1…“, „Cíl 1…“; bez rolí (CLI bez voleb, GUI bez karet a cílů) všechny svazky podle jména
 svazku; měření: karta = čtení až 1 GB, cíl = zápis + čtení 1 GB dočasného souboru, **cíl na svazku karty se neměří
-ani nezapisuje** (varování „Cíl 1 je na stejném svazku jako Karta — na kartu se nezapisuje, zápis se neměří; zvol
+ani nezapisuje** (cíl, který ještě neexistuje, patří svazku nejbližší existující nadřazené složky — nová složka
+na kartě je karta; varování „Cíl 1 je na stejném svazku jako Karta — na kartu se nezapisuje, zápis se neměří; zvol
 jiný cílový disk.“); zrušení přeruší i právě měřené zařízení (nezměřeno) a zbylá přeskočí. Výsledek
 `~/Library/Application Support/Offload/hwtest.json` (atomicky přes `IO.writeFileDurably`); načtení poškozeného nebo
 neúplného souboru → `nil`. Rychlý test nikdy nepřepíše uložené měření (jen souhrn v GUI).

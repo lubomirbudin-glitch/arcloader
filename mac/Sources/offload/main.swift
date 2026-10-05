@@ -8,7 +8,7 @@ struct Offload: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Camera card offload: read once, write to several disks, verify with xxh64.",
         version: OffloadVersion.string,
-        subcommands: [Copy.self, Verify.self, Bench.self],
+        subcommands: [Copy.self, Verify.self, Bench.self, Ports.self],
         defaultSubcommand: Copy.self)
 }
 
@@ -102,6 +102,14 @@ struct Copy: ParsableCommand {
         if config.analyzeClips || proxy {
             print("  ffmpeg: \(tools.ffmpeg ?? "NOT FOUND")")
         }
+        // Connection chain: informational only — resolving it never fails the copy.
+        var chain = [RoleLink(role: "Karta", link: DriveLinks.resolve(plan.source))]
+        chain += plan.destRoots.enumerated().map { RoleLink(role: "Cíl \($0.offset + 1)", link: DriveLinks.resolve($0.element)) }
+        let connectors = UsbScanner.scan().connectors
+        // Status-line names first ("card", "D1"), so "brzdí: D1" there reads against this list.
+        print("  Připojení:")
+        for (i, l) in chain.enumerated() { print("    \(ProgressDisplay.shortName(i)) = \(l.role): \(l.link.describe(connectors))") }
+        for a in Advisor.advise(chain, connectors: connectors) where a.kind == .warning { print("  ! \(a.text)") }
         fflush(stdout)
         if dryRun { return }
 
@@ -113,7 +121,7 @@ struct Copy: ParsableCommand {
         }
         sigint.resume()
 
-        let display = ProgressDisplay(job: job)
+        let display = ProgressDisplay(job: job, chain: chain)
         display.start()
         // The job runs on a worker thread: the main thread keeps its run loop going,
         // which WebKit needs to print the PDF report.
@@ -202,6 +210,97 @@ struct Bench: ParsableCommand {
     }
 }
 
+struct Ports: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Show USB ports, where cards and disks are connected and how fast, with advice.")
+
+    @Flag(help: "Also measure card read and destination write/read speed (temporary file, deleted).")
+    var measure = false
+
+    @Option(help: "Card or reader to check (repeatable).")
+    var card: [String] = []
+
+    @Option(help: "Destination to check (repeatable).")
+    var dest: [String] = []
+
+    @Option(help: "Amount of data per device when measuring, in GB.")
+    var gb: Double = 1
+
+    func run() throws {
+        let cards = card.map(abs)
+        var dests = dest.map(abs)
+        for d in dests {
+            if let c = cards.first(where: { HwTest.sameVolume($0, d) }) {
+                fputs("Error: cíl \(d) je na stejném svazku jako karta \(c) — na kartu se nikdy nezapisuje\n", stderr)
+                throw ExitCode(1)
+            }
+        }
+        var byDrive = false
+        if cards.isEmpty && dests.isEmpty {
+            // No roles given: every volume, labelled by its name.
+            if measure {
+                fputs("Error: --measure needs --card and/or --dest\n", stderr)
+                throw ExitCode(1)
+            }
+            dests = HwTest.allVolumes()
+            byDrive = true
+        }
+        let flag = CancelFlag()
+        signal(SIGINT, SIG_IGN)
+        let sigint = DispatchSource.makeSignalSource(signal: SIGINT, queue: .global())
+        sigint.setEventHandler {
+            // Stops the measurement at once; the process stays until the temporary file is deleted.
+            guard !flag.isCancelled else { return }
+            fputs("\nPřerušeno — zastavuji měření a mažu dočasný soubor…\n", stderr)
+            flag.cancel()
+        }
+        sigint.resume()
+        let result = HwTest.run(cards: cards, destinations: dests, measure: measure, bytesPerDevice: Int64(gb * 1_000_000_000),
+                                rolesByDrive: byDrive, isCancelled: { flag.isCancelled })
+        printResult(result)
+        if flag.isCancelled {
+            print("\nMěření přerušeno — výsledek se neukládá.")
+            throw ExitCode(1)
+        }
+        do {
+            try HwTest.save(result, to: HwTest.defaultPath)
+        } catch {
+            fputs("Varování: výsledek testu nešlo uložit: \(error)\n", stderr)
+        }
+    }
+
+    private func printResult(_ r: HwTestResult) {
+        func pad(_ s: String, _ n: Int) -> String { s.count >= n ? s : s + String(repeating: " ", count: n - s.count) }
+        print("Připojení:")
+        for d in r.drives {
+            // Listed by volume: the role is the volume name — no second column repeating it.
+            let name = d.link.root == "/" ? "/" : (d.link.root as NSString).lastPathComponent
+            let whereText = d.role == name ? pad(d.role, 8) : pad(d.role, 8) + " " + pad(d.link.root, 14)
+            print("  \(whereText) \(d.link.describe(r.connectors))")
+        }
+        var groups: [(id: String, name: String, ports: [UsbConnector])] = []
+        for c in r.connectors where c.userVisible {
+            if let i = groups.firstIndex(where: { $0.id == c.controllerId }) {
+                groups[i].ports.append(c)
+            } else {
+                groups.append((c.controllerId, c.controllerName, [c]))
+            }
+        }
+        for g in groups {
+            print("\nUSB porty (\(g.name)):")
+            for c in g.ports { print("  \(PortLabels.listRow(c, drives: r.drives))") }
+        }
+        if !r.measurements.isEmpty {
+            print("\nMěření:")
+            for m in r.measurements { print("  \(pad(m.role, 8)) \(pad(m.root, 14)) čtení \(mb(m.readMBps))  zápis \(mb(m.writeMBps))") }
+        }
+        print("\nDoporučení:")
+        for a in r.advice { print("  \(a.kind == .warning ? "!" : a.kind == .info ? "i" : "·") \(a.text)") }
+    }
+
+    private func mb(_ v: Double?) -> String { v.map { String(format: "%.0f MB/s", $0) } ?? "—" }
+}
+
 func abs(_ p: String) -> String {
     URL(fileURLWithPath: (p as NSString).expandingTildeInPath).standardizedFileURL.path
 }
@@ -210,13 +309,23 @@ func abs(_ p: String) -> String {
 final class ProgressDisplay {
     let job: OffloadJob
     private let timer = DispatchSource.makeTimerSource(queue: .global())
+    private let brakes: BrakeMeter
+    private let started = Date()
     private var lastTime = Date()
     private var lastRead: Int64 = 0
     private var lastWritten: [Int64] = []
     private var lastVerified: [Int64] = []
     private var lastPhase = ""
 
-    init(job: OffloadJob) { self.job = job }
+    /// chain: the drives in the order card, D1, D2 … (for the "linka plná" check).
+    init(job: OffloadJob, chain: [RoleLink]? = nil) {
+        self.job = job
+        brakes = BrakeMeter(chunkBytes: Int64(job.config.chunkMB) << 20, bufferCount: job.config.buffers,
+                            linkMBps: chain?.map(ChainView.linkCeiling) ?? [])
+    }
+
+    /// The status-line name of a chain element: "card", "D1", "D2" …
+    static func shortName(_ element: Int) -> String { element == 0 ? "card" : "D\(element)" }
 
     func start() {
         timer.schedule(deadline: .now() + 0.5, repeating: 0.5)
@@ -229,10 +338,16 @@ final class ProgressDisplay {
         fputs("\r\u{1B}[K", stderr)
     }
 
+    /// Which element sets the pace — decided from the backlog (BrakeMeter), not from the rates on this line.
+    private func brake(_ s: ProgressSnapshot) -> String {
+        guard let b = brakes.add(seconds: Date().timeIntervalSince(started), readBytes: s.readBytes, writtenBytes: s.writtenBytes) else { return "" }
+        return "brzdí: \(ProgressDisplay.shortName(b.element))\(b.linkFull ? " (linka plná)" : "")  "
+    }
+
     private func tick() {
         let st = job.status()
         let now = Date()
-        let dt = now.timeIntervalSince(lastTime)
+        let dt = max(0.001, now.timeIntervalSince(lastTime))
         if st.phase.rawValue != lastPhase {
             if !lastPhase.isEmpty { fputs("\n", stderr) }
             lastPhase = st.phase.rawValue
@@ -251,7 +366,8 @@ final class ProgressDisplay {
                 line = String(format: "copy %d/%d  %@ / %@  %3.0f%%  card %@ MB/s  %@ MB/s",
                               s.fileIndex + 1, s.totalFiles, formatBytes(s.readBytes), formatBytes(s.totalBytes), pct,
                               rate(s.readBytes, lastRead), dests)
-                line += "  " + (s.currentFile as NSString).lastPathComponent
+                // The brake goes before the file name: a narrow terminal cuts the end of the line.
+                line += "  " + brake(s) + (s.currentFile as NSString).lastPathComponent
             case .verifying:
                 line = "verify  " + s.verifiedBytes.indices.map {
                     String(format: "D%d %3.0f%% %@ MB/s", $0 + 1, Double(s.verifiedBytes[$0]) / Double(max(s.totalBytes, 1)) * 100,

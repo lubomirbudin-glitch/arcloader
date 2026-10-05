@@ -39,10 +39,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ | ✅ kód, neověřeno s nástroji |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
-| **Test USB portů na vyžádání + doporučení** | ❌ | ✅ CLI + GUI |
+| **Test USB portů na vyžádání + doporučení** | 🔨 CLI (`offload ports`), GUI ⏳ | ✅ CLI + GUI |
 | **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test) |
-| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
+| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | 🔨 CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku, GUI ⏳ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
 
@@ -75,9 +75,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Rozpracované soubory** mají na Windows kromě tečky na začátku i atribut „skrytý“.
 - **CLI na Windows je v `bin\`**, protože `Offload.exe` a `offload.exe` by ve stejné složce kolidovaly
   (NTFS nerozlišuje velikost písmen).
-- **HW diagnostika (USB porty, propustnost článků)** je zatím jen na Windows — na přání uživatele. V CLI se z propustnosti
-  článků ukazuje jen to, který článek brzdí (stavový řádek `offload copy`); GUI ukazuje i řetěz připojení a úzké hrdlo
-  na kartě úlohy a okno Hardware.
+- **HW diagnostika:** na Macu zatím jen CLI (`offload ports`, „brzdí: Dn“ ve stavovém řádku kopie), GUI v úkolu 17.
 - **USB rychlosti a porty:** 10 vs 20 Gb/s se nerozlišuje (Windows to bez neověřeného IOCTL nehlásí) — zobrazuje se
   „10 Gb/s a víc“; fyzickou polohu portu Windows neznají spolehlivě, porty pojmenuje uživatel.
 - **Blackmagic RAW (`braw-decode`):** Windows `--info` navíc vydává `gamma`, `gamut` a `colorScienceGen` a LUT se volí

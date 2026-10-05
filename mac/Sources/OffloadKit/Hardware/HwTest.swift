@@ -50,10 +50,22 @@ public enum HwTest {
 
     static func isCard(_ role: String) -> Bool { role.hasPrefix("Karta") }
 
-    /// Whether two paths are on the same volume (unknown → false).
+    /// Whether two paths are on the same volume (unknown → false). A path that does not exist yet counts on the volume
+    /// of its nearest existing folder — where it would be created (a new folder on the card is the card).
     public static func sameVolume(_ a: String, _ b: String) -> Bool {
-        guard let da = IO.device(of: a), let db = IO.device(of: b) else { return false }
+        guard let da = volumeDevice(a), let db = volumeDevice(b) else { return false }
         return da == db
+    }
+
+    /// The device of `path`, else of its nearest existing parent; nil when nothing on the way exists.
+    static func volumeDevice(_ path: String) -> dev_t? {
+        var p = path
+        while true {
+            if let d = IO.device(of: p) { return d }
+            let parent = (p as NSString).deletingLastPathComponent
+            if parent.isEmpty || parent == p { return nil }
+            p = parent
+        }
     }
 
     /// "/" and every volume under /Volumes — the drives listed when no card and no destination is given.
