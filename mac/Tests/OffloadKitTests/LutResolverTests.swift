@@ -136,6 +136,43 @@ final class LutResolverTests: XCTestCase {
                        "red-log3g10-rwg")
     }
 
+    // Review focus 10 (Windows LutResolverTests.Braw_LutFromGamma): the LUT follows the gamma the clip was shot in.
+    func testBrawLutFromGamma() {
+        let cases: [(gamma: String?, gen: Int?, source: String, id: String?, reason: String)] = [
+            ("Blackmagic Design Film", 5, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film Gen 5"),
+            ("blackmagic design film", 6, "auto", "bmd-film-gen5", "Blackmagic RAW: blackmagic design film Gen 6"),
+            ("Blackmagic Design Film", nil, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film"),
+            ("Blackmagic Design Film", 4, "none", nil, "Blackmagic RAW: Blackmagic Design Film Gen 4 (bez vestavěného LUTu)"),
+            ("Blackmagic Design Video", 5, "none", nil, "Blackmagic RAW: Blackmagic Design Video Gen 5 (není log)"),
+            ("Blackmagic Design Extended Video", 5, "none", nil, "Blackmagic RAW: Blackmagic Design Extended Video Gen 5 (není log)"),
+            (nil, nil, "auto", "bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)"),
+            ("", nil, "auto", "bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)"),
+        ]
+        for c in cases {
+            var info = ClipInfo()
+            info.gamma = c.gamma
+            info.colorScienceGen = c.gen
+            let use = LutResolver.resolve(rawClip(.braw, "A001.braw"), info: info, clipFullPath: "/x/A001.braw",
+                                          settings: auto(), catalog: cat)
+            XCTAssertEqual(use.source, c.source, c.reason)
+            XCTAssertEqual(use.id, c.id, c.reason)
+            XCTAssertEqual(use.reason, c.reason)
+        }
+        XCTAssertEqual(LutResolver.resolve(rawClip(.braw, "A001.braw"), info: nil, clipFullPath: "/x/A001.braw",
+                                           settings: auto(), catalog: cat).reason,
+                       "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)")
+    }
+
+    // Recognised as display-ready: the fallback LUT is only for cameras that were not recognised.
+    func testBrawVideoGammaIgnoresFallback() {
+        var info = ClipInfo()
+        info.gamma = "Blackmagic Design Video"
+        let use = LutResolver.resolve(rawClip(.braw, "A001.braw"), info: info, clipFullPath: "/x/A001.braw",
+                                      settings: auto(fallback: "bmd-film-gen5"), catalog: cat)
+        XCTAssertEqual(use.source, "none")
+        XCTAssertNil(use.file)
+    }
+
     func testUnknownCameraUsesTheFallback() {
         let clip = videoClip("DCIM/100CANON/MVI_0001.MP4")
         let none = LutResolver.resolve(clip, info: info(camera: "Canon EOS R5"), clipFullPath: "/x/x.mp4", settings: auto(), catalog: cat)

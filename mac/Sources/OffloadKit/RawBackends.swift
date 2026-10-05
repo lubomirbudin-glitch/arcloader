@@ -37,18 +37,19 @@ struct BRAWBackend: RawBackend {
 
     func isAvailable(_ tools: ExternalTools) -> Bool { tools.brawDecoder != nil }
 
-    private struct Info: Decodable {
+    /// One line of `braw-decode --info`. gamma / gamut / colorScienceGen only when the SDK reports them (braw-decode
+    /// since task 27, and Windows); an older decoder leaves them out.
+    struct Info: Decodable {
         let width: Int, height: Int, sourceWidth: Int, sourceHeight: Int
         let fps: Double, frames: Int, timecode: String, camera: String
+        let gamma: String?, gamut: String?, colorScienceGen: Int?
     }
 
-    private func info(_ path: String, scale: String, tools: ExternalTools) throws -> Info {
-        let out = try ToolProcess.run(tools.brawDecoder!, ["--info", "--scale", scale, path])
-        return try JSONDecoder().decode(Info.self, from: Data(out.utf8))
+    static func parseInfo(_ json: String) throws -> Info {
+        try JSONDecoder().decode(Info.self, from: Data(json.utf8))
     }
 
-    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo {
-        let i = try info(path, scale: "eighth", tools: tools)
+    static func clipInfo(_ i: Info) -> ClipInfo {
         var c = ClipInfo()
         c.codec = "Blackmagic RAW"
         c.width = i.sourceWidth
@@ -58,7 +59,18 @@ struct BRAWBackend: RawBackend {
         c.duration = i.fps > 0 ? Double(i.frames) / i.fps : nil
         c.timecode = i.timecode.isEmpty ? nil : i.timecode
         c.camera = i.camera.isEmpty ? nil : i.camera
+        c.gamma = i.gamma.flatMap { $0.isEmpty ? nil : $0 }
+        c.gamut = i.gamut.flatMap { $0.isEmpty ? nil : $0 }
+        c.colorScienceGen = i.colorScienceGen
         return c
+    }
+
+    private func info(_ path: String, scale: String, tools: ExternalTools) throws -> Info {
+        try BRAWBackend.parseInfo(try ToolProcess.run(tools.brawDecoder!, ["--info", "--scale", scale, path]))
+    }
+
+    func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo {
+        BRAWBackend.clipInfo(try info(path, scale: "eighth", tools: tools))
     }
 
     /// Smallest decode scale that still covers the target height — decoding less is much faster.

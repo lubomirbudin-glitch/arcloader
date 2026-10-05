@@ -47,6 +47,11 @@ public struct ClipInfo: Codable {
     public var squeeze: Double?
     /// "tv" (legal) or "pc" (full) as ffprobe reports it; full-range sources need a pre-map before built-in LUTs.
     public var colorRange: String?
+    /// Blackmagic RAW: gamma, gamut and colour science generation the clip was recorded in (from braw-decode --info);
+    /// the LUT is chosen by them (LutResolver.braw). Not written when unknown.
+    public var gamma: String?
+    public var gamut: String?
+    public var colorScienceGen: Int?
 
     public var fpsLabel: String {
         guard let r = frameRate else { return "" }

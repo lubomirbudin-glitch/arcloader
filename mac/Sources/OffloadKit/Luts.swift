@@ -192,11 +192,27 @@ public enum LutResolver {
         return LutUse(source: source, id: lut.id, name: lut.name, reason: reason, file: lut.path)
     }
 
+    /// BRAW decodes in the gamma the clip was shot in: only "Blackmagic Design Film" Gen 5 matches the built-in LUT.
+    /// Video / Extended Video / Custom / HDR gammas are display-ready already; a decoder without the gamma in --info keeps
+    /// the old assumption (Film Gen 5). Film Gen 4 has no built-in LUT (provisional, as Windows). Port of `LutResolver.Braw`.
+    static func braw(_ info: ClipInfo?) -> (id: String?, reason: String) {
+        guard let gamma = info?.gamma, !gamma.isEmpty else {
+            return ("bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)")
+        }
+        let gen = info?.colorScienceGen
+        let label = gen.map { "\(gamma) Gen \($0)" } ?? gamma
+        if gamma.caseInsensitiveCompare("Blackmagic Design Film") != .orderedSame {
+            return ("", "Blackmagic RAW: \(label) (není log)")
+        }
+        if let gen, gen < 5 { return ("", "Blackmagic RAW: \(label) (bez vestavěného LUTu)") }
+        return ("bmd-film-gen5", "Blackmagic RAW: \(label)")
+    }
+
     /// (id, reason): id nil = not recognised, "" = recognised as non-log (no LUT).
     static func detect(_ clip: Clip, info: ClipInfo?, clipFullPath: String) -> (id: String?, reason: String) {
         switch clip.format {
         case .braw:
-            return ("bmd-film-gen5", "Blackmagic RAW (gama Film Gen 5)")
+            return braw(info)
         case .r3d:
             return ("red-log3g10-rwg", "RED R3D (IPP2 Log3G10)")
         case .arriraw:
