@@ -9,7 +9,7 @@ static class BenchCommand
     {
         var read = new Option<string?>("--read") { Description = "Card or file to read from." };
         var write = new Option<string[]>("--write") { Description = "Destination folder to test write speed (repeatable).", DefaultValueFactory = _ => [] };
-        var gb = new Option<double>("--gb") { Description = "Amount of data per test in GB.", DefaultValueFactory = _ => 2 };
+        var gb = new Option<double>("--gb") { Description = "Amount of data per test in GB.", DefaultValueFactory = _ => 2, CustomParser = a => CliParse.Parse(a) ?? 2 };
         var cmd = new Command("bench", "Measure card read speed and disk write/read speed.");
         cmd.Options.Add(read);
         cmd.Options.Add(write);

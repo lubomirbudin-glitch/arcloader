@@ -20,8 +20,8 @@ static class CopyCommand
         var proxy = new Option<bool>("--proxy") { Description = "Render proxies after the copy is verified." };
         var lut = new Option<string?>("--lut") { Description = "LUT (.cube) applied to proxies and thumbnails." };
         var proxyHeight = new Option<int>("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
-        var frameAspect = new Option<double?>("--frame-aspect") { Description = "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.", CustomParser = a => ParseDouble(a) };
-        var frameScale = new Option<double>("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => ParseDouble(a) ?? 100 };
+        var frameAspect = new Option<double?>("--frame-aspect") { Description = "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.", CustomParser = a => CliParse.Parse(a) };
+        var frameScale = new Option<double>("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
         var proxyCodec = new Option<string>("--proxy-codec") { Description = "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.", DefaultValueFactory = _ => "h264" };
         var proxyBitrate = new Option<int>("--proxy-bitrate") { Description = "Proxy bitrate (Mb/s) for H.264/HEVC.", DefaultValueFactory = _ => 10 };
         var noBurnIn = new Option<bool>("--no-burn-in") { Description = "No burn-in of clip name and timecode." };
@@ -69,15 +69,6 @@ static class CopyCommand
             return Run(config, r.GetValue(dryRun));
         });
         return cmd;
-    }
-
-    /// Culture-independent number parsing: accepts both "1.85" and "1,85" regardless of Windows locale.
-    static double? ParseDouble(System.CommandLine.Parsing.ArgumentResult a)
-    {
-        var s = a.Tokens.Count > 0 ? a.Tokens[0].Value : null;
-        if (s != null && double.TryParse(s.Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v)) return v;
-        a.AddError($"Cannot parse '{s}' as a number.");
-        return null;
     }
 
     static int Run(JobConfig config, bool dryRun)
