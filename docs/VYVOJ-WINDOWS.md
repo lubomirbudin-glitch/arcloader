@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 5 (vestavěné LUTy), průběh
 
+- Úkol 4 — režim LUTu v nastavení (starý vlastní LUT zůstává), kontrola chybějícího LUTu jen pro vlastní, použitý LUT a důvod u klipu v reportu
 - Úkol 3 — automatický výběr LUTu: Sony z XML vedle klipu (Rec.709 bez LUTu), ARRI podle modelu, ARRIRAW podle metadat, BRAW, RED, jinak záložní LUT
 - Úkol 2 — katalog vestavěných LUTů (hledá Offload\luts, při vývoji shared\luts; chybějící nebo poškozený nic neshodí)
 - Úkol 1 — generátor vestavěných LUTů (11 kamer Log → Rec.709, měkké dotočení světel) a sdílené soubory .cube pro Mac i Windows

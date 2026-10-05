@@ -108,6 +108,10 @@ public static class SettingsStore
         p.FrameScale = double.IsFinite(p.FrameScale) ? Math.Clamp(p.FrameScale, 0.5, 1.0) : 1.0;
         if (p.FrameAspect is double a && (!double.IsFinite(a) || a <= 0)) p.FrameAspect = null;
         if (string.IsNullOrWhiteSpace(p.LutPath)) p.LutPath = null;
+        p.LutMode ??= p.LutPath != null ? LutMode.Custom : LutMode.Auto;
+        if (LutCatalog.Default.Find(p.LutBuiltin) == null) p.LutBuiltin = null;
+        if (LutCatalog.Default.Find(p.LutFallback) == null) p.LutFallback = null;
+        if (p.LutMode == LutMode.Builtin && p.LutBuiltin == null) p.LutMode = LutMode.Auto;
         p.ExtraFolder = string.IsNullOrWhiteSpace(p.ExtraFolder) ? null : p.ExtraFolder.Trim();
         return s;
     }
@@ -128,8 +132,9 @@ public static class SettingsStore
 /// Checks before a start that the proxy/thumbnail settings can work.
 public static class ProxyPreflight
 {
-    /// The LUT the next start needs (proxies or thumbnails use it), or null.
-    public static string? LutInUse(ProxySettings p, bool analyzeClips) => (p.Enabled || analyzeClips) ? p.LutPath : null;
+    /// The custom .cube that must exist before a start (only in custom mode — built-in LUTs ship with the app).
+    public static string? LutInUse(ProxySettings p, bool analyzeClips) =>
+        (p.Enabled || analyzeClips) && LutResolver.EffectiveMode(p) == LutMode.Custom ? p.LutPath : null;
 
     /// Why "Spustit offload" must stay disabled, or null. A missing LUT would break thumbnails and proxies.
     /// Touches the disk — the GUI uses the overload with a cached answer instead.

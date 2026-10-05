@@ -67,9 +67,9 @@ public class HtmlReportTests
         Assert.Contains("3840×2160", html);
         Assert.Contains("<td class=\"ok\">hotovo</td>", html);
         Assert.Contains("2 ch", html);
-        Assert.Contains("Proxy: H.264, 1080p, výřez 1.66, LUT: bez LUT", html);
+        Assert.Contains("Proxy: H.264, 1080p, výřez 1.66, LUT: automaticky podle kamery", html);
         r.ProxyEncoder = "h264_nvenc";
-        Assert.Contains("Proxy: H.264 (h264_nvenc), 1080p, výřez 1.66, LUT: bez LUT", HtmlReport.Render(r));
+        Assert.Contains("Proxy: H.264 (h264_nvenc), 1080p, výřez 1.66, LUT: automaticky podle kamery", HtmlReport.Render(r));
         Assert.DoesNotContain("také ve složce", HtmlReport.Render(r));
         r.Proxy.ExtraFolder = @"E:\Proxy & co";
         Assert.Contains("<span class=\"mono\">_PROXY/</span> · také ve složce <span class=\"mono\">E:\\Proxy &amp; co</span></p>", HtmlReport.Render(r));
@@ -107,5 +107,21 @@ public class HtmlReportTests
         Reports.Sample(card).Write(card, includeHashRecords: false);
         Assert.False(File.Exists(Path.Combine(card, "_REPORT", "A001.xxh64")));
         Assert.False(Directory.Exists(Path.Combine(card, "ascmhl")));
+    }
+
+    [Fact]
+    public void Clip_ShowsLut_AndJsonKey()
+    {
+        var report = Reports.Sample(Card);
+        report.Clips.Add(new ClipEntry
+        {
+            Clip = new Clip { Name = "C0001", Path = "C0001.MP4", Format = ClipFormat.Video, Segments = ["C0001.MP4"], Bytes = 1 },
+            Lut = new LutUse("auto", "sony-slog3-sgamut3cine", "Sony S-Log3 / S-Gamut3.Cine → Rec.709", "Sony XML: s-log3-cine / S-Gamut3Cine"),
+        });
+        var html = HtmlReport.Render(report);
+        Assert.Contains("LUT: Sony S-Log3 / S-Gamut3.Cine → Rec.709 (Sony XML: s-log3-cine / S-Gamut3Cine)", html);
+        var json = report.ToJson();
+        Assert.Contains("\"lut\"", json);
+        Assert.Contains("\"source\": \"auto\"", json);
     }
 }

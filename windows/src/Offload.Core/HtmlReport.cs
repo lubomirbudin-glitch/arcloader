@@ -37,7 +37,7 @@ public static class HtmlReport
         ".thumb{width:128px;height:72px;object-fit:contain;background:#000;border-radius:4px;display:block}\n" +
         ".nothumb{width:128px;height:72px;border-radius:4px;background:var(--line)}\n" +
         ".thumbs{display:flex;gap:4px}.thumbs figure{margin:0}.thumbs figcaption{font:10px ui-monospace,Consolas,monospace;color:var(--muted);text-align:center}\n" +
-        ".clipname{font-weight:600}.path{color:var(--muted);font-size:12px}\n" +
+        ".clipname{font-weight:600}.path,.note{color:var(--muted);font-size:12px}\n" +
         "details summary{cursor:pointer;padding:10px 0;font-weight:600}\n" +
         ".err{white-space:normal;color:var(--bad)}\n" +
         "footer{margin-top:40px;color:var(--muted);font-size:12px}\n" +
@@ -186,6 +186,8 @@ public static class HtmlReport
             var note = string.Join(" · ", notes);
             var cameraProxy = c.Clip.IsCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "";
             var noteHtml = note.Length == 0 ? "" : $"<div class=\"path err\">{Esc(note)}</div>";
+            if (c.Lut is { Source: not "none" } lu) noteHtml += $"<div class=\"note\">LUT: {Esc(lu.Name)} ({Esc(lu.Reason)})</div>";
+            else if (c.Lut is { } ln && ln.Reason != "vypnuto v nastavení") noteHtml += $"<div class=\"note\">LUT: bez LUT ({Esc(ln.Reason)})</div>";
             var audio = i == null ? "" : (i.AudioChannels > 0 ? $"{i.AudioChannels} ch" : "—");
             h.Append($"<tr><td>{img}</td><td class=\"clip\"><div class=\"clipname\">{Esc(c.Clip.Name)}{cameraProxy}</div>");
             h.Append($"<div class=\"path\">{Esc(c.Clip.Path)}</div>{noteHtml}</td>");
@@ -197,7 +199,13 @@ public static class HtmlReport
         h.Append("</table></div>\n");
         if (r.Proxy is { Enabled: true } p)
         {
-            var lut = p.LutPath != null ? Path.GetFileName(p.LutPath) : "bez LUT";
+            var lut = LutResolver.EffectiveMode(p) switch
+            {
+                LutMode.Auto => "automaticky podle kamery",
+                LutMode.Builtin => LutCatalog.Default.Find(p.LutBuiltin)?.Name ?? "bez LUT",
+                LutMode.Custom when !string.IsNullOrEmpty(p.LutPath) => Path.GetFileName(p.LutPath),
+                _ => "bez LUT",
+            };
             var frame = p.FrameLabel is string fl ? $", výřez {fl}" : "";
             var encoder = r.ProxyEncoder is string enc ? $" ({enc})" : "";
             var extra = p.ExtraFolder is string x ? $" · také ve složce <span class=\"mono\">{Esc(x)}</span>" : "";

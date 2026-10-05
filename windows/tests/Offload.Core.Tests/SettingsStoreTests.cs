@@ -310,4 +310,42 @@ public class SettingsStoreTests
         var c = SettingsStore.Clone(s);
         Assert.Equal("x", c.PortNames[@"a#1"]);
     }
+
+    [Fact]
+    public void OldSettings_LutPath_IsCustom()
+    {
+        using var dir = new TempDir();
+        var s = LoadJson(dir, """{"proxy":{"enabled":true,"lutPath":"C:/luts/show.cube"}}""");
+        Assert.Equal(LutMode.Custom, s.Proxy.LutMode);
+        var fresh = LoadJson(dir, """{"proxy":{"enabled":true}}""");
+        Assert.Equal(LutMode.Auto, fresh.Proxy.LutMode);
+        Assert.Null(fresh.Proxy.LutFallback);
+    }
+
+    [Fact]
+    public void LutMode_RoundTrip_AndUnknownBuiltinDropped()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        var s = new AppSettings();
+        s.Proxy.LutMode = LutMode.Builtin;
+        s.Proxy.LutBuiltin = "dji-dlog-dgamut";
+        s.Proxy.LutFallback = "sony-slog3-sgamut3cine";
+        SettingsStore.Save(s, path);
+        Assert.Contains("\"lutMode\": \"builtin\"", File.ReadAllText(path));
+        var back = SettingsStore.Load(path);
+        Assert.Equal((LutMode.Builtin, "dji-dlog-dgamut", "sony-slog3-sgamut3cine"), (back.Proxy.LutMode, back.Proxy.LutBuiltin, back.Proxy.LutFallback));
+        var bad = LoadJson(dir, """{"proxy":{"lutMode":"builtin","lutBuiltin":"nope","lutFallback":"nope"}}""");
+        Assert.Null(bad.Proxy.LutBuiltin);
+        Assert.Null(bad.Proxy.LutFallback);
+    }
+
+    [Fact]
+    public void ProxyPreflight_MissingLut_BlocksOnlyInCustomMode()
+    {
+        var auto = new ProxySettings { Enabled = true, LutMode = LutMode.Auto, LutPath = @"Z:\gone.cube" };
+        Assert.Null(ProxyPreflight.LutInUse(auto, analyzeClips: true));
+        var custom = new ProxySettings { Enabled = true, LutMode = LutMode.Custom, LutPath = @"Z:\gone.cube" };
+        Assert.Equal(@"Z:\gone.cube", ProxyPreflight.LutInUse(custom, analyzeClips: true));
+    }
 }

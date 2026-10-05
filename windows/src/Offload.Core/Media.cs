@@ -108,6 +108,8 @@ public sealed class ClipEntry
     [JsonPropertyName("proxyPath")] public string? ProxyPath { get; set; }
     [JsonPropertyName("proxyNote")] public string? ProxyNote { get; set; }
     [JsonPropertyName("proxySeconds")] public double? ProxySeconds { get; set; }
+    /// The LUT applied to this clip's proxy and thumbnails, and why.
+    [JsonPropertyName("lut"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public LutUse? Lut { get; set; }
     /// First, middle and last frame (JPEG + caption); embedded in the HTML/PDF report only.
     [JsonIgnore] public List<Thumbnail> Thumbnails { get; set; } = [];
 }
