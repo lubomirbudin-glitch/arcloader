@@ -70,6 +70,9 @@ public class HtmlReportTests
         Assert.Contains("Proxy: H.264, 1080p, výřez 1.66, LUT: bez LUT", html);
         r.ProxyEncoder = "h264_nvenc";
         Assert.Contains("Proxy: H.264 (h264_nvenc), 1080p, výřez 1.66, LUT: bez LUT", HtmlReport.Render(r));
+        Assert.DoesNotContain("také ve složce", HtmlReport.Render(r));
+        r.Proxy.ExtraFolder = @"E:\Proxy & co";
+        Assert.Contains("<span class=\"mono\">_PROXY/</span> · také ve složce <span class=\"mono\">E:\\Proxy &amp; co</span></p>", HtmlReport.Render(r));
     }
 
     [Fact]

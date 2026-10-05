@@ -17,6 +17,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
 | 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | naplánováno |
 
+## 2026-10-05 — složka pro proxy
+
+- Jádro — nové volitelné nastavení `proxy.extraFolder`: každá hotová proxy se po kopii na cíle zkopíruje i do `<složka>\<datum>\<karta>\` (přes `.part` + přejmenování, při shodě jména `_2`, `_3`…, nikdy nepřepíše); nedostupná složka nebo chyba kopie je jen poznámka u klipu, proxy ani úloha neselže; pravidlo pro start „Složka pro proxy není dostupná“; v HTML/PDF reportu „· také ve složce …“
+
 ## 2026-10-05 — plán 4 (GUI), průběh
 
 - Závěrečné opravy — settings.json s dvojitým klíčem, názvy portů lišícími se jen velikostí písmen nebo s null v seznamu cílů už nezastaví start aplikace (vadná položka nebo sekce se vynechá); testy nezávislé na proměnné OFFLOAD_SETTINGS_DIR a deterministický test zrušení kopie; v jádru pravidla pro GUI: identita karty (svazek + sériové číslo), kdy smí „Vysunout kartu“, kdy nejde měřit, report z prvního cíle, který ho má, okno na malé obrazovce, kontrola LUT z uložené odpovědi, chybou není zrušená úloha; GUI: „Vysunout kartu“ vysune jen kopírovanou kartu (po výměně karty nebo vytažení tlačítko zmizí, dokud z karty kopíruje jiná úloha, odmítne se), dvojklik nevysouvá dvakrát, vysunutá karta se znovu nepřipojí rescanem, LUT a nepřipojené cíle (NAS) se ověřují mimo UI vlákno každých 5 s a tlačítkem obnovit, okna se vejdou na obrazovku notebooku, měření nejde během kopie, zrušená úloha nehraje chybový zvuk, název portu se uloží i po Esc, report z prvního cíle, kde je; checklist ručního testu (skryté `.offload-part`, přerušená karta není zálohovaná, potvrzení měření, vysouvat až po zeleném pruhu), spec 8.5 bez toastu, ROZDILY: Thunderbolt čtečky CFexpress přes „Složka…“

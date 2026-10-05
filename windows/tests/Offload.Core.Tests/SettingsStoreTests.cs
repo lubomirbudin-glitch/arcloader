@@ -189,6 +189,72 @@ public class SettingsStoreTests
         Assert.Null(ProxyPreflight.LutInUse(p, analyzeClips: true));
     }
 
+    // Proxy folder: optional, Windows-only key `proxy.extraFolder`.
+    [Fact]
+    public void ExtraFolder_RoundTrip_AbsentWhenUnset()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        var s = new AppSettings();
+        s.Proxy.ExtraFolder = @"E:\Proxy";
+        SettingsStore.Save(s, path);
+        Assert.Contains("""
+            "extraFolder": "E:\\Proxy"
+            """, File.ReadAllText(path));
+        Assert.Equal(@"E:\Proxy", SettingsStore.Load(path).Proxy.ExtraFolder);
+        SettingsStore.Save(new AppSettings(), path);
+        Assert.DoesNotContain("extraFolder", File.ReadAllText(path));
+        Assert.Null(SettingsStore.Load(path).Proxy.ExtraFolder);
+    }
+
+    [Fact]
+    public void ExtraFolder_MissingOrBlank_IsNull()
+    {
+        using var dir = new TempDir();
+        Assert.Null(LoadJson(dir, """{"proxy":{"enabled":true}}""").Proxy.ExtraFolder);
+        Assert.Null(LoadJson(dir, """{"proxy":{"enabled":true,"extraFolder":"  "}}""").Proxy.ExtraFolder);
+        Assert.Equal(@"D:\P", LoadJson(dir, """{"proxy":{"extraFolder":"D:\\P"}}""").Proxy.ExtraFolder);
+    }
+
+    [Fact]
+    public void Clone_KeepsExtraFolder()
+    {
+        var p = new ProxySettings { ExtraFolder = @"E:\Proxy" };
+        var c = SettingsStore.Clone(p);
+        Assert.Equal(@"E:\Proxy", c.ExtraFolder);
+        c.ExtraFolder = null;
+        Assert.Equal(@"E:\Proxy", p.ExtraFolder);
+    }
+
+    [Fact]
+    public void ProxyPreflight_ExtraFolder_CachedState()
+    {
+        var p = new ProxySettings { Enabled = true, ExtraFolder = @"Z:\Proxy" };
+        Assert.Equal(@"Z:\Proxy", ProxyPreflight.ExtraFolderInUse(p));
+        Assert.Null(ProxyPreflight.ExtraFolderBlocking(p, folderExists: null));   // not checked yet
+        Assert.Null(ProxyPreflight.ExtraFolderBlocking(p, folderExists: true));
+        Assert.Equal(@"Složka pro proxy není dostupná: Z:\Proxy", ProxyPreflight.ExtraFolderBlocking(p, folderExists: false));
+        p.Enabled = false;
+        Assert.Null(ProxyPreflight.ExtraFolderInUse(p));
+        Assert.Null(ProxyPreflight.ExtraFolderBlocking(p, folderExists: false));
+        p.Enabled = true;
+        p.ExtraFolder = null;
+        Assert.Null(ProxyPreflight.ExtraFolderInUse(p));
+        Assert.Null(ProxyPreflight.ExtraFolderBlocking(p, folderExists: false));
+    }
+
+    [Fact]
+    public void ProxyPreflight_ExtraFolder_ChecksDisk()
+    {
+        using var dir = new TempDir();
+        var p = new ProxySettings { Enabled = true, ExtraFolder = dir.Path };
+        Assert.Null(ProxyPreflight.ExtraFolderBlocking(p));
+        p.ExtraFolder = Path.Combine(dir.Path, "nope");
+        Assert.Equal($"Složka pro proxy není dostupná: {p.ExtraFolder}", ProxyPreflight.ExtraFolderBlocking(p));
+        p.Enabled = false;
+        Assert.Null(ProxyPreflight.ExtraFolderBlocking(p));
+    }
+
     [Fact]
     public void ProxyPreflight_MissingFfmpeg_WarnsOnly()
     {

@@ -80,6 +80,62 @@ public class StageTwoTests
         Assert.Empty(Directory.GetFiles(Path.Combine(paths[1], "_PROXY"), "*.part"));
     }
 
+    // Proxy folder: every proxy also lands in <folder>\<date>\<card>\, the backups keep theirs in _PROXY.
+    [FfmpegFact]
+    public void ProxyFolder_GetsACopy()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestMedia.MakeClip(Path.Combine(card, "C0001.mov"), seconds: 1);
+        var extra = dir.Sub("proxies");
+        TestFs.WriteRandom(Path.Combine(extra, "2026-10-05", "A001", "C0001.mov"), 100, 4);   // from an earlier run
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")])
+        {
+            Date = "2026-10-05",
+            Proxy = new ProxySettings { Enabled = true, Height = 360, ExtraFolder = extra },
+        }, Options());
+
+        var report = job.Run();
+
+        Assert.Equal(JobPhase.Done, job.Status().Phase);
+        var clip = Assert.Single(report!.Clips);
+        Assert.Equal(ProxyStatus.Done, clip.ProxyStatus);
+        Assert.Null(clip.ProxyNote);
+        var backup = Path.Combine(job.Plan!.CardPaths[0], "_PROXY", "C0001.mov");
+        var copy = Path.Combine(extra, "2026-10-05", "A001", "C0001_2.mov");
+        Assert.True(File.Exists(backup));
+        Assert.Equal(File.ReadAllBytes(backup), File.ReadAllBytes(copy));
+        Assert.Equal(100, new FileInfo(Path.Combine(extra, "2026-10-05", "A001", "C0001.mov")).Length);
+        Assert.Equal(extra, report.Proxy!.ExtraFolder);
+    }
+
+    // The folder went away mid-job (disconnected disk): a note, never a failed proxy or job.
+    [FfmpegFact]
+    public void ProxyFolderGone_NoteOnly()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestMedia.MakeClip(Path.Combine(card, "C0001.mov"), seconds: 1);
+        var extra = Path.Combine(dir.Path, "unplugged");
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")])
+        {
+            Proxy = new ProxySettings { Enabled = true, Height = 360, ExtraFolder = extra },
+        }, Options());
+        var log = new List<string>();
+
+        var report = job.Run(log.Add);
+
+        var s = job.Status();
+        Assert.Equal(JobPhase.Done, s.Phase);
+        Assert.Equal(1, s.ProxiesDone);
+        Assert.Equal(0, s.ProxiesFailed);
+        var clip = Assert.Single(report!.Clips);
+        Assert.Equal(ProxyStatus.Done, clip.ProxyStatus);
+        Assert.Equal($"kopie do {extra} selhala: složka není dostupná", clip.ProxyNote);
+        Assert.Contains(log, l => l.Contains("C0001") && l.Contains(extra));
+        Assert.False(Directory.Exists(extra));
+    }
+
     [FfmpegFact]
     public void AnalyzeOnly_NoProxies()
     {

@@ -312,13 +312,24 @@ public sealed class OffloadJob
                     for (int o = 0; o < cardPaths.Count; o++)
                     {
                         if (o == d) continue;
-                        try { CopyFile(Layout.Join(cardPaths[d], rel), Layout.Join(cardPaths[o], rel)); }
+                        try { ProxyCopy.CopyFile(Layout.Join(cardPaths[d], rel), Layout.Join(cardPaths[o], rel)); }
                         catch (Exception e)
                         {
                             var note = $"kopie na {cardPaths[o]} selhala: {e.Message}";
                             entries[i].ProxyNote = entries[i].ProxyNote is string prev ? $"{prev}; {note}" : note;
                             log?.Invoke($"proxy {clip.Name}: copy to {cardPaths[o]} failed: {e.Message}");
                         }
+                    }
+                }
+                if (Config.Proxy.ExtraFolder is string extra)
+                {
+                    // The user's proxy folder: also never fails the proxy (the disk may have been disconnected).
+                    var (_, error) = ProxyCopy.ToExtraFolder(Layout.Join(cardPaths[d], rel), extra, plan.Date, plan.CardName, name + ".mov");
+                    if (error != null)
+                    {
+                        var note = $"kopie do {extra} selhala: {error}";
+                        entries[i].ProxyNote = entries[i].ProxyNote is string prev ? $"{prev}; {note}" : note;
+                        log?.Invoke($"proxy {clip.Name}: copy to {extra} failed: {error}");
                     }
                 }
                 if (entries[i].Thumbnails.Count == 0)
@@ -368,7 +379,7 @@ public sealed class OffloadJob
             PdfReport.Write(report, first);
             foreach (var other in plan.CardPaths.Skip(1))
             {
-                try { CopyFile(first, Path.Combine(other, Layout.ReportDirName, name)); }
+                try { ProxyCopy.CopyFile(first, Path.Combine(other, Layout.ReportDirName, name)); }
                 catch (Exception e) { log?.Invoke($"PDF copy to {other}: {e.Message}"); }
             }
         }
@@ -385,24 +396,6 @@ public sealed class OffloadJob
         {
             try { report.Write(path, includeHashRecords: false); }
             catch (Exception e) { log?.Invoke($"report rewrite {path}: {e.Message}"); /* the first report is already there; this only adds clip details */ }
-        }
-    }
-
-    static void CopyFile(string src, string dst)
-    {
-        var dir = Path.GetDirectoryName(dst)!;
-        NativeIO.Mkdirs(dir);
-        var part = Path.Combine(dir, "." + Path.GetFileName(dst) + ".part");
-        NativeIO.Delete(part);
-        try
-        {
-            File.Copy(src, part);
-            NativeIO.Move(part, dst, replace: true);
-        }
-        catch
-        {
-            NativeIO.Delete(part);
-            throw;
         }
     }
 }

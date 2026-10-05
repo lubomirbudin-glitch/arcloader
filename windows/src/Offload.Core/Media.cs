@@ -169,6 +169,9 @@ public sealed class ProxySettings
     [JsonPropertyName("skipCameraProxies")] public bool SkipCameraProxies { get; set; } = true;
     /// Proxies are rendered once, onto the first destination, then copied to the others.
     [JsonPropertyName("copyToAllDestinations")] public bool CopyToAllDestinations { get; set; } = true;
+    /// Windows only, optional: every proxy is also copied to `<folder>\<date>\<card>\` (never overwriting). Absent = off.
+    [JsonPropertyName("extraFolder"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExtraFolder { get; set; }
     /// Crop to the frame lines: aspect ratio of the frame (e.g. 1.66); null = full image.
     [JsonPropertyName("frameAspect")] public double? FrameAspect { get; set; }
     /// How much of the image the frame covers (0.9 = 90 %, i.e. 10 % overscan around it).
