@@ -1,0 +1,2 @@
+shared/luts/*.cube text eol=lf
+shared/luts/luts.json text eol=lf

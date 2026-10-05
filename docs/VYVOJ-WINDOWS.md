@@ -17,6 +17,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
 | 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | naplánováno |
 
+## 2026-10-05 — plán 5 (vestavěné LUTy), průběh
+
+- Úkol 1 — generátor vestavěných LUTů (11 kamer Log → Rec.709, měkké dotočení světel) a sdílené soubory .cube pro Mac i Windows
+
 ## 2026-10-05 — složka pro proxy
 
 - Opravy po kontrole — v README uzavřený blok s příklady CLI (zbytek návodu se zobrazoval jako kód); kopie do složky pro proxy zkusí nejvýš 1000 jmen (`_2` … `_1000`), pak skončí chybou místo nekonečné smyčky
