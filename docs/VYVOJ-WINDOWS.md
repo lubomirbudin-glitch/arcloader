@@ -16,6 +16,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI) |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | naplánováno |
 
+## 2026-10-05 — plán 4 (GUI), průběh
+
+- Úkol 1 — nastavení aplikace (settings.json kompatibilní s Mac klíči, odolné vůči poškozeným sekcím), kontrola LUT a ffmpeg před startem
+
 ## 2026-10-05 — plán HW (USB diagnostika), průběh
 
 - Závěrečné opravy — jeden popisek portu všude (řádek disku, seznam portů, doporučení; port hubu jako „port 7 › 2“, řadič v názvu jen při více řadičích), řadiče podle identity místo názvu, USB 3 hub/dok = obě poloviny sloučené podle čísla portu, neznámý typ portu ≠ „jen USB 2.0“, síťový disk a české názvy sběrnic, sdílený hub + rada rozdělit čtečku a disky na různé řadiče, „brzdí“ ve stavovém řádku podle zásoby nezapsaných bloků (ne podle okamžité rychlosti) a před názvem souboru, `offload ports`: cíl na svazku karty se neměří ani nepřijme, Ctrl+C při měření dokončí aktuální zařízení a smaže jeho dočasný soubor, štítek písmene disku u portu, skenování pokračuje i při chybě jednoho řadiče (`2e25744`, `f185312`)

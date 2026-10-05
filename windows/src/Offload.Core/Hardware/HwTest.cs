@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Offload.Core.Desktop;
 
 namespace Offload.Core.Hardware;
 
@@ -13,8 +14,7 @@ public sealed record HwTestResult(DateTime Time, IReadOnlyList<RoleLink> Drives,
 /// write + read of each destination (a temporary file, deleted). Nothing is ever written to a card.
 public static class HwTest
 {
-    public static string DefaultPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Offload", "hwtest.json");
+    public static string DefaultPath => Path.Combine(AppData.Folder, "hwtest.json");
 
     internal static List<(string Role, string Root)> Roles(IReadOnlyList<string> cards, IReadOnlyList<string> destinations,
         bool rolesByDrive = false)
