@@ -12,7 +12,7 @@ public sealed partial class MainViewModel
 {
     readonly JobQueue queue = new(m => AppLog.Write(m));
     readonly DispatcherTimer ticker = new() { Interval = TimeSpan.FromMilliseconds(330) };
-    bool closing, shownHasFinished;
+    bool closing, closeRaised, waitNoticeShown, shownHasFinished;
 
     public ObservableCollection<JobItemViewModel> Jobs { get; } = [];
     public RelayCommand StartCommand { get; private set; } = null!;
@@ -89,7 +89,7 @@ public sealed partial class MainViewModel
     {
         if (Find(job) is not { } item) return;
         item.Refresh();
-        if (item.SafeToEject) SystemSounds.Asterisk.Play();
+        if (!closing && item.SafeToEject) SystemSounds.Asterisk.Play();
     }
 
     void OnJobFinished(IQueuedJob job)
@@ -105,7 +105,18 @@ public sealed partial class MainViewModel
             }
         }
         Raise(nameof(HasFinished));
-        if (closing && !Jobs.Any(j => !j.IsFinished)) CloseReady?.Invoke();
+        CheckCloseReady();
+    }
+
+    /// Still needs the app: a job that has not finished, or an eject in flight.
+    static bool Busy(JobItemViewModel j) => !j.IsFinished || j.Ejecting;
+
+    /// Closing waits for the cancelled jobs and ejects; once all are done the window is told to close — once.
+    void CheckCloseReady()
+    {
+        if (!closing || closeRaised || Jobs.Any(Busy)) return;
+        closeRaised = true;
+        CloseReady?.Invoke();
     }
 
     void ClearFinished()
@@ -115,20 +126,31 @@ public sealed partial class MainViewModel
     }
 
     /// The window asks to close. True = close now. With unfinished jobs: confirm, cancel them all and close once
-    /// they have cleaned up (CloseReady).
+    /// they have cleaned up (CloseReady). An eject in flight is waited for as well (no question — nothing is lost).
     public bool TryClose(Func<bool> confirm)
     {
         foreach (var j in Jobs) j.Refresh();
-        if (Jobs.Any(j => !j.IsFinished))
+        if (Jobs.Any(Busy))
         {
-            if (closing || !confirm()) return false;
+            if (closing)
+            {
+                // Asked again while the cancelled jobs clean up: say so once (deferred — not inside the Closing event).
+                if (!waitNoticeShown)
+                {
+                    waitNoticeShown = true;
+                    Dispatch(() => ShowMessage("Ukončuji — čekám, až se zrušené úlohy uklidí."));
+                }
+                return false;
+            }
+            if (Jobs.Any(j => !j.IsFinished) && !confirm()) return false;
             closing = true;
             foreach (var j in Jobs) j.Job.Cancel();
             foreach (var j in Jobs) j.Refresh();
             Raise(nameof(CanStart));
             // A queued job reports Zrušeno at once; if nothing is left running, close right away.
-            if (Jobs.Any(j => !j.IsFinished)) return false;
+            if (Jobs.Any(Busy)) return false;
         }
+        closeRaised = true;
         ticker.Stop();
         queue.Dispose();
         SaveNow();
@@ -156,6 +178,10 @@ public sealed partial class MainViewModel
         {
             item.Ejecting = false;
             ShowMessage($"Kartu se nepodařilo vysunout: {e.Message}");
+        }
+        finally
+        {
+            CheckCloseReady();   // the window may be waiting for this eject to close
         }
     }
 }

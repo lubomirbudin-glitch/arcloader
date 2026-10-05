@@ -18,6 +18,7 @@ public sealed class JobItemViewModel : ObservableObject
     IReadOnlyDictionary<string, string>? portNames;
     IReadOnlyList<DestinationLine>? destinationLines;
     string? filesText;
+    List<string> chainLines = [];
     bool chainRequested, ejected, ejecting;
 
     public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject)
@@ -109,15 +110,21 @@ public sealed class JobItemViewModel : ObservableObject
     }
 
     /// The hardware chain with live throughput and the brake (spec 8a.3), while copying or verifying.
+    /// The same list instance comes back while the lines are unchanged, so the rows are not rebuilt every tick.
     public IReadOnlyList<string> ChainLines
     {
         get
         {
-            if (links == null || Phase is not (JobPhase.Copying or JobPhase.Verifying)) return [];
-            var rates = new List<double> { Phase == JobPhase.Copying ? progress.ReadRate / 1e6 : 0 };
-            rates.AddRange(progress.DestRates.Select(r => r / 1e6));
-            var chain = ChainView.Build(links, rates, connectors, portNames);
-            return ChainView.Lines(chain, Phase == JobPhase.Copying ? progress.Brake : null);
+            List<string> lines = [];
+            if (links != null && Phase is JobPhase.Copying or JobPhase.Verifying)
+            {
+                var rates = new List<double> { Phase == JobPhase.Copying ? progress.ReadRate / 1e6 : 0 };
+                rates.AddRange(progress.DestRates.Select(r => r / 1e6));
+                var chain = ChainView.Build(links, rates, connectors, portNames);
+                lines = ChainView.Lines(chain, Phase == JobPhase.Copying ? progress.Brake : null);
+            }
+            if (!lines.SequenceEqual(chainLines)) chainLines = lines;
+            return chainLines;
         }
     }
 
@@ -138,9 +145,12 @@ public sealed class JobItemViewModel : ObservableObject
     public bool ShowSafe => SafeToEject && !Ejected;
     public bool ShowEjectButton => ShowSafe && CanEject;
     public string SafeText => Texts.SafeToEject(Job.Plan?.CardPaths.Count ?? 0);
-    public string? FailedText => Job.Report is { Success: false } r ? Texts.Failed(r.FailedFiles.Count) : null;
+    // Cancelled (unlike the Mac): no red "N souborů selhalo" and no rate of a copy that was cut short — one orange line.
+    bool IsCancelled => Phase == JobPhase.Cancelled;
+    public string? FailedText => !IsCancelled && Job.Report is { Success: false } r ? Texts.Failed(r.FailedFiles.Count) : null;
+    public string? CancelledText => IsCancelled && !SafeToEject ? "Zrušeno — karta není kompletně zálohovaná." : null;
     public string? ErrorText => progress.Status.Error;
-    public string? SummaryText => IsFinished && Job.Report is { } r ? JobProgress.SummaryText(r) : null;
+    public string? SummaryText => IsFinished && !IsCancelled && Job.Report is { } r ? JobProgress.SummaryText(r) : null;
     public bool HasReport => Job.Report != null;
     public bool CanCancel => IsRunning || Phase == JobPhase.Waiting;
 

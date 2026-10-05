@@ -17,7 +17,13 @@ public partial class MainWindow : Window
         Closing += (_, e) => e.Cancel = !vm.TryClose(() => MessageBox.Show(this,
             "Probíhá offload. Opravdu ukončit?\n\nRozpracované soubory se smažou, hotové zůstanou.", "Offload",
             MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes);
-        vm.CloseReady += Close;
+        // Deferred and once: CloseReady can arrive from a dispatcher callback; Close() inside a Closing event throws.
+        bool closed = false;
+        Closed += (_, _) => closed = true;
+        vm.CloseReady += () => Dispatcher.BeginInvoke(() =>
+        {
+            if (!closed && IsLoaded) Close();
+        });
         vm.AttentionRequested += _ => NativeMethods.Flash(this);
     }
 
