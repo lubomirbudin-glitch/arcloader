@@ -12,7 +12,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 |---|---|---|
 | 1 | jádro kopírování, ověření, reporty JSON/TXT/HTML/xxh64/MHL, CLI | hotovo (čeká ostrý test na kartě) |
 | 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | hotovo (čeká ostrý test na skutečném médiu) |
-| 3 | dekodér BRAW v C# (COM `BlackmagicRawAPI.dll` z Blackmagic RAW SDK pro Windows; rozhodnuto 2026-10-05 místo C++ `braw-decode`) | naplánováno |
+| 3 | dekodér BRAW v C# (COM `BlackmagicRawAPI.dll` z Blackmagic RAW SDK pro Windows; rozhodnuto 2026-10-05 místo C++ `braw-decode`) | hotovo (čeká ověření se vzorkem .braw) |
 | HW | test USB portů (CLI, v GUI na vyžádání), doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI + GUI) |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
 | 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | hotovo (čeká ruční test s klipy z kamer) |
@@ -31,6 +31,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 - Úkol 7 — braw-decode.exe v balíčku (bin\), test celé cesty s klipem (proxy, tři snímky, LUT podle gamy) přes OFFLOAD_BRAW_SAMPLE, návod na vzorek v README
 - Úkol 7, oprava 1 — dekodér, kterému pumpa zavřela výstup (ffmpeg už skončil), se posuzuje jako ukončený: jeho kód se ignoruje a rozhoduje kód ffmpeg (jiný dekodér než braw-decode může na zavřené rouře skončit chybou a náhled by se neprávem počítal jako selhaný); dekodér, který selže, zatímco ffmpeg ještě čte, je dál chyba klipu
 - Úkol 8, drobnosti — náhledy BRAW: když se dekodér zasekne, zbylé snímky klipu se nezkoušejí (nejhůř ~6 min místo ~12 min na klip); hláška v logu náhledů „dekodér nebo ffmpeg se zasekl (… bez nového snímku)“ (texty poznámek u proxy beze změny); testovací dekodér zapisuje značku přes `[IO.File]::WriteAllText`
+- Úkol 8 — dokumentace: ROZDILY, VYVOJ-MAC (gama a zaokrouhlení náhledu v Mac braw-decode), návrh §6.6 a LUTy §7, README; ověření se vzorkem zatím nelze (na PC není .braw) — postup v README, „Vzorek BRAW“. Otevřené: Film Gen 4 zatím bez LUTu (provizorně); v GUI řádek nástroje „braw-decode“ ukazuje nalezeno i bez knihovny `BlackmagicRawAPI.dll` (stav BRAW je poznat z poznámky u klipu); sloty COM u klipu, jobu, snímku a VARIANT atributů ověří až vzorek
 
 ## 2026-10-05 — drobnosti po plánu 5
 

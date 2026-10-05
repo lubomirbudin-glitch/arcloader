@@ -263,13 +263,13 @@ Doplněno 2026-10-04 na žádost uživatele; mění i Mac verzi.
 
 ### 6.6 braw-decode pro Windows
 
-**Změna 2026-10-05 (rozhodnutí uživatele):** dekodér se napíše **v C#** nad COM rozhraním Blackmagic RAW SDK
+**Změna 2026-10-05 (rozhodnutí uživatele; hotovo v plánu 3):** dekodér se napíše **v C#** nad COM rozhraním Blackmagic RAW SDK
 pro Windows (`BlackmagicRawAPI.dll`), ne jako port C++ nástroje — odpadá potřeba Visual Studio C++ nástrojů,
 uživatel jen stáhne a nainstaluje SDK. Navenek stejné chování jako Mac `braw-decode`:
 
 - Stejné CLI a výstup: `--info [--scale S] clip` (JSON metadata vč. gamma/gamut), `[--scale S] [--start N] [--count N] clip`
-  (surové snímky RGB48LE na stdout pro ffmpeg). Součást CLI `offload.exe` (podpříkaz) nebo samostatné
-  `binraw-decode.exe` — rozhodne plán 3.
+  (surové snímky RGB48LE na stdout pro ffmpeg). Rozhodnuto v plánu 3: samostatný
+  `bin\braw-decode.exe` (ne podpříkaz `offload.exe`).
 - Hledání `BlackmagicRawAPI.dll`: složka exe → `C:\Program Files\Blackmagic Design\Blackmagic RAW\Blackmagic RAW SDK\Win\Libraries`
   → Blackmagic RAW Player → `C:\Program Files\Blackmagic Design\DaVinci Resolve`.
 - **Předpoklad:** Blackmagic RAW SDK pro Windows (zdarma, stahuje uživatel z blackmagicdesign.com). Soubory SDK

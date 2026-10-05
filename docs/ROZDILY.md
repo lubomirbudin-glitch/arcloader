@@ -34,7 +34,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Analýza klipů, metadata | ✅ | ✅ |
 | Náhledy v reportu | 1 náhled ve 30 % délky → ⏳ **3 snímky** (první/prostřední/poslední) | ✅ 3 snímky |
 | Proxy (LUT, burn-in, frame lines, TC) | ✅ | ✅ ověřeno NVENC + software (libx264); QSV/AMF neověřeno (není HW); čeká ostrý test na skutečném médiu |
-| Blackmagic RAW | ✅ `braw-decode` | ⏳ plán 3 (dekodér v C# nad Blackmagic RAW SDK pro Windows, rozhodnuto 2026-10-05) |
+| Blackmagic RAW | ✅ `braw-decode` | ✅ `braw-decode.exe` (C#, knihovna z SDK / Player / Resolve); čeká ověření se vzorkem .braw |
 | RED R3D (REDline) | ✅ | ✅ kód, neověřeno s nástroji |
 | ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ | ✅ kód, neověřeno s nástroji |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
@@ -89,6 +89,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   i s `--allow-same-device`. Naplánováno i pro Mac.
 - **Kontrola voleb před kopií:** Windows ověří velikost bloku (násobek 4096, nejvýše 1 GiB), počet bufferů (≥ 2)
   a tvar data `RRRR-MM-DD` ještě před vytvořením čehokoli. Naplánováno i pro Mac.
+- **Blackmagic RAW (`braw-decode`):** Windows `--info` navíc vydává `gamma`, `gamut` a `colorScienceGen` a LUT se volí
+  podle gamy klipu (Film Gen 5 → vestavěný LUT; Video, Extended Video a starší generace = bez LUTu; Film Gen 4 zatím bez LUTu —
+  provizorně, ke schválení). Mac zatím vždy předpokládá Film Gen 5. Chybný argument = kód 2; konfigurace pipeline se
+  nastavuje před `OpenClip` (SDK ji čte při prvním otevření klipu). `braw-decode.exe` nenajde-li knihovnu
+  `BlackmagicRawAPI.dll`, BRAW se jen zkopíruje a ověří (proxy a náhledy se přeskočí s nápovědou).
 - **Složka pro proxy navíc** (zatím jen Windows, pro Mac naplánováno): každá hotová proxy se kromě `_PROXY` na cílech
   zkopíruje i do `<složka>\<datum>\<karta>\` (při shodě jména `_2`, `_3`…, nic se nepřepíše). Nastavení
   `proxy.extraFolder` v settings.json a v reportu (Mac neznámý klíč ignoruje), v CLI `--proxy-folder`. Nedostupná

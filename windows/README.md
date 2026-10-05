@@ -12,8 +12,8 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 |---|---|
 | Jádro + CLI (`bin\offload.exe`) | hotovo (plán 1) — ostrý test na skutečné kartě a měření rychlostí zatím chybí |
 | Analýza klipů, 3 snímky, proxy, PDF | hotovo (plán 2) — QSV/AMF a ostrý test na médiu neověřeno |
-| RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: hotovo (plán 3), čeká test se vzorkem |
-| BRAW dekodér (C#, Blackmagic RAW SDK) | hotovo (plán 3, `bin\braw-decode.exe`) — ověřeno jen s knihovnou z DaVinci Resolve, dekódování snímků čeká na vzorek .braw |
+| RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: hotovo (plán 3), čeká ověření se vzorkem .braw / kartou |
+| BRAW dekodér (C#, Blackmagic RAW SDK) | hotovo (plán 3, `bin\braw-decode.exe`) — ověřeno jen s knihovnou z DaVinci Resolve, dekódování snímků a rozložení VARIANT (gama/gamut) čeká na vzorek .braw; Film Gen 4 zatím bez LUTu (provizorně); v GUI v seznamu nástrojů řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny `BlackmagicRawAPI.dll` (BRAW je pak jen zkopírovaný a ověřený, důvod je v poznámce u klipu) |
 | HW diagnostika USB | hotovo (CLI `offload ports`, v GUI okno Hardware a kontrola na vyžádání) |
 | GUI `Offload.exe` | hotovo (čeká ruční test s kartou) |
 | Vestavěné LUTy (plán 5) | hotovo (čeká ruční test s klipy z kamer) |
@@ -46,6 +46,22 @@ Testy, které potřebují skutečný klip, se bez vzorku přeskočí. Vzorek:
 
    (Jméno souboru je příklad; ukázkové klipy z 12K kamery mají stovky MB až jednotky GB.) Test celé cesty
    (`Offload_ProbeThumbnailsProxy`: analýza, tři náhledy, proxy 540p) potřebuje navíc ffmpeg a ffprobe.
+
+**Ověření se vzorkem — co udělat, až klip bude** (na tomto PC zatím žádný .braw není, nic z toho neproběhlo):
+
+1. `setx OFFLOAD_BRAW_SAMPLE "<cesta ke klipu>.braw"`, nové okno PowerShellu, ve složce `windows`:
+   `dotnet test tests\Offload.Core.Tests --filter "FullyQualifiedName~Braw"` — očekává se vše PASS a **0 přeskočených** testů
+   (přeskočený test znamená, že chybí proměnná, knihovna `BlackmagicRawAPI.dll`, ffmpeg nebo ffprobe).
+2. `build\Offload\bin\braw-decode.exe --info --scale eighth $env:OFFLOAD_BRAW_SAMPLE` (po `scripts\build.ps1`; nebo
+   `windows\tools\bin\braw-decode.exe`). Očima zkontrolovat JSON: `gamma` (např. „Blackmagic Design Film“) a `gamut` jsou vyplněné,
+   `colorScienceGen` je číslo (5 u Gen 5), `width`/`height` odpovídají zmenšení, `frames`, `fps`, `timecode`, `camera` dávají smysl.
+   Chybí-li `gamma`/`gamut`, je rozložení VARIANT jiné, než SDK dokumentuje: v `BrawClipProcessingAttributes.Text` vypsat
+   `v.VarType` na stderr a porovnat s IDL SDK; do opravy se LUT chová jako dosud (gama neuvedena → předpoklad Film Gen 5).
+3. `offload copy <složka se vzorkem> <cíl> --proxy`: v reportu klip se **třemi snímky**, LUT „Blackmagic RAW: Blackmagic Design
+   Film Gen 5“ (u klipu v Gen 5), proxy `.mov` se vizuálně shoduje s Blackmagic RAW Playerem s LUTem Film → Rec.709
+   (barvy, kontrast, orientace, bez posunu o snímek; první/prostřední/poslední snímek v reportu odpovídají časům).
+4. Nainstaluje-li uživatel SDK nebo Player, ověřit, že `BrawLibrary.Find` najde jejich cestu (pořadí: vedle exe, SDK, Player, Resolve);
+   rovněž klip z kamery s gamou Video (bez LUTu) nebo Film Gen 4 (rozhodnout o LUTu).
 
 Při vývoji (GUI/CLI z `bin\Debug`) se `braw-decode.exe` hledá ve `windows\tools\bin`:
 `dotnet publish src\Offload.BrawDecode\Offload.BrawDecode.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:DebugType=none -o tools\bin`.
@@ -101,6 +117,7 @@ Vše níže zatím nikdo neověřil na skutečné kartě — GUI je jinak zkouš
 - [ ] 8. Proxy → „Kopírovat proxy i do složky“ → „Vybrat…“ (složka na jiném disku) → offload s proxy → proxy jsou
       v `_PROXY` na cílech i v `<složka>\<datum>\<karta>\`; po odpojení toho disku je start zablokovaný červeným textem
 - [ ] 9. Proxy z log klipu má přirozené barvy; v reportu je u klipu LUT a důvod
+- [ ] 10. BRAW klip: proxy, tři snímky v reportu, LUT podle gamy v reportu (viz „Vzorek BRAW“ výše)
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
