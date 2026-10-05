@@ -127,6 +127,13 @@ final class AppModel: ObservableObject {
     @Published private(set) var destStatus: [String: DestinationStatus] = [:]
     @Published private(set) var lutExists: Bool?
     @Published private(set) var terminating = false
+    @Published private(set) var folderExists: Bool?
+    /// The LUT and proxy folder are being checked right before a start (at most 5 s each).
+    @Published private(set) var starting = false
+    /// The built-in LUTs (the app bundle's Resources/luts; already loaded by SettingsStore.decode at launch).
+    let luts = LutCatalog.shared
+    private var folderChecked: String?
+    private var probedFolder: String?
     private var lutChecked: String?
     private var probedRoots: [String] = []
     private var probedLut: String?
@@ -170,7 +177,9 @@ final class AppModel: ObservableObject {
         if let data = SettingsStore.encode(settings) { UserDefaults.standard.set(data, forKey: SettingsStore.defaultsKey) }
         let t = settings.tools.resolved()
         if t != tools { tools = t }
-        if settings.destRoots != probedRoots || ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips) != probedLut {
+        if settings.destRoots != probedRoots
+            || ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips) != probedLut
+            || ProxyPreflight.extraFolderInUse(settings.proxy) != probedFolder {
             refreshDestinations()
         }
     }
@@ -234,8 +243,8 @@ final class AppModel: ObservableObject {
         for j in jobs { j.objectWillChange.send() }   // "Vysunout kartu" follows the scan
     }
 
-    /// Free space / filesystem / existence of every destination and whether the LUT exists — every 5 s,
-    /// after a change and from the refresh button.
+    /// Free space / filesystem / existence of every destination, whether the custom LUT and the proxy folder exist —
+    /// every 5 s, after a change and from the refresh button. Never on the main thread.
     func refreshDestinations() {
         if probing {
             probeAgain = true   // runs once the check in flight returns (it may hang on a network disk)
@@ -244,17 +253,22 @@ final class AppModel: ObservableObject {
         probing = true
         let roots = settings.destRoots
         let lut = ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips)
+        let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
         probedRoots = roots
         probedLut = lut
+        probedFolder = folder
         destQueue.async { [weak self] in
             var found: [String: DestinationStatus] = [:]
             for r in roots { found[r] = AppModel.probe(r) }
             let lutOK = lut.map { FileManager.default.fileExists(atPath: $0) }
+            let folderOK = folder.map { ProxyPreflight.isDirectory($0) }
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.destStatus = found
                 self.lutExists = lutOK
                 self.lutChecked = lut
+                self.folderExists = folderOK
+                self.folderChecked = folder
                 self.probing = false
                 if self.probeAgain {
                     self.probeAgain = false
@@ -284,6 +298,12 @@ final class AppModel: ObservableObject {
                                        lutExists: lut == lutChecked ? lutExists : nil)
     }
 
+    /// A missing proxy folder (disconnected disk) blocks the start — from the last background check; nil until checked.
+    var proxyFolderProblem: String? {
+        let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
+        return ProxyPreflight.extraFolderBlocking(settings.proxy, folderExists: folder == folderChecked ? folderExists : nil)
+    }
+
     func addManualSource() {
         guard let path = pickFolder(title: "Vyber kartu nebo složku se záznamem") else { return }
         if !manualSources.contains(path) { manualSources.append(path) }
@@ -301,14 +321,55 @@ final class AppModel: ObservableObject {
         refreshVolumes()
     }
 
-    func pickLUT() {
+    /// The .cube dialog; a picked file switches to custom mode. False when cancelled (nothing changes).
+    @discardableResult
+    func pickLUT() -> Bool {
         let panel = NSOpenPanel()
         panel.title = "Vyber LUT (.cube)"
         panel.allowedContentTypes = [.init(filenameExtension: "cube")!]
-        if panel.runModal() == .OK, let url = panel.url {
-            settings.proxy.lutPath = url.path
-            settings.proxy.lutMode = .custom   // until the full LUT picker (task 24): a chosen file is the custom LUT
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        settings.proxy.lutPath = url.path
+        settings.proxy.lutMode = .custom
+        return true
+    }
+
+    /// The LUT picker's value: "auto", a built-in id, "none" or "custom". An unknown built-in id shows as auto (like Windows).
+    var lutChoice: String {
+        switch LutResolver.effectiveMode(settings.proxy) {
+        case .auto: return "auto"
+        case .off: return "none"
+        case .custom: return "custom"
+        case .builtin:
+            let id = settings.proxy.lutBuiltin ?? ""
+            return luts.find(id) != nil ? id : "auto"
         }
+    }
+
+    func setLutChoice(_ choice: String) {
+        switch choice {
+        case "auto":
+            settings.proxy.lutMode = .auto
+        case "none":
+            settings.proxy.lutMode = .off
+        case "custom":
+            if (settings.proxy.lutPath ?? "").isEmpty {
+                // Not inside the Picker's own update: the panel opens right after; Cancel keeps the previous choice.
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    if !self.pickLUT() { self.objectWillChange.send() }
+                }
+                return
+            }
+            settings.proxy.lutMode = .custom
+        default:
+            settings.proxy.lutBuiltin = choice
+            settings.proxy.lutMode = .builtin
+        }
+    }
+
+    func pickProxyFolder() {
+        guard let path = pickFolder(title: "Vyber složku pro proxy") else { return }
+        settings.proxy.extraFolder = path
     }
 
     func pickTool(_ keyPath: WritableKeyPath<ExternalTools, String?>) {
@@ -346,15 +407,55 @@ final class AppModel: ObservableObject {
     // MARK: Jobs
 
     var canStart: Bool {
-        !terminating && !selectedSources.isEmpty && !settings.destRoots.isEmpty
-            && settings.destRoots.allSatisfy { destStatus[$0]?.exists == true } && lutProblem == nil
+        !terminating && !starting && !selectedSources.isEmpty && !settings.destRoots.isEmpty
+            && settings.destRoots.allSatisfy { destStatus[$0]?.exists == true }
+            && lutProblem == nil && proxyFolderProblem == nil
     }
 
     /// A copy writes or verifies the destinations — no speed measurement now.
     var copyRunning: Bool { QueueRules.measureBlocked(jobs.map(\.status.phase)) }
 
+    /// The custom LUT and the proxy folder are checked once more right before the start (they may sit on a disk that
+    /// just went away) — off the main thread, at most 5 s each; meanwhile the start button is disabled.
     func start() {
         guard canStart else { return }
+        let lut = ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips)
+        let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
+        guard lut != nil || folder != nil else { return startJobs() }
+        starting = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let lutOK = lut.map { path in AppModel.answer(within: 5) { FileManager.default.fileExists(atPath: path) } }
+            let folderOK = folder.map { path in AppModel.answer(within: 5) { ProxyPreflight.isDirectory(path) } }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.starting = false
+                // Settings may have changed meanwhile: only an answer for what is still in use counts.
+                if let lut, lut == ProxyPreflight.lutInUse(self.settings.proxy, analyzeClips: self.settings.analyzeClips) {
+                    self.lutExists = lutOK
+                    self.lutChecked = lut
+                }
+                if let folder, folder == ProxyPreflight.extraFolderInUse(self.settings.proxy) {
+                    self.folderExists = folderOK
+                    self.folderChecked = folder
+                }
+                if self.canStart { self.startJobs() }   // otherwise the red text says why
+            }
+        }
+    }
+
+    /// `check` on its own thread; false when it has not answered within `seconds` (a hung network disk).
+    nonisolated static func answer(within seconds: Double, _ check: @escaping () -> Bool) -> Bool {
+        final class Box: @unchecked Sendable { var value = false }
+        let box = Box()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            box.value = check()
+            done.signal()
+        }
+        return done.wait(timeout: .now() + seconds) == .success && box.value
+    }
+
+    private func startJobs() {
         let sources = (volumes.map(\.path) + manualSources).filter { selectedSources.contains($0) }
         for src in sources {
             var config = JobConfig(source: src, destRoots: settings.destRoots)

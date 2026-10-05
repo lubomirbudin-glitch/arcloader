@@ -226,6 +226,8 @@ struct StructureSection: View {
 struct ProxySection: View {
     @EnvironmentObject var model: AppModel
 
+    private var lutMode: LutMode { LutResolver.effectiveMode(model.settings.proxy) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(title: "Proxy", systemImage: "film.stack")
@@ -268,23 +270,32 @@ struct ProxySection: View {
                     }
                     GridRow {
                         Text("LUT").foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(model.settings.proxy.lutPath.map { ($0 as NSString).lastPathComponent }
-                                     ?? (model.settings.proxy.lutMode == .off ? "bez LUT" : "automaticky podle kamery"))
-                                    .lineLimit(1).truncationMode(.middle)
-                                    .foregroundStyle(model.settings.proxy.lutPath == nil ? .secondary : .primary)
-                                Spacer()
-                                Button("Vybrat…") { model.pickLUT() }
-                                if model.settings.proxy.lutPath != nil {
-                                    Button {
-                                        model.settings.proxy.lutPath = nil
-                                        model.settings.proxy.lutMode = .auto
-                                    } label: { Image(systemName: "xmark.circle.fill") }
-                                        .buttonStyle(.borderless)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Picker("", selection: Binding(get: { model.lutChoice }, set: { model.setLutChoice($0) })) {
+                                Text("Automaticky podle kamery").tag("auto")
+                                ForEach(model.luts.luts, id: \.id) { Text($0.name).tag($0.id) }
+                                Text("Bez LUT").tag("none")
+                                Text("Vlastní…").tag("custom")
+                            }.labelsHidden()
+                            if lutMode == .auto {
+                                Text("Když kameru nepoznám:").font(.caption).foregroundStyle(.secondary)
+                                Picker("", selection: Binding(get: { model.settings.proxy.lutFallback ?? "none" },
+                                                              set: { model.settings.proxy.lutFallback = $0 == "none" ? nil : $0 })) {
+                                    Text("Bez LUT").tag("none")
+                                    ForEach(model.luts.luts, id: \.id) { Text($0.name).tag($0.id) }
+                                }.labelsHidden()
+                            }
+                            if lutMode == .custom {
+                                HStack {
+                                    // An empty path (old settings) is "no LUT" — shown as not chosen.
+                                    Text(model.settings.proxy.lutPath.flatMap { $0.isEmpty ? nil : ($0 as NSString).lastPathComponent }
+                                         ?? "nevybráno")
+                                        .lineLimit(1).truncationMode(.middle)
+                                        .help(model.settings.proxy.lutPath ?? "")
+                                    Spacer()
+                                    Button("Vybrat…") { model.pickLUT() }
                                 }
                             }
-                            if let p = model.lutProblem { Text(p).font(.caption).foregroundStyle(.red) }
                         }
                     }
                 }
@@ -293,7 +304,24 @@ struct ProxySection: View {
                 Toggle("Zvuk", isOn: $model.settings.proxy.audio)
                 Toggle("Přeskočit proxy nahrané kamerou (SUB/PROXY)", isOn: $model.settings.proxy.skipCameraProxies)
                 Toggle("Kopírovat proxy na všechny cíle", isOn: $model.settings.proxy.copyToAllDestinations)
+                Text("Kopírovat proxy i do složky").font(.caption).foregroundStyle(.secondary).padding(.top, 4)
+                HStack {
+                    Text(model.settings.proxy.extraFolder.map { ($0 as NSString).lastPathComponent } ?? "nevybráno")
+                        .lineLimit(1).truncationMode(.middle)
+                        .foregroundStyle(model.settings.proxy.extraFolder == nil ? .secondary : .primary)
+                        .help(model.settings.proxy.extraFolder ?? "")
+                    Spacer()
+                    Button("Vybrat…") { model.pickProxyFolder() }
+                    if model.settings.proxy.extraFolder != nil {
+                        Button { model.settings.proxy.extraFolder = nil } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.borderless).help("Nekopírovat do složky")
+                    }
+                }
             }
+            // Outside the proxy block (as on Windows): a missing custom LUT also blocks a start with proxies off
+            // when clip analysis (thumbnails) uses it — the reason must stay visible.
+            if let p = model.lutProblem { Text(p).font(.caption).foregroundStyle(.red) }
+            if let p = model.proxyFolderProblem { Text(p).font(.caption).foregroundStyle(.red) }
         }
     }
 }

@@ -40,8 +40,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
 | **Test USB portů na vyžádání + doporučení** | ✅ CLI (`offload ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
-| **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | 🔨 jádro + CLI, GUI ⏳ | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
-| **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | 🔨 jádro + CLI, GUI ⏳ | ✅ CLI + GUI (GUI čeká ruční test) |
+| **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
+| **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test) |
 | **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ✅ CLI + GUI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; řetěz připojení, % linky a úzké hrdlo na kartě úlohy (GUI čeká ruční test) | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
@@ -83,18 +83,12 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   provizorně, ke schválení). Mac zatím vždy předpokládá Film Gen 5. Chybný argument = kód 2; konfigurace pipeline se
   nastavuje před `OpenClip` (SDK ji čte při prvním otevření klipu). Bez knihovny `BlackmagicRawAPI.dll` se BRAW
   jen zkopíruje a ověří — Offload proxy a náhledy přeskočí s nápovědou (`braw-decode` sám by skončil kódem 3).
-- **Složka pro proxy navíc** (Windows; Mac zatím jádro — kopie, nastavení, report — a CLI `--proxy-folder`; GUI naplánované): každá
-  hotová proxy se kromě `_PROXY` na cílech zkopíruje i do `<složka>\<datum>\<karta>\` (při shodě jména `_2`, `_3`…,
-  nic se nepřepíše). Nastavení `proxy.extraFolder` v settings.json a v reportu, v CLI `--proxy-folder`. Nedostupná
-  složka zablokuje start; zmizí-li během úlohy, je to jen poznámka u klipu.
-- **Vestavěné LUTy** (zatím jen Windows, pro Mac naplánováno; sdílené soubory v [`shared/luts/`](../shared/luts/)):
-  11 LUTů Log → Rec.709, `auto` vybere LUT podle kamery každého klipu a použitý LUT s důvodem je v reportu
-  (klíč `lut` u klipu, FORMATY.md). Zatím se automaticky nepoznají Canon, Panasonic, DJI a Fuji (chybí vzorové klipy,
-  přijdou do záložního LUTu „Když kameru nepoznám:“, výchozí Bez LUT); D-Log M nemá vestavěný LUT. ARRI se pozná podle
-  modelu kamery, takže klip z ARRI nahraný přímo v Rec.709 by dostal LUT neprávem — uživatel zvolí „Bez LUT“.
-  Na vzorcích se ještě ověří rozsah R3D/ARRIRAW mezisouborů a ProRes z ALEXA 35 (LogC4) — berou se jako legální video.
-  Mac má zatím jádro (výběr LUTu po klipech, proxy, náhledy, report; mezisoubory ARRIRAW ověřené jako legální video)
-  a CLI (`--lut auto|none|<id>|<cesta>`, `--lut-fallback`, `offload luts`); výběr v GUI je naplánovaný.
+- **Vestavěné LUTy** (obě verze; sdílené soubory v [`shared/luts/`](../shared/luts/)): 11 LUTů Log → Rec.709, `auto`
+  vybere LUT podle kamery každého klipu a použitý LUT s důvodem je v reportu (klíč `lut` u klipu, FORMATY.md). Zatím se
+  automaticky nepoznají Canon, Panasonic, DJI a Fuji (chybí vzorové klipy, přijdou do záložního LUTu „Když kameru
+  nepoznám:“, výchozí Bez LUT); D-Log M nemá vestavěný LUT. ARRI se pozná podle modelu kamery, takže klip z ARRI nahraný
+  přímo v Rec.709 by dostal LUT neprávem — uživatel zvolí „Bez LUT“. Na vzorcích se ještě ověří rozsah R3D/ARRIRAW
+  mezisouborů a ProRes z ALEXA 35 (LogC4) — berou se jako legální video (Mac: mezisoubory ARRIRAW ověřené jako legální video).
 - **Upozornění po dokončení:** Windows hraje zvuk a bliká tlačítkem v hlavním panelu místo notifikace Macu
   (nebalená aplikace umí toast jen po registraci).
 - **Vysunutí karty (obě verze):** karta ve čtečce se vysune jako médium, čtečka zůstane připojená; interní disky,
