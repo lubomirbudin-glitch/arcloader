@@ -24,18 +24,28 @@ public static class Layout
 
     public static string CardPath(string root, string date, string cardName) => Path.Combine(root, date, cardName);
 
-    /// Volume label when the source is a drive root, otherwise the folder name.
-    public static string DefaultCardName(string source)
+    /// DefaultCardName without touching the disk: `label` is the volume label the scan already read (used only when
+    /// the source is a drive root). For the GUI, whose UI thread never waits on a disk.
+    public static string DefaultCardName(string source, string? label)
     {
-        var full = Path.GetFullPath(source);
-        var root = Path.GetPathRoot(full);
-        if (root != null && string.Equals(full.TrimEnd('\\'), root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
-        {
-            var label = NativeIO.VolumeLabel(root);
-            if (!string.IsNullOrWhiteSpace(label)) return Sanitize(label);
-        }
-        return Sanitize(Path.GetFileName(full.TrimEnd('\\')));
+        if (DriveRootOf(source) != null && !string.IsNullOrWhiteSpace(label)) return Sanitize(label);
+        return Sanitize(Path.GetFileName(Path.GetFullPath(WithRoot(source)).TrimEnd('\\')));
     }
+
+    /// Volume label when the source is a drive root, otherwise the folder name. Reads the label from the disk.
+    public static string DefaultCardName(string source) =>
+        DefaultCardName(source, DriveRootOf(source) is string root ? NativeIO.VolumeLabel(root) : null);
+
+    /// The root when `source` is a drive (or share) root itself, else null. String work only — no disk access.
+    public static string? DriveRootOf(string source)
+    {
+        var full = Path.GetFullPath(WithRoot(source));
+        var root = Path.GetPathRoot(full);
+        return root != null && string.Equals(full.TrimEnd('\\'), root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase) ? root : null;
+    }
+
+    /// "F:" alone would mean the current folder on F:.
+    static string WithRoot(string source) => source.Length == 2 && source[1] == ':' ? source + "\\" : source;
 
     /// A name Windows can use as a folder: forbidden characters become "_", no trailing dot or space, no device names.
     public static string Sanitize(string s)

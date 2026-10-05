@@ -27,6 +27,8 @@ funkce a opravy, které uživatel chce i na Macu. Tento návrh říká **přesn�
    je linka, doporučení, volitelné měření; během kopie karta úlohy ukazuje řetěz připojení a úzké hrdlo;
    CLI `offload ports [--measure]` a „brzdí: D1“ ve stavovém řádku `offload copy`.
 6. Výstupy na disku zůstávají shodné s Windows (FORMATY.md) — kopii z Macu ověří Windows a naopak.
+7.–11. Vestavěné LUTy podle kamery, složka pro proxy navíc, barvy proxy BT.709 / náhledy JFIF, ochrana proti zaseknutí
+   ffmpeg a ikona aplikace — viz oddíl „Doplněk 2026-10-05“ na konci (úkoly 18–25).
 
 ## 2. Výchozí stav
 
@@ -407,7 +409,8 @@ neúplného souboru → `nil`. Rychlý test nikdy nepřepíše uložené měřen
 
 ## 4. Mimo rozsah
 
-- **LUTy Log → Rec.709 vestavěné** — připravovaný plán 5 pro obě platformy.
+- ~~**LUTy Log → Rec.709 vestavěné**~~ — původně mimo rozsah (plán 5); Windows je mezitím má, takže jsou v rozsahu:
+  oddíl „Doplněk 2026-10-05“ (D.3), úkoly 21–25. Totéž platí pro složku pro proxy, barvy proxy, ikonu a hlídání ffmpeg.
 - Windows-only z podstaty: kontroly NTFS/exFAT velikosti písmen, nepovolených jmen a FAT32 ≥ 4 GB, buffered I/O
   fallback a `"unbuffered": false`, atribut skrytý u `.offload-part`, Windows junk soubory, CLI v `bin\`, toast /
   zvuk + blikání v hlavním panelu (Mac má `NSSound` + `requestUserAttention`), Ctrl+Enter (Mac má ⌘↩),
@@ -555,23 +558,293 @@ Ruční ověření (na Macu, s hardwarem) je v každém úkolu plánu s přesný
 | Soubor | Úkoly plánu |
 |---|---|
 | `mac/Package.swift` | 1 (testTarget), 14 (IOKit, DiskArbitration) |
-| `mac/Tests/OffloadKitTests/*.swift` (nové) | 1–18 |
+| `mac/Tests/OffloadKitTests/*.swift` (nové) | 1–25 |
 | `Sources/OffloadKit/Engine.swift` | 2 |
-| `Sources/OffloadKit/Report.swift` | 3, 6, 7, 18 |
-| `Sources/OffloadKit/Job.swift` | 3, 4, 7 |
+| `Sources/OffloadKit/Report.swift` | 3, 6, 7, 22, 26 |
+| `Sources/OffloadKit/Job.swift` | 3, 4, 7, 19, 20, 22 |
 | `Sources/OffloadKit/Timecode.swift` (nový) | 5 |
-| `Sources/OffloadKit/Proxy.swift` | 5, 6, 7 |
-| `Sources/OffloadKit/RawBackends.swift` | 6 |
-| `Sources/OffloadKit/HTMLReport.swift` | 7 |
+| `Sources/OffloadKit/Proxy.swift` | 5, 6, 7, 18, 19, 20, 21, 22 |
+| `Sources/OffloadKit/RawBackends.swift` | 6, 21, 22 |
+| `Sources/OffloadKit/HTMLReport.swift` | 7, 20, 22 |
 | `Sources/OffloadKit/Hash.swift`, `Bench.swift` | 15 |
-| `Sources/OffloadKit/Desktop/{Texts,JobProgress,AppSettings,Volumes,QueueRules}.swift` (nové) | 8, 9, 10 |
+| `Sources/OffloadKit/Desktop/{Texts,JobProgress,AppSettings,Volumes,QueueRules}.swift` (nové) | 8, 9, 10 (`AppSettings` i 20, 21) |
 | `Sources/OffloadKit/Hardware/{BrakeMeter}.swift` (nový) | 8 |
 | `Sources/OffloadKit/Hardware/{UsbSpeeds,UsbTopology,PortLabels}.swift` (nové) | 12 |
 | `Sources/OffloadKit/Hardware/{DriveLinks,Advisor,ChainView}.swift` (nové) | 13 |
 | `Sources/OffloadKit/Hardware/{IORegistry,MacUsbScanner,MacDriveLinks}.swift` (nové) | 14 |
 | `Sources/OffloadKit/Hardware/HwTest.swift` (nový) | 15 |
-| `Sources/offload/main.swift` | 16 |
-| `Sources/OffloadApp/AppModel.swift` | 9, 10, 11, 17 |
-| `Sources/OffloadApp/Views.swift`, `OffloadApp.swift` | 11, 17 |
+| `Sources/offload/main.swift` | 16, 23 |
+| `Sources/OffloadApp/AppModel.swift` | 9, 10, 11, 17, 24 |
+| `Sources/OffloadApp/Views.swift`, `OffloadApp.swift` | 11, 17 (`Views.swift` i 24) |
 | `Sources/OffloadApp/{HardwareModel,HardwareView}.swift` (nové) | 17 |
-| `mac/README.md`, `docs/ROZDILY.md`, `docs/VYVOJ-MAC.md`, `docs/FORMATY.md` | 18 (+ řádek ve VYVOJ-MAC v každém úkolu) |
+| `mac/README.md`, `docs/ROZDILY.md`, `docs/VYVOJ-MAC.md`, `docs/FORMATY.md` | 26 (+ řádek ve VYVOJ-MAC v každém úkolu) |
+| Nové soubory doplňku (`FilterGraph`, `FFmpegWatch`, `ProxyCopy`, `Luts`, `Media.swift`, `scripts/build-app.sh` …) | 18–25, podrobně D.11 |
+
+## Doplněk 2026-10-05: složka pro proxy, vestavěné LUTy, barvy proxy, ikona, ochrana proti zaseknutí ffmpeg
+
+Windows verze dostala po sepsání tohoto návrhu další funkce, které uživatel chce i na Macu. Doplněk říká co, jak a kde;
+implementují ho úkoly **18–25** plánu (dokumentace a verze 0.2.0 se přesunuly z úkolu 18 do úkolu **26**). Platí pravidla
+oddílů 1–10 (texty shodné s Windows, výstupy podle FORMATY.md, UI nikdy nečeká na disk, test před kódem).
+
+### D.1 Cíl a úspěch
+
+7. Proxy i náhledy v reportu z log záznamů vypadají jako Rec.709 bez ručního hledání LUTu: aplikace vybere jeden z 11
+   vestavěných LUTů podle metadat **každého klipu**; v reportu je u klipu „LUT: … (důvod)“ a v JSON klíč `lut`.
+8. Každá hotová proxy se volitelně zkopíruje i do uživatelovy složky `<složka>/<datum>/<karta>/` — nikdy nic nepřepíše.
+9. Proxy mají správné barvy v každém přehrávači (BT.709 v legálním rozsahu, označené), náhledy v HTML/PDF taky (JFIF).
+10. Zaseknutý ffmpeg nikdy nezablokuje frontu: hlídač 60 s, u hardwarového dekódování jedno opakování softwarově.
+11. `Offload.app` má ikonu (sdílenou s Windows).
+
+Windows reference: `windows/src/Offload.Core/ProxyCopy.cs`, `OffloadJob.cs`, `Media.cs` (`ProxySettings`, `ClipInfo.ColorRange`,
+`ClipEntry.Lut`), `Luts.cs`, `FilterGraph.cs`, `Encoders.cs` (`Rec709Args`), `ProxyRenderer.cs`, `RawBackends.cs`, `FrameSource.cs`,
+`ClipDetector.cs` (`FFProbe`), `HtmlReport.cs`, `Desktop/AppSettings.cs`, `Offload.Cli/CopyCommand.cs`, `LutsCommand.cs`,
+`Offload.App/ProxyOptionsViewModel.cs`, `SetupPanel.xaml`, `MainViewModel.Setup.cs`, `MainViewModel.Queue.cs`; návrh LUTů
+[`windows/docs/superpowers/specs/2026-10-05-offload-luts-design.md`](../../../../windows/docs/superpowers/specs/2026-10-05-offload-luts-design.md);
+sdílené soubory [`shared/luts/`](../../../../shared/luts/README.md) a [`shared/icon/`](../../../../shared/icon/README.md).
+
+### D.2 Složka pro proxy navíc (`proxy.extraFolder`)
+
+Uživatel uvidí: v sekci Proxy pod přepínači řádek **„Kopírovat proxy i do složky“** — název vybrané složky (plná cesta
+v nápovědě) nebo „nevybráno“, tlačítko „Vybrat…“ (panel „Vyber složku pro proxy“) a křížek s nápovědou „Nekopírovat do
+složky“. V CLI `offload copy … --proxy --proxy-folder <složka>`.
+
+Chování (1:1 s Windows `ProxyCopy.ToExtraFolder` a `OffloadJob`):
+- Po vyrenderování proxy na první dobrý cíl a po kopii na ostatní cíle (`copyToAllDestinations`) se proxy zkopíruje do
+  `<extraFolder>/<datum>/<karta>/<jméno proxy>.mov` (`<datum>` a `<karta>` jako na cílech — `plan.date`, `plan.cardName`).
+- Kopie přes `.<jméno>.part` vedle cíle a přejmenování **bez nahrazení**. Je-li jméno obsazené (soubor i složka), zkusí
+  `<jméno>_2.mov`, `_3` … nejvýš do `_1000`; pak chyba `žádné volné jméno (C0001.mov … C0001_1000.mov)`. Nikdy nepřepíše.
+- Složka neexistuje (odpojený disk) → `složka není dostupná`; nic se nevytvoří.
+- Jakékoli selhání je jen **poznámka u klipu** `kopie do <složka> selhala: <důvod>` (více poznámek oddělených `; `, jako
+  „kopie na … selhala“ z oddílu 3.4) a řádek logu; proxy zůstává `done`, úloha neselže.
+- Start: nedostupná složka **zablokuje start**, když se proxy renderují — GUI červeně „Složka pro proxy není dostupná: <cesta>“
+  (zjišťuje se na pozadí spolu s cíli každých 5 s, po změně a ještě jednou těsně před startem, nejvýš 5 s); CLI s `--proxy`
+  `Error: Proxy folder not found: <cesta>`, bez `--proxy` jen `Note: --proxy-folder has no effect without --proxy.`; výpis
+  plánu `  proxy also → <složka>/<datum>/<karta>`.
+- Report HTML/PDF: řádek „Proxy: …“ končí `· také ve složce <span class="mono"><cesta></span>`. JSON: `proxy.extraFolder`.
+- Nastavení: klíč `proxy.extraFolder`, prázdný nebo z mezer → `nil`; chybí, když není nastavený.
+
+Mac technika: `renamex_np(part, dst, RENAME_EXCL)` (APFS, HFS+). Kde FS volbu nepodporuje (`ENOTSUP`/`EINVAL`, pravděpodobně
+exFAT/FAT32/SMB), kontrola existence těsně před obyčejným `rename` (stejné okno souběhu jako Windows `Path.Exists` + `Move`).
+Soubory: nový `Sources/OffloadKit/ProxyCopy.swift` (také náhrada soukromého `copyFile` v `Job.swift`), `Proxy.swift`
+(`ProxySettings.extraFolder`), `Job.swift`, `HTMLReport.swift`, `Desktop/AppSettings.swift` (`ProxyPreflight.extraFolder*`,
+`isDirectory`), `offload/main.swift`, `OffloadApp/AppModel.swift`, `Views.swift`.
+
+### D.3 Vestavěné LUTy a výběr LUTu podle klipu
+
+Návrh LUTů (§2–5) platí beze změny; tady jen co a jak na Macu.
+
+**D.3.1 Katalog a přibalení.** `shared/luts/` (11 `.cube` 33³ + `luts.json` `{id, name, maker, file, curve, gamut}`) je commitnutý —
+build ani aplikace Python nepotřebují (generátor `generate.py` jen pro přegenerování). `scripts/build-app.sh` je zkopíruje do
+`Offload.app/Contents/Resources/luts/`. `LutCatalog.defaultFolder` hledá: `Bundle.main.resourcePath/luts` (aplikace),
+`<exe>/luts`, `<exe>/../luts` (CLI v `Contents/Resources/bin`), a **jen** u SwiftPM buildu (cesta spustitelného souboru obsahuje
+`/.build/`) až 8 úrovní nahoru `shared/luts` repa — nainstalovaná kopie si nikdy nevezme repo, ve kterém náhodou leží.
+Testy předávají katalog výslovně (`TestMedia.luts` z `#filePath`), protože pod `swift test` je spustitelný soubor Xcode `xctest`.
+Chybějící/poškozená složka → prázdný katalog (nikdy nespadne); položka bez `id`/`file` nebo s chybějícím souborem se vynechá.
+`LutCatalog.shared` se načte jednou (pár malých souborů v balíčku aplikace, i na hlavním vlákně při startu přes
+`SettingsStore.decode`).
+
+**D.3.2 Režimy a nastavení** (`proxy.lutMode` `auto|builtin|custom|none`, `lutBuiltin`, `lutFallback`, `lutPath` beze změny):
+- chybí-li `lutMode` (nastavení z 0.1.0): neprázdný `lutPath` → `custom` (vlastní LUT jako dřív), jinak `auto` se záložním
+  „bez LUT“; neznámá hodnota `lutMode` (novější verze) se čte jako chybějící;
+- s neprázdným katalogem: neznámé `lutBuiltin`/`lutFallback` → `nil`; `builtin` bez platného id → `auto`. **Prázdný katalog
+  uložené volby nemaže** (rozbitá instalace nesmí smazat nastavení);
+- `lutFallback` je jen id vestavěného LUTu nebo `nil` (vlastní `.cube` jako záloha nejde);
+- blokovat start může jen chybějící **vlastní** `.cube` (`ProxyPreflight.lutInUse` jen v režimu `custom`) — text z oddílu 3.7.
+- Swift: režim „bez LUT“ je `LutMode.off` s JSON hodnotou `"none"` a `LutUse.off(_:)` — `case none` by se u `LutMode?`
+  pletl s `Optional.none`.
+
+**D.3.3 Pravidla výběru** (`LutResolver.resolve`, čisté funkce, 1:1 s Windows, první platné vyhrává):
+
+| Režim / zdroj | Výsledek (`source`, `id`, `reason`) |
+|---|---|
+| `none` | `none`, „vypnuto v nastavení“ |
+| `custom` | `custom`, název souboru, „vlastní LUT“; bez cesty `none`, „vlastní LUT není vybraný“ |
+| `builtin` | `builtin`, id, „vybraný v nastavení“; neznámé id `none`, „vestavěný LUT nenalezen“ |
+| `auto`, prázdný katalog | `none`, „vestavěné LUTy chybí“ |
+| BRAW | `bmd-film-gen5`, „Blackmagic RAW (gama Film Gen 5)“ (braw-decode gamu klipu neprozradí — jako Windows) |
+| R3D | `red-log3g10-rwg`, „RED R3D (IPP2 Log3G10)“ |
+| ARRIRAW | `colorSpace(lut: nil, info)` obsahuje LogC4 → `arri-logc4-awg4` „ARRIRAW (LogC4)“, jinak `arri-logc3-awg3` „ARRIRAW (LogC3)“ |
+| Sony `<klip>M01.XML` | `CaptureGammaEquation` začíná `s-log3` → `sony-slog3-sgamut3cine` (primaries obsahují „cine“, nebo chybí a gama končí „cine“) jinak `sony-slog3-sgamut3`, důvod „Sony XML: <gama> / <primaries>“ (bez koncových „ /“); `s-log…` jiné → bez LUTu „Sony XML: <gama> (bez vestavěného LUTu)“; jiná neprázdná gama → bez LUTu „Sony XML: <gama> (není log)“ — **ani záložní LUT** |
+| kamera obsahuje ALEXA/AMIRA | `\bALEXA\s*35\b` → `arri-logc4-awg4` „ARRI kamera (předpoklad LogC4)“, jinak `arri-logc3-awg3` „… (předpoklad LogC3)“ |
+| nic | záložní LUT: `fallback`, id, „kamera nerozpoznána — záložní LUT“; bez zálohy `none`, „kamera nerozpoznána“ |
+
+Kamera z ffprobe: **výrobce + model** spojené (`com.apple.quicktime.make` „ARRI“ + `…model` „ALEXA 35“ → „ARRI ALEXA 35“; model,
+který výrobcem začíná, zůstane), jinak `product_name`, `company_name`. Sony XML se čte z **cíle** (leží vedle klipu,
+zkopíroval se). Mac čte XML přes `XMLParser` (první prvek s atributem `name`, jeho `value`; jmenné prostory nevadí).
+
+**D.3.4 Render a náhledy** (`ProxyRenderer`, 1:1 s Windows `PrepareLut`/`LookFor`/`NeedsPreMap`):
+- LUT se předává **po klipech** (`thumbnails(…, lut:)`, `render(…, lut:, …)`); `settings.lutPath` sám nic neaplikuje.
+- Kopie do dočasné složky rendereru (filtry bez uvozovek): vlastní LUT jednou při vytvoření rendereru jako `look.cube`
+  (jen v režimu `custom` a když soubor existuje), vestavěný při prvním použití jako `lut-<id>.cube`, jednou na id.
+- **Pre-map jen pro vestavěný LUT na zdroji v plném rozsahu**: `FrameSource.fullRange` (braw-decode dává RGBU16 = plný rozsah)
+  nebo `ClipInfo.colorRange == "pc"` (ffprobe `color_range`). Filtr `FilterGraph.preMap` (`lutrgb`, `x = (v·1023 − 64)/876`)
+  těsně před `lut3d`. Vlastní `.cube` se aplikuje beze změny.
+- **RAW dávají log jen když LUT opravdu následuje** (`RawLook`): R3D `--colorSciVersion 3 --colorSpace 25 --gammaCurve 34`,
+  ARRI `--target-colorspace` podle vestavěného ARRI LUTu (`AWG4/D65/LogC4`, `AWG3/D65/LogC3`), u vlastního podle názvu
+  souboru/metadat (`ARRIRAWBackend.colorSpace`); bez LUTu vlastní Rec.709 vzhled (`Rec.709/D65/BT.1886 --embedded-look`).
+- R3D/ARRI náhledy dál z hotové proxy — **bez** LUTu (proxy ho už má).
+
+**D.3.5 Report.** U klipu volitelný klíč `lut` = `{source, id?, name, reason}` (`id` chybí u `custom`/`none` — `nil` se
+nezapisuje, jako Windows), `file` se nikdy nezapisuje. HTML u klipu `<div class="note">LUT: <název> (<důvod>)</div>`;
+bez LUTu `LUT: bez LUT (<důvod>)`, kromě „vypnuto v nastavení“. CSS `.path,.note{color:var(--muted);font-size:12px}`.
+Řádek „Proxy: …, LUT: <způsob>“: `automaticky podle kamery` / název vestavěného (z katalogu, jinak id) / název vlastního
+souboru / `bez LUT`.
+
+**D.3.6 CLI.** `--lut auto|none|<id>|<cesta.cube>` (výchozí `auto`; cesta = končí `.cube` nebo obsahuje `/` či `\`),
+`--lut-fallback <id>|none`; chyby `Unknown LUT '<x>'. Use auto, none, a .cube path or one of: <ids>`,
+`Unknown fallback LUT '<x>'. Built-in: <ids>`, `LUT not found: <cesta>` (Mac je hlásí jako `ValidationError` — exit 64
+a nápověda, jako dosavadní „LUT not found“). Před kopií řádek `LUT: auto (fallback <id>)` / `none` / `<id>` / `<cesta>` —
+jen když se renderují proxy nebo analyzují klipy (`--no-analyze` bez `--proxy` ho nevypíše, jako Windows `LutOption.PlanLine`).
+`offload luts` vypíše `<id> — <název>`; prázdný katalog → na stderr `No built-in LUTs found (luts folder missing).`, exit 0.
+**Změna chování proti 0.1.0:** bez `--lut` se LUT vybírá automaticky (dřív žádný).
+
+**D.3.7 GUI** (sekce Proxy, řádek LUT): seznam „Automaticky podle kamery“ · 11 vestavěných (název z `luts.json`) · „Bez LUT“ ·
+„Vlastní…“. Při „Automaticky“ pod ním „Když kameru nepoznám:“ se seznamem „Bez LUT“ + vestavěné. Při „Vlastní…“ název
+souboru (nebo „nevybráno“) a „Vybrat…“; „Vlastní…“ bez vybraného souboru otevře panel „Vyber LUT (.cube)“, „Zrušit“ vrátí
+předchozí volbu. Neznámé id vestavěného se ukáže jako „Automaticky“. Červené „LUT nenalezen: …“ (oddíl 3.7) jen u vlastního.
+
+### D.4 Barvy proxy a náhledů
+
+Změřené důvody (ROZDILY „Barvy proxy“, návrh LUTů §2): bez výslovné matice swscale po kroku v RGB (LUT, RGB dekodér)
+převede do YUV maticí **BT.601** a soubor zůstane neoznačený — přehrávač u HD použije BT.709 a čistá červená vyjde
+(255, 23, 0). Samotné výstupní volby nestačí: ffmpeg 8 bere primaries a přenos ze snímků, proto i `setparams`. JPEG (JFIF)
+každý prohlížeč a PDF dekóduje jako BT.601 v plném rozsahu.
+
+- Proxy: `… → scale=out_color_matrix=bt709:out_range=tv → format=<yuv420p|yuv422p10le> → setparams=color_primaries=bt709:color_trc=bt709`
+  a za argumenty enkodéru `-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv`.
+- Náhledy: `scale=-2:180:flags=bicubic → [LUT] → scale=out_color_matrix=bt601:out_range=pc → format=yuvj420p`.
+- Řetěz proxy celý: ořez na frame lines → `scale` → `setsar=1` → `[format=rgb48le,(pre-map,)lut3d]` → burn-in → BT.709 →
+  pixelový formát → značky. Nový `Sources/OffloadKit/FilterGraph.swift` (čisté funkce, test řetězců 1:1 s Windows
+  `FilterGraphTests`); Mac dává do filtrů absolutní cesty z `$TMPDIR` (bez `:`, `,`, `'`, `\`).
+- **VideoToolbox:** `h264_videotoolbox`/`hevc_videotoolbox` převezmou `-colorspace/-color_primaries/-color_trc` z kontextu
+  kodéru do `kVTCompressionPropertyKey_ColorPrimaries/TransferFunction/YCbCrMatrix` a MOV muxer zapíše atom `colr`, když
+  barvy nejsou „unspecified“; `prores_ks` je zapisuje do hlavičky snímku. **Ověřit na Macu** (D.10 ř. 1) — test
+  `ColorTests.testProxyRedIsBT709MatrixAndTagged` to ověří pro H.264 (VideoToolbox) i ProRes LT, s LUTem i bez.
+
+### D.5 Ochrana proti zaseknutí ffmpeg
+
+1:1 s **konečnou** Windows verzí (`windows/src/Offload.Core/ProxyRenderer.cs`, commit `a3f047c` na `windows-followups`;
+testy `ProxyWatchdogTests.cs`). Důvod: ffmpeg 8.1 s `-hwaccel auto` se na Windows na FFV1 navždy zasekl (Vulkan
+VK_ERROR_DEVICE_LOST) a úloha visela.
+- **Hardwarové dekódování jen když kodek začíná `h264` nebo `hevc`** (`ProxyRenderer.usesHardwareDecode(info.codec)`, bez
+  ohledu na velikost písmen). Vše ostatní (FFV1, ProRes, MJPEG, DNx …) softwarově — i když VideoToolbox umí ProRes (ffmpeg 6+,
+  Apple Silicon), pravidlo je stejné jako na Windows. Náhledy vždy softwarově (oddíl 3.3); RAW formáty hwaccel nepoužívají.
+- **Hlídač jen pro render proxy** (`stallTimeout = defaultStallTimeout = 60` s). Pokrok = nová **vyšší** hodnota `frame=` nebo
+  `out_time_us=` z `-progress pipe:1` (úvodní `frame=0`, `out_time_us=N/A` a záporné časy nejsou pokrok), závěrečné
+  `progress=end`, **nebo data, která dekodér RAW poslal do ffmpeg** (braw-decode jde nově přes pumpu: `Pipe` → vlákno →
+  `Pipe`, každý přečtený blok vynuluje hodinky; zapisovací deskriptor s `F_SETNOSIGPIPE`, aby zápis do mrtvého ffmpeg
+  nevyvolal SIGPIPE). Lhůta 60 s, **do prvního pokroku 3× (180 s)** — načtení vstupu, rozběh dekodéru, lookahead enkodéru.
+  Zrušení se kontroluje první a vyhrává. Náhledy hlídané nejsou (jako Windows).
+- **Ukončení:** `Process.terminate()` (SIGTERM) ffmpeg i dekodéru, čekání **nejvýš 10 s** (`killWait`, smyčka po 50 ms),
+  pak `kill(pid, SIGKILL)`; když proces ani pak neskončí (uvízl v ovladači GPU), do logu úlohy
+  `ffmpeg (pid N) did not end 10 s after kill` a úloha jede dál — nikdy se nečeká bez limitu (Windows: `Kill` + 10 s).
+  Kontrola běží ve stávající smyčce po 200 ms (obdoba Windows `WaitForExit(200)`; `DispatchSource` časovač není potřeba).
+- **Opakování jen po hardwarovém dekódování:** zasekl-li se nebo selhal (chyba ffmpeg) běh **s** hwaccel, render se jednou
+  zopakuje bez něj; těsně před opakováním se zkontroluje zrušení (zrušení se nikdy neopakuje). Bez hwaccel se neopakuje nic.
+- **Texty poznámky u klipu** (přesně jako Windows; proxy `failed`, úloha pokračuje):
+  - zasekl se bez hwaccel: `ffmpeg se zasekl (60 s bez nového snímku); proxy nevznikla`
+  - zasekl se s hwaccel i bez něj: `ffmpeg se zasekl (60 s bez nového snímku) i bez hardwarového dekódování; proxy nevznikla`
+  - zasekl se s hwaccel, bez něj selhal: `ffmpeg se zasekl (60 s bez nového snímku); bez hardwarového dekódování selhal: <chyba>`
+  - selhal s hwaccel, bez něj selhal nebo se zasekl: `<2. chyba>; s hardwarovým dekódováním předtím: <1. chyba>`
+  - chyba bez hwaccel: ta chyba beze změny.
+- **Log úlohy** (`ProxyRenderer.log`, z `OffloadJob`): `proxy <klip>: with hardware decoding: <chyba> — retrying in software`,
+  `proxy <klip>: software decoding succeeded`, `proxy <klip>: software decoding failed too: <chyba>`.
+- REDline a art-cmd (mezisoubory před ffmpeg) hlídač nemají — mohou dlouho legitimně pracovat bez výstupu (jako Windows).
+- Mac: `-hwaccel videotoolbox` (Windows `-hwaccel auto`) — jediný rozdíl, zapíše se do ROZDILY (Technologie).
+
+### D.6 Ikona aplikace
+
+`shared/icon/` (generuje `make_icon.py`, Pillow; commitnuté): `Offload-1024.png`, `Offload.ico` (Windows),
+`Offload.iconset/` (`icon_16x16.png` … `icon_512x512@2x.png`). `scripts/build-app.sh`:
+`iconutil -c icns ../shared/icon/Offload.iconset -o build/Offload.app/Contents/Resources/Offload.icns` a v Info.plist
+`<key>CFBundleIconFile</key><string>Offload</string>`. Chybí-li iconset, build jen varuje (ikona je kosmetika); chybějící
+`shared/luts` je chyba buildu. CLI ikonu nemá.
+
+### D.7 Formáty na disku
+
+- `offload_report.json`: u klipu volitelný `lut` (D.3.5); v `proxy` klíče `lutMode`, `lutBuiltin`, `lutFallback`, `extraFolder`
+  (chybějící = nenastaveno); u `info` volitelný `colorRange` (`tv`/`pc`). Starší reporty bez nich zůstávají platné, JSON
+  z Macu i Windows má stejný tvar. Náhledy se dál nezapisují.
+- Nastavení (`UserDefaults` `settings`): `proxy.lutMode`, `proxy.lutBuiltin`, `proxy.lutFallback`, `proxy.extraFolder` —
+  stejné klíče jako Windows `settings.json`; migrace D.3.2.
+- Složka pro proxy: `<extraFolder>/<YYYY-MM-DD>/<karta>/<klip>[_N].mov` — mimo cíle, do `.xxh64`/MHL se nezapisuje.
+- FORMATY.md: u `clips[].lut` a `proxy.extraFolder` zmizí „jen Windows / Mac ignoruje“ (úkoly 20, 22, 26).
+
+### D.8 Poznámky k macOS technice
+
+- `Bundle.main.executableURL?.resolvingSymlinksInPath()` místo `CommandLine.arguments[0]` (CLI spuštěné z `PATH` má
+  v `arguments[0]` jen jméno).
+- `ProxyRenderer` slouží jedné úloze na jednom vlákně (kopie vestavěných LUTů bez zámku); `ProgressWatch` má zámek
+  (řádky přicházejí z obsluhy roury).
+- `OffloadJob.init(config:options:luts:)` — testy předají katalog z repa; aplikace a CLI `LutCatalog.shared`.
+- Ruční ověření GUI: vlastní LUT z verze 0.1.0 musí po aktualizaci zůstat „Vlastní…“ (migrace), ne zmizet.
+
+### D.9 Testy (nové soubory)
+
+| Oblast | Soubor testů | Port z Windows |
+|---|---|---|
+| Filter graph, pre-map, BT.709/JFIF řetězce | `FilterGraphTests.swift` | `FilterGraphTests.cs`, `ProxyRendererTests.FullRangeSource_PreMapped` |
+| Barvy proxy a náhledů (ffmpeg) | `ColorTests.swift` | `ProxyRendererTests.Proxy_Red_Bt709MatrixAndTags`, `Thumbnail_Red_JfifBt601` |
+| Hlídač, hwaccel jen H.264/HEVC, opakování a texty (falešný ffmpeg skript) | `FFmpegWatchTests.swift` | `ProxyWatchdogTests.cs` |
+| Složka pro proxy, preflight, nastavení, HTML, úloha | `ProxyFolderTests.swift` | `ProxyCopyTests.cs`, `StageTwoTests.ProxyFolder_*`, `SettingsStoreTests.ExtraFolder_*`, `HtmlReportTests` |
+| Katalog, hledání složky | `LutCatalogTests.swift` | `LutCatalogTests.cs` |
+| Výběr LUTu, Sony XML, ARRI, ffprobe | `LutResolverTests.swift` | `LutResolverTests.cs`, `RawBackendsTests.Arri_ColorSpace` |
+| `--lut` / `--lut-fallback` | `LutOptionTests.swift` | `LutOptionTests.cs` |
+| Migrace a pravidla nastavení LUTu | `LutSettingsTests.swift` | `SettingsStoreTests.LutMode_*`, `Normalize_EmptyCatalog_*` |
+| Pre-map, RawLook, REDline/art-cmd argumenty, S-Log3 šedá (ffmpeg) | `LutRenderTests.swift` | `ProxyRendererTests` (LUT), `RawBackendsTests` |
+| LUT v HTML/JSON, výběr LUTu v úloze (ffmpeg) | `LutReportTests.swift` | `HtmlReportTests.Clip_ShowsLut_AndJsonKey`, `StageTwoTests.Report_RecordsLutPerClip` |
+
+### D.10 Nejistoty (ověřit na Macu)
+
+| # | Co | Předpoklad | Jak ověřit |
+|---|---|---|---|
+| 1 | VideoToolbox enkodéry zapíší BT.709 značky | `-colorspace/-color_primaries/-color_trc/-color_range` + `setparams` stačí, MOV dostane `colr` | `ffmpeg -f lavfi -i color=c=red:s=320x180:d=1 -vf scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709 -c:v h264_videotoolbox -allow_sw 1 -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv /tmp/r.mov && ffprobe -v error -select_streams v:0 -show_entries stream=color_range,color_space,color_transfer,color_primaries -of default=nw=1 /tmp/r.mov` → vše `bt709`, `tv`; totéž s `hevc_videotoolbox -tag:v hvc1`. Kdyby chyběl `colr`: přidat `-movflags +write_colr` do `FilterGraph.rec709Args` |
+| 2 | `setparams` s `color_primaries`/`color_trc` v Homebrew ffmpeg | ano (ffmpeg ≥ 4.4) | `ffmpeg -hide_banner -h filter=setparams \| grep -E 'color_(primaries\|trc)'` |
+| 3 | `renamex_np` + `RENAME_EXCL` | importuje se ze `<stdio.h>`; na APFS `EEXIST`, na exFAT/FAT32/SMB možná `ENOTSUP`/`EINVAL` (pak záložní kontrola) | `swift build` (překlad `ProxyCopy.swift`); `hdiutil create -size 200m -fs ExFAT -volname PXEXF /tmp/pxexf.dmg && hdiutil attach /tmp/pxexf.dmg` a úkol 20 krok 9; totéž na SMB sdílení, je-li po ruce |
+| 4 | VideoToolbox dekódování drží rozsah | H.264/HEVC `color_range=tv` → po `format=rgb48le` legální roztažení jako software | test `LutRenderTests.testSLog3GreyProxyIs042` (H.264 zdroj jde přes VT); při odchylce porovnat s `usesHardwareDecode → false` |
+| 5 | `-progress` během zaseknutí | ffmpeg buď přestane psát, nebo opakuje stejný blok (`frame=` beze změny) — obojí hlídač pozná (jako Windows) | `ffmpeg -nostats -progress pipe:1 -f lavfi -i testsrc2=d=3 -f null - \| grep -E '^(frame\|out_time_us)='` (bloky každých ~0,5 s); skutečné zaseknutí VT se reprodukovat nedá — chování pokrývají testy s falešným ffmpeg |
+| 6 | `Bundle.main.executableURL` u CLI | v `Contents/Resources/bin` i přes symlink z `/usr/local/bin` vrátí skutečnou cestu | úkol 25 krok 3 (`offload luts` z balíčku i přes symlink → 11 řádků) |
+| 7 | `iconutil` přijme iconset | 10 PNG se správnými rozměry | `sips -g pixelWidth -g pixelHeight ../shared/icon/Offload.iconset/*.png`; `iconutil -c icns ../shared/icon/Offload.iconset -o /tmp/O.icns && ls -l /tmp/O.icns` |
+| 8 | `XMLParser` a Sony XML s `xmlns` | atributy `name`/`value` přijdou bez ohledu na jmenný prostor | `LutResolverTests.testSonySLog3FromXML` (fixture s `xmlns`); se skutečným `C0001M01.XML` z kamery: `swift test --filter LutResolverTests` a ručně úkol 22 krok 9 |
+| 9 | ProRes přes VideoToolbox | záměrně se nepoužívá | volitelně změřit: `time ffmpeg -hwaccel videotoolbox -i prores.mov -f null -` vs. bez `-hwaccel`; rozdíl zapsat do VYVOJ-MAC (rozhodnutí se mění jen společně s Windows) |
+| 10 | Rozsah mezisouborů R3D/ARRIRAW a ProRes z ALEXA 35 | legální video (bez pre-map) | na vzorcích: `ffprobe -show_streams` mezisouboru (`color_range`); jako na Windows (návrh LUTů §6 bod 5) |
+| 11 | Pumpa dekodéru RAW | rodičovská kopie zapisovacího konce roury dekodéru se po spuštění zavře (EOF pro pumpu); `F_SETNOSIGPIPE` se přeloží a zápis do ukončeného ffmpeg vrátí chybu místo SIGPIPE; SIGKILL ukončí ffmpeg do 10 s | `FFmpegWatchTests.testFeederDataIsProgress`, `testNoFeederDataAtAllKilledAfterTheGrace`; ručně BRAW proxy (úkol 19 krok 7) a `Zrušit` uprostřed BRAW renderu — aplikace nespadne, v cíli žádný `.part` |
+
+### D.11 Mapa změn souborů (doplněk)
+
+| Soubor | Úkoly |
+|---|---|
+| `Sources/OffloadKit/FilterGraph.swift` (nový) | 18 |
+| `Sources/OffloadKit/FFmpegWatch.swift` (nový) | 19 |
+| `Sources/OffloadKit/ProxyCopy.swift` (nový) | 20 |
+| `Sources/OffloadKit/Luts.swift` (nový) | 21 |
+| `Sources/OffloadKit/Proxy.swift` | 18, 19, 20, 21, 22 |
+| `Sources/OffloadKit/RawBackends.swift` | 21, 22 |
+| `Sources/OffloadKit/Media.swift` | 21 |
+| `Sources/OffloadKit/Report.swift` | 22 |
+| `Sources/OffloadKit/Job.swift` | 19, 20, 22 |
+| `Sources/OffloadKit/HTMLReport.swift` | 20, 22 |
+| `Sources/OffloadKit/Desktop/AppSettings.swift` | 20, 21 |
+| `Sources/offload/main.swift` | 23 |
+| `Sources/OffloadApp/AppModel.swift`, `Views.swift` | 24 |
+| `scripts/build-app.sh` | 25 |
+| `Tests/OffloadKitTests/{FilterGraph,Color,FFmpegWatch,ProxyFolder,LutCatalog,LutResolver,LutOption,LutSettings,LutRender,LutReport}Tests.swift`, `LutTestSupport.swift` (nové); `ThumbnailTests.swift`, `SettingsStoreTests.swift` (jeden řádek), `ColorTests.swift` (úkol 22) | 18–22 |
+| `docs/VYVOJ-MAC.md`, `docs/ROZDILY.md`, `docs/FORMATY.md`, `mac/README.md` | 18–26 |
+
+### D.12 Pokrytí ROZDILY a „Naplánováno“ (VYVOJ-MAC)
+
+| Mezera Macu (stav 2026-10-05) | Kde se zavírá |
+|---|---|
+| ROZDILY „Náhledy v reportu“ (1 náhled) | úkol 7 |
+| ROZDILY „Test USB portů“, „Propustnost článků HW“, záměrný rozdíl HW diagnostika, „GUI navíc na Windows“ (okno Hardware) | úkoly 16, 17 |
+| ROZDILY „Vestavěné LUTy …“ (řádek i záměrný rozdíl, „Mac … ignoruje“) | úkoly 21–24 (GUI 24) |
+| ROZDILY „Složka pro proxy navíc“ (řádek i záměrný rozdíl) | úkoly 20, 23, 24 |
+| ROZDILY „Barvy proxy“ | úkol 18 |
+| ROZDILY „Report při zrušeném ověření“, „Zdroj, který je sám offload“, „Dvakrát zadaný cíl“, „Kontrola voleb“ | úkoly 2, 3 |
+| ROZDILY „Zrušená úloha v GUI“, „Vysunutí karty“ | úkol 11 |
+| Ochrana proti zaseknutí ffmpeg (Windows `f7d49a1`, konečná podoba `a3f047c`) | úkol 19 |
+| Ikona aplikace (Windows `9915690`) | úkol 25 |
+| ROZDILY „Verze v reportu“ | úkol 26 |
+| Zůstává záměrně: `proxyEncoder` (Mac enkodér nevolí), Windows-only kontroly (oddíl 4), BRAW dekodér Windows (plán 3) | — |
+| VYVOJ-MAC Naplánováno: složka pro proxy, vestavěné LUTy | úkol 24 (odrážky smaže) |
+| VYVOJ-MAC Naplánováno: 3 snímky; „Totéž chování…“, „Podklady pro sestavení…“ | úkol 7; úkol 26 |

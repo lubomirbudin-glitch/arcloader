@@ -55,6 +55,8 @@ internal sealed class ToolProcess : IDisposable
 
     public int ExitCode => process.ExitCode;
 
+    public int Id => process.Id;
+
     public void Start(Action<string>? onStdoutLine)
     {
         try

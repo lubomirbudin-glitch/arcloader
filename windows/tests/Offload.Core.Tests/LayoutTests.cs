@@ -53,4 +53,24 @@ public class LayoutTests
 
     [Fact]
     public void Today_IsIsoDate() => Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", Layout.Today());
+
+    // The GUI's default card name from the scanned label: no disk access (it runs on the UI thread).
+    [Theory]
+    [InlineData(@"F:\", "EOS_DIGITAL", "EOS_DIGITAL")]
+    [InlineData(@"F:\", "A:B", "A_B")]
+    [InlineData(@"F:", "EOS_DIGITAL", "EOS_DIGITAL")]
+    [InlineData(@"F:\", "", "CARD")]
+    [InlineData(@"F:\", null, "CARD")]
+    [InlineData(@"D:\Footage\A001", null, "A001")]
+    [InlineData(@"D:\Footage\A001\", "IGNORED", "A001")]
+    public void DefaultCardName_FromScannedLabel(string source, string? label, string expected) =>
+        Assert.Equal(expected, Layout.DefaultCardName(source, label));
+
+    [Theory]
+    [InlineData(@"F:\", @"F:\")]
+    [InlineData(@"F:", @"F:\")]
+    [InlineData(@"\\nas\share", @"\\nas\share")]
+    [InlineData(@"D:\Footage\A001", null)]
+    [InlineData(@"\\nas\share\A001", null)]
+    public void DriveRootOf_OnlyForARootItself(string source, string? expected) => Assert.Equal(expected, Layout.DriveRootOf(source));
 }

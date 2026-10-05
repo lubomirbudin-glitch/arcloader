@@ -5,7 +5,9 @@ namespace Offload.Core.Tests;
 
 public class JobQueueTests
 {
-    static readonly TimeSpan Wait = TimeSpan.FromSeconds(5);
+    /// Generous: every wait is for an event, so a passing test never sleeps this long, but a loaded full suite
+    /// (proxy renders, copies in parallel) can delay a queue thread by seconds.
+    static readonly TimeSpan Wait = TimeSpan.FromSeconds(30);
 
     sealed class FakeJob(string name, bool post = false) : IQueuedJob
     {

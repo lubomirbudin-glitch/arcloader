@@ -5,14 +5,15 @@ namespace Offload.App;
 
 /// Called from OnSourceInitialized (before the window is shown): a window taller or wider than the work area
 /// (a 1366×768 laptop leaves ~728 px) is shrunk to it, never below its minimum — if even that does not fit, it
-/// starts maximized — and centred on the screen or its owner, inside the work area.
+/// starts maximized — and centred on the screen or its owner, inside the work area. The work area is the one of
+/// the right monitor: the owner's for the Hardware window, the one under the mouse for the main window.
 static class WindowSizing
 {
     public static void FitToWorkArea(Window w)
     {
         try
         {
-            var area = SystemParameters.WorkArea;
+            var area = NativeMethods.WorkAreaFor(w) ?? SystemParameters.WorkArea;
             double? cx = null, cy = null;
             if (w.WindowStartupLocation == WindowStartupLocation.CenterOwner && w.Owner is { WindowState: WindowState.Normal } o)
             {
@@ -23,6 +24,9 @@ static class WindowSizing
             w.WindowStartupLocation = WindowStartupLocation.Manual;
             if (p.Maximize)
             {
+                // Placed on the target monitor first: a window maximizes on the monitor it is on.
+                w.Left = p.Left;
+                w.Top = p.Top;
                 w.WindowState = WindowState.Maximized;
                 return;
             }

@@ -47,9 +47,11 @@ public class ToolsTests
     public void Start_StreamsLines_AndKillStopsTheProcess()
     {
         var lines = new List<string>();
-        using var p = new ToolProcess(Cmd, ["/c", "echo one & echo two & ping -n 30 127.0.0.1 >nul"], null, pipeStdin: false);
-        p.Start(l => { lock (lines) lines.Add(l); });
-        for (int i = 0; i < 50 && lines.Count < 2; i++) Thread.Sleep(100);
+        // Event, not a sleep loop: under a loaded full suite the two lines took longer than the old 5 s.
+        using var twoLines = new ManualResetEventSlim();
+        using var p = new ToolProcess(Cmd, ["/c", "echo one & echo two & ping -n 60 127.0.0.1 >nul"], null, pipeStdin: false);
+        p.Start(l => { lock (lines) { lines.Add(l); if (lines.Count >= 2) twoLines.Set(); } });
+        Assert.True(twoLines.Wait(TimeSpan.FromSeconds(30)), "the two lines did not arrive within 30 s");
         p.Kill();
         Assert.True(p.WaitForExit(5000));
         lock (lines) Assert.Equal(["one ", "two "], lines.Take(2));

@@ -212,4 +212,13 @@ public static class LutOption
     }
 
     static string Ids(LutCatalog cat) => string.Join(", ", cat.Luts.Select(l => l.Id));
+
+    /// The "LUT: ..." line of the CLI plan, or null when neither proxies nor clip analysis (thumbnails) use a LUT.
+    public static string? PlanLine(ProxySettings p, bool analyzeClips) => !p.Enabled && !analyzeClips ? null : "LUT: " + p.LutMode switch
+    {
+        LutMode.None => "none",
+        LutMode.Custom => p.LutPath,
+        LutMode.Builtin => p.LutBuiltin,
+        _ => "auto" + (p.LutFallback != null ? $" (fallback {p.LutFallback})" : ""),
+    };
 }

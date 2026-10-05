@@ -20,6 +20,8 @@
     <DockPanel x:Name="Root" Background="{DynamicResource LayerFillColorDefaultBrush}">
         <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="14">
             <DockPanel>
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding StartProblem}" Style="{StaticResource WarningText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding StartProblem, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="StartProblemText" />
                 <Button DockPanel.Dock="Right" Command="{Binding StartCommand}" Style="{DynamicResource AccentButtonStyle}" MinWidth="150" Padding="16,8"
                         ToolTip="Ctrl+Enter" AutomationProperties.AutomationId="StartButton">
                     <StackPanel Orientation="Horizontal">
