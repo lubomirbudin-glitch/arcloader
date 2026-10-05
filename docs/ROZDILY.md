@@ -99,15 +99,13 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Barvy proxy:** Windows převádí do YUV výslovně maticí BT.709 v legálním rozsahu a proxy označí BT.709
   (`color_space/primaries/transfer = bt709`, `color_range = tv`); náhledy JPEG výslovně BT.601 v plném rozsahu (JFIF).
   Mac zatím nechá volbu matice na ffmpeg a proxy neoznačí (po kroku v RGB tak může vyjít BT.601) — naplánováno.
-- **Zrušená úloha v GUI:** karta úlohy na Windows ukáže jen oranžové „Zrušeno — karta není kompletně zálohovaná.“
-  místo červeného „N souborů selhalo…“ a bez souhrnu rychlosti (rychlost useknuté kopie by klamala). Mac zatím
-  ukazuje červený text i souhrn.
 - **Upozornění po dokončení:** Windows hraje zvuk a bliká tlačítkem v hlavním panelu místo notifikace Macu
   (nebalená aplikace umí toast jen po registraci).
-- **Vysunutí karty:** karta ve čtečce se vysune jako médium, čtečka zůstane připojená; interní disky a složky
-  se nevysouvají nikdy. Vysune se jen karta, která se kopírovala (svazek + sériové číslo souborového systému zapsané
-  na začátku kopie): po výměně karty ve stejné čtečce tlačítko zmizí a vysunutí se odmítne; ani dokud z karty kopíruje
-  jiná úloha. Skutečné vysunutí zatím není vyzkoušené na kartě (položka 4 ručního testu).
+- **Vysunutí karty (obě verze):** karta ve čtečce se vysune jako médium, čtečka zůstane připojená; interní disky,
+  síťové složky a složky se nevysouvají nikdy. Vysune se jen karta, která se kopírovala — identita zapsaná na začátku
+  kopie (Windows: svazek + sériové číslo souborového systému; Mac: UUID svazku, u FAT/exFAT odvozené ze sériového čísla):
+  po výměně karty ve stejné čtečce tlačítko zmizí a vysunutí se odmítne; ani dokud z karty kopíruje jiná úloha.
+  Skutečné vysunutí zatím není vyzkoušené na kartě ve čtečce (položka 4 ručního testu; Mac ověřen na obrazech disku).
 - **Thunderbolt čtečky CFexpress:** Windows je hlásí jako NVMe disk, takže je aplikace sama nenabídne jako kartu
   (nabízí jen vyměnitelná média a USB/SD disky) — kartu v takové čtečce přidejte tlačítkem „Složka…“.
 - **GUI navíc na Windows:** zkratka Ctrl+Enter pro spuštění, tlačítko „Průzkumník“, upozornění „Doporučeno NTFS“

@@ -116,7 +116,7 @@ struct SourceRow: View {
                 if selected {
                     HStack(spacing: 6) {
                         Text("Název složky").font(.caption).foregroundStyle(.secondary)
-                        TextField(Layout.defaultCardName(for: path), text: Binding(
+                        TextField(model.defaultName(path), text: Binding(
                             get: { model.cardNames[path] ?? "" },
                             set: { model.cardNames[path] = $0 }))
                             .textFieldStyle(.roundedBorder)
@@ -137,7 +137,11 @@ struct DestinationsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(title: "Cíle", systemImage: "externaldrive.connected.to.line.below",
-                          trailing: AnyView(Button("Přidat…") { model.addDestination() }.buttonStyle(.borderless)))
+                          trailing: AnyView(HStack(spacing: 4) {
+                              Button { model.refreshDestinations() } label: { Image(systemName: "arrow.clockwise") }
+                                  .help("Znovu zjistit volné místo a připojení cílů")
+                              Button("Přidat…") { model.addDestination() }
+                          }.buttonStyle(.borderless)))
             if model.settings.destRoots.isEmpty {
                 Text("Přidejte dva disky — každá karta se zapíše na oba zároveň.")
                     .font(.callout).foregroundStyle(.secondary)
@@ -148,10 +152,12 @@ struct DestinationsSection: View {
                     Text("\(i + 1)")
                         .font(.caption.bold()).foregroundStyle(.white)
                         .frame(width: 20, height: 20)
-                        .background(Circle().fill(info.exists ? Color.accentColor : .red))
+                        .background(Circle().fill(info.exists || info.checking ? Color.accentColor : .red))
                     VStack(alignment: .leading, spacing: 2) {
                         Text((root as NSString).lastPathComponent).fontWeight(.medium)
-                        if info.exists {
+                        if info.checking {
+                            Text("Zjišťuji…").font(.caption).foregroundStyle(.secondary)
+                        } else if info.exists {
                             Text("\(formatBytes(info.free)) volno · \(info.format)").font(.caption).foregroundStyle(.secondary)
                         } else {
                             Text("Disk není připojen").font(.caption).foregroundStyle(.red)
@@ -195,6 +201,9 @@ struct StructureSection: View {
                     .font(.caption).foregroundStyle(.orange)
             }
             Toggle("Analýza klipů a náhledy v reportu", isOn: $model.settings.analyzeClips)
+            if let w = ProxyPreflight.warning(model.settings.proxy, analyzeClips: model.settings.analyzeClips, resolved: model.tools) {
+                Label(w, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+            }
         }
     }
 }
@@ -244,16 +253,19 @@ struct ProxySection: View {
                     }
                     GridRow {
                         Text("LUT").foregroundStyle(.secondary)
-                        HStack {
-                            Text(model.settings.proxy.lutPath.map { ($0 as NSString).lastPathComponent } ?? "bez LUT")
-                                .lineLimit(1).truncationMode(.middle)
-                                .foregroundStyle(model.settings.proxy.lutPath == nil ? .secondary : .primary)
-                            Spacer()
-                            Button("Vybrat…") { model.pickLUT() }
-                            if model.settings.proxy.lutPath != nil {
-                                Button { model.settings.proxy.lutPath = nil } label: { Image(systemName: "xmark.circle.fill") }
-                                    .buttonStyle(.borderless)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(model.settings.proxy.lutPath.map { ($0 as NSString).lastPathComponent } ?? "bez LUT")
+                                    .lineLimit(1).truncationMode(.middle)
+                                    .foregroundStyle(model.settings.proxy.lutPath == nil ? .secondary : .primary)
+                                Spacer()
+                                Button("Vybrat…") { model.pickLUT() }
+                                if model.settings.proxy.lutPath != nil {
+                                    Button { model.settings.proxy.lutPath = nil } label: { Image(systemName: "xmark.circle.fill") }
+                                        .buttonStyle(.borderless)
+                                }
                             }
+                            if let p = model.lutProblem { Text(p).font(.caption).foregroundStyle(.red) }
                         }
                     }
                 }
@@ -314,13 +326,15 @@ struct StartBar: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        let n = model.selectedSources.count
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(n == 0 ? "Vyberte kartu" : (n == 1 ? "1 karta" : "\(n) karty"))
-                    .fontWeight(.medium)
-                Text("\(model.settings.destRoots.count) cíle\(model.settings.proxy.enabled ? " · proxy" : "")")
+                Text(Texts.cards(model.selectedSources.count)).fontWeight(.medium)
+                Text(Texts.destinations(model.settings.destRoots.count) + (model.settings.proxy.enabled ? " · proxy" : ""))
                     .font(.caption).foregroundStyle(.secondary)
+                // The LUT is also used by thumbnails when proxies are off: say so here, where the start button is.
+                if let p = model.lutProblem, !model.settings.proxy.enabled {
+                    Text(p).font(.caption).foregroundStyle(.red)
+                }
             }
             Spacer()
             Button {
@@ -347,7 +361,7 @@ struct QueuePanel: View {
             HStack {
                 Text("Fronta").font(.title2.weight(.semibold))
                 Spacer()
-                if model.jobs.contains(where: { $0.status.phase.isFinished }) {
+                if model.jobs.contains(where: \.isFinished) {
                     Button("Vyčistit hotové") { model.clearFinished() }
                 }
             }
@@ -378,12 +392,12 @@ struct JobCard: View {
     @ObservedObject var item: JobItem
 
     var phaseColor: Color {
-        switch item.status.phase {
-        case .done: return item.status.copySucceeded == false ? .red : .green
-        case .failed: return .red
-        case .cancelled: return .orange
+        switch item.tone {
+        case .ok: return .green
+        case .error: return .red
+        case .warning: return .orange
         case .waiting: return .secondary
-        default: return .accentColor
+        case .active: return .accentColor
         }
     }
 
@@ -394,10 +408,10 @@ struct JobCard: View {
                 Image(systemName: "sdcard.fill").foregroundStyle(phaseColor)
                 Text(item.plan?.cardName ?? item.sourceName).font(.headline)
                 if let p = item.plan {
-                    Text("\(p.scan.files.count) souborů · \(formatBytes(p.scan.totalBytes))").font(.callout).foregroundStyle(.secondary)
+                    Text(Texts.files(p.scan.files.count, p.scan.totalBytes)).font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(statusText).font(.caption.weight(.semibold))
+                Text(item.statusText).font(.caption.weight(.semibold))
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Capsule().fill(phaseColor.opacity(0.15)))
                     .foregroundStyle(phaseColor)
@@ -418,29 +432,30 @@ struct JobCard: View {
             }
             if item.isRunning {
                 ProgressView(value: item.phaseProgress)
-                Text(detailText).font(.callout.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                Text(item.detailText).font(.callout.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
             }
             if s.safeToEject && !item.ejected {
                 HStack {
-                    Label("Všechny soubory jsou na \(item.plan?.cardPaths.count ?? 0) discích a ověřené — kartu lze vysunout.",
-                          systemImage: "checkmark.shield.fill")
-                        .foregroundStyle(.green).font(.callout)
+                    Label(item.safeText, systemImage: "checkmark.shield.fill").foregroundStyle(.green).font(.callout)
                     Spacer()
-                    Button("Vysunout kartu") { model.eject(item) }
+                    if model.canShowEject(item) {
+                        Button("Vysunout kartu") { model.eject(item) }.disabled(item.ejecting)
+                    }
                 }
             } else if item.ejected {
                 Label("Karta vysunuta", systemImage: "eject.fill").foregroundStyle(.secondary).font(.callout)
             }
-            if let report = item.report, !report.success {
-                Label("\(report.failedFiles.count) souborů selhalo — karta NENÍ bezpečně zálohovaná. Podrobnosti v reportu.",
-                      systemImage: "xmark.octagon.fill")
-                    .foregroundStyle(.red).font(.callout)
+            if let t = item.cancelledText {
+                Label(t, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.callout)
+            }
+            if let t = item.failedText {
+                Label(t, systemImage: "xmark.octagon.fill").foregroundStyle(.red).font(.callout)
             }
             if let e = s.error {
                 Label(e, systemImage: "xmark.octagon.fill").foregroundStyle(.red).font(.callout)
             }
-            if s.phase.isFinished, let r = item.report {
-                Text(summaryText(r)).font(.caption).foregroundStyle(.secondary)
+            if let summary = item.summaryText {
+                Text(summary).font(.caption).foregroundStyle(.secondary)
             }
             HStack {
                 if item.report != nil {
@@ -458,48 +473,5 @@ struct JobCard: View {
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .windowBackgroundColor)))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.15)))
-    }
-
-    var statusText: String {
-        let s = item.status
-        if s.phase == .done && s.copySucceeded == false { return "Chyba" }
-        return s.phase.label
-    }
-
-    var detailText: String {
-        let s = item.status
-        let mb = { (v: Double) in String(format: "%.0f MB/s", v / 1_000_000) }
-        let eta = item.eta.map { t -> String in
-            let i = Int(t)
-            return " · zbývá " + (i >= 3600 ? String(format: "%d:%02d:%02d", i / 3600, i / 60 % 60, i % 60) : String(format: "%d:%02d", i / 60, i % 60))
-        } ?? ""
-        switch s.phase {
-        case .copying:
-            let dests = item.destRates.enumerated().map { "D\($0.offset + 1) \(mb($0.element))" }.joined(separator: " · ")
-            let file = s.copy.map { ($0.currentFile as NSString).lastPathComponent } ?? ""
-            return "Karta \(mb(item.readRate)) · \(dests)\(eta) · \(file)"
-        case .verifying:
-            return item.destRates.enumerated().map { "D\($0.offset + 1) \(mb($0.element))" }.joined(separator: " · ") + eta
-        case .analyzing:
-            return "Klip \(s.clipIndex + 1)/\(s.clipCount) · \(s.clipName)"
-        case .proxies:
-            return String(format: "Proxy %d/%d · %@ · %.0f %%", s.clipIndex + 1, s.clipCount, s.clipName, s.clipFraction * 100)
-        default:
-            return s.phase.label + "…"
-        }
-    }
-
-    func summaryText(_ r: OffloadReport) -> String {
-        var parts = ["kopie \(formatRate(r.totalBytes, r.copySeconds))"]
-        if r.verified { parts.append("ověření \(formatRate(r.totalBytes, r.verifySeconds))") }
-        if !r.clips.isEmpty { parts.append("\(r.clips.count) klipů") }
-        if r.proxy?.enabled == true {
-            let count = { (st: ProxyStatus) in r.clips.filter { $0.proxyStatus == st }.count }
-            var proxy = "proxy \(count(.done))"
-            if count(.failed) > 0 { proxy += ", \(count(.failed)) chyba" }
-            if count(.unsupported) > 0 { proxy += ", \(count(.unsupported)) nepodporováno" }
-            parts.append(proxy)
-        }
-        return parts.joined(separator: " · ")
     }
 }
