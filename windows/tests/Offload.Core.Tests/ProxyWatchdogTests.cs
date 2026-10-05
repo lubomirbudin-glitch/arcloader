@@ -223,6 +223,41 @@ public class ProxyWatchdogTests
         Assert.InRange(sw.Elapsed.TotalSeconds, 2.8, 20);
     }
 
+    /// A stand-in for braw-decode with a hung Blackmagic RAW SDK: frames never come; `--info` hangs too, or prints a
+    /// one-frame 320×180 clip.
+    static string FakeBrawDecode(string dir, bool hangInfo)
+    {
+        var path = Path.Combine(dir, "braw-decode.cmd");
+        File.WriteAllText(path, $$"""
+            @echo off
+            if "%~1"=="--info" goto {{(hangInfo ? "hang" : "info")}}
+            :hang
+            ping -n 60 127.0.0.1 >nul
+            exit /b 0
+            :info
+            echo {"width":320,"height":180,"sourceWidth":320,"sourceHeight":180,"fps":25,"frames":1,"timecode":"","camera":""}
+            exit /b 0
+
+            """.ReplaceLineEndings("\r\n"));
+        return path;
+    }
+
+    // Ruling M3: `braw-decode --info` runs with a timeout — a hung SDK gives the clip a note instead of hanging the job.
+    [Fact]
+    public void BrawInfo_Hung_KilledAfterTheTimeout()
+    {
+        using var dir = new TempDir();
+        var tools = new ExternalTools { BrawDecoder = FakeBrawDecode(dir.Path, hangInfo: true), NoSearch = true };
+        var backend = new BrawBackend(_ => "BlackmagicRawAPI.dll", infoTimeout: TimeSpan.FromSeconds(2));
+        var sw = Stopwatch.StartNew();
+        var e = Assert.Throws<ToolError>(() => backend.Probe(Path.Combine(dir.Path, "A001.braw"), tools, dir.Path));
+        Assert.Equal("braw-decode failed (exit -1): neodpověděl do 2 s — ukončen", e.Message);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 1.9, 30);
+    }
+
+    [Fact]
+    public void BrawInfo_DefaultTimeout() => Assert.Equal(TimeSpan.FromSeconds(60), BrawBackend.DefaultInfoTimeout);
+
     // The real thing: an FFV1 clip (the codec that hung with -hwaccel auto) renders a proxy and never hangs.
     [FfmpegFact]
     public void Render_Ffv1_Completes()

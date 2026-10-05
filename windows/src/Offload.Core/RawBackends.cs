@@ -69,10 +69,20 @@ internal sealed class BrawBackend : IRawBackend
     public ClipFormat Format => ClipFormat.Braw;
     public string MissingHint => "Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)";
 
-    readonly Func<string, string?> _findLibrary;
+    /// How long `braw-decode --info` may take: opening a clip is quick; a hung SDK must never hang the job (the clip
+    /// then gets a note instead).
+    public static readonly TimeSpan DefaultInfoTimeout = TimeSpan.FromSeconds(60);
 
-    /// `findLibrary` (decoder folder → library path) is injectable so tests do not depend on what is installed on the PC.
-    public BrawBackend(Func<string, string?>? findLibrary = null) => _findLibrary = findLibrary ?? BrawLibrary.Find;
+    readonly Func<string, string?> _findLibrary;
+    readonly TimeSpan _infoTimeout;
+
+    /// `findLibrary` (decoder folder → library path) is injectable so tests do not depend on what is installed on the PC;
+    /// `infoTimeout` so tests need not wait a minute.
+    public BrawBackend(Func<string, string?>? findLibrary = null, TimeSpan? infoTimeout = null)
+    {
+        _findLibrary = findLibrary ?? BrawLibrary.Find;
+        _infoTimeout = infoTimeout ?? DefaultInfoTimeout;
+    }
 
     /// braw-decode alone is not enough: without BlackmagicRawAPI.dll it can only fail.
     public bool IsAvailable(ExternalTools tools) =>
@@ -113,7 +123,7 @@ internal sealed class BrawBackend : IRawBackend
     }
 
     BrawInfo Info(string path, string scale, ExternalTools tools) =>
-        ParseInfo(ToolProcess.Run(tools.BrawDecoder!, ["--info", "--scale", scale, path]));
+        ParseInfo(ToolProcess.Run(tools.BrawDecoder!, ["--info", "--scale", scale, path], timeout: _infoTimeout));
 
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => ToClipInfo(Info(path, "eighth", tools));
 
