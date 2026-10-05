@@ -217,7 +217,8 @@ public sealed partial class MainViewModel
         {
             return;
         }
-        if (root == null || manualLabels.ContainsKey(path)
+        // re-read on every add: the card behind a drive root can be swapped while it is out of the list
+        if (root == null
             || volumes.Any(v => string.Equals(v.Path, root, StringComparison.OrdinalIgnoreCase))) return;   // the scan has its label
         Task.Run(() => NativeIO.VolumeLabel(root)).ContinueWith(t =>
         {
