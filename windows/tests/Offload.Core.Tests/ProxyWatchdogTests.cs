@@ -226,13 +226,14 @@ public class ProxyWatchdogTests
 
     /// A stand-in for braw-decode with a hung Blackmagic RAW SDK: frames never come; `--info` hangs too, or prints a
     /// one-frame 320×180 clip.
-    static string FakeBrawDecode(string dir, bool hangInfo)
+    static string FakeBrawDecode(string dir, bool hangInfo, string? attempts = null)
     {
         var path = Path.Combine(dir, "braw-decode.cmd");
         File.WriteAllText(path, $$"""
             @echo off
             if "%~1"=="--info" goto {{(hangInfo ? "hang" : "info")}}
             :hang
+            {{(attempts == null ? "" : $"echo x>>\"{attempts}\"")}}
             ping -n 60 127.0.0.1 >nul
             exit /b 0
             :info
@@ -273,8 +274,29 @@ public class ProxyWatchdogTests
         var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 1, Duration = 0.04 };
         var sw = Stopwatch.StartNew();
         var e = Assert.Throws<FfmpegStalledException>(() => r.Thumbnails(clip, card, info, null));
-        Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku)", e.Message);
+        Assert.Equal("dekodér nebo ffmpeg se zasekl (1 s bez nového snímku)", e.Message);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
+    }
+
+    // Ruling T8-extra: a feeder that stalled is not tried again at the next positions (3 x the grace per clip otherwise).
+    [Fact]
+    public void BrawThumbnail_DecoderHangs_OnlyOneStallAttempt()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var attempts = Path.Combine(dir.Path, "attempts.txt");
+        var consumer = Path.Combine(dir.Path, "ffmpeg.cmd");
+        File.WriteAllText(consumer, "@more >nul\r\n@exit /b 0\r\n");
+        var tools = new ExternalTools { Ffmpeg = consumer, BrawDecoder = FakeBrawDecode(dir.Path, hangInfo: false, attempts), NoSearch = true }.Resolved();
+        using var r = new ProxyRenderer(FakeSettings, tools) { StallTimeout = Stall };
+        var clip = new Clip { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
+        var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 100, Duration = 4 };
+        Assert.Equal(3, ProxyRenderer.FramePositions(info).Count);
+        var sw = Stopwatch.StartNew();
+        var e = Assert.Throws<FfmpegStalledException>(() => r.Thumbnails(clip, card, info, null));
+        Assert.StartsWith("dekodér nebo ffmpeg se zasekl", e.Message);
+        Assert.Single(File.ReadAllLines(attempts));
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(60), $"took {sw.Elapsed}");
     }
 
     /// A RAW decoder that writes until a write fails (its stdout was closed), then notes it in `stopped` and exits
@@ -288,7 +310,7 @@ public class ProxyWatchdogTests
             $line = [Text.Encoding]::ASCII.GetBytes(('x' * 1023) + "`n")
             $n = 0
             while ([Fake.Std]::WriteFile($out, $line, $line.Length, [ref]$n, [IntPtr]::Zero)) { }
-            Set-Content -LiteralPath '{{stopped}}' -Value stopped
+            [IO.File]::WriteAllText('{{stopped}}', 'stopped')
             exit {{exitCode}}
             """;
         consumer = Path.Combine(dir, "consumer.cmd");

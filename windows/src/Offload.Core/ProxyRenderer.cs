@@ -237,6 +237,13 @@ public sealed class ProxyRenderer : IDisposable
                 if (!File.Exists(output)) throw new ToolError("ffmpeg", 0, "no frame");
                 result.Add(new Thumbnail(File.ReadAllBytes(output), Label(info, pos)));
             }
+            catch (FfmpegStalledException e) when (src?.FeederExe != null)
+            {
+                if (isCancelled()) return [];
+                // A hung decoder would hang at the next positions too (3 x the grace per clip): stop here.
+                lastError = new FfmpegStalledException("dekodér nebo " + e.Message, e);
+                break;
+            }
             catch (Exception e) when (e is not OperationCanceledException)
             {
                 if (isCancelled()) return [];
