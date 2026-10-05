@@ -288,7 +288,8 @@ public class ProxyWatchdogTests
         var consumer = Path.Combine(dir.Path, "ffmpeg.cmd");
         File.WriteAllText(consumer, "@more >nul\r\n@exit /b 0\r\n");
         var tools = new ExternalTools { Ffmpeg = consumer, BrawDecoder = FakeBrawDecode(dir.Path, hangInfo: false, attempts), NoSearch = true }.Resolved();
-        using var r = new ProxyRenderer(FakeSettings, tools) { StallTimeout = Stall };
+        var log = new List<string>();
+        using var r = new ProxyRenderer(FakeSettings, tools) { StallTimeout = Stall, Log = l => { lock (log) log.Add(l); } };
         var clip = new Clip { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
         var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 100, Duration = 4 };
         Assert.Equal(3, ProxyRenderer.FramePositions(info).Count);
@@ -297,6 +298,34 @@ public class ProxyWatchdogTests
         Assert.StartsWith("dekodér nebo ffmpeg se zasekl", e.Message);
         Assert.Single(File.ReadAllLines(attempts));
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(60), $"took {sw.Elapsed}");
+        // Final fix M2: the stop is in the log (a clip with some thumbnails would otherwise not say why it lacks the rest).
+        lock (log) Assert.Contains("thumbnails A001: dekodér nebo ffmpeg se zasekl (1 s bez nového snímku); the remaining frames are skipped", log);
+    }
+
+    // Final fix M1: a hung `braw-decode --info` (timeout) is not tried again at the next positions either.
+    [Fact]
+    public void BrawThumbnail_InfoHangs_OnlyOneAttempt()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var attempts = Path.Combine(dir.Path, "attempts.txt");
+        var consumer = Path.Combine(dir.Path, "ffmpeg.cmd");
+        File.WriteAllText(consumer, "@more >nul\r\n@exit /b 0\r\n");
+        var tools = new ExternalTools { Ffmpeg = consumer, BrawDecoder = FakeBrawDecode(dir.Path, hangInfo: true, attempts), NoSearch = true }.Resolved();
+        var log = new List<string>();
+        using var r = new ProxyRenderer(FakeSettings, tools)
+        {
+            StallTimeout = Stall,
+            Backends = [new BrawBackend(_ => "BlackmagicRawAPI.dll", infoTimeout: TimeSpan.FromSeconds(1))],
+            Log = l => { lock (log) log.Add(l); },
+        };
+        var clip = new Clip { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
+        var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 100, Duration = 4 };
+        Assert.Equal(3, ProxyRenderer.FramePositions(info).Count);
+        var e = Assert.Throws<ToolError>(() => r.Thumbnails(clip, card, info, null));
+        Assert.Equal("braw-decode failed (exit -1): neodpověděl do 1 s — ukončen", e.Message);
+        Assert.Single(File.ReadAllLines(attempts));
+        lock (log) Assert.Contains("thumbnails A001: braw-decode failed (exit -1): neodpověděl do 1 s — ukončen; the remaining frames are skipped", log);
     }
 
     /// A RAW decoder that writes until a write fails (its stdout was closed), then notes it in `stopped` and exits

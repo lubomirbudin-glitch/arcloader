@@ -269,6 +269,15 @@ public sealed class ProxyRenderer : IDisposable
                 if (isCancelled()) return [];
                 // A hung decoder would hang at the next positions too (3 x the grace per clip): stop here.
                 lastError = new FfmpegStalledException("dekodér nebo " + e.Message, e);
+                Log?.Invoke($"thumbnails {clip.Name}: {lastError.Message}; the remaining frames are skipped");
+                break;
+            }
+            catch (ToolError e) when (src == null && e.Status == -1 && IsBrawDecoder(e.Tool))
+            {
+                if (isCancelled()) return [];
+                // `braw-decode --info` timed out (or could not run at all): it would at the next positions too.
+                lastError = e;
+                Log?.Invoke($"thumbnails {clip.Name}: {e.Message}; the remaining frames are skipped");
                 break;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -285,6 +294,10 @@ public sealed class ProxyRenderer : IDisposable
         if (result.Count == 0 && lastError != null) ExceptionDispatchInfo.Throw(lastError);
         return result;
     }
+
+    /// The tool name of a ToolError raised by braw-decode (its file name without the extension).
+    bool IsBrawDecoder(string tool) =>
+        Tools.BrawDecoder is string exe && string.Equals(tool, Path.GetFileNameWithoutExtension(exe), StringComparison.OrdinalIgnoreCase);
 
     /// Renders the proxy. A render that stalls (no progress for StallTimeout) is killed. With hardware decoding the
     /// clip is then retried once in software — as is one that failed with it; without, the stall fails the proxy.
