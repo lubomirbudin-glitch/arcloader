@@ -69,7 +69,7 @@ internal sealed unsafe class BrawCallback : IDisposable
         var target = TargetOf(self);   // before the decrement: afterwards an SDK Release may free self
         int left = Interlocked.Decrement(ref self->Refs);
         if (left == 0) Destroy(self);
-        else Report(target, $"braw-decode: callback still referenced by the SDK ({left}); freed on its last Release");
+        else Report(target, () => $"braw-decode: callback still referenced by the SDK ({left}); freed on its last Release");
     }
 
     static nint* CreateVtbl()
@@ -100,11 +100,14 @@ internal sealed unsafe class BrawCallback : IDisposable
         handle.Free();
     }
 
-    static void Report(Target? target, string message)
+    /// The message is built inside the try too: an exception's Message getter may itself throw.
+    static void Report(Target? target, Func<string> message)
     {
-        try { target?.Report(message); }
+        try { target?.Report(message()); }
         catch (Exception) { /* the reporter itself failed (stderr closed): nowhere left to report to */ }
     }
+
+    static void Report(Target? target, Exception e) => Report(target, () => $"braw-decode: {e.Message}");
 
     // Slot 0.
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
@@ -146,7 +149,7 @@ internal sealed unsafe class BrawCallback : IDisposable
         }
         catch (Exception e)
         {
-            Report(target, $"braw-decode: {e.Message}");
+            Report(target, e);
         }
     }
 
@@ -162,7 +165,7 @@ internal sealed unsafe class BrawCallback : IDisposable
         }
         catch (Exception e)
         {
-            Report(target, $"braw-decode: {e.Message}");
+            Report(target, e);
         }
     }
 

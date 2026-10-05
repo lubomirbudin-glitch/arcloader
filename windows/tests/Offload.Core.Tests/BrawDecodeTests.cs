@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO.Pipes;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
@@ -85,12 +87,17 @@ public class BrawDecodeTests
     {
         public readonly List<string> Calls = [];
         public bool Throw;
+        public Exception? ProcessThrows;
         public void ReadComplete(nint job, int result, nint frame)
         {
             Calls.Add($"read {job} {result} {frame}");
             if (Throw) throw new InvalidOperationException("boom");
         }
-        public void ProcessComplete(nint job, int result, nint image) => Calls.Add($"process {job} {result} {image}");
+        public void ProcessComplete(nint job, int result, nint image)
+        {
+            Calls.Add($"process {job} {result} {image}");
+            if (ProcessThrows != null) throw ProcessThrows;
+        }
     }
 
     [Fact]
@@ -136,6 +143,18 @@ public class BrawDecodeTests
         nint m = mute.Pointer;
         ((delegate* unmanaged[Stdcall]<nint, nint, int, nint, void>)Com.Slot(m, 3))(m, 1, 0, 2);
         Assert.Equal(4, sink.Calls.Count);
+
+        // ... nor one thrown while the message is being built (an exception whose Message getter throws).
+        sink.Throw = false;
+        sink.ProcessThrows = new BadMessageException();
+        ((delegate* unmanaged[Stdcall]<nint, nint, int, nint, void>)Com.Slot(p, 5))(p, 1, 0, 2);
+        Assert.Equal(5, sink.Calls.Count);
+        Assert.Single(reports);   // nothing sensible to report, and nothing unwound into the "SDK"
+    }
+
+    sealed class BadMessageException : Exception
+    {
+        public override string Message => throw new InvalidOperationException("no message");
     }
 
     [Fact]
@@ -189,6 +208,7 @@ public class BrawDecodeTests
         Assert.Equal(5, Value(ComVariant.CreateRaw(VarEnum.VT_UINT, 5u)));
         Assert.Null(Value(default));
         Assert.Null(Value(ComVariant.Null));
+        Assert.Equal("", Value(ComVariant.CreateRaw(VarEnum.VT_BSTR, (nint)0)));   // a null BSTR is the empty string
         // Anything else is a decoder error (reported, never a crash), not a silent guess.
         Assert.Throws<NotSupportedException>(() => Value(ComVariant.Create(1.5f)));
         Assert.Throws<OverflowException>(() => Value(ComVariant.Create(uint.MaxValue)));
@@ -302,5 +322,147 @@ public class BrawDecodeTests
         Com.Release(config.Ptr);
         Assert.Equal(0u, Com.Release(codec.Ptr));
         Assert.Equal(0u, Com.Release(f.Ptr));
+    }
+
+    // --- the decoder: Decoder.Run in-process, braw-decode.exe as a process ---
+
+    /// The one in-process run helper (BrawSampleTests uses it too).
+    internal static (int Code, byte[] Stdout, string Stderr) Run(IReadOnlyList<string> args, IReadOnlyList<string>? libraryDirs = null)
+    {
+        using var stdout = new MemoryStream();
+        using var stderr = new StringWriter();
+        int code = Decoder.Run(args, stdout, stderr, libraryDirs);
+        return (code, stdout.ToArray(), stderr.ToString());
+    }
+
+    /// The built braw-decode.exe (copied next to the tests): real stdout handle, real exit code.
+    internal static (int Code, byte[] Stdout, string Stderr) RunExe(params string[] args)
+    {
+        var psi = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "braw-decode.exe"))
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        using var p = Process.Start(psi)!;
+        var err = p.StandardError.ReadToEndAsync();
+        using var ms = new MemoryStream();
+        p.StandardOutput.BaseStream.CopyTo(ms);
+        p.WaitForExit();
+        return (p.ExitCode, ms.ToArray(), err.Result);
+    }
+
+    [Fact]
+    public void Run_Usage_Exit2()
+    {
+        var r = Run(["--info"]);
+        Assert.Equal(2, r.Code);
+        Assert.StartsWith("usage: braw-decode", r.Stderr);
+        Assert.Empty(r.Stdout);
+    }
+
+    [Fact]
+    public void Run_NoLibrary_Exit3()
+    {
+        using var dir = new TempDir();
+        var r = Run(["--info", "a.braw"], [dir.Path]);
+        Assert.Equal(3, r.Code);
+        Assert.Contains("BlackmagicRawAPI.dll not found", r.Stderr);
+        Assert.Empty(r.Stdout);
+    }
+
+    [BrawLibraryFact]
+    public void Run_MissingClip_Exit4()
+    {
+        var r = Run(["--info", @"C:\nonexistent\A001.braw"]);
+        Assert.Equal(4, r.Code);
+        Assert.Contains(@"cannot open C:\nonexistent\A001.braw (0x80004005)", r.Stderr);
+        Assert.Empty(r.Stdout);
+    }
+
+    [BrawLibraryFact]
+    public void Run_NotABrawFile_Exit4()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "A001.braw");
+        TestFs.WriteRandom(path, 64 * 1024, seed: 6);
+        foreach (var args in new[] { new[] { "--info", path }, new[] { "--scale", "eighth", "--count", "1", path } })
+        {
+            var r = Run(args);
+            Assert.Equal(4, r.Code);
+            Assert.Matches(@"^braw-decode: cannot open .*A001\.braw \(0x[0-9A-F]{8}\)\r?\n$", r.Stderr);
+            Assert.Empty(r.Stdout);
+        }
+    }
+
+    [Fact]
+    public void Exe_Usage_Exit2()
+    {
+        var r = RunExe();
+        Assert.Equal(2, r.Code);
+        Assert.StartsWith("usage: braw-decode", r.Stderr);
+        Assert.Empty(r.Stdout);
+    }
+
+    [BrawLibraryFact]
+    public void Exe_MissingClip_Exit4()
+    {
+        var r = RunExe("--info", @"C:\nonexistent\A001.braw");
+        Assert.Equal(4, r.Code);
+        Assert.Equal(@"braw-decode: cannot open C:\nonexistent\A001.braw (0x80004005)", r.Stderr.TrimEnd());
+        Assert.Empty(r.Stdout);
+    }
+
+    /// Ruling M1: stdout is a FileStream over the raw handle, so a reader that went away (ffmpeg exited) is an error
+    /// the decoder sees — Console.OpenStandardOutput() would swallow the broken pipe and decode on for nobody.
+    [Fact]
+    public void Stdout_ReaderGone_WriteFails()
+    {
+        var reader = new AnonymousPipeServerStream(PipeDirection.In);
+        using var writeEnd = reader.ClientSafePipeHandle;
+        using var stdout = BinaryStdout.Open(writeEnd.DangerousGetHandle());
+        var frame = Enumerable.Range(0, 96).Select(i => (byte)i).ToArray();
+        Assert.True(Decoder.Write(stdout, frame, 48));
+        var got = new byte[48];
+        reader.ReadExactly(got);
+        Assert.Equal(frame[..48], got);
+
+        reader.Dispose();   // ffmpeg exited
+        Assert.False(Decoder.Write(stdout, frame, frame.Length));
+        Assert.False(Decoder.Write(stdout, frame, frame.Length));
+    }
+
+    /// T4 review: slots are reused batch after batch; a slot the SDK did not fill this time must not pass as decoded.
+    [Fact]
+    public void FrameSink_Begin_ForgetsTheLastBatch()
+    {
+        using var stderr = new StringWriter();
+        var sink = new FrameSink(Scale.Eighth, stderr);
+        var slots = new[] { new FrameSlot { Ok = true }, new FrameSlot { Ok = true } };
+        sink.Begin(slots, 8);
+        Assert.All(slots, s => Assert.False(s.Ok));
+        Assert.Equal(0, sink.Errors);
+        sink.Fail("cannot read frame 9");
+        Assert.Equal(1, sink.Errors);
+        Assert.Equal("braw-decode: cannot read frame 9" + Environment.NewLine, stderr.ToString());
+    }
+
+    /// Ruling T6-attr: an unreadable colour attribute is a warning, its key is left out, --info still succeeds.
+    [Fact]
+    public void Info_ColourAttributeError_IsAWarning()
+    {
+        nint obj = FakeAttributes.Create();
+        try
+        {
+            using var stderr = new StringWriter();
+            var colour = Decoder.Colour(new BrawClipProcessingAttributes(obj), stderr);
+            Assert.Equal(("Blackmagic Design Film", (string?)null, (int?)5), colour);
+            Assert.Equal("braw-decode: gamut: clip attribute 'gamt' is a number, expected a string" + Environment.NewLine, stderr.ToString());
+        }
+        finally
+        {
+            FakeAttributes.Free(obj);
+        }
     }
 }

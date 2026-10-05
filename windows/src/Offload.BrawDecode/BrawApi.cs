@@ -285,13 +285,14 @@ internal readonly unsafe struct BrawClipProcessingAttributes(nint ptr)
         }
     }
 
-    /// string for VT_BSTR, int for the integer types, null for VT_EMPTY / VT_NULL. Integers are read straight from
+    /// string for VT_BSTR (a null BSTR is the empty string, as in COM), int for the integer types, null for
+    /// VT_EMPTY / VT_NULL. Integers are read straight from
     /// the VARIANT's data (no As<T> type mapping to get wrong); any other type throws NotSupportedException and a
     /// value outside int throws OverflowException — both end up as `error` in Fetch.
     internal static object? Value(ComVariant v) => v.VarType switch
     {
         VarEnum.VT_EMPTY or VarEnum.VT_NULL => null,
-        VarEnum.VT_BSTR => v.As<string>(),
+        VarEnum.VT_BSTR => v.As<string>() ?? "",
         VarEnum.VT_UI1 => (int)v.GetRawDataRef<byte>(),
         VarEnum.VT_I1 => (int)v.GetRawDataRef<sbyte>(),
         VarEnum.VT_UI2 => (int)v.GetRawDataRef<ushort>(),
