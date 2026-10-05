@@ -95,9 +95,11 @@ static class CopyCommand
         {
             var links = new List<RoleLink> { new("Karta", DriveLinks.Resolve(plan.Source)) };
             links.AddRange(plan.DestRoots.Select((d, i) => new RoleLink($"Cíl {i + 1}", DriveLinks.Resolve(d))));
+            var connectors = UsbScanner.Scan().Connectors;
+            // Status-line names first ("card", "D1"), so "brzdí: D1" there reads against this list.
             var lines = new List<string> { "  Připojení:" };
-            lines.AddRange(links.Select(l => $"    {l.Role}: {l.Link.Description}"));
-            lines.AddRange(Advisor.Advise(links, UsbScanner.Scan().Connectors)
+            lines.AddRange(links.Select((l, i) => $"    {ProgressDisplay.ShortName(i)} = {l.Role}: {l.Link.Describe(connectors)}"));
+            lines.AddRange(Advisor.Advise(links, connectors)
                 .Where(a => a.Kind == AdviceKind.Warning).Select(a => $"  ! {a.Text}"));
             foreach (var l in lines) Console.WriteLine(l);
             chainLinks = links;

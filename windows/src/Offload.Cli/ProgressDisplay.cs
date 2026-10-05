@@ -16,14 +16,26 @@ sealed class ProgressDisplay : IDisposable
     long[] lastVerified = [];
     JobPhase? lastPhase;
 
-    readonly IReadOnlyList<RoleLink>? chain;
+    readonly BrakeMeter? brakes;
+    readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
 
+    /// chain: the drives in the order card, D1, D2 … (for the "linka plná" check); optional.
     public ProgressDisplay(OffloadJob job, IReadOnlyList<RoleLink>? chain = null)
     {
         this.job = job;
-        this.chain = chain;
+        try
+        {
+            brakes = new BrakeMeter((long)job.Config.ChunkMB << 20, job.Config.Buffers, chain?.Select(ChainView.LinkCeiling).ToList());
+        }
+        catch (Exception)
+        {
+            brakes = null;
+        }
         timer = new Timer(_ => Tick(), null, 500, 500);
     }
+
+    /// The status-line name of a chain element: "card", "D1", "D2" …
+    public static string ShortName(int element) => element == 0 ? "card" : $"D{element}";
 
     public void Dispose()
     {
@@ -35,15 +47,13 @@ sealed class ProgressDisplay : IDisposable
         lock (gate) ConsoleLine.Clear();
     }
 
-    // Which link of the chain sets the pace right now; optional, never throws.
-    string Bottleneck(ProgressSnapshot s, double dt)
+    // Which element sets the pace (decided in Core from the backlog); optional, never throws.
+    string Brake(ProgressSnapshot s)
     {
         try
         {
-            if (chain == null || chain.Count != 1 + s.WrittenBytes.Length || lastWritten.Length != s.WrittenBytes.Length) return "";
-            var rates = new List<double> { (s.ReadBytes - lastRead) / dt / 1_000_000 };
-            rates.AddRange(s.WrittenBytes.Select((b, i) => (b - lastWritten[i]) / dt / 1_000_000));
-            return ChainView.Bottleneck(ChainView.Build(chain, rates)) is string slow ? $"  | brzdí: {slow}" : "";
+            if (brakes?.Add(clock.Elapsed.TotalSeconds, s.ReadBytes, s.WrittenBytes) is not { } b) return "";
+            return $"brzdí: {ShortName(b.Element)}{(b.LinkFull ? " (linka plná)" : "")}  ";
         }
         catch (Exception)
         {
@@ -80,9 +90,9 @@ sealed class ProgressDisplay : IDisposable
                     case JobPhase.Copying:
                         double pct = s.TotalBytes > 0 ? s.ReadBytes * 100.0 / s.TotalBytes : 0;
                         var dests = string.Join("  ", s.WrittenBytes.Select((b, i) => $"D{i + 1} {Rate(b, lastWritten[i])}"));
+                        // The brake goes before the file name: a narrow console cuts the end of the line.
                         line = $"copy {s.FileIndex + 1}/{s.TotalFiles}  {Format.Bytes(s.ReadBytes)} / {Format.Bytes(s.TotalBytes)}  "
-                             + $"{pct,3:0}%  card {Rate(s.ReadBytes, lastRead)} MB/s  {dests} MB/s  {Path.GetFileName(s.CurrentFile)}";
-                        line += Bottleneck(s, dt);
+                             + $"{pct,3:0}%  card {Rate(s.ReadBytes, lastRead)} MB/s  {dests} MB/s  {Brake(s)}{Path.GetFileName(s.CurrentFile)}";
                         break;
                     case JobPhase.Verifying:
                         line = "verify  " + string.Join("  ", s.VerifiedBytes.Select((b, i) =>

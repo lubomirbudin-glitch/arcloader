@@ -33,19 +33,62 @@ public class HwTestTests
     }
 
     [Fact]
-    public void Measure_ReadsCardWritesDestinations_AndCleansUp()
+    public void Measure_ReadsCard()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestFs.WriteRandom(Path.Combine(card, "clip.bin"), 4 << 20, 1);
+        var r = HwTest.Run([card], [], measure: true, bytesPerDevice: 8 << 20);
+        var m = Assert.Single(r.Measurements);
+        Assert.True(m.ReadMBps > 0);
+        Assert.Null(m.WriteMBps);
+        Assert.Single(Directory.GetFiles(card));
+        Assert.Contains(r.Advice, a => a.Text.StartsWith("Odhad rychlosti offloadu"));
+    }
+
+    [Fact]
+    public void Measure_WritesDestination_AndCleansUp()
+    {
+        using var dir = new TempDir();
+        var dest = dir.Sub("dest");
+        var r = HwTest.Run([], [dest], measure: true, bytesPerDevice: 8 << 20);
+        var m = Assert.Single(r.Measurements);
+        Assert.True(m.WriteMBps > 0);
+        Assert.True(m.ReadMBps > 0);
+        Assert.Empty(Directory.GetFiles(dest, "*", SearchOption.AllDirectories));
+    }
+
+    // Final review 10: a destination on the card's volume is never written to — no measurement, a warning.
+    [Fact]
+    public void Measure_DestinationOnCardVolume_Skipped()
     {
         using var dir = new TempDir();
         var card = dir.Sub("card");
         TestFs.WriteRandom(Path.Combine(card, "clip.bin"), 4 << 20, 1);
         var dest = dir.Sub("dest");
+        Assert.True(HwTest.SameVolume(card, dest));
         var r = HwTest.Run([card], [dest], measure: true, bytesPerDevice: 8 << 20);
         var m = r.Measurements.ToDictionary(x => x.Role);
         Assert.True(m["Karta"].ReadMBps > 0);
-        Assert.Null(m["Karta"].WriteMBps);
-        Assert.True(m["Cíl 1"].WriteMBps > 0);
+        Assert.Null(m["Cíl 1"].ReadMBps);
+        Assert.Null(m["Cíl 1"].WriteMBps);
         Assert.Empty(Directory.GetFiles(dest, "*", SearchOption.AllDirectories));
-        Assert.Contains(r.Advice, a => a.Text.StartsWith("Odhad rychlosti offloadu"));
+        var w = Assert.Single(r.Advice, a => a.Kind == AdviceKind.Warning && a.Text.Contains("stejném svazku"));
+        Assert.StartsWith("Cíl 1 je na stejném svazku jako Karta", w.Text);
+        Assert.Equal(AdviceKind.Warning, r.Advice[0].Kind);
+    }
+
+    // Final review 11: cancelled → the remaining devices are not measured.
+    [Fact]
+    public void Measure_Cancelled_StopsBeforeNextDevice()
+    {
+        using var dir = new TempDir();
+        var dest = dir.Sub("dest");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var r = HwTest.Run([], [dest], measure: true, bytesPerDevice: 8 << 20, cancel: cts.Token);
+        Assert.Empty(r.Measurements);
+        Assert.Empty(Directory.GetFiles(dest, "*", SearchOption.AllDirectories));
     }
 
     [Fact]
@@ -69,14 +112,19 @@ public class HwTestTests
         var path = Path.Combine(dir.Path, "sub", "hwtest.json");
         var inner = new UsbHub("H2", "Hub", [new UsbPort(1, true, true, false, 0, null)]);
         var dev = new UsbDevice("D1", 0x1234, 0x5678, "Disk", UsbLinkSpeed.Super, UsbLinkSpeed.SuperPlus, inner);
-        var conn = new UsbConnector("C1", "H1", "xHCI", 1, 2, true, true, dev);
-        var link = new DriveLink(@"E:\", StorageBus.Usb, "SSD", new UsbLink("xHCI", "Hub", "C1", 1, UsbLinkSpeed.Super, UsbLinkSpeed.SuperPlus, true, true));
+        var conn = new UsbConnector("C1", "H1", @"PCI\HC", "xHCI", 1, 1, 2, true, true, true, dev, "port 1") { AltIds = ["H1#2"] };
+        var link = new DriveLink(@"E:\", StorageBus.Usb, "SSD", new UsbLink(@"PCI\HC", "xHCI", "C1", 1, 2, UsbLinkSpeed.Super, UsbLinkSpeed.SuperPlus, null, true)
+        {
+            Hubs = [new UsbHubRef(@"USB\DOCK", "Dock")],
+        });
         var r = new HwTestResult(new DateTime(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc), [new RoleLink("Karta", link)], [conn],
             [new DriveMeasurement("Karta", @"E:\", 123.5, null)], [new Advice(AdviceKind.Info, "Ahoj č")]);
         HwTest.Save(r, path);
         var back = HwTest.Load(path)!;
         Assert.Equal(r.Time, back.Time);
-        Assert.Equal(link, back.Drives[0].Link with { });
+        Assert.Equivalent(link, back.Drives[0].Link, strict: true);
+        Assert.Equal("port 1", back.Connectors[0].Label);
+        Assert.True(back.Connectors[0].Has("H1#2"));
         Assert.Equal(conn.Device!.Hub!.Ports[0], back.Connectors[0].Device!.Hub!.Ports[0]);
         Assert.True(back.Connectors[0].SupportsUsb3);
         Assert.Equal(123.5, back.Measurements[0].ReadMBps);

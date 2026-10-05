@@ -125,6 +125,15 @@ internal static unsafe partial class UsbNative
         return null;
     }
 
+    public const uint DriveRemote = 4;
+
+    [LibraryImport("kernel32.dll", EntryPoint = "GetDriveTypeW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial uint GetDriveType(string rootPathName);
+
+    /// UNC path of a mapped network drive ("Z:" → "\\server\share"); 0 = success.
+    [LibraryImport("mpr.dll", EntryPoint = "WNetGetConnectionW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int WNetGetConnection(string localName, char* remoteName, ref int length);
+
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool DeviceIoControl(SafeFileHandle device, uint code, void* inBuffer, int inSize, void* outBuffer, int outSize, out int returned, nint overlapped);

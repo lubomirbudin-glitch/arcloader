@@ -26,6 +26,21 @@ public class UsbSpeedsTests
         Assert.Equal(UsbLinkSpeed.Full, UsbSpeeds.Capability(null, 0x0110, UsbLinkSpeed.Full));
         // Never below what the link actually runs at.
         Assert.Equal(UsbLinkSpeed.Super, UsbSpeeds.Capability(null, 0x0200, UsbLinkSpeed.Super));
+        // Final review 8: no V2 flags (query unsupported), but a USB 3 descriptor → a USB 3 device.
+        Assert.Equal(UsbLinkSpeed.Super, UsbSpeeds.Capability(null, 0x0320, UsbLinkSpeed.High));
+        // With V2 flags that say "not SuperSpeed capable", the flags win over the descriptor.
+        Assert.Equal(UsbLinkSpeed.High, UsbSpeeds.Capability(0, 0x0300, UsbLinkSpeed.High));
+    }
+
+    // Final review 8: unknown port kind stays unknown; a SuperSpeed link proves a USB 3 port.
+    [Fact]
+    public void PortIsUsb3_TriState()
+    {
+        Assert.True(UsbSpeeds.PortIsUsb3(0b111, null));
+        Assert.False(UsbSpeeds.PortIsUsb3(0b011, UsbLinkSpeed.High));
+        Assert.Null(UsbSpeeds.PortIsUsb3(null, UsbLinkSpeed.High));
+        Assert.Null(UsbSpeeds.PortIsUsb3(null, null));
+        Assert.True(UsbSpeeds.PortIsUsb3(null, UsbLinkSpeed.Super));
     }
 
     [Fact]

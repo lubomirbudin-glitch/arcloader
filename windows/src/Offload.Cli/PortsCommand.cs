@@ -16,10 +16,23 @@ static class PortsCommand
         foreach (var o in new Option[] { measure, card, dest, gb }) cmd.Options.Add(o);
         cmd.SetAction(r =>
         {
+            using var cancel = new CancellationTokenSource();
+            ConsoleCancelEventHandler onCtrlC = (_, e) =>
+            {
+                // Stop after the device being measured: its temporary file must still be deleted.
+                e.Cancel = true;
+                if (cancel.IsCancellationRequested) return;
+                Console.Error.WriteLine("\nPřerušeno — dokončuji měření aktuálního zařízení a mažu jeho dočasný soubor…");
+                cancel.Cancel();
+            };
+            Console.CancelKeyPress += onCtrlC;
             try
             {
                 var cards = (r.GetValue(card) ?? []).Select(CliPath.Full).ToList();
                 var dests = (r.GetValue(dest) ?? []).Select(CliPath.Full).ToList();
+                foreach (var d in dests)
+                    if (cards.FirstOrDefault(c => HwTest.SameVolume(c, d)) is string c)
+                        throw new ArgumentException($"cíl {d} je na stejném svazku jako karta {c} — na kartu se nikdy nezapisuje");
                 bool byDrive = false;
                 if (cards.Count == 0 && dests.Count == 0)
                 {
@@ -30,8 +43,15 @@ static class PortsCommand
                         .Select(d => d.RootDirectory.FullName).ToList();
                     byDrive = true;
                 }
-                var result = HwTest.Run(cards, dests, r.GetValue(measure), (long)(r.GetValue(gb) * 1_000_000_000), rolesByDrive: byDrive);
+                var result = HwTest.Run(cards, dests, r.GetValue(measure), (long)(r.GetValue(gb) * 1_000_000_000), rolesByDrive: byDrive,
+                    cancel: cancel.Token);
                 Print(result);
+                if (cancel.IsCancellationRequested)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Měření přerušeno — výsledek se neukládá.");
+                    return 1;
+                }
                 try
                 {
                     HwTest.Save(result, HwTest.DefaultPath);
@@ -47,6 +67,10 @@ static class PortsCommand
                 Console.Error.WriteLine($"Error: {e.Message}");
                 return 1;
             }
+            finally
+            {
+                Console.CancelKeyPress -= onCtrlC;
+            }
         });
         return cmd;
     }
@@ -54,11 +78,19 @@ static class PortsCommand
     static void Print(HwTestResult r)
     {
         Console.WriteLine("Připojení:");
-        foreach (var d in r.Drives) Console.WriteLine($"  {d.Role,-8} {d.Link.Root,-6} {d.Link.Description}");
-        Console.WriteLine();
-        Console.WriteLine("USB porty:");
-        foreach (var c in r.Connectors.Where(c => c.UserVisible))
-            Console.WriteLine($"  {c.DefaultLabel,-22} {(c.Device is { } dev ? $"{dev.Name} — {UsbSpeeds.Label(dev.Link)}" : "volný")}");
+        foreach (var d in r.Drives)
+        {
+            // Without roles the role is the drive letter: no second column repeating it.
+            var root = d.Link.Root.TrimEnd('\\');
+            var where = d.Role == root ? $"{d.Role,-8}" : $"{d.Role,-8} {d.Link.Root,-6}";
+            Console.WriteLine($"  {where} {d.Link.Describe(r.Connectors)}");
+        }
+        foreach (var group in r.Connectors.Where(c => c.UserVisible).GroupBy(c => c.ControllerId))
+        {
+            Console.WriteLine();
+            Console.WriteLine($"USB porty ({group.First().ControllerName}):");
+            foreach (var c in group) Console.WriteLine($"  {PortLabels.ListRow(c, r.Drives)}");
+        }
         if (r.Measurements.Count > 0)
         {
             Console.WriteLine();

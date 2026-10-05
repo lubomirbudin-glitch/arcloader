@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán HW (USB diagnostika), průběh
 
+- Závěrečné opravy — jeden popisek portu všude (řádek disku, seznam portů, doporučení; port hubu jako „port 7 › 2“, řadič v názvu jen při více řadičích), řadiče podle identity místo názvu, USB 3 hub/dok = obě poloviny sloučené podle čísla portu, neznámý typ portu ≠ „jen USB 2.0“, síťový disk a české názvy sběrnic, sdílený hub + rada rozdělit čtečku a disky na různé řadiče, „brzdí“ ve stavovém řádku podle zásoby nezapsaných bloků (ne podle okamžité rychlosti) a před názvem souboru, `offload ports`: cíl na svazku karty se neměří ani nepřijme, Ctrl+C při měření dokončí aktuální zařízení a smaže jeho dočasný soubor, štítek písmene disku u portu, skenování pokračuje i při chybě jednoho řadiče
 - Úkol 8 — CLI `offload ports [--measure]`, řetěz připojení a úzké hrdlo v `offload copy`
 - Úkol 7 — test HW: rychlý (topologie, linky) a s měřením (čtení karty, zápis + čtení cílů), uložení výsledku
 - Úkol 6 — řetěz článků během kopie: rychlost, % linky, součet na řadiči, úzké hrdlo

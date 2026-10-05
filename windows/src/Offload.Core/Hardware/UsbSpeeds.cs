@@ -22,14 +22,24 @@ public static class UsbSpeeds
     }
 
     /// What the device could do on a good port and cable — never less than what it runs at.
+    /// Without the V2 flags (query unsupported) the descriptor's bcdUSB ≥ 3.0 still says "USB 3 device".
     public static UsbLinkSpeed Capability(uint? v2Flags, ushort bcdUsb, UsbLinkSpeed link)
     {
         uint f = v2Flags ?? 0;
         var cap = (f & 0b1000) != 0 ? UsbLinkSpeed.SuperPlus
             : (f & 0b0010) != 0 ? UsbLinkSpeed.Super
+            : v2Flags == null && bcdUsb >= 0x0300 ? UsbLinkSpeed.Super
             : bcdUsb >= 0x0200 ? UsbLinkSpeed.High
             : UsbLinkSpeed.Full;
         return cap > link ? cap : link;
+    }
+
+    /// Whether a hub port can do USB 3: from the V2 protocol bits; a link already running at SuperSpeed proves it;
+    /// otherwise unknown (null) — never "USB 2.0 only" just because the query is unsupported.
+    public static bool? PortIsUsb3(uint? supportedProtocols, UsbLinkSpeed? link)
+    {
+        if (link >= UsbLinkSpeed.Super) return true;
+        return supportedProtocols is uint p ? (p & 0b100) != 0 : null;
     }
 
     public static string Label(UsbLinkSpeed s) => s switch
