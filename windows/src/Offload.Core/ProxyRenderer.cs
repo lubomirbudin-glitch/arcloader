@@ -231,7 +231,9 @@ public sealed class ProxyRenderer : IDisposable
                 // Last frame: decode the final second and keep overwriting the image — the last write is the last frame.
                 args.AddRange(video && pos.FromEnd ? ["-map", "0:v:0", "-vf", vf, "-update", "1"] : ["-frames:v", "1", "-vf", vf]);
                 args.AddRange(["-q:v", "5", output]);
-                RunFfmpeg(ffmpeg, args, src, null, null, isCancelled);
+                // A RAW decoder piped in (BRAW) runs under the stall watchdog: data it hands ffmpeg is the progress, and a
+                // hung SDK must not hang the job. (A file input prints no progress here, so it is left alone.)
+                RunFfmpeg(ffmpeg, args, src, null, null, isCancelled, src.FeederExe != null ? StallTimeout : null);
                 if (!File.Exists(output)) throw new ToolError("ffmpeg", 0, "no frame");
                 result.Add(new Thumbnail(File.ReadAllBytes(output), Label(info, pos)));
             }

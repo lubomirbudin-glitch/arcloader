@@ -26,6 +26,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 - Úkol 5 — COM vrstva Blackmagic RAW v C# (volání přes vtable, BSTR/BOOL/VARIANT jako ve Windows SDK, callback jako nativní COM objekt); ověřeno s knihovnou z DaVinci Resolve
 - Úkol 6 — braw-decode dekóduje: --info (rozměr po zmenšení z 1. snímku, TC, kamera, gama, gamut), snímky RGB48 po dávkách 8 v pořadí na stdout, CPU pipeline nastavená před otevřením klipu; stdout přes GetStdHandle, takže zavřená roura (ffmpeg skončil) dekódování hned zastaví (kód 0 jako na Macu — ffmpeg smí rouru zavřít dřív, třeba u náhledu); nečitelný atribut barev je jen varování na stderr; bez vzorku .braw ověřeno jen s knihovnou z DaVinci Resolve (chybějící a neplatný klip → kód 4)
 - Úkol 7 (M3) — `braw-decode --info` má časový limit 60 s (v testech kratší): zaseknutá knihovna Blackmagic RAW úlohu nezasekne, proces se ukončí i s potomky a klip dostane poznámku „braw-decode failed (exit -1): neodpověděl do 60 s — ukončen“
+- Úkol 7 (M3) — náhledy BRAW (dekodér v rouře do ffmpeg) běží pod hlídačem zaseknutí jako proxy: dekodér, který nepošle data, se ukončí (do prvních dat 3× limit) a klip náhled nedostane, úloha jede dál
 
 ## 2026-10-05 — drobnosti po plánu 5
 

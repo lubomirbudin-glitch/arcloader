@@ -258,6 +258,24 @@ public class ProxyWatchdogTests
     [Fact]
     public void BrawInfo_DefaultTimeout() => Assert.Equal(TimeSpan.FromSeconds(60), BrawBackend.DefaultInfoTimeout);
 
+    // Ruling M3: a BRAW thumbnail (the decoder piped into ffmpeg) runs under the stall watchdog like a proxy.
+    [Fact]
+    public void BrawThumbnail_DecoderHangs_KilledAsStalled()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var consumer = Path.Combine(dir.Path, "ffmpeg.cmd");   // reads its input to the end, prints no progress
+        File.WriteAllText(consumer, "@more >nul\r\n@exit /b 0\r\n");
+        var tools = new ExternalTools { Ffmpeg = consumer, BrawDecoder = FakeBrawDecode(dir.Path, hangInfo: false), NoSearch = true }.Resolved();
+        using var r = new ProxyRenderer(FakeSettings, tools) { StallTimeout = Stall };
+        var clip = new Clip { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
+        var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 1, Duration = 0.04 };
+        var sw = Stopwatch.StartNew();
+        var e = Assert.Throws<FfmpegStalledException>(() => r.Thumbnails(clip, card, info, null));
+        Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku)", e.Message);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
+    }
+
     // The real thing: an FFV1 clip (the codec that hung with -hwaccel auto) renders a proxy and never hangs.
     [FfmpegFact]
     public void Render_Ffv1_Completes()
