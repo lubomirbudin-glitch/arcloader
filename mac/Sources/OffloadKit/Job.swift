@@ -318,12 +318,22 @@ public final class OffloadJob {
                     // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.
                     for (o, other) in plan.cardPaths.enumerated() where o != d {
                         do {
-                            try copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel)
+                            try ProxyCopy.copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel)
                         } catch {
                             let note = "kopie na \(other) selhala: \(error)"
                             entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note
                             log?("proxy \(clip.name): copy to \(other) failed: \(error)")
                         }
+                    }
+                }
+                if let extra = config.proxy.extraFolder {
+                    // The user's proxy folder: also never fails the proxy (the disk may have been disconnected).
+                    let (_, error) = ProxyCopy.toExtraFolder(plan.cardPaths[d] + "/" + rel, extraFolder: extra, date: plan.date,
+                                                             cardName: plan.cardName, fileName: name + ".mov")
+                    if let error {
+                        let note = "kopie do \(extra) selhala: \(error)"
+                        entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note
+                        log?("proxy \(clip.name): copy to \(extra) failed: \(error)")
                     }
                 }
                 if entries[i].thumbnails.isEmpty {
@@ -353,7 +363,7 @@ public final class OffloadJob {
         do {
             try PDFReport.write(report, to: first)
             for other in plan.cardPaths.dropFirst() {
-                try? copyFile(first, to: other + "/" + Layout.reportDirName + "/" + name)
+                try? ProxyCopy.copyFile(first, to: other + "/" + Layout.reportDirName + "/" + name)
             }
         } catch {
             // The HTML report is already on disk; the PDF is a convenience copy.
@@ -374,19 +384,6 @@ public final class OffloadJob {
         } catch {
             if !isCancelled { log?("thumbnails \(clip.name): \(error)") }
             return []
-        }
-    }
-
-    private func copyFile(_ src: String, to dst: String) throws {
-        try IO.mkdirs((dst as NSString).deletingLastPathComponent)
-        let part = (dst as NSString).deletingLastPathComponent + "/." + (dst as NSString).lastPathComponent + ".part"
-        unlink(part)
-        do {
-            try FileManager.default.copyItem(atPath: src, toPath: part)
-            guard rename(part, dst) == 0 else { throw IOError("rename", dst) }
-        } catch {
-            unlink(part)
-            throw error
         }
     }
 }

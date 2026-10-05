@@ -154,7 +154,8 @@ public enum HTMLReport {
             if let p = r.proxy, p.enabled {
                 let lut = p.lutPath.map { ($0 as NSString).lastPathComponent } ?? "bez LUT"
                 let frame = p.frameLabel.map { ", výřez \($0)" } ?? ""
-                h += "<p class=\"sub\">Proxy: \(esc(p.codec.label)), \(p.height)p\(frame), LUT: \(esc(lut)) → <span class=\"mono\">\(Layout.proxyDirName)/</span></p>\n"
+                let extra = p.extraFolder.map { " · také ve složce <span class=\"mono\">\(esc($0))</span>" } ?? ""
+                h += "<p class=\"sub\">Proxy: \(esc(p.codec.label)), \(p.height)p\(frame), LUT: \(esc(lut)) → <span class=\"mono\">\(Layout.proxyDirName)/</span>\(extra)</p>\n"
             }
         }
 

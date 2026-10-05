@@ -61,7 +61,7 @@ Jeden řádek na soubor, UTF-8 bez BOM, konce řádků `\n`:
 | `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `sourceError`?, `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl) |
 | `skipped[]` | string | vynechané systémové položky |
 | `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`?, `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje) |
-| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder` — viz níže) |
+| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `copyToAllDestinations`, `frameAspect`, `frameScale`, volitelně `extraFolder` — viz níže) |
 | `proxyEncoder` | string? | jen Windows: enkodér ffmpeg, kterým se renderovaly proxy (`h264_nvenc`, `libx264`, `prores_ks` …); chybí, když se žádná proxy nevyrenderovala |
 
 Hodnoty výčtů:
@@ -81,9 +81,10 @@ Hodnoty výčtů:
 
 Náhledy klipů (JPEG) se do JSON neukládají — jsou jen v HTML a PDF.
 
-`proxy.extraFolder` (string, volitelný, zatím jen Windows): složka, do které se každá hotová proxy kopíruje navíc,
-jako `<extraFolder>\<datum>\<karta>\<klip>.mov` (při shodě jména `_2`, `_3`…). Chybí, když není nastavená. Stejný klíč
-je v sekci `proxy` souboru `settings.json`. Mac ho zatím nezná a ignoruje (neznámé klíče se přeskakují).
+`proxy.extraFolder` (string, volitelný, obě verze): složka, do které se každá hotová proxy kopíruje navíc,
+jako `<extraFolder>/<datum>/<karta>/<klip>.mov` (při shodě jména `_2`, `_3`…, nic se nepřepíše). Chybí, když není
+nastavená. Stejný klíč je v sekci `proxy` souboru `settings.json`. Cesta je podle systému (`/Volumes/…` na Macu,
+`E:\…` na Windows); report z druhé platformy ji jen zobrazí.
 
 ## ASC MHL v2
 

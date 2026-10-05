@@ -62,6 +62,7 @@ public enum SettingsStore {
         s.proxy.frameScale = s.proxy.frameScale.isFinite ? min(max(s.proxy.frameScale, 0.5), 1.0) : 1.0
         if let a = s.proxy.frameAspect, !a.isFinite || a <= 0 { s.proxy.frameAspect = nil }
         if let l = s.proxy.lutPath, l.trimmingCharacters(in: .whitespaces).isEmpty { s.proxy.lutPath = nil }
+        if let f = s.proxy.extraFolder?.trimmingCharacters(in: .whitespaces) { s.proxy.extraFolder = f.isEmpty ? nil : f }
         return s
     }
 }
@@ -83,5 +84,25 @@ public enum ProxyPreflight {
     public static func warning(_ p: ProxySettings, analyzeClips: Bool, resolved: ExternalTools) -> String? {
         (p.enabled || analyzeClips) && (resolved.ffmpeg == nil || resolved.ffprobe == nil)
             ? "ffmpeg/ffprobe nenalezen — náhledy a proxy se přeskočí, kopie a ověření proběhnou." : nil
+    }
+
+    /// The extra proxy folder the next start copies into (only when proxies are rendered), or nil.
+    public static func extraFolderInUse(_ p: ProxySettings) -> String? { p.enabled ? p.extraFolder : nil }
+
+    /// Why the start must wait: the proxy folder is set but missing (a disconnected disk).
+    /// `folderExists` nil = not checked yet (does not block). The app passes its background answer.
+    public static func extraFolderBlocking(_ p: ProxySettings, folderExists: Bool?) -> String? {
+        guard let f = extraFolderInUse(p), folderExists == false else { return nil }
+        return "Složka pro proxy není dostupná: \(f)"
+    }
+
+    /// The same, asking the disk now — the CLI only (the app never touches a disk on the main thread).
+    public static func extraFolderBlocking(_ p: ProxySettings) -> String? {
+        extraFolderBlocking(p, folderExists: extraFolderInUse(p).map(isDirectory))
+    }
+
+    public static func isDirectory(_ path: String) -> Bool {
+        var isDir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
     }
 }

@@ -65,6 +65,8 @@ public struct ProxySettings: Codable, Equatable {
     public var skipCameraProxies = true
     /// Proxies are rendered once, onto the first destination, then copied to the others.
     public var copyToAllDestinations = true
+    /// Optional: every proxy is also copied to `<folder>/<date>/<card>/` (never overwriting). nil = off (key absent).
+    public var extraFolder: String?
     /// Crop to the frame lines: aspect ratio of the frame (e.g. 1.66) and how much of the image
     /// it covers (0.9 = 90 %, i.e. 10 % overscan around it). nil = full image.
     public var frameAspect: Double?
@@ -85,6 +87,7 @@ public struct ProxySettings: Codable, Equatable {
         audio = try c.decodeIfPresent(Bool.self, forKey: .audio) ?? d.audio
         skipCameraProxies = try c.decodeIfPresent(Bool.self, forKey: .skipCameraProxies) ?? d.skipCameraProxies
         copyToAllDestinations = try c.decodeIfPresent(Bool.self, forKey: .copyToAllDestinations) ?? d.copyToAllDestinations
+        extraFolder = try c.decodeIfPresent(String.self, forKey: .extraFolder)
         frameAspect = try c.decodeIfPresent(Double.self, forKey: .frameAspect)
         frameScale = try c.decodeIfPresent(Double.self, forKey: .frameScale) ?? d.frameScale
     }
