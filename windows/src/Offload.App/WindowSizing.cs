@@ -24,6 +24,9 @@ static class WindowSizing
             w.WindowStartupLocation = WindowStartupLocation.Manual;
             if (p.Maximize)
             {
+                // Placed on the target monitor first: a window maximizes on the monitor it is on.
+                w.Left = p.Left;
+                w.Top = p.Top;
                 w.WindowState = WindowState.Maximized;
                 return;
             }

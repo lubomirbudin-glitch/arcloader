@@ -12,6 +12,9 @@ public sealed partial class MainViewModel
     readonly HashSet<string> selected = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> cardNames = new(StringComparer.OrdinalIgnoreCase);
     readonly List<string> manualSources = [];
+    // Volume labels of manual sources that are a drive root the scan does not list (an internal disk, a network
+    // letter), read off the UI thread when the source is added.
+    readonly Dictionary<string, string?> manualLabels = new(StringComparer.OrdinalIgnoreCase);
     List<VolumeItem> volumes = [];
     ExternalTools resolvedTools = new();
     bool scanning, rescan, useCustomDate;
@@ -19,7 +22,8 @@ public sealed partial class MainViewModel
     // Cards ejected from this window: the scan does not touch their letters until Windows reports a new arrival
     // there (or the user presses refresh) — a reader that cannot eject media would otherwise mount the card again.
     readonly HashSet<string> ejectedRoots = new(StringComparer.OrdinalIgnoreCase);
-    // Every ~5 s off the UI thread: missing destinations (a NAS that came back) and the LUT are checked again.
+    // Every ~5 s off the UI thread: missing destinations (a NAS that came back), present network/removable ones
+    // (a NAS that dropped out), the LUT and the proxy folder are checked again.
     readonly DispatcherTimer healthTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     // The LUT's existence, checked off the UI thread (CanStart is evaluated 3×/s and must never touch a disk).
     string? lutCheckedPath;
@@ -198,6 +202,34 @@ public sealed partial class MainViewModel
         if (!manualSources.Contains(path, StringComparer.OrdinalIgnoreCase)) manualSources.Add(path);
         selected.Add(path);
         RebuildSources();
+        ReadManualLabel(path);
+    }
+
+    /// A drive root picked as a folder: its label is the card name the job will use — read it off the UI thread.
+    void ReadManualLabel(string path)
+    {
+        string? root;
+        try
+        {
+            root = Layout.DriveRootOf(path);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return;
+        }
+        if (root == null || manualLabels.ContainsKey(path)
+            || volumes.Any(v => string.Equals(v.Path, root, StringComparison.OrdinalIgnoreCase))) return;   // the scan has its label
+        Task.Run(() => NativeIO.VolumeLabel(root)).ContinueWith(t =>
+        {
+            if (closing) return;
+            if (!t.IsCompletedSuccessfully)
+            {
+                AppLog.Write($"label {root}: {t.Exception?.GetBaseException().Message}");
+                return;
+            }
+            manualLabels[path] = t.Result;
+            if (manualSources.Contains(path, StringComparer.OrdinalIgnoreCase)) RebuildSources();
+        }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
     internal bool IsSelected(string path) => selected.Contains(path);
@@ -215,7 +247,8 @@ public sealed partial class MainViewModel
     /// from the disk here (UI thread). The job itself works out the same name off the UI thread.
     internal string DefaultCardName(string path)
     {
-        var label = volumes.FirstOrDefault(v => string.Equals(v.Path, path, StringComparison.OrdinalIgnoreCase))?.Label;
+        var label = volumes.FirstOrDefault(v => string.Equals(v.Path, path, StringComparison.OrdinalIgnoreCase))?.Label
+            ?? manualLabels.GetValueOrDefault(path);
         try
         {
             return Layout.DefaultCardName(path, label);

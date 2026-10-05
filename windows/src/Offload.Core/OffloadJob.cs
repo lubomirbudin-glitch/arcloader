@@ -205,7 +205,7 @@ public sealed class OffloadJob
     {
         var clips = ClipDetector.Detect(plan.Scan.Files);
         if (clips.Count == 0) return report;
-        using var renderer = new ProxyRenderer(Config.Proxy, Config.Tools.Resolved()) { ForcedEncoder = Engine.Options.ProxyEncoder };
+        using var renderer = new ProxyRenderer(Config.Proxy, Config.Tools.Resolved()) { ForcedEncoder = Engine.Options.ProxyEncoder, Log = log };
         var cardPaths = plan.CardPaths;
         var fileIndex = report.Files.Select((f, i) => (f.Path, i)).ToDictionary(x => x.Path, x => x.i);
         bool Good(string state) => state == "verified" || (!report.Verified && state == "written");

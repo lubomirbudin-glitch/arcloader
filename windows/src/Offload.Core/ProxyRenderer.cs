@@ -22,12 +22,20 @@ public sealed class ProxyRenderer : IDisposable
     public ProxySettings Settings { get; }
     public ExternalTools Tools { get; }
 
-    /// A proxy render with no new frame for this long is stuck (ffmpeg 8.1 with -hwaccel auto on FFV1 hung forever
-    /// on VK_ERROR_DEVICE_LOST): ffmpeg is killed and the clip retried once without hardware decoding.
+    /// A proxy render with no new frame (and no data piped into ffmpeg) for this long is stuck (ffmpeg 8.1 with
+    /// -hwaccel auto on FFV1 hung forever on VK_ERROR_DEVICE_LOST): ffmpeg is killed and, when it decoded in hardware,
+    /// the clip is retried once in software. Until the first sign of progress it gets 3× as long (input probing,
+    /// a RAW decoder starting up, the encoder's lookahead).
     public static readonly TimeSpan DefaultStallTimeout = TimeSpan.FromSeconds(60);
 
     /// Tests shorten it.
     internal TimeSpan StallTimeout { get; init; } = DefaultStallTimeout;
+
+    /// How long a killed ffmpeg is waited for: a process stuck in a GPU driver may never end — the job must go on.
+    internal static readonly TimeSpan KillWait = TimeSpan.FromSeconds(10);
+
+    /// Where retries and unkillable processes are reported (the job's log).
+    internal Action<string>? Log { get; init; }
 
     string? encoderName;
 
@@ -242,8 +250,8 @@ public sealed class ProxyRenderer : IDisposable
         return result;
     }
 
-    /// Renders the proxy. A render that stalls (no new frame for StallTimeout) is killed and retried once without
-    /// hardware decoding, and so is one that fails with it; a failed retry after a stall says "ffmpeg se zasekl".
+    /// Renders the proxy. A render that stalls (no progress for StallTimeout) is killed. With hardware decoding the
+    /// clip is then retried once in software — as is one that failed with it; without, the stall fails the proxy.
     public void Render(Clip clip, string cardPath, ClipInfo info, LutUse? lut, string output, Action<double> progress, Func<bool> isCancelled)
     {
         var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, "ffmpeg not found");
@@ -255,25 +263,30 @@ public sealed class ProxyRenderer : IDisposable
             RenderOnce(ffmpeg, clip, cardPath, info, lut, lutFile, output, progress, isCancelled, hwaccel);
             return;
         }
-        catch (FfmpegStalledException e) when (!isCancelled())
+        catch (FfmpegStalledException e) when (!hwaccel && !isCancelled())
         {
-            first = e;
+            throw new FfmpegStalledException(e.Message + "; proxy nevznikla", e);
         }
-        catch (ToolError e) when (hwaccel && !isCancelled())
+        catch (Exception e) when (hwaccel && e is FfmpegStalledException or ToolError && !isCancelled())
         {
-            first = e;  // hardware decoding failed: once more in software
+            first = e;  // hardware decoding stalled or failed: once more in software
         }
+        if (isCancelled()) throw new ToolError("ffmpeg", -1, "cancelled");
+        Log?.Invoke($"proxy {clip.Name}: with hardware decoding: {first.Message} — retrying in software");
         try
         {
             RenderOnce(ffmpeg, clip, cardPath, info, lut, lutFile, output, progress, isCancelled, hwaccel: false);
+            Log?.Invoke($"proxy {clip.Name}: software decoding succeeded");
         }
-        catch (FfmpegStalledException) when (!isCancelled())
+        catch (Exception e) when (e is FfmpegStalledException or ToolError && !isCancelled())
         {
-            throw new FfmpegStalledException(StallNote(StallTimeout, retriedInSoftware: true));
-        }
-        catch (ToolError e) when (first is FfmpegStalledException && !isCancelled())
-        {
-            throw new FfmpegStalledException($"{first.Message}; bez hardwarového dekódování selhal: {e.Message}", e);
+            Log?.Invoke($"proxy {clip.Name}: software decoding failed too: {e.Message}");
+            throw (first, e) switch
+            {
+                (FfmpegStalledException, FfmpegStalledException) => new ProxyRetryException(StallNote(StallTimeout, retriedInSoftware: true), e),
+                (FfmpegStalledException, _) => new ProxyRetryException($"{first.Message}; bez hardwarového dekódování selhal: {e.Message}", e),
+                _ => new ProxyRetryException($"{e.Message}; s hardwarovým dekódováním předtím: {first.Message}", e),
+            };
         }
     }
 
@@ -333,7 +346,8 @@ public sealed class ProxyRenderer : IDisposable
     }
 
     /// `stallAfter` (with -progress pipe:1 in the args): ffmpeg is killed and FfmpegStalledException thrown when it has
-    /// reported no new frame or output time for that long (a stuck ffmpeg keeps repeating the same progress block).
+    /// reported no new frame or output time and taken no data from the feeder for that long (a stuck ffmpeg keeps
+    /// repeating the same progress block); 3× as long before the first sign of progress.
     internal void RunFfmpeg(string ffmpeg, List<string> args, FrameSource src, double? duration, Action<double>? progress, Func<bool> isCancelled,
         TimeSpan? stallAfter = null)
     {
@@ -344,12 +358,18 @@ public sealed class ProxyRenderer : IDisposable
         bool feederKilled = false;
         var watch = new ProgressWatch();
         long lastAdvance = Environment.TickCount64;
+        int advanced = 0;
+        void Advance()
+        {
+            Interlocked.Exchange(ref lastAdvance, Environment.TickCount64);
+            Volatile.Write(ref advanced, 1);
+        }
         try
         {
             feeder?.Start(null);
             ff.Start(line =>
             {
-                if (watch.Advanced(line)) Interlocked.Exchange(ref lastAdvance, Environment.TickCount64);
+                if (watch.Advanced(line)) Advance();
                 if (progress == null || duration is not double d || d <= 0 || !line.StartsWith("out_time_us=", StringComparison.Ordinal)) return;
                 if (double.TryParse(line["out_time_us=".Length..], NumberStyles.Float, CultureInfo.InvariantCulture, out var us))
                     progress(Math.Clamp(us / 1_000_000 / d, 0, 1));
@@ -365,7 +385,17 @@ public sealed class ProxyRenderer : IDisposable
                 {
                     // Any failure here just means the pipe ended (done, cancelled or a process died); the exit codes tell the story.
                     // Never let an exception escape a background thread: it would take the whole process down.
-                    try { from.CopyTo(to, 4 << 20); }
+                    try
+                    {
+                        // Every chunk ffmpeg takes is progress for the stall watchdog (a slow RAW decoder is not stuck).
+                        var buffer = new byte[4 << 20];
+                        int n;
+                        while ((n = from.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            to.Write(buffer, 0, n);
+                            Advance();
+                        }
+                    }
                     catch (Exception) { }
                     finally { try { to.Close(); } catch (Exception) { } }
                 }) { IsBackground = true };
@@ -375,12 +405,13 @@ public sealed class ProxyRenderer : IDisposable
             {
                 bool cancelled = isCancelled();
                 bool stalled = !cancelled && stallAfter is TimeSpan limit
-                    && Environment.TickCount64 - Interlocked.Read(ref lastAdvance) > limit.TotalMilliseconds;
+                    && Environment.TickCount64 - Interlocked.Read(ref lastAdvance) > limit.TotalMilliseconds * (Volatile.Read(ref advanced) == 1 ? 1 : 3);
                 if (!cancelled && !stalled) continue;
                 ff.Kill();
                 feeder?.Kill();
                 feederKilled = true;
-                ff.WaitForExit();
+                // Bounded: a process stuck in a GPU driver may survive the kill; the job goes on without it.
+                if (!ff.WaitForExit((int)KillWait.TotalMilliseconds)) Log?.Invoke($"ffmpeg (pid {ff.Id}) did not end {KillWait.TotalSeconds:0} s after kill");
                 pump?.Join(5000);
                 if (stalled) throw new FfmpegStalledException(StallNote(stallAfter!.Value, retriedInSoftware: false));
                 throw new ToolError("ffmpeg", -1, "cancelled");
@@ -408,23 +439,27 @@ public sealed class ProxyRenderer : IDisposable
 /// ffmpeg reported no new frame for too long and was killed. The message is the note shown at the clip.
 internal sealed class FfmpegStalledException(string message, Exception? inner = null) : Exception(message, inner);
 
-/// Watches ffmpeg's -progress output: only a new `frame=` or `out_time_us=` value (or the final `progress=end`) is
-/// progress; a stuck ffmpeg keeps printing the same block every half second.
+/// The hardware-decoded attempt and the software retry both failed; the message (the note at the clip) names both.
+internal sealed class ProxyRetryException(string message, Exception inner) : Exception(message, inner);
+
+/// Watches ffmpeg's -progress output: only a `frame=` or `out_time_us=` value above any seen before (or the final
+/// `progress=end`) is progress — a stuck ffmpeg keeps printing the same block every half second, and the opening
+/// "frame=0", "out_time_us=N/A" or negative times say nothing has been written yet.
 internal sealed class ProgressWatch
 {
-    string? frame, outTime;
+    long frame, outTime;
 
     public bool Advanced(string line)
     {
-        if (line.StartsWith("frame=", StringComparison.Ordinal)) return Changed(ref frame, line);
-        if (line.StartsWith("out_time_us=", StringComparison.Ordinal)) return Changed(ref outTime, line);
+        if (line.StartsWith("frame=", StringComparison.Ordinal)) return Rose(ref frame, line["frame=".Length..]);
+        if (line.StartsWith("out_time_us=", StringComparison.Ordinal)) return Rose(ref outTime, line["out_time_us=".Length..]);
         return line == "progress=end";
     }
 
-    static bool Changed(ref string? last, string now)
+    static bool Rose(ref long max, string value)
     {
-        if (last == now) return false;
-        last = now;
+        if (!long.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) || v <= max) return false;
+        max = v;
         return true;
     }
 }

@@ -26,28 +26,33 @@ public class ProxyWatchdogTests
         Assert.Equal(expected, ProxyRenderer.UseHardwareDecoding(codec));
 
     [Fact]
-    public void ProgressWatch_OnlyANewFrameOrTimeCounts()
+    public void ProgressWatch_OnlyARisingFrameOrTimeCounts()
     {
         var w = new ProgressWatch();
-        Assert.True(w.Advanced("frame=0"));
-        Assert.False(w.Advanced("fps=0.00"));
-        Assert.True(w.Advanced("out_time_us=N/A"));
-        Assert.False(w.Advanced("progress=continue"));
-        // ffmpeg keeps printing the same block every half second while it is stuck.
+        // The opening block says nothing has been written yet (encoder lookahead, input probing).
         Assert.False(w.Advanced("frame=0"));
+        Assert.False(w.Advanced("fps=0.00"));
         Assert.False(w.Advanced("out_time_us=N/A"));
+        Assert.False(w.Advanced("out_time_us=-9223372036854775807"));
         Assert.False(w.Advanced("progress=continue"));
         Assert.True(w.Advanced("frame=1"));
         Assert.True(w.Advanced("out_time_us=40000"));
+        // ffmpeg keeps printing the same block every half second while it is stuck.
+        Assert.False(w.Advanced("frame=1"));
+        Assert.False(w.Advanced("out_time_us=40000"));
+        Assert.False(w.Advanced("progress=continue"));
+        Assert.True(w.Advanced("frame=2"));
         Assert.True(w.Advanced("progress=end"));
     }
 
-    /// A stand-in for ffmpeg: logs every call ("call", then "hw" when it got -hwaccel) and never prints progress — it
-    /// just sleeps. (The log path is taken before the loop: shift moves %0 too.) With `softwareWorks` a call without -hwaccel writes its output (the last argument) and exits 0.
-    static string FakeFfmpeg(string dir, bool softwareWorks)
+    /// What the fake ffmpeg does after logging its call: sleep without progress, write its output, or fail.
+    enum Fake { Stall, Ok, Fail }
+
+    /// A stand-in for ffmpeg: logs every call ("call", then "hw" when it got -hwaccel), then does `hw` or `sw`
+    /// (the call with or without -hwaccel). (The log path is taken before the loop: shift moves %0 too.)
+    static string FakeFfmpeg(string dir, Fake hw, Fake sw)
     {
         var path = Path.Combine(dir, "ffmpeg.cmd");
-        var software = softwareWorks ? "if not defined HW (echo x>\"%LAST%\"& exit /b 0)" : "rem";
         File.WriteAllText(path, $"""
             @echo off
             setlocal
@@ -63,18 +68,27 @@ public class ProxyWatchdogTests
             goto next
             :run
             if defined HW echo hw>>"%LOG%"
-            {software}
+            if defined HW goto {hw}
+            goto {sw}
+            :Ok
+            echo x>"%LAST%"
+            exit /b 0
+            :Fail
+            echo boom {"{"}HW{"}"} 1>&2
+            exit /b 1
+            :Stall
             ping -n 120 127.0.0.1 >nul
 
-            """.Replace("\n", "\r\n"));
+            """.Replace("{HW}", "%HW%").Replace("\n", "\r\n"));
         return path;
     }
 
-    static ExternalTools FakeTools(string dir, bool softwareWorks) =>
-        new ExternalTools { Ffmpeg = FakeFfmpeg(dir, softwareWorks), NoSearch = true }.Resolved();
+    static ExternalTools FakeTools(string dir, Fake hw, Fake sw) =>
+        new ExternalTools { Ffmpeg = FakeFfmpeg(dir, hw, sw), NoSearch = true }.Resolved();
 
-    /// Short, but with room for cmd.exe to parse its arguments on a loaded PC before the watchdog fires.
-    static readonly TimeSpan Stall = TimeSpan.FromSeconds(3);
+    /// Short; before the first progress the watchdog waits 3× as long, which also gives cmd.exe time to parse its
+    /// arguments on a loaded PC.
+    static readonly TimeSpan Stall = TimeSpan.FromSeconds(1);
 
     /// The fake has logged its call with -hwaccel, i.e. it is past its argument loop and sleeping.
     static bool LoggedHw(string dir)
@@ -84,34 +98,68 @@ public class ProxyWatchdogTests
     }
 
     static ClipInfo H264Info => new() { Codec = "h264", Width = 320, Height = 180, Duration = 1, FrameRate = "25/1" };
+    static ClipInfo Ffv1Info => new() { Codec = "ffv1", Width = 320, Height = 180, Duration = 1 };
+
+    static string[] Calls(TempDir dir) => File.ReadAllLines(Path.Combine(dir.Path, "calls.txt"));
 
     [Fact]
     public void Render_Stalled_KilledAndRetriedOnceWithoutHwaccel_ThenFailsWithNote()
     {
         using var dir = new TempDir();
         var card = dir.Sub("card");
-        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: false)) { StallTimeout = Stall };
+        var log = new List<string>();
+        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, Fake.Stall, Fake.Stall)) { StallTimeout = Stall, Log = l => { lock (log) log.Add(l); } };
         var output = Path.Combine(card, "_PROXY", "a.mov");
         var sw = Stopwatch.StartNew();
         var e = Assert.ThrowsAny<Exception>(() => r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { }, () => false));
-        Assert.StartsWith("ffmpeg se zasekl", e.Message);
-        Assert.Contains("bez hardwarového dekódování", e.Message);
-        Assert.Equal(["call", "hw", "call"], File.ReadAllLines(Path.Combine(dir.Path, "calls.txt")));
+        Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku) i bez hardwarového dekódování; proxy nevznikla", e.Message);
+        Assert.Equal(["call", "hw", "call"], Calls(dir));
         Assert.False(File.Exists(output));
         Assert.Empty(Directory.GetFiles(Path.Combine(card, "_PROXY")));
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
+        lock (log)
+        {
+            Assert.Contains(log, l => l.Contains("with hardware decoding: ffmpeg se zasekl") && l.Contains("retrying in software"));
+            Assert.Contains(log, l => l.Contains("software decoding failed too"));
+        }
     }
 
     [Fact]
-    public void Render_StalledWithHwaccel_SoftwareRetrySucceeds()
+    public void Render_StalledWithHwaccel_SoftwareRetrySucceeds_AndIsLogged()
     {
         using var dir = new TempDir();
         var card = dir.Sub("card");
-        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: true)) { StallTimeout = Stall };
+        var log = new List<string>();
+        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, Fake.Stall, Fake.Ok)) { StallTimeout = Stall, Log = l => { lock (log) log.Add(l); } };
         var output = Path.Combine(card, "_PROXY", "a.mov");
         r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { }, () => false);
         Assert.True(File.Exists(output));
-        Assert.Equal(["call", "hw", "call"], File.ReadAllLines(Path.Combine(dir.Path, "calls.txt")));
+        Assert.Equal(["call", "hw", "call"], Calls(dir));
+        lock (log) Assert.Contains("proxy a: software decoding succeeded", log);
+    }
+
+    [Fact]
+    public void Render_HwaccelFails_SoftwareFails_NoteNamesBoth()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, Fake.Fail, Fake.Fail)) { StallTimeout = Stall };
+        var output = Path.Combine(card, "_PROXY", "a.mov");
+        var e = Assert.ThrowsAny<Exception>(() => r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { }, () => false));
+        Assert.Equal("ffmpeg failed (exit 1): boom; s hardwarovým dekódováním předtím: ffmpeg failed (exit 1): boom 1", e.Message);
+        Assert.Equal(["call", "hw", "call"], Calls(dir));
+    }
+
+    [Fact]
+    public void Render_SoftwareCodecStalls_NoRetry_NoteWithoutSoftwareClaim()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, Fake.Ok, Fake.Stall)) { StallTimeout = Stall };
+        var output = Path.Combine(card, "_PROXY", "a.mov");
+        var e = Assert.ThrowsAny<Exception>(() => r.Render(VideoClip("a.mov"), card, Ffv1Info, null, output, _ => { }, () => false));
+        Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku); proxy nevznikla", e.Message);
+        Assert.Equal(["call"], Calls(dir));
     }
 
     [Fact]
@@ -119,11 +167,11 @@ public class ProxyWatchdogTests
     {
         using var dir = new TempDir();
         var card = dir.Sub("card");
-        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: true)) { StallTimeout = Stall };
+        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, Fake.Stall, Fake.Ok)) { StallTimeout = Stall };
         var output = Path.Combine(card, "_PROXY", "a.mov");
-        r.Render(VideoClip("a.mov"), card, new ClipInfo { Codec = "ffv1", Width = 320, Height = 180, Duration = 1 }, null, output, _ => { }, () => false);
+        r.Render(VideoClip("a.mov"), card, Ffv1Info, null, output, _ => { }, () => false);
         Assert.True(File.Exists(output));
-        Assert.Equal(["call"], File.ReadAllLines(Path.Combine(dir.Path, "calls.txt")));
+        Assert.Equal(["call"], Calls(dir));
     }
 
     [Fact]
@@ -131,13 +179,47 @@ public class ProxyWatchdogTests
     {
         using var dir = new TempDir();
         var card = dir.Sub("card");
-        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, softwareWorks: true)) { StallTimeout = TimeSpan.FromSeconds(30) };
+        using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, Fake.Stall, Fake.Ok)) { StallTimeout = TimeSpan.FromSeconds(30) };
         var output = Path.Combine(card, "_PROXY", "a.mov");
         var sw = Stopwatch.StartNew();
         var e = Assert.Throws<ToolError>(() => r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { }, () => LoggedHw(dir.Path)));
         Assert.Contains("cancelled", e.Message);
-        Assert.Equal(["call", "hw"], File.ReadAllLines(Path.Combine(dir.Path, "calls.txt")));
+        Assert.Equal(["call", "hw"], Calls(dir));
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(20), $"took {sw.Elapsed}");
+    }
+
+    /// A RAW decoder that needs `delaySeconds` before its first data, piped into a consumer that reads to the end
+    /// and prints no progress at all.
+    static FrameSource SlowFeeder(string dir, int delaySeconds, out string consumer)
+    {
+        var feeder = Path.Combine(dir, "feeder.cmd");
+        File.WriteAllText(feeder, $"@ping -n {delaySeconds + 1} 127.0.0.1 >nul\r\n@echo data\r\n");
+        consumer = Path.Combine(dir, "consumer.cmd");
+        File.WriteAllText(consumer, "@more >nul\r\n@exit /b 0\r\n");
+        return new FrameSource { InputArgs = ["-i", "-"], FeederExe = feeder, AudioFromInput = false };
+    }
+
+    // Review: the clock started at launch, so a slow first frame was killed. Before the first progress 3× the limit
+    // applies, and data flowing into ffmpeg is progress.
+    [Fact]
+    public void SlowFirstData_WithinGrace_NotKilled()
+    {
+        using var dir = new TempDir();
+        var src = SlowFeeder(dir.Path, delaySeconds: 3, out var consumer);
+        using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
+        r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(2));   // first data at 3 s: > 2 s, < 6 s
+    }
+
+    [Fact]
+    public void NoDataAtAll_KilledAfterTheGrace()
+    {
+        using var dir = new TempDir();
+        var src = SlowFeeder(dir.Path, delaySeconds: 60, out var consumer);
+        using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
+        var sw = Stopwatch.StartNew();
+        var e = Assert.Throws<FfmpegStalledException>(() => r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(1)));
+        Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku)", e.Message);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 2.8, 20);
     }
 
     // The real thing: an FFV1 clip (the codec that hung with -hwaccel auto) renders a proxy and never hangs.

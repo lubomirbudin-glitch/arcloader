@@ -65,4 +65,12 @@ public class LayoutTests
     [InlineData(@"D:\Footage\A001\", "IGNORED", "A001")]
     public void DefaultCardName_FromScannedLabel(string source, string? label, string expected) =>
         Assert.Equal(expected, Layout.DefaultCardName(source, label));
+
+    [Theory]
+    [InlineData(@"F:\", @"F:\")]
+    [InlineData(@"F:", @"F:\")]
+    [InlineData(@"\\nas\share", @"\\nas\share")]
+    [InlineData(@"D:\Footage\A001", null)]
+    [InlineData(@"\\nas\share\A001", null)]
+    public void DriveRootOf_OnlyForARootItself(string source, string? expected) => Assert.Equal(expected, Layout.DriveRootOf(source));
 }

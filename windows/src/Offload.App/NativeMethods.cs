@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
-using System.Windows.Media;
 using Offload.Core.Desktop;
 
 namespace Offload.App;
@@ -76,7 +75,9 @@ static partial class NativeMethods
             if (monitor == 0) return null;
             var info = new MonitorInfo { Size = (uint)Marshal.SizeOf<MonitorInfo>() };
             if (!GetMonitorInfo(monitor, ref info)) return null;
-            var toDip = PresentationSource.FromVisual(window)?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+            // Without the window's DPI transform the pixels cannot be turned into WPF units: the caller falls back.
+            if (PresentationSource.FromVisual(window)?.CompositionTarget is not { } target) return null;
+            var toDip = target.TransformFromDevice;
             var (left, top, width, height) = WindowFit.FromDevice(info.Work.Left, info.Work.Top, info.Work.Right, info.Work.Bottom, toDip.M11, toDip.M22);
             return new Rect(left, top, width, height);
         }
