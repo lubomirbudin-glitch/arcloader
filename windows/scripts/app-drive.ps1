@@ -18,6 +18,15 @@ public static class OffloadWin {
 }
 '@
 }
+if (-not ('OffloadDlg' -as [type])) {
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class OffloadDlg {
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+}
+'@
+}
 [OffloadWin]::SetProcessDPIAware() | Out-Null
 $AE = [System.Windows.Automation.AutomationElement]
 
@@ -33,10 +42,15 @@ function Start-Offload([string]$Exe, [string]$Arguments = '', [int]$TimeoutSecon
 
 # Top-level windows of the process. Message boxes are Win32 dialogs (class #32770) titled "Offload" like the
 # main window, so they are told apart by class: -Dialog picks message boxes, without it they are skipped.
+# A message box with an owner (MessageBox.Show(window, ...)) is not under the desktop in UI Automation but a child
+# of its owner window, so -Dialog also looks one level below each top-level window.
 function Get-OffloadWindows($Process, [switch]$Dialog) {
     $cond = New-Object System.Windows.Automation.PropertyCondition($AE::ProcessIdProperty, $Process.Id)
-    @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $cond)) |
-        Where-Object { ($_.Current.ClassName -eq '#32770') -eq [bool]$Dialog }
+    $top = @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $cond))
+    if (-not $Dialog) { return $top | Where-Object { $_.Current.ClassName -ne '#32770' } }
+    $dlg = New-Object System.Windows.Automation.PropertyCondition($AE::ClassNameProperty, '#32770')
+    $top | Where-Object { $_.Current.ClassName -eq '#32770' }
+    foreach ($w in $top) { @($w.FindAll([System.Windows.Automation.TreeScope]::Children, $dlg)) }
 }
 
 function Find-OffloadWindow($Process, [string]$TitlePattern = 'Offload', [switch]$Dialog, [int]$TimeoutSeconds = 10) {
@@ -66,9 +80,13 @@ function Invoke-OffloadButton($Process, [string]$AutomationId, [string]$WindowTi
     $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
 }
 
-# Presses a message-box button: '6' = Ano/Yes, '7' = Ne/No, '2' = OK.
+# Presses a message-box button: '6' = Ano/Yes, '7' = Ne/No, '2' = OK (the Win32 command ids).
+# The buttons of an owned message box show up in UI Automation as panes without InvokePattern, so the dialog gets
+# the button's WM_COMMAND directly - exactly what a click sends.
 function Invoke-OffloadDialogButton($Process, [string]$AutomationId = '6') {
-    Invoke-OffloadButton $Process $AutomationId '*' -Dialog
+    $dlg = Find-OffloadWindow $Process '*' -Dialog
+    Find-OffloadElement $Process $AutomationId '*' -Dialog | Out-Null   # the button exists
+    [OffloadDlg]::PostMessage([IntPtr][int]$dlg.Current.NativeWindowHandle, 0x0111, [IntPtr][int]$AutomationId, [IntPtr]::Zero) | Out-Null
 }
 
 # PrintWindow renders the window itself - works even when it is covered by other windows.

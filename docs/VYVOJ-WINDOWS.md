@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 4 (GUI), průběh
 
+- Úkol 8 — spuštění a fronta: karty úloh s průběhem, rychlostmi, odhadem času a řetězem připojení s úzkým hrdlem, zelený pruh a vysunutí karty, report a Průzkumník, zrušení, zavření okna během kopie, zvuk a blikání v hlavním panelu
 - Úkol 7 — levý panel: karty (automaticky při vložení, ruční složka, název složky), cíle (volné místo, souborový systém, nepřipojený disk), datum a ověření, proxy, dekodéry
 - Úkol 6 — projekt GUI Offload.App (WPF, Fluent, světlý/tmavý režim), okno se dvěma panely, build.ps1 přidá Offload.exe, skript pro ovládání a snímky GUI
 - Úkol 5 — fronta: karty se kopírují za sebou, proxy předchozí karty se renderují souběžně s kopií další; zrušená nebo padající úloha frontu nezastaví

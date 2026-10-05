@@ -18,6 +18,21 @@
         </Style>
     </UserControl.Resources>
     <DockPanel x:Name="Root" Background="{DynamicResource LayerFillColorDefaultBrush}">
+        <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="14">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Command="{Binding StartCommand}" Style="{DynamicResource AccentButtonStyle}" MinWidth="150" Padding="16,8"
+                        ToolTip="Ctrl+Enter" AutomationProperties.AutomationId="StartButton">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" FontSize="13" Text="&#xE768;" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        <TextBlock Text="Spustit offload" />
+                    </StackPanel>
+                </Button>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding CardsText}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding DestinationsText}" Style="{StaticResource Caption}" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="Sections" Margin="18">
 

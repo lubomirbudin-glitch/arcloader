@@ -20,6 +20,7 @@ public sealed partial class MainViewModel : ObservableObject
             SaveNow();
         };
         InitSetup();
+        InitQueue();
     }
 
     public StartupOptions Options { get; }
