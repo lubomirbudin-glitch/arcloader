@@ -31,6 +31,25 @@ public class CardEjectTests
     }
 
     [Fact]
+    public void NullSource_IsInvalid_NotAThrow()
+    {
+        Assert.Equal("neplatná cesta", CardEject.Problem(null));
+        Assert.False(CardEject.CanEject(null));
+    }
+
+    [Theory]
+    [InlineData(DriveType.Removable, StorageBus.Unknown, null)]
+    [InlineData(DriveType.Removable, StorageBus.Sata, null)]
+    [InlineData(DriveType.Fixed, StorageBus.Usb, null)]
+    [InlineData(DriveType.Fixed, StorageBus.Sd, null)]
+    [InlineData(DriveType.Fixed, StorageBus.Mmc, null)]
+    [InlineData(DriveType.Fixed, StorageBus.Sata, "interní disk nelze vysunout")]
+    [InlineData(DriveType.Fixed, StorageBus.Nvme, "interní disk nelze vysunout")]
+    [InlineData(DriveType.Fixed, StorageBus.Unknown, "interní disk nelze vysunout")]
+    public void BusRule(DriveType type, StorageBus bus, string? expected) =>
+        Assert.Equal(expected, CardEject.BusProblem(type, bus));
+
+    [Fact]
     public void VetoTexts()
     {
         Assert.Equal(CardEject.BusyText, CardEject.VetoText(6));

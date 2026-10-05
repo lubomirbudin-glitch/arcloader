@@ -24,11 +24,12 @@ public static unsafe partial class CardEject
     [LibraryImport("cfgmgr32.dll", EntryPoint = "CM_Request_Device_EjectW")]
     private static partial uint CM_Request_Device_Eject(uint devInst, out int vetoType, char* vetoName, int nameLength, uint flags);
 
-    public static bool CanEject(string source) => Problem(source) == null;
+    public static bool CanEject(string? source) => Problem(source) == null;
 
     /// Why this source cannot be ejected, or null.
-    internal static string? Problem(string source)
+    internal static string? Problem(string? source)
     {
+        if (source == null) return "neplatná cesta";
         string full;
         try
         {
@@ -45,6 +46,10 @@ public static unsafe partial class CardEject
         return null;
     }
 
+    /// Removable media is always ejectable; a fixed disk only when it is USB / SD / MMC.
+    internal static string? BusProblem(DriveType type, StorageBus bus) =>
+        type == DriveType.Removable || bus is StorageBus.Usb or StorageBus.Sd or StorageBus.Mmc ? null : "interní disk nelze vysunout";
+
     internal static string VetoText(int veto) => veto switch
     {
         VetoOutstandingOpen => BusyText,
@@ -59,34 +64,49 @@ public static unsafe partial class CardEject
         {
             if (Problem(source) is string problem) return new(false, problem);
             var root = Path.GetPathRoot(Path.GetFullPath(source.Length == 2 ? source + "\\" : source))!;
-            bool media = new DriveInfo(root).DriveType == DriveType.Removable;
-            uint? disk = media ? null : DriveLinks.DiskNode(root);
+            var type = new DriveInfo(root).DriveType;
+            if (type == DriveType.NoRootDirectory) return new(false, "karta není připojená");
+            bool media = type == DriveType.Removable;
+            uint? disk = null;
+            if (!media)
+            {
+                // Decide before anything is locked or dismounted: a fixed disk is only ejected when it is USB / SD / MMC
+                // and its device node is known, so a dismounted volume is never left behind by a failed eject.
+                if (BusProblem(DriveType.Fixed, DriveLinks.Resolve(root).Bus) is string busProblem) return new(false, busProblem);
+                disk = DriveLinks.DiskNode(root);
+                if (disk == null) return new(false, "Windows nenašel zařízení disku — vysuňte ho ikonou Bezpečně odebrat hardware");
+            }
             using (var h = CreateFileW(@"\\.\" + root.TrimEnd('\\'), GenericRead | GenericWrite, ShareReadWrite, 0, OpenExisting, 0, 0))
             {
                 if (h.IsInvalid) return new(false, "karta není připojená");
                 if (!Lock(h)) return new(false, BusyText);
-                UsbNative.DeviceIoControl(h, FsctlDismountVolume, null, 0, null, 0, out _, 0);
+                if (!UsbNative.DeviceIoControl(h, FsctlDismountVolume, null, 0, null, 0, out _, 0))
+                    return new(false, "svazek se nepodařilo odpojit — zavřete programy, které kartu používají");
                 byte allow = 0;
                 UsbNative.DeviceIoControl(h, IoctlStorageMediaRemoval, &allow, 1, null, 0, out _, 0);
-                if (media || disk == null)
+                if (media)
                 {
-                    // A reader that cannot eject the media still has it dismounted — safe to pull out.
+                    // Success is the dismount above: a reader that cannot eject the media (IOCTL unsupported) still has the
+                    // volume dismounted, so the card in its slot is safe to pull out.
                     UsbNative.DeviceIoControl(h, IoctlStorageEjectMedia, null, 0, null, 0, out _, 0);
                     return new(true, null);
                 }
             }
             int veto = 0;
             char* vetoName = stackalloc char[260];
-            uint[] targets = DevNodes.Parent(disk.Value) is uint parent ? [parent, disk.Value] : [disk.Value];
+            uint[] targets = DevNodes.Parent(disk!.Value) is uint parent ? [parent, disk.Value] : [disk.Value];
             foreach (var node in targets)
             {
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
+                    vetoName[0] = (char)0;
                     if (CM_Request_Device_Eject(node, out veto, vetoName, 260, 0) == 0 && veto == 0) return new(true, null);
                     Thread.Sleep(300);
                 }
             }
-            return new(false, VetoText(veto));
+            var name = new string(vetoName);
+            var reason = VetoText(veto) + (name.Length > 0 ? $" ({name})" : "");
+            return new(false, reason + " — svazek je odpojený, ale zařízení zůstalo připojené; vysuňte ho ikonou Bezpečně odebrat hardware");
         }
         catch (Exception e)
         {
