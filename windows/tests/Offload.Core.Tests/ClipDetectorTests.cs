@@ -65,6 +65,29 @@ public class ClipDetectorTests
         Assert.Equal("Sony", i.Camera);
     }
 
+    // Final review 4: an ARRI MOV tags make "ARRI" and model "ALEXA 35" — both are needed to recognise it.
+    [Theory]
+    [InlineData("\"com.apple.quicktime.make\":\"ARRI\",\"com.apple.quicktime.model\":\"ALEXA 35\"", "ARRI ALEXA 35")]
+    [InlineData("\"com.apple.quicktime.make\":\"Sony\",\"com.apple.quicktime.model\":\"Sony ILME-FX3\"", "Sony ILME-FX3")]
+    [InlineData("\"com.apple.quicktime.model\":\"ALEXA Mini\"", "ALEXA Mini")]
+    [InlineData("\"product_name\":\"ILME-FX6\",\"company_name\":\"Sony\"", "ILME-FX6")]
+    [InlineData("\"company_name\":\"Sony\"", "Sony")]
+    public void Parse_CameraJoinsMakeAndModel(string tags, string camera)
+    {
+        var i = FFProbe.Parse("""{"streams":[],"format":{"tags":{""" + tags + "}}}");
+        Assert.Equal(camera, i.Camera);
+    }
+
+    [Fact]
+    public void ArriMov_MakeAndModel_AutoPicksLogC4()
+    {
+        var i = FFProbe.Parse("""{"streams":[],"format":{"tags":{"com.apple.quicktime.make":"ARRI","com.apple.quicktime.model":"ALEXA 35"}}}""");
+        var clip = new Clip { Name = "A", Path = "A.mov", Format = ClipFormat.Video, Segments = ["A.mov"], Bytes = 1 };
+        var use = LutResolver.Resolve(clip, i, @"Z:
+one\A.mov", new ProxySettings { LutMode = LutMode.Auto }, LutCatalog.Load(LutCatalog.DefaultFolder));
+        Assert.Equal(("auto", "arri-logc4-awg4"), (use.Source, use.Id));
+    }
+
     [Fact]
     public void Parse_UndecodableCodecHasNoSize_TimecodeFromAnyStream()
     {

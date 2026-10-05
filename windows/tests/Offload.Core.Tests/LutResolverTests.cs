@@ -145,16 +145,19 @@ public class LutResolverTests
         Assert.Equal("none", LutResolver.Resolve(VideoClip(), null, @"Z:\x", new ProxySettings { LutMode = LutMode.Custom, LutPath = "" }, Cat).Source);
     }
 
+    // Final review 3: S-Log2 / S-Log is log, just without a built-in LUT — only the rest is "not log".
     [Theory]
-    [InlineData("s-log2")]
-    [InlineData("hlg2")]
-    [InlineData("s-cinetone")]
-    public void Sony_OtherGamma_NoLut(string gamma)
+    [InlineData("s-log2", "Sony XML: s-log2 (bez vestavěného LUTu)")]
+    [InlineData("S-Log", "Sony XML: S-Log (bez vestavěného LUTu)")]
+    [InlineData("hlg2", "Sony XML: hlg2 (není log)")]
+    [InlineData("s-cinetone", "Sony XML: s-cinetone (není log)")]
+    public void Sony_OtherGamma_NoLut(string gamma, string reason)
     {
         using var dir = new TempDir();
         var clip = SonyXml(dir, "XDROOT/Clip/C0003.MP4", gamma, "rec709");
         var use = LutResolver.Resolve(VideoClip(), new ClipInfo(), clip, Auto("sony-slog3-sgamut3cine"), Cat);
         Assert.Equal("none", use.Source);
+        Assert.Equal(reason, use.Reason);
     }
 
     [Fact]

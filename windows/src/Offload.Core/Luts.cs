@@ -180,6 +180,8 @@ public static class LutResolver
                 bool cine = p.Contains("cine") || (p.Length == 0 && g.EndsWith("cine", StringComparison.Ordinal));
                 return (cine ? "sony-slog3-sgamut3cine" : "sony-slog3-sgamut3", $"Sony XML: {gamma} / {primaries}".TrimEnd(' ', '/'));
             }
+            // S-Log2 / S-Log is log too, there is just no built-in LUT for it; the rest (rec709, hlg, s-cinetone) is not log.
+            if (g.StartsWith("s-log", StringComparison.Ordinal)) return ("", $"Sony XML: {gamma} (bez vestavěného LUTu)");
             if (g.Length > 0) return ("", $"Sony XML: {gamma} (není log)");
         }
         var camera = (info?.Camera ?? "").ToUpperInvariant();

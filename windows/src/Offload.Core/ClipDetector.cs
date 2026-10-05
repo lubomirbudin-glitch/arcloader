@@ -121,9 +121,18 @@ public static class FFProbe
         if (Dbl(Str(format, "duration")) is double fd) info.Duration = fd;
         var ftags = Tags(format);
         info.Timecode ??= Str(ftags, "timecode") ?? streams.Select(x => Str(Tags(x), "timecode")).FirstOrDefault(t => t != null);
-        info.Camera = new[] { "com.apple.quicktime.make", "com.apple.quicktime.model", "product_name", "company_name" }
-            .Select(k => Str(ftags, k)).FirstOrDefault(x => x != null);
+        info.Camera = Camera(Str(ftags, "com.apple.quicktime.make"), Str(ftags, "com.apple.quicktime.model"))
+            ?? Str(ftags, "product_name") ?? Str(ftags, "company_name");
         return info;
+    }
+
+    /// Make and model together ("ARRI" + "ALEXA 35" → "ARRI ALEXA 35"), unless the model already starts with the make.
+    static string? Camera(string? make, string? model)
+    {
+        make = string.IsNullOrWhiteSpace(make) ? null : make.Trim();
+        model = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
+        if (make == null || model == null) return make ?? model;
+        return model.StartsWith(make, StringComparison.OrdinalIgnoreCase) ? model : make + " " + model;
     }
 
     static JsonElement Tags(JsonElement e) =>
