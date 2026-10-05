@@ -13,11 +13,14 @@ public static class Encoders
     public static string Pick(string ffmpeg, ProxyCodec codec)
     {
         if (codec is not (ProxyCodec.H264 or ProxyCodec.Hevc)) return "prores_ks";
-        return Cache.GetOrAdd((ffmpeg, codec), key =>
-        {
-            var candidates = key.Item2 == ProxyCodec.H264 ? H264 : Hevc;
-            return candidates.FirstOrDefault(e => Works(ffmpeg, e)) ?? candidates[^1];
-        });
+        return Cache.GetOrAdd((ffmpeg, codec), key => Pick(key.Item1, key.Item2, key.Item2 == ProxyCodec.H264 ? H264 : Hevc));
+    }
+
+    /// The first candidate that works (no cache); the last one when none does, so ffmpeg reports the real error.
+    internal static string Pick(string ffmpeg, ProxyCodec codec, IReadOnlyList<string> candidates)
+    {
+        if (codec is not (ProxyCodec.H264 or ProxyCodec.Hevc)) return "prores_ks";
+        return candidates.FirstOrDefault(e => Works(ffmpeg, e)) ?? candidates[^1];
     }
 
     /// One black frame through the encoder — fails fast when the GPU or driver is missing.

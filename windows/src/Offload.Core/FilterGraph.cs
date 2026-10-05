@@ -27,7 +27,8 @@ public static class FilterGraph
         int margin = Math.Max(8, height * 2 / 100);
         var f = new List<string> { $"drawbox=x=0:y=ih-{size * 2}:w=iw:h={size * 2}:color=black@0.55:t=fill" };
         var common = $"fontfile={FontFile}:fontcolor=white:fontsize={size}:y=h-{size * 3 / 2}";
-        if (name) f.Add($"drawtext={common}:textfile={labelFile}:x={margin}");
+        // expansion=none: the name is literal text — a "%" in it would otherwise be read as a drawtext expansion.
+        if (name) f.Add($"drawtext={common}:textfile={labelFile}:expansion=none:x={margin}");
         if (tc)
         {
             var start = Timecode.IsValid(timecode) ? timecode! : "00:00:00:00";

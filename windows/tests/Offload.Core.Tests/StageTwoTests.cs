@@ -33,6 +33,7 @@ public class StageTwoTests
         Assert.True(s.SafeToEject);
         Assert.Equal(2, s.ProxiesDone);
         Assert.Equal(0, s.ProxiesFailed);
+        Assert.Contains(report!.ProxyEncoder, Encoders.H264); // final review B1
         Assert.Equal(3, report!.Clips.Count);
         Assert.All(report.Clips, c => Assert.Equal(3, c.Thumbnails.Count));
         var sub = report.Clips.Single(c => c.Clip.IsCameraProxy);
@@ -47,6 +48,36 @@ public class StageTwoTests
         }
         // The hash list only covers the card's files, not proxies.
         Assert.DoesNotContain("_PROXY", File.ReadAllText(Path.Combine(job.Plan.CardPaths[0], "_REPORT", "A001.xxh64")));
+    }
+
+    // Final review A7: a failed copy to another destination keeps the rendered proxy.
+    [FfmpegFact]
+    public void ProxyCopyFails_RenderedProxyKept()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestMedia.MakeClip(Path.Combine(card, "C0001.mov"), seconds: 1);
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1"), dir.Sub("d2")])
+        {
+            Proxy = new ProxySettings { Enabled = true, Height = 360 },
+        }, Options());
+        Assert.True(job.RunCopy());
+        var paths = job.Plan!.CardPaths;
+        Directory.CreateDirectory(Path.Combine(paths[1], "_PROXY", "C0001.mov")); // blocks the copy on d2
+        var log = new List<string>();
+        job.RunPost(log.Add);
+
+        var s = job.Status();
+        Assert.Equal(JobPhase.Done, s.Phase);
+        Assert.Equal(1, s.ProxiesDone);
+        Assert.Equal(0, s.ProxiesFailed);
+        var clip = Assert.Single(job.Report!.Clips);
+        Assert.Equal(ProxyStatus.Done, clip.ProxyStatus);
+        Assert.Equal("_PROXY/C0001.mov", clip.ProxyPath);
+        Assert.StartsWith($"kopie na {paths[1]} selhala: ", clip.ProxyNote);
+        Assert.Contains(log, l => l.Contains("C0001") && l.Contains(paths[1]));
+        Assert.True(File.Exists(Path.Combine(paths[0], "_PROXY", "C0001.mov")));
+        Assert.Empty(Directory.GetFiles(Path.Combine(paths[1], "_PROXY"), "*.part"));
     }
 
     [FfmpegFact]

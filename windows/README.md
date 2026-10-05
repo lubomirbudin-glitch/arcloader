@@ -11,7 +11,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | Část | Stav |
 |---|---|
 | Jádro + CLI (`bin\offload.exe`) | hotovo (plán 1) — ostrý test na skutečné kartě a měření rychlostí zatím chybí |
-| Analýza klipů, 3 snímky, proxy, PDF | hotovo (plán 2) |
+| Analýza klipů, 3 snímky, proxy, PDF | hotovo (plán 2) — QSV/AMF a ostrý test na médiu neověřeno |
 | RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: plán 3 |
 | braw-decode | plán 3 |
 | GUI `Offload.exe` | plán 4 |

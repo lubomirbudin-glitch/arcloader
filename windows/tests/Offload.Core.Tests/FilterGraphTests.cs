@@ -16,9 +16,17 @@ public class FilterGraphTests
         Assert.Equal(
         [
             "drawbox=x=0:y=ih-64:w=iw:h=64:color=black@0.55:t=fill",
-            "drawtext=fontfile=font.ttf:fontcolor=white:fontsize=32:y=h-48:textfile=label-1.txt:x=21",
+            "drawtext=fontfile=font.ttf:fontcolor=white:fontsize=32:y=h-48:textfile=label-1.txt:expansion=none:x=21",
             "drawtext=fontfile=font.ttf:fontcolor=white:fontsize=32:y=h-48:timecode='01\\:00\\:00\\:00':rate=25/1:x=w-tw-21",
         ], FilterGraph.BurnIn(s, 1080, hasFont: true, "label-1.txt", "01:00:00:00", "25/1"));
+    }
+
+    // Final review A2: a % in the clip name must not be read as a drawtext expansion.
+    [Fact]
+    public void BurnIn_NameIsLiteral()
+    {
+        var name = FilterGraph.BurnIn(new ProxySettings { BurnTimecode = false }, 720, true, "label-2.txt", null, null)[1];
+        Assert.Contains(":textfile=label-2.txt:expansion=none:", name);
     }
 
     [Fact]
@@ -46,7 +54,7 @@ public class FilterGraphTests
             "crop=w='trunc(min(iw*0.9,ih*0.9*1.66)/2)*2':h='trunc(min(iw*0.9,ih*0.9*1.66)/1.66/2)*2'," +
             "scale=-2:720:flags=bicubic,setsar=1,format=rgb48le,lut3d=file=look.cube:interp=tetrahedral," +
             "drawbox=x=0:y=ih-42:w=iw:h=42:color=black@0.55:t=fill," +
-            "drawtext=fontfile=font.ttf:fontcolor=white:fontsize=21:y=h-31:textfile=label.txt:x=14,format=yuv420p",
+            "drawtext=fontfile=font.ttf:fontcolor=white:fontsize=21:y=h-31:textfile=label.txt:expansion=none:x=14,format=yuv420p",
             FilterGraph.Proxy(s, 720, alreadyCropped: false, lut: true, hasFont: true, "label.txt", "01:00:00:00", "25/1"));
     }
 

@@ -66,4 +66,11 @@ public class TimecodeEncoderTests
         Assert.Equal("prores_ks", Encoders.Pick(TestMedia.Ffmpeg!, ProxyCodec.ProresProxy));
         Assert.False(Encoders.Works(TestMedia.Ffmpeg!, "no_such_encoder"));
     }
+
+    // Final review C2
+    [FfmpegFact]
+    public void Pick_FallsBackPastAFailingEncoder()
+    {
+        Assert.Equal("libx264", Encoders.Pick(TestMedia.Ffmpeg!, ProxyCodec.H264, ["no_such_encoder", "libx264"]));
+    }
 }

@@ -49,6 +49,8 @@ public sealed partial class OffloadReport
     [JsonPropertyName("skipped")] public required IReadOnlyList<string> Skipped { get; init; }
     [JsonPropertyName("clips")] public List<ClipEntry> Clips { get; set; } = [];
     [JsonPropertyName("proxy")] public ProxySettings? Proxy { get; set; }
+    /// Windows only: the ffmpeg encoder the proxies were rendered with (e.g. "h264_nvenc"); omitted when none were rendered.
+    [JsonPropertyName("proxyEncoder")] public string? ProxyEncoder { get; set; }
 
     [JsonIgnore] public double CopySeconds => (CopyFinished - Started).TotalSeconds;
     [JsonIgnore] public double VerifySeconds => (Finished - CopyFinished).TotalSeconds;

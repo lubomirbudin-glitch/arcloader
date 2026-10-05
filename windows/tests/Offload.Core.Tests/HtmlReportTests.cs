@@ -68,6 +68,8 @@ public class HtmlReportTests
         Assert.Contains("<td class=\"ok\">hotovo</td>", html);
         Assert.Contains("2 ch", html);
         Assert.Contains("Proxy: H.264, 1080p, výřez 1.66, LUT: bez LUT", html);
+        r.ProxyEncoder = "h264_nvenc";
+        Assert.Contains("Proxy: H.264 (h264_nvenc), 1080p, výřez 1.66, LUT: bez LUT", HtmlReport.Render(r));
     }
 
     [Fact]

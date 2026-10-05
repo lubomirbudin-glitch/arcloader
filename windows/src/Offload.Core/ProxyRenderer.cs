@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using System.Text;
 
 namespace Offload.Core;
@@ -18,6 +19,11 @@ public sealed class ProxyRenderer : IDisposable
 
     public ProxySettings Settings { get; }
     public ExternalTools Tools { get; }
+
+    string? encoderName;
+
+    /// The video encoder proxies are rendered with (probed once, on first use); null without ffmpeg.
+    public string? EncoderName => Tools.Ffmpeg is string ffmpeg ? encoderName ??= Encoders.Pick(ffmpeg, Settings.Codec) : null;
 
     public ProxyRenderer(ProxySettings settings, ExternalTools tools)
     {
@@ -125,42 +131,59 @@ public sealed class ProxyRenderer : IDisposable
         return b.Source(path, info, Settings, Tools, workDir, singleFrameAt);
     }
 
+    /// Where ffmpeg's input seek (-ss before -i) should land for a thumbnail position. A frame in the middle is
+    /// sought half a frame early: its exact time rounded up would skip to the next frame (23.976, 24, 29.97 fps).
+    /// The last frame is sought a second before it and decoded to the end of the video stream — never relative
+    /// to the container end, which is later when the audio runs longer than the picture.
+    internal static string SeekSeconds(ClipInfo info, FramePosition p)
+    {
+        double at = p.Seconds;
+        if (p.FromEnd) at = Math.Max(0, p.Seconds - 1);
+        else if (p.Frame > 0 && Timecode.Fps(info.FrameRate) is double fps) at = (p.Frame - 0.5) / fps;
+        return at.ToString("0.000000", CultureInfo.InvariantCulture);
+    }
+
     /// First, middle and last frame as small JPEGs with the LUT applied, so log footage is readable.
-    public List<Thumbnail> Thumbnails(Clip clip, string cardPath, ClipInfo info, bool applyLut = true)
+    /// When `isCancelled` turns true the clip simply gets no thumbnails.
+    public List<Thumbnail> Thumbnails(Clip clip, string cardPath, ClipInfo info, bool applyLut = true, Func<bool>? isCancelled = null)
     {
         var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, "ffmpeg not found");
+        isCancelled ??= () => false;
         var vf = FilterGraph.Thumbnail(hasLut && applyLut);
         var result = new List<Thumbnail>();
-        ToolError? lastError = null;
+        Exception? lastError = null;
         foreach (var pos in FramePositions(info))
         {
-            var src = SourceFor(clip, cardPath, info, pos.Seconds, forRender: false);
+            if (isCancelled()) return [];
+            FrameSource? src = null;
             var output = Path.Combine(workDir, $"thumb-{Guid.NewGuid():N}.jpg");
             try
             {
+                src = SourceFor(clip, cardPath, info, pos.Seconds, forRender: false);
                 bool video = clip.Format == ClipFormat.Video;
                 var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y" };
                 if (src.FeederExe == null) args.Add("-nostdin");
-                if (video) args.AddRange(pos.FromEnd ? ["-sseof", "-1"] : ["-ss", pos.Seconds.ToString("0.000", CultureInfo.InvariantCulture)]);
+                if (video) args.AddRange(["-ss", SeekSeconds(info, pos)]);
                 args.AddRange(src.InputArgs);
-                // From the end: decode the last second and keep overwriting the image — the final write is the last frame.
-                args.AddRange(video && pos.FromEnd ? ["-vf", vf, "-update", "1"] : ["-frames:v", "1", "-vf", vf]);
+                // Last frame: decode the final second and keep overwriting the image — the last write is the last frame.
+                args.AddRange(video && pos.FromEnd ? ["-map", "0:v:0", "-vf", vf, "-update", "1"] : ["-frames:v", "1", "-vf", vf]);
                 args.AddRange(["-q:v", "5", output]);
-                RunFfmpeg(ffmpeg, args, src, null, null, () => false);
+                RunFfmpeg(ffmpeg, args, src, null, null, isCancelled);
                 if (!File.Exists(output)) throw new ToolError("ffmpeg", 0, "no frame");
                 result.Add(new Thumbnail(File.ReadAllBytes(output), Label(info, pos)));
             }
-            catch (ToolError e)
+            catch (Exception e) when (e is not OperationCanceledException)
             {
+                if (isCancelled()) return [];
                 lastError = e; // one bad position must not cost the other thumbnails
             }
             finally
             {
-                src.RemoveIntermediates();
+                src?.RemoveIntermediates();
                 NativeIO.Delete(output);
             }
         }
-        if (result.Count == 0 && lastError != null) throw lastError;
+        if (result.Count == 0 && lastError != null) ExceptionDispatchInfo.Throw(lastError);
         return result;
     }
 
@@ -189,7 +212,7 @@ public sealed class ProxyRenderer : IDisposable
                 args.AddRange(Encoders.AudioArgs(Settings.Codec));
             }
             args.AddRange(["-vf", vf]);
-            args.AddRange(Encoders.VideoArgs(Encoders.Pick(ffmpeg, Settings.Codec), Settings.Codec, Settings.BitrateMbps));
+            args.AddRange(Encoders.VideoArgs(EncoderName!, Settings.Codec, Settings.BitrateMbps));
             if (Timecode.IsValid(info.Timecode)) args.AddRange(["-timecode", info.Timecode!]);
 
             var dir = Path.GetDirectoryName(output)!;

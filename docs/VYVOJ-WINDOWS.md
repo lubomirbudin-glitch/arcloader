@@ -11,13 +11,14 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | Plán | Obsah | Stav |
 |---|---|---|
 | 1 | jádro kopírování, ověření, reporty JSON/TXT/HTML/xxh64/MHL, CLI | hotovo (čeká ostrý test na kartě) |
-| 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | hotovo |
+| 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | hotovo (čeká ostrý test na skutečném médiu) |
 | 3 | `braw-decode.exe` (C++, Blackmagic RAW SDK pro Windows) | naplánováno |
 | HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | naplánováno |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | naplánováno |
 
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
 
+- Závěrečná kontrola plánu 2 — opravy: přesný prostřední snímek, `%` v názvu, poslední snímek u delšího zvuku, enkodér v reportu, zrušitelné náhledy, R3D/ARRI bez falešné chyby náhledu, proxy zůstane hotová i při selhání kopie na další cíl, test HEVC a záložního enkodéru, `tools\bin` jen pro vývojový build, build skript přeskočí malé shimy z PATH
 - Úkol 11 — balíček s ffmpeg/ffprobe, dokumentace
 - Úkol 10 — CLI: volby proxy (--proxy, --lut, --proxy-codec, --frame-aspect …) a souhrn klipů
 - Úkol 9 — fáze 2 úlohy: analýza klipů, 3 snímky, proxy na všechny cíle, PDF; selhání nikdy nezmění výsledek kopie

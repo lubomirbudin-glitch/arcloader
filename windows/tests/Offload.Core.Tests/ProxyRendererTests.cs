@@ -17,6 +17,16 @@ public class ProxyRendererTests
     }
 
     [Fact]
+    public void SeekSeconds_MiddleHalfFrameEarly_LastOneSecondBefore()
+    {
+        var info = new ClipInfo { FrameRate = "24000/1001", Duration = 2.085417, Frames = 50 };
+        var pos = ProxyRenderer.FramePositions(info);
+        Assert.Equal(["0.000000", "1.021854", "1.043708"], pos.Select(p => ProxyRenderer.SeekSeconds(info, p)));
+        var shortClip = new ClipInfo { FrameRate = "25/1", Duration = 0.12, Frames = 3 };
+        Assert.Equal(["0.000000", "0.020000", "0.000000"], ProxyRenderer.FramePositions(shortClip).Select(p => ProxyRenderer.SeekSeconds(shortClip, p)));
+    }
+
+    [Fact]
     public void FramePositions_UnknownLengthOrSingleFrame_OnlyFirst()
     {
         Assert.Single(ProxyRenderer.FramePositions(new ClipInfo()));
@@ -56,6 +66,67 @@ public class ProxyRendererTests
         Assert.Equal("01:00:03:24", thumbs[2].Label);
     }
 
+    /// Mean grey level of a JPEG, decoded by ffmpeg.
+    static double MeanGrey(string ffmpeg, string jpeg, string workDir)
+    {
+        var raw = Path.Combine(workDir, $"grey-{Guid.NewGuid():N}.raw");
+        ToolProcess.Run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", jpeg, "-f", "rawvideo", "-pix_fmt", "gray", raw]);
+        var bytes = File.ReadAllBytes(raw);
+        return bytes.Average(b => (double)b);
+    }
+
+    // Final review A1
+    [FfmpegFact]
+    public void Thumbnails_MiddleFrameMatchesCaption_24fps()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var file = Path.Combine(card, "ramp.mov");
+        var ffmpeg = TestMedia.Ffmpeg!;
+        // Every frame is one flat grey level, 8 steps above the previous one: a frame off is plain to see.
+        ToolProcess.Run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-f", "lavfi", "-i", "color=c=black:s=320x180:r=24",
+            "-vf", "geq=lum='mod(N*8,256)':cb=128:cr=128", "-frames:v", "50", "-c:v", "libx264", "-pix_fmt", "yuv420p", file]);
+        using var r = new ProxyRenderer(new ProxySettings(), Tools);
+        var clip = VideoClip("ramp.mov");
+        var info = r.Probe(clip, card);
+        var middle = ProxyRenderer.FramePositions(info)[1];
+        Assert.Equal(25, middle.Frame);
+        var thumbs = r.Thumbnails(clip, card, info);
+        Assert.Equal(3, thumbs.Count);
+        var thumb = Path.Combine(dir.Path, "thumb.jpg");
+        File.WriteAllBytes(thumb, thumbs[1].Jpeg);
+        double actual = MeanGrey(ffmpeg, thumb, dir.Path);
+
+        // Decode-exact reference: the frame picked by number, through the same thumbnail filter.
+        double Reference(long n)
+        {
+            var jpg = Path.Combine(dir.Path, $"ref-{n}.jpg");
+            ToolProcess.Run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", file,
+                "-vf", $"select='eq(n,{n})',{FilterGraph.Thumbnail(false)}", "-frames:v", "1", "-q:v", "5", jpg]);
+            return MeanGrey(ffmpeg, jpg, dir.Path);
+        }
+        double exact = Reference(25), next = Reference(26), previous = Reference(24);
+        Assert.True(Math.Abs(actual - exact) < 2, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"thumbnail grey {actual:0.0}, frame 25 {exact:0.0}, frame 26 {next:0.0}, frame 24 {previous:0.0}"));
+    }
+
+    // Final review A3
+    [FfmpegFact]
+    public void Thumbnails_AudioLongerThanVideo_StillThree()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var file = Path.Combine(card, "long-audio.mov");
+        ToolProcess.Run(TestMedia.Ffmpeg!, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+            "-f", "lavfi", "-i", "testsrc2=s=320x180:r=25:d=4", "-f", "lavfi", "-i", "sine=d=6",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", file]);
+        using var r = new ProxyRenderer(new ProxySettings(), Tools);
+        var clip = VideoClip("long-audio.mov");
+        var info = r.Probe(clip, card);
+        var thumbs = r.Thumbnails(clip, card, info);
+        Assert.Equal(3, thumbs.Count);
+        Assert.Equal(ProxyRenderer.Label(info, ProxyRenderer.FramePositions(info)[2]), thumbs[2].Label);
+    }
+
     // Review focus 5
     [FfmpegFact]
     public void Thumbnails_SingleFrameClip()
@@ -92,6 +163,43 @@ public class ProxyRendererTests
         Assert.True(p.AudioChannels > 0);
         Assert.Empty(Directory.GetFiles(Path.Combine(card, "_PROXY"), "*.part"));
         lock (progress) Assert.NotEmpty(progress);
+
+        // Final review A2: "%" would be a drawtext expansion ("Stray %") without expansion=none.
+        var percent = "Take 100% A.mov";
+        TestMedia.MakeClip(Path.Combine(card, percent), seconds: 1, timecode: "10:00:00:00");
+        var percentClip = VideoClip(percent);
+        var percentOut = Path.Combine(card, "_PROXY", percent);
+        r.Render(percentClip, card, r.Probe(percentClip, card), percentOut, _ => { }, () => false);
+        Assert.True(new FileInfo(percentOut).Length > 0);
+    }
+
+    // Final review C1
+    [FfmpegFact]
+    public void Render_Hevc()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeClip(Path.Combine(card, "a.mov"), seconds: 1);
+        using var r = new ProxyRenderer(new ProxySettings { Height = 360, Codec = ProxyCodec.Hevc }, Tools);
+        var clip = VideoClip("a.mov");
+        var output = Path.Combine(card, "_PROXY", "a.mov");
+        r.Render(clip, card, r.Probe(clip, card), output, _ => { }, () => false);
+        Assert.Equal("hevc", FFProbe.Probe(TestMedia.Ffprobe!, output).Codec!.Split(' ')[0]);
+        var tag = ToolProcess.Run(TestMedia.Ffprobe!, ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_tag_string", "-of", "csv=p=0", output]);
+        Assert.Equal("hvc1", tag.Trim());
+    }
+
+    // Final review A4
+    [FfmpegFact]
+    public void Thumbnails_Cancelled_NoneAndNoError()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeClip(Path.Combine(card, "a.mov"), seconds: 2);
+        using var r = new ProxyRenderer(new ProxySettings(), Tools);
+        var clip = VideoClip("a.mov");
+        var info = r.Probe(clip, card);
+        Assert.Empty(r.Thumbnails(clip, card, info, isCancelled: () => true));
     }
 
     [FfmpegFact]

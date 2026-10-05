@@ -33,7 +33,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | PDF report | ✅ (WebKit) | ✅ (Edge headless) |
 | Analýza klipů, metadata | ✅ | ✅ |
 | Náhledy v reportu | 1 náhled ve 30 % délky → ⏳ **3 snímky** (první/prostřední/poslední) | ✅ 3 snímky |
-| Proxy (LUT, burn-in, frame lines, TC) | ✅ | ✅ (NVENC/QSV/AMF/software) |
+| Proxy (LUT, burn-in, frame lines, TC) | ✅ | ✅ ověřeno NVENC + software (libx264); QSV/AMF neověřeno (není HW); čeká ostrý test na skutečném médiu |
 | Blackmagic RAW | ✅ `braw-decode` | ⏳ plán 3 (port `braw-decode` pro Windows) |
 | RED R3D (REDline) | ✅ | ✅ kód, neověřeno s nástroji |
 | ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ | ✅ kód, neověřeno s nástroji |
@@ -84,4 +84,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Kontrola voleb před kopií:** Windows ověří velikost bloku (násobek 4096, nejvýše 1 GiB), počet bufferů (≥ 2)
   a tvar data `RRRR-MM-DD` ještě před vytvořením čehokoli. Naplánováno i pro Mac.
 - **R3D/ARRI bez proxy** zatím nemají náhledy (stejně jako na Macu).
+- **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
+  a ukazuje ho v řádku „Proxy: H.264 (h264_nvenc), …“ v HTML/PDF. Mac klíč nezná a ignoruje ho.
 - **Verze v reportu:** Mac `0.1.0`, Windows `0.1.0-win` — z reportu je vidět, která verze kopírovala.

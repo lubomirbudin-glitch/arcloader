@@ -235,7 +235,9 @@ public sealed class OffloadJob
                     }
                 }
                 entries[i].Info = info;
-                entries[i].Thumbnails = TryThumbnails(renderer, entries[i].Clip, cardPaths[d], info, applyLut: true, log);
+                // RED and ARRI raw cannot give a single frame directly; their thumbnails come from the proxy later.
+                if (entries[i].Clip.Format is not (ClipFormat.R3d or ClipFormat.Arriraw))
+                    entries[i].Thumbnails = TryThumbnails(renderer, entries[i].Clip, cardPaths[d], info, applyLut: true, () => IsCancelled, log);
             }
             catch (Exception e)
             {
@@ -284,18 +286,28 @@ public sealed class OffloadJob
             {
                 renderer.Render(clip, cardPaths[d], info, Layout.Join(cardPaths[d], rel),
                     f => Update(s => s with { ClipFraction = f }), () => IsCancelled);
-                if (Config.Proxy.CopyToAllDestinations)
-                {
-                    for (int o = 0; o < cardPaths.Count; o++)
-                        if (o != d) CopyFile(Layout.Join(cardPaths[d], rel), Layout.Join(cardPaths[o], rel));
-                }
                 entries[i].ProxyStatus = ProxyStatus.Done;
                 entries[i].ProxyPath = rel;
+                if (Config.Proxy.CopyToAllDestinations)
+                {
+                    // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.
+                    for (int o = 0; o < cardPaths.Count; o++)
+                    {
+                        if (o == d) continue;
+                        try { CopyFile(Layout.Join(cardPaths[d], rel), Layout.Join(cardPaths[o], rel)); }
+                        catch (Exception e)
+                        {
+                            var note = $"kopie na {cardPaths[o]} selhala: {e.Message}";
+                            entries[i].ProxyNote = entries[i].ProxyNote is string prev ? $"{prev}; {note}" : note;
+                            log?.Invoke($"proxy {clip.Name}: copy to {cardPaths[o]} failed: {e.Message}");
+                        }
+                    }
+                }
                 if (entries[i].Thumbnails.Count == 0)
                 {
                     // RAW formats rendered via an intermediate: take the thumbnails from the finished proxy.
                     var proxyClip = new Clip { Name = name, Path = rel, Format = ClipFormat.Video, Segments = [rel], Bytes = 0 };
-                    entries[i].Thumbnails = TryThumbnails(renderer, proxyClip, cardPaths[d], info, applyLut: false, log);
+                    entries[i].Thumbnails = TryThumbnails(renderer, proxyClip, cardPaths[d], info, applyLut: false, () => IsCancelled, log);
                 }
                 entries[i].ProxySeconds = sw.Elapsed.TotalSeconds;
                 Update(s => s with { ProxiesDone = s.ProxiesDone + 1 });
@@ -309,19 +321,21 @@ public sealed class OffloadJob
             }
         }
         report.Clips = entries;
+        if (entries.Any(e => e.ProxyStatus == ProxyStatus.Done)) report.ProxyEncoder = renderer.EncoderName;
         RewriteReports(report, plan, log);
         return report;
     }
 
-    static List<Thumbnail> TryThumbnails(ProxyRenderer renderer, Clip clip, string cardPath, ClipInfo info, bool applyLut, Action<string>? log)
+    static List<Thumbnail> TryThumbnails(ProxyRenderer renderer, Clip clip, string cardPath, ClipInfo info, bool applyLut,
+        Func<bool> isCancelled, Action<string>? log)
     {
         try
         {
-            return renderer.Thumbnails(clip, cardPath, info, applyLut);
+            return renderer.Thumbnails(clip, cardPath, info, applyLut, isCancelled);
         }
         catch (Exception e)
         {
-            log?.Invoke($"thumbnails {clip.Name}: {e.Message}");
+            if (!isCancelled()) log?.Invoke($"thumbnails {clip.Name}: {e.Message}");
             return [];
         }
     }

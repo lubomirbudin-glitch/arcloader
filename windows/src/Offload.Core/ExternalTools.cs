@@ -38,17 +38,26 @@ public sealed class ExternalTools
             var exeDir = AppContext.BaseDirectory.TrimEnd('\\');
             dirs.Add(Path.Combine(exeDir, "bin"));
             dirs.Add(exeDir);
-            var d = exeDir;
-            for (int i = 0; i < 6 && Path.GetDirectoryName(d) is string parent; i++)
+            if (IsDevBuild(AppContext.BaseDirectory))
             {
-                d = parent;
-                dirs.Add(Path.Combine(d, "tools", "bin"));
+                // Only a build running from the repo walks up to windows\tools\bin; an installed one must never pick up C:\tools\bin.
+                var d = exeDir;
+                for (int i = 0; i < 6 && Path.GetDirectoryName(d) is string parent; i++)
+                {
+                    d = parent;
+                    dirs.Add(Path.Combine(d, "tools", "bin"));
+                }
             }
             dirs.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Offload", "bin"));
             dirs.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
             return dirs;
         }
     }
+
+    /// Running from a project's bin\Debug\ or bin\Release\ output (development), not from an installed copy.
+    internal static bool IsDevBuild(string baseDirectory) =>
+        baseDirectory.Contains(@"\bin\Debug\", StringComparison.OrdinalIgnoreCase)
+        || baseDirectory.Contains(@"\bin\Release\", StringComparison.OrdinalIgnoreCase);
 
     static readonly Dictionary<string, string[]> KnownPaths = new(StringComparer.OrdinalIgnoreCase)
     {

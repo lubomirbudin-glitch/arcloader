@@ -4,6 +4,18 @@ public class ToolsTests
 {
     const string Cmd = @"C:\Windows\System32\cmd.exe";
 
+    // Final review D1
+    [Fact]
+    public void SearchDirs_ToolsBinWalkOnlyForDevelopmentBuilds()
+    {
+        Assert.True(ExternalTools.IsDevBuild(@"D:\offload\windows\src\Offload.Cli\bin\Debug\net10.0-windows\"));
+        Assert.True(ExternalTools.IsDevBuild(@"D:\offload\windows\src\Offload.Cli\BIN\release\net10.0-windows\win-x64\"));
+        Assert.False(ExternalTools.IsDevBuild(@"C:\Program Files\Offload\bin\"));
+        Assert.False(ExternalTools.IsDevBuild(@"D:\offload\windows\build\Offload\bin\"));
+        // The tests themselves run from bin\Debug, so they still find windows\tools\bin.
+        Assert.Contains(ExternalTools.SearchDirs, d => d.EndsWith(@"\tools\bin", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public void Run_ReturnsStdout() => Assert.Equal("hello\n", ToolProcess.Run(Cmd, ["/c", "echo hello"]));
 
