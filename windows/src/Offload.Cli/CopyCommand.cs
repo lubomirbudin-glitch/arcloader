@@ -1,5 +1,6 @@
 using System.CommandLine;
 using Offload.Core;
+using Offload.Core.Desktop;
 using Offload.Core.Hardware;
 
 namespace Offload.Cli;
@@ -26,10 +27,11 @@ static class CopyCommand
         var proxyCodec = new Option<string>("--proxy-codec") { Description = "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.", DefaultValueFactory = _ => "h264" };
         var proxyBitrate = new Option<int>("--proxy-bitrate") { Description = "Proxy bitrate (Mb/s) for H.264/HEVC.", DefaultValueFactory = _ => 10 };
         var noBurnIn = new Option<bool>("--no-burn-in") { Description = "No burn-in of clip name and timecode." };
+        var proxyFolder = new Option<string?>("--proxy-folder") { Description = "Also copy every proxy to <folder>\\<date>\\<card name>\\ (with --proxy; never overwrites)." };
 
         var cmd = new Command("copy", "Copy a card to <dest>/<date>/<card name>/ on every destination and verify.");
         cmd.Arguments.Add(source);
-        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noAnalyze, proxy, lut, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn }) cmd.Options.Add(o);
+        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noAnalyze, proxy, lut, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder }) cmd.Options.Add(o);
         cmd.SetAction(r =>
         {
             JobConfig config;
@@ -60,7 +62,12 @@ static class CopyCommand
                     FrameScale = r.GetValue(frameScale) / 100,
                     BurnFilename = !r.GetValue(noBurnIn),
                     BurnTimecode = !r.GetValue(noBurnIn),
+                    ExtraFolder = r.GetValue(proxyFolder) is string pf ? CliPath.Full(pf) : null,
                 };
+                if (config.Proxy.ExtraFolder != null && !config.Proxy.Enabled)
+                    Console.Error.WriteLine("Note: --proxy-folder has no effect without --proxy.");
+                if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string folder && !Directory.Exists(folder))
+                    throw new ArgumentException($"Proxy folder not found: {folder}");
             }
             catch (Exception e)
             {
@@ -87,6 +94,8 @@ static class CopyCommand
         }
         Console.WriteLine($"Card {plan.CardName}: {plan.Scan.Files.Count} files, {Format.Bytes(plan.Scan.TotalBytes)}");
         foreach (var p in plan.CardPaths) Console.WriteLine($"  → {p}");
+        if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string extra)
+            Console.WriteLine($"  proxy also → {Layout.CardPath(extra, plan.Date, plan.CardName)}");
         if (config.AnalyzeClips || config.Proxy.Enabled)
             Console.WriteLine($"  ffmpeg: {config.Tools.Resolved().Ffmpeg ?? "NOT FOUND"}");
         // Connection chain: informational only, must never fail a copy.

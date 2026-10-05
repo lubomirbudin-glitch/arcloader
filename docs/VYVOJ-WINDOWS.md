@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — složka pro proxy
 
+- CLI — `offload copy --proxy-folder <složka>` (holé `E:` = `E:\`); neexistující složka při `--proxy` je chyba před startem (exit 1), bez `--proxy` jen poznámka; výpis plánu ukáže cílovou složku proxy; návod v README
 - Jádro — nové volitelné nastavení `proxy.extraFolder`: každá hotová proxy se po kopii na cíle zkopíruje i do `<složka>\<datum>\<karta>\` (přes `.part` + přejmenování, při shodě jména `_2`, `_3`…, nikdy nepřepíše); nedostupná složka nebo chyba kopie je jen poznámka u klipu, proxy ani úloha neselže; pravidlo pro start „Složka pro proxy není dostupná“; v HTML/PDF reportu „· také ve složce …“
 
 ## 2026-10-05 — plán 4 (GUI), průběh
