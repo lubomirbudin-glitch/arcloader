@@ -696,7 +696,9 @@ zkopíroval se). Mac čte XML přes `XMLParser` (první prvek s atributem `name`
   těsně před `lut3d`. Vlastní `.cube` se aplikuje beze změny.
 - **RAW dávají log jen když LUT opravdu následuje** (`RawLook`): R3D `--colorSciVersion 3 --colorSpace 25 --gammaCurve 34`,
   ARRI `--target-colorspace` podle vestavěného ARRI LUTu (`AWG4/D65/LogC4`, `AWG3/D65/LogC3`), u vlastního podle názvu
-  souboru/metadat (`ARRIRAWBackend.colorSpace`); bez LUTu vlastní Rec.709 vzhled (`Rec.709/D65/BT.1886 --embedded-look`).
+  souboru/metadat (`ARRIRAWBackend.colorSpace`); bez LUTu vlastní Rec.709 vzhled — RED výchozí, ARRI jen `--embedded-look`
+  (oprava 2026-10-06: art-cmd odmítne `--target-colorspace` u vzhledu bez DRT LUTu, skončí kódem 0 a nic nezapíše; klip bez
+  vloženého vzhledu dá LogC). Prázdná cesta k LUTu = bez LUTu.
 - R3D/ARRI náhledy dál z hotové proxy — **bez** LUTu (proxy ho už má).
 
 **D.3.5 Report.** U klipu volitelný klíč `lut` = `{source, id?, name, reason}` (`id` chybí u `custom`/`none` — `nil` se

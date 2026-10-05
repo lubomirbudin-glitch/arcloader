@@ -62,7 +62,7 @@ final class LutRenderTests: XCTestCase {
                                     look: RawLook(log: false, arriColorSpace: nil), parametersFile: "/t/p.json")
         XCTAssertTrue(a.cropped)
         XCTAssertEqual(a.args, ["process", "--input", "/c/c.mxf", "--video-codec", "prores422lt", "--deflip", "--output", "/t/i.mxf",
-                                "--parameters", "/t/p.json", "--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"])
+                                "--parameters", "/t/p.json", "--embedded-look"])
         let p = try XCTUnwrap(try JSONSerialization.jsonObject(with: try XCTUnwrap(a.parameters)) as? [String: [String: Int]])
         XCTAssertEqual(p["inputCrop"], ["displayXOffsetOverride": 0, "displayYOffsetOverride": 194,
                                         "displayWidthOverride": 4608, "displayHeightOverride": 2774])

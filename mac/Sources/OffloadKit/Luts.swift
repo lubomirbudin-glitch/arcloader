@@ -248,7 +248,8 @@ public enum LutOption {
             fb = fallback
         }
         guard let value, value.lowercased() != "auto" else { return Parsed(mode: .auto, fallback: fb) }
-        if value.lowercased() == "none" { return Parsed(mode: .off, fallback: fb) }
+        // An empty value ("--lut ''") is an explicit "no LUT", like none.
+        if value.lowercased() == "none" || value.trimmingCharacters(in: .whitespaces).isEmpty { return Parsed(mode: .off, fallback: fb) }
         if value.lowercased().hasSuffix(".cube") || value.contains("/") || value.contains("\\") {
             return Parsed(mode: .custom, path: value, fallback: fb)
         }

@@ -296,7 +296,7 @@ public final class ProxyRenderer {
     /// The .cube for this clip as a plain path in the temp folder, or nil for no LUT. The custom LUT was copied in init
     /// (nil when it was missing); a built-in one is copied on first use, once per id.
     func prepareLUT(_ lut: LutUse?) throws -> String? {
-        guard let lut, let file = lut.file else { return nil }
+        guard let lut, let file = lut.file, !file.isEmpty else { return nil }   // an empty path is no LUT
         guard let id = lut.id else { return hasCustomLUT ? tempDir + "/look.cube" : nil }
         let copy = tempDir + "/lut-\(id).cube"
         if !builtinLUTs.contains(id) {
@@ -309,7 +309,7 @@ public final class ProxyRenderer {
 
     /// RAW decoders hand over log whenever a LUT follows; ARRI's target space must match a built-in ARRI LUT.
     static func lookFor(_ lut: LutUse?, info: ClipInfo) -> RawLook {
-        guard let lut, let file = lut.file else { return RawLook(log: false, arriColorSpace: nil) }
+        guard let lut, let file = lut.file, !file.isEmpty else { return RawLook(log: false, arriColorSpace: nil) }
         switch lut.id {
         case "arri-logc4-awg4"?: return RawLook(log: true, arriColorSpace: "AWG4/D65/LogC4")
         case "arri-logc3-awg3"?: return RawLook(log: true, arriColorSpace: "AWG3/D65/LogC3")

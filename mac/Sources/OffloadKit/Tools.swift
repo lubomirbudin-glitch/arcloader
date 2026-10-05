@@ -130,6 +130,21 @@ final class ToolProcess {
         }
         return String(decoding: data, as: UTF8.self)
     }
+
+    /// For tools that log to stdout and report failures there (art-cmd): stdout and stderr together, and the exit
+    /// status — the caller decides what counts as failure (art-cmd may exit 0 without writing its output).
+    static func runCombined(_ executable: String, _ args: [String], cwd: String? = nil) throws -> (status: Int32, output: String) {
+        let p = ToolProcess(executable, args)
+        if let cwd { p.process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
+        let out = Pipe()
+        p.process.standardOutput = out
+        p.process.standardError = out
+        p.process.standardInput = FileHandle.nullDevice
+        try p.process.run()
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.process.waitUntilExit()
+        return (p.process.terminationStatus, String(decoding: data, as: UTF8.self))
+    }
 }
 
 public struct ToolError: Error, CustomStringConvertible {

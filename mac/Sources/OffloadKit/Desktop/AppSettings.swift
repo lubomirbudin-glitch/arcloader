@@ -78,7 +78,9 @@ public enum SettingsStore {
 public enum ProxyPreflight {
     /// The user's own .cube the next start needs (only in custom mode — built-in LUTs ship with the app), or nil.
     public static func lutInUse(_ p: ProxySettings, analyzeClips: Bool) -> String? {
-        (p.enabled || analyzeClips) && LutResolver.effectiveMode(p) == .custom ? p.lutPath : nil
+        guard (p.enabled || analyzeClips) && LutResolver.effectiveMode(p) == .custom, let path = p.lutPath,
+              !path.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }   // an empty path is no LUT
+        return path
     }
 
     /// Why "Spustit offload" must stay disabled, or nil. `lutExists` nil = not checked yet (does not block).

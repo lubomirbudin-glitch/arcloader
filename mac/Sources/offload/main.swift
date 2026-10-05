@@ -79,7 +79,12 @@ struct Copy: ParsableCommand {
         config.allowSameDevice = allowSameDevice
         config.analyzeClips = !noAnalyze
         config.proxy.enabled = proxy
-        config.proxy.lutPath = lut.map(abs)
+        // An empty --lut "" is "no LUT" (not the current folder); without --lut the LUT is chosen per clip (auto).
+        if let lut, lut.trimmingCharacters(in: .whitespaces).isEmpty {
+            config.proxy.lutMode = .off
+        } else {
+            config.proxy.lutPath = lut.map(abs)
+        }
         config.proxy.height = proxyHeight
         guard let codec = ProxyCodec(rawValue: proxyCodec) else {
             throw ValidationError("Unknown proxy codec \(proxyCodec)")

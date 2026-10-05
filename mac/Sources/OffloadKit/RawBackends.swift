@@ -2,7 +2,7 @@ import Foundation
 
 /// Vendor decoders for formats ffmpeg cannot read. When a LUT is applied they hand ffmpeg the camera's log
 /// (`RawLook.log`; BRAW always decodes in the clip's gamma), so the same LUT / scale / burn-in chain fits every
-/// camera; without a LUT, RED and ARRI deliver their own Rec.709 look.
+/// camera; without a LUT, RED delivers its own Rec.709 look and ARRI the clip's embedded look.
 enum RawBackends {
     static let all: [RawBackend] = [BRAWBackend(), R3DBackend(), ARRIRAWBackend(), CanonRawBackend()]
 
@@ -256,9 +256,24 @@ struct ARRIRAWBackend: RawBackend {
         if look.log {
             args += ["--target-colorspace", look.arriColorSpace ?? colorSpace(lut: nil, info: c)]
         } else {
-            args += ["--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"]
+            // The camera's embedded look (ARRI's display transform to Rec.709; plain LogC when the clip has no look).
+            // Never with --target-colorspace: art-cmd refuses that for looks without DRT LUTs ("target-colorspace
+            // argument is only valid for embedded looks with DRT LUTs") — and exits 0 without writing anything.
+            args += ["--embedded-look"]
         }
         return (args, parameters, parameters != nil)
+    }
+
+    /// art-cmd's log lines that explain a failure, on one line: its [error]/[critical] lines (else the last three),
+    /// without the timestamp and logger prefix.
+    static func logTail(_ output: String) -> String {
+        let lines = output.split(whereSeparator: \.isNewline).map { raw -> String in
+            let s = String(raw).trimmingCharacters(in: .whitespaces)
+            let bare = s.replacingOccurrences(of: #"^\[[^\]]*\]\s*\[[^\]]*\]\s*"#, with: "", options: .regularExpression)
+            return String(bare.prefix(300))
+        }.filter { !$0.isEmpty }
+        let errors = lines.filter { $0.hasPrefix("[error]") || $0.hasPrefix("[critical]") }
+        return (errors.isEmpty ? Array(lines.suffix(3)) : errors).joined(separator: " | ")
     }
 
     func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
@@ -269,8 +284,13 @@ struct ARRIRAWBackend: RawBackend {
         let file = dir + "/parameters.json"
         let a = ARRIRAWBackend.args(input: path, output: out, info: c, settings: settings, look: look, parametersFile: file)
         if let json = a.parameters { try json.write(to: URL(fileURLWithPath: file)) }
-        try ToolProcess.run(tools.artCmd!, a.args, cwd: dir)
-        guard FileManager.default.fileExists(atPath: out) else { throw ToolError(tool: "art-cmd", status: -1, message: "no output") }
+        // art-cmd logs (errors too) to stdout and may exit 0 without an output file: both cases quote its own lines.
+        let run = try ToolProcess.runCombined(tools.artCmd!, a.args, cwd: dir)
+        let log = ARRIRAWBackend.logTail(run.output)
+        guard run.status == 0 else { throw ToolError(tool: "art-cmd", status: run.status, message: log) }
+        guard FileManager.default.fileExists(atPath: out) else {
+            throw ToolError(tool: "art-cmd", status: 0, message: "no output file" + (log.isEmpty ? "" : ": " + log))
+        }
         return FrameSource(inputArgs: ["-i", out], alreadyCropped: a.cropped, cleanup: [dir])
     }
 }
