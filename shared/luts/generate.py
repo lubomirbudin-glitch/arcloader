@@ -13,7 +13,7 @@ import warnings
 
 import numpy as np
 
-warnings.filterwarnings("ignore", message=".*Matplotlib.*", category=UserWarning)   # optional plotting dependency, unused here
+warnings.filterwarnings("ignore", message=".*Matplotlib.*", category=Warning)   # optional plotting dependency, unused here
 import colour  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
