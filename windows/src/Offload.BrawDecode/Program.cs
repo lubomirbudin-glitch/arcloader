@@ -17,4 +17,7 @@ using Offload.BrawDecode;
 
 // Binary stdout over the raw handle: a closed pipe is an error the decoder sees (never Console.Out / OpenStandardOutput).
 using var stdout = BinaryStdout.Open();
-return Decoder.Run(args, stdout, Console.Error);
+// stderr in UTF-8 like the Mac tool (Offload's ToolProcess reads it so), not the console's OEM code page: a clip path
+// with diacritics must come back intact in the error message.
+using var stderr = new StreamWriter(Console.OpenStandardError(), new System.Text.UTF8Encoding(false)) { AutoFlush = true };
+return Decoder.Run(args, stdout, stderr);

@@ -335,17 +335,26 @@ public class BrawDecodeTests
         return (code, stdout.ToArray(), stderr.ToString());
     }
 
-    /// The built braw-decode.exe (copied next to the tests): real stdout handle, real exit code.
-    internal static (int Code, byte[] Stdout, string Stderr) RunExe(params string[] args)
+    /// Starts the built braw-decode.exe (copied next to the tests): real stdout handle, stderr read as UTF-8 like
+    /// Offload's ToolProcess.
+    internal static Process StartExe(params string[] args)
     {
         var psi = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "braw-decode.exe"))
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi)!;
+        return Process.Start(psi)!;
+    }
+
+    /// The exe run to the end: real exit code, all of stdout, stderr.
+    internal static (int Code, byte[] Stdout, string Stderr) RunExe(params string[] args)
+    {
+        using var p = StartExe(args);
         var err = p.StandardError.ReadToEndAsync();
         using var ms = new MemoryStream();
         p.StandardOutput.BaseStream.CopyTo(ms);
@@ -412,6 +421,15 @@ public class BrawDecodeTests
         Assert.Equal(4, r.Code);
         Assert.Equal(@"braw-decode: cannot open C:\nonexistent\A001.braw (0x80004005)", r.Stderr.TrimEnd());
         Assert.Empty(r.Stdout);
+    }
+
+    /// stderr is UTF-8 like the Mac tool (and as ToolProcess reads it), not the console's OEM code page.
+    [BrawLibraryFact]
+    public void Exe_StderrIsUtf8()
+    {
+        var r = RunExe("--info", @"C:\nonexistent\Natáčení – 日本.braw");
+        Assert.Equal(4, r.Code);
+        Assert.Equal(@"braw-decode: cannot open C:\nonexistent\Natáčení – 日本.braw (0x80004005)", r.Stderr.TrimEnd());
     }
 
     /// Ruling M1: stdout is a FileStream over the raw handle, so a reader that went away (ffmpeg exited) is an error

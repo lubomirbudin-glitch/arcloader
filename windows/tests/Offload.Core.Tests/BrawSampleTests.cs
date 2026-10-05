@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using Offload.BrawDecode;
 
@@ -97,14 +96,7 @@ public class BrawSampleTests
     {
         var i = Info("eighth");
         Assert.True(i.Frames >= 2, "the sample needs at least 2 frames");
-        var psi = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "braw-decode.exe"))
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        foreach (var a in new[] { "--scale", "eighth", Sample }) psi.ArgumentList.Add(a);   // the whole clip
-        using var p = Process.Start(psi)!;
+        using var p = BrawDecodeTests.StartExe("--scale", "eighth", Sample);   // the whole clip
         var err = p.StandardError.ReadToEndAsync();
         try
         {
