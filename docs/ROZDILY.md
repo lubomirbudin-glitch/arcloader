@@ -30,13 +30,13 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Report HTML | ✅ | ✅ |
 | ASC MHL v2 | ✅ | ✅ |
 | CLI `copy` / `verify` / `bench` | ✅ | ✅ (čeká ostrý test na skutečné kartě) |
-| PDF report | ✅ (WebKit) | ⏳ plán 2 (WebView2) |
-| Analýza klipů, metadata | ✅ | ⏳ plán 2 |
-| Náhledy v reportu | 1 náhled ve 30 % délky → ⏳ **3 snímky** (první/prostřední/poslední) | ⏳ plán 2: 3 snímky |
-| Proxy (LUT, burn-in, frame lines, TC) | ✅ | ⏳ plán 2 |
+| PDF report | ✅ (WebKit) | ✅ (Edge headless) |
+| Analýza klipů, metadata | ✅ | ✅ |
+| Náhledy v reportu | 1 náhled ve 30 % délky → ⏳ **3 snímky** (první/prostřední/poslední) | ✅ 3 snímky |
+| Proxy (LUT, burn-in, frame lines, TC) | ✅ | ✅ (NVENC/QSV/AMF/software) |
 | Blackmagic RAW | ✅ `braw-decode` | ⏳ plán 3 (port `braw-decode` pro Windows) |
-| RED R3D (REDline) | ✅ | ⏳ plán 2 |
-| ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ | ⏳ plán 2 |
+| RED R3D (REDline) | ✅ | ✅ kód, neověřeno s nástroji |
+| ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ | ✅ kód, neověřeno s nástroji |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ⏳ plán 4 |
 | **Test USB portů při startu + doporučení** | ❌ | ⏳ plán HW (jen Windows) |
@@ -57,7 +57,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Paralelismus | GCD sériové fronty | vlákno + fronta na cíl (`SerialWorker`) |
 | xxHash64 | C knihovna xxhash | `System.IO.Hashing.XxHash64` |
 | HW enkodér proxy | VideoToolbox | NVENC → QSV → AMF → software (zjistí se automaticky) |
-| PDF | WebKit tisk | WebView2 `PrintToPdfAsync` |
+| PDF | WebKit tisk | Edge headless `--print-to-pdf` |
 | Detekce karet | `NSWorkspace` notifikace | `WM_DEVICECHANGE` |
 | Vysunutí | `unmountAndEjectDevice` | `FSCTL_LOCK/DISMOUNT_VOLUME` + `CM_Request_Device_Eject` |
 | Nastavení | `UserDefaults` | `%APPDATA%\Offload\settings.json` (stejné schéma) |
@@ -83,4 +83,5 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   i s `--allow-same-device`. Naplánováno i pro Mac.
 - **Kontrola voleb před kopií:** Windows ověří velikost bloku (násobek 4096, nejvýše 1 GiB), počet bufferů (≥ 2)
   a tvar data `RRRR-MM-DD` ještě před vytvořením čehokoli. Naplánováno i pro Mac.
+- **R3D/ARRI bez proxy** zatím nemají náhledy (stejně jako na Macu).
 - **Verze v reportu:** Mac `0.1.0`, Windows `0.1.0-win` — z reportu je vidět, která verze kopírovala.

@@ -11,7 +11,8 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | Část | Stav |
 |---|---|
 | Jádro + CLI (`bin\offload.exe`) | hotovo (plán 1) — ostrý test na skutečné kartě a měření rychlostí zatím chybí |
-| Analýza klipů, proxy, RAW, PDF | plán 2 |
+| Analýza klipů, 3 snímky, proxy, PDF | hotovo (plán 2) |
+| RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: plán 3 |
 | braw-decode | plán 3 |
 | GUI `Offload.exe` | plán 4 |
 
@@ -31,11 +32,15 @@ Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 offload E:\ -d D:\Zaloha -d F:\Zaloha          # karta E: na dva disky, ověření, report
 offload verify D:\Zaloha\2026-10-04\A001        # znovu ověřit hotovou kopii
 offload bench --read E:\ --write D:\ --gb 2     # rychlost karty a disků
+offload E:\ -d D:\Zaloha -d F:\Zaloha --proxy --lut look.cube --frame-aspect 1.85   # + proxy s LUT a výřezem
 ```
 
 Na Windows se čte i zapisuje mimo systémovou cache (`FILE_FLAG_NO_BUFFERING`), po zápisu
 `FlushFileBuffers`; ověření tak čte data z disku, ne z RAM. Svazky, které to neumí (některé síťové),
 přejdou na běžný zápis a report to uvede.
+
+PDF tiskne Microsoft Edge v režimu bez okna (je ve Windows vždy). ffmpeg/ffprobe jsou v `bin\` vedle `offload.exe`
+(build gyan.dev, licence GPL — pro vlastní použití v pořádku, při dalším šíření je třeba přiložit licenci a zdroj ffmpeg).
 
 ## ASC MHL a `ascmhl` na Windows
 

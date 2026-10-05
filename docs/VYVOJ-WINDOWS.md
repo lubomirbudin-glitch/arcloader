@@ -11,13 +11,14 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | Plán | Obsah | Stav |
 |---|---|---|
 | 1 | jádro kopírování, ověření, reporty JSON/TXT/HTML/xxh64/MHL, CLI | hotovo (čeká ostrý test na kartě) |
-| 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | naplánováno |
+| 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | hotovo |
 | 3 | `braw-decode.exe` (C++, Blackmagic RAW SDK pro Windows) | naplánováno |
 | HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | naplánováno |
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | naplánováno |
 
 ## 2026-10-05 — plán 2 (klipy, proxy, PDF), průběh
 
+- Úkol 11 — balíček s ffmpeg/ffprobe, dokumentace
 - Úkol 10 — CLI: volby proxy (--proxy, --lut, --proxy-codec, --frame-aspect …) a souhrn klipů
 - Úkol 9 — fáze 2 úlohy: analýza klipů, 3 snímky, proxy na všechny cíle, PDF; selhání nikdy nezmění výsledek kopie
 - Úkol 8 — PDF report přes Microsoft Edge (headless), A4 na šířku, funguje i z příkazové řádky
@@ -31,6 +32,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-04 — plán 1 (jádro + CLI), průběh
 
+- Úkol 11 — balíček s ffmpeg/ffprobe, dokumentace
 Implementace po úkolech; každý úkol napsal subagent a zkontroloval nezávislý reviewer.
 - Závěrečná kontrola plánu 1 — opravy: JSON/TXT/HTML s konci řádků `\n`, nulování přesahu nebufferovaného zápisu, report při zrušeném ověření nepočítá hotové soubory jako chybné, odmítnutí zdroje, který je sám offload, dvakrát zadaného cíle a neplatných voleb (velikost bloku, buffery, datum), opravená dokumentace
 - Úkol 17 — build skript scripts\build.ps1 (self-contained offload.exe), README, MHL ověřený nástrojem ascmhl (`becfbad`)
