@@ -19,7 +19,7 @@ public enum SettingsStore {
     public static let proxyHeights = [540, 720, 1080, 2160]
     public static let defaultsKey = "settings"
 
-    public static func decode(_ data: Data?) -> AppSettings {
+    public static func decode(_ data: Data?, catalog: LutCatalog = .shared) -> AppSettings {
         var s = AppSettings()
         guard let data, let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return s }
         if let roots = root["destRoots"] as? [Any] { s.destRoots = roots.compactMap { $0 as? String } }
@@ -28,7 +28,7 @@ public enum SettingsStore {
         if let p = section(root["proxy"], as: ProxySettings.self) { s.proxy = p }
         if let t = section(root["tools"], as: ExternalTools.self) { s.tools = t }
         if let names = root["portNames"] as? [String: Any] { s.portNames = names.compactMapValues { $0 as? String } }
-        return normalize(s)
+        return normalize(s, catalog: catalog)
     }
 
     public static func encode(_ s: AppSettings) -> Data? { try? JSONEncoder().encode(s) }
@@ -44,7 +44,7 @@ public enum SettingsStore {
         return try? JSONDecoder().decode(T.self, from: data)
     }
 
-    static func normalize(_ input: AppSettings) -> AppSettings {
+    static func normalize(_ input: AppSettings, catalog: LutCatalog = .shared) -> AppSettings {
         var s = input
         var roots: [String] = []
         for r in s.destRoots.map({ $0.trimmingCharacters(in: .whitespaces) }) where !r.isEmpty {
@@ -62,6 +62,13 @@ public enum SettingsStore {
         s.proxy.frameScale = s.proxy.frameScale.isFinite ? min(max(s.proxy.frameScale, 0.5), 1.0) : 1.0
         if let a = s.proxy.frameAspect, !a.isFinite || a <= 0 { s.proxy.frameAspect = nil }
         if let l = s.proxy.lutPath, l.trimmingCharacters(in: .whitespaces).isEmpty { s.proxy.lutPath = nil }
+        // Settings from before the built-in LUTs: a lutPath stays the user's own LUT, otherwise automatic.
+        if s.proxy.lutMode == nil { s.proxy.lutMode = s.proxy.lutPath != nil ? .custom : .auto }
+        if !catalog.luts.isEmpty {   // an empty catalog (luts folder missing) must not erase saved choices
+            if catalog.find(s.proxy.lutBuiltin) == nil { s.proxy.lutBuiltin = nil }
+            if catalog.find(s.proxy.lutFallback) == nil { s.proxy.lutFallback = nil }
+            if s.proxy.lutMode == .builtin && s.proxy.lutBuiltin == nil { s.proxy.lutMode = .auto }
+        }
         if let f = s.proxy.extraFolder?.trimmingCharacters(in: .whitespaces) { s.proxy.extraFolder = f.isEmpty ? nil : f }
         return s
     }
@@ -69,9 +76,9 @@ public enum SettingsStore {
 
 /// Checks before a start that the proxy/thumbnail settings can work.
 public enum ProxyPreflight {
-    /// The LUT the next start needs (proxies or thumbnails use it), or nil.
+    /// The user's own .cube the next start needs (only in custom mode — built-in LUTs ship with the app), or nil.
     public static func lutInUse(_ p: ProxySettings, analyzeClips: Bool) -> String? {
-        (p.enabled || analyzeClips) ? p.lutPath : nil
+        (p.enabled || analyzeClips) && LutResolver.effectiveMode(p) == .custom ? p.lutPath : nil
     }
 
     /// Why "Spustit offload" must stay disabled, or nil. `lutExists` nil = not checked yet (does not block).

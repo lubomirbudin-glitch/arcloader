@@ -79,6 +79,7 @@ final class SettingsStoreTests: XCTestCase {
         s.destRoots = ["/Volumes/A"]
         s.portNames = ["loc:14100000#1": "přední levý"]
         s.proxy.lutPath = "/Users/x/look.cube"
+        s.proxy.lutMode = .custom   // what normalize derives from an old lutPath (task 21)
         XCTAssertEqual(SettingsStore.decode(SettingsStore.encode(s)), s)
     }
 

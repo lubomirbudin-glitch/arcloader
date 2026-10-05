@@ -305,7 +305,10 @@ final class AppModel: ObservableObject {
         let panel = NSOpenPanel()
         panel.title = "Vyber LUT (.cube)"
         panel.allowedContentTypes = [.init(filenameExtension: "cube")!]
-        if panel.runModal() == .OK, let url = panel.url { settings.proxy.lutPath = url.path }
+        if panel.runModal() == .OK, let url = panel.url {
+            settings.proxy.lutPath = url.path
+            settings.proxy.lutMode = .custom   // until the full LUT picker (task 24): a chosen file is the custom LUT
+        }
     }
 
     func pickTool(_ keyPath: WritableKeyPath<ExternalTools, String?>) {

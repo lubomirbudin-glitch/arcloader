@@ -56,8 +56,14 @@ public struct ProxySettings: Codable, Equatable {
     public var height = 1080
     public var codec: ProxyCodec = .h264
     public var bitrateMbps = 10
-    /// .cube 3D LUT applied after downscaling (cheap at proxy resolution).
+    /// The user's own .cube (mode custom), applied after downscaling (cheap at proxy resolution).
     public var lutPath: String?
+    /// Which LUT source applies; nil = not stored (older settings): a lutPath means custom, otherwise automatic.
+    public var lutMode: LutMode?
+    /// Built-in LUT id used in builtin mode.
+    public var lutBuiltin: String?
+    /// Built-in LUT id used in auto mode when the camera is not recognised (nil = no LUT).
+    public var lutFallback: String?
     public var burnFilename = true
     public var burnTimecode = true
     public var audio = true
@@ -82,6 +88,10 @@ public struct ProxySettings: Codable, Equatable {
         codec = (try? c.decodeIfPresent(ProxyCodec.self, forKey: .codec)) ?? d.codec
         bitrateMbps = try c.decodeIfPresent(Int.self, forKey: .bitrateMbps) ?? d.bitrateMbps
         lutPath = try c.decodeIfPresent(String.self, forKey: .lutPath)
+        // An unknown mode (a newer version) reads as "not stored" — normalize then derives it like for old settings.
+        lutMode = try? c.decodeIfPresent(LutMode.self, forKey: .lutMode)
+        lutBuiltin = try c.decodeIfPresent(String.self, forKey: .lutBuiltin)
+        lutFallback = try c.decodeIfPresent(String.self, forKey: .lutFallback)
         burnFilename = try c.decodeIfPresent(Bool.self, forKey: .burnFilename) ?? d.burnFilename
         burnTimecode = try c.decodeIfPresent(Bool.self, forKey: .burnTimecode) ?? d.burnTimecode
         audio = try c.decodeIfPresent(Bool.self, forKey: .audio) ?? d.audio

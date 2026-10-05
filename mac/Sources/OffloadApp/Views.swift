@@ -270,13 +270,17 @@ struct ProxySection: View {
                         Text("LUT").foregroundStyle(.secondary)
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {
-                                Text(model.settings.proxy.lutPath.map { ($0 as NSString).lastPathComponent } ?? "bez LUT")
+                                Text(model.settings.proxy.lutPath.map { ($0 as NSString).lastPathComponent }
+                                     ?? (model.settings.proxy.lutMode == .off ? "bez LUT" : "automaticky podle kamery"))
                                     .lineLimit(1).truncationMode(.middle)
                                     .foregroundStyle(model.settings.proxy.lutPath == nil ? .secondary : .primary)
                                 Spacer()
                                 Button("Vybrat…") { model.pickLUT() }
                                 if model.settings.proxy.lutPath != nil {
-                                    Button { model.settings.proxy.lutPath = nil } label: { Image(systemName: "xmark.circle.fill") }
+                                    Button {
+                                        model.settings.proxy.lutPath = nil
+                                        model.settings.proxy.lutMode = .auto
+                                    } label: { Image(systemName: "xmark.circle.fill") }
                                         .buttonStyle(.borderless)
                                 }
                             }

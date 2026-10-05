@@ -45,6 +45,8 @@ public struct ClipInfo: Codable {
     public var logEncoding: String?
     /// Anamorphic squeeze of the lens (2.0 for 2x), when the format reports it.
     public var squeeze: Double?
+    /// "tv" (legal) or "pc" (full) as ffprobe reports it; full-range sources need a pre-map before built-in LUTs.
+    public var colorRange: String?
 
     public var fpsLabel: String {
         guard let r = frameRate else { return "" }
@@ -119,7 +121,11 @@ public enum ClipDetector {
 enum FFProbe {
     static func probe(_ ffprobe: String, _ path: String) throws -> ClipInfo {
         let out = try ToolProcess.run(ffprobe, ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", path])
-        guard let json = try JSONSerialization.jsonObject(with: Data(out.utf8)) as? [String: Any] else {
+        return try parse(Data(out.utf8))
+    }
+
+    static func parse(_ data: Data) throws -> ClipInfo {
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ToolError(tool: "ffprobe", status: 0, message: "unreadable output")
         }
         let streams = json["streams"] as? [[String: Any]] ?? []
@@ -137,6 +143,7 @@ enum FFProbe {
             if let r = v["avg_frame_rate"] as? String, r != "0/0" { info.frameRate = r } else { info.frameRate = v["r_frame_rate"] as? String }
             info.frames = (v["nb_frames"] as? String).flatMap(Int.init)
             info.timecode = (v["tags"] as? [String: Any])?["timecode"] as? String
+            info.colorRange = v["color_range"] as? String
             if info.duration == nil { info.duration = (v["duration"] as? String).flatMap(Double.init) }
         }
         info.audioChannels = streams.filter { $0["codec_type"] as? String == "audio" }.reduce(0) { $0 + ($1["channels"] as? Int ?? 0) }
@@ -146,8 +153,16 @@ enum FFProbe {
             info.timecode = (ftags["timecode"] as? String)
                 ?? streams.lazy.compactMap { ($0["tags"] as? [String: Any])?["timecode"] as? String }.first
         }
-        info.camera = [ftags["com.apple.quicktime.make"], ftags["com.apple.quicktime.model"], ftags["product_name"], ftags["company_name"]]
-            .compactMap { $0 as? String }.first
+        info.camera = camera(make: ftags["com.apple.quicktime.make"] as? String, model: ftags["com.apple.quicktime.model"] as? String)
+            ?? (ftags["product_name"] as? String) ?? (ftags["company_name"] as? String)
         return info
+    }
+
+    /// Make and model together ("ARRI" + "ALEXA 35" → "ARRI ALEXA 35"), unless the model already starts with the make.
+    static func camera(make: String?, model: String?) -> String? {
+        let mk = make?.trimmingCharacters(in: .whitespaces), md = model?.trimmingCharacters(in: .whitespaces)
+        let m = (mk?.isEmpty ?? true) ? nil : mk, n = (md?.isEmpty ?? true) ? nil : md
+        guard let m, let n else { return m ?? n }
+        return n.lowercased().hasPrefix(m.lowercased()) ? n : m + " " + n
     }
 }

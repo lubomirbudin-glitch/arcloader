@@ -208,13 +208,19 @@ struct ARRIRAWBackend: RawBackend {
     }
 
     /// The LUT decides which log it needs when its name says so; otherwise the clip's own log encoding
-    /// from metadata (ALEXA 35 family → LogC4, older ALEXAs → LogC3).
-    func colorSpace(for lut: String?, info: ClipInfo) -> String {
+    /// from metadata, then the camera (ALEXA 35 family → LogC4, older ALEXAs → LogC3).
+    static func colorSpace(lut: String?, info: ClipInfo) -> String {
         let name = ((lut ?? "") as NSString).lastPathComponent.lowercased()
         if name.contains("logc4") { return "AWG4/D65/LogC4" }
         if name.contains("logc3") || name.contains("logc ") || name.contains("logc_") || name.contains("logc-") { return "AWG3/D65/LogC3" }
         if let log = info.logEncoding?.lowercased() { return log.contains("4") ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3" }
-        return (info.camera ?? "").lowercased().contains("35") ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3"
+        return isAlexa35(info.camera) ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3"
+    }
+
+    /// "ALEXA 35" / "ALEXA35" as a whole word — not "ALEXA Mini LF 35mm" or a serial number.
+    static func isAlexa35(_ camera: String?) -> Bool {
+        guard let camera else { return false }
+        return camera.range(of: #"\bALEXA\s*35\b"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     func source(_ path: String, info c: ClipInfo, settings: ProxySettings, tools: ExternalTools,
@@ -247,7 +253,7 @@ struct ARRIRAWBackend: RawBackend {
             args += ["--desqueeze", "--output-height", String(settings.height)]
         }
         if settings.lutPath != nil {
-            args += ["--target-colorspace", colorSpace(for: settings.lutPath, info: c)]
+            args += ["--target-colorspace", ARRIRAWBackend.colorSpace(lut: settings.lutPath, info: c)]
         } else {
             args += ["--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"]
         }
