@@ -18,6 +18,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-05 — plán 4 (GUI), průběh
 
+- Úkol 2 — svazky: nabídka karet (vyměnitelné a USB/SD disky, nikdy systémový ani cílový disk), „vypadá jako karta“ 1:1 s Macem, výběr po připojení/odpojení, argumenty aplikace
 - Úkol 1 — nastavení aplikace (settings.json kompatibilní s Mac klíči, odolné vůči poškozeným sekcím), kontrola LUT a ffmpeg před startem
 
 ## 2026-10-05 — plán HW (USB diagnostika), průběh
