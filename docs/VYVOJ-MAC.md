@@ -7,6 +7,14 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Podklady pro sestavení na Macu jsou připravené (2026-10-05):** návrh
+  [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
+  plán po úkolech s testy [`mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](../mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md)
+  a návod jak začít [`mac/docs/superpowers/plans/README-START.md`](../mac/docs/superpowers/plans/README-START.md).
+  Pokrývá 3 snímky na klip, pravidla B1–B4, opravy z vývoje Windows verze, české texty, vysunutí jen kopírované karty,
+  USB diagnostiku (IOKit), `offload ports`, okno Hardware a řetěz připojení. LUTy přijdou v plánu 5 (společný návrh
+  [`2026-10-05-offload-luts-design.md`](../windows/docs/superpowers/specs/2026-10-05-offload-luts-design.md)).
+
 - **3 snímky na klip v reportu** (první, prostřední, poslední frame) místo jednoho náhledu ve 30 % délky —
   na žádost uživatele, aby Mac i Windows reporty vypadaly stejně. Změna v `Proxy.swift`, `Job.swift`,
   `Report.swift`, `HTMLReport.swift`; navrženo ve specifikaci Windows verze (oddíl 6.5a). Sestavit a ověřit
