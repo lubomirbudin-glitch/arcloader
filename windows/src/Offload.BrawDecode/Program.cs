@@ -8,7 +8,8 @@
 //
 //   S = full | half | quarter | eighth
 //
-// Exit codes: 0 OK, 2 usage, 3 library/codec missing, 4 clip cannot be opened, 5 a frame failed, 6 stdout closed.
+// Exit codes: 0 OK (also when the reader closed the pipe early), 2 usage, 3 library/codec missing,
+// 4 clip cannot be opened, 5 a frame failed.
 // Frames come out in the clip's own gamma/gamut; the LUT is applied later by ffmpeg.
 // BlackmagicRawAPI.dll is loaded at runtime (Offload.Core.BrawLibrary: next to this exe, SDK, Player, Resolve).
 

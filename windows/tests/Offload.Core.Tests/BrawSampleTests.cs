@@ -90,10 +90,10 @@ public class BrawSampleTests
         Assert.Equal(Run("--scale", "eighth", "--count", "3", Sample).Stdout, r.Stdout);
     }
 
-    /// Ruling M1: when the reader closes the pipe (ffmpeg exited) the exe stops promptly with a non-zero exit code
-    /// instead of decoding the rest of the clip for nobody.
+    /// Ruling M1: when the reader closes the pipe (ffmpeg has what it wanted) the exe stops promptly instead of
+    /// decoding the rest of the clip for nobody — and exits 0 like the Mac (a closed pipe is not a failure).
     [BrawSampleFact]
-    public void Exe_ReaderClosesThePipe_StopsWithExit6()
+    public void Exe_ReaderClosesThePipe_StopsWithExit0()
     {
         var i = Info("eighth");
         Assert.True(i.Frames >= 2, "the sample needs at least 2 frames");
@@ -112,7 +112,7 @@ public class BrawSampleTests
             p.StandardOutput.BaseStream.ReadExactly(first);   // decoding has started
             p.StandardOutput.Close();                          // ffmpeg exited
             Assert.True(p.WaitForExit(60_000), "braw-decode kept running after its reader went away");
-            Assert.Equal(6, p.ExitCode);
+            Assert.Equal(0, p.ExitCode);
             Assert.Contains("braw-decode: stdout closed", err.Result);
         }
         finally

@@ -24,7 +24,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 - Úkol 3 — BRAW: gama, gamut a generace barev z dekodéru v metadatech klipu; LUT jen pro Blackmagic Design Film Gen 5, Video / Extended Video bez LUTu
 - Úkol 4 — projekt braw-decode (samostatný bin\braw-decode.exe): argumenty jako na Macu, JSON --info, přesná velikost snímku RGB48; testovací projekt na něj odkazuje, takže `braw-decode.exe` leží ve výstupu testů a `ExternalTools` v testech najde BRAW dekodér — test „BRAW nepodporováno“ musí použít seam bez hledání
 - Úkol 5 — COM vrstva Blackmagic RAW v C# (volání přes vtable, BSTR/BOOL/VARIANT jako ve Windows SDK, callback jako nativní COM objekt); ověřeno s knihovnou z DaVinci Resolve
-- Úkol 6 — braw-decode dekóduje: --info (rozměr po zmenšení z 1. snímku, TC, kamera, gama, gamut), snímky RGB48 po dávkách 8 v pořadí na stdout, CPU pipeline nastavená před otevřením klipu; stdout přes GetStdHandle, takže zavřená roura (ffmpeg skončil) dekódování hned zastaví s kódem 6; nečitelný atribut barev je jen varování na stderr; bez vzorku .braw ověřeno jen s knihovnou z DaVinci Resolve (chybějící a neplatný klip → kód 4)
+- Úkol 6 — braw-decode dekóduje: --info (rozměr po zmenšení z 1. snímku, TC, kamera, gama, gamut), snímky RGB48 po dávkách 8 v pořadí na stdout, CPU pipeline nastavená před otevřením klipu; stdout přes GetStdHandle, takže zavřená roura (ffmpeg skončil) dekódování hned zastaví (kód 0 jako na Macu — ffmpeg smí rouru zavřít dřív, třeba u náhledu); nečitelný atribut barev je jen varování na stderr; bez vzorku .braw ověřeno jen s knihovnou z DaVinci Resolve (chybějící a neplatný klip → kód 4)
 
 ## 2026-10-05 — drobnosti po plánu 5
 

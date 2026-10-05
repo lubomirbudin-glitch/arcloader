@@ -5,13 +5,16 @@ using Offload.Core;
 
 namespace Offload.BrawDecode;
 
-/// braw-decode itself: the C++ Mac tool's flow on the Windows COM API. Exit codes as on the Mac, plus 6:
-/// 0 OK, 2 usage, 3 library/codec missing, 4 clip cannot be opened, 5 a frame failed to decode,
-/// 6 stdout closed by the reader (ffmpeg exited) — decoding stops at once instead of going on for nobody
-/// (the Mac tool dies of SIGPIPE in that case, also a non-zero end).
+/// braw-decode itself: the C++ Mac tool's flow on the Windows COM API. Exit codes as on the Mac:
+/// 0 OK (also when the reader closed the pipe), 2 usage, 3 library/codec missing, 4 clip cannot be opened,
+/// 5 a frame failed to decode. A closed stdout (ffmpeg has the frames it wanted, e.g. a thumbnail) stops decoding
+/// at once and is a success: Offload treats a feeder that ends non-zero on its own as the job's error.
 internal static class Decoder
 {
-    public const int Ok = 0, Usage = 2, NoLibrary = 3, CannotOpen = 4, FrameFailed = 5, StdoutClosed = 6;
+    public const int Ok = 0, Usage = 2, NoLibrary = 3, CannotOpen = 4, FrameFailed = 5;
+
+    /// Internal outcome of Info/Frames: the reader closed stdout. Run turns it into Ok, whatever else happened.
+    const int ReaderGone = -1;
 
     /// Frames decoded in parallel by the SDK and then written in order.
     const int Batch = 8;
@@ -69,6 +72,7 @@ internal static class Decoder
                 return NoLibrary;
             }
             int code = o.Info ? Info(codec, clip, sink, stdout, stderr) : Frames(o, codec, clip, sink, stdout, stderr);
+            if (code == ReaderGone) return Ok;   // like the Mac's _exit(0) on a failed write
             return code != Ok ? code : sink.Errors > 0 ? FrameFailed : Ok;
         }
         finally
@@ -168,7 +172,7 @@ internal static class Decoder
     static int Closed(TextWriter stderr)
     {
         Say(stderr, "braw-decode: stdout closed by the reader, stopping");
-        return StdoutClosed;
+        return ReaderGone;
     }
 
     /// false when the reader went away (broken pipe: ffmpeg exited). Needs a stdout that reports it — see BinaryStdout.
