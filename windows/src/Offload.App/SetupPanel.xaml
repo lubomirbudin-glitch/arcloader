@@ -98,7 +98,7 @@
                                             <Style TargetType="Border">
                                                 <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Exists}" Value="False">
+                                                    <DataTrigger Binding="{Binding ShowMissing}" Value="True">
                                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -108,8 +108,8 @@
                                     </Border>
                                     <StackPanel>
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" ToolTip="{Binding Root}" />
-                                        <TextBlock Text="{Binding FreeText}" Style="{StaticResource Caption}" Visibility="{Binding Exists, Converter={StaticResource BoolToVisible}}" />
-                                        <TextBlock Text="Disk není připojen" Style="{StaticResource ErrorText}" Visibility="{Binding Exists, Converter={StaticResource BoolToCollapsed}}" />
+                                        <TextBlock Text="{Binding FreeText}" Style="{StaticResource Caption}" />
+                                        <TextBlock Text="Disk není připojen" Style="{StaticResource ErrorText}" Visibility="{Binding ShowMissing, Converter={StaticResource BoolToVisible}}" />
                                         <TextBlock Text="{Binding FsWarning}" Style="{StaticResource WarningText}" Visibility="{Binding FsWarning, Converter={StaticResource NullToCollapsed}}" />
                                     </StackPanel>
                                 </DockPanel>

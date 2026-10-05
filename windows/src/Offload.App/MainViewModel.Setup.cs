@@ -56,26 +56,56 @@ public sealed partial class MainViewModel
         Task.Run(() => Volumes.Scan(dests)).ContinueWith(t =>
         {
             scanning = false;
-            if (t.IsCompletedSuccessfully) ApplyVolumes(t.Result);
-            else AppLog.Write($"volume scan: {t.Exception?.GetBaseException().Message}");
-            if (rescan)
+            try
             {
-                rescan = false;
-                RefreshVolumes();
+                if (t.IsCompletedSuccessfully) ApplyVolumes(t.Result);
+                else AppLog.Write($"volume scan: {t.Exception?.GetBaseException().Message}");
+            }
+            catch (Exception e)
+            {
+                AppLog.Write($"volume apply: {e.Message}");
+            }
+            finally
+            {
+                if (rescan)
+                {
+                    rescan = false;
+                    RefreshVolumes();
+                }
             }
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
+    string? sourcesSig, destSig;
+
     void ApplyVolumes(List<VolumeItem> found)
     {
         var next = Volumes.SelectionAfterRefresh(volumes.Select(v => v.Path), found, selected, manualSources);
+        var gone = volumes.Select(v => v.Path).Except(found.Select(v => v.Path), StringComparer.OrdinalIgnoreCase).ToList();
         volumes = found;
         selected.Clear();
         selected.UnionWith(next);
-        RebuildSources();
-        RebuildDestinations();   // a destination disk may just have been connected
+        foreach (var p in gone) cardNames.Remove(p);   // another card on the same drive letter must not inherit the name
+        var sig = string.Join("\n", found.Where(v => !v.IsDestination).Select(v => $"{v.Path}|{v.Name}|{v.Total - v.Free}|{v.Format}|{v.LooksLikeCard}|{selected.Contains(v.Path)}"))
+            + "\n" + string.Join("\n", manualSources.Select(p => $"{p}|{selected.Contains(p)}"));
+        if (sig != sourcesSig)
+        {
+            sourcesSig = sig;
+            RebuildSources();
+        }
+        else SetupChanged?.Invoke();
+        // destinations: only when the list or the set of connected volumes changed (a disk may just have been connected)
+        var dsig = string.Join("\n", Settings.DestRoots) + "\n" + string.Join("\n", found.Select(v => v.Path));
+        if (dsig != destSig)
+        {
+            destSig = dsig;
+            RebuildDestinations();
+        }
     }
 
+    internal bool IsCurrent(DestinationViewModel row) => Destinations.Contains(row);
+
+    internal void DestinationInfoChanged() => SetupChanged?.Invoke();
     void RebuildSources()
     {
         Sources.Clear();
