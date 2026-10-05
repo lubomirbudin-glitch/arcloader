@@ -114,6 +114,7 @@ public static class FFProbe
             info.FrameRate = Str(v, "avg_frame_rate") is string avg && avg != "0/0" ? avg : Str(v, "r_frame_rate");
             info.Frames = int.TryParse(Str(v, "nb_frames"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : null;
             info.Timecode = Str(Tags(v), "timecode");
+            info.ColorRange = Str(v, "color_range");
             info.Duration = Dbl(Str(v, "duration"));
         }
         info.AudioChannels = streams.Where(x => Str(x, "codec_type") == "audio").Sum(x => Int(x, "channels") ?? 0);

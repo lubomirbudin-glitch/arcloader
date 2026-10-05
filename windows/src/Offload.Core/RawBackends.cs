@@ -264,8 +264,12 @@ internal sealed class ArriBackend : IRawBackend
         if (name.Contains("logc4")) return "AWG4/D65/LogC4";
         if (name.Contains("logc3") || name.Contains("logc ") || name.Contains("logc_") || name.Contains("logc-")) return "AWG3/D65/LogC3";
         if (info.LogEncoding?.ToLowerInvariant() is string log) return log.Contains('4') ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3";
-        return (info.Camera ?? "").ToLowerInvariant().Contains("35") ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3";
+        return IsAlexa35(info.Camera) ? "AWG4/D65/LogC4" : "AWG3/D65/LogC3";
     }
+
+    /// "ALEXA 35" / "ALEXA35" as a whole word, not "ALEXA Mini LF 35mm" or a serial number.
+    public static bool IsAlexa35(string? camera) =>
+        camera != null && System.Text.RegularExpressions.Regex.IsMatch(camera, @"\bALEXA\s*35\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     public static (List<string> Args, string? ParametersJson, bool Cropped) Args(string input, string output, ClipInfo c, ProxySettings s, string parametersFile)
     {
