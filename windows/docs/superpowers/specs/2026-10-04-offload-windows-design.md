@@ -22,7 +22,7 @@ GUI i CLI.
 |---|---|
 | Rozsah | plná parita s Mac verzí |
 | Technologie | C# / .NET 10, WPF |
-| BRAW | port `mac/Tools/braw-decode` do C++ pro Windows |
+| BRAW | dekodér v C# nad Blackmagic RAW SDK (změna 2026-10-05; původně port `mac/Tools/braw-decode` do C++) |
 | Umístění | stejné repo, složka `windows/`; Mac kód se nemění |
 | Jazyk UI | čeština, stejné texty a rozvržení jako na Macu |
 | Distribuce | přenosná složka / zip, bez instalátoru |
@@ -46,7 +46,6 @@ windows/
     Offload.Core/              knihovna: veškerá logika, bez UI
     Offload.Cli/               offload.exe — copy | verify | bench (System.CommandLine)
     Offload.App/               Offload.exe — WPF GUI (MVVM)
-  tools/braw-decode/           C++ port, CMakeLists.txt → tools/bin/braw-decode.exe
   tests/Offload.Core.Tests/    xUnit
   scripts/build.ps1            publish → windows/build/Offload/ + Offload-win-x64.zip
   docs/
@@ -264,16 +263,19 @@ Doplněno 2026-10-04 na žádost uživatele; mění i Mac verzi.
 
 ### 6.6 braw-decode pro Windows
 
-- Port `mac/Tools/braw-decode/braw-decode.cpp` do `windows/tools/braw-decode/`, MSVC (C++17), CMake.
-- Stejné CLI: `--info [--scale S] clip`, `[--scale S] [--start N] [--count N] clip`; stejný JSON a výstup RGB48LE.
-- Windows SDK API je COM (`IUnknown`, `BSTR` místo `CFStringRef`); factory přes
-  `CreateBlackmagicRawFactoryInstanceFromPath` z Windows dispatch souboru SDK.
+**Změna 2026-10-05 (rozhodnutí uživatele):** dekodér se napíše **v C#** nad COM rozhraním Blackmagic RAW SDK
+pro Windows (`BlackmagicRawAPI.dll`), ne jako port C++ nástroje — odpadá potřeba Visual Studio C++ nástrojů,
+uživatel jen stáhne a nainstaluje SDK. Navenek stejné chování jako Mac `braw-decode`:
+
+- Stejné CLI a výstup: `--info [--scale S] clip` (JSON metadata vč. gamma/gamut), `[--scale S] [--start N] [--count N] clip`
+  (surové snímky RGB48LE na stdout pro ffmpeg). Součást CLI `offload.exe` (podpříkaz) nebo samostatné
+  `binraw-decode.exe` — rozhodne plán 3.
 - Hledání `BlackmagicRawAPI.dll`: složka exe → `C:\Program Files\Blackmagic Design\Blackmagic RAW\Blackmagic RAW SDK\Win\Libraries`
   → Blackmagic RAW Player → `C:\Program Files\Blackmagic Design\DaVinci Resolve`.
-- stdout v binárním režimu (`_setmode(_fileno(stdout), _O_BINARY)`), `CoInitializeEx` na začátku.
-- **Předpoklady:** Visual Studio workload „Vývoj desktopových aplikací pomocí C++“; Blackmagic RAW SDK pro Windows
-  (zdarma, stahuje uživatel z blackmagicdesign.com — hlavičky a dispatch soubor se do repa nedávají, pokud to licence nedovolí;
-  build skript je hledá v cestě z proměnné `BRAW_SDK`).
+- **Předpoklad:** Blackmagic RAW SDK pro Windows (zdarma, stahuje uživatel z blackmagicdesign.com). Soubory SDK
+  se do repa nedávají, pokud to licence nedovolí.
+- Metadata (gamma „Blackmagic Design Film“ Gen 5 / Video, gamut) předává pro automatický výběr LUTu — viz
+  [návrh LUTů](2026-10-05-offload-luts-design.md).
 
 ## 7. PDF report
 
@@ -339,8 +341,12 @@ Vzhled: WPF Fluent theme (`ThemeMode="System"`), světlý i tmavý režim podle 
 
 ### 8.5 Upozornění
 
-- Ověřeno a lze vysunout: `SystemSounds.Asterisk` + toast notifikace.
-- Chyba: `SystemSounds.Hand` + `FlashWindowEx` v hlavním panelu.
+> **Nahrazeno (2026-10-05):** toast se nepoužívá (nebalená aplikace ho umí jen po registraci) — místo něj zvuk
+> a blikání tlačítka v hlavním panelu, viz `docs/ROZDILY.md` („Upozornění po dokončení“). Platí:
+
+- Ověřeno a lze vysunout: `SystemSounds.Asterisk`; po dokončení úlohy `FlashWindowEx` v hlavním panelu.
+- Chyba: `SystemSounds.Hand` + `FlashWindowEx`. Úloha zrušená uživatelem není chyba (bez chybového zvuku).
+- ~~toast notifikace~~ (původní návrh).
 
 ### 8.6 Nastavení
 
@@ -362,9 +368,10 @@ Doplněno 2026-10-04 na žádost uživatele.
   → „pravděpodobně kabel nebo port“.
 - Rychlost linky je strop daný nejslabším z port + kabel + zařízení; skutečná rychlost je naměřená.
 
-### 8a.2 Test při startu
+### 8a.2 Test USB portů
 
-- **Při každém spuštění** se aplikace zeptá „Prověřit USB porty?“ (Ano / Ne).
+- **Na vyžádání** z menu *Nástroje → Prověřit USB porty…* (Ctrl+U) nebo tlačítkem v sekci *Hardware*.
+  Změna 2026-10-05 na žádost uživatele: původně se aplikace ptala při každém spuštění — to se nedělá.
 - **Rychlá část** (sekundy, nic nezapisuje): topologie, rychlosti linek, varování.
 - **Měření** (volitelné, na potvrzení): pro každé zapojené úložiště krátký test — čtení ~1 GB (karta/čtečka)
   nebo zápis + čtení ~1 GB do dočasného souboru (disky, smaže se). Na kartu se nikdy nezapisuje.
@@ -400,7 +407,7 @@ D2     F: Samsung T7     ── USB 3.2 Gen2 (10 Gb/s) ── řadič ASMedia   
 ### 8a.4 Zařazení
 
 Nový plán **„HW diagnostika“** (mezi plány 2 a 4): modul `Offload.Core/Hardware/` (topologie, mapování
-svazek → USB, měření, doporučení), `offload ports`, rozšíření stavového řádku CLI. GUI části (dotaz při startu,
+svazek → USB, měření, doporučení), `offload ports`, rozšíření stavového řádku CLI. GUI části (test na vyžádání z menu,
 sekce *Hardware*, řetěz na kartě úlohy) jsou v plánu 4.
 
 ## 9. CLI
@@ -441,7 +448,7 @@ GUI ručně otestované (detekce karty, fronta, vysunutí).
 | Riziko | Dopad | Opatření |
 |---|---|---|
 | BRAW SDK pro Windows vyžaduje registraci | BRAW proxy nepůjdou bez SDK | uživatel stáhne SDK; bez něj BRAW funguje jako Canon RAW (kopie + ověření) |
-| Chybí C++ toolchain | braw-decode nejde sestavit | doinstalovat VS workload C++ |
+| Chybí Blackmagic RAW SDK | BRAW bez proxy | uživatel stáhne SDK (C++ toolchain už není potřeba — dekodér v C#) |
 | NO_BUFFERING nefunguje na některých svazcích | pomalejší / chyba zápisu | automatický fallback na buffered (4.3) |
 | Cesty k REDline / art-cmd na Windows | RAW proxy se nenajdou | ověřit při implementaci, nastavitelné v GUI |
 | WebView2 Runtime chybí (Win10) | bez PDF | PDF se přeskočí, HTML report zůstává |

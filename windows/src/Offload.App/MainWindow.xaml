@@ -1,0 +1,35 @@
+<Window x:Class="Offload.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Offload.App"
+        Title="Offload" Width="1240" Height="860" MinWidth="940" MinHeight="640"
+        WindowStartupLocation="CenterScreen">
+    <Window.InputBindings>
+        <KeyBinding Gesture="Ctrl+Enter" Command="{Binding StartCommand}" />
+        <KeyBinding Gesture="Ctrl+U" Command="{Binding OpenHardwareCommand}" />
+    </Window.InputBindings>
+    <DockPanel>
+        <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+            <Menu Padding="6,2">
+                <MenuItem Header="_Nástroje">
+                    <MenuItem Header="Prověřit USB porty…" InputGestureText="Ctrl+U" Command="{Binding OpenHardwareCommand}"
+                              AutomationProperties.AutomationId="CheckPortsMenuItem">
+                        <MenuItem.Icon>
+                            <TextBlock Style="{StaticResource Icon}" FontSize="14" Text="&#xE88E;" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                </MenuItem>
+            </Menu>
+        </Border>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="400" MinWidth="360" MaxWidth="480" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="520" />
+            </Grid.ColumnDefinitions>
+            <local:SetupPanel Grid.Column="0" />
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+            <local:QueuePanel Grid.Column="2" />
+        </Grid>
+    </DockPanel>
+</Window>

@@ -1,5 +1,4 @@
-# Builds windows\build\Offload: bin\offload.exe (self-contained, single file) + bin\ffmpeg.exe, ffprobe.exe.
-# Plan 4 adds the GUI Offload.exe next to bin\.
+# Builds windows\build\Offload: Offload.exe (GUI) + bin\offload.exe (CLI) + bin\ffmpeg.exe, ffprobe.exe (all self-contained).
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $out = Join-Path $root 'build\Offload'
@@ -7,6 +6,10 @@ if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 dotnet publish (Join-Path $root 'src\Offload.Cli\Offload.Cli.csproj') -c Release -r win-x64 --self-contained `
     -p:PublishSingleFile=true -p:DebugType=none -o (Join-Path $out 'bin')
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
+# GUI: Offload.exe next to bin\ (single file; WPF native libraries are extracted at first start).
+dotnet publish (Join-Path $root 'src\Offload.App\Offload.App.csproj') -c Release -r win-x64 --self-contained `
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o $out
+if ($LASTEXITCODE -ne 0) { throw 'dotnet publish (app) failed' }
 # ffmpeg/ffprobe: windows\tools\bin first (pinned copy), otherwise whatever is on PATH.
 # A tool on PATH under 5 MB is a launcher shim or a shared build (needs DLLs next to it): not bundled.
 foreach ($t in 'ffmpeg.exe', 'ffprobe.exe') {
@@ -24,4 +27,8 @@ foreach ($t in 'ffmpeg.exe', 'ffprobe.exe') {
     }
     if ($src) { Copy-Item $src (Join-Path $out 'bin'); Write-Host "bundled $t from $src" } else { Write-Warning "$t not bundled - proxies and thumbnails will need it at runtime" }
 }
+$zip = Join-Path $root 'build\Offload-win-x64.zip'
+if (Test-Path $zip) { Remove-Item -Force $zip }
+Compress-Archive -Path $out -DestinationPath $zip
+Write-Host "zipped $zip"
 Write-Host "built $out"

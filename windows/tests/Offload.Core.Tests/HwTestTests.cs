@@ -92,6 +92,45 @@ public class HwTestTests
     }
 
     [Fact]
+    public void Advise_SameAsRun_AndUsesPortNames()
+    {
+        using var dir = new TempDir();
+        var r = HwTest.Run([dir.Sub("card")], [dir.Sub("dest")], measure: false);
+        Assert.Equal(r.Advice, HwTest.Advise(r.Drives, r.Connectors, r.Measurements, null));
+        if (r.Connectors.FirstOrDefault(c => c.UserVisible && c.SupportsUsb3 == true && c.Device == null) is { } free)
+        {
+            var named = HwTest.Advise(r.Drives, r.Connectors, r.Measurements, new Dictionary<string, string> { [free.Id] = "přední levý" });
+            Assert.Contains(named, a => a.Text.Contains("přední levý"));
+        }
+    }
+
+    [Fact]
+    public void Load_MissingLists_IsNull()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "hwtest.json");
+        File.WriteAllText(path, "{}");
+        Assert.Null(HwTest.Load(path));
+        File.WriteAllText(path, """{"Time":"2026-10-05T10:00:00Z","Drives":[],"Connectors":[],"Measurements":[]}""");
+        Assert.Null(HwTest.Load(path));
+    }
+
+    // Fix round 1: cancelling stops inside the 1 GB test file, deletes it, and skips the remaining devices.
+    [Fact]
+    public void Measure_CancelledDuringWrite_StopsAtOnce_NoBenchFileLeft()
+    {
+        using var dir = new TempDir();
+        var dest1 = dir.Sub("dest1");
+        var dest2 = dir.Sub("dest2");
+        using var cts = BenchTests.CancelWhenBenchFileAppears(dest1);
+        var r = HwTest.Run([], [dest1, dest2], measure: true, bytesPerDevice: 512L << 20, cancel: cts.Token);
+        Assert.True(cts.IsCancellationRequested);
+        Assert.Empty(r.Measurements);   // the interrupted device is "not measured", the next one is skipped
+        Assert.Empty(Directory.GetFiles(dest1, "*", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetFiles(dest2, "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
     public void SaveLoad_RoundTrip()
     {
         using var dir = new TempDir();

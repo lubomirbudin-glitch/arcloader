@@ -129,15 +129,35 @@ public static unsafe class DriveLinks
             ? n.DeviceNumber : null;
     }
 
-    static UsbLink? UsbLinkOf(uint diskNumber)
+    /// The disk device node with this disk number, or null.
+    internal static uint? DiskNodeOf(uint diskNumber)
     {
-        string? instance = null;
         foreach (var iface in DevNodes.Interfaces(UsbNative.DiskInterface, null))
         {
             using var h = UsbNative.OpenForQuery(iface);
-            if (h != null && DiskNumber(h) == diskNumber) { instance = DevNodes.InterfaceStr(iface, DevKeys.InstanceId); break; }
+            if (h != null && DiskNumber(h) == diskNumber)
+                return DevNodes.InterfaceStr(iface, DevKeys.InstanceId) is string id ? DevNodes.Locate(id) : null;
         }
-        if (instance == null || DevNodes.Locate(instance) is not uint diskNode) return null;
+        return null;
+    }
+
+    /// The disk device node holding the volume at `root` ("E:\"), or null.
+    internal static uint? DiskNode(string root)
+    {
+        try
+        {
+            using var volume = UsbNative.OpenForQuery(@"\\.\" + root.TrimEnd('\\'));
+            return volume != null && DiskNumber(volume) is uint n ? DiskNodeOf(n) : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    static UsbLink? UsbLinkOf(uint diskNumber)
+    {
+        if (DiskNodeOf(diskNumber) is not uint diskNode) return null;
 
         // Walk up to the USB device: the first ancestor whose parent is a hub (BOT: USBSTOR\…, UASP: SCSI\…, composite: &MI_xx).
         uint? usbDevice = null, hub = null;

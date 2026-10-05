@@ -15,6 +15,8 @@ public sealed class OffloadOptions
     internal bool AllowSourceVolume { get; set; }
     /// Tests only: behave as on a volume that refuses unbuffered writes.
     internal bool ForceBuffered { get; set; }
+    /// Tests only: called on the copy thread just before file i is read (a deterministic point to cancel at).
+    internal Action<int>? BeforeFileCopy { get; set; }
 }
 
 public enum FileState { Pending, Written, Verified, Failed }

@@ -98,6 +98,14 @@ public static unsafe class NativeIO
         return Win32.GetVolumeNameForVolumeMountPoint(root, buf, 64) ? new string(buf) : root.ToLowerInvariant();
     }
 
+    /// The serial number the file system got when it was formatted, or null (no volume there).
+    public static uint? VolumeSerial(string path)
+    {
+        var root = VolumeRoot(path);
+        if (root == null) return null;
+        return Win32.GetVolumeInformation(root, null, 0, out var serial, out _, out _, null, 0) ? serial : null;
+    }
+
     /// "NTFS", "exFAT", "FAT32", "ReFS" … or "?".
     public static string FilesystemType(string path)
     {

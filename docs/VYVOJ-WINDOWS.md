@@ -13,8 +13,23 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 1 | jádro kopírování, ověření, reporty JSON/TXT/HTML/xxh64/MHL, CLI | hotovo (čeká ostrý test na kartě) |
 | 2 | analýza klipů, 3 snímky na klip, proxy (ffmpeg, NVENC/QSV/AMF), REDline, art-cmd, PDF | hotovo (čeká ostrý test na skutečném médiu) |
 | 3 | `braw-decode.exe` (C++, Blackmagic RAW SDK pro Windows) | naplánováno |
-| HW | test USB portů při startu, doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI) |
-| 4 | WPF GUI, detekce a vysunutí karet, balíček | naplánováno |
+| HW | test USB portů (CLI, v GUI na vyžádání), doporučení zapojení, propustnost článků HW při kopii, `offload ports` | hotovo (CLI + GUI) |
+| 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
+| 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | naplánováno |
+
+## 2026-10-05 — plán 4 (GUI), průběh
+
+- Závěrečné opravy — settings.json s dvojitým klíčem, názvy portů lišícími se jen velikostí písmen nebo s null v seznamu cílů už nezastaví start aplikace (vadná položka nebo sekce se vynechá); testy nezávislé na proměnné OFFLOAD_SETTINGS_DIR a deterministický test zrušení kopie; v jádru pravidla pro GUI: identita karty (svazek + sériové číslo), kdy smí „Vysunout kartu“, kdy nejde měřit, report z prvního cíle, který ho má, okno na malé obrazovce, kontrola LUT z uložené odpovědi, chybou není zrušená úloha; GUI: „Vysunout kartu“ vysune jen kopírovanou kartu (po výměně karty nebo vytažení tlačítko zmizí, dokud z karty kopíruje jiná úloha, odmítne se), dvojklik nevysouvá dvakrát, vysunutá karta se znovu nepřipojí rescanem, LUT a nepřipojené cíle (NAS) se ověřují mimo UI vlákno každých 5 s a tlačítkem obnovit, okna se vejdou na obrazovku notebooku, měření nejde během kopie, zrušená úloha nehraje chybový zvuk, název portu se uloží i po Esc, report z prvního cíle, kde je; checklist ručního testu (skryté `.offload-part`, přerušená karta není zálohovaná, potvrzení měření, vysouvat až po zeleném pruhu), spec 8.5 bez toastu, ROZDILY: Thunderbolt čtečky CFexpress přes „Složka…“
+- Úkol 10 — balíček Offload-win-x64.zip (Offload.exe + bin\offload.exe + ffmpeg), návod k aplikaci a checklist ručního testu
+- Úkol 9 — Hardware v GUI: kontrola USB portů jen na vyžádání (menu Nástroje › „Prověřit USB porty…“, Ctrl+U, tlačítko v sekci Hardware; při startu se už neptá), okno Hardware (připojení, doporučení, měření s potvrzením a okamžitým zastavením, USB porty s vlastními názvy), vždy jen jeden test naráz, sekce Hardware s posledním testem
+- Úkol 8 — spuštění a fronta: karty úloh s průběhem, rychlostmi, odhadem času a řetězem připojení s úzkým hrdlem, zelený pruh a vysunutí karty, report a Průzkumník, zrušení, zavření okna během kopie, zvuk a blikání v hlavním panelu
+- Úkol 7 — levý panel: karty (automaticky při vložení, ruční složka, název složky), cíle (volné místo, souborový systém, nepřipojený disk), datum a ověření, proxy, dekodéry
+- Úkol 6 — projekt GUI Offload.App (WPF, Fluent, světlý/tmavý režim), okno se dvěma panely, build.ps1 přidá Offload.exe, skript pro ovládání a snímky GUI
+- Úkol 5 — fronta: karty se kopírují za sebou, proxy předchozí karty se renderují souběžně s kopií další; zrušená nebo padající úloha frontu nezastaví
+- Úkol 4 — karta úlohy v jádru: rychlosti a odhad času jako na Macu, průběh fáze, texty s českým množným číslem, úzké hrdlo; zrušená úloha ve frontě hlásí „Zrušeno“
+- Úkol 3 — vysunutí: karta ze čtečky jako médium (čtečka zůstane), USB disk jako zařízení; zamčení svazku odhalí otevřené soubory
+- Úkol 2 — svazky: nabídka karet (vyměnitelné a USB/SD disky, nikdy systémový ani cílový disk), „vypadá jako karta“ 1:1 s Macem, výběr po připojení/odpojení, argumenty aplikace
+- Úkol 1 — nastavení aplikace (settings.json kompatibilní s Mac klíči, odolné vůči poškozeným sekcím), kontrola LUT a ffmpeg před startem
 
 ## 2026-10-05 — plán HW (USB diagnostika), průběh
 
