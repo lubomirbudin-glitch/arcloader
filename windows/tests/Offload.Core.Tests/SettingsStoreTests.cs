@@ -348,4 +348,19 @@ public class SettingsStoreTests
         var custom = new ProxySettings { Enabled = true, LutMode = LutMode.Custom, LutPath = @"Z:\gone.cube" };
         Assert.Equal(@"Z:\gone.cube", ProxyPreflight.LutInUse(custom, analyzeClips: true));
     }
+
+    [Fact]
+    public void Normalize_EmptyCatalog_KeepsBuiltinChoices()
+    {
+        var s = new AppSettings();
+        s.Proxy.LutMode = LutMode.Builtin;
+        s.Proxy.LutBuiltin = "dji-dlog-dgamut";
+        s.Proxy.LutFallback = "sony-slog3-sgamut3cine";
+        SettingsStore.Normalize(s, LutCatalog.Load(null));
+        Assert.Equal((LutMode.Builtin, "dji-dlog-dgamut", "sony-slog3-sgamut3cine"), (s.Proxy.LutMode, s.Proxy.LutBuiltin, s.Proxy.LutFallback));
+        s.Proxy.LutBuiltin = "nope";
+        SettingsStore.Normalize(s, LutCatalog.Default);
+        Assert.Null(s.Proxy.LutBuiltin);
+        Assert.Equal(LutMode.Auto, s.Proxy.LutMode);
+    }
 }

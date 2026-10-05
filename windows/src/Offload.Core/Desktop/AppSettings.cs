@@ -92,7 +92,9 @@ public static class SettingsStore
         }
     }
 
-    internal static AppSettings Normalize(AppSettings s)
+    internal static AppSettings Normalize(AppSettings s) => Normalize(s, LutCatalog.Default);
+
+    internal static AppSettings Normalize(AppSettings s, LutCatalog catalog)
     {
         s.DestRoots = (s.DestRoots ?? []).Where(d => !string.IsNullOrWhiteSpace(d)).Select(d => d.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -109,9 +111,12 @@ public static class SettingsStore
         if (p.FrameAspect is double a && (!double.IsFinite(a) || a <= 0)) p.FrameAspect = null;
         if (string.IsNullOrWhiteSpace(p.LutPath)) p.LutPath = null;
         p.LutMode ??= p.LutPath != null ? LutMode.Custom : LutMode.Auto;
-        if (LutCatalog.Default.Find(p.LutBuiltin) == null) p.LutBuiltin = null;
-        if (LutCatalog.Default.Find(p.LutFallback) == null) p.LutFallback = null;
-        if (p.LutMode == LutMode.Builtin && p.LutBuiltin == null) p.LutMode = LutMode.Auto;
+        if (catalog.Luts.Count > 0)   // an empty catalog (luts folder missing) must not erase saved choices
+        {
+            if (catalog.Find(p.LutBuiltin) == null) p.LutBuiltin = null;
+            if (catalog.Find(p.LutFallback) == null) p.LutFallback = null;
+            if (p.LutMode == LutMode.Builtin && p.LutBuiltin == null) p.LutMode = LutMode.Auto;
+        }
         p.ExtraFolder = string.IsNullOrWhiteSpace(p.ExtraFolder) ? null : p.ExtraFolder.Trim();
         return s;
     }

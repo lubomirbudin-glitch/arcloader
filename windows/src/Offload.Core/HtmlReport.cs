@@ -202,7 +202,7 @@ public static class HtmlReport
             var lut = LutResolver.EffectiveMode(p) switch
             {
                 LutMode.Auto => "automaticky podle kamery",
-                LutMode.Builtin => LutCatalog.Default.Find(p.LutBuiltin)?.Name ?? "bez LUT",
+                LutMode.Builtin => LutCatalog.Default.Find(p.LutBuiltin)?.Name ?? p.LutBuiltin ?? "bez LUT",
                 LutMode.Custom when !string.IsNullOrEmpty(p.LutPath) => Path.GetFileName(p.LutPath),
                 _ => "bez LUT",
             };
