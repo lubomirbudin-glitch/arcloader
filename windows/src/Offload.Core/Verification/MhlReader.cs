@@ -45,6 +45,30 @@ public static partial class MhlReader
 
     static string Gen(int seq) => seq.ToString("0000", CultureInfo.InvariantCulture);
 
+    /// Tests only: called with the path while a file is open for reading (this thread only).
+    [ThreadStatic] internal static Action<string>? WhileOpen;
+
+    /// Every file of ascmhl/ is opened with ReadWrite | Delete sharing: a verify or a planner reading the chain must
+    /// never stop an append from swapping it (ReplaceFile; fix round 2, item 6a).
+    static FileStream OpenShared(string path) =>
+        new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+    static byte[] ReadShared(string path)
+    {
+        using var s = OpenShared(path);
+        WhileOpen?.Invoke(path);
+        using var m = new MemoryStream();
+        s.CopyTo(m);
+        return m.ToArray();
+    }
+
+    static XDocument LoadShared(string path)
+    {
+        using var s = OpenShared(path);
+        WhileOpen?.Invoke(path);
+        return XDocument.Load(s);
+    }
+
     /// Null when the card folder has no ascmhl/ or no generation in it (then a hash list is the only record).
     public static MhlHistory? Read(string cardPath)
     {
@@ -64,7 +88,7 @@ public static partial class MhlReader
                     problems.Add($"V řetězu ASC MHL je generace {Gen(c.Seq)}, ale její soubor chybí: {c.Path}");
                     continue;
                 }
-                if (Mhl.C4(File.ReadAllBytes(path)) != c.C4)
+                if (Mhl.C4(ReadShared(path)) != c.C4)
                     problems.Add($"ASC MHL generace {Gen(c.Seq)} neodpovídá řetězu (soubor MHL byl změněn).");
                 order.Add((c.Seq, c.Path));
             }
@@ -126,7 +150,7 @@ public static partial class MhlReader
         if (!File.Exists(path)) return null;
         try
         {
-            var doc = XDocument.Load(path);
+            var doc = LoadShared(path);
             return doc.Descendants(DirNs + "hashlist")
                 .Select(h => new MhlChainEntry(
                     int.Parse((string?)h.Attribute("sequencenr") ?? "0", CultureInfo.InvariantCulture),
@@ -144,7 +168,7 @@ public static partial class MhlReader
 
     internal static MhlGeneration ParseGeneration(string file, int seq)
     {
-        var doc = XDocument.Load(file);
+        var doc = LoadShared(file);
         var ignore = doc.Descendants(Ns + "ignore").Elements(Ns + "pattern").Select(p => p.Value.Trim()).Where(p => p.Length > 0).ToList();
         var files = new List<MhlFileRecord>();
         foreach (var h in doc.Descendants(Ns + "hashes").Elements(Ns + "hash"))

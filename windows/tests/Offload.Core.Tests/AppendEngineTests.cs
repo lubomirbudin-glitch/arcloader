@@ -443,6 +443,113 @@ public class AppendEngineTests
         Assert.Equal(3, File.ReadAllText(Path.Combine(paths[0], "_REPORT", "A001.xxh64")).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
     }
 
+    // Fix round 2, item 6a: Offload's own reader (a verify, a planner) holding the chain open does not stop an append
+    // from swapping it — every ascmhl/ read goes through the ReadWrite | Delete sharing of MhlReader. The append runs
+    // while MhlReader.Read has the chain open, for the whole append (no retry could outwait it).
+    [Fact]
+    public void MhlReaderHoldingTheChain_DoesNotBlockTheAppend()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        AppendFixtures.NewClip(card);
+        var chain = Path.Combine(paths[0], Mhl.DirName, MhlReader.ChainFileName);
+        var gen1 = Path.GetFileName(Directory.GetFiles(Path.Combine(paths[0], Mhl.DirName), "0001_*.mhl").Single());
+        var seen = new List<string>();
+        OffloadJob? append = null;
+        MhlReader.WhileOpen = path =>
+        {
+            seen.Add(Path.GetFileName(path));
+            if (append != null || !string.Equals(path, chain, StringComparison.OrdinalIgnoreCase)) return;
+            var watching = MhlReader.WhileOpen;
+            MhlReader.WhileOpen = null;   // the append's own reads are not recorded
+            append = Job(card, [], dir.Sub("appdata"), appendInto: paths);
+            append.Run();
+            MhlReader.WhileOpen = watching;
+        };
+        MhlHistory? read;
+        try
+        {
+            read = MhlReader.Read(paths[0]);
+        }
+        finally
+        {
+            MhlReader.WhileOpen = null;
+        }
+
+        Assert.Equal((JobPhase.Done, null), (append!.Status().Phase, append.Status().Error));
+        // All three reads of ascmhl/ went through the shared open: the chain, the C4 of 0001, its parse.
+        Assert.Equal([MhlReader.ChainFileName, gen1, gen1], seen);
+        Assert.Equal([1], read!.Chain.Select(c => c.Seq));   // the reader still saw what it opened
+        Assert.Equal([1, 2], MhlReader.Read(paths[0])!.Chain.Select(c => c.Seq));
+        Assert.True(BackupVerifier.Verify(paths[0], chunkSize: 4096).Success);
+    }
+
+    // Fix round 2, item 6a: another program holding the chain without delete sharing for a moment — the swap is retried
+    // (Mhl.ChainAttempts × Mhl.ChainPause) instead of failing the append at once.
+    [Fact]
+    public void ChainHeldBrieflyWithoutDeleteSharing_TheSwapIsRetried()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        AppendFixtures.NewClip(card);
+        var ascmhl = Path.Combine(paths[0], Mhl.DirName);
+        var reader = new FileStream(Path.Combine(ascmhl, MhlReader.ChainFileName), FileMode.Open, FileAccess.Read, FileShare.Read);
+        // Let go a little after the first attempt: generation 0002 is created right before the chain is swapped.
+        var releaser = new Thread(() =>
+        {
+            var until = DateTime.UtcNow.AddSeconds(120);
+            while (Directory.GetFiles(ascmhl, "0002_*.mhl").Length == 0 && DateTime.UtcNow < until) Thread.Sleep(2);
+            Thread.Sleep(Mhl.ChainPause + TimeSpan.FromMilliseconds(50));
+            reader.Dispose();
+        });
+        releaser.Start();
+        var append = Job(card, [], dir.Sub("appdata"), appendInto: paths);
+
+        append.Run();
+
+        releaser.Join();
+        Assert.Equal((JobPhase.Done, null), (append.Status().Phase, append.Status().Error));
+        Assert.Equal([1, 2], MhlReader.Read(paths[0])!.Chain.Select(c => c.Seq));
+    }
+
+    // Fix round 2, item 6b: a hash list whose write failed (step 3 of OffloadReport.Write), then an append with nothing
+    // new — that one adds the missed lines, as an append with new files would.
+    [Fact]
+    public void NothingNew_AfterAHashListFailure_HealsTheList()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        var history = dir.Sub("appdata");
+        var list = Path.Combine(paths[0], "_REPORT", "A001.xxh64");
+        var earlier = File.ReadAllBytes(list);
+        AppendFixtures.NewClip(card);
+        using (new FileStream(list, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var failed = Job(card, [], history, appendInto: paths);
+            failed.Run();
+            Assert.Equal(JobPhase.Failed, failed.Status().Phase);
+        }
+        Assert.DoesNotContain("CLIP/A001C003.mov", File.ReadAllText(list));
+
+        var nothing = Job(card, [], history, appendInto: paths);
+        nothing.Run();
+
+        Assert.Equal((JobPhase.Done, Msg.NothingNew, null), (nothing.Status().Phase, nothing.Status().Note, nothing.Status().Warning));
+        foreach (var p in paths)
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(p, "_REPORT", "A001.xxh64"));
+            Assert.Equal(earlier, bytes[..earlier.Length]);
+            Assert.Equal(1, Encoding.UTF8.GetString(bytes).Split('\n').Count(l => l.EndsWith("  CLIP/A001C003.mov", StringComparison.Ordinal)));
+            Assert.Equal(3, Encoding.UTF8.GetString(bytes).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+            Assert.True(BackupVerifier.Verify(p, chunkSize: 4096).Success);
+        }
+
+        // Whole now: the next "nothing new" leaves it byte for byte.
+        var healed = File.ReadAllBytes(list);
+        Job(card, [], history, appendInto: paths).Run();
+        Assert.Equal(healed, File.ReadAllBytes(list));
+    }
+
     // Fix round 1, item 6 (order): the hash list is written last, after the chain. When it fails, the reports and the
     // chain still agree, so the next append is not refused (ruling I1) — and it adds the lines that were missed.
     [Fact]

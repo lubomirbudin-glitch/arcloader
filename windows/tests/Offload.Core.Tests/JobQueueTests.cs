@@ -7,7 +7,7 @@ public class JobQueueTests
 {
     /// Generous: every wait is for an event, so a passing test never sleeps this long, but a loaded full suite
     /// (proxy renders, copies in parallel) can delay a queue thread by seconds.
-    static readonly TimeSpan Wait = TimeSpan.FromSeconds(30);
+    static readonly TimeSpan Wait = TestAssembly.JobWait;   // fix round 2, item 9: longer than a PDF may take
 
     sealed class FakeJob(string name, bool post = false) : IQueuedJob
     {

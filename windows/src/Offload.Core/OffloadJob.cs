@@ -185,11 +185,13 @@ public sealed class OffloadJob
             }
         }
         using var awake = NativeIO.KeepAwake();
+        AppendLock? folders = null;
         try
         {
             // An append holds its card folders until stage 1 ends (fix round 1, item 1) and plans under that hold — a
             // plan made before (the CLI prints one first) is made again, another append may have finished meanwhile.
-            using var folders = Config.AppendInto is { Count: > 0 } into ? AppendLock.Acquire(into) : null;
+            // Released in `finally`, so the NothingNew path below still holds them while it heals the hash list.
+            folders = Config.AppendInto is { Count: > 0 } into ? AppendLock.Acquire(into) : null;
             if (folders != null)
             {
                 Plan = null;
@@ -222,6 +224,19 @@ public sealed class OffloadJob
             if (appendPlan is { } a)
             {
                 RefreshHistory(a, log);
+                // A hash list whose write failed in the last append gets its missed lines now (fix round 2, item 6b).
+                foreach (var cardPath in a.CardPaths)
+                {
+                    try
+                    {
+                        if (OffloadReport.HealHashList(cardPath, a.CardName)) log?.Invoke($"hash list healed: {cardPath}");
+                    }
+                    catch (Exception x) when (x is IOException or UnauthorizedAccessException or OffloadError)
+                    {
+                        var message = Msg.HashListNotHealed(cardPath, x.Message);
+                        Update(s => s.WithWarning(message));
+                    }
+                }
                 // Nothing to copy does not make the earlier backup verified (fix round 1, item 3).
                 if (a.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(a.UnverifiedEarlier)));
             }
@@ -237,6 +252,10 @@ public sealed class OffloadJob
         {
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
             return false;
+        }
+        finally
+        {
+            folders?.Dispose();
         }
     }
 

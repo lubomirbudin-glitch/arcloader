@@ -3,11 +3,13 @@ using System.Text.RegularExpressions;
 
 namespace Offload.Core.Tests;
 
+[Collection("Edge")]
 public class PdfReportTests
 {
     [EdgeFact]
     public void Write_A4LandscapePdf_EvenForLargeReports()
     {
+        using var pdfs = PdfReport.PrintHere();
         using var dir = new TempDir();
         var card = dir.Sub("2026-10-05", "A001");
         var report = Reports.Sample(card);
@@ -35,6 +37,27 @@ public class PdfReportTests
         Assert.InRange(double.Parse(box.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), 840, 844);
         Assert.InRange(double.Parse(box.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), 593, 597);
         Assert.Equal(["A001_report.pdf"], Directory.GetFiles(Path.GetDirectoryName(pdf)!).Select(Path.GetFileName));
+    }
+
+    // Fix round 2, item 9: outside PrintHere a test prints nothing (Edge is never started) — also on the threads it starts.
+    [Fact]
+    public void InTests_NoPdfUnlessAsked()
+    {
+        using var dir = new TempDir();
+        var pdf = Path.Combine(dir.Path, "x.pdf");
+        Assert.True(PdfReport.SkipUnlessAsked);
+        Assert.Equal("PDF skipped (tests)", Assert.Throws<ToolError>(() => PdfReport.WriteHtml("<p>x</p>", pdf)).Detail);
+        bool askedOnAThread = false;
+        using (PdfReport.PrintHere())
+        {
+            // The scope reaches a thread the test starts (only the flag is read; Edge is not started).
+            var t = new Thread(() => askedOnAThread = PdfReport.AskedHere);
+            t.Start();
+            t.Join();
+        }
+        Assert.True(askedOnAThread);
+        Assert.False(PdfReport.AskedHere);
+        Assert.False(File.Exists(pdf));
     }
 
     [Fact]

@@ -220,26 +220,42 @@ public sealed partial class OffloadReport
         // An append: the earlier lines byte for byte, then the missed ones, then this generation's.
         var hashList = System.IO.Path.Combine(dir, $"{CardName}.xxh64");
         var lines = Encoding.UTF8.GetBytes(HashList);
-        NativeIO.WriteFileReplacing(hashList, generation > 1 ? AppendedHashList(hashList, cardPath, lines) : lines);
+        if (generation == 1)
+        {
+            NativeIO.WriteFileReplacing(hashList, lines);
+            return;
+        }
+        var (earlier, missed) = HashListAndMissed(hashList, cardPath, Files.Select(f => f.Path));
+        NativeIO.WriteFileReplacing(hashList, [.. earlier, .. missed, .. lines]);
     }
 
-    /// The card's hash list as the earlier generations left it (exact bytes, then a line break if it had none), the
-    /// xxh64 of every path the ASC MHL history records but the list lacks (a hash list whose write failed before), then
-    /// `lines` (this generation's).
-    byte[] AppendedHashList(string path, string cardPath, byte[] lines)
+    /// `<card>/_REPORT/<card name>.xxh64` gets the lines of every path the ASC MHL history records but the list lacks
+    /// (a hash list whose write failed, step 3 of Write) — the one record file that may be rewritten. Used by an append
+    /// with nothing new (fix round 2, item 6b); an append with new files does the same in Write. False: nothing missed.
+    public static bool HealHashList(string cardPath, string cardName)
+    {
+        var hashList = System.IO.Path.Combine(cardPath, Layout.ReportDirName, $"{cardName}.xxh64");
+        var (earlier, missed) = HashListAndMissed(hashList, cardPath, []);
+        if (missed.Length == 0) return false;
+        NativeIO.WriteFileReplacing(hashList, [.. earlier, .. missed]);
+        return true;
+    }
+
+    /// The card's hash list as the earlier generations left it (exact bytes, then a line break if it had none), and
+    /// the xxh64 lines of every path the ASC MHL history records but neither the list nor `alsoListed` has.
+    static (byte[] Earlier, byte[] Missed) HashListAndMissed(string path, string cardPath, IEnumerable<string> alsoListed)
     {
         var earlier = File.Exists(path) ? File.ReadAllBytes(path) : [];
         if (earlier.Length > 0 && earlier[^1] != (byte)'\n') earlier = [.. earlier, (byte)'\n'];
-        var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var listed = new HashSet<string>(alsoListed, StringComparer.OrdinalIgnoreCase);
         foreach (var line in Encoding.UTF8.GetString(earlier).Split('\n'))
             if (line.TrimEnd('\r').IndexOf("  ", StringComparison.Ordinal) is int at and >= 0) listed.Add(line.TrimEnd('\r')[(at + 2)..]);
-        foreach (var f in Files) listed.Add(f.Path);
         var missed = new StringBuilder();
         if (Verification.MhlReader.Read(cardPath) is { } mhl)
             foreach (var r in mhl.LastGood.Values.OrderBy(r => r.Path, StringComparer.Ordinal))
                 if (!listed.Contains(r.Path) && r.Hashes.FirstOrDefault(h => h.Algorithm == "xxh64") is { } h)
                     missed.Append($"{h.Value}  {r.Path}\n");
-        return [.. earlier, .. Encoding.UTF8.GetBytes(missed.ToString()), .. lines];
+        return (earlier, Encoding.UTF8.GetBytes(missed.ToString()));
     }
 
     static JsonNode? Sorted(JsonNode? node) => node switch

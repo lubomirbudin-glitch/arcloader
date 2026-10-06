@@ -5,7 +5,7 @@ namespace Offload.Core.Tests;
 
 public class VerifyJobTests
 {
-    static readonly TimeSpan Wait = TimeSpan.FromSeconds(60);
+    static readonly TimeSpan Wait = TestAssembly.JobWait;   // fix round 2, item 9: longer than a PDF may take
 
     static string Offloaded(TempDir dir)
     {

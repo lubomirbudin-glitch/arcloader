@@ -80,14 +80,20 @@ public class VerifyReportTests
         Assert.Empty(Directory.GetFiles(Path.Combine(card, "ascmhl")));
     }
 
-    [EdgeFact]
-    public void Write_Pdf()
+    /// Launches Edge: in the Edge collection (fix round 2, item 9), the rest of the class stays parallel.
+    [Collection("Edge")]
+    public class Pdf
     {
-        using var dir = new TempDir();
-        var card = dir.Sub("2026-10-06", "A001");
-        VerifyReport.Write(Sample(card));
-        var pdf = Path.Combine(card, "_REPORT", "A001_verify_2026-10-06_081500Z.pdf");
-        Assert.True(File.Exists(pdf));
-        Assert.Equal("%PDF"u8.ToArray(), File.ReadAllBytes(pdf)[..4]);
+        [EdgeFact]
+        public void Write_Pdf()
+        {
+            using var pdfs = PdfReport.PrintHere();
+            using var dir = new TempDir();
+            var card = dir.Sub("2026-10-06", "A001");
+            VerifyReport.Write(Sample(card));
+            var pdf = Path.Combine(card, "_REPORT", "A001_verify_2026-10-06_081500Z.pdf");
+            Assert.True(File.Exists(pdf));
+            Assert.Equal("%PDF"u8.ToArray(), File.ReadAllBytes(pdf)[..4]);
+        }
     }
 }

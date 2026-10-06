@@ -103,8 +103,8 @@ public static class Msg
     public static string AppendDifferentFolders(IEnumerable<string> cardPaths) =>
         $"Složky dřívější zálohy se jmenují různě ({string.Join(", ", cardPaths)}) — doplnit jde jen do složek se stejným datem a názvem karty.";
     public static string AppendConflict(IReadOnlyList<string> lines, string fullCopyFolder) =>
-        $"Doplnění zastaveno — nic se nezkopírovalo. {lines.Count} {Desktop.Texts.Plural(lines.Count, "soubor na kartě má", "soubory na kartě mají", "souborů na kartě má")} "
-        + "stejné jméno jako v záloze, ale jinou velikost nebo datum:\n  "
+        $"Doplnění zastaveno — nic se nezkopírovalo. {lines.Count} {Desktop.Texts.Plural(lines.Count, "soubor se neshoduje", "soubory se neshodují", "souborů se neshoduje")} "
+        + "se zálohou:\n  "
         + string.Join("\n  ", lines.Take(10)) + (lines.Count > 10 ? "\n  …" : "")
         + $"\nUdělejte celou kopii (vznikne {fullCopyFolder}).";
     public static string AppendMissingFile(string disk, string path) =>
@@ -114,9 +114,14 @@ public static class Msg
     public const string AppendOtherCard = "Na kartě není žádný soubor z dřívější zálohy — jde o jinou kartu? Udělejte celou kopii.";
     public static string AppendMhlDamaged(string cardPath) =>
         $"Historie ASC MHL v {cardPath} je poškozená — zkontrolujte ji přes Nástroje → Ověřit zálohu…; doplnit nejde.";
+    /// One line of the AppendConflict list: a file on a destination that no report records (a crashed append leaves one).
+    public static string AppendUnknownFile(string disk, string path) =>
+        $"na {disk} je soubor {path}, který žádný report nezná (nedokončené doplnění?)";
     /// One line of the AppendConflict list: the temporary copy name of a new file is taken.
     public static string AppendPartNameTaken(string path, string part) =>
         $"{path} (dočasné jméno kopie {part} je jiný soubor zálohy nebo karty)";
+    public static string HashListNotHealed(string cardPath, string error) =>
+        $"Seznam kontrolních součtů (.xxh64) v {cardPath} nejde doplnit o chybějící řádky: {error}";
     public static string AppendBusy(string cardPath) =>
         $"Do této zálohy právě doplňuje jiná úloha ({cardPath}) — počkejte, až skončí.";
     public const string NothingNew = "Nic nového — záloha je úplná.";

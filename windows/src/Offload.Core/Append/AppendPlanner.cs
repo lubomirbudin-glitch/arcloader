@@ -104,7 +104,7 @@ public static class AppendPlanner
                 if (!records[d].Files.TryGetValue(f.RelPath, out var rec))
                 {
                     // Not in any report but on the disk: someone else's file — never overwritten, never trusted.
-                    if (exists) conflicts.Add(Conflict(f, Disk(paths[d]), onDisk.Length, onDisk.LastWriteTimeUtc));
+                    if (exists) conflicts.Add(Msg.AppendUnknownFile(Disk(paths[d]), f.RelPath));
                     continue;
                 }
                 int column = CardRecord.DestinationIndex(rec.Report, paths[d], d);
@@ -199,5 +199,5 @@ public static class AppendPlanner
 
     /// "CLIP/A001C003.mov (karta 1,2 GB · 6. 10. 9:14, D: 1,1 GB · 6. 10. 9:10)"
     static string Conflict(SourceFile card, string disk, long size, DateTime modifiedUtc) =>
-        $"{card.RelPath} (karta {Format.BytesCs(card.Size)} · {When(card.ModifiedUtc)}, {disk} {Format.BytesCs(size)} · {When(modifiedUtc)})";
+        $"{card.RelPath}: jiná velikost nebo datum (karta {Format.BytesCs(card.Size)} · {When(card.ModifiedUtc)}, {disk} {Format.BytesCs(size)} · {When(modifiedUtc)})";
 }

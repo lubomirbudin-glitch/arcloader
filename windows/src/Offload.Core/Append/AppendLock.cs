@@ -8,6 +8,14 @@ namespace Offload.Core.Append;
 /// stage 1 ends, never waited for — a busy folder refuses the job at once. Named mutexes in the session namespace, like
 /// the history lock; one per card folder, taken in a stable order so two jobs can never deadlock. A full copy goes into
 /// a new folder and needs none.
+///
+/// Gaps (fix round 2, item 10; also in docs/ROZDILY.md):
+/// - `Local\` is one Windows session. An append from another session (another user logged in, a service) or from
+///   another machine into the same share takes its own lock and is not stopped — there the no-replace writes of the
+///   `_NNNN` reports and the MHL generation are the only guard, after its data files are copied.
+/// - The name comes from the spelling resolved to a volume and a path on it, not from the folder's identity: a `subst`
+///   drive, `\\localhost\D$` or an 8.3 short name of the same folder gives another name, so two
+///   appends spelled that way are not stopped either.
 public sealed class AppendLock : IDisposable
 {
     const string Prefix = @"Local\Offload-append-";

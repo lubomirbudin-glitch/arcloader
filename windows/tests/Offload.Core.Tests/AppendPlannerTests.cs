@@ -83,7 +83,7 @@ public class AppendPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.AppendConflict, e.Code);
-        Assert.StartsWith("Doplnění zastaveno — nic se nezkopírovalo. 1 soubor na kartě má stejné jméno jako v záloze, ale jinou velikost nebo datum:\n  CLIP/A001C001.mov (karta ", e.Message);
+        Assert.StartsWith("Doplnění zastaveno — nic se nezkopírovalo. 1 soubor se neshoduje se zálohou:\n  CLIP/A001C001.mov: jiná velikost nebo datum (karta ", e.Message);
         Assert.EndsWith("\nUdělejte celou kopii (vznikne A001_2).", e.Message);
     }
 
@@ -127,7 +127,7 @@ public class AppendPlannerTests
         Assert.Equal(["CLIP/A001C003.mov"], plan.NewFiles.Select(f => f.RelPath));
         var e = Refused(card, paths, "exFAT", _ => "NTFS");
         Assert.Equal(PreflightCode.AppendConflict, e.Code);
-        Assert.StartsWith("Doplnění zastaveno — nic se nezkopírovalo. 2 soubory na kartě mají stejné jméno", e.Message);   // both clips, on d2 only
+        Assert.StartsWith("Doplnění zastaveno — nic se nezkopírovalo. 2 soubory se neshodují se zálohou:\n  CLIP/A001C001.mov: jiná velikost nebo datum (karta ", e.Message);   // both clips, on d2 only
     }
 
     [Fact]
@@ -258,7 +258,14 @@ public class AppendPlannerTests
         var (card, paths) = AppendFixtures.CopiedCard(dir);
         AppendFixtures.NewClip(card);
         AppendFixtures.NewClip(Path.Combine(paths[0]), size: 999, seed: 9);   // the same name already on d1, not in any report
-        Assert.Equal(PreflightCode.AppendConflict, Refused(card, paths).Code);
+
+        var e = Refused(card, paths);
+
+        // Fix round 2, item 8: its own line (a crashed append leaves exactly this), not "jiná velikost nebo datum".
+        Assert.Equal(PreflightCode.AppendConflict, e.Code);
+        Assert.Equal("Doplnění zastaveno — nic se nezkopírovalo. 1 soubor se neshoduje se zálohou:\n"
+                     + $"  na {AppendPlanner.Disk(paths[0])} je soubor CLIP/A001C003.mov, který žádný report nezná (nedokončené doplnění?)\n"
+                     + "Udělejte celou kopii (vznikne A001_2).", e.Message);
     }
 
     // The folders of one backup must be <root>\<date>\<card> with the same date and name: the copy goes to exactly those.

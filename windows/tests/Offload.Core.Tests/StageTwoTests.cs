@@ -16,40 +16,46 @@ public class StageTwoTests
         return card;
     }
 
-    [FfmpegFact]
-    public void Proxies_ThumbnailsAndPdf_OnEveryDestination()
+    /// Launches Edge (the report PDF): in the Edge collection (fix round 2, item 9); the other stage-two tests stay parallel.
+    [Collection("Edge")]
+    public class Pdf
     {
-        using var dir = new TempDir();
-        var card = SonyCard(dir);
-        var config = new JobConfig(card, [dir.Sub("d1"), dir.Sub("d2")])
+        [FfmpegFact]
+        public void Proxies_ThumbnailsAndPdf_OnEveryDestination()
         {
-            Date = "2026-10-05",
-            Proxy = new ProxySettings { Enabled = true, Height = 360 },
-        };
-        var job = new OffloadJob(config, Options());
+            using var pdfs = PdfReport.PrintHere();
+            using var dir = new TempDir();
+            var card = SonyCard(dir);
+            var config = new JobConfig(card, [dir.Sub("d1"), dir.Sub("d2")])
+            {
+                Date = "2026-10-05",
+                Proxy = new ProxySettings { Enabled = true, Height = 360 },
+            };
+            var job = new OffloadJob(config, Options());
 
-        var report = job.Run();
+            var report = job.Run();
 
-        var s = job.Status();
-        Assert.Equal(JobPhase.Done, s.Phase);
-        Assert.True(s.SafeToEject);
-        Assert.Equal(2, s.ProxiesDone);
-        Assert.Equal(0, s.ProxiesFailed);
-        Assert.Equal("libx264", report!.ProxyEncoder); // final review B1; the encoder the test forced
-        Assert.Equal(3, report!.Clips.Count);
-        Assert.All(report.Clips, c => Assert.Equal(3, c.Thumbnails.Count));
-        var sub = report.Clips.Single(c => c.Clip.IsCameraProxy);
-        Assert.Equal(ProxyStatus.Skipped, sub.ProxyStatus);
-        foreach (var cardPath in job.Plan!.CardPaths)
-        {
-            Assert.True(File.Exists(Path.Combine(cardPath, "_PROXY", "C0001.mov")));
-            Assert.True(File.Exists(Path.Combine(cardPath, "_PROXY", "C0002.mov")));
-            var html = File.ReadAllText(Path.Combine(cardPath, "_REPORT", "A001_report.html"));
-            Assert.Contains("<figcaption>01:00:10:00</figcaption>", html);
-            if (PdfReport.FindEdge() != null) Assert.True(File.Exists(Path.Combine(cardPath, "_REPORT", "A001_report.pdf")));
+            var s = job.Status();
+            Assert.Equal(JobPhase.Done, s.Phase);
+            Assert.True(s.SafeToEject);
+            Assert.Equal(2, s.ProxiesDone);
+            Assert.Equal(0, s.ProxiesFailed);
+            Assert.Equal("libx264", report!.ProxyEncoder); // final review B1; the encoder the test forced
+            Assert.Equal(3, report!.Clips.Count);
+            Assert.All(report.Clips, c => Assert.Equal(3, c.Thumbnails.Count));
+            var sub = report.Clips.Single(c => c.Clip.IsCameraProxy);
+            Assert.Equal(ProxyStatus.Skipped, sub.ProxyStatus);
+            foreach (var cardPath in job.Plan!.CardPaths)
+            {
+                Assert.True(File.Exists(Path.Combine(cardPath, "_PROXY", "C0001.mov")));
+                Assert.True(File.Exists(Path.Combine(cardPath, "_PROXY", "C0002.mov")));
+                var html = File.ReadAllText(Path.Combine(cardPath, "_REPORT", "A001_report.html"));
+                Assert.Contains("<figcaption>01:00:10:00</figcaption>", html);
+                if (PdfReport.FindEdge() != null) Assert.True(File.Exists(Path.Combine(cardPath, "_REPORT", "A001_report.pdf")));
+            }
+            // The hash list only covers the card's files, not proxies.
+            Assert.DoesNotContain("_PROXY", File.ReadAllText(Path.Combine(job.Plan.CardPaths[0], "_REPORT", "A001.xxh64")));
         }
-        // The hash list only covers the card's files, not proxies.
-        Assert.DoesNotContain("_PROXY", File.ReadAllText(Path.Combine(job.Plan.CardPaths[0], "_REPORT", "A001.xxh64")));
     }
 
     // Plan 5, task 5: the LUT is chosen per clip (Sony XML read from the destination copy) and recorded in the report.

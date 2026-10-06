@@ -128,3 +128,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
   a ukazuje ho v řádku „Proxy: H.264 (h264_nvenc), …“ v HTML/PDF. Mac klíč nezná a ignoruje ho.
 - **Verze v reportu:** Mac `0.1.0`, Windows `0.1.0-win` — z reportu je vidět, která verze kopírovala.
+- **Doplnění do zálohy — zámek složky karty** (Windows): dvě doplnění do stejné zálohy najednou se nepustí (druhé hned
+  skončí „Do této zálohy právě doplňuje jiná úloha …“). Zámek platí jen v jedné přihlášené relaci Windows na jednom
+  počítači — nechrání před doplněním z jiného účtu ani z jiného počítače do sdílené složky — a stejnou složku pod jiným
+  jménem (`subst`, `\\localhost\D$`, krátké jméno 8.3) bere jako jinou.

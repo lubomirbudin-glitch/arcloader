@@ -99,7 +99,28 @@ public static class Mhl
             chain.Append("  </hashlist>\n");
         }
         chain.Append("</ascmhldirectory>\n");
-        NativeIO.WriteFileReplacing(Path.Combine(dir, ChainName), Encoding.UTF8.GetBytes(chain.ToString()));
+        ReplaceChain(Path.Combine(dir, ChainName), Encoding.UTF8.GetBytes(chain.ToString()));
+    }
+
+    /// Another program reading the chain without delete sharing (a sync client, an antivirus scan) usually lets go within
+    /// a moment: the swap is tried ChainAttempts times, ChainPause apart, before the append fails (fix round 2, item 6a).
+    internal const int ChainAttempts = 5;
+    internal static readonly TimeSpan ChainPause = TimeSpan.FromMilliseconds(200);
+
+    static void ReplaceChain(string path, byte[] data)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                NativeIO.WriteFileReplacing(path, data);
+                return;
+            }
+            catch (Exception e) when (attempt < ChainAttempts && e is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(ChainPause);
+            }
+        }
     }
 
     static string IsoDate(DateTime d) => d.ToLocalTime().ToString("yyyy-MM-dd'T'HH:mm:ssK", CultureInfo.InvariantCulture);

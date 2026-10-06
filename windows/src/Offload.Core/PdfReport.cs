@@ -7,6 +7,28 @@ namespace Offload.Core;
 /// from the report's @page rule.
 public static class PdfReport
 {
+    /// How long Edge may take to print one report before the PDF is given up (the HTML report is already written).
+    public const int DefaultTimeoutSeconds = 60;
+
+    /// Tests only (fix round 2, item 9): set for the whole test assembly, every PDF is skipped (a ToolError, which
+    /// every caller logs and goes on) except inside a PrintHere() scope — a headless Edge per job was slow and flaked
+    /// under load. The scope is an AsyncLocal, so it reaches the threads and tasks a test starts.
+    internal static bool SkipUnlessAsked;
+    static readonly AsyncLocal<bool> asked = new();
+
+    internal static bool AskedHere => asked.Value;
+
+    internal static IDisposable PrintHere()
+    {
+        asked.Value = true;
+        return new Asked();
+    }
+
+    sealed class Asked : IDisposable
+    {
+        public void Dispose() => asked.Value = false;
+    }
+
     public static string? FindEdge()
     {
         string[] candidates =
@@ -19,12 +41,13 @@ public static class PdfReport
     }
 
     /// `replace`: false for an append's `_NNNN` PDF — it never replaces an existing file (ruling I1).
-    public static void Write(OffloadReport report, string path, int timeoutSeconds = 60, bool replace = true) =>
+    public static void Write(OffloadReport report, string path, int timeoutSeconds = DefaultTimeoutSeconds, bool replace = true) =>
         WriteHtml(HtmlReport.Render(report, forPrint: true), path, timeoutSeconds, replace);
 
     /// Any self-contained HTML page (the offload report, the verification report) printed to `path`.
-    public static void WriteHtml(string html, string path, int timeoutSeconds = 60, bool replace = true)
+    public static void WriteHtml(string html, string path, int timeoutSeconds = DefaultTimeoutSeconds, bool replace = true)
     {
+        if (SkipUnlessAsked && !AskedHere) throw new ToolError("Edge", -1, "PDF skipped (tests)");
         var edge = FindEdge() ?? throw new ToolError("Edge", -1, "Microsoft Edge not found — PDF skipped");
         var work = Path.Combine(Path.GetTempPath(), "offload-pdf-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(work);
