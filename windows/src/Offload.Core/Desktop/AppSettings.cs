@@ -25,6 +25,10 @@ public sealed class AppSettings
         }
     }
     private Dictionary<string, string> _portNames = new(StringComparer.OrdinalIgnoreCase);
+
+    /// Top-level keys this version does not know (a newer version wrote them): kept as they are and written back,
+    /// so going back to an older version never loses projects or rules (R24).
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
 public static class SettingsStore
@@ -32,6 +36,9 @@ public static class SettingsStore
     public static readonly int[] ProxyHeights = [540, 720, 1080, 2160];
 
     public static string DefaultPath => Path.Combine(AppData.Folder, "settings.json");
+
+    /// The top-level keys Load reads into properties; every other key goes to AppSettings.Extra.
+    static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal) { "destRoots", "verify", "analyzeClips", "proxy", "tools", "portNames" };
 
     static readonly JsonSerializerOptions Json = new()
     {
@@ -83,6 +90,8 @@ public static class SettingsStore
                     if (p.Value.ValueKind == JsonValueKind.String) names[p.Name] = p.Value.GetString()!;
                 s.PortNames = names;
             });
+            foreach (var (key, value) in root)
+                if (!KnownKeys.Contains(key)) (s.Extra ??= [])[key] = value.Clone();   // the document is disposed below
             return Normalize(s);
         }
         catch (Exception)
