@@ -26,7 +26,7 @@ public static class FileListStore
             }
         }
         NativeIO.Mkdirs(Path.GetDirectoryName(path)!);
-        NativeIO.WriteFileDurably(path, buffer.ToArray());
+        NativeIO.WriteFileReplacing(path, buffer.ToArray());
     }
 
     /// Null when the list is missing or damaged — that only costs the "new files" count, never the history line.
@@ -34,7 +34,7 @@ public static class FileListStore
     {
         try
         {
-            using var file = File.OpenRead(path);
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var gz = new GZipStream(file, CompressionMode.Decompress);
             using var r = new StreamReader(gz, Encoding.UTF8);
             var list = new List<SourceFile>();

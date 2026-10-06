@@ -110,7 +110,7 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
             foreach (var gone in entries.Except(keep))
                 if (FileListPath(gone.Id) is string list) NativeIO.Delete(list);
             NativeIO.Mkdirs(Folder);
-            NativeIO.WriteFileDurably(FilePath, JsonSerializer.SerializeToUtf8Bytes(new HistoryFile { Entries = keep }, Json));
+            NativeIO.WriteFileReplacing(FilePath, JsonSerializer.SerializeToUtf8Bytes(new HistoryFile { Entries = keep }, Json));
             return true;
         }
         catch (Exception e)
@@ -139,7 +139,13 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
     (List<HistoryEntry> Entries, int Version) ReadFile(bool repair)
     {
         if (!File.Exists(FilePath)) return ([], CurrentVersion);
-        var bytes = File.ReadAllBytes(FilePath);
+        byte[] bytes;
+        // Shared with writers: an open reader must never block the writer's rename (it would lose the entry).
+        using (var fs = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        {
+            bytes = new byte[fs.Length];
+            fs.ReadExactly(bytes);
+        }
         int version;
         try
         {
@@ -189,10 +195,12 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
 
     void SetAside(string why)
     {
-        var target = FilePath + ".corrupt-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        var stamp = FilePath + ".corrupt-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        var target = stamp;
+        for (int n = 2; File.Exists(target); n++) target = $"{stamp}-{n}";   // never overwrite an earlier set-aside file
         try
         {
-            File.Move(FilePath, target, overwrite: true);
+            File.Move(FilePath, target, overwrite: false);
             log?.Invoke($"history.json is damaged ({why}) — set aside as {Path.GetFileName(target)}, starting empty");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -213,19 +221,30 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
     /// The cross-process lock, or null when another writer held it for LockTimeout. Released on the same thread.
     Held? Lock()
     {
-        var mutex = new Mutex(false, MutexName);
-        try
+        var deadline = DateTime.UtcNow + LockTimeout;
+        while (true)
         {
-            if (!mutex.WaitOne(LockTimeout))
+            Mutex? mutex = null;
+            try
             {
+                mutex = new Mutex(false, MutexName);
+                var left = deadline - DateTime.UtcNow;
+                if (mutex.WaitOne(left > TimeSpan.Zero ? left : TimeSpan.Zero)) return new Held(mutex);
                 mutex.Dispose();
                 return null;
             }
+            catch (AbandonedMutexException)
+            {
+                // A process died holding it: we own it now, and the file was replaced atomically, so it is consistent.
+                return new Held(mutex!);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // The mutex was created by an elevated process: we cannot open it — the same as busy; retry until the timeout.
+                mutex?.Dispose();
+                if (DateTime.UtcNow >= deadline) return null;
+                Thread.Sleep(50);
+            }
         }
-        catch (AbandonedMutexException)
-        {
-            // A process died holding it: we own it now, and the file was replaced atomically, so it is consistent.
-        }
-        return new Held(mutex);
     }
 }

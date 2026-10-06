@@ -107,7 +107,7 @@ public class HistoryStoreTests
 
     // Review focus 4: GUI and CLI writing at once — the mutex keeps every entry.
     [Fact]
-    public void TwoWriters_InTwoThreads_KeepEveryEntry()
+    public async Task TwoWriters_InTwoThreads_KeepEveryEntry()
     {
         using var dir = new TempDir();
         var store = new HistoryStore(dir.Path);
@@ -115,12 +115,7 @@ public class HistoryStoreTests
         {
             for (int i = 0; i < 25; i++) Assert.True(store.Record(HistoryFixtures.Entry(T0.AddMinutes(offset + i)), null));
         }
-        var a = new Thread(() => Write(0));
-        var b = new Thread(() => Write(100));
-        a.Start();
-        b.Start();
-        a.Join();
-        b.Join();
+        await Task.WhenAll(Task.Run(() => Write(0)), Task.Run(() => Write(100)));
         Assert.Equal(50, store.Load().Count);
     }
 
@@ -206,7 +201,7 @@ public class HistoryStoreTests
 
     // Ruling I2: load-modify-save under ONE mutex hold — two threads appending to the same entry lose nothing.
     [Fact]
-    public void Update_TwoThreadsOnTheSameEntry_LoseNoGeneration()
+    public async Task Update_TwoThreadsOnTheSameEntry_LoseNoGeneration()
     {
         using var dir = new TempDir();
         var store = new HistoryStore(dir.Path);
@@ -222,12 +217,7 @@ public class HistoryStoreTests
                     return e;
                 }));
         }
-        var a = new Thread(() => Append(100));
-        var b = new Thread(() => Append(200));
-        a.Start();
-        b.Start();
-        a.Join();
-        b.Join();
+        await Task.WhenAll(Task.Run(() => Append(100)), Task.Run(() => Append(200)));
         var back = Assert.Single(store.Load());
         Assert.Equal(41, back.Generations.Count);
         Assert.Equal(2 + 40, back.Files);
@@ -253,6 +243,47 @@ public class HistoryStoreTests
         Assert.True(store.Update(entry.Id, _ => entry, [new SourceFile("a.mov", 1, T0)]));
         Assert.NotNull(store.ReadFileList(Assert.Single(store.Load())));
         Assert.False(store.Update(entry.Id, e => { e!.Id = "other"; return e; }));
+    }
+
+    [Fact]
+    public void OpenReaders_DoNotBlockTheWriter()
+    {
+        using var dir = new TempDir();
+        var store = new HistoryStore(dir.Path);
+        var first = HistoryFixtures.Entry(T0);
+        Assert.True(store.Record(first, [new SourceFile("a.mov", 1, T0)]));
+        using var json = new FileStream(store.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var list = new FileStream(Path.Combine(dir.Path, "history", first.Id + ".files.gz"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+        Assert.True(store.Record(HistoryFixtures.Entry(T0.AddHours(1)), null));
+        Assert.True(store.Update(first.Id, e => e, [new SourceFile("a.mov", 2, T0)]));
+        Assert.Equal(2, store.Load().Count);
+    }
+
+    [Fact]
+    public void TwoSetAsidesInTheSameSecond_KeepBoth()
+    {
+        using var dir = new TempDir();
+        var store = new HistoryStore(dir.Path);
+        File.WriteAllText(store.FilePath, "{bad one");
+        Assert.Empty(store.Load());
+        File.WriteAllText(store.FilePath, "{bad two");
+        Assert.Empty(store.Load());
+        var asides = Directory.GetFiles(dir.Path, "history.json.corrupt-*").Select(File.ReadAllText).Order().ToArray();
+        Assert.Equal(["{bad one", "{bad two"], asides);
+    }
+
+    // A process that died holding the mutex must not stop history.
+    [Fact]
+    public void AbandonedMutex_IsTakenOver()
+    {
+        using var dir = new TempDir();
+        var store = new HistoryStore(dir.Path);
+        var t = new Thread(() => new Mutex(false, @"Local\Offload-history").WaitOne());   // exits without releasing
+        t.Start();
+        t.Join();
+        Assert.True(store.Record(HistoryFixtures.Entry(T0), null));
+        Assert.Single(store.Load());
     }
 
     [Fact]

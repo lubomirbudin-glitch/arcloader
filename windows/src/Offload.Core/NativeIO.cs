@@ -81,6 +81,28 @@ public static unsafe class NativeIO
         }
     }
 
+    /// Like WriteFileDurably, but an existing `path` is swapped with ReplaceFile: that works while another process (a
+    /// backup, an indexer, a reader) holds it open with FileShare.Delete, where a plain rename-over is denied.
+    public static void WriteFileReplacing(string path, ReadOnlySpan<byte> data)
+    {
+        if (!File.Exists(path))
+        {
+            WriteFileDurably(path, data);
+            return;
+        }
+        var tmp = Path.Combine(Path.GetDirectoryName(path)!, "." + Path.GetFileName(path) + ".new");
+        try
+        {
+            WriteFileDurably(tmp, data);
+            File.Replace(tmp, path, null);
+        }
+        catch
+        {
+            Delete(tmp);
+            throw;
+        }
+    }
+
     public static void Mkdirs(string path) => Wrap("mkdir", path, () => Directory.CreateDirectory(path));
 
     public static string? VolumeRoot(string path)
