@@ -14,7 +14,7 @@ static class CopyCommand
         // Not Required: the parser's "Option '--dest' is required." has no Czech translation — the engine says
         // "Není zadaný žádný cíl." instead.
         var dest = new Option<string[]>("--dest", "-d") { Description = "Destination root (repeat for each disk).", DefaultValueFactory = _ => [] };
-        var name = new Option<string?>("--name") { Description = "Card folder name (default: volume label)." };
+        var name = new Option<string?>("--name") { Description = "Card folder name (default: volume label); auto = the reel in the clip names (A001C003… → A001), else the volume label." };
         var date = new Option<string?>("--date") { Description = "Date folder (default: today, YYYY-MM-DD)." };
         var chunkMb = new Option<int>("--chunk-mb") { Description = "Block size in MB.", DefaultValueFactory = _ => 16 };
         var buffers = new Option<int>("--buffers") { Description = "Blocks in flight.", DefaultValueFactory = _ => 16 };
@@ -45,7 +45,7 @@ static class CopyCommand
             {
                 config = new JobConfig(CliPath.Full(r.GetValue(source)!), r.GetValue(dest)!.Select(CliPath.Full).ToList())
                 {
-                    CardName = r.GetValue(name),
+                    CardName = r.GetValue(name) is string n && !n.Equals("auto", StringComparison.OrdinalIgnoreCase) ? n : null,
                     Date = r.GetValue(date),
                     ChunkMB = r.GetValue(chunkMb),
                     Buffers = r.GetValue(buffers),
@@ -88,15 +88,23 @@ static class CopyCommand
             }
             // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all.
             if (LutOption.PlanLine(config.Proxy, config.AnalyzeClips) is string lutLine) Console.WriteLine(lutLine);
-            return Run(config, r.GetValue(dryRun));
+            bool autoName = r.GetValue(name) is string a && a.Equals("auto", StringComparison.OrdinalIgnoreCase);
+            return Run(config, r.GetValue(dryRun), autoName);
         });
         return cmd;
     }
 
-    static int Run(JobConfig config, bool dryRun)
+    static int Run(JobConfig config, bool dryRun, bool autoName)
     {
-        if (config.RecordHistory && Inspect(config.Source)?.History is { } known)
+        var insight = config.RecordHistory || autoName ? Inspect(config.Source, withHistory: config.RecordHistory) : null;
+        if (insight?.History is { } known)
             Console.WriteLine(HistoryText.Line(known, fullPaths: true).Text);   // no question: a script has nobody to ask
+        if (autoName)
+        {
+            // --name auto: the reel from the clip names, otherwise the volume label (as without --name).
+            config.CardName = insight?.Name?.Name;
+            if (insight?.NameNote is string note) Console.WriteLine(note);
+        }
         var job = new OffloadJob(config);
         OffloadPlan plan;
         try
@@ -163,13 +171,14 @@ static class CopyCommand
         return status.Phase == JobPhase.Done && report?.Success == true ? 0 : 1;
     }
 
-    /// The card against history (spec 2.1 CLI). Never fails the copy: any problem only means no history line.
-    internal static CardInsight? Inspect(string source)
+    /// The card against history (spec 2.1 CLI) and its clip names (2.3). Never fails the copy: any problem only means
+    /// no history line and no suggested name.
+    internal static CardInsight? Inspect(string source, bool withHistory)
     {
         try
         {
-            var store = HistoryStore.Default(m => Console.Error.WriteLine(m));
-            return CardInspector.Inspect(source, store.Load(), store, CancellationToken.None);
+            var store = withHistory ? HistoryStore.Default(m => Console.Error.WriteLine(m)) : null;
+            return CardInspector.Inspect(source, store?.Load(), store, CancellationToken.None);
         }
         catch (Exception e)
         {

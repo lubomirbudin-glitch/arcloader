@@ -191,9 +191,9 @@ public sealed partial class MainViewModel
         foreach (var v in volumes.Where(v => !v.IsDestination))
             Sources.Add(new SourceItemViewModel(this, v.Path, v.Name,
                 $"{Format.Bytes(v.Total - v.Free)} · {v.Format}{(v.LooksLikeCard ? "" : " · nevypadá jako karta")}",
-                v.LooksLikeCard ? SourceKind.Card : SourceKind.Drive, DefaultCardName(v.Path)));
+                v.LooksLikeCard ? SourceKind.Card : SourceKind.Drive));
         foreach (var p in manualSources)
-            Sources.Add(new SourceItemViewModel(this, p, Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p, p, SourceKind.Folder, DefaultCardName(p)));
+            Sources.Add(new SourceItemViewModel(this, p, Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p, p, SourceKind.Folder));
         Raise(nameof(HasSources));
         SetupChanged?.Invoke();
     }
@@ -247,7 +247,16 @@ public sealed partial class MainViewModel
 
     /// The card folder name a start would use now: the typed name, otherwise the placeholder.
     internal string PlannedName(string path) =>
-        cardNames.GetValueOrDefault(path) is { } typed && typed.Trim().Length > 0 ? typed.Trim() : DefaultCardName(path);
+        cardNames.GetValueOrDefault(path) is { } typed && typed.Trim().Length > 0 ? typed.Trim() : Placeholder(path).Name;
+
+    /// Spec 2.3: the suggestion from the clips or the next in line, else the volume label / folder name. Memory only.
+    internal (string Name, string? Hint) Placeholder(string path) =>
+        CardNaming.Placeholder(Settings.Naming.SuggestFromClips, Insight(path), history, DateString, Layout.Today(), DefaultCardName(path));
+
+    void NamingChanged()
+    {
+        foreach (var s in Sources) s.NamingChanged();
+    }
 
     internal void SetSelected(string path, bool on)
     {
@@ -314,13 +323,35 @@ public sealed partial class MainViewModel
     public bool UseCustomDate
     {
         get => useCustomDate;
-        set { if (Set(ref useCustomDate, value)) Raise(nameof(PathPreview)); }
+        set
+        {
+            if (!Set(ref useCustomDate, value)) return;
+            Raise(nameof(PathPreview));
+            NamingChanged();   // "next in line" counts within the date folder
+        }
     }
 
     public DateTime? CustomDate
     {
         get => customDate;
-        set { if (Set(ref customDate, value)) Raise(nameof(PathPreview)); }
+        set
+        {
+            if (!Set(ref customDate, value)) return;
+            Raise(nameof(PathPreview));
+            NamingChanged();
+        }
+    }
+
+    public bool SuggestCardNames
+    {
+        get => Settings.Naming.SuggestFromClips;
+        set
+        {
+            Settings.Naming.SuggestFromClips = value;
+            SettingsChanged();
+            Raise();
+            NamingChanged();
+        }
     }
 
     public string DateString => UseCustomDate && CustomDate is DateTime d

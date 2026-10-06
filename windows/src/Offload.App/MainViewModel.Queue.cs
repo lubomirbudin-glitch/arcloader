@@ -121,7 +121,10 @@ public sealed partial class MainViewModel
                 selected.Remove(src);
                 continue;
             }
-            var name = cardNames.GetValueOrDefault(src) is { Length: > 0 } n && n.Trim().Length > 0 ? n.Trim() : null;
+            // Exactly what the row shows: the typed name, else a suggestion (spec 2.3); null = the volume label.
+            var name = cardNames.GetValueOrDefault(src) is { Length: > 0 } n && n.Trim().Length > 0 ? n.Trim()
+                : Placeholder(src).Name is var shown && shown != DefaultCardName(src) ? shown
+                : null;
             var config = new JobConfig(src, Settings.DestRoots.ToList())
             {
                 CardName = name,

@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-06 — plán 6: karty a bezpečnost dat
 
+- Úkol 9 — název karty z názvů klipů (ARRI/Sony Venice/Canon `A001C003…`, RED `A001_C003…`, Blackmagic `A001_08251530_C001`) nebo „další v řadě“ podle historie dne; šedý zástupný text a řádek pod polem, volba „Navrhovat název karty podle klipů“ (`naming.suggestFromClips`), CLI `--name auto`, cívky v historii (`reels`)
 - Úkoly 7–8, oprava — selhané zjišťování karty se pamatuje jako chyba („Kartu se nepodařilo prověřit.“), takže ho každý sken neopakuje; při zavření bez úloh se nastaví `closing` před posledním zrušením; okno záloh říká „např. A001_2“ (skutečný název volí start podle disků)
 - Úkol 8 — GUI: před celou kopií karty, kterou historie zná, okno „Karty už jsou zálohované“ (Kopírovat znovu celé / Vynechat zálohované / Zrušit) se seznamem záloh a složkou, která vznikne (A001_2); karta vyprázdněná v kameře se neptá
 - Úkol 7 — GUI: pod kartou řádek „Zálohováno 6. 10. 2026 8:15 na Zaloha (D:) … — ověřeno“ (zeleně / oranžově / červeně, šedě „Zjišťuji…“; prázdná karta „Karta je prázdná — dřív zálohováno …“), zjišťuje se mimo UI vlákno po jedné úloze na kartu; výměna karty ve čtečce (i během čtení) běžící zjišťování zruší a výsledek zahodí; po dokončené kopii se historie načte znovu. Oprava po revizi: sken s ArgumentException/NotSupported/UnauthorizedAccess = chyba karty, kořen disku bez čitelného svazku = „Karta se nedá přečíst“, identita a svazek se na začátku kopie čtou každé zvlášť

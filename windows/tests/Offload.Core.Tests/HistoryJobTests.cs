@@ -43,6 +43,7 @@ public class HistoryJobTests
         Assert.Equal(job.Plan!.CardPaths, e.Destinations.Select(d => d.CardPath));
         Assert.Equal(1, Assert.Single(e.Generations).Seq);
         Assert.Equal(2, store.ReadFileList(e)!.Count);
+        Assert.Equal(["A001"], e.Reels);   // spec 2.3: the reels of the clips
     }
 
     [Fact]

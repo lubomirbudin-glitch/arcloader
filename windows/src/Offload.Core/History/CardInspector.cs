@@ -16,6 +16,10 @@ public sealed record CardInsight
     public string Fingerprint { get; init; } = "";
     public string Shape { get; init; } = "";
     public HistoryMatch? History { get; init; }
+    /// The folder name the clips suggest (spec 2.3), or null.
+    public NameSuggestion? Name { get; init; }
+    /// "Na kartě je víc cívek: A001, A002" when the clips disagree.
+    public string? NameNote { get; init; }
     public string? Error { get; init; }
 
     /// A card emptied in the camera after the backup: history still knows it (Identical, everything "Removed").
@@ -53,6 +57,8 @@ public static class CardInspector
                 var list = candidate.Fingerprint == fingerprint ? null : store?.ReadFileList(candidate);
                 match = HistoryMatcher.Match(scan, fingerprint, candidate, list, filesystem);
             }
+            var clips = ClipDetector.Detect(scan.Files);
+            var (name, note, _) = ReelSuggestion.FromClips(clips);
             return new CardInsight
             {
                 Source = source,
@@ -60,10 +66,12 @@ public static class CardInspector
                 Filesystem = filesystem,
                 TotalBytes = scan.TotalBytes,
                 FileCount = scan.Files.Count,
-                Clips = ClipDetector.Detect(scan.Files),
+                Clips = clips,
                 Fingerprint = fingerprint,
                 Shape = shape,
                 History = match,
+                Name = name,
+                NameNote = note,
             };
         }
         catch (Exception e) when (e is IOError or ArgumentException or NotSupportedException or UnauthorizedAccessException)

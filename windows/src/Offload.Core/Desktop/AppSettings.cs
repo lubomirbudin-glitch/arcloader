@@ -3,6 +3,13 @@ using System.Text.Json.Serialization;
 
 namespace Offload.Core.Desktop;
 
+/// "naming" in settings.json (spec 5.1).
+public sealed class NamingSettings
+{
+    /// Propose the card folder name from the clip names ("A001C003…" → "A001") or the next in line (spec 2.3).
+    [JsonPropertyName("suggestFromClips")] public bool SuggestFromClips { get; set; } = true;
+}
+
 /// The app's settings — the Mac `AppSettings` keys (destRoots, verify, analyzeClips, proxy, tools);
 /// `portNames` is Windows only: the user's names for USB sockets (`UsbConnector.Id` → name).
 public sealed class AppSettings
@@ -12,6 +19,7 @@ public sealed class AppSettings
     [JsonPropertyName("analyzeClips")] public bool AnalyzeClips { get; set; } = true;
     [JsonPropertyName("proxy")] public ProxySettings Proxy { get; set; } = new();
     [JsonPropertyName("tools")] public ExternalTools Tools { get; set; } = new();
+    [JsonPropertyName("naming")] public NamingSettings Naming { get; set; } = new();
     [JsonPropertyName("portNames")]
     public Dictionary<string, string> PortNames
     {
@@ -42,7 +50,7 @@ public static class SettingsStore
     public static string DefaultPath => Path.Combine(AppData.Folder, "settings.json");
 
     /// The top-level keys Load reads into properties; every other key goes to AppSettings.Extra.
-    static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal) { "destRoots", "verify", "analyzeClips", "proxy", "tools", "portNames" };
+    static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal) { "destRoots", "verify", "analyzeClips", "proxy", "tools", "naming", "portNames" };
 
     static readonly JsonSerializerOptions Json = new()
     {
@@ -98,6 +106,7 @@ public static class SettingsStore
             }
             Kept("proxy", (ProxySettings v) => s.Proxy = v, () => new ProxySettings());
             Kept("tools", (ExternalTools v) => s.Tools = v, () => new ExternalTools());
+            Kept("naming", (NamingSettings v) => s.Naming = v, () => new NamingSettings());
             Section("portNames", e =>
             {
                 var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -124,6 +133,7 @@ public static class SettingsStore
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         s.Proxy ??= new ProxySettings();
         s.Tools ??= new ExternalTools();
+        s.Naming ??= new NamingSettings();
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (id, name) in s.PortNames ?? [])
             if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name)) names[id] = name.Trim();

@@ -239,6 +239,7 @@ public sealed class OffloadJob
                         Files = plan.Scan.Files.Count, Bytes = plan.Scan.TotalBytes, Verified = report.Verified,
                     },
                 ],
+                Reels = ReelSuggestion.FromClips(ClipDetector.Detect(plan.Scan.Files)).Reels.ToList(),
             };
             var store = Config.HistoryFolder is string folder ? new HistoryStore(folder, log) : HistoryStore.Default(log);
             store.Record(entry, plan.Scan.Files);

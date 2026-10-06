@@ -93,15 +93,20 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <DockPanel Margin="0,6,0,0" Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisible}}">
-                                            <TextBlock Text="Název složky" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                            <Grid>
-                                                <TextBox Text="{Binding CardName, UpdateSourceTrigger=PropertyChanged}" FontSize="12" />
-                                                <TextBlock Text="{Binding CardNamePlaceholder}" Style="{StaticResource Caption}" Margin="12,0,0,0"
-                                                           VerticalAlignment="Center" IsHitTestVisible="False"
-                                                           Visibility="{Binding CardName, Converter={StaticResource EmptyToVisible}}" />
-                                            </Grid>
-                                        </DockPanel>
+                                        <StackPanel Margin="0,6,0,0" Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisible}}">
+                                            <DockPanel>
+                                                <TextBlock Text="Název složky" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <Grid>
+                                                    <TextBox Text="{Binding CardName, UpdateSourceTrigger=PropertyChanged}" FontSize="12" />
+                                                    <TextBlock Text="{Binding CardNamePlaceholder}" Style="{StaticResource Caption}" Margin="12,0,0,0"
+                                                               VerticalAlignment="Center" IsHitTestVisible="False"
+                                                               Visibility="{Binding CardName, Converter={StaticResource EmptyToVisible}}" />
+                                                </Grid>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding NameHint}" Style="{StaticResource Caption}" FontSize="11" Margin="0,2,0,0"
+                                                       AutomationProperties.AutomationId="CardNameHint"
+                                                       Visibility="{Binding NameHint, Converter={StaticResource NullToCollapsed}}" />
+                                        </StackPanel>
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -172,6 +177,8 @@
                 <TextBlock Text="Bez ověření není jisté, že data na disku jsou v pořádku." Style="{StaticResource WarningText}"
                            Visibility="{Binding Verify, Converter={StaticResource BoolToCollapsed}}" />
                 <CheckBox Content="Analýza klipů a náhledy v reportu" IsChecked="{Binding AnalyzeClips}" />
+                <CheckBox Content="Navrhovat název karty podle klipů" IsChecked="{Binding SuggestCardNames}"
+                          AutomationProperties.AutomationId="SuggestCardNames" />
 
                 <!-- Proxy -->
                 <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
