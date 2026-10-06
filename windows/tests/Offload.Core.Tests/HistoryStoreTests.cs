@@ -38,6 +38,12 @@ public static class HistoryFixtures
     }
 }
 
+/// These tests hold or abandon the machine-wide `Local\Offload-history` mutex and time its writers, while every OffloadJob test
+/// now records history through the same mutex — so this class runs with nothing else in parallel.
+[CollectionDefinition("HistoryMutex", DisableParallelization = true)]
+public class HistoryMutexCollection;
+
+[Collection("HistoryMutex")]
 public class HistoryStoreTests
 {
     static readonly DateTime T0 = HistoryFixtures.T0;

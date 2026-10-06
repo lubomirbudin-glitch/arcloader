@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using Offload.Core.Desktop;
+using Offload.Core.History;
 
 namespace Offload.Core;
 
@@ -16,6 +18,10 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     public bool AnalyzeClips { get; set; } = true;
     public ProxySettings Proxy { get; set; } = new();
     public ExternalTools Tools { get; set; } = new();
+    /// Write the finished copy into history.json (R27; CLI --no-history turns it off).
+    public bool RecordHistory { get; set; } = true;
+    /// Where history.json lives; null = HistoryStore.Default (%APPDATA%\Offload).
+    public string? HistoryFolder { get; set; }
 }
 
 public enum JobPhase { Waiting, Copying, Flushing, Verifying, Reporting, Analyzing, Proxies, Done, Failed, Cancelled }
@@ -66,10 +72,19 @@ public sealed class OffloadJob
     public OffloadEngine Engine { get; }
     volatile OffloadPlan? planValue;
     volatile OffloadReport? reportValue;
+    volatile string? sourceIdentity;
+    CardVolume? cardVolume;
 
     /// Set on a worker thread, read by the app's UI thread.
     public OffloadPlan? Plan { get => planValue; private set => planValue = value; }
     public OffloadReport? Report { get => reportValue; private set => reportValue = value; }
+    /// The card in the source's drive when the copy started (`CardIdentity`), read on the copy thread; null before
+    /// that or when unknown. "Vysunout kartu" ejects only this card.
+    public string? SourceIdentity => sourceIdentity;
+
+    /// Tests: what CardIdentity.Of / CardVolume.Of would read from the drive.
+    internal Func<string, string?> Identify { get; init; } = CardIdentity.Of;
+    internal Func<string, CardVolume?> VolumeOf { get; init; } = CardVolume.Of;
 
     public OffloadJob(JobConfig config)
         : this(config, new OffloadOptions
@@ -135,6 +150,7 @@ public sealed class OffloadJob
     /// After this the card is no longer needed, so the app can start the next card while stage 2 runs.
     public bool RunCopy(Action<string>? log = null)
     {
+        IdentifyCard(log);
         lock (gate)
         {
             started = true;
@@ -156,8 +172,9 @@ public sealed class OffloadJob
             if (IsCancelled)
             {
                 Update(s => s with { Phase = JobPhase.Cancelled });
-                return false;
+                return false;   // a cancelled copy is not recorded in history
             }
+            RecordHistory(plan, report, log);
             if (!Config.AnalyzeClips && !Config.Proxy.Enabled)
             {
                 WritePdfReports(report, plan, log);
@@ -176,6 +193,63 @@ public sealed class OffloadJob
         {
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
             return false;
+        }
+    }
+
+    /// Which card is in the drive — read on the copy thread before anything else (the UI never waits on a card).
+    void IdentifyCard(Action<string>? log)
+    {
+        try
+        {
+            sourceIdentity = Identify(Config.Source);
+            cardVolume = VolumeOf(Config.Source);
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"card identity: {e.Message}");
+        }
+    }
+
+    /// The finished stage 1 (with failed files too) goes into history.json; this never fails the job.
+    void RecordHistory(OffloadPlan plan, OffloadReport report, Action<string>? log)
+    {
+        if (!Config.RecordHistory) return;
+        try
+        {
+            var (fingerprint, shape) = CardFingerprint.Compute(plan.Scan);
+            var cardPaths = plan.CardPaths;
+            var entry = new HistoryEntry
+            {
+                Id = HistoryStore.NewId(report.Finished),
+                Card = cardVolume?.ToHistoryCard(),
+                Source = plan.Source,
+                CardName = plan.CardName,
+                Date = plan.Date,
+                Finished = report.Finished,
+                Success = report.Success,
+                Verified = report.Verified,
+                FailedFiles = report.Success ? null : report.FailedFiles.Count,
+                HashAlgorithms = [report.HashAlgorithm],
+                Files = plan.Scan.Files.Count,
+                Bytes = plan.Scan.TotalBytes,
+                Fingerprint = fingerprint,
+                Shape = shape,
+                Destinations = plan.DestRoots.Select((root, i) => new HistoryDestination { Root = root, CardPath = cardPaths[i] }).ToList(),
+                Generations =
+                [
+                    new HistoryGeneration
+                    {
+                        Seq = 1, Kind = HistoryGeneration.Full, Finished = report.Finished,
+                        Files = plan.Scan.Files.Count, Bytes = plan.Scan.TotalBytes, Verified = report.Verified,
+                    },
+                ],
+            };
+            var store = Config.HistoryFolder is string folder ? new HistoryStore(folder, log) : HistoryStore.Default(log);
+            store.Record(entry, plan.Scan.Files);
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
         }
     }
 

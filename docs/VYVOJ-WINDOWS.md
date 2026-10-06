@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-06 — plán 6: karty a bezpečnost dat
 
+- Úkol 5 — každá dokončená kopie (i s chybami, zrušená ne) se zapíše do historie s otiskem a seznamem souborů; identitu karty zjišťuje úloha sama na vlákně kopie (i v CLI); CLI `--no-history`; testy píšou historii jen do %TEMP%
 - Úkol 4, oprava — čtení `history.json` a seznamu souborů nebrání přejmenování při zápisu, odložený poškozený soubor se nepřepíše (`-2`, `-3`), mutex vytvořený povýšeným procesem se bere jako obsazený a zkouší se znovu
 - Úkol 4 — `history.json` v %APPDATA%\Offload (formát návrhu §5.2) pod pojmenovaným mutexem `Local\Offload-history` (GUI i CLI), `Update` = čtení, změna a zápis pod jedním zámkem, poškozený soubor (i ruční `null`) odložen jako `history.json.corrupt-…`, novější verze jen ke čtení, nejvýš 5 000 záznamů
 - Úkol 3 — otisk karty (SHA-256 `fingerprint` s časy a `shape` bez nich), seznam souborů jako gz, porovnání časů s tolerancí celých hodin na FAT/FAT32 (posun letního času)

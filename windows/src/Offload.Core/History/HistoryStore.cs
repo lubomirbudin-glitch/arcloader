@@ -17,7 +17,11 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
     public const int CurrentVersion = 1;
     const string MutexName = @"Local\Offload-history";
 
-    public static HistoryStore Default(Action<string>? log = null) => new(AppData.Folder, log);
+    /// %APPDATA%\Offload (or OFFLOAD_SETTINGS_DIR). Tests set DefaultFolderOverride once, so no test ever writes into
+    /// the developer's own history — not even while another test changes OFFLOAD_SETTINGS_DIR.
+    public static HistoryStore Default(Action<string>? log = null) => new(DefaultFolderOverride ?? AppData.Folder, log);
+
+    internal static string? DefaultFolderOverride { get; set; }
 
     public string Folder { get; } = folder;
     public string FilePath => Path.Combine(Folder, "history.json");

@@ -74,9 +74,9 @@ public class QueueRulesTests
     public void Runner_RecordsTheCardOnTheCopyThread()
     {
         using var dir = new TempDir();
-        var job = new OffloadJob(new JobConfig(dir.Sub("card"), [dir.Sub("d1")]));
         var seen = new List<string>();
-        var runner = new JobQueue.Runner(job, null, src => { seen.Add(src); return "ID-" + src.Length; });
+        var job = new OffloadJob(new JobConfig(dir.Sub("card"), [dir.Sub("d1")])) { Identify = src => { seen.Add(src); return "ID-" + src.Length; } };
+        var runner = new JobQueue.Runner(job, null);
         Assert.Null(runner.SourceIdentity);
         job.Cancel();
         runner.RunCopy();

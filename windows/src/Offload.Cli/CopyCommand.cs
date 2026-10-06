@@ -32,9 +32,11 @@ static class CopyCommand
         var noBurnIn = new Option<bool>("--no-burn-in") { Description = "No burn-in of clip name and timecode." };
         var proxyFolder = new Option<string?>("--proxy-folder") { Description = "Also copy every proxy to <folder>\\<date>\\<card name>\\ (with --proxy; never overwrites)." };
 
+        var noHistory = new Option<bool>("--no-history") { Description = "Do not read or write the offload history (%APPDATA%\\Offload\\history.json)." };
+
         var cmd = new Command("copy", "Copy a card to <dest>/<date>/<card name>/ on every destination and verify.");
         cmd.Arguments.Add(source);
-        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noAnalyze, proxy, lut, lutFallback, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder }) cmd.Options.Add(o);
+        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noAnalyze, proxy, lut, lutFallback, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder, noHistory }) cmd.Options.Add(o);
         cmd.SetAction(r =>
         {
             JobConfig config;
@@ -48,6 +50,7 @@ static class CopyCommand
                     Buffers = r.GetValue(buffers),
                     Verify = !r.GetValue(noVerify),
                     AllowSameDevice = r.GetValue(allowSame),
+                    RecordHistory = !r.GetValue(noHistory),
                 };
                 if (!ProxyCodecExtensions.TryParseWire(r.GetValue(proxyCodec)!, out var codec))
                     throw new ArgumentException(Msg.UnknownProxyCodec(r.GetValue(proxyCodec)));

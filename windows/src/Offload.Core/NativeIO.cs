@@ -148,6 +148,10 @@ public static unsafe class NativeIO
     public static long? AvailableBytes(string path) =>
         Win32.GetDiskFreeSpaceEx(Path.GetFullPath(path), out var free, out _, out _) ? (long)free : null;
 
+    /// The size of the volume (a card's capacity — part of how history recognises a card, R1).
+    public static long? TotalBytes(string path) =>
+        Win32.GetDiskFreeSpaceEx(Path.GetFullPath(path), out _, out var total, out _) ? (long)total : null;
+
     /// Write size unit for unbuffered I/O on this file's volume (at least 4096).
     public static int SectorSize(SafeFileHandle h)
     {
