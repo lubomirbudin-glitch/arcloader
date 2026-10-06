@@ -1,7 +1,9 @@
 # Builds windows\build\Offload: Offload.exe (GUI) + bin\offload.exe (CLI) + bin\braw-decode.exe + bin\ffmpeg.exe, ffprobe.exe (all self-contained).
+# -Staging builds into build\staging\Offload instead (e.g. while build\Offload\Offload.exe is running); same zip.
+param([switch]$Staging)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$out = Join-Path $root 'build\Offload'
+$out = Join-Path $root $(if ($Staging) { 'build\staging\Offload' } else { 'build\Offload' })
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 dotnet publish (Join-Path $root 'src\Offload.Cli\Offload.Cli.csproj') -c Release -r win-x64 --self-contained `
     -p:PublishSingleFile=true -p:DebugType=none -o (Join-Path $out 'bin')
@@ -30,11 +32,24 @@ foreach ($t in 'ffmpeg.exe', 'ffprobe.exe') {
         }
     }
     if ($src) { Copy-Item $src (Join-Path $out 'bin'); Write-Host "bundled $t from $src" } else { Write-Warning "$t not bundled - proxies and thumbnails will need it at runtime" }
+    # GPL: ship the licence and the build's README (version + source link) next to the binaries.
+    if ($src -and -not (Test-Path (Join-Path $out 'licence\ffmpeg'))) {
+        $buildDir = Split-Path -Parent (Split-Path -Parent $src)
+        $notices = 'LICENSE', 'README.txt' | ForEach-Object { Join-Path $buildDir $_ } | Where-Object { Test-Path $_ }
+        if ($notices) {
+            New-Item -ItemType Directory -Force (Join-Path $out 'licence\ffmpeg') | Out-Null
+            Copy-Item $notices (Join-Path $out 'licence\ffmpeg')
+        } else { Write-Warning "ffmpeg licence not found next to $src - add it to licence\ffmpeg before sharing the zip" }
+    }
 }
+# Instructions for whoever unpacks the zip.
+Copy-Item (Join-Path $root 'package\CTI-ME.txt') $out
 # Built-in LUTs (shared with the Mac version).
 $luts = Join-Path (Split-Path -Parent $root) 'shared\luts'
 New-Item -ItemType Directory -Force (Join-Path $out 'luts') | Out-Null
 Copy-Item (Join-Path $luts '*.cube'), (Join-Path $luts 'luts.json') (Join-Path $out 'luts')
+New-Item -ItemType Directory -Force (Join-Path $out 'licence') | Out-Null
+Copy-Item (Join-Path $luts 'README.md') (Join-Path $out 'licence\LUTy-README.md')
 $zip = Join-Path $root 'build\Offload-win-x64.zip'
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path $out -DestinationPath $zip

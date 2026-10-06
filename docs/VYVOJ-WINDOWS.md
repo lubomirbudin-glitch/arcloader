@@ -17,6 +17,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
 | 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | hotovo (čeká ruční test s klipy z kamer) |
 
+## 2026-10-06 — balíček ZIP
+
+- Balíček — v ZIPu je `CTI-ME.txt` (jak spustit, SmartScreen, požadavky, volitelné doplňky BRAW/RED/ARRI, kde je nastavení), licence přibaleného FFmpeg (GPL v3 + README buildu s odkazem na zdrojový kód) v `licencefmpeg` a popis LUTů; `build.ps1 -Staging` sestaví balíček do `build\staging`, když z `build\Offload` běží aplikace
+
 ## 2026-10-05 — plán 3: BRAW dekodér v C#
 
 - Úkol 1 — hledání knihovny Blackmagic RAW (vedle braw-decode, SDK, Player, DaVinci Resolve); bez knihovny je BRAW „nepodporovaný“ s nápovědou místo selhané proxy
