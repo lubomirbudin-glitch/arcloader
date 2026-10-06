@@ -64,7 +64,7 @@ public class VerifyReportTests
         var ok = new VerifyResult { CardPath = "x", Basis = "ascmhl", Started = DateTime.UtcNow.AddSeconds(-10), Finished = DateTime.UtcNow, Checked = 12, Ok = 12, BytesRead = 512_000_000_000 };
         Assert.StartsWith("Ověřeno 12 souborů (512 GB) za 0:10 (", VerifyTexts.CliSummary(ok));
         Assert.EndsWith(" — vše v pořádku.", VerifyTexts.CliSummary(ok));
-        Assert.EndsWith(" — NALEZENY PROBLÉMY: nesedí 1, chybí 1, nečitelné 1, navíc 1.", VerifyTexts.CliSummary(Sample("x")));
+        Assert.EndsWith(" — NALEZENY PROBLÉMY: nesedí 1, chybí 1, nečitelné 1, selhalo při kopii 0, navíc 1.", VerifyTexts.CliSummary(Sample("x")));
     }
 
     // R8: the report goes into _REPORT, never into ascmhl\.

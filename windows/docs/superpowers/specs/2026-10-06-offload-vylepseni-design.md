@@ -328,6 +328,11 @@ srozumitelný výsledek a volitelně report.
     offload_verify_<YYYY-MM-DD_HHMMSS>Z.json
 ```
 
+Výjimka (oprava po revizi): když historie `ascmhl` karty `_REPORT` **neignoruje** (cizí nástroj, např. `ascmhl` 1.0.1 ignoruje jen `.DS_Store` a `ascmhl`),
+report v kartě by byl pro `ascmhl verify` „nový nezaznamenaný soubor“. Pak jde report do denního `_REPORT` vedle složky karty
+(`<datum>/_REPORT/<karta>_verify_<stamp>Z.html/.pdf/.json`) a CLI/GUI to česky oznámí („Report ověření je uložený mimo složku karty, aby nenarušil její
+historii ASC MHL: <cesta>“). Historie zapsané Offloadem `_REPORT` ignorují, tam zůstává report v kartě.
+
 `offload_verify_….json` (UTF-8 bez BOM, seřazené klíče, data ISO 8601 UTC jako report):
 `tool`, `version`, `cardPath`, `started`, `finished`, `basis` (`ascmhl` | `hashList`), `generations` (počet),
 `hashAlgorithms` (např. `["xxh64"]`), `totalFiles`, `totalBytes`, `ok` (počet), `changed[]`, `missing[]`,
@@ -916,7 +921,7 @@ Mac je ignoruje. Zapisuje se do `docs/FORMATY.md` (oddíl nastavení) a do ROZDI
 | `_REPORT/offload_report_NNNN.json/.txt`, `<karta>_report_NNNN.html/.pdf`, klíč `generation` | 6 | ignoruje (nečte) |
 | `<karta>.xxh64` rozšířený o soubory doplnění | 6 | čte beze změny |
 | `ascmhl/NNNN_<karta>_…Z.mhl`, řetěz s víc položkami | 6 | `ascmhl` OK; Mac `verify` čte jen `.xxh64` — v pořádku |
-| `_REPORT/<karta>_verify_<stamp>Z.html/.pdf`, `offload_verify_<stamp>Z.json` | 6 | ignoruje |
+| `_REPORT/<karta>_verify_<stamp>Z.html/.pdf`, `offload_verify_<stamp>Z.json` (u cizí MHL, která `_REPORT` neignoruje: `<datum>/_REPORT/<karta>_verify_<stamp>Z.*`) | 6 | ignoruje |
 | `<datum>/_REPORT/<datum>_day_report.html/.pdf`, `<datum>_clips.csv/.ale` | 7 | ignoruje; `UniqueCardFolder` nekoliduje |
 | `_REPORT/<karta>_clips.csv/.ale` | 7 | ignoruje |
 | `hashAlgorithms`, `files[].md5`, `<karta>.md5`, MHL `<md5>` | 7 | ignoruje MD5, xxh64 ověří dál |

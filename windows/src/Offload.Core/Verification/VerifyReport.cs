@@ -41,7 +41,9 @@ public static class VerifyTexts
             };
             return ($"Ověřeno: {all} ({Basis(r)}).", VerifyTone.Ok);
         }
-        var text = $"Nesedí {Files(r.Changed.Count)}, chybí {N(r.Missing.Count)}, nečitelný {N(r.Unreadable.Count)} — podrobnosti v reportu ověření.";
+        var text = r.Changed.Count + r.Missing.Count + r.Unreadable.Count == 0
+            ? $"Nelze ověřit: {Files(r.FailedAtCopy.Count)} {Texts.Plural(r.FailedAtCopy.Count, "selhal", "selhaly", "selhalo")} už při kopii a v záznamu není žádný platný součet — podrobnosti v reportu ověření."
+            : $"Nesedí {Files(r.Changed.Count)}, chybí {N(r.Missing.Count)}, nečitelný {N(r.Unreadable.Count)} — podrobnosti v reportu ověření.";
         if (r.FolderGone) text += " Složka zálohy zmizela — disk se možná odpojil.";
         return (text, VerifyTone.Error);
     }
@@ -54,6 +56,8 @@ public static class VerifyTexts
             lines.Add($"{Files(r.Extra.Count)} navíc (nejsou v {(r.Basis == "ascmhl" ? "MHL" : "seznamu součtů")}).");
         if (r.FailedAtCopy.Count > 0)
             lines.Add($"{Files(r.FailedAtCopy.Count)} {Texts.Plural(r.FailedAtCopy.Count, "selhal", "selhaly", "selhalo")} už při kopii.");
+        if (r.FailedSuperseded.Count > 0)
+            lines.Add($"{Files(r.FailedSuperseded.Count)} {Texts.Plural(r.FailedSuperseded.Count, "má", "mají", "má")} v nejnovější generaci záznam „selhalo při kopii“ — ověřeno proti starší platné generaci.");
         lines.AddRange(r.ChainProblems);
         return lines;
     }
@@ -62,12 +66,16 @@ public static class VerifyTexts
     public static string CliSummary(VerifyResult r)
     {
         double secs = (r.Finished - r.Started).TotalSeconds;
-        var head = $"Ověřeno {Files(r.Checked)} ({Format.BytesCs(r.BytesRead)}) za {JobProgress.EtaText(secs)} ({Format.Rate(r.BytesRead, secs)})";
+        var head = $"Ověřeno {Files(r.Ok + r.Changed.Count)} ({Format.BytesCs(r.BytesRead)}) za {JobProgress.EtaText(secs)} ({Format.Rate(r.BytesRead, secs)})";
         if (r.Cancelled) return Summary(r).Text;
         return r.Success
             ? $"{head} — vše v pořádku."
-            : $"{head} — NALEZENY PROBLÉMY: nesedí {N(r.Changed.Count)}, chybí {N(r.Missing.Count)}, nečitelné {N(r.Unreadable.Count)}, navíc {N(r.Extra.Count)}.";
+            : $"{head} — NALEZENY PROBLÉMY: nesedí {N(r.Changed.Count)}, chybí {N(r.Missing.Count)}, nečitelné {N(r.Unreadable.Count)}, selhalo při kopii {N(r.FailedAtCopy.Count)}, navíc {N(r.Extra.Count)}.";
     }
+
+    /// Why the report is not in the card folder (an MHL history that does not ignore _REPORT would turn it into an unlisted file).
+    public static string ReportOutsideNote(string path) =>
+        $"Report ověření je uložený mimo složku karty, aby nenarušil její historii ASC MHL: {path}";
 }
 
 /// The verification report (spec 2.4, R8): `_REPORT\<card>_verify_<stamp>Z.html/.pdf` and `offload_verify_<stamp>Z.json`.
@@ -139,7 +147,8 @@ public static class VerifyReport
         Section(h, "Nesedí (obsah se liší od záznamu)", "bad", r.Changed);
         Section(h, "Chybí", "bad", r.Missing);
         Section(h, "Nečitelné", "bad", r.Unreadable.Select(u => $"{u.Path} — {u.Error}").ToList());
-        Section(h, "Selhaly už při kopii", "warn", r.FailedAtCopy);
+        Section(h, "Selhaly už při kopii (bez platného záznamu)", "bad", r.FailedAtCopy);
+        Section(h, "Nejnovější záznam selhal při kopii (ověřeno proti starší generaci)", "warn", r.FailedSuperseded);
         Section(h, r.Basis == "ascmhl" ? "Navíc (nejsou v MHL)" : "Navíc (nejsou v seznamu součtů)", "warn", r.Extra);
         Section(h, "Řetěz ASC MHL", "warn", r.ChainProblems);
         h.Append($"<footer>offload {HtmlReport.Esc(OffloadVersion.String)} · report ověření · {HtmlReport.DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
@@ -157,14 +166,24 @@ public static class VerifyReport
         h.Append("</table></div>\n");
     }
 
+    /// `<card>\_REPORT`, or — when the card's MHL history does not ignore _REPORT — `<parent>\_REPORT` (never into the card).
+    public static string ReportDir(VerifyResult r)
+    {
+        var card = r.CardPath.TrimEnd('\\', '/');
+        var parent = r.ReportInsideCard ? null : Path.GetDirectoryName(card);
+        return Path.Combine(parent ?? card, Layout.ReportDirName);
+    }
+
     /// Writes JSON, HTML and (best effort, logged) PDF into `<card>\_REPORT\`. Returns the HTML path. Not for a cancelled run.
     public static string Write(VerifyResult r, Action<string>? log = null)
     {
-        var dir = Path.Combine(r.CardPath, Layout.ReportDirName);
+        var dir = ReportDir(r);
         NativeIO.Mkdirs(dir);
         var stamp = Stamp(r);
         var card = CardName(r);
-        NativeIO.WriteFileDurably(Path.Combine(dir, $"offload_verify_{stamp}Z.json"), new UTF8Encoding(false).GetBytes(Json(r)));
+        // Beside the card folder the day-level _REPORT holds several cards' reports, so the JSON carries the card name too.
+        var jsonName = r.ReportInsideCard ? $"offload_verify_{stamp}Z.json" : $"{card}_verify_{stamp}Z.json";
+        NativeIO.WriteFileDurably(Path.Combine(dir, jsonName), new UTF8Encoding(false).GetBytes(Json(r)));
         var html = Path.Combine(dir, $"{card}_verify_{stamp}Z.html");
         NativeIO.WriteFileDurably(html, new UTF8Encoding(false).GetBytes(Html(r)));
         try

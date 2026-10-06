@@ -8,7 +8,7 @@ namespace Offload.Core.Verification;
 /// One hash of a file in an ASC MHL generation; `Action`: "original", "verified", "failed" …
 public sealed record MhlHash(string Algorithm, string Value, string? Action);
 
-public sealed record MhlFileRecord(string Path, long? Size, DateTime? Modified, IReadOnlyList<MhlHash> Hashes, int Generation)
+public sealed record MhlFileRecord(string Path, long? Size, DateTime? Modified, IReadOnlyList<MhlHash> Hashes, int Generation, string? PreviousPath = null)
 {
     /// The copy recorded this file as failed (action="failed").
     public bool Failed => Hashes.Any(h => h.Action == "failed");
@@ -24,6 +24,8 @@ public sealed class MhlHistory
 {
     public required IReadOnlyList<MhlGeneration> Generations { get; init; }
     public required IReadOnlyDictionary<string, MhlFileRecord> Files { get; init; }
+    /// Per path the newest record that is not `failed` — what a file whose newest record failed is verified against.
+    public required IReadOnlyDictionary<string, MhlFileRecord> LastGood { get; init; }
     /// The ignore patterns of every generation.
     public required IReadOnlyList<string> Ignore { get; init; }
     /// The chain as read, in order (an append writes it back with one more entry); empty when there is none.
@@ -91,13 +93,26 @@ public static partial class MhlReader
         }
         if (generations.Count == 0 && problems.Count == 0) return null;
 
-        var files = new Dictionary<string, MhlFileRecord>(StringComparer.Ordinal);
+        // Case-insensitive keys (the disk is, and Extra compares that way). A later generation wins; a path a later
+        // generation lists as previousPath was renamed, so its old record no longer describes a file.
+        var files = new Dictionary<string, MhlFileRecord>(StringComparer.OrdinalIgnoreCase);
+        var lastGood = new Dictionary<string, MhlFileRecord>(StringComparer.OrdinalIgnoreCase);
         foreach (var g in generations)
-            foreach (var f in g.Files) files[f.Path] = f;   // a later generation wins
+            foreach (var f in g.Files)
+            {
+                if (f.PreviousPath is { Length: > 0 } prev && !string.Equals(prev, f.Path, StringComparison.OrdinalIgnoreCase))
+                {
+                    files.Remove(prev);
+                    lastGood.Remove(prev);
+                }
+                files[f.Path] = f;
+                if (!f.Failed) lastGood[f.Path] = f;
+            }
         return new MhlHistory
         {
             Generations = generations,
             Files = files,
+            LastGood = lastGood,
             Ignore = generations.SelectMany(g => g.Ignore).Distinct(StringComparer.Ordinal).ToList(),
             Chain = chain ?? [],
             ChainProblems = problems,
@@ -139,10 +154,11 @@ public static partial class MhlReader
             DateTime? modified = DateTime.TryParse((string?)p.Attribute("lastmodificationdate"), CultureInfo.InvariantCulture,
                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var m) ? m : null;
             var hashes = h.Elements()
-                .Where(e => e.Name != Ns + "path")
+                .Where(e => e.Name != Ns + "path" && e.Name != Ns + "previousPath")
                 .Select(e => new MhlHash(e.Name.LocalName, e.Value.Trim(), (string?)e.Attribute("action")))
                 .ToList();
-            files.Add(new MhlFileRecord(p.Value.Trim().Replace('\\', '/'), size, modified, hashes, seq));
+            var previous = ((string?)h.Element(Ns + "previousPath"))?.Trim().Replace('\\', '/');
+            files.Add(new MhlFileRecord(p.Value.Trim().Replace('\\', '/'), size, modified, hashes, seq, previous));
         }
         return new MhlGeneration(seq, Path.GetFileName(file), ignore, files);
     }

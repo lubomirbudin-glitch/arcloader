@@ -28,20 +28,27 @@ public sealed class VerifyResult
     public List<string> Missing { get; } = [];
     public List<UnreadableFile> Unreadable { get; } = [];
     public List<string> Extra { get; } = [];
+    /// Failed at the copy and no earlier good record exists: there is nothing to verify the file against.
     public List<string> FailedAtCopy { get; } = [];
+    /// The newest record failed at the copy but an older one did not: the file was verified against that one.
+    public List<string> FailedSuperseded { get; } = [];
     public List<string> ChainProblems { get; } = [];
     public bool Cancelled { get; set; }
     /// The card folder itself vanished during the run (a disconnected disk).
     public bool FolderGone { get; set; }
 
-    public bool Success => !Cancelled && Changed.Count == 0 && Missing.Count == 0 && Unreadable.Count == 0;
+    /// False when the MHL history does not ignore _REPORT: a report inside the card folder would break `ascmhl verify`,
+    /// so VerifyReport.Write puts it into the day-level _REPORT beside the card folder.
+    public bool ReportInsideCard { get; init; } = true;
+
+    public bool Success => !Cancelled && Changed.Count == 0 && Missing.Count == 0 && Unreadable.Count == 0 && FailedAtCopy.Count == 0;
 }
 
 /// Re-reads a card folder on a destination and compares every file with its ASC MHL (all generations, every hash type
 /// R9) — or, without ascmhl/, with the hash lists in _REPORT. Writes nothing (R8): the report is a separate step.
 public static class BackupVerifier
 {
-    sealed record Expected(string Path, long? Size, IReadOnlyList<MhlHash> Hashes, bool Failed);
+    sealed record Expected(string Path, long? Size, IReadOnlyList<MhlHash> Hashes, bool Failed, bool FailedNewer = false);
 
     static readonly string[] Ours = [Layout.ReportDirName + "/", Layout.ProxyDirName + "/", Mhl.DirName + "/"];
 
@@ -58,13 +65,21 @@ public static class BackupVerifier
         if (mhl is { Generations.Count: > 0 })
         {
             expected = mhl.Files.Values.OrderBy(f => f.Path, StringComparer.Ordinal)
-                .Select(f => new Expected(f.Path, f.Size, f.Hashes.Where(h => HashAlgo.IsKnown(h.Algorithm)).ToList(), f.Failed)).ToList();
+                .Select(f =>
+                {
+                    // A newest record that failed at the copy: verify against the newest one that did not (a corrupt file
+                    // must not pass); with none, there is nothing to compare with.
+                    if (f.Failed && mhl.LastGood.TryGetValue(f.Path, out var good))
+                        return new Expected(f.Path, good.Size, good.Hashes.Where(h => HashAlgo.IsKnown(h.Algorithm)).ToList(), false, true);
+                    return new Expected(f.Path, f.Size, f.Hashes.Where(h => HashAlgo.IsKnown(h.Algorithm)).ToList(), f.Failed);
+                }).ToList();
             ignore = mhl.Ignore;
             basis = "ascmhl";
         }
         else
         {
-            expected = ReadHashLists(cardPath) ?? throw OffloadError.Preflight(PreflightCode.NoHashRecord, Msg.NoHashRecord(cardPath));
+            expected = ReadHashLists(cardPath) ?? throw OffloadError.Preflight(PreflightCode.NoHashRecord,
+                string.Join(" ", new[] { Msg.NoHashRecord(cardPath) }.Concat(mhl?.ChainProblems ?? [])));
             ignore = [];
             basis = "hashList";
         }
@@ -79,6 +94,8 @@ public static class BackupVerifier
             HashAlgorithms = expected.SelectMany(e => e.Hashes.Select(h => h.Algorithm)).Distinct().OrderBy(a => HashAlgo.Names.ToList().IndexOf(a)).ToList(),
             TotalFiles = expected.Count,
             TotalBytes = total,
+            // Only an ascmhl history can be broken by a report: _REPORT must be ignored by every generation.
+            ReportInsideCard = basis != "ascmhl" || mhl!.Generations.All(g => Ignored(Layout.ReportDirName + "/x", g.Ignore)),
         };
         result.ChainProblems.AddRange(mhl?.ChainProblems ?? []);
 
@@ -101,9 +118,12 @@ public static class BackupVerifier
             var path = Layout.Join(cardPath, e.Path);
             if (!File.Exists(path))
             {
-                result.Missing.Add(e.Path);
+                // A card folder that vanished (disk pulled) makes every remaining file unreadable, not missing.
+                if (!Directory.Exists(cardPath)) result.Unreadable.Add(new UnreadableFile(e.Path, "složka zálohy zmizela"));
+                else result.Missing.Add(e.Path);
                 continue;
             }
+            if (e.FailedNewer) result.FailedSuperseded.Add(e.Path);
             if (e.Hashes.Count == 0)
             {
                 result.Unreadable.Add(new UnreadableFile(e.Path, "záznam nemá žádný podporovaný kontrolní součet"));
@@ -164,8 +184,9 @@ public static class BackupVerifier
         }
     }
 
-    /// ASC MHL ignore patterns: a name ("*.tmp", ".DS_Store") matches any path component, "name/" only a folder,
-    /// a pattern with "/" inside the path from the card folder.
+    /// ASC MHL ignore patterns, gitwildmatch style: a name ("*.tmp", ".DS_Store") matches any path component, "name/" only
+    /// a folder; a pattern with "/" inside, or a leading "/", is anchored at the card folder. `*` and `?` never cross a
+    /// "/", `**` does. A matching folder ignores everything below it.
     internal static bool Ignored(string relPath, IReadOnlyList<string> patterns)
     {
         var parts = relPath.Split('/');
@@ -176,18 +197,41 @@ public static class BackupVerifier
             if (pattern.Length == 0) continue;
             if (pattern.Contains('/'))
             {
-                if (Wildcard(relPath, pattern) || relPath.StartsWith(pattern + "/", StringComparison.OrdinalIgnoreCase)) return true;
+                var rx = Wildcard(pattern.TrimStart('/'));
+                var tail = folderOnly ? "/.*" : "(/.*)?";
+                if (Regex.IsMatch(relPath, "^" + rx + tail + "$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)) return true;
                 continue;
             }
+            var name = "^" + Wildcard(pattern) + "$";
             var candidates = folderOnly ? parts[..^1] : parts;
-            if (candidates.Any(c => Wildcard(c, pattern))) return true;
+            if (candidates.Any(c => Regex.IsMatch(c, name, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))) return true;
         }
         return false;
     }
 
-    static bool Wildcard(string text, string pattern) =>
-        Regex.IsMatch(text, "^" + Regex.Escape(pattern).Replace(@"\*", ".*").Replace(@"\?", ".") + "$",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    /// A gitwildmatch glob as a regex body (no anchors).
+    static string Wildcard(string glob)
+    {
+        var rx = new StringBuilder();
+        for (int i = 0; i < glob.Length; i++)
+        {
+            char c = glob[i];
+            if (c == '*' && i + 1 < glob.Length && glob[i + 1] == '*')
+            {
+                i++;
+                if (i + 1 < glob.Length && glob[i + 1] == '/')
+                {
+                    i++;
+                    rx.Append("(.*/)?");
+                }
+                else rx.Append(".*");
+            }
+            else if (c == '*') rx.Append("[^/]*");
+            else if (c == '?') rx.Append("[^/]");
+            else rx.Append(Regex.Escape(c.ToString()));
+        }
+        return rx.ToString();
+    }
 
     /// `_REPORT\*.xxh64` and `*.md5` ("<hash><two spaces><path>" lines, also with \r\n): one record per path.
     static List<Expected>? ReadHashLists(string cardPath)

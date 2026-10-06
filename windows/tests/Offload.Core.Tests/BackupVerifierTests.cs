@@ -82,7 +82,7 @@ public class BackupVerifierTests
 
         var r = BackupVerifier.Verify(card, chunkSize: 4096);
 
-        Assert.True(r.Success);
+        Assert.False(r.Success);   // a file nobody could verify is never "all fine"
         Assert.Equal(["CLIP/b.mov"], r.FailedAtCopy);
         Assert.Equal("1 soubor selhal už při kopii.", Assert.Single(VerifyTexts.Warnings(r)));
     }

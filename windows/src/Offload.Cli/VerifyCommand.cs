@@ -95,7 +95,9 @@ static class VerifyCommand
         {
             try
             {
-                Console.WriteLine($"Report: {VerifyReport.Write(r, m => Console.Error.WriteLine(m))}");
+                var html = VerifyReport.Write(r, m => Console.Error.WriteLine(m));
+                Console.WriteLine($"Report: {html}");
+                if (!r.ReportInsideCard) Console.WriteLine(VerifyTexts.ReportOutsideNote(html));
             }
             catch (Exception e)
             {
