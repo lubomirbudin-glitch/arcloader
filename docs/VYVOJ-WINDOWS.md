@@ -20,6 +20,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 ## 2026-10-06 — plán 6: karty a bezpečnost dat
 
 - Úkol 2 — nastavení zachová klíče, které tahle verze nezná (horní úroveň i `proxy`), takže návrat na starší verzi od 0.2.0 nesmaže projekty ani pravidla
+- Úkol 2, oprava — sekce `proxy`/`tools`, kterou tahle verze nepřečte (např. kodek z novější verze), se uloží zpátky beze změny místo vynulování; `tools` také drží neznámé klíče
 - Úkol 1 — české hlášky kontrol před kopií (`Msg`, `PreflightCode` u každé chyby), CLI „Chyba: “, chyby parseru System.CommandLine česky, kde je balíček přeložené (satelit cs; chybějící `--dest` hlásí jádro: „Není zadaný žádný cíl.“), velikosti v českých větách „3,2 GB“
 
 ## 2026-10-06 — balíček ZIP

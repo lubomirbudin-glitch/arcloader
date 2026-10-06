@@ -29,6 +29,10 @@ public sealed class AppSettings
     /// Top-level keys this version does not know (a newer version wrote them): kept as they are and written back,
     /// so going back to an older version never loses projects or rules (R24).
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+
+    /// "proxy" / "tools" sections that did not parse (a value from a newer version): the original JSON, written back by
+    /// Save unchanged so the next save never drops them. While one is kept, in-app changes to that section do not persist.
+    [JsonIgnore] internal Dictionary<string, JsonElement>? RawSections { get; set; }
 }
 
 public static class SettingsStore
@@ -81,8 +85,19 @@ public static class SettingsStore
                 .Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList());
             Section("verify", e => s.Verify = e.GetBoolean());
             Section("analyzeClips", e => s.AnalyzeClips = e.GetBoolean());
-            Section("proxy", e => s.Proxy = e.Deserialize<ProxySettings>(Json) ?? new ProxySettings());
-            Section("tools", e => s.Tools = e.Deserialize<ExternalTools>(Json) ?? new ExternalTools());
+            void Kept<T>(string key, Func<T, T> set, Func<T> fresh) where T : class
+            {
+                if (!root.TryGetValue(key, out var e) || e.ValueKind == JsonValueKind.Null) return;
+                try { set(e.Deserialize<T>(Json) ?? fresh()); }
+                catch (Exception)
+                {
+                    // Not understood by this version: keep the raw section and write it back as it was.
+                    (s.RawSections ??= [])[key] = e.Clone();
+                    System.Diagnostics.Trace.WriteLine($"settings: section \"{key}\" kept as-is (could not be read)");
+                }
+            }
+            Kept("proxy", (ProxySettings v) => s.Proxy = v, () => new ProxySettings());
+            Kept("tools", (ExternalTools v) => s.Tools = v, () => new ExternalTools());
             Section("portNames", e =>
             {
                 var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -135,7 +150,13 @@ public static class SettingsStore
     {
         NativeIO.Mkdirs(Path.GetDirectoryName(path)!);
         var tmp = path + ".tmp";
-        NativeIO.WriteFileDurably(tmp, JsonSerializer.SerializeToUtf8Bytes(settings, Json));
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(settings, Json);
+        if (settings.RawSections is { Count: > 0 } raw && System.Text.Json.Nodes.JsonNode.Parse(bytes) is System.Text.Json.Nodes.JsonObject obj)
+        {
+            foreach (var (key, value) in raw) obj[key] = System.Text.Json.Nodes.JsonNode.Parse(value.GetRawText());
+            bytes = JsonSerializer.SerializeToUtf8Bytes(obj, Json);
+        }
+        NativeIO.WriteFileDurably(tmp, bytes);
         NativeIO.Move(tmp, path, replace: true);
     }
 

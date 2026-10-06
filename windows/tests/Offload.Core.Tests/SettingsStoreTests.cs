@@ -84,6 +84,27 @@ public class SettingsStoreTests
         Assert.DoesNotContain("Extra", names);
     }
 
+    // A "proxy" section with a value this version cannot parse is kept raw: the next save does not drop it.
+    [Fact]
+    public void UnparsableProxySection_SurvivesRoundTrip_KnownFieldsStillWork()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        File.WriteAllText(path, """{"verify":false,"proxy":{"codec":"av1","lutRules":[{"match":"x"}]},"tools":{"ffmpeg":"C:\f.exe","future":1}}""");
+        var s = SettingsStore.Load(path);
+        s.Verify = true;
+        SettingsStore.Save(s, path);
+        var again = SettingsStore.Load(path);
+        Assert.True(again.Verify);
+        Assert.Equal("C:\f.exe", again.Tools.Ffmpeg);
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var proxy = doc.RootElement.GetProperty("proxy");
+        Assert.Equal("av1", proxy.GetProperty("codec").GetString());
+        Assert.Equal("x", proxy.GetProperty("lutRules")[0].GetProperty("match").GetString());
+        Assert.Equal(1, doc.RootElement.GetProperty("tools").GetProperty("future").GetInt32());
+        Assert.Equal(1, doc.RootElement.EnumerateObject().Count(p => p.Name == "proxy"));
+    }
+
     [Fact]
     public void UnknownKeys_KeptByClone_NoneForFreshSettings()
     {
