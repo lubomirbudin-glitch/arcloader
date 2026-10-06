@@ -336,7 +336,7 @@ historii ASC MHL: <cesta>“). Historie zapsané Offloadem `_REPORT` ignorují, 
 `offload_verify_….json` (UTF-8 bez BOM, seřazené klíče, data ISO 8601 UTC jako report):
 `tool`, `version`, `cardPath`, `started`, `finished`, `basis` (`ascmhl` | `hashList`), `generations` (počet),
 `hashAlgorithms` (např. `["xxh64"]`), `totalFiles`, `totalBytes`, `ok` (počet), `changed[]`, `missing[]`,
-`unreadable[]` ({`path`, `error`}), `extra[]`, `failedAtCopy[]`, `chainProblems[]` (texty), `success` (bool).
+`unreadable[]` ({`path`, `error`}), `extra[]`, `failedAtCopy[]`, `failedSuperseded[]` (soubory v pořádku, jejichž nejnovější záznam je `failed`), `chainProblems[]` (texty), `success` (bool).
 Pole jsou relativní cesty s `/`.
 
 **Jádro.** `Offload.Core.Verification`:

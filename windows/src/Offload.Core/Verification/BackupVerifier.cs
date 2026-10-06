@@ -123,7 +123,6 @@ public static class BackupVerifier
                 else result.Missing.Add(e.Path);
                 continue;
             }
-            if (e.FailedNewer) result.FailedSuperseded.Add(e.Path);
             if (e.Hashes.Count == 0)
             {
                 result.Unreadable.Add(new UnreadableFile(e.Path, "záznam nemá žádný podporovaný kontrolní součet"));
@@ -140,7 +139,11 @@ public static class BackupVerifier
                 bool same = e.Size is not long want || want == size;
                 for (int h = 0; same && h < hashers.Count; h++)
                     same = HashAlgo.Same(e.Hashes[h].Algorithm, hashers[h].Finish(), e.Hashes[h].Value);
-                if (same) result.Ok++;
+                if (same)
+                {
+                    result.Ok++;
+                    if (e.FailedNewer) result.FailedSuperseded.Add(e.Path);   // only when it checks out against the older good record
+                }
                 else result.Changed.Add(e.Path);
             }
             catch (OperationCanceledException)

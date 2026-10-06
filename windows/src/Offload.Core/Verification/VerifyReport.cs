@@ -103,6 +103,7 @@ public static class VerifyReport
             ["changed"] = Strings(r.Changed),
             ["extra"] = Strings(r.Extra),
             ["failedAtCopy"] = Strings(r.FailedAtCopy),
+            ["failedSuperseded"] = Strings(r.FailedSuperseded),
             ["finished"] = Iso(r.Finished),
             ["generations"] = r.Generations,
             ["hashAlgorithms"] = Strings(r.HashAlgorithms),

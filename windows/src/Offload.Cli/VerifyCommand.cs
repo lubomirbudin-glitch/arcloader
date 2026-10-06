@@ -31,7 +31,7 @@ static class VerifyCommand
     }
 
     /// Exit 0 when every card verified; 1 when any had a problem (or there was nothing to verify). The problem lines stay
-    /// machine-readable (MISMATCH, MISSING, ERROR, EXTRA, FAILED-AT-COPY, CHAIN) for scripts; the summary is Czech.
+    /// machine-readable (MISMATCH, MISSING, ERROR, EXTRA, FAILED-AT-COPY, FAILED-SUPERSEDED, CHAIN) for scripts; the summary is Czech.
     static int Run(string folder, bool writeReport)
     {
         var cards = VerifyTargets.Resolve(folder);
@@ -89,6 +89,7 @@ static class VerifyCommand
         foreach (var m in r.Unreadable) Console.WriteLine($"ERROR     {m.Path}: {m.Error}");
         foreach (var m in r.Extra) Console.WriteLine($"EXTRA     {m}");
         foreach (var m in r.FailedAtCopy) Console.WriteLine($"FAILED-AT-COPY  {m}");
+        foreach (var m in r.FailedSuperseded) Console.WriteLine($"FAILED-SUPERSEDED  {m}");
         foreach (var m in r.ChainProblems) Console.WriteLine($"CHAIN     {m}");
         Console.WriteLine(VerifyTexts.CliSummary(r));
         if (writeReport && !r.Cancelled)
@@ -96,8 +97,7 @@ static class VerifyCommand
             try
             {
                 var html = VerifyReport.Write(r, m => Console.Error.WriteLine(m));
-                Console.WriteLine($"Report: {html}");
-                if (!r.ReportInsideCard) Console.WriteLine(VerifyTexts.ReportOutsideNote(html));
+                Console.WriteLine(r.ReportInsideCard ? $"Report: {html}" : VerifyTexts.ReportOutsideNote(html));
             }
             catch (Exception e)
             {
