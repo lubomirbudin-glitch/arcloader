@@ -23,6 +23,15 @@ public enum PreflightCode
     NoSpace,
     NoHashRecord,
     NoFilesToRead,
+    AppendUnavailable,
+    AppendNoReport,
+    AppendNoMhl,
+    AppendDiverged,
+    AppendConflict,
+    AppendMissingFile,
+    AppendFailedFile,
+    /// Not an error: the backup already has everything (the job ends "Hotovo").
+    NothingNew,
 }
 
 /// Every message a user sees from checks and validation (GUI job card, CLI) — Czech, one method per message, no resx.
@@ -70,6 +79,39 @@ public static class Msg
     public const string CardNameAutoNone = "Návrh názvu nenalezen, použije se jmenovka svazku.";
     public static string CardNameAuto(string name) => $"Název karty: {name} (podle klipů)";
     public static string CardUnreadable(string detail) => $"Kartu nejde přečíst: {detail}";
+
+    // Append (spec 2.2)
+    public static string AppendUnavailable(string cardPath) =>
+        $"Dřívější záloha není dostupná: {cardPath} — připojte disk, nebo udělejte celou kopii.";
+    public static string AppendNoReport(string cardPath) =>
+        $"V {cardPath} chybí report dřívější zálohy (_REPORT\\offload_report.json) — doplnit nejde.";
+    public static string AppendBadReport(string cardPath, string detail) =>
+        $"Report dřívější zálohy v {cardPath} nejde přečíst ({detail}) — doplnit nejde.";
+    public static string AppendNoMhl(string cardPath) =>
+        $"V {cardPath} chybí ASC MHL (ascmhl\\ascmhl_chain.xml) — doplnit nejde.";
+    public static string AppendDiverged(string details) =>
+        $"Zálohy na cílech se liší ({details}) — zkontrolujte je přes Nástroje → Ověřit zálohu…; doplnit nejde.";
+    /// Ruling I1: the numbered reports and the ASC MHL chain of one card folder disagree (an append stopped half way).
+    public static string AppendReportsMismatch(string cardPath, int report, int mhl) =>
+        $"V {cardPath} nesouhlasí reporty s ASC MHL (poslední report je generace {report}, poslední generace MHL {mhl}) — dřívější doplnění se nedokončilo. "
+        + "Zkontrolujte zálohu přes Nástroje → Ověřit zálohu… a složku opravte ručně; doplnit nejde.";
+    public static string AppendNotACardFolder(string path) =>
+        $"{path} není složka karty v záloze (<cíl>\\<datum>\\<karta>) — doplnit nejde.";
+    public static string AppendDifferentFolders(IEnumerable<string> cardPaths) =>
+        $"Složky dřívější zálohy se jmenují různě ({string.Join(", ", cardPaths)}) — doplnit jde jen do složek se stejným datem a názvem karty.";
+    public static string AppendConflict(IReadOnlyList<string> lines, string fullCopyFolder) =>
+        $"Doplnění zastaveno — nic se nezkopírovalo. {lines.Count} {Desktop.Texts.Plural(lines.Count, "soubor na kartě má", "soubory na kartě mají", "souborů na kartě má")} "
+        + "stejné jméno jako v záloze, ale jinou velikost nebo datum:\n  "
+        + string.Join("\n  ", lines.Take(10)) + (lines.Count > 10 ? "\n  …" : "")
+        + $"\nUdělejte celou kopii (vznikne {fullCopyFolder}).";
+    public static string AppendMissingFile(string disk, string path) =>
+        $"Na {disk} chybí soubor z dřívější zálohy: {path} — zkontrolujte zálohu přes Nástroje → Ověřit zálohu…";
+    public static string AppendFailedFile(string path, string disk) =>
+        $"{path} se při dřívější záloze na {disk} nezkopíroval správně — doplnit nejde, udělejte celou kopii.";
+    public const string NothingNew = "Nic nového — záloha je úplná.";
+    public static string UnverifiedEarlier(int n) =>
+        $"{n} {Desktop.Texts.Plural(n, "soubor", "soubory", "souborů")} z dřívější zálohy {Desktop.Texts.Plural(n, "nebyl ověřen", "nebyly ověřeny", "nebylo ověřeno")} — doporučeno Ověřit zálohu.";
+    public const string CardNotInHistory = "Karta není v historii — zadejte složky zálohy volbou --into.";
 
     // CLI
     public const string CliError = "Chyba: ";

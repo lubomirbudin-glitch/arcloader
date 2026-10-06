@@ -51,6 +51,8 @@ public sealed partial class OffloadReport
     [JsonPropertyName("proxy")] public ProxySettings? Proxy { get; set; }
     /// Windows only: the ffmpeg encoder the proxies were rendered with (e.g. "h264_nvenc"); omitted when none were rendered.
     [JsonPropertyName("proxyEncoder")] public string? ProxyEncoder { get; set; }
+    /// The ASC MHL generation this report belongs to: absent (= 1) for the full copy, 2, 3 … for appends (spec 2.2).
+    [JsonPropertyName("generation")] public int? Generation { get; set; }
 
     [JsonIgnore] public double CopySeconds => (CopyFinished - Started).TotalSeconds;
     [JsonIgnore] public double VerifySeconds => (Finished - CopyFinished).TotalSeconds;
