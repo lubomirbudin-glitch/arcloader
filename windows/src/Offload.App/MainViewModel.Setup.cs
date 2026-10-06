@@ -89,6 +89,7 @@ public sealed partial class MainViewModel
         // Missing rows (a NAS that may come back) and present network/removable ones (a NAS that may drop out);
         // a row whose probe is still running is skipped by Probe itself.
         foreach (var d in Destinations.Where(d => d.ShouldReprobe)) d.Probe();
+        ReprobeStaleSpaceProblem();   // a red "není dost místa" on a fixed disk must clear once space is freed
         RefreshLut();
         RefreshProxyFolder();
     }

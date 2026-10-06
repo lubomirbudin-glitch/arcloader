@@ -114,6 +114,42 @@ public class StartWaitTests
         Assert.False(await StartWait.AllWithinAsync([never.Task], TimeSpan.FromMilliseconds(80)));
     }
 
+    // Ruling S1: the wait ran out - the question names only the cards still pending; Ne stops, Ano goes on.
+    [Fact]
+    public void WaitTimedOut_AsksAboutThePendingCardsOnly()
+    {
+        string? asked = null;
+        Assert.False(StartWait.ContinueAfterWait(false, ["A001"], q => { asked = q; return false; }));
+        Assert.Equal("Karta A001 se ještě prověřuje — nevím, jestli už je zálohovaná. Spustit přesto celou kopii?", asked);
+        Assert.True(StartWait.ContinueAfterWait(false, ["A001", "A002"], q => { asked = q; return true; }));
+        Assert.Equal("Karty A001, A002 se ještě prověřují — nevím, jestli už jsou zálohované. Spustit přesto celou kopii?", asked);
+        asked = null;
+        Assert.True(StartWait.ContinueAfterWait(true, [], q => { asked = q; return false; }));   // finished in time: no question
+        Assert.Null(asked);
+    }
+
+    [Fact]
+    public async Task AllWithin_CancelledByTheClosingWindow_Throws()
+    {
+        using var cts = new CancellationTokenSource(50);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            StartWait.AllWithinAsync([new TaskCompletionSource().Task], TimeSpan.FromSeconds(30), cts.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            StartWait.UntilAsync(() => 1, null, TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(10), cts.Token));
+    }
+
+    // Item 3: a stale red text on a fixed disk is cleared by the health check - one read at a time, only while it is shown.
+    [Fact]
+    public void FreeSpaceReprobe_OnlyWhileTheProblemShows_OneInFlight()
+    {
+        var r = new FreeSpaceReprobe();
+        Assert.False(r.TryBegin(spaceProblemShown: false));
+        Assert.True(r.TryBegin(true));
+        Assert.False(r.TryBegin(true));   // still running
+        r.End();
+        Assert.True(r.TryBegin(true));
+    }
+
     // Ruling I4 (Review focus 5): free space probed before the copy started, a second card for the same disk.
     [Fact]
     public void FreeSpaceBaseline_NeverSubtractsBytesWrittenSinceTheProbe()

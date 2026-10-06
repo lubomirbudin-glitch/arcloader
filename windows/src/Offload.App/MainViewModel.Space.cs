@@ -47,6 +47,7 @@ public sealed partial class MainViewModel
     /// remaining need is counted against. A disk that does not answer keeps its last figure and the old baseline.
     async Task ProbeFreeSpaceAsync(TimeSpan bound)
     {
+        if (closing) return;
         var snapshot = Jobs.OfType<JobItemViewModel>().ToDictionary(j => j, j => j.WrittenNow());   // before the reads: never too high
         var probes = Destinations.ToList().Select(d => d.ProbeFreshAsync()).ToList();
         if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is string folder)
@@ -55,9 +56,25 @@ public sealed partial class MainViewModel
                 if (t.IsCompletedSuccessfully) ApplyFolderProbe(folder, t.Result);
                 else AppLog.Write($"proxy folder free space: {t.Exception?.GetBaseException().Message}");
             }, TaskScheduler.FromCurrentSynchronizationContext()));
-        if (await StartWait.AllWithinAsync(probes, bound)) spaceBaseline.Commit(snapshot);
-        else AppLog.Write($"free space: not every destination answered in {bound.TotalSeconds:0} s");
+        try
+        {
+            if (await StartWait.AllWithinAsync(probes, bound, lifetime.Token)) spaceBaseline.Commit(snapshot);
+            else AppLog.Write($"free space: not every destination answered in {bound.TotalSeconds:0} s");
+        }
+        catch (OperationCanceledException)
+        {
+            return;   // the window is closing
+        }
         RefreshSpace();
+    }
+
+    // The health check re-reads the free space while a space problem shows (ruling S3): one read at a time.
+    readonly FreeSpaceReprobe spaceReprobe = new();
+
+    void ReprobeStaleSpaceProblem()
+    {
+        if (!spaceReprobe.TryBegin(SpaceProblem != null)) return;
+        ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30)).ContinueWith(_ => spaceReprobe.End(), TaskScheduler.Default);
     }
 
     /// Recomputes both texts; raises them (and CanStart) only when one changed.

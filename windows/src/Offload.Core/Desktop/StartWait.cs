@@ -15,6 +15,17 @@ public static class StartWait
     public static string InspectionStatus(int cards) =>
         cards == 1 ? "Prověřuji kartu, než začnu kopírovat…" : $"Prověřuji karty ({cards}), než začnu kopírovat…";
 
+    /// Ruling S1: the inspection wait ran out. The question about the cards still being looked at (default Ne).
+    public static string UnansweredQuestion(IReadOnlyList<string> cardNames) =>
+        cardNames.Count == 1
+            ? $"Karta {cardNames[0]} se ještě prověřuje — nevím, jestli už je zálohovaná. Spustit přesto celou kopii?"
+            : $"Karty {string.Join(", ", cardNames)} se ještě prověřují — nevím, jestli už jsou zálohované. Spustit přesto celou kopii?";
+
+    /// Whether Start goes on after the inspection wait: always when it finished; otherwise only when the user says Ano
+    /// to the question about the cards still pending. `ask` returns true for Ano.
+    public static bool ContinueAfterWait(bool looked, IReadOnlyList<string> pendingNames, Func<string, bool> ask) =>
+        looked || pendingNames.Count == 0 || ask(UnansweredQuestion(pendingNames));
+
     public const string FreeSpaceStatus = "Zjišťuji volné místo na cílech…";
 
     /// Polls `pending` until it reports 0 (true) or `timeout` passes (false — the caller goes on with what is known).
@@ -34,15 +45,28 @@ public static class StartWait
     }
 
     /// True when every task completed within `timeout`; the tasks themselves are never cancelled (a probe keeps its answer).
-    public static async Task<bool> AllWithinAsync(IEnumerable<Task> tasks, TimeSpan timeout)
+    public static async Task<bool> AllWithinAsync(IEnumerable<Task> tasks, TimeSpan timeout, CancellationToken ct = default)
     {
         var all = Task.WhenAll(tasks);
-        using var cts = new CancellationTokenSource();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var done = await Task.WhenAny(all, Task.Delay(timeout, cts.Token)) == all;
         cts.Cancel();
+        ct.ThrowIfCancellationRequested();
         if (!done) _ = all.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
         return done && all.IsCompletedSuccessfully;
     }
+}
+
+/// The periodic health check re-reads the free space only while a space problem is shown (a fixed disk is otherwise
+/// probed once, so freeing space would never clear the red text) and never while an earlier read is still running.
+public sealed class FreeSpaceReprobe
+{
+    int running;
+
+    /// True = the caller starts the probe now and calls End() when it is over.
+    public bool TryBegin(bool spaceProblemShown) => spaceProblemShown && Interlocked.CompareExchange(ref running, 1, 0) == 0;
+
+    public void End() => Volatile.Write(ref running, 0);
 }
 
 /// The written bytes of the running jobs at the moment the destinations were last probed (spec 2.5, ruling I4). A job's

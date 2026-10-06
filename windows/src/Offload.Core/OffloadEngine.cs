@@ -1,4 +1,5 @@
 using Offload.Core.Append;
+using Offload.Core.History;
 using Offload.Core.Space;
 
 namespace Offload.Core;
@@ -152,7 +153,7 @@ public sealed partial class OffloadEngine
         foreach (var root in roots)
             if (Fat32Problem(NativeIO.FilesystemType(root), scan.Files) is string fat)
                 throw OffloadError.Preflight(PreflightCode.Fat32, $"{root}: {fat}");
-        var places = SpacePlanner.Places(roots, extra, SpaceEstimator.CardBytes(scan.TotalBytes, scan.Files.Count), root => root);
+        var places = SpacePlanner.Places(roots, extra, SpaceEstimator.CardBytes(scan.TotalBytes, scan.Files.Count), HistoryText.DiskName);
         var (problems, lines) = SpacePlanner.CheckPlaces(places, FreeBytes);
         if (problems.FirstOrDefault(p => p.Severity == SpaceSeverity.Blocking) is { } blocking)
             throw OffloadError.Preflight(PreflightCode.NoSpace, blocking.Text);

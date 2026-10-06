@@ -26,6 +26,7 @@ public partial class MainWindow : Window
         });
         vm.AttentionRequested += _ => NativeMethods.Flash(this);
         vm.AskBackedUp = model => BackedUpPromptWindow.Ask(this, model);
+        vm.AskYesNo = text => MessageBox.Show(this, text, "Offload", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
         // Spec 8a.2: the USB check is on demand only (menu Nástroje, Ctrl+U, the Hardware section) — no start-up question.
         vm.HardwareRequested += hw =>
         {

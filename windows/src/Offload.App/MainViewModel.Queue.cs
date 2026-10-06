@@ -16,6 +16,8 @@ public sealed partial class MainViewModel
     readonly DispatcherTimer ticker = new() { Interval = TimeSpan.FromMilliseconds(330) };
     bool closing, closeRaised, waitNoticeShown, shownHasFinished, shownCopyRunning, starting;
     string? startStatus;
+    // Cancelled when the window closes: the Start waits stop at once and say nothing.
+    readonly CancellationTokenSource lifetime = new();
 
     /// Offloads and verifications, newest on top.
     public ObservableCollection<QueueItem> Jobs { get; } = [];
@@ -28,6 +30,8 @@ public sealed partial class MainViewModel
     public event Action? CloseReady;
     /// Shows "Karty už jsou zálohované" (set by the window; modal, the user answers — no disk is waited on).
     public Func<BackedUpPromptModel, BackedUpChoice>? AskBackedUp { get; set; }
+    /// A Czech yes/no question (set by the window); without it the answer is Ne.
+    public Func<string, bool>? AskYesNo { get; set; }
 
     void InitQueue()
     {
@@ -92,14 +96,24 @@ public sealed partial class MainViewModel
             }
             // Without the inspections a card history knows would be copied again in full, with no prompt: wait for the
             // ones still looking, at most 10 s (a card that does not answer never blocks the start - then what is known counts).
-            bool looked = await StartWait.UntilAsync(
-                () => StartWait.PendingInspections(SelectedSources(), p => Insight(p) != null, inspections.IsRunning, history != null).Count,
-                n => SetStartStatus(StartWait.InspectionStatus(n)), TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(200));
-            if (!looked) AppLog.Write("start: the card inspection did not finish in 10 s, going on with what is known");
+            List<string> Pending() => StartWait.PendingInspections(SelectedSources(), p => Insight(p) != null, inspections.IsRunning, history != null);
+            bool looked = await StartWait.UntilAsync(() => Pending().Count, n => SetStartStatus(StartWait.InspectionStatus(n)),
+                TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(200), lifetime.Token);
+            if (closing) return;
+            if (!looked)
+            {
+                // Ruling S1: not knowing whether a card is backed up, a full copy needs the user's yes (default Ne).
+                var names = Pending().Select(PlannedName).ToList();
+                AppLog.Write("start: the card inspection did not finish in 10 s");
+                SetStartStatus(null);
+                if (!StartWait.ContinueAfterWait(false, names, q => AskYesNo?.Invoke(q) ?? false)) return;
+                if (closing) return;
+            }
             // The free space of every destination is read again now (ruling I4): a fixed disk is otherwise probed only
             // once, long before a running copy filled it.
             SetStartStatus(StartWait.FreeSpaceStatus);
             await ProbeFreeSpaceAsync(TimeSpan.FromSeconds(5));
+            if (closing) return;
             SetStartStatus(null);
             if (SpaceProblem != null) return;   // the red text says why
             // Spec 2.1: cards history already knows are copied again in full only when the user says so.
@@ -120,7 +134,11 @@ public sealed partial class MainViewModel
             }
             if (ReadyToStart) StartJobs(skip);   // anything may have changed while the LUT was checked
         }
-        catch (Exception e)
+        catch (OperationCanceledException) when (closing)
+        {
+            // the window is closing: nothing to say
+        }
+        catch (Exception e) when (!closing)
         {
             AppLog.Write($"start: {e}");
             ShowMessage($"Offload se nepodařilo spustit: {e.Message}");
@@ -287,6 +305,7 @@ public sealed partial class MainViewModel
             }
             if (Jobs.Any(j => !j.IsFinished) && !confirm()) return false;
             closing = true;
+            lifetime.Cancel();
             inspections.CancelAll();
             foreach (var j in Jobs) j.Cancel();
             foreach (var j in Jobs) j.Refresh();
@@ -296,6 +315,7 @@ public sealed partial class MainViewModel
         }
         closeRaised = true;
         closing = true;   // a late continuation must not start another inspection
+        lifetime.Cancel();
         inspections.CancelAll();
         ticker.Stop();
         healthTimer.Stop();

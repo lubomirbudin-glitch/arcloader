@@ -154,9 +154,10 @@ public class SpaceEngineTests
         var plan = new OffloadEngine(options).Prepare(card, [d1], null, "2026-10-06");
 
         var line = Assert.Single(plan.Space);
-        Assert.Equal((d1, need, need + need / 50), (line.Label, line.Need.Total, line.Free));
-        Assert.StartsWith($"Na cíli {d1} zbude po offloadu jen ", Assert.Single(plan.SpaceWarnings));
-        Assert.Equal($"Místo: {d1} potřeba 68 MB (karta 68 MB), volno 70 MB", Msg.SpaceLine(line.Label, line.Need, line.Free));
+        var label = Offload.Core.History.HistoryText.DiskName(d1);
+        Assert.Equal((label, need, need + need / 50), (line.Label, line.Need.Total, line.Free));
+        Assert.StartsWith($"Na cíli {label} zbude po offloadu jen ", Assert.Single(plan.SpaceWarnings));
+        Assert.Equal($"Místo: {label} potřeba 68 MB (karta 68 MB), volno 70 MB", Msg.SpaceLine(line.Label, line.Need, line.Free));
     }
 
 
