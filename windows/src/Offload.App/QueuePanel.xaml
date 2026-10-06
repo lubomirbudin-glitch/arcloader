@@ -90,6 +90,10 @@
                                     <TextBlock Text="{Binding FailedText}" Style="{StaticResource ErrorText}" FontSize="13" Margin="0,8,0,0" Visibility="{Binding FailedText, Converter={StaticResource NullToCollapsed}}" />
                                     <TextBlock Text="{Binding CancelledText}" Style="{StaticResource WarningText}" FontSize="13" Margin="0,8,0,0" Visibility="{Binding CancelledText, Converter={StaticResource NullToCollapsed}}" />
                                     <TextBlock Text="{Binding ErrorText}" Style="{StaticResource ErrorText}" FontSize="13" Margin="0,8,0,0" Visibility="{Binding ErrorText, Converter={StaticResource NullToCollapsed}}" />
+                                    <TextBlock Text="{Binding WarningText}" Style="{StaticResource WarningText}" FontSize="13" Margin="0,8,0,0" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
+                                               AutomationProperties.AutomationId="JobWarningText" />
+                                    <TextBlock Text="{Binding NoteText}" FontSize="13" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="{Binding NoteText, Converter={StaticResource NullToCollapsed}}"
+                                               AutomationProperties.AutomationId="JobNoteText" />
                                     <TextBlock Text="{Binding SummaryText}" Style="{StaticResource Caption}" Margin="0,8,0,0" Visibility="{Binding SummaryText, Converter={StaticResource NullToCollapsed}}" />
                                     <DockPanel Margin="0,12,0,0">
                                         <Button DockPanel.Dock="Right" Content="Zrušit" Command="{Binding CancelCommand}" Style="{StaticResource CardButton}" Margin="0"

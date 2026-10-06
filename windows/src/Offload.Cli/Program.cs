@@ -6,7 +6,7 @@ namespace Offload.Cli;
 
 static class Program
 {
-    static readonly string[] Commands = ["copy", "verify", "bench", "ports", "luts"];
+    static readonly string[] Commands = ["copy", "append", "verify", "bench", "ports", "luts"];
 
     static int Main(string[] args)
     {
@@ -19,6 +19,7 @@ static class Program
         if (args.Length > 0 && !Commands.Contains(args[0]) && !args[0].StartsWith('-')) args = ["copy", .. args];
         var root = new RootCommand("Camera card offload: read once, write to several disks, verify with xxh64.");
         root.Subcommands.Add(CopyCommand.Create());
+        root.Subcommands.Add(AppendCommand.Create());
         root.Subcommands.Add(VerifyCommand.Create());
         root.Subcommands.Add(BenchCommand.Create());
         root.Subcommands.Add(PortsCommand.Create());

@@ -16,6 +16,9 @@ public sealed record CardInsight
     public string Fingerprint { get; init; } = "";
     public string Shape { get; init; } = "";
     public HistoryMatch? History { get; init; }
+    /// New files found and every card folder of the earlier backup exists now (spec 2.2: the append is offered only
+    /// then). Looked up with the scan, off the UI thread; a destination connected later shows after the next look.
+    public bool AppendReachable { get; init; }
     /// The folder name the clips suggest (spec 2.3), or null.
     public NameSuggestion? Name { get; init; }
     /// "Na kartě je víc cívek: A001, A002" when the clips disagree.
@@ -31,11 +34,12 @@ public static class CardInspector
     /// Reads only (a folder listing — nothing is ever written to the card). Runs off the UI thread; `ct` cancels it when
     /// the card is swapped. `history` null = not loaded (or unreadable): no history match.
     public static CardInsight Inspect(string source, IReadOnlyList<HistoryEntry>? history, HistoryStore? store, CancellationToken ct) =>
-        Inspect(source, history, store, ct, CardVolume.Of, CardIdentity.Of, Layout.DriveRootOf);
+        Inspect(source, history, store, ct, CardVolume.Of, CardIdentity.Of, Layout.DriveRootOf, Directory.Exists);
 
     /// `volumeOf`, `identify`, `driveRootOf`: the disk reads, replaceable in tests.
     internal static CardInsight Inspect(string source, IReadOnlyList<HistoryEntry>? history, HistoryStore? store, CancellationToken ct,
-        Func<string, CardVolume?> volumeOf, Func<string, string?> identify, Func<string, string?> driveRootOf)
+        Func<string, CardVolume?> volumeOf, Func<string, string?> identify, Func<string, string?> driveRootOf,
+        Func<string, bool>? directoryExists = null)
     {
         try
         {
@@ -57,6 +61,9 @@ public static class CardInspector
                 var list = candidate.Fingerprint == fingerprint ? null : store?.ReadFileList(candidate);
                 match = HistoryMatcher.Match(scan, fingerprint, candidate, list, filesystem);
             }
+            bool reachable = volume != null && match is { Kind: HistoryMatchKind.NewFiles } m
+                             && m.Entry.Destinations.Count > 0 && m.Entry.Destinations.All(d => d.CardPath != "" && (directoryExists ?? Directory.Exists)(d.CardPath));
+            ct.ThrowIfCancellationRequested();
             var clips = ClipDetector.Detect(scan.Files);
             var (name, note, _) = ReelSuggestion.FromClips(clips);
             return new CardInsight
@@ -70,6 +77,7 @@ public static class CardInspector
                 Fingerprint = fingerprint,
                 Shape = shape,
                 History = match,
+                AppendReachable = reachable,
                 Name = name,
                 NameNote = note,
             };

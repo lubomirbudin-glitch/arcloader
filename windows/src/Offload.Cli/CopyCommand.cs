@@ -21,23 +21,13 @@ static class CopyCommand
         var noVerify = new Option<bool>("--no-verify") { Description = "Skip read-back verification (not recommended)." };
         var allowSame = new Option<bool>("--allow-same-device") { Description = "Allow two destinations on the same volume." };
         var dryRun = new Option<bool>("--dry-run") { Description = "Only scan and check, do not copy." };
-        var noAnalyze = new Option<bool>("--no-analyze") { Description = "Skip clip analysis (metadata + thumbnails in the report)." };
-        var proxy = new Option<bool>("--proxy") { Description = "Render proxies after the copy is verified." };
-        var lut = new Option<string?>("--lut") { Description = "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path." };
-        var lutFallback = new Option<string?>("--lut-fallback") { Description = "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto." };
-        var proxyHeight = new Option<int>("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
-        var frameAspect = new Option<double?>("--frame-aspect") { Description = "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.", CustomParser = a => CliParse.Parse(a) };
-        var frameScale = new Option<double>("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
-        var proxyCodec = new Option<string>("--proxy-codec") { Description = "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.", DefaultValueFactory = _ => "h264" };
-        var proxyBitrate = new Option<int>("--proxy-bitrate") { Description = "Proxy bitrate (Mb/s) for H.264/HEVC.", DefaultValueFactory = _ => 10 };
-        var noBurnIn = new Option<bool>("--no-burn-in") { Description = "No burn-in of clip name and timecode." };
-        var proxyFolder = new Option<string?>("--proxy-folder") { Description = "Also copy every proxy to <folder>\\<date>\\<card name>\\ (with --proxy; never overwrites)." };
-
         var noHistory = new Option<bool>("--no-history") { Description = "Do not read or write the offload history (%APPDATA%\\Offload\\history.json)." };
+        var stageTwo = new StageTwoOptions();
 
         var cmd = new Command("copy", "Copy a card to <dest>/<date>/<card name>/ on every destination and verify.");
         cmd.Arguments.Add(source);
-        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noAnalyze, proxy, lut, lutFallback, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder, noHistory }) cmd.Options.Add(o);
+        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noHistory }) cmd.Options.Add(o);
+        stageTwo.AddTo(cmd);
         cmd.SetAction(r =>
         {
             JobConfig config;
@@ -53,94 +43,90 @@ static class CopyCommand
                     AllowSameDevice = r.GetValue(allowSame),
                     RecordHistory = !r.GetValue(noHistory),
                 };
-                if (!ProxyCodecExtensions.TryParseWire(r.GetValue(proxyCodec)!, out var codec))
-                    throw new ArgumentException(Msg.UnknownProxyCodec(r.GetValue(proxyCodec)));
-                var (lutMode, lutBuiltin, lutRaw, lutFb, lutErr) = LutOption.Parse(r.GetValue(lut), r.GetValue(lutFallback), LutCatalog.Default);
-                if (lutErr != null) throw new ArgumentException(lutErr);
-                var lutPath = lutRaw != null ? CliPath.Full(lutRaw) : null;
-                if (lutPath != null && !File.Exists(lutPath)) throw new ArgumentException(Msg.LutNotFound(lutPath));
-                config.AnalyzeClips = !r.GetValue(noAnalyze);
-                config.Proxy = new ProxySettings
-                {
-                    Enabled = r.GetValue(proxy),
-                    LutMode = lutMode,
-                    LutBuiltin = lutBuiltin,
-                    LutPath = lutPath,
-                    LutFallback = lutFb,
-                    Height = r.GetValue(proxyHeight),
-                    Codec = codec,
-                    BitrateMbps = r.GetValue(proxyBitrate),
-                    FrameAspect = r.GetValue(frameAspect),
-                    FrameScale = r.GetValue(frameScale) / 100,
-                    BurnFilename = !r.GetValue(noBurnIn),
-                    BurnTimecode = !r.GetValue(noBurnIn),
-                    ExtraFolder = r.GetValue(proxyFolder) is string pf ? CliPath.Full(pf) : null,
-                };
-                if (config.Proxy.ExtraFolder != null && !config.Proxy.Enabled)
-                    Console.Error.WriteLine(Msg.ProxyFolderNoEffect);
-                if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string folder && !Directory.Exists(folder))
-                    throw new ArgumentException(Msg.ProxyFolderNotFound(folder));
+                stageTwo.Apply(r, config);
             }
             catch (Exception e)
             {
                 Console.Error.WriteLine(Msg.CliError + e.Message);
                 return 1;
             }
-            // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all.
-            if (LutOption.PlanLine(config.Proxy, config.AnalyzeClips) is string lutLine) Console.WriteLine(lutLine);
             bool autoName = r.GetValue(name) is string a && a.Equals("auto", StringComparison.OrdinalIgnoreCase);
-            return Run(config, r.GetValue(dryRun), autoName);
+            var insight = config.RecordHistory || autoName ? Inspect(config.Source, withHistory: config.RecordHistory) : null;
+            if (insight?.History is { } known)
+                Console.WriteLine(HistoryText.Line(known, fullPaths: true).Text);   // no question: a script has nobody to ask
+            if (autoName)
+            {
+                // --name auto: the reel from the clip names, otherwise the volume label (as without --name).
+                config.CardName = insight?.Name?.Name;
+                if (insight?.NameNote is string note) Console.WriteLine(note);
+                Console.WriteLine(config.CardName is { } chosen ? Msg.CardNameAuto(chosen) : Msg.CardNameAutoNone);
+            }
+            return RunJob(config, r.GetValue(dryRun));
         });
         return cmd;
     }
 
-    static int Run(JobConfig config, bool dryRun, bool autoName)
+    /// Plans, prints the plan and runs the job (copy or append). Exit 0 = copied (and verified unless --no-verify) or,
+    /// for an append, nothing new; 1 = anything else (a refusal of the engine prints as "Chyba: " + its Czech text).
+    ///
+    /// An append's printed plan is labelled "plán (může se ještě upřesnit)": the run plans again under the card-folder
+    /// lock, so what runs may differ (another append finished, a disk went away). The plan is not repeated right before
+    /// the run — the run's own planning is the only one that counts; the report and the status lines tell what happened.
+    internal static int RunJob(JobConfig config, bool dryRun)
     {
-        var insight = config.RecordHistory || autoName ? Inspect(config.Source, withHistory: config.RecordHistory) : null;
-        if (insight?.History is { } known)
-            Console.WriteLine(HistoryText.Line(known, fullPaths: true).Text);   // no question: a script has nobody to ask
-        if (autoName)
-        {
-            // --name auto: the reel from the clip names, otherwise the volume label (as without --name).
-            config.CardName = insight?.Name?.Name;
-            if (insight?.NameNote is string note) Console.WriteLine(note);
-            Console.WriteLine(config.CardName is { } chosen ? Msg.CardNameAuto(chosen) : Msg.CardNameAutoNone);
-        }
+        // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all.
+        if (LutOption.PlanLine(config.Proxy, config.AnalyzeClips) is string lutLine) Console.WriteLine(lutLine);
         var job = new OffloadJob(config);
-        OffloadPlan plan;
+        OffloadPlan? plan = null;
         try
         {
             plan = job.Prepare();
+        }
+        catch (OffloadError e) when (e.Code == PreflightCode.NothingNew)
+        {
+            if (dryRun)
+            {
+                Console.WriteLine(e.Message);
+                return 0;
+            }
+            // Not an error — but the run still refreshes history and heals the hash list, so it goes on (and plans again).
         }
         catch (Exception e)
         {
             Console.Error.WriteLine(Msg.CliError + e.Message);
             return 1;
         }
-        Console.WriteLine($"Card {plan.CardName}: {plan.Scan.Files.Count} files, {Format.Bytes(plan.Scan.TotalBytes)}");
-        foreach (var p in plan.CardPaths) Console.WriteLine($"  → {p}");
-        if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string extra)
-            Console.WriteLine($"  proxy also → {Layout.CardPath(extra, plan.Date, plan.CardName)}");
-        if (config.AnalyzeClips || config.Proxy.Enabled)
-            Console.WriteLine($"  ffmpeg: {config.Tools.Resolved().Ffmpeg ?? "NOT FOUND"}");
-        // Connection chain: informational only, must never fail a copy.
         List<RoleLink>? chainLinks = null;
-        try
+        if (plan != null)
         {
-            var links = new List<RoleLink> { new("Karta", DriveLinks.Resolve(plan.Source)) };
-            links.AddRange(plan.DestRoots.Select((d, i) => new RoleLink($"Cíl {i + 1}", DriveLinks.Resolve(d))));
-            var connectors = UsbScanner.Scan().Connectors;
-            // Status-line names first ("card", "D1"), so "brzdí: D1" there reads against this list.
-            var lines = new List<string> { "  Připojení:" };
-            lines.AddRange(links.Select((l, i) => $"    {ProgressDisplay.ShortName(i)} = {l.Role}: {l.Link.Describe(connectors)}"));
-            lines.AddRange(Advisor.Advise(links, connectors)
-                .Where(a => a.Kind == AdviceKind.Warning).Select(a => $"  ! {a.Text}"));
-            foreach (var l in lines) Console.WriteLine(l);
-            chainLinks = links;
-        }
-        catch (Exception)
-        {
-            // Hardware info unavailable: just omit it.
+            var what = plan.Mode == PlanMode.Append
+                ? $"Doplnění karty {plan.CardName} (generace {plan.Generation}), plán (může se ještě upřesnit)"
+                : $"Card {plan.CardName}";
+            Console.WriteLine($"{what}: {plan.Scan.Files.Count} files, {Format.Bytes(plan.Scan.TotalBytes)}");
+            foreach (var p in plan.CardPaths) Console.WriteLine($"  → {p}");
+            if (plan.UnverifiedEarlier > 0) Console.WriteLine("Varování: " + Msg.UnverifiedEarlier(plan.UnverifiedEarlier));
+            if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string extra)
+                Console.WriteLine($"  proxy also → {Layout.CardPath(extra, plan.Date, plan.CardName)}");
+            if (config.AnalyzeClips || config.Proxy.Enabled)
+                Console.WriteLine($"  ffmpeg: {config.Tools.Resolved().Ffmpeg ?? "NOT FOUND"}");
+            // Connection chain: informational only, must never fail a copy.
+            try
+            {
+                var links = new List<RoleLink> { new("Karta", DriveLinks.Resolve(plan.Source)) };
+                links.AddRange(plan.DestRoots.Select((d, i) => new RoleLink($"Cíl {i + 1}", DriveLinks.Resolve(d))));
+                var connectors = UsbScanner.Scan().Connectors;
+                // Status-line names first ("card", "D1"), so "brzdí: D1" there reads against this list.
+                var lines = new List<string> { "  Připojení:" };
+                lines.AddRange(links.Select((l, i) => $"    {ProgressDisplay.ShortName(i)} = {l.Role}: {l.Link.Describe(connectors)}"));
+                lines.AddRange(Advisor.Advise(links, connectors)
+                    .Where(a => a.Kind == AdviceKind.Warning).Select(a => $"  ! {a.Text}"));
+                foreach (var l in lines) Console.WriteLine(l);
+                chainLinks = links;
+            }
+            catch (Exception)
+            {
+                // Hardware info unavailable: just omit it.
+            }
         }
         if (dryRun) return 0;
 
@@ -155,7 +141,8 @@ static class CopyCommand
         using (new ProgressDisplay(job, chainLinks)) report = job.Run(message => Console.Error.WriteLine(message));
 
         var status = job.Status();
-        if (report != null)
+        plan = job.Plan ?? plan;
+        if (report != null && plan != null)
         {
             Console.WriteLine();
             Console.Write(report.Summary);
@@ -166,10 +153,13 @@ static class CopyCommand
                 foreach (var c in report.Clips.Where(c => c.ProxyStatus is ProxyStatus.Failed or ProxyStatus.Unsupported))
                     Console.WriteLine($"  {c.Clip.Name}: {c.ProxyStatus.ToString().ToLowerInvariant()} — {c.ProxyNote}");
             }
-            Console.WriteLine($"Report: {Path.Combine(plan.CardPaths[0], Layout.ReportDirName, plan.CardName + "_report.html")}");
+            Console.WriteLine($"Report: {QueueRules.ReportPath(plan.CardPaths[0], plan.CardName, plan.Generation)}");
         }
+        if (status.Note != null) Console.WriteLine(status.Note);
+        if (status.Warning != null) Console.WriteLine("Varování: " + status.Warning);
         if (status.Error != null) Console.WriteLine(Msg.CliError + status.Error);
-        return status.Phase == JobPhase.Done && report?.Success == true ? 0 : 1;
+        // "Nic nového" ends Done without a report: that is success (exit 0).
+        return status.Phase == JobPhase.Done && (report?.Success == true || (report == null && status.Note != null)) ? 0 : 1;
     }
 
     /// The card against history (spec 2.1 CLI) and its clip names (2.3). Never fails the copy: any problem only means

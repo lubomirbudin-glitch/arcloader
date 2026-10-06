@@ -92,7 +92,7 @@ public sealed class JobItemViewModel : QueueItem
     public double Progress => progress.PhaseProgress;
     public string DetailText => progress.DetailText;
 
-    public string Title => Job.Plan?.CardName ?? sourceName;
+    public string Title => Job.Plan is { Mode: PlanMode.Append } p ? AppendRules.Title(p.CardName) : Job.Plan?.CardName ?? sourceName;
     public string FilesText
     {
         get
@@ -159,6 +159,10 @@ public sealed class JobItemViewModel : QueueItem
     public string? FailedText => !IsCancelled && Job.Report is { Success: false } r ? Texts.Failed(r.FailedFiles.Count) : null;
     public string? CancelledText => IsCancelled && !SafeToEject ? "Zrušeno — karta není kompletně zálohovaná." : null;
     public string? ErrorText => progress.Status.Error;
+    /// "Nic nového — záloha je úplná." (spec 2.2) and similar information.
+    public string? NoteText => progress.Status.Note;
+    /// Orange, never an error: e.g. "5 souborů z dřívější zálohy nebylo ověřeno — doporučeno Ověřit zálohu."
+    public string? WarningText => progress.Status.Warning;
     public string? SummaryText => IsFinished && !IsCancelled && Job.Report is { } r ? JobProgress.SummaryText(r) : null;
     public bool HasReport => Job.Report != null;
     public bool CanCancel => IsRunning || Phase == JobPhase.Waiting;
@@ -172,10 +176,11 @@ public sealed class JobItemViewModel : QueueItem
         {
             var cards = plan.CardPaths;
             var name = plan.CardName;
-            var path = await Task.Run(() => QueueRules.FirstReport(cards, name));
+            var generation = plan.Generation;
+            var path = await Task.Run(() => QueueRules.FirstReport(cards, name, generation));
             if (path == null)
             {
-                owner.ShowMessage("Report nenalezen na žádném cíli:\n" + string.Join("\n", cards.Select(c => QueueRules.ReportPath(c, name))));
+                owner.ShowMessage("Report nenalezen na žádném cíli:\n" + string.Join("\n", cards.Select(c => QueueRules.ReportPath(c, name, generation))));
                 return;
             }
             if (Shell.Open(path) is string error) owner.ShowMessage(error);

@@ -94,7 +94,12 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                         <StackPanel Margin="0,6,0,0" Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisible}}">
-                                            <DockPanel>
+                                            <CheckBox Content="{Binding AppendText}" IsChecked="{Binding AppendNewFiles}" Margin="0,0,0,4"
+                                                      AutomationProperties.AutomationId="AppendNewFiles"
+                                                      Visibility="{Binding AppendText, Converter={StaticResource NullToCollapsed}}" />
+                                            <TextBlock Text="{Binding AppendFolderText}" Style="{StaticResource Caption}" FontFamily="Consolas"
+                                                       Visibility="{Binding AppendFolderText, Converter={StaticResource NullToCollapsed}}" />
+                                            <DockPanel Visibility="{Binding AppendNewFiles, Converter={StaticResource BoolToCollapsed}}">
                                                 <TextBlock Text="Název složky" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
                                                 <Grid>
                                                     <TextBox Text="{Binding CardName, UpdateSourceTrigger=PropertyChanged}" FontSize="12" />

@@ -18,6 +18,11 @@ public static class BackedUpPrompt
     /// not for a card emptied in the camera (nothing on it to copy).
     public static bool ShouldAsk(CardInsight? insight) => insight is { IsEmptied: false, History: { Kind: not HistoryMatchKind.Changed } };
 
+    /// The selected cards the prompt asks about: backed up, and not ticked for the append (spec 2.2 — those add only the
+    /// new files, there is no full copy to warn about).
+    public static List<string> CardsToAsk(IEnumerable<string> selected, Func<string, CardInsight?> insight, Func<string, bool> appendChosen) =>
+        selected.Where(p => ShouldAsk(insight(p)) && !appendChosen(p)).ToList();
+
     /// "A001 — 6. 10. 2026 8:15, Zaloha (D:), Zaloha2 (F:), ověřeno · nové soubory: 12"
     public static string Line(HistoryMatch m)
     {

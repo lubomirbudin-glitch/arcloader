@@ -45,7 +45,9 @@ public sealed partial class MainViewModel
     public string DestinationsText => Texts.Destinations(Settings.DestRoots.Count) + (Settings.Proxy.Enabled ? " · proxy" : "");
     /// In memory only (evaluated 3×/s): the LUT, the proxy folder and the destinations come from checks made off the UI thread.
     public bool CanStart => !starting && ReadyToStart;
-    bool ReadyToStart => !closing && selected.Count > 0 && Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)
+    /// The Cíle section is needed only by full copies: appends go to the destinations of their earlier backup (spec 2.2).
+    bool ReadyToStart => !closing && selected.Count > 0
+        && (!AppendRules.NeedsDestinations(AppendRules.FullCopies(selected, AppendChosen)) || (Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)))
         && LutProblem == null && ProxyFolderProblem == null && StartProblem == null;
     /// The hint under the start bar: why Start is off when the setup itself does not say it (a speed measurement runs).
     public string? StartProblem => QueueRules.StartProblem(Measuring);
@@ -85,7 +87,7 @@ public sealed partial class MainViewModel
             }
             // Spec 2.1: cards history already knows are copied again in full only when the user says so.
             var skip = new List<string>();
-            var backedUp = SelectedSources().Where(p => BackedUpPrompt.ShouldAsk(Insight(p))).ToList();
+            var backedUp = BackedUpPrompt.CardsToAsk(SelectedSources(), Insight, AppendChosen);
             if (backedUp.Count > 0 && AskBackedUp is { } ask)
             {
                 var model = BackedUpPrompt.Build(backedUp.Select(p => (Insight(p)!.History!, PlannedName(p))).ToList(), DateString);
@@ -122,6 +124,27 @@ public sealed partial class MainViewModel
                 selected.Remove(src);
                 continue;
             }
+            bool isVolume = volumes.Any(v => string.Equals(v.Path, src, StringComparison.OrdinalIgnoreCase));
+            if (AppendChosen(src) && Insight(src)?.History is { } known)
+            {
+                // Spec 2.2: only the new files, into the card folders of the earlier backup — not into the Cíle section.
+                // The engine plans again under the folder lock and refuses with a Czech message when anything is off.
+                var appendConfig = new JobConfig(src, known.Entry.Destinations.Select(d => d.Root).ToList())
+                {
+                    AppendInto = known.Entry.Destinations.Select(d => d.CardPath).ToList(),
+                    Verify = Settings.Verify,
+                    AnalyzeClips = Settings.AnalyzeClips,
+                    Proxy = SettingsStore.Clone(Settings.Proxy),
+                    Tools = SettingsStore.Clone(Settings.Tools),
+                };
+                var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), AppendRules.Title(known.Entry.CardName),
+                    canEject: isVolume && CardEject.CanEject(src));
+                Jobs.Insert(0, appendItem);
+                selected.Remove(src);
+                appendChosen.Remove(src);
+                queue.Enqueue(appendItem.Runner);
+                continue;
+            }
             // Exactly what the row shows: the typed name, else a suggestion (spec 2.3); null = the volume label.
             var name = cardNames.GetValueOrDefault(src) is { Length: > 0 } n && n.Trim().Length > 0 ? n.Trim()
                 : Placeholder(src).Name is var shown && shown != DefaultCardName(src) ? shown
@@ -135,7 +158,6 @@ public sealed partial class MainViewModel
                 Proxy = SettingsStore.Clone(Settings.Proxy),
                 Tools = SettingsStore.Clone(Settings.Tools),
             };
-            bool isVolume = volumes.Any(v => string.Equals(v.Path, src, StringComparison.OrdinalIgnoreCase));
             var item = new JobItemViewModel(this, new OffloadJob(config), name ?? DefaultCardName(src),
                 canEject: isVolume && CardEject.CanEject(src));
             Jobs.Insert(0, item);

@@ -98,6 +98,36 @@ public class CardInspectorTests
         Assert.Equal(2, same.FileCount);
     }
 
+    // Requirement 2: the append is offered only when the earlier card folders can be reached (checked off the UI thread, here).
+    [Fact]
+    public void NewFiles_ReachableFlag_FollowsTheEarlierCardFolders()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        var volume = new CardVolume("card1", "1A2B3C4D", 1000, "A001", "exFAT");
+        var store = new HistoryStore(dir.Sub("appdata"));
+        var before = Scanner.Scan(card);
+        var (fp, shape) = CardFingerprint.Compute(before);
+        var d1 = dir.Sub("D1");
+        var d2 = Path.Combine(dir.Path, "D2");
+        var entry = HistoryFixtures.Entry(HistoryFixtures.T0, serial: "1A2B3C4D", capacity: 1000, fingerprint: fp, shape: shape);
+        entry.Destinations = [new HistoryDestination { Root = dir.Path, CardPath = d1 }, new HistoryDestination { Root = dir.Path, CardPath = d2 }];
+        store.Record(entry, before.Files);
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C003_261006_R1AB.mov"), 500, 3);
+
+        var missing = CardInspector.Inspect(card, store.Load(), store, CancellationToken.None, _ => volume, _ => "card1", _ => @"E:");
+        Assert.Equal(HistoryMatchKind.NewFiles, missing.History!.Kind);
+        Assert.False(missing.AppendReachable);
+        Assert.False(AppendRules_Offer(missing));
+
+        Directory.CreateDirectory(d2);
+        var ok = CardInspector.Inspect(card, store.Load(), store, CancellationToken.None, _ => volume, _ => "card1", _ => @"E:");
+        Assert.True(ok.AppendReachable);
+        Assert.True(AppendRules_Offer(ok));
+    }
+
+    static bool AppendRules_Offer(CardInsight i) => Offload.Core.Desktop.AppendRules.Offer(i);
+
     // Spec 5.5: 10 000 files well within the budget (3 s on a USB 3 reader; here a local disk).
     [Fact]
     public void TenThousandFiles_UnderBudget()

@@ -22,7 +22,24 @@ public sealed class SourceItemViewModel(MainViewModel owner, string path, string
     public HistoryTone HistoryTone => owner.HistoryLine(path).Tone;
 
     /// A card inspection finished: the history line (and what depends on it) may have changed.
-    internal void InsightChanged() => RaiseMany(nameof(HistoryText), nameof(HistoryTone), nameof(CardNamePlaceholder), nameof(NameHint));
+    internal void InsightChanged() => RaiseMany(nameof(HistoryText), nameof(HistoryTone), nameof(CardNamePlaceholder), nameof(NameHint),
+        nameof(AppendText), nameof(AppendNewFiles), nameof(AppendFolderText));
+
+    /// "Doplnit jen nové klipy do dřívější zálohy (12 souborů · 3,2 GB)", or null when there is nothing to append.
+    public string? AppendText => owner.AppendOffer(path);
+
+    public bool AppendNewFiles
+    {
+        get => owner.AppendChosen(path);
+        set
+        {
+            owner.SetAppend(path, value);
+            RaiseMany(nameof(AppendNewFiles), nameof(AppendFolderText));
+        }
+    }
+
+    /// "Složka: 2026-10-06\A001 na 2 cílech" in place of the name field while appending.
+    public string? AppendFolderText => owner.AppendFolder(path);
 
     /// The date folder or the naming option changed: the suggested name may be another.
     internal void NamingChanged() => RaiseMany(nameof(CardNamePlaceholder), nameof(NameHint));
