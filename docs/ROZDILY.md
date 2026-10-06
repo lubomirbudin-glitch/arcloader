@@ -34,7 +34,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Analýza klipů, metadata | ✅ | ✅ |
 | Náhledy v reportu | ✅ 3 snímky | ✅ 3 snímky |
 | Proxy (LUT, burn-in, frame lines, TC) | ✅ | ✅ ověřeno NVENC + software (libx264); QSV/AMF neověřeno (není HW); čeká ostrý test na skutečném médiu |
-| Blackmagic RAW | ✅ `braw-decode` | ✅ `braw-decode.exe` (C#, knihovna z SDK / Player / Resolve); čeká ověření se vzorkem .braw |
+| Blackmagic RAW | ✅ `braw-decode` (C++, knihovna z SDK / Player / Resolve); ověřeno se vzorkem URSA Mini Pro 4.6K (Film Gen 4, 4 snímky), vzorek Gen 5 chybí | ✅ `braw-decode.exe` (C#, knihovna z SDK / Player / Resolve); čeká ověření se vzorkem .braw |
 | RED R3D (REDline) | ✅ | ✅ kód, neověřeno s nástroji |
 | ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ | ✅ kód, neověřeno s nástroji |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
@@ -66,6 +66,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Nastavení | `UserDefaults` | `%APPDATA%\Offload\settings.json` (stejné schéma) |
 | Ikona aplikace | Offload.icns z shared/icon/Offload.iconset (iconutil) | Offload.ico ze shared/icon (exe i okna) |
 | Vestavěné LUTy v balíčku | Offload.app/Contents/Resources/luts | Offload\luts |
+| Dekodér BRAW | braw-decode (C++ nad BlackmagicRawAPI.framework, CFBundle) | braw-decode.exe (C# nad COM BlackmagicRawAPI.dll) |
 
 ## Záměrné rozdíly
 
@@ -80,11 +81,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   (NTFS nerozlišuje velikost písmen).
 - **USB rychlosti a porty:** 10 vs 20 Gb/s se nerozlišuje (Windows to bez neověřeného IOCTL nehlásí) — zobrazuje se
   „10 Gb/s a víc“; fyzickou polohu portu Windows neznají spolehlivě, porty pojmenuje uživatel.
-- **Blackmagic RAW (`braw-decode`):** Windows `--info` navíc vydává `gamma`, `gamut` a `colorScienceGen` a LUT se volí
-  podle gamy klipu (Film Gen 5 → vestavěný LUT; Video, Extended Video a starší generace = bez LUTu; Film Gen 4 zatím bez LUTu —
-  provizorně, ke schválení). Mac zatím vždy předpokládá Film Gen 5. Chybný argument = kód 2; konfigurace pipeline se
-  nastavuje před `OpenClip` (SDK ji čte při prvním otevření klipu). Bez knihovny `BlackmagicRawAPI.dll` se BRAW
-  jen zkopíruje a ověří — Offload proxy a náhledy přeskočí s nápovědou (`braw-decode` sám by skončil kódem 3).
+- **Blackmagic RAW:** obě verze vybírají LUT podle gamy klipu z braw-decode --info (Film Gen 5 → vestavěný LUT; Video, Extended Video a Film Gen 4 bez LUTu — Gen 4 provizorně, ke schválení). Liší se jen technika dekodéru (Mac C++ a framework, Windows C# a COM DLL) a ukončení po časovém limitu --info (Windows ukončí strom procesů, Mac proces braw-decode — ten potomky nemá).
 - **Vestavěné LUTy** (obě verze; sdílené soubory v [`shared/luts/`](../shared/luts/)): 11 LUTů Log → Rec.709, `auto`
   vybere LUT podle kamery každého klipu a použitý LUT s důvodem je v reportu (klíč `lut` u klipu, FORMATY.md). Zatím se
   automaticky nepoznají Canon, Panasonic, DJI a Fuji (chybí vzorové klipy, přijdou do záložního LUTu „Když kameru

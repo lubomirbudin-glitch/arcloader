@@ -25,7 +25,7 @@ Na kartu se nikdy nezapisuje. Během offloadu se nespí.
 | Formát | Proxy přes | Potřeba |
 |---|---|---|
 | ProRes, H.264/H.265, XAVC, XF-AVC, DNx, AVC-Intra (MOV/MP4/MXF) | ffmpeg | přibaleno |
-| Blackmagic RAW | `braw-decode` → ffmpeg | Blackmagic RAW Player, SDK nebo DaVinci Resolve |
+| Blackmagic RAW | `braw-decode` → ffmpeg (LUT podle gamy klipu) | Blackmagic RAW Player, SDK nebo DaVinci Resolve (bez knihovny se BRAW jen zkopíruje a ověří) |
 | RED R3D | REDline → ProRes LT → ffmpeg | REDCINE-X PRO |
 | ARRIRAW, ARRIRAW HDE, ARRICORE (MXF, .ari) | art-cmd → ProRes LT (log) → ffmpeg | ARRI Reference Tool CMD – nainstalováno v `~/Library/Application Support/Offload/arri/` (odkaz v `…/Offload/bin/art-cmd`) |
 | Canon Cinema RAW Light, Sony X-OCN | – | na macOS Intel neexistuje CLI dekodér; zkopíruje a ověří se, proxy se přeskočí |
@@ -45,6 +45,18 @@ scripts/build-app.sh          # → build/Offload.app (+ CLI uvnitř)
 
 `Tools/bin/` (ignorováno gitem) musí obsahovat `ffmpeg` a `ffprobe` (statické x86_64 buildy z evermeet.cx);
 `braw-decode` se zbuilduje automaticky z `Tools/braw-decode/` (hlavičky BRAW SDK, licence Blackmagic je v nich).
+
+### Vzorek BRAW (testy dekodéru Blackmagic RAW)
+
+`Tools/braw-decode/build.sh` sestaví `Tools/bin/braw-decode` (stačí Xcode; `scripts/build-app.sh` ho sestaví jen když chybí —
+po změně `braw-decode.cpp` spustit ručně). Za běhu potřebuje knihovnu `BlackmagicRawAPI.framework` — Blackmagic RAW Player
+nebo SDK (zdarma, https://www.blackmagicdesign.com/products/blackmagicraw) nebo DaVinci Resolve. Testy se skutečným klipem:
+
+```sh
+OFFLOAD_BRAW_SAMPLE="$HOME/Vzorky/A001_01011200_C001.braw" swift test --filter Braw   # 0 přeskočených
+```
+
+Ukázkové klipy: stránka Blackmagic RAW → „Download RAW Samples“ (formulář, zdarma; stovky MB až jednotky GB).
 
 ## CLI
 
