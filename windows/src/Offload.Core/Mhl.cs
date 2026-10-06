@@ -81,9 +81,12 @@ public static class Mhl
         s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
 
     /// C4 ID: "c4" + base58(SHA-512), left-padded with "1" to 88 characters.
-    internal static string C4(ReadOnlySpan<byte> data)
+    internal static string C4(ReadOnlySpan<byte> data) => C4FromSha512(SHA512.HashData(data));
+
+    /// The C4 ID of data whose SHA-512 is `digest` (a file hashed block by block).
+    internal static string C4FromSha512(ReadOnlySpan<byte> digest)
     {
-        var n = new BigInteger(SHA512.HashData(data), isUnsigned: true, isBigEndian: true);
+        var n = new BigInteger(digest, isUnsigned: true, isBigEndian: true);
         var digits = new StringBuilder();
         while (n > 0)
         {

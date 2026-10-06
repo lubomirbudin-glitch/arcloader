@@ -1,0 +1,149 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
+
+namespace Offload.Core.Verification;
+
+/// One hash of a file in an ASC MHL generation; `Action`: "original", "verified", "failed" …
+public sealed record MhlHash(string Algorithm, string Value, string? Action);
+
+public sealed record MhlFileRecord(string Path, long? Size, DateTime? Modified, IReadOnlyList<MhlHash> Hashes, int Generation)
+{
+    /// The copy recorded this file as failed (action="failed").
+    public bool Failed => Hashes.Any(h => h.Action == "failed");
+}
+
+public sealed record MhlGeneration(int Seq, string FileName, IReadOnlyList<string> Ignore, IReadOnlyList<MhlFileRecord> Files);
+
+/// One `<hashlist>` of ascmhl_chain.xml.
+public sealed record MhlChainEntry(int Seq, string Path, string C4);
+
+/// Everything ascmhl/ of a card folder says (spec 2.4). `Files`: per path the newest generation that lists it.
+public sealed class MhlHistory
+{
+    public required IReadOnlyList<MhlGeneration> Generations { get; init; }
+    public required IReadOnlyDictionary<string, MhlFileRecord> Files { get; init; }
+    /// The ignore patterns of every generation.
+    public required IReadOnlyList<string> Ignore { get; init; }
+    /// The chain as read, in order (an append writes it back with one more entry); empty when there is none.
+    public required IReadOnlyList<MhlChainEntry> Chain { get; init; }
+    /// Czech texts for the verify report: a changed or missing generation, a missing chain.
+    public required IReadOnlyList<string> ChainProblems { get; init; }
+}
+
+public static partial class MhlReader
+{
+    public const string ChainFileName = "ascmhl_chain.xml";
+    static readonly XNamespace Ns = "urn:ASC:MHL:v2.0";
+    static readonly XNamespace DirNs = "urn:ASC:MHL:DIRECTORY:v2.0";
+
+    [GeneratedRegex(@"^(\d+)_")]
+    private static partial Regex LeadingNumber();
+
+    static string Gen(int seq) => seq.ToString("0000", CultureInfo.InvariantCulture);
+
+    /// Null when the card folder has no ascmhl/ or no generation in it (then a hash list is the only record).
+    public static MhlHistory? Read(string cardPath)
+    {
+        var dir = Path.Combine(cardPath, Mhl.DirName);
+        if (!Directory.Exists(dir)) return null;
+        var mhlFiles = Directory.GetFiles(dir, "*.mhl").Select(f => Path.GetFileName(f)).ToList();
+        var problems = new List<string>();
+        var chain = ReadChain(dir, problems);
+        var order = new List<(int Seq, string File)>();
+        if (chain != null)
+        {
+            foreach (var c in chain)
+            {
+                var path = Path.Combine(dir, c.Path);
+                if (c.Path.IndexOfAny(['/', '\\']) >= 0 || !File.Exists(path))
+                {
+                    problems.Add($"V řetězu ASC MHL je generace {Gen(c.Seq)}, ale její soubor chybí: {c.Path}");
+                    continue;
+                }
+                if (Mhl.C4(File.ReadAllBytes(path)) != c.C4)
+                    problems.Add($"ASC MHL generace {Gen(c.Seq)} neodpovídá řetězu (soubor MHL byl změněn).");
+                order.Add((c.Seq, c.Path));
+            }
+            foreach (var extra in mhlFiles.Where(f => !chain.Any(c => string.Equals(c.Path, f, StringComparison.OrdinalIgnoreCase))))
+                problems.Add($"Soubor ASC MHL není v řetězu: {extra}");
+        }
+        else if (mhlFiles.Count > 0)
+        {
+            problems.Add($"Chybí {ChainFileName} — generace se čtou podle čísla v názvu souboru.");
+            order.AddRange(mhlFiles
+                .Select(f => (Seq: LeadingNumber().Match(f) is { Success: true } m ? int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) : int.MaxValue, File: f))
+                .OrderBy(x => x.Seq).ThenBy(x => x.File, StringComparer.Ordinal));
+        }
+
+        var generations = new List<MhlGeneration>();
+        foreach (var (seq, file) in order)
+        {
+            try
+            {
+                generations.Add(ParseGeneration(Path.Combine(dir, file), seq));
+            }
+            catch (Exception e) when (e is XmlException or IOException or UnauthorizedAccessException or FormatException)
+            {
+                problems.Add($"ASC MHL generaci {Gen(seq)} nejde přečíst: {e.Message}");
+            }
+        }
+        if (generations.Count == 0 && problems.Count == 0) return null;
+
+        var files = new Dictionary<string, MhlFileRecord>(StringComparer.Ordinal);
+        foreach (var g in generations)
+            foreach (var f in g.Files) files[f.Path] = f;   // a later generation wins
+        return new MhlHistory
+        {
+            Generations = generations,
+            Files = files,
+            Ignore = generations.SelectMany(g => g.Ignore).Distinct(StringComparer.Ordinal).ToList(),
+            Chain = chain ?? [],
+            ChainProblems = problems,
+        };
+    }
+
+    /// ascmhl_chain.xml in `ascmhlDir`, or null when it is missing; a broken one is a problem and null.
+    public static IReadOnlyList<MhlChainEntry>? ReadChain(string ascmhlDir, List<string>? problems = null)
+    {
+        var path = Path.Combine(ascmhlDir, ChainFileName);
+        if (!File.Exists(path)) return null;
+        try
+        {
+            var doc = XDocument.Load(path);
+            return doc.Descendants(DirNs + "hashlist")
+                .Select(h => new MhlChainEntry(
+                    int.Parse((string?)h.Attribute("sequencenr") ?? "0", CultureInfo.InvariantCulture),
+                    ((string?)h.Element(DirNs + "path") ?? "").Trim(),
+                    ((string?)h.Element(DirNs + "c4") ?? "").Trim()))
+                .OrderBy(e => e.Seq)
+                .ToList();
+        }
+        catch (Exception e) when (e is XmlException or IOException or UnauthorizedAccessException or FormatException or OverflowException)
+        {
+            problems?.Add($"{ChainFileName} nejde přečíst: {e.Message}");
+            return null;
+        }
+    }
+
+    internal static MhlGeneration ParseGeneration(string file, int seq)
+    {
+        var doc = XDocument.Load(file);
+        var ignore = doc.Descendants(Ns + "ignore").Elements(Ns + "pattern").Select(p => p.Value.Trim()).Where(p => p.Length > 0).ToList();
+        var files = new List<MhlFileRecord>();
+        foreach (var h in doc.Descendants(Ns + "hashes").Elements(Ns + "hash"))
+        {
+            if (h.Element(Ns + "path") is not { } p) continue;
+            long? size = long.TryParse((string?)p.Attribute("size"), NumberStyles.None, CultureInfo.InvariantCulture, out var s) ? s : null;
+            DateTime? modified = DateTime.TryParse((string?)p.Attribute("lastmodificationdate"), CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var m) ? m : null;
+            var hashes = h.Elements()
+                .Where(e => e.Name != Ns + "path")
+                .Select(e => new MhlHash(e.Name.LocalName, e.Value.Trim(), (string?)e.Attribute("action")))
+                .ToList();
+            files.Add(new MhlFileRecord(p.Value.Trim().Replace('\\', '/'), size, modified, hashes, seq));
+        }
+        return new MhlGeneration(seq, Path.GetFileName(file), ignore, files);
+    }
+}
