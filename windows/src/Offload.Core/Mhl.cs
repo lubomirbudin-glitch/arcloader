@@ -85,7 +85,8 @@ public static class Mhl
         if (generation > 1) NativeIO.WriteFileNew(Path.Combine(dir, fileName), data);
         else NativeIO.WriteFileDurably(Path.Combine(dir, fileName), data);
 
-        // The chain: every earlier generation exactly as it was read, then this one — replaced in one rename.
+        // The chain: every earlier generation exactly as it was read, then this one — swapped with ReplaceFile (works while
+        // a reader holds it). Writing it is the commit point of the generation (see OffloadReport.Write).
         var entries = (earlier?.Chain ?? []).Append(new MhlChainEntry(generation, fileName, C4(data)));
         var chain = new StringBuilder();
         chain.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -98,7 +99,7 @@ public static class Mhl
             chain.Append("  </hashlist>\n");
         }
         chain.Append("</ascmhldirectory>\n");
-        NativeIO.WriteFileDurably(Path.Combine(dir, ChainName), Encoding.UTF8.GetBytes(chain.ToString()));
+        NativeIO.WriteFileReplacing(Path.Combine(dir, ChainName), Encoding.UTF8.GetBytes(chain.ToString()));
     }
 
     static string IsoDate(DateTime d) => d.ToLocalTime().ToString("yyyy-MM-dd'T'HH:mm:ssK", CultureInfo.InvariantCulture);

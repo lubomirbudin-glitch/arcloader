@@ -187,6 +187,14 @@ public sealed class OffloadJob
         using var awake = NativeIO.KeepAwake();
         try
         {
+            // An append holds its card folders until stage 1 ends (fix round 1, item 1) and plans under that hold — a
+            // plan made before (the CLI prints one first) is made again, another append may have finished meanwhile.
+            using var folders = Config.AppendInto is { Count: > 0 } into ? AppendLock.Acquire(into) : null;
+            if (folders != null)
+            {
+                Plan = null;
+                appendPlan = null;
+            }
             var plan = Prepare();
             if (plan.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(plan.UnverifiedEarlier)));
             Update(s => s with { Phase = JobPhase.Copying });
@@ -211,7 +219,12 @@ public sealed class OffloadJob
         catch (OffloadError e) when (e.Code == PreflightCode.NothingNew)
         {
             // Not an error: the earlier backup already has every file of the card — history still learns the card as it is.
-            if (appendPlan is { } a) RefreshHistory(a, log);
+            if (appendPlan is { } a)
+            {
+                RefreshHistory(a, log);
+                // Nothing to copy does not make the earlier backup verified (fix round 1, item 3).
+                if (a.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(a.UnverifiedEarlier)));
+            }
             Update(s => s with { Phase = JobPhase.Done, Note = e.Message });
             return false;
         }

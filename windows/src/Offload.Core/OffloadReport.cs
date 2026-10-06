@@ -185,7 +185,18 @@ public sealed partial class OffloadReport
     /// so they are written once (`includeHashRecords`); the HTML/JSON are refreshed as clips get analysed.
     /// An append (Generation > 1) writes its own `_NNNN` files — created, never replacing one (ruling I1; only the
     /// job's own refresh later replaces them) — and adds its lines to the hash list; the reports of the earlier
-    /// generations are never rewritten (R5, R6). Order: the reports, then the hash list, then the MHL generation.
+    /// generations are never rewritten (R5, R6).
+    ///
+    /// Order (fix round 1, item 6) — no single failure may leave a folder that ruling I1 refuses for the wrong reason:
+    ///   1. the `_NNNN` reports, created (one that is there already stops everything before a shared file is touched);
+    ///   2. the MHL generation file, created, then the chain, replaced — the chain is the commit point: reports and
+    ///      MHL now agree, and a failure before it leaves reports without their generation, which I1 rightly refuses
+    ///      (those files have no ASC MHL record yet);
+    ///   3. the hash list last: it is derived from the MHL (spec 2.2), so a failure there (a reader holding it without
+    ///      delete sharing, a full disk) leaves reports and chain in agreement — the next append goes ahead and adds the
+    ///      lines that were missed (any MHL-recorded path not in the list).
+    /// The hash list and the chain are swapped with ReplaceFile (NativeIO.WriteFileReplacing), which works while a
+    /// reader holds them with delete sharing.
     public void Write(string cardPath, bool includeHashRecords)
     {
         int generation = Generation ?? 1;
@@ -205,19 +216,30 @@ public sealed partial class OffloadReport
             else NativeIO.WriteFileDurably(path, Encoding.UTF8.GetBytes(text));
         }
         if (!includeHashRecords) return;
-        // An append: the earlier lines byte for byte, then this generation's — replaced in one rename (tmp + MoveFileEx).
+        Mhl.Write(this, cardPath);
+        // An append: the earlier lines byte for byte, then the missed ones, then this generation's.
         var hashList = System.IO.Path.Combine(dir, $"{CardName}.xxh64");
         var lines = Encoding.UTF8.GetBytes(HashList);
-        NativeIO.WriteFileDurably(hashList, generation > 1 ? [.. EarlierHashList(hashList), .. lines] : lines);
-        Mhl.Write(this, cardPath);
+        NativeIO.WriteFileReplacing(hashList, generation > 1 ? AppendedHashList(hashList, cardPath, lines) : lines);
     }
 
-    /// The card's hash list as the earlier generations left it (exact bytes), ending with a line break; empty when none.
-    static byte[] EarlierHashList(string path)
+    /// The card's hash list as the earlier generations left it (exact bytes, then a line break if it had none), the
+    /// xxh64 of every path the ASC MHL history records but the list lacks (a hash list whose write failed before), then
+    /// `lines` (this generation's).
+    byte[] AppendedHashList(string path, string cardPath, byte[] lines)
     {
-        if (!File.Exists(path)) return [];
-        var bytes = File.ReadAllBytes(path);
-        return bytes.Length == 0 || bytes[^1] == (byte)'\n' ? bytes : [.. bytes, (byte)'\n'];
+        var earlier = File.Exists(path) ? File.ReadAllBytes(path) : [];
+        if (earlier.Length > 0 && earlier[^1] != (byte)'\n') earlier = [.. earlier, (byte)'\n'];
+        var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in Encoding.UTF8.GetString(earlier).Split('\n'))
+            if (line.TrimEnd('\r').IndexOf("  ", StringComparison.Ordinal) is int at and >= 0) listed.Add(line.TrimEnd('\r')[(at + 2)..]);
+        foreach (var f in Files) listed.Add(f.Path);
+        var missed = new StringBuilder();
+        if (Verification.MhlReader.Read(cardPath) is { } mhl)
+            foreach (var r in mhl.LastGood.Values.OrderBy(r => r.Path, StringComparer.Ordinal))
+                if (!listed.Contains(r.Path) && r.Hashes.FirstOrDefault(h => h.Algorithm == "xxh64") is { } h)
+                    missed.Append($"{h.Value}  {r.Path}\n");
+        return [.. earlier, .. Encoding.UTF8.GetBytes(missed.ToString()), .. lines];
     }
 
     static JsonNode? Sorted(JsonNode? node) => node switch

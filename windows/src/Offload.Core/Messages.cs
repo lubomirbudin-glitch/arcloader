@@ -30,6 +30,9 @@ public enum PreflightCode
     AppendConflict,
     AppendMissingFile,
     AppendFailedFile,
+    AppendOtherCard,
+    AppendMhlDamaged,
+    AppendBusy,
     /// Not an error: the backup already has everything (the job ends "Hotovo").
     NothingNew,
 }
@@ -108,6 +111,14 @@ public static class Msg
         $"Na {disk} chybí soubor z dřívější zálohy: {path} — zkontrolujte zálohu přes Nástroje → Ověřit zálohu…";
     public static string AppendFailedFile(string path, string disk) =>
         $"{path} se při dřívější záloze na {disk} nezkopíroval správně — doplnit nejde, udělejte celou kopii.";
+    public const string AppendOtherCard = "Na kartě není žádný soubor z dřívější zálohy — jde o jinou kartu? Udělejte celou kopii.";
+    public static string AppendMhlDamaged(string cardPath) =>
+        $"Historie ASC MHL v {cardPath} je poškozená — zkontrolujte ji přes Nástroje → Ověřit zálohu…; doplnit nejde.";
+    /// One line of the AppendConflict list: the temporary copy name of a new file is taken.
+    public static string AppendPartNameTaken(string path, string part) =>
+        $"{path} (dočasné jméno kopie {part} je jiný soubor zálohy nebo karty)";
+    public static string AppendBusy(string cardPath) =>
+        $"Do této zálohy právě doplňuje jiná úloha ({cardPath}) — počkejte, až skončí.";
     public const string NothingNew = "Nic nového — záloha je úplná.";
     public static string UnverifiedEarlier(int n) =>
         $"{n} {Desktop.Texts.Plural(n, "soubor", "soubory", "souborů")} z dřívější zálohy {Desktop.Texts.Plural(n, "nebyl ověřen", "nebyly ověřeny", "nebylo ověřeno")} — doporučeno Ověřit zálohu.";

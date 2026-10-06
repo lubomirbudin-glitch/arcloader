@@ -303,6 +303,183 @@ public class AppendEngineTests
         Assert.Equal("2 soubory z dřívější zálohy nebyly ověřeny — doporučeno Ověřit zálohu.", append.Status().Warning);
     }
 
+    // Fix round 1, item 1: two appends into the same card folders at once (GUI + CLI). The second refuses before it
+    // reads or writes anything; the first one's backup is whole.
+    [Fact]
+    public void TwoAppendsAtOnce_TheSecondRefuses_TheFirstVerifiesClean()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        var history = dir.Sub("appdata");
+        AppendFixtures.NewClip(card);
+        AppendFixtures.NewClip(card, "A001C004.mov", seed: 4);
+        OffloadJob? loser = null;
+        List<Dictionary<string, byte[]>>? before = null, during = null;
+        var winner = Job(card, [], history, appendInto: paths, beforeFile: i =>
+        {
+            if (i != 0) return;
+            // The winner holds the folders and has not written a byte of data yet: run the second append now, on
+            // another thread (a mutex is re-entrant on its own thread).
+            before = paths.Select(AppendFixtures.Tree).ToList();
+            loser = Job(card, [], history, appendInto: [paths[1].ToLowerInvariant() + "\\", paths[0]]);   // other spelling, other order
+            var t = new Thread(() => loser.Run());
+            t.Start();
+            t.Join();
+            during = paths.Select(AppendFixtures.Tree).ToList();
+        });
+
+        winner.Run();
+
+        Assert.Equal(JobPhase.Failed, loser!.Status().Phase);
+        Assert.Contains(loser.Status().Error, loser.Config.AppendInto!.Select(Msg.AppendBusy));
+        Assert.Null(loser.Plan);   // refused before planning: nothing read, nothing written
+        for (int d = 0; d < paths.Count; d++)
+        {
+            Assert.Equal(before![d].Keys.Order(), during![d].Keys.Order());
+            foreach (var (name, bytes) in before[d]) Assert.Equal(bytes, during[d][name]);
+        }
+        Assert.Equal(JobPhase.Done, winner.Status().Phase);
+        foreach (var p in paths)
+        {
+            var v = BackupVerifier.Verify(p, chunkSize: 4096);
+            Assert.True(v.Success);
+            Assert.Equal(4, v.Ok);
+        }
+
+        // Released at the end of stage 1: the next append is free to go (and has nothing new).
+        var next = Job(card, [], history, appendInto: paths);
+        next.Run();
+        Assert.Equal(Msg.NothingNew, next.Status().Note);
+    }
+
+    [Fact]
+    public void AppendLock_Name_SameFolderWhateverTheSpelling()
+    {
+        using var dir = new TempDir();
+        var a = dir.Sub("d1", "2026-10-06", "A001");
+        Assert.Equal(AppendLock.Name(a), AppendLock.Name(a.ToUpperInvariant() + "\\"));
+        Assert.NotEqual(AppendLock.Name(a), AppendLock.Name(dir.Sub("d1", "2026-10-06", "A002")));
+        Assert.StartsWith(@"Local\Offload-append-", AppendLock.Name(a));
+        Assert.Equal(@"Local\Offload-append-".Length + 64, AppendLock.Name(a).Length);
+    }
+
+    // A full copy goes into a new folder and takes no lock: it runs while an append holds another backup.
+    [Fact]
+    public void FullCopy_IsNotBlockedByAnAppendLock()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        using var held = AppendLock.Acquire(paths);
+        var other = dir.Sub("B001");
+        TestFs.WriteRandom(Path.Combine(other, "CLIP", "B001C001.mov"), 10_000, 5);
+        var full = Job(other, [dir.Sub("d1")], dir.Sub("appdata"));
+        var t = new Thread(() => full.Run());
+        t.Start();
+        t.Join();
+        Assert.Equal(JobPhase.Done, full.Status().Phase);
+    }
+
+    // Fix round 1, item 3: "Nic nového" still says that the earlier backup was never read back.
+    [Fact]
+    public void NothingNew_AfterAnUnverifiedFullCopy_StillWarns()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 10_000, 1);
+        var history = dir.Sub("appdata");
+        var full = Job(card, [dir.Sub("d1")], history, verify: false);   // CLI --no-verify
+        full.Run();
+
+        var append = Job(card, [], history, appendInto: full.Plan!.CardPaths);
+        append.Run();
+
+        Assert.Equal((JobPhase.Done, Msg.NothingNew), (append.Status().Phase, append.Status().Note));
+        Assert.Equal("1 soubor z dřívější zálohy nebyl ověřen — doporučeno Ověřit zálohu.", append.Status().Warning);
+    }
+
+    [Fact]
+    public void NothingNew_AfterAnAppendCancelledInVerification_StillWarns()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 10_000, 1);
+        var history = dir.Sub("appdata");
+        var full = Job(card, [dir.Sub("d1")], history);
+        full.Run();
+        AppendFixtures.NewClip(card, "A001C002.mov", seed: 2);
+        var options = AppendFixtures.Options();
+        OffloadJob? cancelled = null;
+        options.BeforeVerify = () => cancelled!.Cancel();   // every file copied, then cancelled as verification starts
+        cancelled = new OffloadJob(new JobConfig(card, []) { AnalyzeClips = false, HistoryFolder = history, AppendInto = full.Plan!.CardPaths }, options);
+        cancelled.Run();
+        Assert.Equal(JobPhase.Cancelled, cancelled.Status().Phase);
+
+        var append = Job(card, [], history, appendInto: full.Plan.CardPaths);
+        append.Run();
+
+        Assert.Equal((JobPhase.Done, Msg.NothingNew), (append.Status().Phase, append.Status().Note));
+        Assert.Equal(Msg.UnverifiedEarlier(1), append.Status().Warning);
+    }
+
+    // Fix round 1, item 6: a reader holding the hash list or the chain (an indexer, a verify, a backup tool) does not
+    // stop the append — both are swapped with ReplaceFile.
+    [Fact]
+    public void HeldOpenReaders_DoNotBlockTheAppend()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        AppendFixtures.NewClip(card);
+        var share = FileShare.ReadWrite | FileShare.Delete;
+        using (new FileStream(Path.Combine(paths[0], "_REPORT", "A001.xxh64"), FileMode.Open, FileAccess.Read, share))
+        using (new FileStream(Path.Combine(paths[0], "ascmhl", "ascmhl_chain.xml"), FileMode.Open, FileAccess.Read, share))
+        {
+            var append = Job(card, [], dir.Sub("appdata"), appendInto: paths);
+            append.Run();
+            Assert.Equal(JobPhase.Done, append.Status().Phase);
+        }
+        var v = BackupVerifier.Verify(paths[0], chunkSize: 4096);
+        Assert.True(v.Success);
+        Assert.Equal(3, v.Ok);
+        Assert.Equal(3, File.ReadAllText(Path.Combine(paths[0], "_REPORT", "A001.xxh64")).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+    }
+
+    // Fix round 1, item 6 (order): the hash list is written last, after the chain. When it fails, the reports and the
+    // chain still agree, so the next append is not refused (ruling I1) — and it adds the lines that were missed.
+    [Fact]
+    public void HashListFailure_LeavesTheFolderConsistent_NextAppendFillsTheList()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        var history = dir.Sub("appdata");
+        var list = Path.Combine(paths[0], "_REPORT", "A001.xxh64");
+        var earlier = File.ReadAllBytes(list);
+        AppendFixtures.NewClip(card);
+        using (new FileStream(list, FileMode.Open, FileAccess.Read, FileShare.Read))   // no delete sharing: not replaceable
+        {
+            var failed = Job(card, [], history, appendInto: paths);
+            failed.Run();
+            Assert.Equal(JobPhase.Failed, failed.Status().Phase);
+            Assert.StartsWith("Report se nepodařilo zapsat: ", failed.Status().Error);
+        }
+        Assert.Equal(earlier, File.ReadAllBytes(list));
+        Assert.Equal([1, 2], MhlReader.Read(paths[0])!.Chain.Select(c => c.Seq));
+        AppendFixtures.NewClip(card, "A001C004.mov", seed: 4);
+
+        var next = Job(card, [], history, appendInto: paths);
+        next.Run();
+
+        Assert.Equal((JobPhase.Done, 3), (next.Status().Phase, next.Plan!.Generation));
+        foreach (var p in paths)
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(p, "_REPORT", "A001.xxh64"));
+            var text = Encoding.UTF8.GetString(bytes);
+            Assert.Equal(earlier, bytes[..earlier.Length]);
+            Assert.Equal(1, text.Split('\n').Count(l => l.EndsWith("  CLIP/A001C003.mov", StringComparison.Ordinal)));
+            Assert.Contains("  CLIP/A001C004.mov\n", text);
+            Assert.True(BackupVerifier.Verify(p, chunkSize: 4096).Success);
+        }
+    }
+
     // Spec 2.2: an existing proxy is never overwritten; a new clip of the same name gets "_2".
     [FfmpegFact]
     public void Proxies_ExistingNeverOverwritten()

@@ -274,6 +274,100 @@ public class AppendPlannerTests
         Assert.Equal($"Složky dřívější zálohy se jmenují různě ({paths[0]}, {other}) — doplnit jde jen do složek se stejným datem a názvem karty.", e.Message);
     }
 
+    // Fix round 1, item 2 (ruling I3): another card in the reader (swapped between the prompt and Start, or a wrong
+    // --into) shares no file with the backup — appending it wholesale into A001 would mix two cards.
+    [Fact]
+    public void OtherCard_NoFileOfTheBackup_Refused()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        Directory.Delete(card, recursive: true);
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "B007C001.mov"), 70_000, 9);
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "B007C002.mov"), 70_000, 10);
+        var backups = paths.Select(AppendFixtures.Tree).ToList();
+
+        var e = Refused(card, paths);
+
+        Assert.Equal(PreflightCode.AppendOtherCard, e.Code);
+        Assert.Equal("Na kartě není žádný soubor z dřívější zálohy — jde o jinou kartu? Udělejte celou kopii.", e.Message);
+        for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(backups[d], paths[d]);
+    }
+
+    // Fix round 1, item 4: a new file's temporary copy name (".<name>.offload-part") is a file the backup recorded —
+    // the copy would write over it.
+    [Fact]
+    public void PartNameOfANewFile_IsARecordedFile_Conflict()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 10_000, 1);
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", ".A001C003.mov.offload-part"), 5_000, 7);   // a camera/user file of that name
+        var engine = new OffloadEngine(AppendFixtures.Options());
+        var plan = engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-06");
+        engine.Run(plan);
+        File.Delete(Path.Combine(card, "CLIP", ".A001C003.mov.offload-part"));   // gone from the card, still in the backup
+        AppendFixtures.NewClip(card);
+
+        var e = Refused(card, plan.CardPaths);
+
+        Assert.Equal(PreflightCode.AppendConflict, e.Code);
+        Assert.Contains("CLIP/A001C003.mov (dočasné jméno kopie CLIP/.A001C003.mov.offload-part je jiný soubor zálohy nebo karty)", e.Message);
+
+        // Both new: one would be copied over the other.
+        File.Delete(Path.Combine(card, "CLIP", "A001C003.mov"));
+        AppendFixtures.NewClip(card, "A001C004.mov", seed: 4);
+        AppendFixtures.NewClip(card, ".A001C004.mov.offload-part", seed: 5);
+        Assert.Contains("CLIP/A001C004.mov (dočasné jméno kopie CLIP/.A001C004.mov.offload-part", Refused(card, plan.CardPaths).Message);
+    }
+
+    // Fix round 1, item 5: a changed generation, or a generation file outside the chain, is a damaged history.
+    [Fact]
+    public void DamagedMhlHistory_Refused()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        AppendFixtures.NewClip(card);
+        var gen1 = Directory.GetFiles(Path.Combine(paths[1], "ascmhl"), "0001_*.mhl").Single();
+        File.AppendAllText(gen1, " ");
+
+        var e = Refused(card, paths);
+
+        Assert.Equal(PreflightCode.AppendMhlDamaged, e.Code);
+        Assert.Equal($"Historie ASC MHL v {paths[1]} je poškozená — zkontrolujte ji přes Nástroje → Ověřit zálohu…; doplnit nejde.", e.Message);
+
+        File.WriteAllText(gen1, File.ReadAllText(gen1)[..^1]);
+        Assert.Single(AppendPlanner.Plan(card, paths).NewFiles);   // repaired: fine again
+        File.Copy(gen1, Path.Combine(paths[0], "ascmhl", "0002_A001_2026-10-06_090000Z.mhl"));   // not in the chain
+        Assert.Equal(PreflightCode.AppendMhlDamaged, Refused(card, paths).Code);
+    }
+
+    // Fix round 1, item 7: _REPORT that cannot be listed is a Czech "report nejde přečíst", not a crash.
+    [Fact]
+    public void UnlistableReportFolder_Refused()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        AppendFixtures.NewClip(card);
+        var report = new DirectoryInfo(Path.Combine(paths[0], "_REPORT"));
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var deny = new System.Security.AccessControl.FileSystemAccessRule(me, System.Security.AccessControl.FileSystemRights.ListDirectory,
+            System.Security.AccessControl.AccessControlType.Deny);
+        var acl = report.GetAccessControl();
+        acl.AddAccessRule(deny);
+        report.SetAccessControl(acl);
+        try
+        {
+            var e = Refused(card, paths);
+            Assert.Equal(PreflightCode.AppendNoReport, e.Code);
+            Assert.StartsWith($"Report dřívější zálohy v {paths[0]} nejde přečíst (", e.Message);
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            report.SetAccessControl(acl);
+        }
+    }
+
     [Fact]
     public void UnverifiedEarlierBackup_CountsFiles()
     {

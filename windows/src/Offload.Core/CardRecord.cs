@@ -53,7 +53,17 @@ public sealed partial class CardRecord
             return new CardRecord { CardPath = cardPath, Error = e.Message };
         }
         int highest = generations[0].Generation;
-        foreach (var file in Directory.GetFiles(dir))
+        string[] reportFiles;
+        try
+        {
+            reportFiles = Directory.GetFiles(dir);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // The appends cannot be listed: what the folder holds is unknown (fix round 1, item 7).
+            return new CardRecord { CardPath = cardPath, Error = e.Message };
+        }
+        foreach (var file in reportFiles)
         {
             var name = Path.GetFileName(file);
             if (NumberedReportFile().Match(name) is { Success: true } n)

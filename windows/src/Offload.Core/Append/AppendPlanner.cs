@@ -63,10 +63,13 @@ public static class AppendPlanner
             if (record.Error != null) throw OffloadError.Preflight(PreflightCode.AppendNoReport, Msg.AppendBadReport(cardPath, record.Error));
             // An append report nobody can read: the files it recorded would look like someone else's.
             if (record.Problems.Count > 0) throw OffloadError.Preflight(PreflightCode.AppendNoReport, Msg.AppendBadReport(cardPath, record.Problems[0]));
-            if (MhlReader.ReadChain(Path.Combine(cardPath, Mhl.DirName)) is not { Count: > 0 } chain)
+            if (MhlReader.Read(cardPath) is not { Chain.Count: > 0 } mhl)
                 throw OffloadError.Preflight(PreflightCode.AppendNoMhl, Msg.AppendNoMhl(cardPath));
+            // A changed or missing generation, or one outside the chain (fix round 1, item 5): the history the next
+            // generation would extend is not what was written — have it checked first.
+            if (mhl.ChainProblems.Count > 0) throw OffloadError.Preflight(PreflightCode.AppendMhlDamaged, Msg.AppendMhlDamaged(cardPath));
             records.Add(record);
-            generations.Add(chain.Max(c => c.Seq));
+            generations.Add(mhl.Chain.Max(c => c.Seq));
         }
         if (generations.Distinct().Count() > 1)
         {
@@ -87,7 +90,7 @@ public static class AppendPlanner
         var diskLocalTime = paths.Select(p => cardLocalTime || FileTimes.StoresLocalTime(destFilesystem?.Invoke(p) ?? NativeIO.FilesystemType(p))).ToList();
         var newFiles = new List<SourceFile>();
         var conflicts = new List<string>();
-        int unverified = 0;
+        int unverified = 0, known = 0;
         foreach (var f in scan.Files)
         {
             ct.ThrowIfCancellationRequested();
@@ -124,11 +127,20 @@ public static class AppendPlanner
                     conflicts.Add(Conflict(f, Disk(paths[d]), onDisk.Length, onDisk.LastWriteTimeUtc));
             }
             if (unverifiedFile) unverified++;
+            if (goodInRecord > 0) known++;
             if (goodInRecord == 0 && present == 0) newFiles.Add(f);
             else if (goodInRecord > 0 && goodInRecord < paths.Count && present < paths.Count)
                 throw OffloadError.Preflight(PreflightCode.AppendDiverged,
                     Msg.AppendDiverged($"{f.RelPath} je jen na {string.Join(", ", paths.Where(p => File.Exists(Layout.Join(p, f.RelPath))).Select(Disk))}"));
         }
+        // Ruling I3 (fix round 1, item 2): not one file of the card is in the backup — another card, never mixed into it.
+        if (scan.Files.Count > 0 && known == 0) throw OffloadError.Preflight(PreflightCode.AppendOtherCard, Msg.AppendOtherCard);
+        // Fix round 1, item 4: a new file is copied via ".<name>.offload-part" next to it, created over whatever has
+        // that name — never over a file the backup recorded, nor over another file of the card.
+        var taken = scan.Files.Select(f => f.RelPath).Concat(records.SelectMany(r => r.Files.Keys)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in newFiles)
+            if (DestWriter.PartName(f.RelPath) is var part && taken.Contains(part))
+                conflicts.Add(Msg.AppendPartNameTaken(f.RelPath, part));
         if (conflicts.Count > 0)
             throw OffloadError.Preflight(PreflightCode.AppendConflict, Msg.AppendConflict(conflicts.Distinct().ToList(), cardName + "_2"));
 

@@ -63,6 +63,7 @@ public sealed partial class OffloadEngine
             OnEachDestination(ws, w => w.FlushDevice());
             var copyFinished = DateTime.UtcNow;
 
+            Options.BeforeVerify?.Invoke();
             if (Options.Verify && !IsCancelled)
             {
                 SetPhase(CopyPhase.Verify);
