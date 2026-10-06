@@ -2,6 +2,7 @@ using System.CommandLine;
 using Offload.Core;
 using Offload.Core.Desktop;
 using Offload.Core.Hardware;
+using Offload.Core.History;
 
 namespace Offload.Cli;
 
@@ -94,6 +95,8 @@ static class CopyCommand
 
     static int Run(JobConfig config, bool dryRun)
     {
+        if (config.RecordHistory && Inspect(config.Source)?.History is { } known)
+            Console.WriteLine(HistoryText.Line(known, fullPaths: true).Text);   // no question: a script has nobody to ask
         var job = new OffloadJob(config);
         OffloadPlan plan;
         try
@@ -158,5 +161,20 @@ static class CopyCommand
         }
         if (status.Error != null) Console.WriteLine(Msg.CliError + status.Error);
         return status.Phase == JobPhase.Done && report?.Success == true ? 0 : 1;
+    }
+
+    /// The card against history (spec 2.1 CLI). Never fails the copy: any problem only means no history line.
+    internal static CardInsight? Inspect(string source)
+    {
+        try
+        {
+            var store = HistoryStore.Default(m => Console.Error.WriteLine(m));
+            return CardInspector.Inspect(source, store.Load(), store, CancellationToken.None);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"history: {e.Message}");
+            return null;
+        }
     }
 }

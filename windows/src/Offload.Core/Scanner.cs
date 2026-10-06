@@ -35,7 +35,8 @@ public static class Scanner
         ReturnSpecialDirectories = false,
     };
 
-    public static SourceScan Scan(string root)
+    /// `ct` is checked before every folder: a card inspection is cancelled when the card is swapped or pulled out.
+    public static SourceScan Scan(string root, CancellationToken ct = default)
     {
         var files = new List<SourceFile>();
         var dirs = new List<string>();
@@ -43,6 +44,7 @@ public static class Scanner
 
         void Walk(string dir, string prefix)
         {
+            ct.ThrowIfCancellationRequested();
             List<FileSystemInfo> entries;
             try { entries = new DirectoryInfo(dir).EnumerateFileSystemInfos("*", OneLevel).ToList(); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { throw new IOError("scan", dir, e); }
