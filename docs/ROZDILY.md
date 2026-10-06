@@ -7,7 +7,7 @@ Pravidlo: když změna v jedné verzi způsobí, že se verze v něčem rozejdou
 aktualizuje se tento soubor ve stejném commitu. Historie každé verze je v [VYVOJ-MAC.md](VYVOJ-MAC.md)
 a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 
-*Stav k 2026-10-05.*
+*Stav k 2026-10-07.*
 
 ## Přehled
 
@@ -16,7 +16,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.1.0 | 0.1.0-win (ve vývoji) |
+| Verze | 0.1.0 | 0.2.0-win (ve vývoji) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
@@ -42,6 +42,12 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Test USB portů na vyžádání + doporučení** | ❌ | ✅ CLI + GUI |
 | **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test) |
+| **Karta už zálohovaná** (`history.json`, řádek u karty, dotaz před celou kopií) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test s kartou) |
+| **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ⏳ naplánováno | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
+| **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ⏳ naplánováno | ✅ CLI + GUI |
+| **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | `verify` jen proti `.xxh64` | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
+| **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | jen velikost karty | ✅ CLI + GUI |
+| **Hlášky kontrol před kopií česky** (`PreflightCode`) | ⏳ naplánováno (zatím anglicky) | ✅ |
 | **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
@@ -127,7 +133,25 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **R3D/ARRI bez proxy** zatím nemají náhledy (stejně jako na Macu).
 - **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
   a ukazuje ho v řádku „Proxy: H.264 (h264_nvenc), …“ v HTML/PDF. Mac klíč nezná a ignoruje ho.
-- **Verze v reportu:** Mac `0.1.0`, Windows `0.1.0-win` — z reportu je vidět, která verze kopírovala.
+- **Verze v reportu:** Mac `0.1.0`, Windows `0.2.0-win` — z reportu je vidět, která verze kopírovala.
+- **Historie karet** (zatím jen Windows, pro Mac naplánováno): `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,
+  „Místní soubory“) — řádek „Zálohováno … — ověřeno“ u karty, dotaz „Karty už jsou zálohované“ před celou kopií, CLI
+  vypíše řádek před plánem (bez dotazu); `--no-history` historii vypne. Karta se pozná podle sériového čísla souborového
+  systému + kapacity, ne podle GUID svazku — Mac musí vyjít na stejné `fsSerial` (u FAT/exFAT ověřit).
+- **Doplnění** (zatím jen Windows): generace ASC MHL N a `offload_report_NNNN.*` (FORMATY.md). Mac `verify` čte jen
+  `<karta>.xxh64`, který doplnění rozšíří — doplněnou zálohu tedy ověří i Mac. Doplnění drží zámek složky karty (viz
+  níže) a odmítne kartu, na které není žádný soubor dřívější zálohy, i zálohu s nedokončeným dřívějším doplněním.
+- **Ověření zálohy:** Windows ověřuje proti ASC MHL (všechny generace, i MHL ze Silverstacku/ShotPutu), bez `ascmhl/`
+  proti `.xxh64`; Mac zatím jen proti `.xxh64`. Report ověření jde do `_REPORT` karty, a když MHL složky `_REPORT`
+  neignoruje (cizí program), do `_REPORT` vedle složky karty — do karty ani do `ascmhl/` se nezapisuje. Výstup `verify`
+  na Windows: strojové řádky (`MISMATCH`, `MISSING`, `ERROR`, `EXTRA`, nově `FAILED-AT-COPY`, `FAILED-SUPERSEDED`,
+  `CHAIN`) a český souhrn místo `OK`/`FAILED`.
+- **Kontrola místa** (chování, ne formát): Windows sčítá požadavky po svazcích (karta + 64 KiB na soubor + 64 MiB, proxy
+  podle odhadu z délky a datového toku, report 32 MiB + 1 MiB na klip, čekající a běžící úlohy, složka pro proxy) a před
+  renderem proxy přepočítá podle skutečné délky klipů (nevejde-li se, proxy se přeskočí, kopie zůstane ověřená). Mac
+  kontroluje jen kartu.
+- **Hlášky česky:** kontroly před kopií, CLI („Chyba: …“, souhrn `verify`) a chyby parseru (kde je System.CommandLine
+  přeložené) jsou na Windows česky; logy, TXT report a `--help` zůstávají anglicky. Mac je zatím anglicky.
 - **Doplnění do zálohy — zámek složky karty** (Windows): dvě doplnění do stejné zálohy najednou se nepustí (druhé hned
   skončí „Do této zálohy právě doplňuje jiná úloha …“). Zámek platí jen v jedné přihlášené relaci Windows na jednom
   počítači — nechrání před doplněním z jiného účtu ani z jiného počítače do sdílené složky — a stejnou složku pod jiným

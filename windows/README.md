@@ -17,6 +17,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | HW diagnostika USB | hotovo (CLI `offload ports`, v GUI okno Hardware a kontrola na vyžádání) |
 | GUI `Offload.exe` | hotovo (čeká ruční test s kartou) |
 | Vestavěné LUTy (plán 5) | hotovo (čeká ruční test s klipy z kamer) |
+| Karty a bezpečnost dat (plán 6, 0.2.0): historie, doplnění, název z klipů, ověření zálohy, místo, české hlášky | hotovo (čeká ruční test s kartou) |
 
 ## Build a testy
 
@@ -99,7 +100,8 @@ klikněte na „Další informace“ → „Přesto spustit“.
 - **Hardware:** kontrola USB portů se nespouští při startu, jen na vyžádání — menu „Nástroje → Prověřit USB porty…“ (Ctrl+U)
   nebo tlačítko „Prověřit…“ v sekci Hardware. Okno Hardware ukazuje připojení, doporučení, měření rychlosti
   (s potvrzením) a USB porty s vlastními názvy. Přepínač `--no-hw-prompt` se stále přijímá, ale nic nedělá.
-- **Soubory:** nastavení `%APPDATA%\Offload\settings.json`, log `%APPDATA%\Offload\app.log`, poslední test HW `hwtest.json`
+- **Soubory:** nastavení `%APPDATA%\Offload\settings.json`, historie offloadů `history.json` + `history\` (seznamy souborů),
+  log `%APPDATA%\Offload\app.log`, poslední test HW `hwtest.json`
   (složku lze přesměrovat proměnnou `OFFLOAD_SETTINGS_DIR`).
 
 ### Checklist ručního testu (s kartou)
@@ -136,7 +138,23 @@ offload E:\ -d D:\Zaloha -d F:\Zaloha --proxy --lut look.cube --frame-aspect 1.8
 offload E:\ -d D:\Zaloha --proxy --proxy-folder G:\Proxy   # proxy navíc do G:\Proxy\<datum>\<karta>\
 offload E:\ -d D:\Zaloha --proxy --lut sony-slog3-sgamut3   # vestavěný LUT podle id
 offload luts                                                # seznam vestavěných LUTů (id — název)
+offload E:\ -d D:\Zaloha -d F:\Zaloha --name auto            # název složky z názvů klipů (A001C003… → A001)
+offload append E:\                                          # doplnit jen nové klipy do dřívější zálohy (cíle z historie)
+offload append E:\ --into D:\Zaloha\2026-10-06\A001 --into F:\Zaloha\2026-10-06\A001
+offload verify D:\Zaloha\2026-10-06 --report                # ověřit všechny karty dne proti ASC MHL + report ověření
 ```
+
+Historie (`%APPDATA%\Offload\history.json`): `copy` před plánem vypíše „Zálohováno … — ověřeno“, když kartu zná (bez
+dotazu), a po dokončené kopii ji zapíše; `--no-history` čtení i zápis vypne. `append` bez `--into` najde složky zálohy
+v historii (jinak „Chyba: Karta není v historii — zadejte složky zálohy volbou --into.“; s `--no-history` je `--into`
+povinné); kód 0 = doplněno, nebo „Nic nového — záloha je úplná.“, kód 1 = odmítnuto (jiná karta, změněné soubory,
+nedostupný dřívější cíl, běží jiné doplnění téže zálohy …, česky s důvodem). `--dry-run` plán jen vypíše (běh plánuje
+znovu pod zámkem složky karty). `--name auto` vezme cívku z názvů klipů, jinak jmenovku svazku (bez „další v řadě“,
+to umí jen GUI). `verify` čte ASC MHL všech generací (bez `ascmhl\` seznam `_REPORT\*.xxh64`), řádky problémů zůstávají
+strojové (`MISMATCH`, `MISSING`, `ERROR`, `EXTRA`, `FAILED-AT-COPY`, `FAILED-SUPERSEDED`, `CHAIN`), souhrn je česky, kód
+1 při jakémkoli problému; složka dne ověří každou kartu; `--report` zapíše report ověření do `_REPORT` karty (u MHL,
+které `_REPORT` neignoruje, vedle složky karty). Chyby a souhrny CLI jsou česky, průběh a `--help` anglicky (nadpisy
+nápovědy a chyby parseru česky tam, kde je System.CommandLine 2.0.12 přeložené).
 
 `--lut auto|none|<id>|<cesta.cube>` (výchozí `auto`): `auto` vybere LUT podle kamery každého klipu, `none` žádný,
 `<id>` vestavěný LUT, cesta s `.cube` nebo lomítkem vlastní LUT. Seznam id vypíše `offload luts` — samostatný příkaz,
