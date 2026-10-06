@@ -23,6 +23,8 @@ public sealed partial class MainViewModel
     public event Action<bool>? AttentionRequested;
     /// Closing was requested while jobs ran; they are cancelled and finished now — close the window.
     public event Action? CloseReady;
+    /// Shows "Karty už jsou zálohované" (set by the window; modal, the user answers — no disk is waited on).
+    public Func<BackedUpPromptModel, BackedUpChoice>? AskBackedUp { get; set; }
 
     void InitQueue()
     {
@@ -80,7 +82,22 @@ public sealed partial class MainViewModel
                 if (!exists) return;   // the red text says why
                 break;
             }
-            if (ReadyToStart) StartJobs();   // anything may have changed while the LUT was checked
+            // Spec 2.1: cards history already knows are copied again in full only when the user says so.
+            var skip = new List<string>();
+            var backedUp = SelectedSources().Where(p => BackedUpPrompt.ShouldAsk(Insight(p))).ToList();
+            if (backedUp.Count > 0 && AskBackedUp is { } ask)
+            {
+                var model = BackedUpPrompt.Build(backedUp.Select(p => (Insight(p)!.History!, PlannedName(p))).ToList(), DateString);
+                switch (ask(model))
+                {
+                    case BackedUpChoice.Cancel:
+                        return;
+                    case BackedUpChoice.SkipBackedUp:
+                        skip.AddRange(backedUp);
+                        break;
+                }
+            }
+            if (ReadyToStart) StartJobs(skip);   // anything may have changed while the LUT was checked
         }
         catch (Exception e)
         {
@@ -94,11 +111,16 @@ public sealed partial class MainViewModel
         }
     }
 
-    void StartJobs()
+    /// `skip`: backed-up cards the user chose not to copy again — they are unticked, not started.
+    void StartJobs(IReadOnlyCollection<string> skip)
     {
-        var sources = volumes.Select(v => v.Path).Concat(manualSources).Where(selected.Contains).ToList();
-        foreach (var src in sources)
+        foreach (var src in SelectedSources())
         {
+            if (skip.Contains(src, StringComparer.OrdinalIgnoreCase))
+            {
+                selected.Remove(src);
+                continue;
+            }
             var name = cardNames.GetValueOrDefault(src) is { Length: > 0 } n && n.Trim().Length > 0 ? n.Trim() : null;
             var config = new JobConfig(src, Settings.DestRoots.ToList())
             {

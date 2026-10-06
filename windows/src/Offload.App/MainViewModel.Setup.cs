@@ -242,6 +242,13 @@ public sealed partial class MainViewModel
 
     internal bool IsSelected(string path) => selected.Contains(path);
 
+    /// The ticked sources in the order of the list (volumes, then manual folders).
+    List<string> SelectedSources() => volumes.Select(v => v.Path).Concat(manualSources).Where(selected.Contains).ToList();
+
+    /// The card folder name a start would use now: the typed name, otherwise the placeholder.
+    internal string PlannedName(string path) =>
+        cardNames.GetValueOrDefault(path) is { } typed && typed.Trim().Length > 0 ? typed.Trim() : DefaultCardName(path);
+
     internal void SetSelected(string path, bool on)
     {
         if (on) selected.Add(path);
