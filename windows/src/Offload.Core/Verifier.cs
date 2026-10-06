@@ -20,7 +20,7 @@ public static class Verifier
     {
         var reportDir = Path.Combine(cardPath, Layout.ReportDirName);
         var list = Directory.Exists(reportDir) ? Directory.GetFiles(reportDir, "*.xxh64").FirstOrDefault() : null;
-        if (list == null) throw OffloadError.Preflight($"No .xxh64 hash list in {reportDir}");
+        if (list == null) throw OffloadError.Preflight(PreflightCode.NoHashRecord, Msg.NoHashRecord(cardPath));
 
         var expected = new List<(string Hash, string Path)>();
         foreach (var raw in File.ReadAllText(list, Encoding.UTF8).Split('\n'))

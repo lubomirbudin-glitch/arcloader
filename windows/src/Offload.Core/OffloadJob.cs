@@ -227,7 +227,7 @@ public sealed class OffloadJob
             Update(s => s with { ClipIndex = index, ClipName = clip.Name, ClipFraction = 0 });
             if (GoodDest(clip) is not int d)
             {
-                entries[i].ProbeError = "no verified copy";
+                entries[i].ProbeError = Msg.NoVerifiedCopy;
                 continue;
             }
             if (clip.Format != ClipFormat.Video && renderer.UnsupportedReason(clip) is string reason)
@@ -294,7 +294,7 @@ public sealed class OffloadJob
             if (GoodDest(clip) is not int d || entries[i].Info is not { } info)
             {
                 entries[i].ProxyStatus = ProxyStatus.Failed;
-                entries[i].ProxyNote = entries[i].ProbeError ?? "no verified copy";
+                entries[i].ProxyNote = entries[i].ProbeError ?? Msg.NoVerifiedCopy;
                 Update(s => s with { ProxiesFailed = s.ProxiesFailed + 1 });
                 continue;
             }

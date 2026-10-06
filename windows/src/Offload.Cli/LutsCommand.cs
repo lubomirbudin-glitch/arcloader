@@ -11,7 +11,7 @@ static class LutsCommand
         cmd.SetAction(_ =>
         {
             var cat = LutCatalog.Default;
-            if (cat.Luts.Count == 0) Console.Error.WriteLine("No built-in LUTs found (luts folder missing).");
+            if (cat.Luts.Count == 0) Console.Error.WriteLine(Msg.NoBuiltinLuts);
             foreach (var l in cat.Luts) Console.WriteLine($"{l.Id} — {l.Name}");
             return 0;
         });

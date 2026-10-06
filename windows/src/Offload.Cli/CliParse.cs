@@ -18,7 +18,7 @@ static class CliParse
     {
         var s = a.Tokens.Count > 0 ? a.Tokens[0].Value : null;
         var v = Double(s);
-        if (v == null) a.AddError($"Cannot parse '{s}' as a positive number.");
+        if (v == null) a.AddError(Offload.Core.Msg.NotPositiveNumber(s));
         return v;
     }
 }

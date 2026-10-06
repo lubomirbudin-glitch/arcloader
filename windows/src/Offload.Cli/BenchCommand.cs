@@ -35,7 +35,7 @@ static class BenchCommand
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine($"Error: {e.Message}");
+                Console.Error.WriteLine(Msg.CliError + e.Message);
                 return 1;
             }
         });

@@ -206,9 +206,9 @@ public class StageTwoTests
         Assert.Equal(JobPhase.Done, s.Phase);
         Assert.True(s.SafeToEject);
         var clip = Assert.Single(report!.Clips);
-        Assert.Contains("ffprobe not found", clip.ProbeError);
+        Assert.Contains("ffprobe nenalezen", clip.ProbeError);
         Assert.Equal(ProxyStatus.Unsupported, clip.ProxyStatus);
-        Assert.Equal("ffmpeg not found", clip.ProxyNote);
+        Assert.Equal("ffmpeg nenalezen", clip.ProxyNote);
     }
 
     // Review focus 3

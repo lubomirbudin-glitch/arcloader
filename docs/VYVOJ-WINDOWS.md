@@ -17,6 +17,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 4 | WPF GUI, detekce a vysunutí karet, balíček | hotovo (čeká ruční test s kartou) |
 | 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | hotovo (čeká ruční test s klipy z kamer) |
 
+## 2026-10-06 — plán 6: karty a bezpečnost dat
+
+- Úkol 1 — české hlášky kontrol před kopií (`Msg`, `PreflightCode` u každé chyby), CLI „Chyba: “, chyby parseru System.CommandLine česky, kde je balíček přeložené (satelit cs; chybějící `--dest` hlásí jádro: „Není zadaný žádný cíl.“), velikosti v českých větách „3,2 GB“
+
 ## 2026-10-06 — balíček ZIP
 
 - Uživatelský návod — `Offload-navod.pdf` (česky, 29 stran A4: instalace, hlavní okno, první offload, volby, proxy a LUTy, report, fronta a vysunutí, okno Hardware, struktura na disku, CLI, řešení problémů, licence) ze zdroje `windows/package/navod/navod.html`, tiskne ho `navod/render.ps1` přes Edge headless jako PDF report; `build.ps1` ho kopíruje do kořene balíčku vedle `CTI-ME.txt`, který na něj odkazuje

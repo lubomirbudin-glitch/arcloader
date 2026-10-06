@@ -66,7 +66,7 @@ public class VerifierTests
     {
         using var dir = new TempDir();
         var e = Assert.Throws<OffloadError>(() => Verifier.Verify(dir.Sub("card")));
-        Assert.Contains("No .xxh64 hash list", e.Message);
+        Assert.Equal(PreflightCode.NoHashRecord, e.Code);
     }
 
     [Fact]

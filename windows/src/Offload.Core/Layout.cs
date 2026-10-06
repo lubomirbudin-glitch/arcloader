@@ -59,9 +59,9 @@ public static class Layout
     /// Why Windows cannot store a file or folder with this name, or null when it can.
     public static string? InvalidNameReason(string name)
     {
-        if (name.Any(c => c < 0x20 || InvalidChars.Contains(c))) return "contains a character Windows does not allow";
-        if (name.EndsWith('.') || name.EndsWith(' ')) return "ends with a dot or space";
-        if (ReservedNames.Contains(BaseName(name))) return "reserved device name on Windows";
+        if (name.Any(c => c < 0x20 || InvalidChars.Contains(c))) return Msg.InvalidChar;
+        if (name.EndsWith('.') || name.EndsWith(' ')) return Msg.EndsWithDotOrSpace;
+        if (ReservedNames.Contains(BaseName(name))) return Msg.ReservedName;
         return null;
     }
 

@@ -213,7 +213,7 @@ public static class LutOption
         string? fb = null;
         if (fallback != null && !fallback.Equals("none", StringComparison.OrdinalIgnoreCase))
         {
-            if (cat.Find(fallback) == null) return (LutMode.Auto, null, null, null, $"Unknown fallback LUT '{fallback}'. Built-in: {Ids(cat)}");
+            if (cat.Find(fallback) == null) return (LutMode.Auto, null, null, null, Msg.UnknownFallbackLut(fallback, Ids(cat)));
             fb = fallback;
         }
         if (value == null || value.Equals("auto", StringComparison.OrdinalIgnoreCase)) return (LutMode.Auto, null, null, fb, null);
@@ -222,7 +222,7 @@ public static class LutOption
             return (LutMode.Custom, null, value, fb, null);
         return cat.Find(value) != null
             ? (LutMode.Builtin, value, null, fb, null)
-            : (LutMode.Auto, null, null, fb, $"Unknown LUT '{value}'. Use auto, none, a .cube path or one of: {Ids(cat)}");
+            : (LutMode.Auto, null, null, fb, Msg.UnknownLut(value, Ids(cat)));
     }
 
     static string Ids(LutCatalog cat) => string.Join(", ", cat.Luts.Select(l => l.Id));

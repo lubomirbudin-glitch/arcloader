@@ -81,7 +81,7 @@ public sealed partial class OffloadEngine
                 catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException) { reportErrors.Add(e.Message); }
             }
             SetPhase(CopyPhase.Done);
-            if (reportErrors.Count > 0) throw OffloadError.Failed("Report could not be written: " + string.Join("; ", reportErrors));
+            if (reportErrors.Count > 0) throw OffloadError.Failed(Msg.ReportNotWritten(string.Join("; ", reportErrors)));
             return report;
         }
         finally

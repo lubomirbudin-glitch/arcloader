@@ -81,7 +81,7 @@ public static class Scanner
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in scan.Dirs.Concat(scan.Files.Select(f => f.RelPath)))
         {
-            if (seen.TryGetValue(p, out var other)) problems.Add($"{p}: same name as {other} except for upper/lower case");
+            if (seen.TryGetValue(p, out var other)) problems.Add(Msg.SameNameCase(p, other));
             else seen[p] = p;
             var reason = p.Split('/').Select(Layout.InvalidNameReason).FirstOrDefault(r => r != null);
             if (reason != null) problems.Add($"{p}: {reason}");

@@ -22,7 +22,7 @@ public static class Bench
             targets = [path];
         else
             throw new IOError("open", path, 2);
-        if (targets.Count == 0) throw OffloadError.Preflight($"No files to read in {path}");
+        if (targets.Count == 0) throw OffloadError.Preflight(PreflightCode.NoFilesToRead, Msg.NoFilesToRead(path));
 
         var lines = new List<Line>();
         foreach (var bs in blockSizes)

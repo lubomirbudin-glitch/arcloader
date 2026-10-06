@@ -10,7 +10,9 @@ static class CopyCommand
     public static Command Create()
     {
         var source = new Argument<string>("source") { Description = "Card drive or source folder." };
-        var dest = new Option<string[]>("--dest", "-d") { Description = "Destination root (repeat for each disk).", Required = true };
+        // Not Required: the parser's "Option '--dest' is required." has no Czech translation — the engine says
+        // "Není zadaný žádný cíl." instead.
+        var dest = new Option<string[]>("--dest", "-d") { Description = "Destination root (repeat for each disk).", DefaultValueFactory = _ => [] };
         var name = new Option<string?>("--name") { Description = "Card folder name (default: volume label)." };
         var date = new Option<string?>("--date") { Description = "Date folder (default: today, YYYY-MM-DD)." };
         var chunkMb = new Option<int>("--chunk-mb") { Description = "Block size in MB.", DefaultValueFactory = _ => 16 };
@@ -48,11 +50,11 @@ static class CopyCommand
                     AllowSameDevice = r.GetValue(allowSame),
                 };
                 if (!ProxyCodecExtensions.TryParseWire(r.GetValue(proxyCodec)!, out var codec))
-                    throw new ArgumentException($"Unknown proxy codec {r.GetValue(proxyCodec)}");
+                    throw new ArgumentException(Msg.UnknownProxyCodec(r.GetValue(proxyCodec)));
                 var (lutMode, lutBuiltin, lutRaw, lutFb, lutErr) = LutOption.Parse(r.GetValue(lut), r.GetValue(lutFallback), LutCatalog.Default);
                 if (lutErr != null) throw new ArgumentException(lutErr);
                 var lutPath = lutRaw != null ? CliPath.Full(lutRaw) : null;
-                if (lutPath != null && !File.Exists(lutPath)) throw new ArgumentException($"LUT not found: {lutPath}");
+                if (lutPath != null && !File.Exists(lutPath)) throw new ArgumentException(Msg.LutNotFound(lutPath));
                 config.AnalyzeClips = !r.GetValue(noAnalyze);
                 config.Proxy = new ProxySettings
                 {
@@ -71,13 +73,13 @@ static class CopyCommand
                     ExtraFolder = r.GetValue(proxyFolder) is string pf ? CliPath.Full(pf) : null,
                 };
                 if (config.Proxy.ExtraFolder != null && !config.Proxy.Enabled)
-                    Console.Error.WriteLine("Note: --proxy-folder has no effect without --proxy.");
+                    Console.Error.WriteLine(Msg.ProxyFolderNoEffect);
                 if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string folder && !Directory.Exists(folder))
-                    throw new ArgumentException($"Proxy folder not found: {folder}");
+                    throw new ArgumentException(Msg.ProxyFolderNotFound(folder));
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine($"Error: {e.Message}");
+                Console.Error.WriteLine(Msg.CliError + e.Message);
                 return 1;
             }
             // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all.
@@ -97,7 +99,7 @@ static class CopyCommand
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"Error: {e.Message}");
+            Console.Error.WriteLine(Msg.CliError + e.Message);
             return 1;
         }
         Console.WriteLine($"Card {plan.CardName}: {plan.Scan.Files.Count} files, {Format.Bytes(plan.Scan.TotalBytes)}");
@@ -130,7 +132,7 @@ static class CopyCommand
         Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true;
-            Console.Error.WriteLine("\nCancelling — finishing current block, partial files will be removed…");
+            Console.Error.WriteLine("\n" + Msg.Cancelling);
             job.Cancel();
         };
 
@@ -151,7 +153,7 @@ static class CopyCommand
             }
             Console.WriteLine($"Report: {Path.Combine(plan.CardPaths[0], Layout.ReportDirName, plan.CardName + "_report.html")}");
         }
-        if (status.Error != null) Console.WriteLine($"ERROR: {status.Error}");
+        if (status.Error != null) Console.WriteLine(Msg.CliError + status.Error);
         return status.Phase == JobPhase.Done && report?.Success == true ? 0 : 1;
     }
 }

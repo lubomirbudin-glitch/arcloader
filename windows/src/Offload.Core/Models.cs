@@ -56,9 +56,15 @@ public sealed record ProgressSnapshot(
 public sealed class OffloadError : Exception
 {
     public bool IsPreflight { get; }
+    /// Which check failed (preflight errors only); tests and the GUI tell the cases apart by it, not by the text.
+    public PreflightCode? Code { get; }
 
-    OffloadError(string message, bool preflight) : base(message) => IsPreflight = preflight;
+    OffloadError(string message, bool preflight, PreflightCode? code) : base(message)
+    {
+        IsPreflight = preflight;
+        Code = code;
+    }
 
-    public static OffloadError Preflight(string message) => new(message, true);
-    public static OffloadError Failed(string message) => new(message, false);
+    public static OffloadError Preflight(PreflightCode code, string message) => new(message, true, code);
+    public static OffloadError Failed(string message) => new(message, false, null);
 }
