@@ -44,6 +44,8 @@ foreach ($t in 'ffmpeg.exe', 'ffprobe.exe') {
 }
 # Instructions for whoever unpacks the zip.
 Copy-Item (Join-Path $root 'package\CTI-ME.txt') $out
+# User manual (Czech PDF, printed from package\navod\navod.html by package\navod\render.ps1).
+Copy-Item (Join-Path $root 'package\Offload-navod.pdf') $out
 # Built-in LUTs (shared with the Mac version).
 $luts = Join-Path (Split-Path -Parent $root) 'shared\luts'
 New-Item -ItemType Directory -Force (Join-Path $out 'luts') | Out-Null

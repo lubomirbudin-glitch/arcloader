@@ -1,6 +1,8 @@
 Offload pro Windows — přenosná verze (bez instalace)
 ====================================================
 
+Podrobný návod: Offload-navod.pdf
+
 Spuštění
 --------
 1. Rozbalte celý ZIP do obyčejné složky (např. Dokumenty\Offload). Nespouštějte ho přímo z archivu.
@@ -26,6 +28,7 @@ Volitelné doplňky
 Co je ve složce
 ---------------
 Offload.exe            aplikace
+Offload-navod.pdf      uživatelský návod
 bin\offload.exe        příkazová řádka (offload --help)
 bin\braw-decode.exe    dekodér Blackmagic RAW (knihovnu Blackmagic nepřibaluje)
 bin\ffmpeg.exe,

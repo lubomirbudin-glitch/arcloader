@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-06 — balíček ZIP
 
+- Uživatelský návod — `Offload-navod.pdf` (česky, 29 stran A4: instalace, hlavní okno, první offload, volby, proxy a LUTy, report, fronta a vysunutí, okno Hardware, struktura na disku, CLI, řešení problémů, licence) ze zdroje `windows/package/navod/navod.html`, tiskne ho `navod/render.ps1` přes Edge headless jako PDF report; `build.ps1` ho kopíruje do kořene balíčku vedle `CTI-ME.txt`, který na něj odkazuje
 - Balíček — v ZIPu je `CTI-ME.txt` (jak spustit, SmartScreen, požadavky, volitelné doplňky BRAW/RED/ARRI, kde je nastavení), licence přibaleného FFmpeg (GPL v3 + README buildu s odkazem na zdrojový kód) v `licencefmpeg` a popis LUTů; `build.ps1 -Staging` sestaví balíček do `build\staging`, když z `build\Offload` běží aplikace
 
 ## 2026-10-05 — plán 3: BRAW dekodér v C#
