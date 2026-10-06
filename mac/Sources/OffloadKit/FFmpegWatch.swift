@@ -84,3 +84,21 @@ final class ProgressWatch {
         return true
     }
 }
+
+/// A one-way flag set on one thread and read on another (the pump marks a decoder pipe it cut).
+final class Flag {
+    private let lock = NSLock()
+    private var value = false
+
+    func set() {
+        lock.lock()
+        value = true
+        lock.unlock()
+    }
+
+    var isSet: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}

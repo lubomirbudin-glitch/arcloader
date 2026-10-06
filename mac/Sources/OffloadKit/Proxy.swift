@@ -354,8 +354,9 @@ public final class ProxyRenderer {
 
     /// First, middle and last frame as small JPEGs with captions, with the clip's LUT so log footage is readable.
     /// `lut` nil = no LUT (thumbnails taken from a finished proxy, which already has it). When `isCancelled` turns
-    /// true the clip simply gets no thumbnails. One bad position does not cost the others; if none works, the last
-    /// error is thrown.
+    /// true the clip simply gets no thumbnails. One bad position does not cost the others — except a hung RAW decoder
+    /// (a stall, or `braw-decode --info` timing out), which would hang at the next positions too: the rest is skipped and
+    /// the log says so. If none works, the last error is thrown.
     public func thumbnails(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil,
                            isCancelled: () -> Bool = { false }) throws -> [Thumbnail] {
         guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "ffmpeg not found") }
@@ -368,22 +369,40 @@ public final class ProxyRenderer {
             if isCancelled() { return [] }
             let out = tempDir + "/thumb-\(UUID().uuidString).jpg"
             defer { unlink(out) }
+            var src: FrameSource?
             do {
-                let src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: pos.seconds, hwaccel: false)
-                defer { src.removeIntermediates() }
+                let s = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: pos.seconds, hwaccel: false)
+                src = s
+                defer { s.removeIntermediates() }
                 // The pre-map depends on the source (BRAW, full-range video).
-                let filter = FilterGraph.thumbnail(lutFile: lutFile, premap: ProxyRenderer.needsPreMap(lut, source: src, info: info))
+                let filter = FilterGraph.thumbnail(lutFile: lutFile, premap: ProxyRenderer.needsPreMap(lut, source: s, info: info))
                 var args = ["-hide_banner", "-loglevel", "error", "-y"]
                 if video { args += ["-ss", ProxyRenderer.seekSeconds(info, pos)] }
-                args += src.inputArgs
+                args += s.inputArgs
                 // Last frame: decode the final second and keep overwriting the image — the last write is the last frame.
                 args += video && pos.fromEnd ? ["-map", "0:v:0", "-vf", filter, "-update", "1"] : ["-frames:v", "1", "-vf", filter]
                 args += ["-q:v", "5", out]
-                try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: nil, progress: nil, isCancelled: isCancelled)
+                // A RAW decoder piped in (BRAW) runs under the stall watchdog: the data it hands ffmpeg is the progress, and
+                // a hung SDK must not hang the job. A file input prints no progress here, so it is left alone (as Windows).
+                try runFFmpeg(ffmpeg, args, feeder: s.feeder, explainFeederError: s.explainFeederError, duration: nil,
+                              progress: nil, isCancelled: isCancelled, stallAfter: s.feeder != nil ? stallTimeout : nil)
                 guard FileManager.default.fileExists(atPath: out) else {
                     throw ToolError(tool: "ffmpeg", status: 0, message: "no frame")
                 }
                 result.append(Thumbnail(jpeg: try Data(contentsOf: URL(fileURLWithPath: out)), label: ProxyRenderer.label(info, pos)))
+            } catch let e as FFmpegStall where src?.feeder != nil {
+                if isCancelled() { return [] }
+                // A hung decoder would hang at the next positions too (3 × the grace per clip): stop here.
+                let stall = FFmpegStall(note: "dekodér nebo " + e.note)
+                lastError = stall
+                log?("thumbnails \(clip.name): \(stall); the remaining frames are skipped")
+                break
+            } catch let e as ToolError where src == nil && e.status == -1 && isBrawDecoder(e.tool) {
+                if isCancelled() { return [] }
+                // `braw-decode --info` timed out: it would at the next positions too.
+                lastError = e
+                log?("thumbnails \(clip.name): \(e); the remaining frames are skipped")
+                break
             } catch {
                 if isCancelled() { return [] }
                 lastError = error
@@ -391,6 +410,11 @@ public final class ProxyRenderer {
         }
         if result.isEmpty, let lastError { throw lastError }
         return result
+    }
+
+    /// A ToolError raised by braw-decode (ToolProcess names errors by the executable's file name).
+    private func isBrawDecoder(_ tool: String) -> Bool {
+        tools.brawDecoder.map { ($0 as NSString).lastPathComponent == tool } ?? false
     }
 
     /// Renders the proxy. A render that stalls (no progress for `stallTimeout`) is killed. With hardware decoding the clip
@@ -453,8 +477,8 @@ public final class ProxyRenderer {
         let part = dir + "/." + (output as NSString).lastPathComponent + ".part"
         args += ["-f", "mov", part]
         do {
-            try runFFmpeg(ffmpeg, args, feeder: src.feeder, duration: info.duration, progress: progress,
-                          isCancelled: isCancelled, stallAfter: stallTimeout)
+            try runFFmpeg(ffmpeg, args, feeder: src.feeder, explainFeederError: src.explainFeederError, duration: info.duration,
+                          progress: progress, isCancelled: isCancelled, stallAfter: stallTimeout)
             guard rename(part, output) == 0 else { throw IOError("rename", output) }
         } catch {
             unlink(part)
@@ -485,20 +509,27 @@ public final class ProxyRenderer {
         return f
     }
 
-    /// `stallAfter` (renders only, with -progress pipe:1 in the args): ffmpeg is killed and `FFmpegStall` thrown when it
-    /// has reported no new frame or output time and taken no data from the feeder for that long (3× before the first
-    /// progress). Cancelling is checked first and wins.
-    func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, duration: Double?,
-                   progress: ((Double) -> Void)?, isCancelled: () -> Bool, stallAfter: TimeInterval? = nil) throws {
+    /// `stallAfter`: ffmpeg is killed and `FFmpegStall` thrown when it has reported no new frame or output time and taken
+    /// no data from the feeder for that long (3× before the first progress) — every proxy, and thumbnails with a feeder.
+    /// Cancelling is checked first and wins. A feeder (RAW decoder) is judged as on Windows: one that ended non-zero on
+    /// its own while ffmpeg still read is the clip's error, before ffmpeg's (`explainFeederError` may turn it into the
+    /// note); one that was terminated, or whose stdout the pump closed because ffmpeg had stopped reading, is not.
+    func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, explainFeederError: ((ToolError) -> Error)? = nil,
+                   duration: Double?, progress: ((Double) -> Void)?, isCancelled: () -> Bool,
+                   stallAfter: TimeInterval? = nil) throws {
         let p = ToolProcess(ffmpeg, args)
         p.captureStderr()
         let watch = ProgressWatch()
+        // Set by the pump when ffmpeg stopped taking data and the feeder's stdout was closed under it.
+        let feederCut = Flag()
+        var feederStderr: StderrTail?
         var pump: Thread?
         if let feeder {
             // The decoder's frames go through a pump: every chunk ffmpeg takes is progress (a slow RAW decoder is not stuck).
             let fromFeeder = Pipe(), toFFmpeg = Pipe()
             feeder.standardOutput = fromFeeder
-            feeder.standardError = FileHandle.nullDevice
+            // Its stderr names the cause when it fails on its own (braw-decode: the clip and the library it loaded).
+            feederStderr = StderrTail(feeder)
             p.process.standardInput = toFFmpeg
             // A write after ffmpeg died must fail with EPIPE, not take the app down with SIGPIPE.
             _ = fcntl(toFFmpeg.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
@@ -518,12 +549,20 @@ public final class ProxyRenderer {
                     while sent < n {
                         let w = Darwin.write(outFD, buffer + sent, n - sent)
                         if w < 0 && errno == EINTR { continue }
-                        if w <= 0 { break pumping }   // ffmpeg is gone (EPIPE, no signal thanks to F_SETNOSIGPIPE)
+                        if w <= 0 {
+                            // ffmpeg went away first (a thumbnail needs one frame, or it failed). Marked before the
+                            // decoder's end is closed below, so its exit code is known to be a consequence.
+                            feederCut.set()
+                            break pumping
+                        }
                         sent += w
                     }
                     watch.dataFlowed()
                 }
                 try? toFFmpeg.fileHandleForWriting.close()
+                // Close the decoder's end too: a decoder still writing sees the broken pipe and stops by itself
+                // (braw-decode exits 0) instead of blocking on a full pipe until it is terminated.
+                try? fromFeeder.fileHandleForReading.close()
             }
         } else {
             p.process.standardInput = FileHandle.nullDevice
@@ -553,13 +592,24 @@ public final class ProxyRenderer {
             }
             usleep(200_000)
         }
-        if let feeder, feeder.isRunning { feeder.terminate() }
-        feeder?.waitUntilExit()
-        guard p.process.terminationStatus == 0 else {
-            throw ToolError(tool: "ffmpeg", status: p.process.terminationStatus, message: p.stderrText)
+        if let feeder {
+            // ffmpeg is done. A decoder still writing gets the closed pipe from the pump and ends by itself; one that has
+            // not ended within 2 s (decoding a frame nobody wants) is terminated — its exit code then says nothing.
+            let deadline = Date().addingTimeInterval(2)
+            while feeder.isRunning && Date() < deadline { usleep(20_000) }
+            if feeder.isRunning { feeder.terminate() }
+            feeder.waitUntilExit()
+            if feeder.terminationReason == .exit, feeder.terminationStatus != 0, !feederCut.isSet {
+                let error = ToolError(tool: feeder.executableURL?.lastPathComponent ?? "decoder", status: feeder.terminationStatus,
+                                      message: feederStderr?.drain() ?? "")
+                let explained = explainFeederError?(error) ?? error
+                if explained is RawDecoderError { log?("\(error)") }   // the decoder's own words for the log
+                throw explained
+            }
         }
-        if let feeder, feeder.terminationStatus != 0, feeder.terminationReason == .exit {
-            throw ToolError(tool: (feeder.executableURL?.lastPathComponent ?? "decoder"), status: feeder.terminationStatus, message: "")
+        guard p.process.terminationStatus == 0 else {
+            // drain: ffmpeg has ended, the whole stderr tail (the handler may lag behind the exit — task 29)
+            throw ToolError(tool: "ffmpeg", status: p.process.terminationStatus, message: p.drainStderr())
         }
     }
 
