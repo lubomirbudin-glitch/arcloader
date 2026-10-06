@@ -133,6 +133,9 @@ struct FrameSource {
     var fullRange = false
     /// Intermediate files to delete once ffmpeg is done.
     var cleanup: [String] = []
+    /// Turns the feeder's own failure (it ended non-zero while ffmpeg still read) into the clip's note — a
+    /// `RawDecoderError`; nil = the feeder's ToolError as it is (Windows `FrameSource.ExplainFeederError`).
+    var explainFeederError: ((ToolError) -> Error)?
 
     func removeIntermediates() {
         for p in cleanup { try? FileManager.default.removeItem(atPath: p) }
@@ -170,7 +173,8 @@ struct FramePosition: Equatable {
 public final class ProxyRenderer {
     public let settings: ProxySettings
     public let tools: ExternalTools
-    let backends: [ClipFormat: RawBackend]
+    /// One backend per RAW format. Tests replace one (e.g. BRAW with a fake library search or a short --info timeout).
+    var backends: [ClipFormat: RawBackend]
     let tempDir: String
     /// A proxy render with no progress for this long is stuck (3× as long before the first progress): ffmpeg is killed
     /// and, when it decoded in hardware, the clip is retried once in software.
@@ -237,7 +241,7 @@ public final class ProxyRenderer {
         guard let b = backends[clip.format], b.isAvailable(tools) else {
             throw ToolError(tool: clip.format.label, status: -1, message: unsupportedReason(clip) ?? "")
         }
-        return try b.probe(path, tools: tools)
+        return try logged { try b.probe(path, tools: tools) }
     }
 
     // MARK: Thumbnail positions
@@ -332,7 +336,18 @@ public final class ProxyRenderer {
             return FrameSource(inputArgs: hwaccel ? ["-hwaccel", "videotoolbox", "-i", path] : ["-i", path])
         }
         guard let b = backends[clip.format] else { throw ToolError(tool: clip.format.label, status: -1, message: "no decoder") }
-        return try b.source(path, info: info, settings: settings, look: look, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt)
+        return try logged { try b.source(path, info: info, settings: settings, look: look, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt) }
+    }
+
+    /// A decoder error turned into a note for the clip (`RawDecoderError`): the decoder's own words — its stderr, e.g.
+    /// the library it loaded — go to the job's log, the note to the clip (Windows `Logged`).
+    private func logged<T>(_ decode: () throws -> T) throws -> T {
+        do {
+            return try decode()
+        } catch let e as RawDecoderError {
+            log?("\(e.decoderError)")
+            throw e
+        }
     }
 
     // MARK: Thumbnails and proxies

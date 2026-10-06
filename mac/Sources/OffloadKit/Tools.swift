@@ -70,31 +70,85 @@ public struct ExternalTools: Codable, Equatable {
     }
 }
 
+/// The last 4000 characters a child process wrote to stderr. The pipe is read as data arrives (a chatty tool never
+/// blocks on a full pipe); `drain()` after the process ended picks up what the handler has not delivered yet —
+/// non-blocking, so a grandchild still holding the pipe cannot hang the caller. The handler reads under the same lock
+/// and never after `drain()`: a read racing drain's non-blocking one could hit EAGAIN, which `availableData` raises as
+/// an Objective-C exception (a crash, not a Swift error). Bytes are kept and decoded only in `text`, so a UTF-8
+/// character split between two reads (a path with diacritics) comes out whole.
+final class StderrTail {
+    private let pipe = Pipe()
+    private let lock = NSLock()
+    private var bytes = Data()
+    private var drained = false
+
+    init(_ process: Process) {
+        process.standardError = pipe
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
+            guard let self else { return }
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            guard !self.drained else { return }
+            let data = h.availableData
+            if data.isEmpty {
+                h.readabilityHandler = nil   // EOF: otherwise the handler keeps firing with empty data
+            } else {
+                self.appendLocked(data)
+            }
+        }
+    }
+
+    var text: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return String(String(decoding: bytes, as: UTF8.self).suffix(4000))
+    }
+
+    func drain() -> String {
+        let handle = pipe.fileHandleForReading
+        handle.readabilityHandler = nil   // outside the lock: a handler still waiting for it then sees `drained`
+        lock.lock()
+        if !drained {
+            drained = true
+            let fd = handle.fileDescriptor
+            _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+            var buffer = [UInt8](repeating: 0, count: 65536)
+            while true {
+                let n = buffer.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
+                if n < 0 && errno == EINTR { continue }
+                if n <= 0 { break }   // EOF, or nothing more right now (EAGAIN)
+                appendLocked(Data(buffer[0..<n]))
+            }
+        }
+        lock.unlock()
+        return text
+    }
+
+    /// Caller holds `lock`. At most 16 000 bytes are kept (≥ 4000 characters of UTF-8).
+    private func appendLocked(_ data: Data) {
+        bytes.append(data)
+        if bytes.count > 16_000 { bytes = Data(bytes.suffix(16_000)) }
+    }
+}
+
 /// Runs a child process, streams stdout lines to a handler, captures the stderr tail for error messages.
 final class ToolProcess {
     let process = Process()
-    private var stderrTail = ""
-    private let lock = NSLock()
+    private var stderr: StderrTail?
 
     init(_ executable: String, _ args: [String]) {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = args
     }
 
-    var stderrText: String { lock.lock(); defer { lock.unlock() }; return stderrTail }
+    var stderrText: String { stderr?.text ?? "" }
 
     func captureStderr() {
-        let pipe = Pipe()
-        process.standardError = pipe
-        pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
-            let data = h.availableData
-            if data.isEmpty { h.readabilityHandler = nil }   // EOF: otherwise the handler keeps firing with empty data
-            guard let self, !data.isEmpty else { return }
-            self.lock.lock()
-            self.stderrTail = String((self.stderrTail + String(decoding: data, as: UTF8.self)).suffix(4000))
-            self.lock.unlock()
-        }
+        stderr = StderrTail(process)
     }
+
+    /// After the process ended: the complete stderr tail.
+    func drainStderr() -> String { stderr?.drain() ?? "" }
 
     func onStdoutLine(_ handler: @escaping (String) -> Void) {
         let pipe = Pipe()
@@ -114,21 +168,43 @@ final class ToolProcess {
         }
     }
 
-    /// Runs to completion and returns stdout (only when no line handler is installed).
+    private final class Output {
+        var data = Data()
+        let done = DispatchSemaphore(value: 0)
+    }
+
+    /// Runs to completion and returns stdout (only when no line handler is installed). With `timeout`, a tool still
+    /// running after it is killed (SIGKILL) and a ToolError says so — a hung tool must never hang the job (Windows
+    /// `ToolProcess.Run(…, timeout)`; Windows kills the whole process tree, here the tool itself).
     @discardableResult
-    static func run(_ executable: String, _ args: [String], cwd: String? = nil) throws -> String {
+    static func run(_ executable: String, _ args: [String], cwd: String? = nil, timeout: TimeInterval? = nil) throws -> String {
         let p = ToolProcess(executable, args)
         if let cwd { p.process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
+        let name = (executable as NSString).lastPathComponent
         let out = Pipe()
         p.process.standardOutput = out
         p.captureStderr()
         try p.process.run()
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        p.process.waitUntilExit()
-        guard p.process.terminationStatus == 0 else {
-            throw ToolError(tool: (executable as NSString).lastPathComponent, status: p.process.terminationStatus, message: p.stderrText)
+        // stdout on its own thread, so the wait below can give up on a tool that never ends.
+        let output = Output()
+        Thread {
+            output.data = out.fileHandleForReading.readDataToEndOfFile()
+            output.done.signal()
+        }.start()
+        if let timeout {
+            let deadline = Date().addingTimeInterval(timeout)
+            while p.process.isRunning && Date() < deadline { usleep(20_000) }
+            if p.process.isRunning {
+                kill(p.process.processIdentifier, SIGKILL)
+                throw ToolError(tool: name, status: -1, message: "neodpověděl do \(String(format: "%.0f", timeout)) s — ukončen")
+            }
         }
-        return String(decoding: data, as: UTF8.self)
+        p.process.waitUntilExit()
+        output.done.wait()
+        guard p.process.terminationStatus == 0 else {
+            throw ToolError(tool: name, status: p.process.terminationStatus, message: p.drainStderr())
+        }
+        return String(decoding: output.data, as: UTF8.self)
     }
 
     /// For tools that log to stdout and report failures there (art-cmd): stdout and stderr together, and the exit

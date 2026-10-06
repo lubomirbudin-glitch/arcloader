@@ -31,11 +31,38 @@ enum RawBackends {
 
 // MARK: - Blackmagic RAW (braw-decode helper → raw RGB48 frames on a pipe)
 
+/// A RAW decoder's error turned into a note for the clip (Windows `RawDecoderException`). `description` is the note;
+/// the decoder's own error, with its stderr (e.g. the library it loaded), stays in `decoderError` for the job's log.
+struct RawDecoderError: Error, CustomStringConvertible {
+    let note: String
+    let decoderError: ToolError
+
+    var description: String { note }
+}
+
 struct BRAWBackend: RawBackend {
     let format = ClipFormat.braw
-    let missingHint = "Blackmagic RAW: chybí braw-decode nebo Blackmagic RAW Player/SDK"
+    let missingHint = "Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)"
 
-    func isAvailable(_ tools: ExternalTools) -> Bool { tools.brawDecoder != nil }
+    /// How long `braw-decode --info` may take: opening a clip is quick; a hung SDK must never hang the job (the clip
+    /// then gets a note instead).
+    static let defaultInfoTimeout: TimeInterval = 60
+
+    /// Decoder folder → library path. Injectable so tests do not depend on what is installed on the Mac.
+    var findLibrary: (String) -> String? = { BrawLibrary.find(decoderDir: $0) }
+    /// Tests shorten it.
+    var infoTimeout: TimeInterval = BRAWBackend.defaultInfoTimeout
+
+    /// braw-decode alone is not enough: without BlackmagicRawAPI.framework it can only fail (exit 3).
+    func isAvailable(_ tools: ExternalTools) -> Bool {
+        guard let exe = tools.brawDecoder else { return false }
+        return findLibrary(BRAWBackend.decoderDir(exe)) != nil
+    }
+
+    /// The folder braw-decode looks in first ("@exe": its real path, symlinks resolved).
+    static func decoderDir(_ exe: String) -> String {
+        URL(fileURLWithPath: exe).resolvingSymlinksInPath().deletingLastPathComponent().path
+    }
 
     /// One line of `braw-decode --info`. gamma / gamut / colorScienceGen only when the SDK reports them (braw-decode
     /// since task 27, and Windows); an older decoder leaves them out.
@@ -66,7 +93,34 @@ struct BRAWBackend: RawBackend {
     }
 
     private func info(_ path: String, scale: String, tools: ExternalTools) throws -> Info {
-        try BRAWBackend.parseInfo(try ToolProcess.run(tools.brawDecoder!, ["--info", "--scale", scale, path]))
+        let out: String
+        do {
+            out = try ToolProcess.run(tools.brawDecoder!, ["--info", "--scale", scale, path], timeout: infoTimeout)
+        } catch let e as ToolError {
+            throw explain(e, tools: tools)
+        }
+        return try BRAWBackend.parseInfo(out)
+    }
+
+    /// braw-decode's exit codes 3 (library unusable), 4 (clip cannot be opened) and 5 (a frame failed) as a note for
+    /// the clip; the original error, with braw-decode's stderr, stays inside it for the log. Anything else (a timeout,
+    /// a usage error) is returned as it is. Texts as Windows `BrawBackend.Explain`.
+    func explain(_ e: ToolError, tools: ExternalTools) -> Error {
+        let lib = tools.brawDecoder.flatMap { findLibrary(BRAWBackend.decoderDir($0)) } ?? BrawLibrary.frameworkName
+        let note: String
+        switch e.status {
+        case 3: note = "Blackmagic RAW: knihovnu \(lib) nelze použít — nainstalujte aktuální Blackmagic RAW Player"
+        case 4: note = "Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna \(lib) starší než kamera (nainstalujte aktuální Blackmagic RAW Player)"
+        case 5: note = "Blackmagic RAW: snímek klipu se nepodařilo dekódovat (\(BRAWBackend.lastLine(e.message)))"
+        default: return e
+        }
+        return RawDecoderError(note: note, decoderError: e)
+    }
+
+    /// braw-decode's last stderr line without its "braw-decode: " prefix.
+    static func lastLine(_ stderr: String) -> String {
+        let line = stderr.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty } ?? ""
+        return line.hasPrefix("braw-decode: ") ? String(line.dropFirst("braw-decode: ".count)) : line
     }
 
     func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo {
@@ -101,7 +155,8 @@ struct BRAWBackend: RawBackend {
         // braw-decode hands over full-range RGB (RGBU16) in the clip's own gamma: a built-in LUT needs the pre-map first.
         return FrameSource(inputArgs: ["-f", "rawvideo", "-pix_fmt", "rgb48le", "-s", "\(dims.width)x\(dims.height)",
                                        "-r", c.frameRate ?? "25", "-i", "-"],
-                           feeder: feeder, audioFromInput: false, fullRange: true)
+                           feeder: feeder, audioFromInput: false, fullRange: true,
+                           explainFeederError: { self.explain($0, tools: tools) })
     }
 }
 
