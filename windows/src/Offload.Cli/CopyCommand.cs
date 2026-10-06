@@ -104,6 +104,7 @@ static class CopyCommand
             // --name auto: the reel from the clip names, otherwise the volume label (as without --name).
             config.CardName = insight?.Name?.Name;
             if (insight?.NameNote is string note) Console.WriteLine(note);
+            Console.WriteLine(config.CardName is { } chosen ? Msg.CardNameAuto(chosen) : Msg.CardNameAutoNone);
         }
         var job = new OffloadJob(config);
         OffloadPlan plan;

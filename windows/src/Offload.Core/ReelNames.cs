@@ -58,14 +58,17 @@ public static partial class ReelSuggestion
 
     /// "Next in line": history entries of the same date folder (and, from plan 8, project) named like "A001"; exactly
     /// one camera letter → the next number ("A001" → "A002"). Several letters → null (which camera is this card?).
-    public static NameSuggestion? Next(IEnumerable<HistoryEntry> history, string date, string? project, string today)
+    public static NameSuggestion? Next(IEnumerable<HistoryEntry> history, string date, string? project, string today, IEnumerable<string>? taken = null)
     {
+        // TODO(plan 8): `project` is always null until projects exist; callers pass it through then.
         var names = history.Where(e => e.Date == date && e.Project == project && ReelFolder().IsMatch(e.CardName))
             .Select(e => e.CardName).ToList();
         if (names.Count == 0 || names.Select(n => n[0]).Distinct().Count() != 1) return null;
-        int max = names.Max(n => int.Parse(n[1..], NumberStyles.None, CultureInfo.InvariantCulture));
-        if (max >= 999) return null;
         var letter = names[0][0];
+        // Names typed or already suggested for other cards of this start count as taken: the number goes past them.
+        var all = names.Concat((taken ?? []).Select(t => t.ToUpperInvariant()).Where(t => ReelFolder().IsMatch(t) && t[0] == letter));
+        int max = all.Max(n => int.Parse(n[1..], NumberStyles.None, CultureInfo.InvariantCulture));
+        if (max >= 999) return null;
         var when = date == today ? "dnes" : date;
         return new NameSuggestion($"{letter}{max + 1:000}", $"další v řadě po {letter}{max:000} ({when})");
     }

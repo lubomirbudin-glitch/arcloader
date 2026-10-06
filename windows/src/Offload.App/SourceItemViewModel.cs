@@ -15,7 +15,7 @@ public sealed class SourceItemViewModel(MainViewModel owner, string path, string
     /// The name a start uses when none is typed: the clips' reel, the next in line, or the volume label / folder name.
     public string CardNamePlaceholder => owner.Placeholder(path).Name;
     /// "podle názvů klipů (A001C001…)", "další v řadě po A001 (dnes)", "Na kartě je víc cívek: …" — or null.
-    public string? NameHint => owner.Placeholder(path).Hint;
+    public string? NameHint => owner.CardName(path).Trim().Length > 0 ? null : owner.Placeholder(path).Hint;
 
     /// "Zálohováno … — ověřeno" (spec 2.1), or null for a card history does not know.
     public string? HistoryText => owner.HistoryLine(path).Text;

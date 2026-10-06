@@ -250,8 +250,14 @@ public sealed partial class MainViewModel
         cardNames.GetValueOrDefault(path) is { } typed && typed.Trim().Length > 0 ? typed.Trim() : Placeholder(path).Name;
 
     /// Spec 2.3: the suggestion from the clips or the next in line, else the volume label / folder name. Memory only.
-    internal (string Name, string? Hint) Placeholder(string path) =>
-        CardNaming.Placeholder(Settings.Naming.SuggestFromClips, Insight(path), history, DateString, Layout.Today(), DefaultCardName(path));
+    /// Cards are numbered in list order together with the other ticked cards, so the rows and Start agree.
+    internal (string Name, string? Hint) Placeholder(string path)
+    {
+        var paths = SelectedSources();
+        if (!paths.Contains(path, StringComparer.OrdinalIgnoreCase)) paths.Add(path);
+        var cards = paths.Select(p => new CardNameInput(p, cardNames.GetValueOrDefault(p), Insight(p), DefaultCardName(p))).ToList();
+        return CardNaming.Resolve(Settings.Naming.SuggestFromClips, cards, history, DateString, Layout.Today())[path];
+    }
 
     void NamingChanged()
     {
@@ -262,6 +268,7 @@ public sealed partial class MainViewModel
     {
         if (on) selected.Add(path);
         else selected.Remove(path);
+        NamingChanged();   // the numbering of "next in line" follows the ticked cards
         SetupChanged?.Invoke();
     }
 
@@ -283,7 +290,11 @@ public sealed partial class MainViewModel
         }
     }
 
-    internal void SetCardName(string path, string name) => cardNames[path] = name;
+    internal void SetCardName(string path, string name)
+    {
+        cardNames[path] = name;
+        NamingChanged();   // a typed name is taken for the other cards' suggestions
+    }
 
     // ── Cíle ───────────────────────────────────────────────────────────────
 

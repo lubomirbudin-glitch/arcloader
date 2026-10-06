@@ -67,6 +67,8 @@ public static class Msg
     public const string CardVolumeUnreadable = "Karta se nedá přečíst.";
     public const string CardInspectFailed = "Kartu se nepodařilo prověřit.";
     public const string CardSwapped = "Karta se během čtení vyměnila.";
+    public const string CardNameAutoNone = "Návrh názvu nenalezen, použije se jmenovka svazku.";
+    public static string CardNameAuto(string name) => $"Název karty: {name} (podle klipů)";
     public static string CardUnreadable(string detail) => $"Kartu nejde přečíst: {detail}";
 
     // CLI

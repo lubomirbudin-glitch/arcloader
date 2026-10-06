@@ -135,6 +135,53 @@ public class ReelNamesTests
         Assert.Equal(("EOS_DIGITAL", "Na kartě je víc cívek: A001, A002"), CardNaming.Placeholder(true, twoReels, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL"));
     }
 
+    static CardNameInput In(string key, string? typed = null, CardInsight? insight = null) =>
+        new(key, typed, insight ?? new CardInsight { Source = key }, "LABEL_" + key);
+
+    [Fact]
+    public void Resolve_TwoUnknownCards_NumberedInListOrder()
+    {
+        HistoryEntry[] h = [Copied("A001", "2026-10-06")];
+        var r = CardNaming.Resolve(true, [In("E"), In("F")], h, "2026-10-06", "2026-10-06");
+        Assert.Equal("A002", r["E"].Name);
+        Assert.Equal("A003", r["F"].Name);
+    }
+
+    [Fact]
+    public void Resolve_SkipsTypedName_AndTypedWins()
+    {
+        HistoryEntry[] h = [Copied("A001", "2026-10-06")];
+        var r = CardNaming.Resolve(true, [In("E"), In("F", typed: " A002 "), In("G")], h, "2026-10-06", "2026-10-06");
+        Assert.Equal(("A002", (string?)null), r["F"]);   // typed: exactly that, no hint
+        Assert.Equal("A003", r["E"].Name);
+        Assert.Equal("A004", r["G"].Name);
+    }
+
+    [Fact]
+    public void Resolve_SkipsClipSuggestedName()
+    {
+        HistoryEntry[] h = [Copied("A001", "2026-10-06")];
+        var clip = new CardInsight { Source = "F", Name = new NameSuggestion("A002", "x") };
+        var r = CardNaming.Resolve(true, [In("E"), In("F", insight: clip)], h, "2026-10-06", "2026-10-06");
+        Assert.Equal("A003", r["E"].Name);
+        Assert.Equal("A002", r["F"].Name);
+    }
+
+    [Fact]
+    public void Resolve_SettingOff_TypedStillWins_OthersFallback()
+    {
+        var r = CardNaming.Resolve(false, [In("E", typed: "X"), In("F")], [Copied("A001", "2026-10-06")], "2026-10-06", "2026-10-06");
+        Assert.Equal("X", r["E"].Name);
+        Assert.Equal("LABEL_F", r["F"].Name);
+    }
+
+    [Fact]
+    public void FailedInspection_NoNext()
+    {
+        var failed = new CardInsight { Source = "E", Error = "x" };
+        Assert.Equal(("EOS", (string?)null), CardNaming.Placeholder(true, failed, [Copied("A001", "2026-10-06")], "2026-10-06", "2026-10-06", "EOS"));
+    }
+
     [Fact]
     public void Setting_DefaultOn_RoundTrip()
     {
