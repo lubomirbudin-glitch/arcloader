@@ -15,7 +15,8 @@ public sealed partial class MainViewModel
     readonly DispatcherTimer ticker = new() { Interval = TimeSpan.FromMilliseconds(330) };
     bool closing, closeRaised, waitNoticeShown, shownHasFinished, shownCopyRunning, starting;
 
-    public ObservableCollection<JobItemViewModel> Jobs { get; } = [];
+    /// Offloads and verifications, newest on top.
+    public ObservableCollection<QueueItem> Jobs { get; } = [];
     public RelayCommand StartCommand { get; private set; } = null!;
     public RelayCommand ClearFinishedCommand { get; private set; } = null!;
 
@@ -169,11 +170,11 @@ public sealed partial class MainViewModel
     /// The copied card is in its drive per the last scan (not pulled out, not replaced by another card).
     internal bool CardInDrive(JobItemViewModel item) => QueueRules.CardInDrive(item.Job.Config.Source, item.Runner.SourceIdentity, volumes);
 
-    JobItemViewModel? Find(IQueuedJob job) => Jobs.FirstOrDefault(j => ReferenceEquals(j.Runner, job));
+    QueueItem? Find(IQueuedJob job) => Jobs.FirstOrDefault(j => ReferenceEquals(j.Queued, job));
 
     void OnCopyFinished(IQueuedJob job)
     {
-        if (Find(job) is not { } item) return;
+        if (Find(job) is not JobItemViewModel item) return;   // a verification has no stage 2: OnJobFinished follows
         item.Refresh();
         if (!closing && item.SafeToEject) SystemSounds.Asterisk.Play();
         if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Zálohováno"
@@ -196,7 +197,7 @@ public sealed partial class MainViewModel
     }
 
     /// Still needs the app: a job that has not finished, or an eject in flight.
-    static bool Busy(JobItemViewModel j) => !j.IsFinished || j.Ejecting;
+    static bool Busy(QueueItem j) => j.Busy;
 
     /// Closing waits for the cancelled jobs and ejects; once all are done the window is told to close — once.
     void CheckCloseReady()
@@ -232,7 +233,7 @@ public sealed partial class MainViewModel
             if (Jobs.Any(j => !j.IsFinished) && !confirm()) return false;
             closing = true;
             inspections.CancelAll();
-            foreach (var j in Jobs) j.Job.Cancel();
+            foreach (var j in Jobs) j.Cancel();
             foreach (var j in Jobs) j.Refresh();
             Raise(nameof(CanStart));
             // A queued job reports Zrušeno at once; if nothing is left running, close right away.
@@ -255,7 +256,7 @@ public sealed partial class MainViewModel
         if (item.Ejecting || item.Ejected) return;   // a double click must not start a second eject
         var source = item.Job.Config.Source;
         var copied = item.Runner.SourceIdentity;
-        bool inUse = QueueRules.CardInUse(source, Jobs.Where(j => !ReferenceEquals(j, item)).Select(j => (j.Job.Config.Source, j.Phase)));
+        bool inUse = QueueRules.CardInUse(source, Jobs.OfType<JobItemViewModel>().Where(j => !ReferenceEquals(j, item)).Select(j => (j.Job.Config.Source, j.Phase)));
         try
         {
             item.Ejecting = true;

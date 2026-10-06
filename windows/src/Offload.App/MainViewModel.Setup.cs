@@ -177,7 +177,7 @@ public sealed partial class MainViewModel
             RebuildDestinations();
         }
         InspectMissing();   // new or swapped cards
-        foreach (var j in Jobs) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
+        foreach (var j in Jobs.OfType<JobItemViewModel>()) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
         RefreshLut();   // the LUT may sit on a disk that just came or went
         RefreshProxyFolder();   // and so may the proxy folder
     }

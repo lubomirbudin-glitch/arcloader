@@ -8,7 +8,7 @@ namespace Offload.App;
 public sealed record DestinationLine(string Name, string Sub, string FullPath);
 
 /// One card in the queue: mirrors the job's status every tick (Mac `JobItem` + `JobCard`).
-public sealed class JobItemViewModel : ObservableObject
+public sealed class JobItemViewModel : QueueItem
 {
     readonly MainViewModel owner;
     readonly string sourceName;
@@ -41,8 +41,11 @@ public sealed class JobItemViewModel : ObservableObject
     public RelayCommand EjectCommand { get; }
     public RelayCommand OpenReportCommand { get; }
     public RelayCommand RevealCommand { get; }
+    public override IQueuedJob Queued => Runner;
+    public override void Cancel() => Job.Cancel();
+    public override bool Busy => !IsFinished || Ejecting;
 
-    public void Refresh()
+    public override void Refresh()
     {
         progress.Update(Job.Status(), DateTime.UtcNow);
         if (!chainRequested && Job.Plan is { } plan && progress.Status.Phase == JobPhase.Copying)
@@ -77,13 +80,13 @@ public sealed class JobItemViewModel : ObservableObject
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    public JobPhase Phase => progress.Status.Phase;
+    public override JobPhase Phase => progress.Status.Phase;
     public bool IsRunning => progress.IsRunning;
-    public bool IsFinished => Phase.IsFinished();
+    public override bool IsFinished => Phase.IsFinished();
     public bool SafeToEject => progress.Status.SafeToEject;
     public bool? CopySucceeded => progress.Status.CopySucceeded;
     /// Failed or copied with errors; a cancelled job is not an error.
-    public bool IsError => progress.IsError;
+    public override bool IsError => progress.IsError;
     public CardTone Tone => progress.Tone;
     public string StatusText => progress.StatusText;
     public double Progress => progress.PhaseProgress;

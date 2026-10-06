@@ -10,7 +10,7 @@ public class RealAscmhlTests
     static string Bs(string s) => s.Replace('/', '\\');
 
     /// One generation file in the shape ascmhl writes (paths with backslashes).
-    static string Gen(string card, int seq, params (string Path, string Xml)[] files)
+    internal static string Gen(string card, int seq, params (string Path, string Xml)[] files)
     {
         var x = new StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<hashlist version=\"2.0\" xmlns=\"urn:ASC:MHL:v2.0\">\n");
         x.Append("  <creatorinfo>\n    <creationdate>2026-10-06T21:52:47+02:00</creationdate>\n    <hostname>PC</hostname>\n    <tool version=\"1.0.1\">ascmhl</tool>\n  </creatorinfo>\n");
@@ -26,10 +26,10 @@ public class RealAscmhlTests
         return name;
     }
 
-    static string H(string algo, string action, string value, string extra = "") =>
+    internal static string H(string algo, string action, string value, string extra = "") =>
         $"      <{algo} action=\"{action}\" hashdate=\"2026-10-06T21:52:47.026650+02:00\">{value}</{algo}>\n{extra}";
 
-    static string X(string card, string rel) => HashAlgo.Of("xxh64", File.ReadAllBytes(Layout.Join(card, rel)));
+    internal static string X(string card, string rel) => HashAlgo.Of("xxh64", File.ReadAllBytes(Layout.Join(card, rel)));
 
     static long SizeOf(string card, string rel) => File.Exists(Layout.Join(card, rel)) ? new FileInfo(Layout.Join(card, rel)).Length : 0;
 
