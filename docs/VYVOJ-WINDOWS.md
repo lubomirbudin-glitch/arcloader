@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-06 — plán 6: karty a bezpečnost dat
 
+- Úkol 4 — `history.json` v %APPDATA%\Offload (formát návrhu §5.2) pod pojmenovaným mutexem `Local\Offload-history` (GUI i CLI), `Update` = čtení, změna a zápis pod jedním zámkem, poškozený soubor (i ruční `null`) odložen jako `history.json.corrupt-…`, novější verze jen ke čtení, nejvýš 5 000 záznamů
 - Úkol 3 — otisk karty (SHA-256 `fingerprint` s časy a `shape` bez nich), seznam souborů jako gz, porovnání časů s tolerancí celých hodin na FAT/FAT32 (posun letního času)
 - Úkol 2 — nastavení zachová klíče, které tahle verze nezná (horní úroveň i `proxy`), takže návrat na starší verzi od 0.2.0 nesmaže projekty ani pravidla
 - Úkol 2, oprava — sekce `proxy`/`tools`, kterou tahle verze nepřečte (např. kodek z novější verze), se uloží zpátky beze změny místo vynulování; `tools` také drží neznámé klíče

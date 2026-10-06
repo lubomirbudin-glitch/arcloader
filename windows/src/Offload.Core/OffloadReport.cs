@@ -198,7 +198,7 @@ public sealed partial class OffloadReport
         _ => node?.DeepClone(),
     };
 
-    sealed class IsoSecondsDateConverter : JsonConverter<DateTime>
+    internal sealed class IsoSecondsDateConverter : JsonConverter<DateTime>
     {
         public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
             DateTime.Parse(reader.GetString()!, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
