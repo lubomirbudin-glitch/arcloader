@@ -105,6 +105,9 @@ static class CopyCommand
             Console.WriteLine(PlanLine(plan));
             foreach (var p in plan.CardPaths) Console.WriteLine($"  → {p}");
             if (plan.UnverifiedEarlier > 0) Console.WriteLine("Varování: " + Msg.UnverifiedEarlier(plan.UnverifiedEarlier));
+            foreach (var warning in plan.SpaceWarnings) Console.WriteLine("Varování: " + warning);   // R11: never blocks
+            if (dryRun)
+                foreach (var line in plan.Space) Console.WriteLine(Msg.SpaceLine(line.Label, line.Need, line.Free));
             if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string extra)
                 Console.WriteLine($"  proxy also → {Layout.CardPath(extra, plan.Date, plan.CardName)}");
             if (config.AnalyzeClips || config.Proxy.Enabled)

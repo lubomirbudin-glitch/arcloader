@@ -75,8 +75,8 @@ public class PreflightMessagesTests
     [Fact]
     public void TextsWithoutAnEasyScenario()
     {
-        Assert.Equal(@"Na cíli D:\Zaloha není dost místa: potřeba 412 GB, volno 398 GB.",
-            Msg.NoSpace(@"D:\Zaloha", 412_000_000_000, 398_000_000_000));
+        Assert.Equal(@"Na cíli D:\Zaloha není dost místa: potřeba 412 GB (karty 380 GB, proxy ~30 GB, report 2 GB), volno 398 GB.",
+            Msg.NoSpace(@"D:\Zaloha", new Space.SpaceNeed(380_000_000_000, 30_000_000_000, 2_000_000_000), 398_000_000_000));
         Assert.Equal(@"Na cíl nejde zapisovat: D:\Zaloha", Msg.DestinationNotWritable(@"D:\Zaloha"));
         Assert.Equal(@"Cíl nejde přečíst: D:\Zaloha", Msg.DestinationUnreadable(@"D:\Zaloha"));
         Assert.Equal(@"Zdroj nejde přečíst: E:\", Msg.SourceUnreadable(@"E:\"));

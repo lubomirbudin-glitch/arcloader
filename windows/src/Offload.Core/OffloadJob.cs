@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Offload.Core.Append;
 using Offload.Core.Desktop;
 using Offload.Core.History;
+using Offload.Core.Space;
 
 namespace Offload.Core;
 
@@ -123,10 +124,13 @@ public sealed class OffloadJob
         if (Config.AppendInto is { Count: > 0 } into)
         {
             var a = appendPlan = Engine.PlanAppend(Config.Source, into);
-            return Plan = Engine.PrepareAppend(a);
+            return Plan = Engine.PrepareAppend(a, EstimateExtra);
         }
-        return Plan = Engine.Prepare(Config.Source, Config.DestRoots, Config.CardName, Config.Date);
+        return Plan = Engine.Prepare(Config.Source, Config.DestRoots, Config.CardName, Config.Date, EstimateExtra);
     }
+
+    /// Spec 2.5: proxies and report on top of the card, from the clip names (the clips are not read before the copy).
+    SpaceExtra EstimateExtra(SourceScan scan) => SpaceEstimator.Extra(ClipDetector.Detect(scan.Files), Config.Proxy, Config.Tools.Resolved());
 
     public void Cancel() => Engine.Cancel();
 
@@ -458,6 +462,19 @@ public sealed class OffloadJob
         RewriteReports(report, plan, log);
 
         if (!Config.Proxy.Enabled || IsCancelled) return report;
+        if (ProxySpaceProblem(entries, plan, renderer) is string noRoom)
+        {
+            // Spec 2.5: the copy stays verified; the proxies are left out and the job card says why (orange).
+            foreach (var e in entries.Where(e => e.ProxyStatus == ProxyStatus.None))
+            {
+                e.ProxyStatus = ProxyStatus.Skipped;
+                e.ProxyNote = noRoom;
+            }
+            Update(s => s.WithWarning(noRoom));
+            log?.Invoke(noRoom);
+            RewriteReports(report, plan, log);
+            return report;
+        }
         Update(s => s with { Phase = JobPhase.Proxies, ClipCount = entries.Count });
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (plan.Mode == PlanMode.Append) usedNames.UnionWith(ExistingProxyNames(cardPaths));
@@ -544,6 +561,24 @@ public sealed class OffloadJob
         if (entries.Any(e => e.ProxyStatus == ProxyStatus.Done)) report.ProxyEncoder = renderer.EncoderName;
         RewriteReports(report, plan, log);
         return report;
+    }
+
+    /// Spec 2.5: before the proxies, their need again from the analysed clips (real duration, height, audio) against the
+    /// free space now. The message when they do not fit, or null. Same place list and check as the engine's (one calculation).
+    string? ProxySpaceProblem(List<ClipEntry> entries, OffloadPlan plan, ProxyRenderer renderer)
+    {
+        var infos = new Dictionary<Clip, ClipInfo>(ReferenceEqualityComparer.Instance);
+        foreach (var e in entries)
+            if (e.Info != null) infos[e.Clip] = e.Info;
+        long proxy = SpaceEstimator.ProxyBytes(entries.Select(e => e.Clip), Config.Proxy,
+            c => infos.ContainsKey(c) && renderer.UnsupportedReason(c) == null, c => infos.GetValueOrDefault(c));
+        if (proxy == 0) return null;
+        var extra = new SpaceExtra(proxy, 0, Config.Proxy.CopyToAllDestinations, Config.Proxy.ExtraFolder);
+        var places = SpacePlanner.Places(plan.DestRoots, extra, 0, HistoryText.DiskName);
+        var (problems, _) = SpacePlanner.CheckPlaces(places, Engine.FreeBytes);
+        return problems.FirstOrDefault(p => p.Severity == SpaceSeverity.Blocking) is { } b
+            ? Msg.ProxiesSkippedForSpace(b.Label, b.Need.Proxy, b.Free)
+            : null;
     }
 
     static List<Thumbnail> TryThumbnails(ProxyRenderer renderer, Clip clip, string cardPath, ClipInfo info, LutUse? lut,

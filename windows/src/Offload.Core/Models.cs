@@ -19,6 +19,8 @@ public sealed class OffloadOptions
     internal Action<int>? BeforeFileCopy { get; set; }
     /// Tests only: called on the copy thread after every file is copied and flushed, just before verification.
     internal Action? BeforeVerify { get; set; }
+    /// Tests only: the free bytes of the volume of a path, instead of NativeIO.AvailableBytes.
+    internal Func<string, long?>? FreeSpace { get; set; }
     /// Tests only: H.264/HEVC proxies with this encoder (e.g. libx264) instead of the probed one — parallel
     /// NVENC sessions from concurrently running tests can collide.
     internal string? ProxyEncoder { get; set; }
@@ -57,6 +59,10 @@ public sealed class OffloadPlan
     public SourceScan? FullScan { get; init; }
     /// Append: files of the earlier backup that were never read back.
     public int UnverifiedEarlier { get; init; }
+    /// Spec 2.5: what each destination volume needs and has free (the CLI's --dry-run lists it).
+    public IReadOnlyList<Space.SpaceLine> Space { get; init; } = [];
+    /// "Na cíli … zbude po offloadu jen … — rezerva pod 5 %…" — never blocks (R11).
+    public IReadOnlyList<string> SpaceWarnings { get; init; } = [];
 }
 
 public enum CopyPhase { Copy, Flush, Verify, Report, Done }

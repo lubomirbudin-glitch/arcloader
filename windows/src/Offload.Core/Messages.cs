@@ -71,8 +71,25 @@ public static class Msg
     public const string ReservedName = "rezervovaný název zařízení ve Windows";
     public static string Fat32(string filesystem, string path, long size) =>
         $"{filesystem} neumí uložit soubory od 4 GB ({path}, {Format.BytesCs(size)})";
-    public static string NoSpace(string root, long need, long free) =>
-        $"Na cíli {root} není dost místa: potřeba {Format.BytesCs(need)}, volno {Format.BytesCs(free)}.";
+    /// "Na cíli Zaloha (D:) není dost místa: potřeba 412 GB (karty 380 GB, proxy ~30 GB, report 2 GB), volno 398 GB."
+    public static string NoSpace(string where, Space.SpaceNeed need, long free) =>
+        $"Na cíli {where} není dost místa: potřeba {Format.BytesCs(need.Total)} ({Parts(need, "karty")}), volno {Format.BytesCs(free)}.";
+    /// CLI --dry-run: "Místo: D:\Zaloha potřeba 412 GB (karta 380 GB, proxy ~30 GB, report 2 GB), volno 398 GB"
+    public static string SpaceLine(string where, Space.SpaceNeed need, long free) =>
+        $"Místo: {where} potřeba {Format.BytesCs(need.Total)} ({Parts(need, "karta")}), volno {Format.BytesCs(free)}";
+
+    static string Parts(Space.SpaceNeed need, string cards)
+    {
+        var parts = new List<string>();
+        if (need.Card > 0) parts.Add($"{cards} {Format.BytesCs(need.Card)}");
+        if (need.Proxy > 0) parts.Add($"proxy ~{Format.BytesCs(need.Proxy)}");
+        if (need.Report > 0) parts.Add($"report {Format.BytesCs(need.Report)}");
+        return string.Join(", ", parts);
+    }
+    public static string LowSpace(string where, long left) =>
+        $"Na cíli {where} zbude po offloadu jen {Format.BytesCs(left)} — rezerva pod 5 %, odhad proxy je přibližný.";
+    public static string ProxiesSkippedForSpace(string where, long need, long free) =>
+        $"Proxy se nevyrenderovaly: na {where} chybí místo (potřeba ~{Format.BytesCs(need)}, volno {Format.BytesCs(free)}).";
     public static string ReportNotWritten(string details) => $"Report se nepodařilo zapsat: {details}";
     public static string NoHashRecord(string dir) => $"Ve složce {dir} není ASC MHL ani seznam součtů — není s čím porovnat.";
     public static string NoFilesToRead(string path) => $"V {path} nejsou soubory ke čtení.";

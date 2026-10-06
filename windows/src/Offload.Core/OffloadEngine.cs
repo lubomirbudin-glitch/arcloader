@@ -1,4 +1,5 @@
 using Offload.Core.Append;
+using Offload.Core.Space;
 
 namespace Offload.Core;
 
@@ -24,8 +25,10 @@ public sealed partial class OffloadEngine
 
     public bool IsCancelled => cts.IsCancellationRequested;
 
-    /// Scans the card and checks the destinations before a single byte is written.
-    public OffloadPlan Prepare(string source, IReadOnlyList<string> destRoots, string? cardName, string? date)
+    /// Scans the card and checks the destinations before a single byte is written. `extra`: what proxies and the report
+    /// will need besides the card (spec 2.5), worked out from the scan; null = the card alone.
+    public OffloadPlan Prepare(string source, IReadOnlyList<string> destRoots, string? cardName, string? date,
+        Func<SourceScan, SpaceExtra>? extra = null)
     {
         CheckOptions();
         if (date != null && !DateFormat.IsMatch(date)) throw OffloadError.Preflight(PreflightCode.Date, Msg.Date(date));
@@ -34,17 +37,18 @@ public sealed partial class OffloadEngine
         CheckNotAnOffload(source);
         CheckDestinations(source, roots);
         var scan = ScanSource(source);
-        CheckFilesFit(roots, scan.Files, scan.TotalBytes);
+        var (space, warnings) = CheckFilesFit(roots, scan, extra?.Invoke(scan));
 
         var day = date ?? Layout.Today();
         var name = Layout.UniqueCardFolder(roots, day, cardName != null ? Layout.Sanitize(cardName) : Layout.DefaultCardName(source));
-        return new OffloadPlan { Source = source, Scan = scan, Date = day, CardName = name, DestRoots = roots };
+        return new OffloadPlan { Source = source, Scan = scan, Date = day, CardName = name, DestRoots = roots, Space = space, SpaceWarnings = warnings };
     }
 
     /// An append (spec 2.2): the same checks as Prepare (options, source, destinations, Windows names, FAT32, space),
     /// but over the new files only, into the card folders of the earlier backup. `NothingNew` when there are none.
-    public OffloadPlan PrepareAppend(string source, IReadOnlyList<string> cardPaths, CancellationToken ct = default) =>
-        PrepareAppend(PlanAppend(source, cardPaths, ct));
+    public OffloadPlan PrepareAppend(string source, IReadOnlyList<string> cardPaths, CancellationToken ct = default,
+        Func<SourceScan, SpaceExtra>? extra = null) =>
+        PrepareAppend(PlanAppend(source, cardPaths, ct), extra);
 
     /// The first half of PrepareAppend: the checks of the source and the destinations, and what AppendPlanner finds —
     /// also when there is nothing new (a job then refreshes its history entry). Cancel() stops the card scan too.
@@ -61,17 +65,18 @@ public sealed partial class OffloadEngine
     }
 
     /// The second half of PrepareAppend: the new files must fit (names, FAT32, space) — then the plan of generation N.
-    public OffloadPlan PrepareAppend(AppendPlan a)
+    public OffloadPlan PrepareAppend(AppendPlan a, Func<SourceScan, SpaceExtra>? extra = null)
     {
         if (a.NewFiles.Count == 0) throw OffloadError.Preflight(PreflightCode.NothingNew, Msg.NothingNew);
         var scan = new SourceScan { Root = a.FullScan.Root, Files = a.NewFiles, Dirs = a.NewDirs, Skipped = a.FullScan.Skipped };
         var problems = Scanner.WindowsProblems(scan);
         if (problems.Count > 0) throw OffloadError.Preflight(PreflightCode.BadNames, Msg.BadNames(problems));
-        CheckFilesFit(a.DestRoots, scan.Files, scan.TotalBytes);
+        var (space, warnings) = CheckFilesFit(a.DestRoots, scan, extra?.Invoke(scan));
         return new OffloadPlan
         {
             Source = a.Source, Scan = scan, Date = a.Date, CardName = a.CardName, DestRoots = a.DestRoots,
             Mode = PlanMode.Append, Generation = a.Generation, FullScan = a.FullScan, UnverifiedEarlier = a.UnverifiedEarlier,
+            Space = space, SpaceWarnings = warnings,
         };
     }
 
@@ -139,18 +144,23 @@ public sealed partial class OffloadEngine
         return scan;
     }
 
-    /// The FAT32 limit and free space on every destination for `files` (all of them, or only the new ones of an append).
-    void CheckFilesFit(IReadOnlyList<string> roots, IReadOnlyList<SourceFile> files, long totalBytes)
+    /// The FAT32 limit on every destination, and the space per volume (spec 2.5: two destinations on one volume add up,
+    /// the proxy folder counts on its own volume) for `scan` — the whole card, or only the new files of an append.
+    /// Returns the per-volume breakdown and the "rezerva pod 5 %" warnings; not enough space throws.
+    (IReadOnlyList<SpaceLine> Lines, IReadOnlyList<string> Warnings) CheckFilesFit(IReadOnlyList<string> roots, SourceScan scan, SpaceExtra? extra)
     {
-        long needed = totalBytes + files.Count * 64L * 1024 + (64L << 20);
         foreach (var root in roots)
-        {
-            if (Fat32Problem(NativeIO.FilesystemType(root), files) is string fat)
+            if (Fat32Problem(NativeIO.FilesystemType(root), scan.Files) is string fat)
                 throw OffloadError.Preflight(PreflightCode.Fat32, $"{root}: {fat}");
-            long free = NativeIO.AvailableBytes(root) ?? 0;
-            if (free < needed) throw OffloadError.Preflight(PreflightCode.NoSpace, Msg.NoSpace(root, needed, free));
-        }
+        var places = SpacePlanner.Places(roots, extra, SpaceEstimator.CardBytes(scan.TotalBytes, scan.Files.Count), root => root);
+        var (problems, lines) = SpacePlanner.CheckPlaces(places, FreeBytes);
+        if (problems.FirstOrDefault(p => p.Severity == SpaceSeverity.Blocking) is { } blocking)
+            throw OffloadError.Preflight(PreflightCode.NoSpace, blocking.Text);
+        return (lines, problems.Select(p => p.Text).ToList());
     }
+
+    /// Free bytes of the volume a path is on (tests: OffloadOptions.FreeSpace).
+    internal long? FreeBytes(string path) => Options.FreeSpace != null ? Options.FreeSpace(path) : NativeIO.AvailableBytes(path);
 
     /// FAT32 cannot hold files of 4 GiB or more — say so before the copy, not at 99 %.
     internal static string? Fat32Problem(string filesystem, IEnumerable<SourceFile> files)
