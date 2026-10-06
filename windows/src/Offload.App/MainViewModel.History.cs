@@ -71,6 +71,7 @@ public sealed partial class MainViewModel
             bool listed = Sources.Any(s => string.Equals(s.Path, path, StringComparison.OrdinalIgnoreCase));
             bool again = inspections.Finished(path, t.IsCompletedSuccessfully ? t.Result : null, IdentityOf(path), listed);
             if (closing) return;
+            PruneAppend();
             RowFor(path)?.InsightChanged();
             SetupChanged?.Invoke();
             if (again) Inspect(path);

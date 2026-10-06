@@ -12,7 +12,8 @@ public sealed partial class MainViewModel
     readonly HashSet<string> selected = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> cardNames = new(StringComparer.OrdinalIgnoreCase);
     // Cards whose "Doplnit jen nové klipy" is ticked (spec 2.2); it applies only while the card still has new files.
-    readonly HashSet<string> appendChosen = new(StringComparer.OrdinalIgnoreCase);
+    // A tick belongs to the history entry the user saw and is pruned as soon as its offer goes away (never returns by itself).
+    readonly AppendTicks appendTicks = new();
     readonly List<string> manualSources = [];
     // Volume labels of manual sources that are a drive root the scan does not list (an internal disk, a network
     // letter), read off the UI thread when the source is added.
@@ -161,7 +162,7 @@ public sealed partial class MainViewModel
         foreach (var p in drop)
         {
             cardNames.Remove(p);
-            appendChosen.Remove(p);
+            appendTicks.Drop(p);
             inspections.Drop(p);   // its history line belonged to the card that left
         }
         var sig = string.Join("\n", found.Where(v => !v.IsDestination).Select(v => $"{v.Path}|{v.Identity}|{v.Name}|{v.Total - v.Free}|{v.Format}|{v.LooksLikeCard}|{selected.Contains(v.Path)}"))
@@ -303,14 +304,20 @@ public sealed partial class MainViewModel
     internal string? AppendOffer(string path) =>
         Insight(path) is { } i && AppendRules.Offer(i) ? AppendRules.CheckboxText(i.History!) : null;
 
-    internal bool AppendChosen(string path) => appendChosen.Contains(path) && AppendRules.Offer(Insight(path));
+    internal bool AppendChosen(string path) => appendTicks.Chosen(path, Insight(path));
+
+    /// Ticked, or ticked until the offer went away: such a card is never started as a full copy (Start tells the user).
+    bool AppendWanted(string path) => appendTicks.Wants(path);
+
+    /// Removes the ticks whose offer is gone (the card changed, was swapped, the inspection failed). UI thread, memory only.
+    void PruneAppend() => appendTicks.Prune(Insight);
 
     internal string? AppendFolder(string path) => AppendChosen(path) ? AppendRules.FolderText(Insight(path)!.History!.Entry) : null;
 
     internal void SetAppend(string path, bool on)
     {
-        if (on) appendChosen.Add(path);
-        else appendChosen.Remove(path);
+        if (on) appendTicks.Tick(path, Insight(path));
+        else appendTicks.Untick(path);
         SetupChanged?.Invoke();
     }
 

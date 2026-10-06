@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Offload.Core\Offload.Core.csproj" />
+    <ProjectReference Include="..\..\src\Offload.Cli\Offload.Cli.csproj" />
     <!-- Also copies braw-decode.exe into the test output, so ExternalTools (which searches the exe folder) now finds a
          BRAW decoder in tests. A test of BRAW "unsupported" must use the no-search seam, not ExternalTools.Resolved(). -->
     <ProjectReference Include="..\..\src\Offload.BrawDecode\Offload.BrawDecode.csproj" />

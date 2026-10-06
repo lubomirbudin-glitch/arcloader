@@ -47,7 +47,7 @@ public sealed partial class MainViewModel
     public bool CanStart => !starting && ReadyToStart;
     /// The Cíle section is needed only by full copies: appends go to the destinations of their earlier backup (spec 2.2).
     bool ReadyToStart => !closing && selected.Count > 0
-        && (!AppendRules.NeedsDestinations(AppendRules.FullCopies(selected, AppendChosen)) || (Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)))
+        && (!AppendRules.NeedsDestinations(AppendRules.FullCopies(selected, AppendWanted)) || (Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)))
         && LutProblem == null && ProxyFolderProblem == null && StartProblem == null;
     /// The hint under the start bar: why Start is off when the setup itself does not say it (a speed measurement runs).
     public string? StartProblem => QueueRules.StartProblem(Measuring);
@@ -87,7 +87,8 @@ public sealed partial class MainViewModel
             }
             // Spec 2.1: cards history already knows are copied again in full only when the user says so.
             var skip = new List<string>();
-            var backedUp = BackedUpPrompt.CardsToAsk(SelectedSources(), Insight, AppendChosen);
+            PruneAppend();   // after the awaits above: the cards may have changed meanwhile
+            var backedUp = BackedUpPrompt.CardsToAsk(SelectedSources(), Insight, AppendWanted);
             if (backedUp.Count > 0 && AskBackedUp is { } ask)
             {
                 var model = BackedUpPrompt.Build(backedUp.Select(p => (Insight(p)!.History!, PlannedName(p))).ToList(), DateString);
@@ -117,6 +118,7 @@ public sealed partial class MainViewModel
     /// `skip`: backed-up cards the user chose not to copy again — they are unticked, not started.
     void StartJobs(IReadOnlyCollection<string> skip)
     {
+        var gone = new List<string>();
         foreach (var src in SelectedSources())
         {
             if (skip.Contains(src, StringComparer.OrdinalIgnoreCase))
@@ -125,7 +127,15 @@ public sealed partial class MainViewModel
                 continue;
             }
             bool isVolume = volumes.Any(v => string.Equals(v.Path, src, StringComparison.OrdinalIgnoreCase));
-            if (AppendChosen(src) && Insight(src)?.History is { } known)
+            // Decided now, on the newest insight (the prompt above may have taken a while): a ticked append that can no
+            // longer be offered is not turned into a full copy — the card stays unstarted and the user is told.
+            var (kind, goneName) = appendTicks.Classify(src, Insight(src));
+            if (kind == StartKind.AppendGone)
+            {
+                gone.Add(goneName ?? DefaultCardName(src));
+                continue;
+            }
+            if (kind == StartKind.Append && Insight(src)?.History is { } known)
             {
                 // Spec 2.2: only the new files, into the card folders of the earlier backup — not into the Cíle section.
                 // The engine plans again under the folder lock and refuses with a Czech message when anything is off.
@@ -141,7 +151,7 @@ public sealed partial class MainViewModel
                     canEject: isVolume && CardEject.CanEject(src));
                 Jobs.Insert(0, appendItem);
                 selected.Remove(src);
-                appendChosen.Remove(src);
+                appendTicks.Untick(src);
                 queue.Enqueue(appendItem.Runner);
                 continue;
             }
@@ -166,6 +176,7 @@ public sealed partial class MainViewModel
         }
         RebuildSources();   // the started cards are unticked
         RaiseMany(nameof(HasJobs), nameof(HasFinished));
+        if (gone.Count > 0) ShowMessage(AppendTicks.GoneMessage(gone));
     }
 
     void Tick()

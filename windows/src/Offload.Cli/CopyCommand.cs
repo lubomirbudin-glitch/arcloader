@@ -66,6 +66,9 @@ static class CopyCommand
         return cmd;
     }
 
+    /// Tests: how the job is made (the engine options of a test differ: card and destinations share one volume).
+    internal static Func<JobConfig, OffloadJob> JobFactory { get; set; } = c => new OffloadJob(c);
+
     /// Plans, prints the plan and runs the job (copy or append). Exit 0 = copied (and verified unless --no-verify) or,
     /// for an append, nothing new; 1 = anything else (a refusal of the engine prints as "Chyba: " + its Czech text).
     ///
@@ -76,7 +79,7 @@ static class CopyCommand
     {
         // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all.
         if (LutOption.PlanLine(config.Proxy, config.AnalyzeClips) is string lutLine) Console.WriteLine(lutLine);
-        var job = new OffloadJob(config);
+        var job = JobFactory(config);
         OffloadPlan? plan = null;
         try
         {
@@ -99,10 +102,7 @@ static class CopyCommand
         List<RoleLink>? chainLinks = null;
         if (plan != null)
         {
-            var what = plan.Mode == PlanMode.Append
-                ? $"Doplnění karty {plan.CardName} (generace {plan.Generation}), plán (může se ještě upřesnit)"
-                : $"Card {plan.CardName}";
-            Console.WriteLine($"{what}: {plan.Scan.Files.Count} files, {Format.Bytes(plan.Scan.TotalBytes)}");
+            Console.WriteLine(PlanLine(plan));
             foreach (var p in plan.CardPaths) Console.WriteLine($"  → {p}");
             if (plan.UnverifiedEarlier > 0) Console.WriteLine("Varování: " + Msg.UnverifiedEarlier(plan.UnverifiedEarlier));
             if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string extra)
@@ -161,6 +161,12 @@ static class CopyCommand
         // "Nic nového" ends Done without a report: that is success (exit 0).
         return status.Phase == JobPhase.Done && (report?.Success == true || (report == null && status.Note != null)) ? 0 : 1;
     }
+
+    /// "Card A001: 3 files, 1 GB" for a full copy; an append (Czech, with plural forms): "Doplnění karty A001
+    /// (generace 2), plán (může se ještě upřesnit): 2 soubory · 50 KB".
+    internal static string PlanLine(OffloadPlan plan) => plan.Mode == PlanMode.Append
+        ? $"Doplnění karty {plan.CardName} (generace {plan.Generation}), plán (může se ještě upřesnit): {Texts.Files(plan.Scan.Files.Count, plan.Scan.TotalBytes)}"
+        : $"Card {plan.CardName}: {plan.Scan.Files.Count} files, {Format.Bytes(plan.Scan.TotalBytes)}";
 
     /// The card against history (spec 2.1 CLI) and its clip names (2.3). Never fails the copy: any problem only means
     /// no history line and no suggested name.

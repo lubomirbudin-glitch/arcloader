@@ -87,6 +87,19 @@ public class AppendPlannerTests
         Assert.EndsWith("\nUdělejte celou kopii (vznikne A001_2).", e.Message);
     }
 
+    // A difference below the rounding must not read "100 KB, 100 KB".
+    [Fact]
+    public void SizeConflict_BelowTheRounding_ShowsExactBytes()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        var c1 = Path.Combine(card, "CLIP", "A001C001.mov");
+        File.AppendAllText(c1, "xx");
+        var e = Refused(card, paths);
+        Assert.Contains("(karta 100002 B · ", e.Message);
+        Assert.Contains(", " + AppendPlanner.Disk(paths[0]) + " 100000 B · ", e.Message);
+    }
+
     [Fact]
     public void MtimeConflict()
     {

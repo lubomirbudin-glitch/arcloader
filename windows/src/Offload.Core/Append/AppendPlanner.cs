@@ -198,6 +198,10 @@ public static class AppendPlanner
     }
 
     /// "CLIP/A001C003.mov (karta 1,2 GB · 6. 10. 9:14, D: 1,1 GB · 6. 10. 9:10)"
-    static string Conflict(SourceFile card, string disk, long size, DateTime modifiedUtc) =>
-        $"{card.RelPath}: jiná velikost nebo datum (karta {Format.BytesCs(card.Size)} · {When(card.ModifiedUtc)}, {disk} {Format.BytesCs(size)} · {When(modifiedUtc)})";
+    static string Conflict(SourceFile card, string disk, long size, DateTime modifiedUtc)
+    {
+        // A difference smaller than the rounding ("100 KB" on both sides) shows the exact bytes instead.
+        var (a, b) = Format.BytesCs(card.Size) == Format.BytesCs(size) && card.Size != size ? ($"{card.Size} B", $"{size} B") : (Format.BytesCs(card.Size), Format.BytesCs(size));
+        return $"{card.RelPath}: jiná velikost nebo datum (karta {a} · {When(card.ModifiedUtc)}, {disk} {b} · {When(modifiedUtc)})";
+    }
 }
