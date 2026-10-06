@@ -7,27 +7,61 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
-- **Dorovnání s Windows verzí — podklady pro Mac (2026-10-05, doplněno o BRAW po Windows plánu 3):** návrh
-  [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
-  plán po úkolech s testy [`mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](../mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md)
-  (31 úkolů, pořadí 1–25, 27–31, 26) a návod jak začít [`mac/docs/superpowers/plans/README-START.md`](../mac/docs/superpowers/plans/README-START.md).
-  Pokrývá všechno, co Macu podle [ROZDILY.md](ROZDILY.md) chybí: 3 snímky na klip, B1–B4 (report při zrušeném ověření, zdroj
-  s `_REPORT`/`_PROXY`/`ascmhl`, dvakrát zadaný cíl, kontrola voleb), české texty, vysunutí jen kopírované karty, GUI bez
-  blokování na discích, USB diagnostiku (IOKit), `offload ports`, okno Hardware, barvy proxy BT.709, hlídač ffmpeg, složku pro
-  proxy, vestavěné LUTy s výběrem podle kamery, ikonu a Blackmagic RAW jako Windows (gama → LUT, BRAW jen s knihovnou, limit
-  `--info`, české poznámky, náhledy pod hlídačem). Průběh zapisují úkoly plánu níže; úkol 26 tuto odrážku smaže.
-
-- **Mimo plán — zbývá i po něm:**
-  - Blackmagic RAW Film Gen 4: zatím bez LUTu (provizorně, jako Windows) — rozhodne uživatel; platí pro obě verze.
+- **Mimo plán — zbývá (stav po verzi 0.2.0):**
+  - Blackmagic RAW Film Gen 4: zatím bez LUTu (provizorně, jako Windows) — rozhodne uživatel (spec D.15); platí pro obě verze.
   - Nastavení nástrojů: řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny Blackmagic RAW (stav BRAW je vidět z poznámky
     u klipu) — otevřené i na Windows.
-  - Ověření se vzorkem `.braw` a ostrý test s kartou, REDline a art-cmd — ruční, postup v README-START (oddíly 6–7).
   - Náhledy R3D/ARRI bez proxy, zrušení `ffprobe`, selhání kopie proxy v souhrnu CLI — otevřené i na Windows (návrh, oddíl 4).
+  - Windows: ARRIRAW bez LUTu má stále chybu opravenou na Macu v `3b43352` — `windows/src/Offload.Core/RawBackends.cs`
+    (ř. 381) předává art-cmd `--target-colorspace` spolu s `--embedded-look`, art-cmd to odmítne, skončí kódem 0 a nic
+    nezapíše (klip bez proxy a náhledů). Na Windows straně neopraveno.
+  - **Chybějící vzorky:** BRAW Film Gen 5 (automatický LUT), BRAW klip s ≥ 10 snímky (`testFramesAcrossBatchesInOrder`,
+    dávky po 8), BRAW s gamou Video; vizuální srovnání BRAW proxy s Blackmagic RAW Playerem; R3D se skutečným REDline;
+    skutečné Sony `…M01.XML` z kamery.
+  - **Ruční test se skutečným hardwarem** (README-START, oddíl 7): skutečná karta ve čtečce (FAT32 i exFAT, vysunutí, jiná
+    karta v téže čtečce) a USB disky — HDD, aby „brzdí“ ukázalo pomalejší disk ze správného důvodu, SSD 10 Gb/s (linka
+    „USB 3 (10 Gb/s a víc)“, `testUsbVolumesResolveToASocket` s USB diskem), týž disk přes USB 2 (varování), čtečka za USB 3
+    hubem / dokem, UAS, Thunderbolt disk (`volumeIsInternal`), SMB svazek, Apple Silicon (`usb-drd*`); BRAW bez knihovny
+    na Macu bez Playeru / Resolve; křížové ověření s kopií z Windows (`offload verify` oběma směry) a `ascmhl verify`
+    (`ascmhl` tu není nainstalovaný).
+  - **GUI nikdy nespuštěné** (během dorovnání se aplikace nespouštěla — na Macu se pracovalo); zkontrolovat ručně:
+    - úkol 11: zdroj-složka bez „Vysunout kartu“; zrušení úlohy ve frontě → oranžové „Zrušeno“, bez zvuku Basso,
+      „Vyčistit hotové“; ⌘Q během kopie → Pokračovat / Ukončit, žádný `.offload-part`; odpojený cíl → „Disk není připojen“
+      do 5 s; chybějící LUT → červeně, start neaktivní; jiná karta v téže čtečce → bez tlačítka vysunutí;
+    - úkol 17: ⌘U otevře okno Hardware, druhé ⌘U ho jen přenese dopředu; měření a Zastavit; název portu zůstane po
+      restartu; měření neaktivní během kopie; ⌘Q během měření; „Čekám, až doběhne předchozí test…“; řetěz a oranžové
+      „Úzké hrdlo“ na kartě úlohy; řádek „Poslední test“;
+    - úkoly 19/20: zrušení uprostřed renderu BRAW proxy — bez pádu, bez `.part`; barvy proxy vizuálně v QuickTime Playeru
+      a Resolve;
+    - úkoly 21/24: výběr LUTu — `.cube` z 0.1.0 → „Vlastní…“; nabídka auto / 11 vestavěných / Bez LUT / Vlastní…; zrušený
+      „Vlastní…“ ponechá volbu; vestavěný LUT přežije restart; výběr složky pro proxy, červená hláška po odpojení, křížek
+      ji smaže; kontrola odpojení těsně před startem; ostrý offload se složkou → řádky v reportu;
+    - úkol 25: ikona v Docku, ⌘⇥ a Finderu; 11 LUTů v *Proxy › LUT*.
 
-## 2026-10-05 — dorovnání s Windows (plán mac-parity), průběh
+## 2026-10-06 — verze 0.2.0: dorovnání s Windows (plán mac-parity)
 
 Plán: [`mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](../mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md)
+(návrh [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md)).
+Všech 31 úkolů hotovo; co zbývá, je v oddílu „Naplánováno“ nahoře.
 
+Odchylky od plánu a zjištění (podrobně ve zprávách commitů):
+
+- MacBook Pro 16,1 (Intel, macOS 26): USB 2 a USB 3 polovina USB-C zásuvky leží na různých řadičích (XHC1 ↔ XHC2/XHC3) —
+  skener je páruje podle `UsbProtocolCompanion`, jinak by hlásil falešné „jen USB 2.0“ (úkol 14).
+- `HwTest.sameVolume`: cíl, který ještě neexistuje, se posuzuje podle nejbližší existující složky — nová složka na kartě
+  dřív prošla jako jiný svazek (úkol 16).
+- ffprobe 9 vypisuje video stopu dvakrát, když má MOV stopu timecode — test HEVC proxy chce `hvc1` u každého výpisu (úkol 7);
+  `readabilityHandler` se na konci výstupu nuluje (jinak nástroj po skončení točil CPU).
+- `renamex_np(RENAME_EXCL)` vrací na exFAT (fskit, macOS 26) `ENOTSUP` → záložní kontrola existence těsně před `rename`
+  (úkol 20).
+- ARRIRAW bez LUTu (oprava `3b43352`): art-cmd odmítne `--target-colorspace` spolu s `--embedded-look`, skončí kódem 0
+  a nic nezapíše → bez LUTu jen `--embedded-look`; Windows má stejnou chybu (viz „Naplánováno“).
+- ALEXA 35 neumí výstup LogC3: LogC3 LUT (vlastní nebo vestavěný) na klipu z ALEXA 35 → klip bez proxy, v poznámce důvod
+  od art-cmd. art-cmd chce výstup široký aspoň 360 px.
+- DaVinci Resolve má `BlackmagicRawAPI.framework` v `Contents/Frameworks`, ne `Contents/Libraries` (úkol 27).
+
+
+- Úkol 26 — verze 0.2.0, README (testy, Hardware, LUTy a složka pro proxy), ROZDILY a FORMATY podle stavu po dorovnání. Závěrečné ověření (MacBook Pro 16,1, macOS 26, se vzorkem `profile.braw`): `swift build -c release && swift test && scripts/build-app.sh` zelené — 272 testů, 0 selhání, 3 přeskočené (`testFramesAcrossBatchesInOrder` chce vzorek ≥ 10 snímků; dva testy USB bez připojeného USB svazku); Info.plist `CFBundleShortVersionString` 0.2.0 a `CFBundleIconFile` Offload; `offload --version` → 0.2.0, `offload luts` → 11 řádků. Křížové ověření s kopií z Windows a `ascmhl verify` neproběhlo (viz „Naplánováno“)
 - Úkol 31 — BRAW: test celé cesty se vzorkem (OFFLOAD_BRAW_SAMPLE: analýza s gamou, LUT podle gamy, tři náhledy, proxy 540p), README „Vzorek BRAW“, ROZDILY (BRAW na obou stejně). Ověřeno se vzorkem `profile.braw` z Blackmagic RAW Speed Test (URSA Mini Pro 4.6K, 4608×2592, 60 fps, 4 snímky, gama Blackmagic Design Film, gamut Blackmagic Design, generace 4): `swift test --filter Braw` 34 testů, přeskočen jen `testFramesAcrossBatchesInOrder` (chce ≥ 10 snímků); `offload … --proxy` → tři náhledy (00:00:00:00 / :02 / :03), proxy 1920×1080 H.264 BT.709 se 4 snímky, „LUT: bez LUT (Blackmagic RAW: Blackmagic Design Film Gen 4 (bez vestavěného LUTu))“, v JSON info.gamma/gamut/colorScienceGen; s `--lut bmd-film-gen5` proxy s LUTem bez chyby. Zbývá: vzorek Film Gen 5 (automatický LUT) a delší klip (dávky po 8 snímcích), vizuální srovnání s Blackmagic RAW Playerem, BRAW bez knihovny na skutečném Macu
 - Úkol 30 — náhledy BRAW pod hlídačem jako proxy (zaseknutý dekodér se ukončí, klip náhled nedostane, úloha jede dál); po prvním zaseknutí nebo limitu --info se další snímky klipu nezkoušejí a log to řekne; když ffmpeg skončí dřív, pumpa zavře i výstup dekodéru (braw-decode skončí sám s kódem 0, odříznutý dekodér se neposuzuje); dekodér, který selže, zatímco ffmpeg čte, je chyba klipu s českou poznámkou
 - Úkol 29 — BRAW jen s knihovnou Blackmagic RAW (bez ní se klip jen zkopíruje a ověří, nápověda jako Windows); braw-decode --info s limitem 60 s (zaseknutá knihovna úlohu nezasekne, poznámka „neodpověděl do 60 s — ukončen“); kódy 3/4/5 → česká poznámka u klipu, původní hláška braw-decode do logu; ToolProcess čte stderr celé i u nástroje, který hned skončí

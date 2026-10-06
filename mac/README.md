@@ -6,6 +6,10 @@ Toto je Mac verze projektu; všechny příkazy níže se spouštějí ze složky
 [`../windows/`](../windows/), rozdíly v [`../docs/ROZDILY.md`](../docs/ROZDILY.md), historie Mac verze v
 [`../docs/VYVOJ-MAC.md`](../docs/VYVOJ-MAC.md) — každá změna Mac verze tam přidá záznam ve stejném commitu.
 
+Návrh dorovnání s Windows: [`docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
+plán po úkolech: [`docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](docs/superpowers/plans/2026-10-05-offload-mac-parity.md)
+(hotový ve verzi 0.2.0; ruční testy s hardwarem v [`README-START.md`](docs/superpowers/plans/README-START.md), oddíl 7).
+
 ## Jak to funguje
 
 1. **Kopie** – karta se čte **jen jednou** (velké bloky, bez page cache), každý blok jde paralelně na všechny cíle
@@ -65,3 +69,36 @@ offload /Volumes/A001 -d /Volumes/RAID_A -d /Volumes/SHUTTLE_B [--proxy --lut lo
 offload verify /Volumes/RAID_A/2026-10-03/A001
 offload bench --read /Volumes/A001 --write /Volumes/RAID_A --write /Volumes/SHUTTLE_B
 ```
+
+## Testy
+
+```sh
+swift test                    # XCTest (Tests/OffloadKitTests); ffmpeg testy se bez ffmpeg přeskočí
+```
+
+## Hardware (USB porty)
+
+- Aplikace: menu **Nástroje › Prověřit USB porty…** (⌘U) nebo tlačítko v sekci *Hardware* — kde jsou karta a disky
+  připojené, rychlost linky, doporučení zapojení, volitelné měření (z karty se jen čte, na cíl se zapíše a smaže 1 GB),
+  vlastní názvy portů. Při startu se nic nespouští.
+- Během kopie karta úlohy ukazuje řetěz připojení s rychlostí, % linky a úzkým hrdlem.
+- CLI: `offload ports [--measure] [--card /Volumes/A001] [--dest /Volumes/RAID]`; `offload copy` ukáže připojení
+  a ve stavovém řádku „brzdí: D1“.
+- Omezení: zařízení 10 Gb/s běžící na 5 Gb/s se nepozná (macOS neprozradí schopnost bez BOS deskriptoru);
+  fyzickou polohu portu macOS nezná — porty si pojmenujte.
+
+## LUTy, proxy a složka pro proxy
+
+- Proxy i náhledy v reportu dostanou LUT podle kamery každého klipu: 11 vestavěných LUTů Log → Rec.709
+  (`Offload.app/Contents/Resources/luts`, sdílené s Windows ve `shared/luts`). Aplikace: *Proxy › LUT* — Automaticky podle
+  kamery (+ „Když kameru nepoznám:“), vestavěný LUT, Bez LUT, Vlastní… (`.cube`). Použitý LUT a důvod je v reportu u klipu.
+- CLI: `offload luts` (seznam id), `offload copy … --proxy --lut auto|none|<id>|<cesta.cube> [--lut-fallback <id>|none]`;
+  bez `--lut` platí `auto`.
+- Složka pro proxy navíc: *Proxy › Kopírovat proxy i do složky* nebo `--proxy-folder <složka>` — každá proxy i do
+  `<složka>/<datum>/<karta>/` (při shodě jména `_2`, `_3`…, nic se nepřepíše); nedostupná složka zablokuje start.
+- Proxy jsou BT.709 v legálním rozsahu a tak i označené, náhledy JPEG BT.601 (JFIF). VideoToolbox dekóduje jen H.264/HEVC;
+  render proxy bez pokroku 60 s (nový snímek nebo data z dekodéru RAW; do prvního pokroku 180 s) se ukončí — po hardwarovém
+  dekódování se jednou zkusí znovu softwarově, jinak proxy selže s poznámkou „ffmpeg se zasekl (60 s bez nového snímku);
+  proxy nevznikla“ (po neúspěšném opakování „… i bez hardwarového dekódování; proxy nevznikla“).
+- Python k sestavení netřeba: `.cube` i ikona jsou v repu. Jen kdo mění `shared/luts/generate.py` nebo
+  `shared/icon/make_icon.py`, potřebuje Python (návod v `shared/luts/README.md` a `shared/icon/README.md`).

@@ -51,7 +51,7 @@ Jeden řádek na soubor, UTF-8 bez BOM, konce řádků `\n`:
 | Klíč | Typ | Význam |
 |---|---|---|
 | `tool` | string | `offload` |
-| `version` | string | `0.1.0` (Mac), `0.1.0-win` (Windows) |
+| `version` | string | `0.2.0` (Mac), `0.1.0-win` (Windows) |
 | `hashAlgorithm` | string | `xxh64` |
 | `cardName`, `date`, `source`, `sourceFilesystem` | string | |
 | `started`, `copyFinished`, `finished` | datum | |
