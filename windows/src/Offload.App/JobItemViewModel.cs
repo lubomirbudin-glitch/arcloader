@@ -2,6 +2,7 @@ using System.IO;
 using Offload.Core;
 using Offload.Core.Desktop;
 using Offload.Core.Hardware;
+using Offload.Core.Space;
 
 namespace Offload.App;
 
@@ -21,10 +22,14 @@ public sealed class JobItemViewModel : QueueItem
     List<string> chainLines = [];
     bool chainRequested, ejected, ejecting, openingReport;
 
-    public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject)
+    readonly IReadOnlyList<VolumeDemand> space;
+
+    /// `space`: what the card needs on each destination volume (spec 2.5) — counted while this job is queued or copies.
+    public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject, IReadOnlyList<VolumeDemand>? space = null)
     {
         this.owner = owner;
         this.sourceName = sourceName;
+        this.space = space ?? [];
         Job = job;
         CanEject = canEject;
         Runner = new JobQueue.Runner(job, m => AppLog.Write($"{sourceName}: {m}"));
@@ -81,6 +86,15 @@ public sealed class JobItemViewModel : QueueItem
     }
 
     public override JobPhase Phase => progress.Status.Phase;
+
+    /// Bytes written so far to the least written destination (the safe side); 0 before the copy.
+    internal long WrittenNow() => progress.Status.Copy?.WrittenBytes is { Length: > 0 } w ? w.Min() : 0;
+
+    /// What this job still needs (spec 2.5): all of it while queued, the rest while copying - `writtenAtProbe` is what had
+    /// been written when the destinations' free space was last read (ruling I4: never what was written since, the free
+    /// figure does not show it yet) - proxies and report in stage 2, nothing once finished.
+    internal IEnumerable<VolumeDemand> SpaceDemands(long writtenAtProbe) =>
+        space.Select(d => d with { Need = SpaceCheck.Remaining(d.Need, Phase, writtenAtProbe) });
     public bool IsRunning => progress.IsRunning;
     public override bool IsFinished => Phase.IsFinished();
     public bool SafeToEject => progress.Status.SafeToEject;

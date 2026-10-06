@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows.Threading;
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.Space;
 
 namespace Offload.App;
 
@@ -76,7 +77,7 @@ public sealed partial class MainViewModel
     {
         ejectedRoots.Clear();
         RefreshVolumes();
-        foreach (var d in Destinations) d.Probe();
+        _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // every destination and the proxy folder: free space, volume
         RefreshLut();
         RefreshProxyFolder();
         ReloadHistory();   // and every card is looked at again
@@ -482,14 +483,16 @@ public sealed partial class MainViewModel
         }
         if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is not string folder)
         {
+            folderTarget = null;
+            folderFree = null;
             SetProxyFolderState(null, null);
             return;
         }
         folderChecking = true;
-        Task.Run(() => Directory.Exists(folder)).ContinueWith(t =>
+        Task.Run(() => ProbeFolder(folder)).ContinueWith(t =>
         {
             folderChecking = false;
-            if (t.IsCompletedSuccessfully) SetProxyFolderState(folder, t.Result);
+            if (t.IsCompletedSuccessfully) ApplyFolderProbe(folder, t.Result);
             else AppLog.Write($"proxy folder check: {t.Exception?.GetBaseException().Message}");
             if (folderRecheck)
             {
@@ -497,6 +500,19 @@ public sealed partial class MainViewModel
                 RefreshProxyFolder();
             }
         }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// The proxy folder with its volume and free space (spec 2.5: the proxies count there too). Off the UI thread.
+    static (bool Exists, string? Volume, long? Free) ProbeFolder(string folder) =>
+        Directory.Exists(folder) ? (true, SpacePlanner.VolumeKey(folder), NativeIO.AvailableBytes(folder)) : (false, null, null);
+
+    /// UI thread: keeps the answer for the space check and the red text - unless the folder was changed meanwhile.
+    void ApplyFolderProbe(string folder, (bool Exists, string? Volume, long? Free) r)
+    {
+        if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is not string now || !string.Equals(now, folder, StringComparison.OrdinalIgnoreCase)) return;
+        folderTarget = r.Exists && r.Volume != null ? new SpaceTarget(folder, r.Volume, folder) : null;
+        folderFree = r.Free;
+        SetProxyFolderState(folder, r.Exists);
     }
 
     /// A new answer about the proxy folder: the red text and the start button follow it.

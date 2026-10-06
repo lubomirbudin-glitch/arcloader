@@ -1,6 +1,8 @@
 ﻿using System.IO;
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.History;
+using Offload.Core.Space;
 
 namespace Offload.App;
 
@@ -13,7 +15,9 @@ public sealed class DestinationViewModel : ObservableObject
     readonly MainViewModel owner;
     bool exists, isChecking = true, probing, mayDropOut;
     string fileSystem = "", freeText = "zjišťuji…";
-    string? fsWarning;
+    string? fsWarning, volume;
+    long? freeBytes;
+    Task probeTask = Task.CompletedTask;
 
     public DestinationViewModel(MainViewModel owner, int index, string root)
     {
@@ -27,12 +31,12 @@ public sealed class DestinationViewModel : ObservableObject
 
     /// Probes the disk off the UI thread; while a probe runs (a dead network path can take long) no second one starts.
     /// The row keeps showing the last answer until the new one arrives.
-    public void Probe()
+    public Task Probe()
     {
-        if (probing) return;
+        if (probing) return probeTask;
         probing = true;
         var root = Root;
-        Task.Run(() => ProbeDisk(root)).ContinueWith(t =>
+        return probeTask = Task.Run(() => ProbeDisk(root)).ContinueWith(t =>
         {
             probing = false;
             if (!owner.IsCurrent(this)) return;   // the row was replaced meanwhile
@@ -40,9 +44,11 @@ public sealed class DestinationViewModel : ObservableObject
             string beforeText = freeText;
             if (t.IsCompletedSuccessfully)
             {
-                var (ex, fs, free, volatileDisk) = t.Result;
+                var (ex, fs, free, volatileDisk, vol) = t.Result;
                 exists = ex;
                 mayDropOut = volatileDisk;
+                volume = ex ? vol : null;
+                freeBytes = ex ? free : null;
                 fileSystem = fs;
                 freeText = ex ? $"{(free is long f ? Format.Bytes(f) : "?")} volno · {fs}" : "";
                 fsWarning = ex && fs is "exFAT" or "FAT32" or "FAT" ? "Doporučeno NTFS — spolehlivější než exFAT/FAT32" : null;
@@ -51,6 +57,8 @@ public sealed class DestinationViewModel : ObservableObject
             {
                 AppLog.Write($"destination probe {root}: {t.Exception?.GetBaseException().Message}");
                 exists = false;
+                volume = null;
+                freeBytes = null;
                 freeText = "";
             }
             isChecking = false;
@@ -60,11 +68,19 @@ public sealed class DestinationViewModel : ObservableObject
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    static (bool, string, long?, bool) ProbeDisk(string root)
+    /// A probe that started after this call: waits for one in flight (its answer may be older than what the caller
+    /// needs — the free space after a copy), then probes again. Never throws; the row keeps its last answer on failure.
+    public async Task ProbeFreshAsync()
+    {
+        if (probing) await probeTask;
+        await Probe();
+    }
+
+    static (bool, string, long?, bool, string?) ProbeDisk(string root)
     {
         bool mayDropOut = DestinationHealth.MayDropOut(root, DriveTypeOf(root));
-        if (!Directory.Exists(root)) return (false, "", null, mayDropOut);
-        return (true, NativeIO.FilesystemType(root), NativeIO.AvailableBytes(root), mayDropOut);
+        if (!Directory.Exists(root)) return (false, "", null, mayDropOut, null);
+        return (true, NativeIO.FilesystemType(root), NativeIO.AvailableBytes(root), mayDropOut, SpacePlanner.VolumeKey(root));
     }
 
     /// The type of the root's drive letter (network, removable, fixed…), null for a UNC path or when unknown.
@@ -92,5 +108,8 @@ public sealed class DestinationViewModel : ObservableObject
     public string FileSystem => fileSystem;
     public string FreeText => freeText;
     public string? FsWarning => fsWarning;
+    /// For the space check (spec 2.5): the volume and its free bytes from the last probe; null until known or when missing.
+    public SpaceTarget? SpaceTarget => exists && volume != null ? new SpaceTarget(Root, volume, HistoryText.DiskName(Root)) : null;
+    public long? FreeBytes => freeBytes;
     public RelayCommand RemoveCommand { get; }
 }

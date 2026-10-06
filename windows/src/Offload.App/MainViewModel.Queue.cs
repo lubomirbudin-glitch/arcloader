@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.Space;
 
 namespace Offload.App;
 
@@ -14,6 +15,7 @@ public sealed partial class MainViewModel
     readonly JobQueue queue = new(m => AppLog.Write(m));
     readonly DispatcherTimer ticker = new() { Interval = TimeSpan.FromMilliseconds(330) };
     bool closing, closeRaised, waitNoticeShown, shownHasFinished, shownCopyRunning, starting;
+    string? startStatus;
 
     /// Offloads and verifications, newest on top.
     public ObservableCollection<QueueItem> Jobs { get; } = [];
@@ -48,14 +50,16 @@ public sealed partial class MainViewModel
     /// The Cíle section is needed only by full copies: appends go to the destinations of their earlier backup (spec 2.2).
     bool ReadyToStart => !closing && selected.Count > 0
         && (!AppendRules.NeedsDestinations(AppendRules.FullCopies(selected, AppendWanted)) || (Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)))
-        && LutProblem == null && ProxyFolderProblem == null && StartProblem == null;
+        && LutProblem == null && ProxyFolderProblem == null && StartProblem == null && SpaceProblem == null;
     /// The hint under the start bar: why Start is off when the setup itself does not say it (a speed measurement runs).
     public string? StartProblem => QueueRules.StartProblem(Measuring);
     public bool HasJobs => Jobs.Count > 0;
     public bool HasFinished => Jobs.Any(j => j.IsFinished);
 
     /// The LUT and the proxy folder are checked once more right before the start (they may sit on a disk that just
-    /// went away) — off the UI thread, at most 5 s each; meanwhile the start button is disabled.
+    /// went away) — off the UI thread, at most 5 s each; meanwhile the start button is disabled. Then the inspections
+    /// of the selected cards (at most 10 s) and the free space of every destination (at most 5 s) — all awaited, the UI
+    /// thread never waits on a card or a disk (spec 2.5, ruling I4).
     async void Start()
     {
         if (!CanStart) return;
@@ -76,15 +80,28 @@ public sealed partial class MainViewModel
             }
             while (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is string folder)
             {
-                var check = Task.Run(() => Directory.Exists(folder));
+                var check = Task.Run(() => ProbeFolder(folder));
                 bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
-                bool exists = answered && check.IsCompletedSuccessfully && check.Result;
+                bool exists = answered && check.IsCompletedSuccessfully && check.Result.Exists;
                 if (!answered) AppLog.Write($"proxy folder check before start: no answer from {folder} in 5 s");
                 if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) != folder) continue;   // changed meanwhile
-                SetProxyFolderState(folder, exists);
+                if (answered && check.IsCompletedSuccessfully) ApplyFolderProbe(folder, check.Result);
+                else SetProxyFolderState(folder, false);
                 if (!exists) return;   // the red text says why
                 break;
             }
+            // Without the inspections a card history knows would be copied again in full, with no prompt: wait for the
+            // ones still looking, at most 10 s (a card that does not answer never blocks the start - then what is known counts).
+            bool looked = await StartWait.UntilAsync(
+                () => StartWait.PendingInspections(SelectedSources(), p => Insight(p) != null, inspections.IsRunning, history != null).Count,
+                n => SetStartStatus(StartWait.InspectionStatus(n)), TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(200));
+            if (!looked) AppLog.Write("start: the card inspection did not finish in 10 s, going on with what is known");
+            // The free space of every destination is read again now (ruling I4): a fixed disk is otherwise probed only
+            // once, long before a running copy filled it.
+            SetStartStatus(StartWait.FreeSpaceStatus);
+            await ProbeFreeSpaceAsync(TimeSpan.FromSeconds(5));
+            SetStartStatus(null);
+            if (SpaceProblem != null) return;   // the red text says why
             // Spec 2.1: cards history already knows are copied again in full only when the user says so.
             var skip = new List<string>();
             PruneAppend();   // after the awaits above: the cards may have changed meanwhile
@@ -111,6 +128,7 @@ public sealed partial class MainViewModel
         finally
         {
             starting = false;
+            SetStartStatus(null);
             Raise(nameof(CanStart));
         }
     }
@@ -119,8 +137,10 @@ public sealed partial class MainViewModel
     void StartJobs(IReadOnlyCollection<string> skip)
     {
         var gone = new List<string>();
+        var targets = SpaceTargets();
         foreach (var src in SelectedSources())
         {
+            var space = CardSpace(src, targets);   // the job card keeps counting it until it has copied (spec 2.5)
             if (skip.Contains(src, StringComparer.OrdinalIgnoreCase))
             {
                 selected.Remove(src);
@@ -148,7 +168,7 @@ public sealed partial class MainViewModel
                     Tools = SettingsStore.Clone(Settings.Tools),
                 };
                 var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), AppendRules.Title(known.Entry.CardName),
-                    canEject: isVolume && CardEject.CanEject(src));
+                    canEject: isVolume && CardEject.CanEject(src), space);
                 Jobs.Insert(0, appendItem);
                 selected.Remove(src);
                 appendTicks.Untick(src);
@@ -169,7 +189,7 @@ public sealed partial class MainViewModel
                 Tools = SettingsStore.Clone(Settings.Tools),
             };
             var item = new JobItemViewModel(this, new OffloadJob(config), name ?? DefaultCardName(src),
-                canEject: isVolume && CardEject.CanEject(src));
+                canEject: isVolume && CardEject.CanEject(src), space);
             Jobs.Insert(0, item);
             selected.Remove(src);
             queue.Enqueue(item.Runner);
@@ -183,6 +203,7 @@ public sealed partial class MainViewModel
     {
         foreach (var j in Jobs)
             if (!j.IsFinished) j.Refresh();
+        RefreshSpace();   // memory only: a running job needs less as it copies (against its baseline)
         // A queued job cancelled behind a running copy is finished before the queue reports it.
         if (HasFinished != shownHasFinished)
         {
@@ -211,6 +232,7 @@ public sealed partial class MainViewModel
         item.Refresh();
         if (!closing && item.SafeToEject) SystemSounds.Asterisk.Play();
         if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Zálohováno"
+        if (!closing) _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // the disks changed: free space again (ruling I4)
     }
 
     void OnJobFinished(IQueuedJob job)

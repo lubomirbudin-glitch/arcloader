@@ -22,6 +22,12 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Bottom" Text="{Binding StartProblem}" Style="{StaticResource WarningText}" Margin="0,8,0,0" TextWrapping="Wrap"
                            Visibility="{Binding StartProblem, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="StartProblemText" />
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding StartStatus}" FontSize="12" Opacity="0.8" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding StartStatus, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="StartStatusText" />
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding SpaceWarning}" Style="{StaticResource WarningText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding SpaceWarning, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="SpaceWarningText" />
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding SpaceProblem}" Style="{StaticResource ErrorText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding SpaceProblem, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="SpaceProblemText" />
                 <Button DockPanel.Dock="Right" Command="{Binding StartCommand}" Style="{DynamicResource AccentButtonStyle}" MinWidth="150" Padding="16,8"
                         ToolTip="Ctrl+Enter" AutomationProperties.AutomationId="StartButton">
                     <StackPanel Orientation="Horizontal">
