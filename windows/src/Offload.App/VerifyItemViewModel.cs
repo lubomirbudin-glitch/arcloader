@@ -12,6 +12,7 @@ public sealed class VerifyItemViewModel : QueueItem
     DateTime lastTime = DateTime.UtcNow;
     long lastBytes;
     double rate;
+    bool hadProgress;
 
     public VerifyItemViewModel(MainViewModel owner, VerifyJob job)
     {
@@ -47,7 +48,14 @@ public sealed class VerifyItemViewModel : QueueItem
         status = Job.Status();
         var now = DateTime.UtcNow;
         double dt = (now - lastTime).TotalSeconds;
-        if (status.Progress is { } p && dt > 0.2)
+        if (status.Progress is { } first && !hadProgress)
+        {
+            // The first sample: the verification may have waited in the queue, so start the speed measurement here.
+            hadProgress = true;
+            lastTime = now;
+            lastBytes = first.Bytes;
+        }
+        else if (status.Progress is { } p && dt > 0.2)
         {
             var current = Math.Max(0, (p.Bytes - lastBytes) / dt);
             rate = rate == 0 ? current : rate * 0.6 + current * 0.4;
@@ -66,7 +74,7 @@ public sealed class VerifyItemViewModel : QueueItem
     public string DetailText => VerifyJobView.Detail(status.Progress, rate);
     public string? ResultText => status.Result is { } r ? VerifyTexts.Summary(r).Text : null;
     public VerifyTone ResultTone => status.Result is { } r ? VerifyTexts.Summary(r).Tone : VerifyTone.Ok;
-    public IReadOnlyList<string> Warnings => status.Result is { Cancelled: false } r ? VerifyTexts.Warnings(r) : [];
+    public IReadOnlyList<string> Warnings => status.Result is { Cancelled: false } r ? [.. VerifyTexts.Warnings(r), .. (status.ReportError is { } e ? new[] { e } : [])] : [];
     public string? ErrorText => status.Error;
     public string? ReportNote => VerifyJobView.ReportNote(status);
     public bool HasReport => status.ReportPath != null;

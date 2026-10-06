@@ -5,7 +5,7 @@ namespace Offload.Core.Desktop;
 
 public enum VerifyJobState { Waiting, Running, Done, Cancelled, Failed }
 
-public sealed record VerifyJobStatus(VerifyJobState State, VerifyProgress? Progress, VerifyResult? Result, string? Error, string? ReportPath);
+public sealed record VerifyJobStatus(VerifyJobState State, VerifyProgress? Progress, VerifyResult? Result, string? Error, string? ReportPath, string? ReportError = null);
 
 /// "Ověřit zálohu…" as a queue item (spec 2.4): it runs in the copy queue, one after another with the copies — both
 /// load the same disks. `RunCopy` verifies (and writes the report), returns false: there is no stage 2.
@@ -48,13 +48,18 @@ public sealed class VerifyJob(string cardPath, bool writeReport, Action<string>?
         try
         {
             var r = BackupVerifier.Verify(CardPath, p => Set(s => s with { Progress = p }), cts.Token);
-            string? report = null;
+            string? report = null, reportError = null;
             if (writeReport && !r.Cancelled)
             {
+                // Writing the report and the PDF runs inside this queue slot and ignores Cancel (it is short, and a half-written report is worse).
                 try { report = VerifyReport.Write(r, log); }
-                catch (Exception e) { log?.Invoke($"verify report: {e.Message}"); }
+                catch (Exception e)
+                {
+                    log?.Invoke($"verify report: {e.Message}");
+                    reportError = Msg.ReportNotWritten(e.Message);
+                }
             }
-            Set(s => s with { State = r.Cancelled ? VerifyJobState.Cancelled : VerifyJobState.Done, Result = r, ReportPath = report });
+            Set(s => s with { State = r.Cancelled ? VerifyJobState.Cancelled : VerifyJobState.Done, Result = r, ReportPath = report, ReportError = reportError });
         }
         catch (Exception e)
         {

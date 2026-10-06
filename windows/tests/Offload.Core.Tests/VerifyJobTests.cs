@@ -65,6 +65,45 @@ public class VerifyJobTests
         Assert.Contains("mimo složku karty", VerifyJobView.ReportNote(s));
     }
 
+    // A report that cannot be written is a Czech warning on the card, not a silent nothing.
+    [Fact]
+    public void ReportWriteFails_CzechReportError()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("2026-10-06", "A001");
+        TestFs.WriteRandom(Layout.Join(card, "c.xml"), 1000, 3);
+        MhlFixtures.Chain(card, RealAscmhlTests.Gen(card, 1, ("c.xml", RealAscmhlTests.H("xxh64", "original", RealAscmhlTests.X(card, "c.xml")))));
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(card)!, "_REPORT"), "in the way");   // the report goes beside the card: its folder cannot be made
+        var logged = new List<string>();
+        var job = new VerifyJob(card, writeReport: true, logged.Add);
+        job.RunCopy();
+        var s = job.Status();
+
+        Assert.Equal(VerifyJobState.Done, s.State);
+        Assert.True(s.Result!.Success);
+        Assert.Null(s.ReportPath);
+        Assert.StartsWith("Report se nepodařilo zapsat:", s.ReportError);
+        Assert.Contains(logged, l => l.StartsWith("verify report:"));
+    }
+
+    // A newest `failed` record only counts as superseded when the file matches the older good one.
+    [Fact]
+    public void FailedNewest_FileDiffersFromOlderGood_IsChanged_NotSuperseded()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("D001");
+        TestFs.WriteRandom(Layout.Join(card, "CLIP/x.mov"), 2000, 1);
+        var g1 = RealAscmhlTests.Gen(card, 1, ("CLIP/x.mov", RealAscmhlTests.H("xxh64", "original", "0000000000000000")));
+        var g2 = RealAscmhlTests.Gen(card, 2, ("CLIP/x.mov", RealAscmhlTests.H("xxh64", "failed", "df88698dec264e9a")));
+        MhlFixtures.Chain(card, g1, g2);
+
+        var r = BackupVerifier.Verify(card, chunkSize: 4096);
+
+        Assert.False(r.Success);
+        Assert.Equal(["CLIP/x.mov"], r.Changed);
+        Assert.Empty(r.FailedSuperseded);
+    }
+
     [Fact]
     public void Problems_AreAnErrorTone_NoReportWhenOff()
     {

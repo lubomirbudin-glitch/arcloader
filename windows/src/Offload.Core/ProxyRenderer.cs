@@ -484,9 +484,11 @@ public sealed class ProxyRenderer : IDisposable
                 throw new ToolError("ffmpeg", -1, "cancelled");
             }
             ff.WaitForExit();
+            ff.DrainStderr();
             if (feeder != null)
             {
                 if (!feeder.WaitForExit(2000)) { feeder.Kill(); feederKilled = true; }
+                else feeder.DrainStderr();   // the decoder's last line must be in StderrTail before it becomes the error
                 pump!.Join(2000);
             }
             // A feeder that died on its own is the real cause; ffmpeg only saw a truncated stream. One that was killed,
