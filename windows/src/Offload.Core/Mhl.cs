@@ -2,11 +2,14 @@ using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
+using Offload.Core.Desktop;
+using Offload.Core.Verification;
 
 namespace Offload.Core;
 
-/// ASC MHL v2 (urn:ASC:MHL:v2.0) — the industry-standard hash record, written as the first generation
-/// into `<card>/ascmhl/` so `ascmhl verify` and other DIT tools can check the copy later.
+/// ASC MHL v2 (urn:ASC:MHL:v2.0) — the industry-standard hash record in `<card>/ascmhl/`, so `ascmhl verify` and other
+/// DIT tools can check the copy later. A full copy writes generation 0001; an append (spec 2.2, R5) writes generation N
+/// with only its new files and adds it to the chain — the earlier generation files are never touched.
 /// Optional directory/root hashes are omitted; per-file xxh64 hashes are what verification relies on.
 public static class Mhl
 {
@@ -26,9 +29,25 @@ public static class Mhl
         var dir = Path.Combine(cardPath, DirName);
         NativeIO.Mkdirs(dir);
 
+        int generation = report.Generation ?? 1;
+        // An append keeps the chain and the ignore list of the earlier generations (spec 2.2) — and goes right after them.
+        var earlier = generation > 1 ? MhlReader.Read(cardPath) : null;
+        if (generation > 1)
+        {
+            int last = earlier is { Chain.Count: > 0 } ? earlier.Chain.Max(c => c.Seq) : 0;
+            if (last != generation - 1)
+                throw new IOException($"ASC MHL v {cardPath} se během doplnění změnil (poslední generace {last}, doplnění píše {generation}) — generace se nezapsala.");
+        }
         var stamp = IsoDate(now);
         var folder = Path.GetFileName(cardPath.TrimEnd('\\'));
-        var fileName = $"0001_{folder}_{now.ToUniversalTime().ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture)}Z.mhl";
+        var fileName = $"{generation:0000}_{folder}_{now.ToUniversalTime().ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture)}Z.mhl";
+        int listed = report.Files.Count(f => f.Xxh64 != null);
+        var comment = generation > 1
+            ? $"Offload doplnění: {listed} {Texts.Plural(listed, "nový soubor", "nové soubory", "nových souborů")} z {report.Source}"
+            : $"Offload of {report.CardName} from {report.Source}";
+        IEnumerable<string> ignore = earlier?.Generations.FirstOrDefault() is { } first
+            ? first.Ignore
+            : IgnorePatterns.Concat(report.Skipped.Select(s => s.Split('/')[^1]));
 
         var x = new StringBuilder();
         void Line(string s) => x.Append(s).Append('\n');
@@ -38,12 +57,12 @@ public static class Mhl
         Line($"    <creationdate>{stamp}</creationdate>");
         Line($"    <hostname>{Esc(host)}</hostname>");
         Line($"    <tool version=\"{Esc(report.Version)}\">{Esc(report.Tool)}</tool>");
-        Line($"    <comment>Offload of {Esc(report.CardName)} from {Esc(report.Source)}</comment>");
+        Line($"    <comment>{Esc(comment)}</comment>");
         Line("  </creatorinfo>");
         Line("  <processinfo>");
         Line("    <process>transfer</process>");
         Line("    <ignore>");
-        foreach (var p in IgnorePatterns.Concat(report.Skipped.Select(s => s.Split('/')[^1])))
+        foreach (var p in ignore)
             Line($"      <pattern>{Esc(p)}</pattern>");
         Line("    </ignore>");
         Line("  </processinfo>");
@@ -62,15 +81,22 @@ public static class Mhl
         Line("</hashlist>");
 
         var data = Encoding.UTF8.GetBytes(x.ToString());
-        NativeIO.WriteFileDurably(Path.Combine(dir, fileName), data);
+        // A new generation file never replaces one (ruling I1); generation 0001 goes into a fresh card folder.
+        if (generation > 1) NativeIO.WriteFileNew(Path.Combine(dir, fileName), data);
+        else NativeIO.WriteFileDurably(Path.Combine(dir, fileName), data);
 
+        // The chain: every earlier generation exactly as it was read, then this one — replaced in one rename.
+        var entries = (earlier?.Chain ?? []).Append(new MhlChainEntry(generation, fileName, C4(data)));
         var chain = new StringBuilder();
         chain.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         chain.Append("<ascmhldirectory xmlns=\"urn:ASC:MHL:DIRECTORY:v2.0\">\n");
-        chain.Append("  <hashlist sequencenr=\"1\">\n");
-        chain.Append($"    <path>{Esc(fileName)}</path>\n");
-        chain.Append($"    <c4>{C4(data)}</c4>\n");
-        chain.Append("  </hashlist>\n");
+        foreach (var e in entries)
+        {
+            chain.Append($"  <hashlist sequencenr=\"{e.Seq.ToString(CultureInfo.InvariantCulture)}\">\n");
+            chain.Append($"    <path>{Esc(e.Path)}</path>\n");
+            chain.Append($"    <c4>{Esc(e.C4)}</c4>\n");
+            chain.Append("  </hashlist>\n");
+        }
         chain.Append("</ascmhldirectory>\n");
         NativeIO.WriteFileDurably(Path.Combine(dir, ChainName), Encoding.UTF8.GetBytes(chain.ToString()));
     }

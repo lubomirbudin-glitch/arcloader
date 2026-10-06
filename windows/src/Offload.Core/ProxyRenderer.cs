@@ -54,6 +54,10 @@ public sealed class ProxyRenderer : IDisposable
     /// Tests only: H.264/HEVC encoder to use instead of the probed one (OffloadOptions.ProxyEncoder).
     internal string? ForcedEncoder { get; init; }
 
+    /// False for an append (spec 2.2): a proxy of that name that appeared meanwhile is never overwritten — the render
+    /// fails instead.
+    public bool ReplaceExisting { get; init; } = true;
+
     /// The video encoder proxies are rendered with (probed once, on first use); null without ffmpeg.
     public string? EncoderName => Tools.Ffmpeg is string ffmpeg
         ? encoderName ??= (ForcedEncoder is string forced && Settings.Codec is ProxyCodec.H264 or ProxyCodec.Hevc ? forced : Encoders.Pick(ffmpeg, Settings.Codec))
@@ -379,7 +383,7 @@ public sealed class ProxyRenderer : IDisposable
             try
             {
                 RunFfmpeg(ffmpeg, args, src, info.Duration, progress, isCancelled, StallTimeout);
-                NativeIO.Move(part, output, replace: true);
+                NativeIO.Move(part, output, replace: ReplaceExisting);
             }
             catch
             {

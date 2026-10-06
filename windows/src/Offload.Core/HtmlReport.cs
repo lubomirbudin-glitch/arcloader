@@ -102,7 +102,8 @@ public static class HtmlReport
         h.Append($"<title>Offload {Esc(r.CardName)} – {Esc(r.Date)}</title>\n<style>\n");
         h.Append(Styles(forPrint));
         h.Append("</style></head><body><main>\n");
-        h.Append($"<header><h1>{Esc(r.CardName)}</h1><span class=\"badge {statusClass}\">{status}</span>\n");
+        var append = r.Generation > 1 ? $" <span class=\"sub\">· doplnění (generace {r.Generation})</span>" : "";
+        h.Append($"<header><h1>{Esc(r.CardName)}{append}</h1><span class=\"badge {statusClass}\">{status}</span>\n");
         h.Append($"<span class=\"sub\">{DateTimeText(r.Started)} – {TimeText(r.Finished)}</span></header>\n");
         h.Append("<div class=\"stats\">\n");
         Stat(h, r.TotalFiles.ToString(Inv), "souborů");

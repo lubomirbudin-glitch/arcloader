@@ -251,6 +251,28 @@ public class HistoryStoreTests
         Assert.False(store.Update(entry.Id, e => { e!.Id = "other"; return e; }));
     }
 
+    // An append keeps the union of the file lists (spec 5.2): the stored list is read under the same lock hold.
+    [Fact]
+    public void UpdateWithFiles_ReadsTheStoredListUnderTheLock_NullChangesNothing()
+    {
+        using var dir = new TempDir();
+        var store = new HistoryStore(dir.Path);
+        var entry = HistoryFixtures.Entry(T0);
+        Assert.True(store.Record(entry, [new SourceFile("a.mov", 1, T0)]));
+
+        Assert.True(store.UpdateWithFiles(entry.Id, e =>
+        {
+            var stored = store.ReadFileList(e!)!;
+            e!.Files = stored.Count + 1;
+            return (e, [.. stored, new SourceFile("b.mov", 2, T0)]);
+        }));
+        Assert.False(store.UpdateWithFiles(entry.Id, _ => null));
+
+        var back = Assert.Single(store.Load());
+        Assert.Equal(2, back.Files);
+        Assert.Equal(["a.mov", "b.mov"], store.ReadFileList(back)!.Select(f => f.RelPath));
+    }
+
     [Fact]
     public void OpenReaders_DoNotBlockTheWriter()
     {

@@ -1,3 +1,5 @@
+using Offload.Core.Append;
+
 namespace Offload.Core;
 
 public sealed partial class OffloadEngine
@@ -37,6 +39,40 @@ public sealed partial class OffloadEngine
         var day = date ?? Layout.Today();
         var name = Layout.UniqueCardFolder(roots, day, cardName != null ? Layout.Sanitize(cardName) : Layout.DefaultCardName(source));
         return new OffloadPlan { Source = source, Scan = scan, Date = day, CardName = name, DestRoots = roots };
+    }
+
+    /// An append (spec 2.2): the same checks as Prepare (options, source, destinations, Windows names, FAT32, space),
+    /// but over the new files only, into the card folders of the earlier backup. `NothingNew` when there are none.
+    public OffloadPlan PrepareAppend(string source, IReadOnlyList<string> cardPaths, CancellationToken ct = default) =>
+        PrepareAppend(PlanAppend(source, cardPaths, ct));
+
+    /// The first half of PrepareAppend: the checks of the source and the destinations, and what AppendPlanner finds —
+    /// also when there is nothing new (a job then refreshes its history entry). Cancel() stops the card scan too.
+    public AppendPlan PlanAppend(string source, IReadOnlyList<string> cardPaths, CancellationToken ct = default)
+    {
+        CheckOptions();
+        source = CheckSource(source);
+        FullRoots(cardPaths);   // at least one, none twice
+        CheckNotAnOffload(source);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, cts.Token);
+        var a = AppendPlanner.Plan(source, cardPaths, linked.Token);
+        CheckDestinations(source, a.DestRoots);
+        return a;
+    }
+
+    /// The second half of PrepareAppend: the new files must fit (names, FAT32, space) — then the plan of generation N.
+    public OffloadPlan PrepareAppend(AppendPlan a)
+    {
+        if (a.NewFiles.Count == 0) throw OffloadError.Preflight(PreflightCode.NothingNew, Msg.NothingNew);
+        var scan = new SourceScan { Root = a.FullScan.Root, Files = a.NewFiles, Dirs = a.NewDirs, Skipped = a.FullScan.Skipped };
+        var problems = Scanner.WindowsProblems(scan);
+        if (problems.Count > 0) throw OffloadError.Preflight(PreflightCode.BadNames, Msg.BadNames(problems));
+        CheckFilesFit(a.DestRoots, scan.Files, scan.TotalBytes);
+        return new OffloadPlan
+        {
+            Source = a.Source, Scan = scan, Date = a.Date, CardName = a.CardName, DestRoots = a.DestRoots,
+            Mode = PlanMode.Append, Generation = a.Generation, FullScan = a.FullScan, UnverifiedEarlier = a.UnverifiedEarlier,
+        };
     }
 
     void CheckOptions()

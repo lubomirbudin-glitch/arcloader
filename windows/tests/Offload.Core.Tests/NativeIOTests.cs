@@ -91,4 +91,20 @@ public class NativeIOTests
         Assert.Equal("open", e.Op);
         Assert.Contains("missing.bin", e.Message);
     }
+
+    // Ruling I1: a file that must be new (an append's reports, its MHL generation) is never written over another.
+    [Fact]
+    public void WriteFileNew_CreatesDurably_NeverReplaces_LeavesNoTemporaryFile()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "offload_report_0002.json");
+        NativeIO.WriteFileNew(path, "first"u8);
+        Assert.Equal("first", File.ReadAllText(path));
+
+        var e = Assert.Throws<IOError>(() => NativeIO.WriteFileNew(path, "second"u8));
+
+        Assert.Equal("rename", e.Op);
+        Assert.Equal("first", File.ReadAllText(path));
+        Assert.Equal([path], Directory.GetFiles(dir.Path));
+    }
 }

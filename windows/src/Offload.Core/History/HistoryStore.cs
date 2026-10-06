@@ -75,7 +75,12 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
     /// when there is none) and returns the entry to store, or null to change nothing. It must keep the id. `files`, when
     /// given, replaces the entry's file list. False when nothing was written (lock busy, newer version, null result,
     /// disk failure) — logged. Keep `modify` quick: the lock is held meanwhile.
-    public bool Update(string id, Func<HistoryEntry?, HistoryEntry?> modify, IReadOnlyList<SourceFile>? files = null)
+    public bool Update(string id, Func<HistoryEntry?, HistoryEntry?> modify, IReadOnlyList<SourceFile>? files = null) =>
+        UpdateWithFiles(id, e => modify(e) is { } changed ? (changed, files) : null);
+
+    /// Update whose `modify` also returns the file list (null = keep the stored one) — e.g. the union with the stored
+    /// list (ReadFileList), read under the same hold of the lock (an append, spec 5.2). A null result changes nothing.
+    public bool UpdateWithFiles(string id, Func<HistoryEntry?, (HistoryEntry Entry, IReadOnlyList<SourceFile>? Files)?> modify)
     {
         if (!SafeId().IsMatch(id))
         {
@@ -96,8 +101,7 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
                 log?.Invoke($"history: version {version} is newer than this app — read only, the entry {id} is skipped");
                 return false;
             }
-            var entry = modify(entries.FirstOrDefault(e => e.Id == id));
-            if (entry == null) return false;
+            if (modify(entries.FirstOrDefault(e => e.Id == id)) is not ({ } entry, var files)) return false;
             if (entry.Id != id)
             {
                 log?.Invoke($"history: the entry changed its id from {id} to \"{entry.Id}\" — not written");

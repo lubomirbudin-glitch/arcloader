@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Offload.Core.Append;
 using Offload.Core.Desktop;
 using Offload.Core.History;
 
@@ -22,6 +23,9 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     public bool RecordHistory { get; set; } = true;
     /// Where history.json lives; null = HistoryStore.Default (%APPDATA%\Offload).
     public string? HistoryFolder { get; set; }
+    /// Append (spec 2.2): only the card's new files go into these card folders (`<root>\<date>\<card>` of the earlier
+    /// backup); DestRoots, CardName and Date are then taken from them.
+    public IReadOnlyList<string>? AppendInto { get; set; }
 }
 
 public enum JobPhase { Waiting, Copying, Flushing, Verifying, Reporting, Analyzing, Proxies, Done, Failed, Cancelled }
@@ -59,6 +63,13 @@ public sealed record JobStatus
     public bool SafeToEject { get; init; }
     public bool? CopySucceeded { get; init; }
     public string? Error { get; init; }
+    /// Information for the job card, e.g. "Nic nového — záloha je úplná."
+    public string? Note { get; init; }
+    /// Warnings that do not fail the job (orange), one per line — e.g. unverified files of the earlier backup.
+    public string? Warning { get; init; }
+
+    /// This status with `line` added to the warnings.
+    public JobStatus WithWarning(string line) => this with { Warning = Warning == null ? line : Warning + "\n" + line };
 }
 
 /// One card: copy → verify → report → clip analysis → optional proxies → PDF. Used by both the CLI and the app.
@@ -74,6 +85,8 @@ public sealed class OffloadJob
     volatile OffloadReport? reportValue;
     volatile string? sourceIdentity;
     CardVolume? cardVolume;
+    /// Append: what the planner found (also when there is nothing new); read on the copy thread only.
+    AppendPlan? appendPlan;
 
     /// Set on a worker thread, read by the app's UI thread.
     public OffloadPlan? Plan { get => planValue; private set => planValue = value; }
@@ -103,7 +116,17 @@ public sealed class OffloadJob
         Engine = new OffloadEngine(options);
     }
 
-    public OffloadPlan Prepare() => Plan ??= Engine.Prepare(Config.Source, Config.DestRoots, Config.CardName, Config.Date);
+    /// A full copy, or with Config.AppendInto an append into those card folders (`NothingNew` when it has nothing to copy).
+    public OffloadPlan Prepare()
+    {
+        if (Plan is { } done) return done;
+        if (Config.AppendInto is { Count: > 0 } into)
+        {
+            var a = appendPlan = Engine.PlanAppend(Config.Source, into);
+            return Plan = Engine.PrepareAppend(a);
+        }
+        return Plan = Engine.Prepare(Config.Source, Config.DestRoots, Config.CardName, Config.Date);
+    }
 
     public void Cancel() => Engine.Cancel();
 
@@ -165,6 +188,7 @@ public sealed class OffloadJob
         try
         {
             var plan = Prepare();
+            if (plan.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(plan.UnverifiedEarlier)));
             Update(s => s with { Phase = JobPhase.Copying });
             var report = Engine.Run(plan);
             Report = report;
@@ -183,6 +207,13 @@ public sealed class OffloadJob
             }
             Update(s => s with { Phase = JobPhase.Analyzing });
             return true;
+        }
+        catch (OffloadError e) when (e.Code == PreflightCode.NothingNew)
+        {
+            // Not an error: the earlier backup already has every file of the card — history still learns the card as it is.
+            if (appendPlan is { } a) RefreshHistory(a, log);
+            Update(s => s with { Phase = JobPhase.Done, Note = e.Message });
+            return false;
         }
         catch (OperationCanceledException)
         {
@@ -206,49 +237,98 @@ public sealed class OffloadJob
         catch (Exception e) { log?.Invoke($"card volume: {e.Message}"); }
     }
 
-    /// The finished stage 1 (with failed files too) goes into history.json; this never fails the job.
+    HistoryStore Store(Action<string>? log) => Config.HistoryFolder is string folder ? new HistoryStore(folder, log) : HistoryStore.Default(log);
+
+    /// The finished stage 1 (with failed files too) goes into history.json; this never fails the job. An append adds
+    /// its generation to the entry of the card folder it went into (spec 5.2) — or starts one when history does not
+    /// know the backup — under one hold of the history lock (ruling I2).
     void RecordHistory(OffloadPlan plan, OffloadReport report, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
         try
         {
-            var (fingerprint, shape) = CardFingerprint.Compute(plan.Scan);
+            var store = Store(log);
+            var card = plan.FullScan ?? plan.Scan;
+            var (fingerprint, shape) = CardFingerprint.Compute(card);
             var cardPaths = plan.CardPaths;
-            var entry = new HistoryEntry
+            // The id only finds the entry; everything about it is read and changed under the lock below.
+            var id = (plan.Mode == PlanMode.Append ? EntryOf(store, cardPaths)?.Id : null) ?? HistoryStore.NewId(report.Finished);
+            store.UpdateWithFiles(id, existing =>
             {
-                Id = HistoryStore.NewId(report.Finished),
-                Card = cardVolume?.ToHistoryCard(),
-                Source = plan.Source,
-                CardName = plan.CardName,
-                Date = plan.Date,
-                Finished = report.Finished,
-                Success = report.Success,
-                Verified = report.Verified,
-                FailedFiles = report.Success ? null : report.FailedFiles.Count,
-                HashAlgorithms = [report.HashAlgorithm],
-                Files = plan.Scan.Files.Count,
-                Bytes = plan.Scan.TotalBytes,
-                Fingerprint = fingerprint,
-                Shape = shape,
-                Destinations = plan.DestRoots.Select((root, i) => new HistoryDestination { Root = root, CardPath = cardPaths[i] }).ToList(),
-                Generations =
-                [
-                    new HistoryGeneration
-                    {
-                        Seq = 1, Kind = HistoryGeneration.Full, Finished = report.Finished,
-                        Files = plan.Scan.Files.Count, Bytes = plan.Scan.TotalBytes, Verified = report.Verified,
-                    },
-                ],
-                Reels = ReelSuggestion.FromClips(ClipDetector.Detect(plan.Scan.Files)).Reels.ToList(),
-            };
-            var store = Config.HistoryFolder is string folder ? new HistoryStore(folder, log) : HistoryStore.Default(log);
-            store.Record(entry, plan.Scan.Files);
+                var entry = existing ?? new HistoryEntry
+                {
+                    Id = id,
+                    Source = plan.Source,
+                    CardName = plan.CardName,
+                    Date = plan.Date,
+                    Success = true,
+                    Verified = true,
+                    HashAlgorithms = [report.HashAlgorithm],
+                    Destinations = plan.DestRoots.Select((root, i) => new HistoryDestination { Root = root, CardPath = cardPaths[i] }).ToList(),
+                };
+                entry.Finished = report.Finished;
+                entry.Success &= report.Success;
+                entry.Verified &= report.Verified;
+                entry.FailedFiles = entry.Success ? null : (entry.FailedFiles ?? 0) + report.FailedFiles.Count;
+                entry.Generations.RemoveAll(g => g.Seq == plan.Generation);
+                entry.Generations.Add(new HistoryGeneration
+                {
+                    Seq = plan.Generation,
+                    Kind = plan.Mode == PlanMode.Append ? HistoryGeneration.Append : HistoryGeneration.Full,
+                    Finished = report.Finished,
+                    Files = plan.Scan.Files.Count,
+                    Bytes = plan.Scan.TotalBytes,
+                    Verified = report.Verified,
+                });
+                entry.Reels = ReelSuggestion.FromClips(ClipDetector.Detect(card.Files)).Reels.ToList();
+                return WithCard(store, entry, existing, card, fingerprint, shape);
+            });
         }
         catch (Exception e)
         {
             log?.Invoke($"history: {e.Message}");
         }
     }
+
+    /// "Nic nového" (minors M17): the entry of that backup learns the card as it is now — no new generation.
+    void RefreshHistory(AppendPlan a, Action<string>? log)
+    {
+        if (!Config.RecordHistory) return;
+        try
+        {
+            var store = Store(log);
+            if (EntryOf(store, a.CardPaths) is not { } found) return;
+            var (fingerprint, shape) = CardFingerprint.Compute(a.FullScan);
+            store.UpdateWithFiles(found.Id, existing => existing == null ? null : WithCard(store, existing, existing, a.FullScan, fingerprint, shape));
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
+        }
+    }
+
+    /// The card as it is now (`fingerprint`, `shape`, the volume) into `entry`; its file list, `files` and `bytes` are
+    /// the union with the list stored for `existing` (spec 5.2) — read while the caller holds the history lock.
+    (HistoryEntry, IReadOnlyList<SourceFile>?) WithCard(HistoryStore store, HistoryEntry entry, HistoryEntry? existing, SourceScan card,
+        string fingerprint, string shape)
+    {
+        var all = new Dictionary<string, SourceFile>(StringComparer.Ordinal);
+        if (existing != null)
+            foreach (var f in store.ReadFileList(existing) ?? []) all[f.RelPath] = f;
+        foreach (var f in card.Files) all[f.RelPath] = f;
+        var files = all.Values.OrderBy(f => f.RelPath, StringComparer.Ordinal).ToList();
+        entry.Card = cardVolume?.ToHistoryCard() ?? entry.Card;
+        entry.Fingerprint = fingerprint;
+        entry.Shape = shape;
+        entry.Files = files.Count;
+        entry.Bytes = files.Sum(f => f.Size);
+        return (entry, files);
+    }
+
+    /// The newest history entry that has one of these card folders as a destination.
+    static HistoryEntry? EntryOf(HistoryStore store, IReadOnlyList<string> cardPaths) =>
+        store.Load().FirstOrDefault(e => e.Destinations.Any(d => cardPaths.Any(p =>
+            string.Equals(d.CardPath.TrimEnd('\\'), p.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))));
 
     /// Stage 2 — clip analysis, thumbnails, optional proxies, PDF. Reads only from the destinations.
     /// A failure here never changes the copy's result (SafeToEject stays as stage 1 left it).
@@ -276,7 +356,12 @@ public sealed class OffloadJob
     {
         var clips = ClipDetector.Detect(plan.Scan.Files);
         if (clips.Count == 0) return report;
-        using var renderer = new ProxyRenderer(Config.Proxy, Config.Tools.Resolved()) { ForcedEncoder = Engine.Options.ProxyEncoder, Log = log };
+        using var renderer = new ProxyRenderer(Config.Proxy, Config.Tools.Resolved())
+        {
+            ForcedEncoder = Engine.Options.ProxyEncoder,
+            Log = log,
+            ReplaceExisting = plan.Mode == PlanMode.Full,   // an append never overwrites a proxy (spec 2.2)
+        };
         var cardPaths = plan.CardPaths;
         var fileIndex = report.Files.Select((f, i) => (f.Path, i)).ToDictionary(x => x.Path, x => x.i);
         bool Good(string state) => state == "verified" || (!report.Verified && state == "written");
@@ -343,6 +428,7 @@ public sealed class OffloadJob
         if (!Config.Proxy.Enabled || IsCancelled) return report;
         Update(s => s with { Phase = JobPhase.Proxies, ClipCount = entries.Count });
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (plan.Mode == PlanMode.Append) usedNames.UnionWith(ExistingProxyNames(cardPaths));
         for (int i = 0; i < entries.Count; i++)
         {
             if (IsCancelled) break;
@@ -385,7 +471,7 @@ public sealed class OffloadJob
                     for (int o = 0; o < cardPaths.Count; o++)
                     {
                         if (o == d) continue;
-                        try { ProxyCopy.CopyFile(Layout.Join(cardPaths[d], rel), Layout.Join(cardPaths[o], rel)); }
+                        try { ProxyCopy.CopyFile(Layout.Join(cardPaths[d], rel), Layout.Join(cardPaths[o], rel), replace: plan.Mode == PlanMode.Full); }
                         catch (Exception e)
                         {
                             var note = $"kopie na {cardPaths[o]} selhala: {e.Message}";
@@ -442,17 +528,38 @@ public sealed class OffloadJob
         }
     }
 
+    /// The proxies earlier generations rendered: a new clip of the same name becomes "_2" in an append (spec 2.2).
+    static List<string> ExistingProxyNames(IReadOnlyList<string> cardPaths)
+    {
+        var names = new List<string>();
+        foreach (var p in cardPaths)
+        {
+            var dir = Path.Combine(p, Layout.ProxyDirName);
+            try
+            {
+                if (Directory.Exists(dir)) names.AddRange(Directory.EnumerateFiles(dir, "*.mov").Select(f => Path.GetFileNameWithoutExtension(f)));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A destination that went away: nothing is rendered or copied there now either.
+            }
+        }
+        return names;
+    }
+
     /// PDF copy of the report on every destination. Rendered once, then copied; a failure here never fails the offload.
+    /// An append's `_NNNN` PDF never replaces a file (spec 2.2).
     static void WritePdfReports(OffloadReport report, OffloadPlan plan, Action<string>? log)
     {
-        var name = $"{plan.CardName}_report.pdf";
+        var name = OffloadReport.PdfName(plan.CardName, plan.Generation);
         var first = Path.Combine(plan.CardPaths[0], Layout.ReportDirName, name);
+        bool replace = plan.Mode == PlanMode.Full;
         try
         {
-            PdfReport.Write(report, first);
+            PdfReport.Write(report, first, replace: replace);
             foreach (var other in plan.CardPaths.Skip(1))
             {
-                try { ProxyCopy.CopyFile(first, Path.Combine(other, Layout.ReportDirName, name)); }
+                try { ProxyCopy.CopyFile(first, Path.Combine(other, Layout.ReportDirName, name), replace); }
                 catch (Exception e) { log?.Invoke($"PDF copy to {other}: {e.Message}"); }
             }
         }

@@ -37,14 +37,24 @@ public static class FileStateExtensions
 
 public readonly record struct DestFileResult(FileState State, string? Error);
 
+public enum PlanMode { Full, Append }
+
 public sealed class OffloadPlan
 {
     public required string Source { get; init; }
+    /// What is copied: the whole card, or for an append only the new files and their folders.
     public required SourceScan Scan { get; init; }
     public required string Date { get; init; }
     public required string CardName { get; init; }
     public required IReadOnlyList<string> DestRoots { get; init; }
     public IReadOnlyList<string> CardPaths => DestRoots.Select(r => Layout.CardPath(r, Date, CardName)).ToList();
+    public PlanMode Mode { get; init; } = PlanMode.Full;
+    /// The ASC MHL generation this copy writes: 1 for a full copy, N for an append (spec 2.2).
+    public int Generation { get; init; } = 1;
+    /// Append: the whole card as it is now (history); null for a full copy (then Scan is the whole card).
+    public SourceScan? FullScan { get; init; }
+    /// Append: files of the earlier backup that were never read back.
+    public int UnverifiedEarlier { get; init; }
 }
 
 public enum CopyPhase { Copy, Flush, Verify, Report, Done }

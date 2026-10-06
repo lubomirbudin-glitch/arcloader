@@ -112,8 +112,15 @@ public sealed partial class OffloadReport
             Destinations = dests,
             Files = files,
             Skipped = plan.Scan.Skipped,
+            Generation = plan.Generation > 1 ? plan.Generation : null,
         };
     }
+
+    /// Report file names of generation `generation`: the full copy keeps the plain names, an append adds "_NNNN" (R6).
+    public static string JsonName(int generation) => generation <= 1 ? "offload_report.json" : $"offload_report_{generation:0000}.json";
+    public static string TextName(int generation) => generation <= 1 ? "offload_report.txt" : $"offload_report_{generation:0000}.txt";
+    public static string HtmlName(string cardName, int generation) => generation <= 1 ? $"{cardName}_report.html" : $"{cardName}_report_{generation:0000}.html";
+    public static string PdfName(string cardName, int generation) => generation <= 1 ? $"{cardName}_report.pdf" : $"{cardName}_report_{generation:0000}.pdf";
 
     /// Plain hash list, one "<xxh64>  <path>" per line — readable by humans and by `offload verify`.
     [JsonIgnore]
@@ -176,20 +183,41 @@ public sealed partial class OffloadReport
 
     /// Writes all report files into `<card>/_REPORT`. The hash list and MHL are the record of the copy itself,
     /// so they are written once (`includeHashRecords`); the HTML/JSON are refreshed as clips get analysed.
+    /// An append (Generation > 1) writes its own `_NNNN` files — created, never replacing one (ruling I1; only the
+    /// job's own refresh later replaces them) — and adds its lines to the hash list; the reports of the earlier
+    /// generations are never rewritten (R5, R6). Order: the reports, then the hash list, then the MHL generation.
     public void Write(string cardPath, bool includeHashRecords)
     {
+        int generation = Generation ?? 1;
         var dir = System.IO.Path.Combine(cardPath, Layout.ReportDirName);
         NativeIO.Mkdirs(dir);
         var outputs = new List<(string Name, string Text)>
         {
-            ("offload_report.json", ToJson()),
-            ("offload_report.txt", Summary),
-            ($"{CardName}_report.html", HtmlReport.Render(this)),
+            (JsonName(generation), ToJson()),
+            (TextName(generation), Summary),
+            (HtmlName(CardName, generation), HtmlReport.Render(this)),
         };
-        if (includeHashRecords) outputs.Add(($"{CardName}.xxh64", HashList));
+        bool create = generation > 1 && includeHashRecords;
         foreach (var (name, text) in outputs)
-            NativeIO.WriteFileDurably(System.IO.Path.Combine(dir, name), Encoding.UTF8.GetBytes(text));
-        if (includeHashRecords) Mhl.Write(this, cardPath);
+        {
+            var path = System.IO.Path.Combine(dir, name);
+            if (create) NativeIO.WriteFileNew(path, Encoding.UTF8.GetBytes(text));
+            else NativeIO.WriteFileDurably(path, Encoding.UTF8.GetBytes(text));
+        }
+        if (!includeHashRecords) return;
+        // An append: the earlier lines byte for byte, then this generation's — replaced in one rename (tmp + MoveFileEx).
+        var hashList = System.IO.Path.Combine(dir, $"{CardName}.xxh64");
+        var lines = Encoding.UTF8.GetBytes(HashList);
+        NativeIO.WriteFileDurably(hashList, generation > 1 ? [.. EarlierHashList(hashList), .. lines] : lines);
+        Mhl.Write(this, cardPath);
+    }
+
+    /// The card's hash list as the earlier generations left it (exact bytes), ending with a line break; empty when none.
+    static byte[] EarlierHashList(string path)
+    {
+        if (!File.Exists(path)) return [];
+        var bytes = File.ReadAllBytes(path);
+        return bytes.Length == 0 || bytes[^1] == (byte)'\n' ? bytes : [.. bytes, (byte)'\n'];
     }
 
     static JsonNode? Sorted(JsonNode? node) => node switch

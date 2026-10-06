@@ -62,7 +62,13 @@ public static unsafe class NativeIO
     }
 
     /// Write + flush via a temp name, so a crash never leaves a half-written report.
-    public static void WriteFileDurably(string path, ReadOnlySpan<byte> data)
+    public static void WriteFileDurably(string path, ReadOnlySpan<byte> data) => WriteViaTemp(path, data, replace: true);
+
+    /// Like WriteFileDurably, but `path` must not exist yet: the rename never replaces (IOError "rename" when it is
+    /// there — the existing file stays as it was). For what an append adds next to earlier generations (ruling I1).
+    public static void WriteFileNew(string path, ReadOnlySpan<byte> data) => WriteViaTemp(path, data, replace: false);
+
+    static void WriteViaTemp(string path, ReadOnlySpan<byte> data, bool replace)
     {
         var tmp = Path.Combine(Path.GetDirectoryName(path)!, "." + Path.GetFileName(path) + ".tmp");
         try
@@ -72,7 +78,7 @@ public static unsafe class NativeIO
                 if (!data.IsEmpty) Write(h, data, 0, tmp);
                 Flush(h, tmp);
             }
-            Move(tmp, path, replace: true);
+            Move(tmp, path, replace);
         }
         catch
         {

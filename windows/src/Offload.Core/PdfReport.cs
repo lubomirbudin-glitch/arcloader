@@ -18,11 +18,12 @@ public static class PdfReport
         return candidates.FirstOrDefault(File.Exists);
     }
 
-    public static void Write(OffloadReport report, string path, int timeoutSeconds = 60) =>
-        WriteHtml(HtmlReport.Render(report, forPrint: true), path, timeoutSeconds);
+    /// `replace`: false for an append's `_NNNN` PDF — it never replaces an existing file (ruling I1).
+    public static void Write(OffloadReport report, string path, int timeoutSeconds = 60, bool replace = true) =>
+        WriteHtml(HtmlReport.Render(report, forPrint: true), path, timeoutSeconds, replace);
 
     /// Any self-contained HTML page (the offload report, the verification report) printed to `path`.
-    public static void WriteHtml(string html, string path, int timeoutSeconds = 60)
+    public static void WriteHtml(string html, string path, int timeoutSeconds = 60, bool replace = true)
     {
         var edge = FindEdge() ?? throw new ToolError("Edge", -1, "Microsoft Edge not found — PDF skipped");
         var work = Path.Combine(Path.GetTempPath(), "offload-pdf-" + Guid.NewGuid().ToString("N")[..8]);
@@ -48,7 +49,7 @@ public static class PdfReport
             }
             var ok = File.Exists(tmp) && new FileInfo(tmp).Length > 4 && File.ReadAllBytes(tmp)[..4] is [0x25, 0x50, 0x44, 0x46];
             if (!ok) throw new ToolError("Edge", p.ExitCode, "PDF: printing did not produce a file\n" + p.StderrTail);
-            NativeIO.Move(tmp, path, replace: true);
+            NativeIO.Move(tmp, path, replace);
         }
         finally
         {
