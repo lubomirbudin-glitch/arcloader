@@ -18,7 +18,11 @@ public static class PdfReport
         return candidates.FirstOrDefault(File.Exists);
     }
 
-    public static void Write(OffloadReport report, string path, int timeoutSeconds = 60)
+    public static void Write(OffloadReport report, string path, int timeoutSeconds = 60) =>
+        WriteHtml(HtmlReport.Render(report, forPrint: true), path, timeoutSeconds);
+
+    /// Any self-contained HTML page (the offload report, the verification report) printed to `path`.
+    public static void WriteHtml(string html, string path, int timeoutSeconds = 60)
     {
         var edge = FindEdge() ?? throw new ToolError("Edge", -1, "Microsoft Edge not found — PDF skipped");
         var work = Path.Combine(Path.GetTempPath(), "offload-pdf-" + Guid.NewGuid().ToString("N")[..8]);
@@ -27,14 +31,14 @@ public static class PdfReport
         try
         {
             // A file, not a data URL: the report with thumbnails is easily several MB.
-            var html = Path.Combine(work, "report.html");
-            File.WriteAllText(html, HtmlReport.Render(report, forPrint: true), new UTF8Encoding(false));
+            var page = Path.Combine(work, "report.html");
+            File.WriteAllText(page, html, new UTF8Encoding(false));
             NativeIO.Delete(tmp);
             using var p = new ToolProcess(edge,
             [
                 "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
                 $"--user-data-dir={Path.Combine(work, "profile")}",  // never touches the user's own Edge profile
-                "--no-pdf-header-footer", $"--print-to-pdf={tmp}", new Uri(html).AbsoluteUri,
+                "--no-pdf-header-footer", $"--print-to-pdf={tmp}", new Uri(page).AbsoluteUri,
             ], work, pipeStdin: false);
             p.Start(_ => { });
             if (!p.WaitForExit(timeoutSeconds * 1000))

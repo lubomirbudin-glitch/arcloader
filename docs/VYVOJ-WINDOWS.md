@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-06 — plán 6: karty a bezpečnost dat
 
+- Úkol 11 — ověření zálohy proti ASC MHL všech generací (každý soubor se čte jednou všemi hashi, velikost zvlášť; `failed` z kopie, soubory navíc mimo `_REPORT`/`_PROXY`/`ascmhl` a ignore vzory MHL), bez `ascmhl` proti `.xxh64`/`.md5`; report ověření `_REPORT\<karta>_verify_<stamp>Z.html/.pdf` + `offload_verify_<stamp>Z.json` (do `ascmhl` nic); CLI `verify` s českým souhrnem, `--report` a složkou dne; starý `Verifier` odstraněn
 - Úkol 10 — čtení ASC MHL: všechny generace podle řetězu (C4 každé generace; změněná, chybějící nebo nezapsaná generace je problém, chybějící řetěz = čtení podle čísla v názvu), nejnovější záznam na cestu, hashe xxh64/md5/sha1/xxh3/xxh128/c4
 - Úkol 9 — název karty z názvů klipů (ARRI/Sony Venice/Canon `A001C003…`, RED `A001_C003…`, Blackmagic `A001_08251530_C001`) nebo „další v řadě“ podle historie dne; šedý zástupný text a řádek pod polem, volba „Navrhovat název karty podle klipů“ (`naming.suggestFromClips`), CLI `--name auto`, cívky v historii (`reels`)
 - Úkoly 7–8, oprava — selhané zjišťování karty se pamatuje jako chyba („Kartu se nepodařilo prověřit.“), takže ho každý sken neopakuje; při zavření bez úloh se nastaví `closing` před posledním zrušením; okno záloh říká „např. A001_2“ (skutečný název volí start podle disků)
