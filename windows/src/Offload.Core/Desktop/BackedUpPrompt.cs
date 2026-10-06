@@ -28,7 +28,8 @@ public static class BackedUpPrompt
         return m.Kind == HistoryMatchKind.NewFiles ? $"{line} · nové soubory: {m.New.Count}" : line;
     }
 
-    /// The folder a full copy would create: "A001_2" when the card was copied under the same name into today's date
+    /// The folder a full copy would probably create (the real name is picked at start by Layout.UniqueCardFolder, which
+    /// reads the destinations — not done on the UI thread, so the prompt says "např."): "A001_2" when the card was copied under the same name into today's date
     /// folder, otherwise the name in the date folder ("2026-10-07\A001").
     public static string NewFolder(HistoryEntry entry, string date, string plannedName) =>
         entry.Date == date && string.Equals(entry.CardName, plannedName, StringComparison.OrdinalIgnoreCase)
@@ -40,8 +41,8 @@ public static class BackedUpPrompt
     {
         var folders = string.Join(", ", cards.Select(c => NewFolder(c.Match.Entry, date, c.PlannedName)));
         return cards.Count == 1
-            ? new BackedUpPromptModel("Karta už je zálohovaná", [Line(cards[0].Match)], $"Zkopírovat ji znovu celou? Vznikne nová složka ({folders}).")
+            ? new BackedUpPromptModel("Karta už je zálohovaná", [Line(cards[0].Match)], $"Zkopírovat ji znovu celou? Vznikne nová složka (např. {folders}).")
             : new BackedUpPromptModel("Karty už jsou zálohované", cards.Select(c => Line(c.Match)).ToList(),
-                $"Zkopírovat je znovu celé? Vzniknou nové složky ({folders}).");
+                $"Zkopírovat je znovu celé? Vzniknou nové složky (např. {folders}).");
     }
 }

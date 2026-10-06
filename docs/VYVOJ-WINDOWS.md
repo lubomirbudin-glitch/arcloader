@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-06 — plán 6: karty a bezpečnost dat
 
+- Úkoly 7–8, oprava — selhané zjišťování karty se pamatuje jako chyba („Kartu se nepodařilo prověřit.“), takže ho každý sken neopakuje; při zavření bez úloh se nastaví `closing` před posledním zrušením; okno záloh říká „např. A001_2“ (skutečný název volí start podle disků)
 - Úkol 8 — GUI: před celou kopií karty, kterou historie zná, okno „Karty už jsou zálohované“ (Kopírovat znovu celé / Vynechat zálohované / Zrušit) se seznamem záloh a složkou, která vznikne (A001_2); karta vyprázdněná v kameře se neptá
 - Úkol 7 — GUI: pod kartou řádek „Zálohováno 6. 10. 2026 8:15 na Zaloha (D:) … — ověřeno“ (zeleně / oranžově / červeně, šedě „Zjišťuji…“; prázdná karta „Karta je prázdná — dřív zálohováno …“), zjišťuje se mimo UI vlákno po jedné úloze na kartu; výměna karty ve čtečce (i během čtení) běžící zjišťování zruší a výsledek zahodí; po dokončené kopii se historie načte znovu. Oprava po revizi: sken s ArgumentException/NotSupported/UnauthorizedAccess = chyba karty, kořen disku bez čitelného svazku = „Karta se nedá přečíst“, identita a svazek se na začátku kopie čtou každé zvlášť
 - Úkol 6 — pohled na kartu: jeden sken (zrušitelný), otisk, shoda s historií (beze změny / nové soubory / změněná / bez seznamu; karta bez jediné společné cesty = změněná), texty řádku historie; CLI vypíše před plánem „Zálohováno … — ověřeno“

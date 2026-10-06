@@ -47,6 +47,17 @@ public class CardInspectionsTests
         Assert.False(c.IsRunning(@"E:\"));
     }
 
+    // Retry storm: a failed or cancelled run is remembered as an error, so InspectMissing leaves the card alone.
+    [Fact]
+    public void FailedRun_KeptAsError_NotRetried_SwapStillReinspects()
+    {
+        var c = new CardInspections();
+        c.Start(@"E:\", "card1");
+        Assert.False(c.Finished(@"E:\", null, "card1", stillListed: true));
+        Assert.Equal(Offload.Core.Msg.CardInspectFailed, c.Result(@"E:\", "card1")!.Error);
+        Assert.Null(c.Result(@"E:\", "card2"));   // another card: looked at again
+    }
+
     [Fact]
     public void Result_OnlyForTheSameCard()
     {

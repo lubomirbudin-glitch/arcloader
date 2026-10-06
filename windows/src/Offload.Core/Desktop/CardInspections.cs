@@ -34,7 +34,7 @@ public sealed class CardInspections
         return run.Cts.Token;
     }
 
-    /// The run for `path` ended; `insight` is null when it was cancelled or failed. Its result is kept only while the
+    /// The run for `path` ended; `insight` is null when it was cancelled or failed (kept as an error result, so InspectMissing does not retry on every scan). Its result is kept only while the
     /// path is still listed and holds the card it looked at (`currentIdentity`). True = start once more.
     public bool Finished(string path, CardInsight? insight, string? currentIdentity, bool stillListed)
     {
@@ -47,7 +47,7 @@ public sealed class CardInspections
         }
         bool sameCard = Same(run.Identity, currentIdentity);
         if (!sameCard) results.Remove(path);
-        else if (insight != null) results[path] = (run.Identity, insight);
+        else results[path] = (run.Identity, insight ?? new CardInsight { Source = path, Error = Msg.CardInspectFailed });   // a failed look is not retried by every scan
         return run.Again || !sameCard;
     }
 

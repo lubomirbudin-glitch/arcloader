@@ -22,7 +22,7 @@ public class BackedUpPromptTests
         Assert.Equal(
             ["A001 — 6. 10. 2026 8:15, Zaloha (D:), Zaloha (F:), ověřeno", "A002 — 6. 10. 2026 8:15, Zaloha (D:), Zaloha (F:), ověřeno · nové soubory: 12"],
             model.Lines);
-        Assert.Equal("Zkopírovat je znovu celé? Vzniknou nové složky (A001_2, A002_2).", model.Question);
+        Assert.Equal("Zkopírovat je znovu celé? Vzniknou nové složky (např. A001_2, A002_2).", model.Question);
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class BackedUpPromptTests
         var model = BackedUpPrompt.Build([(Match("A001", verified: false), "A001")], "2026-10-07");
         Assert.Equal("Karta už je zálohovaná", model.Title);
         Assert.Equal(["A001 — 6. 10. 2026 8:15, Zaloha (D:), Zaloha (F:), NEOVĚŘENO"], model.Lines);
-        Assert.Equal(@"Zkopírovat ji znovu celou? Vznikne nová složka (2026-10-07\A001).", model.Question);
+        Assert.Equal(@"Zkopírovat ji znovu celou? Vznikne nová složka (např. 2026-10-07\A001).", model.Question);
     }
 
     [Fact]

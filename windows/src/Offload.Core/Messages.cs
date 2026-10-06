@@ -65,6 +65,7 @@ public static class Msg
     public static string NoHashRecord(string dir) => $"Ve složce {dir} není ASC MHL ani seznam součtů — není s čím porovnat.";
     public static string NoFilesToRead(string path) => $"V {path} nejsou soubory ke čtení.";
     public const string CardVolumeUnreadable = "Karta se nedá přečíst.";
+    public const string CardInspectFailed = "Kartu se nepodařilo prověřit.";
     public const string CardSwapped = "Karta se během čtení vyměnila.";
     public static string CardUnreadable(string detail) => $"Kartu nejde přečíst: {detail}";
 

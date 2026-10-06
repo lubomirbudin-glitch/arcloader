@@ -236,6 +236,7 @@ public sealed partial class MainViewModel
             if (Jobs.Any(Busy)) return false;
         }
         closeRaised = true;
+        closing = true;   // a late continuation must not start another inspection
         inspections.CancelAll();
         ticker.Stop();
         healthTimer.Stop();
