@@ -65,6 +65,39 @@ public class CardInspectorTests
         Assert.StartsWith("Kartu nejde přečíst: ", insight.Error);
     }
 
+    [Fact]
+    public void ScanArgumentException_ErrorInTheInsight()
+    {
+        using var dir = new TempDir();
+        // A path with an illegal character makes the scan throw ArgumentException/NotSupported, not IOError.
+        var insight = CardInspector.Inspect(Path.Combine(dir.Path, "a<b|c"), null, null, CancellationToken.None);
+        Assert.StartsWith("Kartu nejde přečíst: ", insight.Error);
+    }
+
+    [Fact]
+    public void DriveRoot_VolumeUnreadable_IsAnError_NotAShapeMatch()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        var insight = CardInspector.Inspect(card, [], null, CancellationToken.None, _ => null, _ => null, _ => @"E:\");
+        Assert.Equal(Offload.Core.Msg.CardVolumeUnreadable, insight.Error);
+        Assert.Null(insight.History);
+    }
+
+    [Fact]
+    public void CardSwappedDuringTheScan_ResultDiscarded()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        var volume = new CardVolume("card1", "1A2B3C4D", 1000, "A001", "exFAT");
+        var insight = CardInspector.Inspect(card, [], null, CancellationToken.None, _ => volume, _ => "card2", _ => @"E:\");
+        Assert.Equal(Offload.Core.Msg.CardSwapped, insight.Error);
+        Assert.Equal(0, insight.FileCount);
+        var same = CardInspector.Inspect(card, [], null, CancellationToken.None, _ => volume, _ => "card1", _ => @"E:\");
+        Assert.Null(same.Error);
+        Assert.Equal(2, same.FileCount);
+    }
+
     // Spec 5.5: 10 000 files well within the budget (3 s on a USB 3 reader; here a local disk).
     [Fact]
     public void TenThousandFiles_UnderBudget()

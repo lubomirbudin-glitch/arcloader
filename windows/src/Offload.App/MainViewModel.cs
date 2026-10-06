@@ -22,6 +22,7 @@ public sealed partial class MainViewModel : ObservableObject
         InitSetup();
         InitQueue();
         InitHardware();
+        InitHistory();
     }
 
     public StartupOptions Options { get; }

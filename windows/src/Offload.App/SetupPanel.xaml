@@ -73,6 +73,26 @@
                                     <StackPanel Grid.Column="2">
                                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
                                         <TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" Margin="0,2,0,0" />
+                                        <TextBlock Text="{Binding HistoryText}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
+                                                   AutomationProperties.AutomationId="CardHistoryText"
+                                                   Visibility="{Binding HistoryText, Converter={StaticResource NullToCollapsed}}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HistoryTone}" Value="Ok">
+                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding HistoryTone}" Value="Warning">
+                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding HistoryTone}" Value="Error">
+                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <DockPanel Margin="0,6,0,0" Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisible}}">
                                             <TextBlock Text="Název složky" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
                                             <Grid>

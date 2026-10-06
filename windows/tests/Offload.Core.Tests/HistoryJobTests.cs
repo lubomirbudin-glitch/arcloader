@@ -64,6 +64,22 @@ public class HistoryJobTests
         Assert.Equal(("1A2B3C4D", 256_060_514_304L, "exFAT"), (card.FsSerial, card.Capacity, card.Filesystem));
     }
 
+    // Review: a failing identity read must not skip the volume read.
+    [Fact]
+    public void IdentityFails_VolumeStillRead()
+    {
+        using var dir = new TempDir();
+        var history = dir.Sub("appdata");
+        var config = new JobConfig(Card(dir), [dir.Sub("d1")]) { AnalyzeClips = false, HistoryFolder = history };
+        var job = new OffloadJob(config, Options())
+        {
+            Identify = _ => throw new IOException("boom"),
+            VolumeOf = _ => new CardVolume(null, "1A2B3C4D", 1000, "A001", "exFAT"),
+        };
+        job.Run();
+        Assert.Equal("1A2B3C4D", Assert.Single(new HistoryStore(history).Load()).Card!.FsSerial);
+    }
+
     // Review focus 4: a cancelled job leaves no history entry.
     [Fact]
     public void Cancelled_IsNotRecorded()

@@ -199,15 +199,11 @@ public sealed class OffloadJob
     /// Which card is in the drive — read on the copy thread before anything else (the UI never waits on a card).
     void IdentifyCard(Action<string>? log)
     {
-        try
-        {
-            sourceIdentity = Identify(Config.Source);
-            cardVolume = VolumeOf(Config.Source);
-        }
-        catch (Exception e)
-        {
-            log?.Invoke($"card identity: {e.Message}");
-        }
+        // Each read has its own try: one failing must not skip the other.
+        try { sourceIdentity = Identify(Config.Source); }
+        catch (Exception e) { log?.Invoke($"card identity: {e.Message}"); }
+        try { cardVolume = VolumeOf(Config.Source); }
+        catch (Exception e) { log?.Invoke($"card volume: {e.Message}"); }
     }
 
     /// The finished stage 1 (with failed files too) goes into history.json; this never fails the job.

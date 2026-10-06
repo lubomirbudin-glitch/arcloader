@@ -76,6 +76,7 @@ public sealed partial class MainViewModel
         foreach (var d in Destinations) d.Probe();
         RefreshLut();
         RefreshProxyFolder();
+        ReloadHistory();   // and every card is looked at again
     }
 
     void HealthCheck()
@@ -155,7 +156,11 @@ public sealed partial class MainViewModel
         volumes = found;
         selected.Clear();
         selected.UnionWith(next);
-        foreach (var p in drop) cardNames.Remove(p);
+        foreach (var p in drop)
+        {
+            cardNames.Remove(p);
+            inspections.Drop(p);   // its history line belonged to the card that left
+        }
         var sig = string.Join("\n", found.Where(v => !v.IsDestination).Select(v => $"{v.Path}|{v.Identity}|{v.Name}|{v.Total - v.Free}|{v.Format}|{v.LooksLikeCard}|{selected.Contains(v.Path)}"))
             + "\n" + string.Join("\n", manualSources.Select(p => $"{p}|{selected.Contains(p)}"));
         if (sig != sourcesSig)
@@ -171,6 +176,7 @@ public sealed partial class MainViewModel
             destSig = dsig;
             RebuildDestinations();
         }
+        InspectMissing();   // new or swapped cards
         foreach (var j in Jobs) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
         RefreshLut();   // the LUT may sit on a disk that just came or went
         RefreshProxyFolder();   // and so may the proxy folder
@@ -203,6 +209,7 @@ public sealed partial class MainViewModel
         selected.Add(path);
         RebuildSources();
         ReadManualLabel(path);
+        Inspect(path);
     }
 
     /// A drive root picked as a folder: its label is the card name the job will use — read it off the UI thread.

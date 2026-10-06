@@ -151,6 +151,7 @@ public sealed partial class MainViewModel
         if (Find(job) is not { } item) return;
         item.Refresh();
         if (!closing && item.SafeToEject) SystemSounds.Asterisk.Play();
+        if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Zálohováno"
     }
 
     void OnJobFinished(IQueuedJob job)
@@ -205,6 +206,7 @@ public sealed partial class MainViewModel
             }
             if (Jobs.Any(j => !j.IsFinished) && !confirm()) return false;
             closing = true;
+            inspections.CancelAll();
             foreach (var j in Jobs) j.Job.Cancel();
             foreach (var j in Jobs) j.Refresh();
             Raise(nameof(CanStart));
@@ -212,6 +214,7 @@ public sealed partial class MainViewModel
             if (Jobs.Any(Busy)) return false;
         }
         closeRaised = true;
+        inspections.CancelAll();
         ticker.Stop();
         healthTimer.Stop();
         queue.Dispose();

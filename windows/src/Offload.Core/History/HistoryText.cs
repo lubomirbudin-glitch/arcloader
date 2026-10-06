@@ -29,6 +29,10 @@ public static class HistoryText
 
     static string Files(int n) => $"{n} {Texts.Plural(n, "soubor", "soubory", "souborů")}";
 
+    /// A card emptied in the camera after the backup (everything on it was backed up, then deleted).
+    public static (string Text, HistoryTone Tone) Emptied(HistoryMatch m) =>
+        ($"Karta je prázdná — dřív zálohováno {When(m.Entry.Finished)} na {string.Join(", ", m.Entry.Destinations.Select(d => DiskName(d.Root)))}", HistoryTone.Neutral);
+
     /// `fullPaths`: the CLI names the destinations by their full root ("D:\Zaloha"), the GUI by DiskName.
     public static (string Text, HistoryTone Tone) Line(HistoryMatch m, bool fullPaths = false)
     {

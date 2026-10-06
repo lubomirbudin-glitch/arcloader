@@ -19,6 +19,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-06 — plán 6: karty a bezpečnost dat
 
+- Úkol 7 — GUI: pod kartou řádek „Zálohováno 6. 10. 2026 8:15 na Zaloha (D:) … — ověřeno“ (zeleně / oranžově / červeně, šedě „Zjišťuji…“; prázdná karta „Karta je prázdná — dřív zálohováno …“), zjišťuje se mimo UI vlákno po jedné úloze na kartu; výměna karty ve čtečce (i během čtení) běžící zjišťování zruší a výsledek zahodí; po dokončené kopii se historie načte znovu. Oprava po revizi: sken s ArgumentException/NotSupported/UnauthorizedAccess = chyba karty, kořen disku bez čitelného svazku = „Karta se nedá přečíst“, identita a svazek se na začátku kopie čtou každé zvlášť
 - Úkol 6 — pohled na kartu: jeden sken (zrušitelný), otisk, shoda s historií (beze změny / nové soubory / změněná / bez seznamu; karta bez jediné společné cesty = změněná), texty řádku historie; CLI vypíše před plánem „Zálohováno … — ověřeno“
 - Úkol 5 — každá dokončená kopie (i s chybami, zrušená ne) se zapíše do historie s otiskem a seznamem souborů; identitu karty zjišťuje úloha sama na vlákně kopie (i v CLI); CLI `--no-history`; testy píšou historii jen do %TEMP%
 - Úkol 4, oprava — čtení `history.json` a seznamu souborů nebrání přejmenování při zápisu, odložený poškozený soubor se nepřepíše (`-2`, `-3`), mutex vytvořený povýšeným procesem se bere jako obsazený a zkouší se znovu
