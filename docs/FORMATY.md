@@ -27,12 +27,13 @@ Změna čehokoli tady = změna v obou verzích + záznam v obou `VYVOJ-*.md` + v
         offload_report_0002.txt
         <karta>_report_0002.html
         <karta>_report_0002.pdf
+        neshoda_0002/<cesta na kartě>  jen po opravě (Windows od 0.5.0): nesouhlasná kopie odložená před novou
         <karta>_verify_<YYYY-MM-DD_HHMMSS>Z.html   jen po ověření zálohy s reportem (viz „Report ověření“)
         <karta>_verify_<YYYY-MM-DD_HHMMSS>Z.pdf
         offload_verify_<YYYY-MM-DD_HHMMSS>Z.json
     ascmhl/
         0001_<karta>_<YYYY-MM-DD_HHMMSS>Z.mhl
-        0002_<karta>_<YYYY-MM-DD_HHMMSS>Z.mhl     jen po doplnění
+        0002_<karta>_<YYYY-MM-DD_HHMMSS>Z.mhl     jen po doplnění nebo opravě
         ascmhl_chain.xml
     _PROXY/                           jen když se renderují proxy
         <klip>.mov
@@ -83,8 +84,11 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | Klíč | Typ | Význam |
 |---|---|---|
 | `tool` | string | `offload` |
-| `version` | string | `0.1.0` (Mac), `0.4.0-win` (Windows) |
-| `generation` | číslo? | jen Windows od 0.2.0 a jen v reportu doplnění (`offload_report_NNNN.json`): číslo generace ASC MHL; chybí = 1 (celá kopie) |
+| `version` | string | `0.1.0` (Mac), `0.5.0-win` (Windows) |
+| `generation` | číslo? | jen Windows od 0.2.0 a jen v reportu doplnění nebo opravy (`offload_report_NNNN.json`): číslo generace ASC MHL; chybí = 1 (celá kopie) |
+| `kind` | string? | jen Windows od 0.5.0: `repair` u opravy („Zkopírovat znovu“); chybí u celé kopie a doplnění. Mac ignoruje |
+| `copyPausedSeconds`, `verifyPausedSeconds` | číslo? | jen Windows od 0.5.0: sekundy, které kopie / zpětné čtení stály pozastavené (od Pozastavit do Pokračovat); chybí, když se nepozastavovalo. Rychlosti a doby v TXT, HTML a PDF je odečítají; Mac ignoruje |
+| `setAside[]` | objekt? | jen Windows od 0.5.0 a jen u opravy: `destination` (index cíle), `path` (cesta na kartě), `movedTo` (`_REPORT/neshoda_NNNN/<path>`) — nesouhlasné kopie přesunuté před novou; chybí, když žádná nebyla |
 | `project` | string? | jen Windows od 0.4.0: projekt, ve kterém se karta kopírovala; chybí bez projektu. Doplnění zapíše projekt dřívější zálohy, ne projekt zobrazený v aplikaci. Denní report ho ukáže, když ho mají všechny karty dne stejný |
 | `hashAlgorithm` | string | `xxh64` (vždy, i s MD5 — Mac ho jen zobrazí) |
 | `hashAlgorithms` | string[]? | jen Windows od 0.3.0 a jen když nejsou jen xxh64: `["xxh64", "md5"]` |
@@ -93,7 +97,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `verified` | bool | proběhlo ověření zpětným čtením |
 | `totalFiles`, `totalBytes` | číslo | |
 | `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows) |
-| `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`?, `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky) |
+| `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
 | `skipped[]` | string | vynechané systémové položky |
 | `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`?, `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje) |
 | `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5` — viz níže) |
@@ -171,6 +175,31 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
   velikost nebo čas (tolerance 2 s, na FAT celé hodiny); soubor na cíli, který žádný report nezná;
 - dvě doplnění do téže složky karty najednou nejdou: pojmenovaný mutex `Local\Offload-append-<sha256(svazek|cesta)>`
   na každou složku karty, bez čekání (druhé skončí „Do této zálohy právě doplňuje jiná úloha …“); celá kopie zámek nebere.
+
+### Oprava — „Zkopírovat znovu“ (Windows od 0.5.0, Mac naplánováno)
+
+Soubory, jejichž **nejnovější** záznam v reportech na cílech selhal, se znovu zkopírují z karty — jen na cíle, kde
+selhaly — jako další generace ve stejné složce karty (jen GUI, tlačítko na kartě úlohy):
+
+- kontroly zálohy a pořadí zápisu jsou stejné jako u doplnění (složky, reporty, neporušený řetěz MHL, stejný počet
+  generací na všech cílech, zámek `Local\Offload-append-…`); generace N = max + 1 na **všech** cílech;
+- **zaznamenaný hash se nikdy nemění**: očekávaný xxh64 je z nejnovější generace, která není oprava (celá kopie nebo
+  doplnění; z opravy jen pro soubor, který žádná jiná generace nehashovala). Karta se před jakýmkoli zápisem přečte a
+  porovná; jiný obsah než při záloze = celá oprava odmítnuta bez zápisu (nový hash je jen v české hlášce). Změní-li se
+  karta až mezi plánováním a kopírováním, nová kopie se zahodí, nesouhlasná se nepřesune a soubor zůstane `failed` s
+  `sourceError` `card differs from the backup: xxh64 <nový> != recorded <zaznamenaný>`; v reportech, MHL a seznamech
+  hashů je pořád zaznamenaný hash;
+- dobrá kopie na ostatních cílech se nepřepíše, jen přečte a porovná se zaznamenaným hashem; dobrá kopie, jejíž nejnovější
+  záznam nebyl přečten zpět (zrušené ověření, záloha bez ověření), se jen přečte (karta se pro ni nepotřebuje);
+  oprava záloh bez ověření se odmítne;
+- karta ve čtečce musí být ta, ze které se kopírovalo (identita svazku); jiná = odmítnutí bez zápisu;
+- nesouhlasná kopie, která na cíli je, se před novou přesune do `_REPORT/neshoda_NNNN/<cesta>` (nikdy se nesmaže ani
+  nepřepíše; je-li místo obsazené, použije se první volné `neshoda_NNNN_2`, `_3`, …; obsadí-li se až po plánování,
+  soubor na tom cíli selže s `set aside: …` a nic se nepřepíše);
+- generace MHL N obsahuje opravované soubory na všech cílech: nová kopie `action="original"`, přečtená dobrá kopie
+  `action="verified"` (`hashdate` = čas opravy), `<comment>Offload oprava: 1 soubor znovu z E:\</comment>`;
+- report `offload_report_NNNN.*` s `kind: "repair"`, `rewritten`, `setAside`; `<karta>.xxh64` (a `.md5`) se přepíše bez
+  opakovaných řádků; nic k opravě = nic se nezapíše.
 
 ## Report ověření (Windows od 0.2.0)
 
@@ -296,7 +325,7 @@ podle `finished` se smažou i se seznamem souborů). Poškozený soubor se přej
 | `fingerprint`, `shape` | string | SHA-256 (hex) přes řádky seřazené podle cesty `relpath\tsize\tmtimeTicksUtc\n` resp. `relpath\tsize\n` |
 | `fileList` | string | `history/<id>.files.gz` — gzip řádků `relpath\tsize\tmtimeTicksUtc\n` (seznam po všech generacích) |
 | `destinations[]` | objekt | `root`, `cardPath` |
-| `generations[]` | objekt | `seq`, `kind` (`full` / `append`), `finished`, `files`, `bytes`, `verified` |
+| `generations[]` | objekt | `seq`, `kind` (`full` / `append` / `repair` — Windows od 0.5.0), `finished`, `files`, `bytes`, `verified`; po opravě se `success` a `failedFiles` záznamu spočítají znovu z reportů na cílech |
 | `reels[]` | string | cívky z názvů klipů (`A001`) |
 
 Karta se pozná podle `fsSerial` + `capacity` (GUID svazku dává Windows podle čtečky, proto se k poznání nepoužije);
