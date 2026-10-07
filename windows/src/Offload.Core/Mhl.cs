@@ -76,9 +76,10 @@ public static class Mhl
             if (f.Rewritten is { } rewritten && d < rewritten.Count)
             {
                 // A repair (ruling C1: the hash is always the one the backup recorded): a good copy that was only read
-                // back is "verified"; one not read back (a cancelled repair) or not touched at all is not in this
-                // generation; a new copy is "original"; a copy found or left bad "failed".
-                if (state == "pending" || (!rewritten[d] && state == "written")) continue;
+                // back is "verified"; one not read back in this generation (the repair was cancelled before its read-back
+                // — its state carries on the earlier one) or not touched at all is not in it; a new copy is "original";
+                // a copy found or left bad "failed".
+                if (state == "pending" || (!rewritten[d] && (state == "written" || !report.Verified))) continue;
                 action = state == "failed" ? "failed" : rewritten[d] ? "original" : "verified";
             }
             else action = state is "verified" or "written" ? "original" : "failed";

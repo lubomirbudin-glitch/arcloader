@@ -80,6 +80,21 @@ public class RepairPlannerTests
         Assert.Equal([dir.Sub("d1"), dir.Sub("d2")], plan.DestRoots);
     }
 
+    // Fix round 1, item 1: a file shot onto the card after the backup is in no report — the repair does not copy it, but
+    // counts it (the card must not be ejected as backed up).
+    [Fact]
+    public void NewFileOnTheCard_NotRepaired_Counted()
+    {
+        using var dir = new TempDir();
+        var (card, paths, _) = RepairFixtures.Mismatch(dir);
+        AppendFixtures.NewClip(card);
+
+        var plan = RepairPlanner.Plan(card, paths);
+
+        Assert.Equal([RepairFixtures.Bad], plan.Files.Select(f => f.RelPath));
+        Assert.Equal(1, plan.NotInBackup);
+    }
+
     [Fact]
     public void EverythingGood_RepairNothing()
     {

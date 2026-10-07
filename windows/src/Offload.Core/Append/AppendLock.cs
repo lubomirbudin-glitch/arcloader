@@ -16,6 +16,9 @@ namespace Offload.Core.Append;
 /// - The name comes from the spelling resolved to a volume and a path on it, not from the folder's identity: a `subst`
 ///   drive, `\\localhost\D$` or an 8.3 short name of the same folder gives another name, so two
 ///   appends spelled that way are not stopped either.
+/// - Ověřit zálohu (BackupVerifier, GUI and `offload verify`) does not take this lock: it only reads. A verify running
+///   while a repair (plan 9) sets a bad copy aside can see that file missing for the moment between the move to
+///   `_REPORT\neshoda_NNNN` and the rename of the new copy into place — run it again after the repair; nothing is lost.
 public sealed class AppendLock : IDisposable
 {
     const string Prefix = @"Local\Offload-append-";

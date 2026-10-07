@@ -87,6 +87,11 @@ public sealed class OffloadPlan
     /// Repair: per file and destination, where its copy that did not match goes before the new one takes its place
     /// (relative to the card folder), else null.
     public IReadOnlyList<string?[]>? SetAside { get; init; }
+    /// Repair: per file and destination, a kept copy whose newest record says it was read back — still "verified" when
+    /// the repair ends (cancelled) before reading it again (fix round 1, item 2).
+    public IReadOnlyList<bool[]>? ReadBackBefore { get; init; }
+    /// Repair: card files that no report of the backup records (fix round 1, item 1) — the card is not safe to eject.
+    public int NotInBackup { get; init; }
 
     /// File `file` gets written to destination `dest`.
     public bool Writes(int file, int dest) => Write?[file][dest] ?? true;

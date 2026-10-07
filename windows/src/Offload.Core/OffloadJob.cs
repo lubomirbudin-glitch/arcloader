@@ -300,7 +300,14 @@ public sealed class OffloadJob
                 var w = whole = BackupState.Of(plan.CardPaths);
                 safe &= w.Failed == 0 && w.Unverified == 0;
                 if (w.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(w.Unverified)));
+                // Fix round 1, item 1: files shot after the backup are in no report — a repair does not copy them, and
+                // the card formatted now would lose them.
+                safe &= plan.NotInBackup == 0;
+                if (plan.NotInBackup > 0) Update(s => s.WithWarning(Msg.CardFilesNotInBackup(plan.NotInBackup)));
             }
+            // The same for an append (fix round 1, item 1, plan 6's verdict checked): its new files are verified, but
+            // files of the earlier backup that were never read back keep the card from "kartu lze vysunout".
+            if (plan.Mode == PlanMode.Append) safe &= plan.UnverifiedEarlier == 0;
             Update(s => s with { SafeToEject = safe, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
             if (IsCancelled)
             {
@@ -335,7 +342,17 @@ public sealed class OffloadJob
         }
         catch (OffloadError e) when (e.Code == PreflightCode.RepairNothing)
         {
-            // Not an error: every file is good everywhere (another repair or an append got there first).
+            // Not an error: every file is good everywhere (another repair or an append got there first). Nothing to
+            // copy does not make an earlier copy verified (fix round 1, item 3; as NothingNew says it).
+            try
+            {
+                if (BackupState.Of(Config.RepairInto!) is { Unverified: > 0 } whole)
+                    Update(s => s.WithWarning(Msg.UnverifiedEarlier(whole.Unverified)));
+            }
+            catch (Exception x) when (x is IOException or UnauthorizedAccessException)
+            {
+                log?.Invoke($"backup state: {x.Message}");
+            }
             Update(s => s with { Phase = JobPhase.Done, Note = e.Message });
             return false;
         }

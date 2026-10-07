@@ -180,6 +180,99 @@ public class RepairJobTests
         Assert.False(entry.Verified);
     }
 
+    // Fix round 1, item 1: a clip shot onto the card after the backup is in no report — the repair fixes what failed,
+    // but the card is not safe to eject (formatting it would lose the clip): Czech warning, no "lze vysunout".
+    [Fact]
+    public void NewClipOnTheCard_RepairNotSafeToEject()
+    {
+        using var dir = new TempDir();
+        var failed = FailedJob(dir, dir.Sub("history"));
+        AppendFixtures.NewClip(failed.Config.Source);
+
+        var repair = Repair(failed);
+        repair.Run();
+
+        var s = repair.Status();
+        Assert.Equal(JobPhase.Done, s.Phase);
+        Assert.True(repair.Report!.SafeToEject);
+        Assert.False(s.SafeToEject);
+        Assert.Equal("Na kartě je 1 soubor, který záloha nemá — kartu nevysouvejte, zálohu doplňte.", s.Warning);
+        Assert.Equal("Na kartě jsou 3 soubory, které záloha nemá — kartu nevysouvejte, zálohu doplňte.", Msg.CardFilesNotInBackup(3));
+        Assert.Equal("Na kartě je 5 souborů, které záloha nemá — kartu nevysouvejte, zálohu doplňte.", Msg.CardFilesNotInBackup(5));
+        Assert.Equal(OutcomeKind.Attention, JobOutcomes.Final("A001", s, repair.Report)!.Kind);
+    }
+
+    // Fix round 1, item 2: cancel a repair, then repair again — the day report says "ověřeno" and history agrees
+    // (CardRecord.Verified and BackupState share one definition: every file's newest record read back).
+    [Fact]
+    public void CancelThenRepair_DayReportVerified_HistoryAgrees()
+    {
+        using var dir = new TempDir();
+        var history = dir.Sub("history");
+        var failed = FailedJob(dir, history, dayReport: true);
+        var options = AppendFixtures.Options();
+        var cancelled = Repair(failed, options: options);
+        options.BeforeFileCopy = _ => cancelled.Cancel();
+        cancelled.Run();
+        Assert.Equal(JobPhase.Cancelled, cancelled.Status().Phase);
+        Assert.Equal(["verified", "pending"], Assert.Single(cancelled.Report!.Files).Destinations);   // the kept copy stays verified
+
+        var repair = Repair(failed);
+        repair.Run();
+
+        Assert.True(repair.Status().SafeToEject);
+        var entry = Assert.Single(new HistoryStore(history).Load());
+        Assert.True(entry.Success && entry.Verified);
+        foreach (var root in failed.Plan!.DestRoots)
+        {
+            var day = DayReport.Load(Path.Combine(root, "2026-10-07"));
+            Assert.True(Assert.Single(day.Cards).Record.Verified);
+            Assert.Equal(1, day.VerifiedCards);
+        }
+        Assert.All(repair.DayReports, p =>
+        {
+            var html = File.ReadAllText(p);
+            Assert.Contains("<td class=\"ok\">ověřeno</td>", html);
+            Assert.DoesNotContain("NEOVĚŘENO", html);
+        });
+    }
+
+    // Fix round 1, item 3: nothing to repair on a backup copied without verification — the note, and the warning
+    // that the earlier copy was not read back (as an append with nothing new says it).
+    [Fact]
+    public void NothingToRepair_UnverifiedBackup_Warning()
+    {
+        using var dir = new TempDir();
+        var failed = UnverifiedJobWithAWriteError(dir, dir.Sub("history"));
+        Repair(failed).Run();
+
+        var again = Repair(failed);
+        again.Run();
+
+        var s = again.Status();
+        Assert.Equal((JobPhase.Done, Msg.RepairNothing, Msg.UnverifiedEarlier(1)), (s.Phase, s.Note, s.Warning));
+        Assert.Equal(OutcomeKind.Attention, JobOutcomes.Final("A001", s, null)!.Kind);
+    }
+
+    // Fix round 1, item 4: Ověřit zálohu does not take AppendLock — it runs while a repair holds the card folders, and
+    // only reads (so at worst it sees a copy that is being set aside as missing for a moment).
+    [Fact]
+    public void VerifyBackup_RunsWhileTheFoldersAreHeld_ReadsOnly()
+    {
+        using var dir = new TempDir();
+        var failed = FailedJob(dir, dir.Sub("history"));
+        var paths = failed.Plan!.CardPaths;
+        var before = paths.Select(RepairFixtures.Snapshot).ToList();
+
+        using (AppendLock.Acquire(paths))
+        {
+            Assert.True(Verification.BackupVerifier.Verify(paths[0], chunkSize: 4096).Success);
+            Assert.False(Verification.BackupVerifier.Verify(paths[1], chunkSize: 4096).Success);
+        }
+
+        for (int d = 0; d < paths.Count; d++) Assert.Empty(RepairFixtures.AssertUntouchedExcept(before[d], paths[d]));
+    }
+
     // Minor M12: a cancelled repair keeps its warnings; its card folders (full paths) stay known.
     [Fact]
     public void CancelledRepair_KeepsWarningAndPaths()

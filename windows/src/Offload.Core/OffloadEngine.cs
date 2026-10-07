@@ -148,6 +148,7 @@ public sealed partial class OffloadEngine
             Source = r.Source, Scan = scan, Date = r.Date, CardName = r.CardName, DestRoots = r.DestRoots,
             Mode = PlanMode.Repair, Generation = r.Generation, Space = lines, SpaceWarnings = problems.Select(p => p.Text).ToList(),
             Hashes = HashKinds.FromNames(r.HashAlgorithms), Write = r.Write, Expected = r.Expected, SetAside = r.SetAside,
+            ReadBackBefore = r.ReadBackBefore, NotInBackup = r.NotInBackup,
         };
     }
 

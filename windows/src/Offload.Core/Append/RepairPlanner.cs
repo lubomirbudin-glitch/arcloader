@@ -24,8 +24,14 @@ public sealed class RepairPlan
     public required IReadOnlyList<FileHashes> Expected { get; init; }
     /// Per file, per destination: where the copy that did not match goes first (relative to the card folder), or null.
     public required IReadOnlyList<string?[]> SetAside { get; init; }
+    /// Per file, per destination: a kept copy (not written) whose newest record says it was read back
+    /// (CardRecord.ReadBack) — a repair that ends before reading it again records it "verified" still.
+    public required IReadOnlyList<bool[]> ReadBackBefore { get; init; }
     /// The hash types of the earlier backup — a repair uses them, like an append (spec 3.5).
     public IReadOnlyList<string> HashAlgorithms { get; init; } = ["xxh64"];
+    /// Fix round 1, item 1: files on the card that no report of the backup records (shot after it) — not repaired, but
+    /// the card must not be ejected as backed up while they are there.
+    public int NotInBackup { get; init; }
 }
 
 /// Pure decisions over the card and the card folders, like AppendPlanner (R4: the truth is what the destinations hold).
@@ -78,6 +84,7 @@ public static class RepairPlanner
         var write = new List<bool[]>();
         var expected = new List<FileHashes>();
         var setAside = new List<string?[]>();
+        var readBack = new List<bool[]>();
         foreach (var path in failed)
         {
             ct.ThrowIfCancellationRequested();
@@ -95,6 +102,7 @@ public static class RepairPlanner
             if (taken.Contains(DestWriter.PartName(path))) conflicts.Add(Msg.AppendPartNameTaken(path, DestWriter.PartName(path)));
             var mask = new bool[paths.Count];
             var aside = new string?[paths.Count];
+            var before = new bool[paths.Count];
             for (int d = 0; d < paths.Count; d++)
             {
                 bool exists = File.Exists(Layout.Join(paths[d], path));
@@ -103,6 +111,7 @@ public static class RepairPlanner
                 {
                     // A good copy: never written — but it must be there to be read back (as an append requires).
                     if (!exists) throw OffloadError.Preflight(PreflightCode.AppendMissingFile, Msg.AppendMissingFile(AppendPlanner.Disk(paths[d]), path));
+                    before[d] = CardRecord.ReadBack(rec, paths[d], d);
                     continue;
                 }
                 mask[d] = true;
@@ -111,6 +120,7 @@ public static class RepairPlanner
             files.Add(card);
             write.Add(mask);
             setAside.Add(aside);
+            readBack.Add(before);
             expected.Add(Expected(records, path));
         }
         // Ruling C1(c): the card read now must give what the backup recorded — checked before anything is written (one
@@ -122,8 +132,10 @@ public static class RepairPlanner
         return new RepairPlan
         {
             Source = Path.GetFullPath(source), CardPaths = paths, DestRoots = roots, Date = date, CardName = cardName, Generation = generation,
-            Files = files, Dirs = dirs, Write = write, Expected = expected, SetAside = setAside,
+            Files = files, Dirs = dirs, Write = write, Expected = expected, SetAside = setAside, ReadBackBefore = readBack,
             HashAlgorithms = records[0].Generations[0].Report.Algorithms,
+            // Fix round 1, item 1: a file shot after the backup is in no report — not repaired, but counted.
+            NotInBackup = scan.Files.Count(f => !records.Any(r => r.Files.ContainsKey(f.RelPath))),
         };
     }
 
@@ -169,7 +181,7 @@ public static class RepairPlanner
     static bool Good(RecordedFile rec, string cardPath, int position)
     {
         int column = CardRecord.DestinationIndex(rec.Report, cardPath, position);
-        var state = column < rec.File.Destinations.Count ? rec.File.Destinations[column] : "pending";
+        var state = CardRecord.StateOf(rec, cardPath, position);
         bool kept = rec.File.Rewritten is { } rewritten && column < rewritten.Count && !rewritten[column];
         if (rec.File.SourceError != null && !kept) return false;
         return state is "verified" || (state == "written" && !rec.Report.Verified);

@@ -173,6 +173,10 @@ public static class Msg
     /// Ruling I1: the card in the drive is not the one the repaired backup was copied from.
     public const string RepairOtherCard =
         "Ve čtečce není karta, ze které se záloha dělala (jiná karta, nebo žádná) — nic se nezkopírovalo. Vložte původní kartu a spusťte Zkopírovat znovu.";
+    /// Fix round 1 (plan 9, tasks 4–5), item 1: card files that no report of the backup records (shot after it) — a
+    /// repair does not copy them, so the card must not be ejected as backed up.
+    public static string CardFilesNotInBackup(int n) =>
+        $"Na kartě {Desktop.Texts.Plural(n, "je", "jsou", "je")} {n} {Desktop.Texts.Plural(n, "soubor, který", "soubory, které", "souborů, které")} záloha nemá — kartu nevysouvejte, zálohu doplňte.";
     /// Minor M5: the checks of the earlier backup are an append's; refusing a repair they say "opravit".
     public static string ForRepair(string appendRefusal) =>
         appendRefusal.Replace("doplnit nejde", "opravit nejde").Replace("doplnit jde jen", "opravit jde jen");

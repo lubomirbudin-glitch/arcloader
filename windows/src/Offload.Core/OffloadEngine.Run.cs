@@ -117,6 +117,11 @@ public sealed partial class OffloadEngine
                 // A repair compares every copy — kept or new — with what the backup recorded (ruling C1).
                 OnEachDestination(ws, w => w.Verify(files, recorded, plan.Hashes, cts.Token, Pauses));
             }
+            // A kept copy this repair did not get to read again (cancelled) is untouched: its earlier read-back stands.
+            for (int i = 0; plan.ReadBackBefore is { } before && i < files.Count; i++)
+                foreach (var w in ws)
+                    if (!plan.Writes(i, w.Index) && before[i][w.Index] && w.Results[i].State == FileState.Written)
+                        w.Results[i] = new DestFileResult(FileState.Verified, null);
             var finished = DateTime.UtcNow;
             var verifyPaused = Pauses.PausedTotal - pausedBefore - copyPaused;
 

@@ -201,8 +201,11 @@ public class RepairEngineTests
         var cancelled = engine.Run(plan);
 
         var f = Assert.Single(cancelled.Files);
-        Assert.Equal(["written", "pending"], f.Destinations);
+        // Fix round 1, item 2: the kept copy was read back before and is untouched — it stays "verified"; not read back
+        // in this generation, it is not in its ASC MHL generation.
+        Assert.Equal(["verified", "pending"], f.Destinations);
         Assert.Equal("cancelled", f.SourceError);
+        Assert.Empty(MhlReader.Read(paths[0])!.Generations[1].Files);
         var next = RepairPlanner.Plan(card, paths);
         Assert.Equal(3, next.Generation);
         Assert.Equal([false, true], next.Write[0]);
