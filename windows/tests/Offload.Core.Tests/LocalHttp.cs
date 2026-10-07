@@ -30,6 +30,9 @@ public sealed class LocalHttp : IDisposable
         get { lock (requests) return [.. requests]; }
     }
 
+    /// Waits (bounded) until at least `count` requests are recorded; false when they did not come in time.
+    public bool WaitForRequests(int count, TimeSpan timeout) => SpinWait.SpinUntil(() => Requests.Count >= count, timeout);
+
     /// A port nothing listens on now (another process may take it — rare enough for a test).
     public static int FreePort()
     {
@@ -48,7 +51,10 @@ public sealed class LocalHttp : IDisposable
             try { c = await listener.GetContextAsync(); }
             catch (Exception) { return; }   // stopped
             using var body = new MemoryStream();
-            await c.Request.InputStream.CopyToAsync(body);
+            // A client that gave up meanwhile (a timeout test) breaks the body: the request is recorded anyway and the
+            // loop goes on.
+            try { await c.Request.InputStream.CopyToAsync(body); }
+            catch (Exception) { }
             lock (requests) requests.Add(new Request(c.Request.HttpMethod, c.Request.Url!.AbsolutePath, c.Request.ContentType, c.Request.UserAgent, body.ToArray()));
             _ = Task.Run(async () =>
             {

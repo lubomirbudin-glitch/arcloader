@@ -41,6 +41,10 @@ public sealed partial class OffloadEngine
     /// no proof); false or an exception = it is not. Null = never asked (a folder source has no card identity).
     internal Func<bool>? SameCard { get; set; }
 
+    /// Fix round 1: how many times more the card is identified, 250 ms apart, before it counts as changed — a reader
+    /// that answers late once after a pause must not fail the job.
+    internal const int IdentifyRetries = 3;
+
     /// The card was not the copied one after a pause: the remaining files were left out (CardChangedWhilePaused).
     public bool CardChanged => cardChanged;
     volatile bool cardChanged;
@@ -216,7 +220,7 @@ public sealed partial class OffloadEngine
         {
             return new ProgressSnapshot(phase, plan?.Scan.TotalBytes ?? 0, plan?.Scan.Files.Count ?? 0, fileIndex, currentFile,
                 Interlocked.Read(ref readBytes), writers.Select(w => w.Written).ToArray(), writers.Select(w => w.Verified).ToArray(), errorCount,
-                Pauses.IsPaused, Pauses.IsHolding);
+                Pauses.IsPaused, Pauses.IsHolding && writers.All(w => w.IsIdle));
         }
     }
 

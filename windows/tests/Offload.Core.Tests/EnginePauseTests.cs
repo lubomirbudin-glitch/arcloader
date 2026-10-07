@@ -214,7 +214,7 @@ public class EnginePauseTests
         Assert.Equal(JobPhase.Failed, s.Phase);
         Assert.Equal(Msg.CardChangedWhilePaused, s.Error);
         Assert.False(s.SafeToEject);
-        Assert.Equal(2, Volatile.Read(ref reads));   // when the copy started, and once after the pause
+        Assert.Equal(2 + OffloadEngine.IdentifyRetries, Volatile.Read(ref reads));   // at the start; after the pause with retries
         var report = job.Report!;
         Assert.Equal(["verified", "verified"], report.Files[0].Destinations);
         Assert.All(report.Files.Skip(1), f => Assert.Equal(OffloadEngine.CardChangedWhilePaused, f.SourceError));
@@ -225,6 +225,60 @@ public class EnginePauseTests
             Assert.Empty(Directory.GetFiles(cardPath, "*.offload-part", SearchOption.AllDirectories));
             Assert.False(OffloadReport.FromJson(File.ReadAllText(Path.Combine(cardPath, Layout.ReportDirName, OffloadReport.JsonName(1)))).Success);
         }
+    }
+
+    // Fix round 1: a reader that answers late once after the pause (no volume yet, or an error) is asked again 250 ms
+    // later, like a card read — the same card then goes on and the job ends Done.
+    [Theory]
+    [InlineData(false)]   // null once
+    [InlineData(true)]    // throws once
+    public async Task CardUnreadableOnceAfterThePause_AskedAgain_JobDone(bool throws)
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        int reads = 0;
+        var job = PausingJob(dir, card,
+            () => Volatile.Read(ref reads) != 2 ? "card-A" : throws ? throw new IOException("Zařízení není připraveno.") : null,
+            () => Interlocked.Increment(ref reads));
+
+        var copy = TestThreads.Start(() => job.RunCopy());
+        Assert.True(Until(() => job.Engine.Snapshot().PauseHeld));
+        job.Engine.Pauses.Resume();
+        await copy.WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.Equal(JobPhase.Done, job.Status().Phase);
+        Assert.True(job.Report!.SafeToEject);
+        Assert.Equal(3, Volatile.Read(ref reads));   // at the start, the failed read after the pause, the retry
+    }
+
+    // Fix round 1: "Pozastaveno" only once every destination has written all it was handed — a slow disk still
+    // writing its queued blocks (up to the whole buffer pool) must not look safe to unplug.
+    [Fact]
+    public async Task PauseHeld_OnlyAfterTheSlowDiskDrained()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        var options = Options();
+        var engine = new OffloadEngine(options);
+        using var slow = new ManualResetEventSlim(false);
+        options.BeforeFileCopy = i => { if (i == 1) engine.Pauses.Pause(); };
+        options.BeforeDestWrite = d => { if (d == 1) slow.Wait(TimeSpan.FromSeconds(60)); };
+        var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-07");
+
+        var run = TestThreads.Start(() => engine.Run(plan));
+        Assert.True(Until(() => engine.Pauses.IsHolding));    // the copy waits at the gate ...
+        Thread.Sleep(500);
+        var draining = engine.Snapshot();
+        Assert.True(draining.Paused);
+        Assert.False(draining.PauseHeld);                      // ... but disk 2 still has blocks to write
+        Assert.True(draining.WrittenBytes[1] < draining.ReadBytes, $"{draining.WrittenBytes[1]} < {draining.ReadBytes}");
+        slow.Set();
+        Assert.True(Until(() => engine.Snapshot().PauseHeld));
+        var held = engine.Snapshot();
+        Assert.Equal([held.ReadBytes, held.ReadBytes], held.WrittenBytes);
+        engine.Pauses.Resume();
+
+        Assert.True((await run.WaitAsync(TimeSpan.FromSeconds(60))).SafeToEject);
     }
 
     // A folder source has no card identity (null when the copy started): nothing to compare, the copy goes on.

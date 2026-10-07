@@ -14,6 +14,7 @@ internal sealed class DestWriter : IDisposable
     int align = AlignedBuffer.Alignment;
     long written;
     long verified;
+    volatile bool reading;
 
     public string CardPath { get; }
     public DestFileResult[] Results { get; }
@@ -21,6 +22,11 @@ internal sealed class DestWriter : IDisposable
     public bool Unbuffered { get; private set; }
     public long Written => Interlocked.Read(ref written);
     public long Verified => Interlocked.Read(ref verified);
+
+    /// Nothing is being written to or read back from this destination now: every block handed to it is on the disk
+    /// (or failed there) and the read-back, if any, waits at the pause gate or is done. Pozastavit shows "Pozastaveno"
+    /// only when every destination is idle — until then a disk must not be unplugged.
+    public bool IsIdle => worker.IsIdle && !reading;
 
     public DestWriter(int index, string cardPath, int fileCount, OffloadOptions options)
     {
@@ -180,15 +186,36 @@ internal sealed class DestWriter : IDisposable
     {
         using var buf = new AlignedBuffer(options.ChunkSize);
         bool md5 = HashKinds.Normalize(kinds).HasFlag(HashKind.Md5);
+        // Not reading while waiting at the gate (IsIdle).
+        bool Hold()
+        {
+            reading = false;
+            try { return pause!.WaitWhilePaused(ct); }
+            finally { reading = true; }
+        }
+        reading = true;
+        try
+        {
+            VerifyFiles(files, sourceHashes, kinds, ct, pause == null ? null : Hold, buf, md5);
+        }
+        finally
+        {
+            reading = false;
+        }
+    }
+
+    void VerifyFiles(IReadOnlyList<SourceFile> files, IReadOnlyList<FileHashes> sourceHashes, HashKind kinds, CancellationToken ct,
+        Func<bool>? hold, AlignedBuffer buf, bool md5)
+    {
         for (int i = 0; i < files.Count; i++)
         {
             if (Results[i].State != FileState.Written) continue;
-            if (ct.IsCancellationRequested || (pause != null && !pause.WaitWhilePaused(ct))) return;
+            if (ct.IsCancellationRequested || (hold != null && !hold())) return;
             var f = files[i];
             try
             {
                 var (got, size) = Hashing.HashFile(Layout.Join(CardPath, f.RelPath), buf, kinds, n => Interlocked.Add(ref verified, n), ct,
-                    pause == null ? null : () => pause.WaitWhilePaused(ct));
+                    hold == null ? null : () => hold());
                 var want = sourceHashes[i];
                 if (size != f.Size)
                     Results[i] = new DestFileResult(FileState.Failed, $"size mismatch: {size} != {f.Size}");

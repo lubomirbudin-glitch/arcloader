@@ -207,6 +207,9 @@ public class NtfyClientTests
         Assert.False(send.IsCompleted);
         await send;
         lock (log) Assert.Equal("ntfy: Server neodpověděl do 0.5 s.", Assert.Single(log).Replace(',', '.'));
+        // The listener records a request on its own pool thread — under the whole suite that can come after the client
+        // gave up: wait for it (bounded) before counting.
+        Assert.True(server.WaitForRequests(1, TimeSpan.FromSeconds(30)), "the request never reached the listener");
 
         await NtfyClient.SendOutcomeAsync(new NtfySettings { Enabled = false, Server = server.Url, Topic = "t" }, outcome, log.Add);
         await NtfyClient.SendOutcomeAsync(settings, outcome with { Kind = OutcomeKind.Ejectable }, log.Add);

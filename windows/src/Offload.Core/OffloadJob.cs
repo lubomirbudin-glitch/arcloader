@@ -191,7 +191,8 @@ public sealed class OffloadJob
         JobStatus s;
         bool wasStarted;
         lock (gate) { s = state; wasStarted = started; }
-        if (s.Phase is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying or JobPhase.Reporting)
+        bool stage1 = s.Phase is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying or JobPhase.Reporting;
+        if (stage1)
         {
             var snap = Engine.Snapshot();
             s = s with
@@ -210,7 +211,9 @@ public sealed class OffloadJob
         if (s.Phase == JobPhase.Waiting && !wasStarted && IsCancelled) s = s with { Phase = JobPhase.Cancelled };
         var pauses = Engine.Pauses;
         bool running = s.Phase != JobPhase.Waiting && !s.Phase.IsFinished();
-        return s with { Paused = running && pauses.IsPaused, PauseHeld = running && pauses.IsHolding, PausedTotal = pauses.PausedTotal };
+        // Stage 1 stands only when the destinations are idle too (the engine's snapshot says so — fix round 1).
+        bool held = stage1 ? s.Copy!.PauseHeld : pauses.IsHolding;
+        return s with { Paused = running && pauses.IsPaused, PauseHeld = running && held, PausedTotal = pauses.PausedTotal };
     }
 
     void Update(Func<JobStatus, JobStatus> change)

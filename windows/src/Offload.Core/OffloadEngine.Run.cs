@@ -129,11 +129,21 @@ public sealed partial class OffloadEngine
         }
     }
 
-    /// Ruling I1: the card in the drive is the copied one (no check without SameCard); an exception says it is not.
+    /// Ruling I1: the card in the drive is the copied one (no check without SameCard). A different, unreadable (null) or
+    /// failing answer is asked again IdentifyRetries times 250 ms apart, like a card read — only then the card changed.
     bool StillSameCard()
     {
-        try { return SameCard?.Invoke() ?? true; }
-        catch (Exception) { return false; }
+        if (SameCard is not { } same) return true;
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                if (same()) return true;
+            }
+            catch (Exception) { /* unreadable now: asked again */ }
+            if (attempt >= IdentifyRetries || IsCancelled) return false;
+            Thread.Sleep(250);
+        }
     }
 
     /// Reads one file block by block and hands every block to the hashers and all writers. Returns the failure, or null.
