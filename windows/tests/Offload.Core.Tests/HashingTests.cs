@@ -59,6 +59,20 @@ public class HashingTests
         Assert.Equal((data.Length, (long)data.Length), (read, progress));   // both hashes from one read of the file
     }
 
+    // Spec 3.5: the choice in the GUI and its texts; settings/CLI values "xxh64" and "both" only.
+    [Fact]
+    public void Choices_Labels_Wire()
+    {
+        Assert.Equal(["xxHash64 (rychlý)", "xxHash64 + MD5"], Desktop.HashChoice.All.Select(c => c.Label));
+        Assert.Equal(HashKind.Both, Desktop.HashChoice.Of(HashKind.Md5).Kind);
+        Assert.Equal("Ověřit kopie zpětným čtením (xxHash64 + MD5)", Desktop.Texts.VerifyLabel(HashKind.Both));
+        Assert.Equal("Ověřit kopie zpětným čtením (xxHash64)", Desktop.Texts.VerifyLabel(HashKind.Xxh64));
+        Assert.Equal(("xxh64", "both"), (HashKinds.Wire(HashKind.Xxh64), HashKinds.Wire(HashKind.Md5)));
+        Assert.True(HashKinds.TryParseWire("both", out var both) && both == HashKind.Both);
+        Assert.False(HashKinds.TryParseWire("md5", out _));   // R16: never MD5 alone
+        Assert.Equal(HashKind.Xxh64, HashKinds.FromSetting(null));
+    }
+
     [Fact]
     public void HashKinds_Xxh64Always()
     {

@@ -40,6 +40,73 @@ public class ReportTests
         Assert.Equal("boom", root.GetProperty("files")[1].GetProperty("errors")[0].GetString());
     }
 
+    // Spec 3.5: the JSON of a copy with xxh64 + MD5, byte for byte (golden) — "hashAlgorithm" stays "xxh64" for the
+    // Mac, "hashAlgorithms" and "md5" are added keys.
+    [Fact]
+    public void Json_Both_Golden()
+    {
+        var t0 = new DateTime(2026, 10, 7, 8, 0, 0, DateTimeKind.Utc);
+        var r = new OffloadReport
+        {
+            Version = "test", CardName = "A001", Date = "2026-10-07", Source = @"E:\", SourceFilesystem = "exFAT",
+            Started = t0, CopyFinished = t0.AddSeconds(10), Finished = t0.AddSeconds(15), Verified = true, TotalFiles = 1, TotalBytes = 3,
+            HashAlgorithms = ["xxh64", "md5"],
+            Destinations = [new ReportDestination { Root = @"D:\Zaloha", CardPath = @"D:\Zaloha\2026-10-07\A001", Filesystem = "NTFS", FilesOK = 1 }],
+            Files = [new ReportFile { Path = "CLIP/abc.mov", Size = 3, Modified = t0, Xxh64 = "44bc2cf5ad770999", Md5 = "900150983cd24fb0d6963f7d28e17f72", Destinations = ["verified"], Errors = [null] }],
+            Skipped = [],
+        };
+        const string golden = """
+            {
+              "cardName": "A001",
+              "clips": [],
+              "copyFinished": "2026-10-07T08:00:10Z",
+              "date": "2026-10-07",
+              "destinations": [
+                {
+                  "cardPath": "D:\\Zaloha\\2026-10-07\\A001",
+                  "filesFailed": 0,
+                  "filesOK": 1,
+                  "filesystem": "NTFS",
+                  "root": "D:\\Zaloha"
+                }
+              ],
+              "files": [
+                {
+                  "destinations": [
+                    "verified"
+                  ],
+                  "errors": [
+                    null
+                  ],
+                  "md5": "900150983cd24fb0d6963f7d28e17f72",
+                  "modified": "2026-10-07T08:00:00Z",
+                  "path": "CLIP/abc.mov",
+                  "size": 3,
+                  "xxh64": "44bc2cf5ad770999"
+                }
+              ],
+              "finished": "2026-10-07T08:00:15Z",
+              "hashAlgorithm": "xxh64",
+              "hashAlgorithms": [
+                "xxh64",
+                "md5"
+              ],
+              "skipped": [],
+              "source": "E:\\",
+              "sourceFilesystem": "exFAT",
+              "started": "2026-10-07T08:00:00Z",
+              "tool": "offload",
+              "totalBytes": 3,
+              "totalFiles": 1,
+              "verified": true,
+              "version": "test"
+            }
+            """;
+        Assert.Equal(golden.Replace("\r\n", "\n"), r.ToJson());
+        Assert.Equal(["xxh64", "md5"], OffloadReport.FromJson(r.ToJson()).Algorithms);
+        Assert.Equal(["xxh64"], Reports.Sample(Card).Algorithms);   // a report without the key (the Mac, xxh64 only)
+    }
+
     [Fact]
     public void Json_UnbufferedOmittedWhenNormal()
     {

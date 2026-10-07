@@ -184,7 +184,14 @@
                                 Visibility="{Binding UseCustomDate, Converter={StaticResource BoolToVisible}}" />
                 </StackPanel>
                 <TextBlock Text="{Binding PathPreview}" FontFamily="Consolas" Style="{StaticResource Caption}" Margin="0,6,0,0" />
-                <CheckBox Content="Ověřit kopie zpětným čtením (xxHash64)" IsChecked="{Binding Verify}" />
+                <DockPanel Margin="0,6,0,0">
+                    <TextBlock Text="Kontrolní součet" Style="{StaticResource Caption}" VerticalAlignment="Center" Width="110" />
+                    <ComboBox ItemsSource="{Binding HashChoices}" SelectedItem="{Binding Hash}" DisplayMemberPath="Label"
+                              AutomationProperties.AutomationId="HashChoice" />
+                </DockPanel>
+                <TextBlock Text="{Binding Md5Note}" Style="{StaticResource WarningText}" TextWrapping="Wrap"
+                           Visibility="{Binding Md5Note, Converter={StaticResource NullToCollapsed}}" />
+                <CheckBox Content="{Binding VerifyLabel}" IsChecked="{Binding Verify}" />
                 <TextBlock Text="Bez ověření není jisté, že data na disku jsou v pořádku." Style="{StaticResource WarningText}"
                            Visibility="{Binding Verify, Converter={StaticResource BoolToCollapsed}}" />
                 <CheckBox Content="Analýza klipů a náhledy v reportu" IsChecked="{Binding AnalyzeClips}" />

@@ -23,6 +23,9 @@ public sealed class AppSettings
     [JsonPropertyName("proxy")] public ProxySettings Proxy { get; set; } = new();
     [JsonPropertyName("tools")] public ExternalTools Tools { get; set; } = new();
     [JsonPropertyName("naming")] public NamingSettings Naming { get; set; } = new();
+    /// "xxh64" (default) or "both" = xxh64 + MD5 (spec 3.5, R16). A value a newer version wrote is kept as it is and
+    /// read as xxh64 (HashKinds.FromSetting).
+    [JsonPropertyName("hash")] public string Hash { get; set; } = "xxh64";
     [JsonPropertyName("portNames")]
     public Dictionary<string, string> PortNames
     {
@@ -53,7 +56,7 @@ public static class SettingsStore
     public static string DefaultPath => Path.Combine(AppData.Folder, "settings.json");
 
     /// The top-level keys Load reads into properties; every other key goes to AppSettings.Extra.
-    static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal) { "destRoots", "verify", "analyzeClips", "proxy", "tools", "naming", "portNames" };
+    static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal) { "destRoots", "verify", "analyzeClips", "proxy", "tools", "naming", "portNames", "hash" };
 
     static readonly JsonSerializerOptions Json = new()
     {
@@ -96,6 +99,7 @@ public static class SettingsStore
                 .Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList());
             Section("verify", e => s.Verify = e.GetBoolean());
             Section("analyzeClips", e => s.AnalyzeClips = e.GetBoolean());
+            Section("hash", e => s.Hash = e.GetString() is { Length: > 0 } h ? h : "xxh64");
             void Kept<T>(string key, Func<T, T> set, Func<T> fresh) where T : class
             {
                 if (!root.TryGetValue(key, out var e) || e.ValueKind == JsonValueKind.Null) return;

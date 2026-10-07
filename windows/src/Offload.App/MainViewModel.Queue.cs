@@ -205,6 +205,7 @@ public sealed partial class MainViewModel
             {
                 CardName = name,
                 Date = DateString,
+                Hashes = HashKinds.FromSetting(Settings.Hash),   // an append (above) keeps the earlier backup's (spec 3.5)
                 Verify = Settings.Verify,
                 AnalyzeClips = Settings.AnalyzeClips,
                 Proxy = SettingsStore.Clone(Settings.Proxy),

@@ -302,7 +302,7 @@ public sealed class OffloadJob
                     Date = plan.Date,
                     Success = true,
                     Verified = true,
-                    HashAlgorithms = [report.HashAlgorithm],
+                    HashAlgorithms = [.. report.Algorithms],
                     Destinations = plan.DestRoots.Select((root, i) => new HistoryDestination { Root = root, CardPath = cardPaths[i] }).ToList(),
                 };
                 entry.Finished = report.Finished;

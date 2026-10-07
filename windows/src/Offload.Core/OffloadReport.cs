@@ -24,6 +24,8 @@ public sealed class ReportFile
     [JsonPropertyName("size")] public long Size { get; init; }
     [JsonPropertyName("modified")] public DateTime Modified { get; init; }
     [JsonPropertyName("xxh64")] public string? Xxh64 { get; init; }
+    /// Only when the copy computed MD5 too (spec 3.5): 32 lower-case hex digits.
+    [JsonPropertyName("md5")] public string? Md5 { get; init; }
     [JsonPropertyName("sourceError")] public string? SourceError { get; init; }
     [JsonPropertyName("destinations")] public required IReadOnlyList<string> Destinations { get; init; }
     [JsonPropertyName("errors")] public required IReadOnlyList<string?> Errors { get; init; }
@@ -33,7 +35,10 @@ public sealed partial class OffloadReport
 {
     [JsonPropertyName("tool")] public string Tool { get; init; } = "offload";
     [JsonPropertyName("version")] public string Version { get; init; } = OffloadVersion.String;
+    /// Always "xxh64" (the Mac only shows it); `hashAlgorithms` says when there is more.
     [JsonPropertyName("hashAlgorithm")] public string HashAlgorithm { get; init; } = "xxh64";
+    /// Only when it is not just xxh64 (spec 3.5): ["xxh64", "md5"].
+    [JsonPropertyName("hashAlgorithms")] public IReadOnlyList<string>? HashAlgorithms { get; init; }
     [JsonPropertyName("cardName")] public required string CardName { get; init; }
     [JsonPropertyName("date")] public required string Date { get; init; }
     [JsonPropertyName("source")] public required string Source { get; init; }
@@ -53,6 +58,9 @@ public sealed partial class OffloadReport
     [JsonPropertyName("proxyEncoder")] public string? ProxyEncoder { get; set; }
     /// The ASC MHL generation this report belongs to: absent (= 1) for the full copy, 2, 3 … for appends (spec 2.2).
     [JsonPropertyName("generation")] public int? Generation { get; set; }
+
+    /// The hashes of this copy: `hashAlgorithms`, else the one `hashAlgorithm` (reports without the key, the Mac).
+    [JsonIgnore] public IReadOnlyList<string> Algorithms => HashAlgorithms is { Count: > 0 } all ? all : [HashAlgorithm];
 
     [JsonIgnore] public double CopySeconds => (CopyFinished - Started).TotalSeconds;
     [JsonIgnore] public double VerifySeconds => (Finished - CopyFinished).TotalSeconds;
@@ -80,6 +88,7 @@ public sealed partial class OffloadReport
             Size = f.Size,
             Modified = f.ModifiedUtc,
             Xxh64 = hashes[i].Xxh64Hex,
+            Md5 = hashes[i].Md5Hex,
             SourceError = sourceErrors[i],
             Destinations = destResults.Select(r => r[i].State.Wire()).ToList(),
             Errors = destResults.Select(r => r[i].Error).ToList(),
@@ -110,6 +119,7 @@ public sealed partial class OffloadReport
             Files = files,
             Skipped = plan.Scan.Skipped,
             Generation = plan.Generation > 1 ? plan.Generation : null,
+            HashAlgorithms = HashKinds.Normalize(plan.Hashes).HasFlag(HashKind.Md5) ? HashKinds.Names(plan.Hashes) : null,
         };
     }
 
@@ -121,7 +131,15 @@ public sealed partial class OffloadReport
 
     /// Plain hash list, one "<xxh64>  <path>" per line — readable by humans and by `offload verify`.
     [JsonIgnore]
-    public string HashList => string.Join("\n", Files.Where(f => f.Xxh64 != null).Select(f => $"{f.Xxh64}  {f.Path}")) + "\n";
+    public string HashList => HashListOf("xxh64");
+
+    /// "<hash>  <path>" per file that has hash `algorithm` ("xxh64" or "md5", the md5sum format), "\n" after each.
+    public string HashListOf(string algorithm) =>
+        string.Concat(Files.Select(f => (Hash: algorithm == "md5" ? f.Md5 : f.Xxh64, f.Path)).Where(x => x.Hash != null).Select(x => $"{x.Hash}  {x.Path}\n"));
+
+    /// `_REPORT\<card>.xxh64` or `.md5`.
+    static string HashListPath(string cardPath, string cardName, string algorithm) =>
+        System.IO.Path.Combine(cardPath, Layout.ReportDirName, $"{cardName}.{algorithm}");
 
     [JsonIgnore]
     public string Summary
@@ -138,7 +156,7 @@ public sealed partial class OffloadReport
             s.Append($"Files:       {TotalFiles}  ({Format.Bytes(TotalBytes)})\n");
             s.Append($"Copy:        {CopySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, CopySeconds)}\n");
             s.Append("Verify:      " + (Verified ? $"{VerifySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, VerifySeconds)}" : "NOT VERIFIED") + "\n");
-            s.Append($"Hash:        {HashAlgorithm}\n");
+            s.Append($"Hash:        {string.Join("+", Algorithms)}\n");
             foreach (var d in Destinations)
                 s.Append($"Destination: {d.CardPath} [{d.Filesystem}]  ok {d.FilesOK}  failed {d.FilesFailed}{(d.Unbuffered == false ? "  (buffered I/O)" : "")}\n");
             if (Skipped.Count > 0) s.Append($"\nSkipped (system files): {string.Join(", ", Skipped)}\n");
@@ -214,33 +232,43 @@ public sealed partial class OffloadReport
         }
         if (!includeHashRecords) return;
         Mhl.Write(this, cardPath);
-        // An append: the earlier lines byte for byte, then the missed ones, then this generation's.
-        var hashList = System.IO.Path.Combine(dir, $"{CardName}.xxh64");
-        var lines = Encoding.UTF8.GetBytes(HashList);
-        if (generation == 1)
+        // `<card>.xxh64` always, `<card>.md5` with MD5 (spec 3.5). An append: the earlier lines byte for byte, then the
+        // missed ones, then this generation's.
+        foreach (var algorithm in Algorithms.Where(a => a is "xxh64" or "md5"))
         {
-            NativeIO.WriteFileReplacing(hashList, lines);
-            return;
+            var hashList = HashListPath(cardPath, CardName, algorithm);
+            var lines = Encoding.UTF8.GetBytes(HashListOf(algorithm));
+            if (generation == 1)
+            {
+                NativeIO.WriteFileReplacing(hashList, lines);
+                continue;
+            }
+            var (earlier, missed) = HashListAndMissed(hashList, cardPath, Files.Select(f => f.Path), algorithm);
+            NativeIO.WriteFileReplacing(hashList, [.. earlier, .. missed, .. lines]);
         }
-        var (earlier, missed) = HashListAndMissed(hashList, cardPath, Files.Select(f => f.Path));
-        NativeIO.WriteFileReplacing(hashList, [.. earlier, .. missed, .. lines]);
     }
 
-    /// `<card>/_REPORT/<card name>.xxh64` gets the lines of every path the ASC MHL history records but the list lacks
-    /// (a hash list whose write failed, step 3 of Write) — the one record file that may be rewritten. Used by an append
-    /// with nothing new (fix round 2, item 6b); an append with new files does the same in Write. False: nothing missed.
+    /// `<card>/_REPORT/<card name>.xxh64` (and `.md5` when the ASC MHL history has MD5) gets the lines of every path the
+    /// history records but the list lacks (a hash list whose write failed, step 3 of Write) — the record files that may
+    /// be rewritten. Used by an append with nothing new (fix round 2, item 6b); an append with new files does the same
+    /// in Write. False: nothing missed.
     public static bool HealHashList(string cardPath, string cardName)
     {
-        var hashList = System.IO.Path.Combine(cardPath, Layout.ReportDirName, $"{cardName}.xxh64");
-        var (earlier, missed) = HashListAndMissed(hashList, cardPath, []);
-        if (missed.Length == 0) return false;
-        NativeIO.WriteFileReplacing(hashList, [.. earlier, .. missed]);
-        return true;
+        bool healed = false;
+        foreach (var algorithm in new[] { "xxh64", "md5" })
+        {
+            var hashList = HashListPath(cardPath, cardName, algorithm);
+            var (earlier, missed) = HashListAndMissed(hashList, cardPath, [], algorithm);
+            if (missed.Length == 0) continue;
+            NativeIO.WriteFileReplacing(hashList, [.. earlier, .. missed]);
+            healed = true;
+        }
+        return healed;
     }
 
     /// The card's hash list as the earlier generations left it (exact bytes, then a line break if it had none), and
-    /// the xxh64 lines of every path the ASC MHL history records but neither the list nor `alsoListed` has.
-    static (byte[] Earlier, byte[] Missed) HashListAndMissed(string path, string cardPath, IEnumerable<string> alsoListed)
+    /// the `algorithm` lines of every path the ASC MHL history records but neither the list nor `alsoListed` has.
+    static (byte[] Earlier, byte[] Missed) HashListAndMissed(string path, string cardPath, IEnumerable<string> alsoListed, string algorithm)
     {
         var earlier = File.Exists(path) ? File.ReadAllBytes(path) : [];
         if (earlier.Length > 0 && earlier[^1] != (byte)'\n') earlier = [.. earlier, (byte)'\n'];
@@ -250,7 +278,7 @@ public sealed partial class OffloadReport
         var missed = new StringBuilder();
         if (Verification.MhlReader.Read(cardPath) is { } mhl)
             foreach (var r in mhl.LastGood.Values.OrderBy(r => r.Path, StringComparer.Ordinal))
-                if (!listed.Contains(r.Path) && r.Hashes.FirstOrDefault(h => h.Algorithm == "xxh64") is { } h)
+                if (!listed.Contains(r.Path) && r.Hashes.FirstOrDefault(h => h.Algorithm == algorithm) is { } h)
                     missed.Append($"{h.Value}  {r.Path}\n");
         return (earlier, Encoding.UTF8.GetBytes(missed.ToString()));
     }

@@ -24,6 +24,21 @@ public static class HashKinds
     /// From a report's hash names ("md5" anywhere → both); anything else is xxh64.
     public static HashKind FromNames(IEnumerable<string>? names) =>
         names != null && names.Contains("md5", StringComparer.OrdinalIgnoreCase) ? HashKind.Both : HashKind.Xxh64;
+
+    /// settings.json `hash` and CLI --hash: "xxh64" | "both".
+    public static string Wire(HashKind kinds) => Normalize(kinds).HasFlag(HashKind.Md5) ? "both" : "xxh64";
+
+    public static bool TryParseWire(string? s, out HashKind kinds)
+    {
+        kinds = s switch { "xxh64" => HashKind.Xxh64, "both" => HashKind.Both, _ => default };
+        return kinds != default;
+    }
+
+    /// The setting as the copy uses it: anything this version does not know (a newer value) is xxh64.
+    public static HashKind FromSetting(string? s) => TryParseWire(s, out var k) ? k : HashKind.Xxh64;
+
+    /// For people: "xxHash64", "xxHash64 + MD5".
+    public static string Label(HashKind kinds) => Normalize(kinds).HasFlag(HashKind.Md5) ? "xxHash64 + MD5" : "xxHash64";
 }
 
 /// The checksums of one file; null = not computed (the file failed, or MD5 was not asked for).

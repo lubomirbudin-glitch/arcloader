@@ -111,7 +111,7 @@ public static class HtmlReport
         Stat(h, videoClips.Count.ToString(Inv), "klipů" + (totalDuration > 0 ? " · " + Duration(totalDuration) : ""));
         Stat(h, Duration(r.CopySeconds), "kopírování · " + Format.Rate(r.TotalBytes, r.CopySeconds));
         Stat(h, r.Verified ? Duration(r.VerifySeconds) : "—", "ověření · " + (r.Verified ? Format.Rate(r.TotalBytes, r.VerifySeconds) : "neprovedeno"));
-        Stat(h, Esc(r.HashAlgorithm.ToUpperInvariant()), "kontrolní součet");
+        Stat(h, Esc(string.Join(" + ", r.Algorithms.Select(a => a.ToUpperInvariant()))), "kontrolní součet");
         h.Append("</div>\n\n");
 
         h.Append("<h2>Cíle</h2><div class=\"panel\"><table>\n");
@@ -146,12 +146,14 @@ public static class HtmlReport
         if (r.Clips.Count > 0) AppendClips(h, r);
 
         h.Append($"<details{(forPrint ? " open" : "")}><summary>Všechny soubory ({r.Files.Count})</summary><div class=\"panel\"><table>\n");
-        h.Append($"<tr><th>Soubor</th><th class=\"num\">Velikost</th><th>{Esc(r.HashAlgorithm)}</th>");
+        bool md5 = r.Algorithms.Contains("md5");
+        h.Append($"<tr><th>Soubor</th><th class=\"num\">Velikost</th><th>xxh64</th>{(md5 ? "<th>md5</th>" : "")}");
         for (int i = 0; i < r.Destinations.Count; i++) h.Append($"<th>Cíl {i + 1}</th>");
         h.Append("</tr>\n");
         foreach (var f in r.Files)
         {
             h.Append($"<tr><td class=\"mono\">{Esc(f.Path)}</td><td class=\"num\">{Format.Bytes(f.Size)}</td><td class=\"mono\">{Esc(f.Xxh64 ?? "—")}</td>");
+            if (md5) h.Append($"<td class=\"mono\">{Esc(f.Md5 ?? "—")}</td>");
             foreach (var s in f.Destinations)
             {
                 var cls = s == "verified" ? "ok" : (s == "failed" ? "bad" : "warn");

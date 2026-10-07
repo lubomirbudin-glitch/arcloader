@@ -25,6 +25,24 @@ public class SettingsStoreTests
         Assert.Empty(s.PortNames);
     }
 
+    // Spec 5.1: "hash" — "xxh64" by default, "both" round-trips; a value a newer version wrote is kept but read as xxh64.
+    [Fact]
+    public void Hash_DefaultBothAndUnknownValue()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        Assert.Equal("xxh64", SettingsStore.Load(path).Hash);
+        var s = LoadJson(dir, """{"hash":"both"}""");
+        Assert.Equal(HashKind.Both, HashKinds.FromSetting(s.Hash));
+        Assert.Null(s.Extra);
+        SettingsStore.Save(s, path);
+        Assert.Contains("\"hash\": \"both\"", File.ReadAllText(path));
+        var future = LoadJson(dir, """{"hash":"xxh128"}""");
+        Assert.Equal(HashKind.Xxh64, HashKinds.FromSetting(future.Hash));
+        SettingsStore.Save(future, path);
+        Assert.Contains("\"hash\": \"xxh128\"", File.ReadAllText(path));
+    }
+
     [Fact]
     public void Corrupt_Defaults()
     {

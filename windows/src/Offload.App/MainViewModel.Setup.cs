@@ -404,6 +404,26 @@ public sealed partial class MainViewModel
         set { Settings.Verify = value; SettingsChanged(); Raise(); }
     }
 
+    /// "Kontrolní součet" (spec 3.5): xxHash64 or xxHash64 + MD5 — `hash` in settings.json.
+    public IReadOnlyList<HashChoice> HashChoices => HashChoice.All;
+
+    public HashChoice Hash
+    {
+        get => HashChoice.Of(HashKinds.FromSetting(Settings.Hash));
+        set
+        {
+            if (value == null) return;
+            Settings.Hash = HashKinds.Wire(value.Kind);
+            SettingsChanged();
+            RaiseMany(nameof(Hash), nameof(VerifyLabel), nameof(Md5Note));
+        }
+    }
+
+    public string VerifyLabel => Texts.VerifyLabel(HashKinds.FromSetting(Settings.Hash));
+
+    /// Shown under the choice while MD5 is on.
+    public string? Md5Note => HashKinds.FromSetting(Settings.Hash).HasFlag(HashKind.Md5) ? Texts.Md5Slower : null;
+
     public bool AnalyzeClips
     {
         get => Settings.AnalyzeClips;

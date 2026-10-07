@@ -122,6 +122,66 @@ public class EngineTests
         Assert.False(report.Success);
     }
 
+    // Spec 3.5: xxh64 + MD5 — "md5" per file, `<card>.md5` (md5sum format), MHL <md5> beside <xxh64>, TXT and HTML say
+    // so, and the verification of the backup reads both; xxh64 alone leaves no trace of MD5.
+    [Fact]
+    public void Both_ReportHashListMhlAndBackupVerification()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        var files = MakeCard(card);
+        var options = Options();
+        options.Hashes = HashKind.Both;
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-04");
+
+        var report = engine.Run(plan);
+
+        Assert.Equal(["xxh64", "md5"], report.HashAlgorithms);
+        foreach (var f in report.Files)
+            Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(files[f.Path])), f.Md5);
+        var rep = Path.Combine(plan.CardPaths[0], "_REPORT");
+        var md5List = File.ReadAllText(Path.Combine(rep, "A001.md5"));
+        Assert.Equal(report.HashListOf("md5"), md5List);
+        Assert.Contains($"{report.Files[0].Md5}  {report.Files[0].Path}\n", md5List);
+        Assert.DoesNotContain("\r", md5List);
+        Assert.NotEqual(0xEF, File.ReadAllBytes(Path.Combine(rep, "A001.md5"))[0]);   // no BOM
+        Assert.Contains("Hash:        xxh64+md5", File.ReadAllText(Path.Combine(rep, "offload_report.txt")));
+        var html = File.ReadAllText(Path.Combine(rep, "A001_report.html"));
+        Assert.Contains("XXH64 + MD5", html);
+        Assert.Contains("<th>xxh64</th><th>md5</th>", html);   // a column per algorithm (preflight M3)
+        Assert.All(report.Files, f => Assert.Contains($"<td class=\"mono\">{f.Md5}</td>", html));
+        var mhl = Verification.MhlReader.Read(plan.CardPaths[0])!;
+        Assert.All(mhl.Files.Values, r => Assert.Equal(["xxh64", "md5"], r.Hashes.Select(h => h.Algorithm)));
+        // <md5> carries the same action and hashdate as <xxh64> (spec 3.5, preflight M3).
+        System.Xml.Linq.XNamespace ns = "urn:ASC:MHL:v2.0";
+        var gen = System.Xml.Linq.XDocument.Load(Directory.GetFiles(Path.Combine(plan.CardPaths[0], "ascmhl"), "0001_*.mhl").Single());
+        var hashEls = gen.Descendants(ns + "hash").ToList();
+        Assert.Equal(report.Files.Count, hashEls.Count);
+        foreach (var hashEl in hashEls)
+        {
+            var xx = hashEl.Element(ns + "xxh64")!;
+            var md5 = hashEl.Element(ns + "md5")!;
+            Assert.Equal(((string?)xx.Attribute("action"), (string?)xx.Attribute("hashdate")), ((string?)md5.Attribute("action"), (string?)md5.Attribute("hashdate")));
+            Assert.Equal("original", (string?)md5.Attribute("action"));
+            Assert.Equal(32, md5.Value.Length);
+        }
+        var verify = Verification.BackupVerifier.Verify(plan.CardPaths[0], chunkSize: Chunk);
+        Assert.True(verify.Success);
+        Assert.Equal(["xxh64", "md5"], verify.HashAlgorithms);
+
+        // xxh64 alone (the default): no md5 key, no .md5 list, no <md5> in the MHL.
+        var plain = new OffloadEngine(Options());
+        var plainPlan = plain.Prepare(card, [dir.Sub("d2")], null, "2026-10-04");
+        var plainReport = plain.Run(plainPlan);
+        Assert.Null(plainReport.HashAlgorithms);
+        Assert.All(plainReport.Files, f => Assert.Null(f.Md5));
+        Assert.False(File.Exists(Path.Combine(plainPlan.CardPaths[0], "_REPORT", "A001.md5")));
+        Assert.DoesNotContain("<th>md5</th>", File.ReadAllText(Path.Combine(plainPlan.CardPaths[0], "_REPORT", "A001_report.html")));
+        Assert.All(Verification.MhlReader.Read(plainPlan.CardPaths[0])!.Files.Values, r => Assert.Equal(["xxh64"], r.Hashes.Select(h => h.Algorithm)));
+        Assert.DoesNotContain("md5", plainReport.ToJson());
+    }
+
     [Fact]
     public void DefaultBlockSize_FileOneByteOverBlock()
     {
