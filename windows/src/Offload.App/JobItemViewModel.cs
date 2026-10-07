@@ -9,7 +9,7 @@ namespace Offload.App;
 public sealed record DestinationLine(string Name, string Sub, string FullPath);
 
 /// One card in the queue: mirrors the job's status every tick (Mac `JobItem` + `JobCard`).
-public sealed class JobItemViewModel : QueueItem
+public sealed partial class JobItemViewModel : QueueItem
 {
     readonly MainViewModel owner;
     readonly string sourceName;
@@ -27,7 +27,6 @@ public sealed class JobItemViewModel : QueueItem
     readonly JobCardFacts? facts;
     CardHeadline headline;
     IReadOnlyList<string>? destNames;
-    int? clipCount;
 
     /// `space`: what the card needs on each destination volume (spec 2.5) — counted while this job is queued or copies.
     /// `profileNote`: orange, for the whole life of the card — e.g. an append whose project no longer exists.
@@ -48,6 +47,7 @@ public sealed class JobItemViewModel : QueueItem
         EjectCommand = new RelayCommand(() => owner.Eject(this), () => !Ejecting);
         OpenReportCommand = new RelayCommand(OpenReport);
         RevealCommand = new RelayCommand(Reveal);
+        InitCard();
     }
 
     public OffloadJob Job { get; }
@@ -77,6 +77,7 @@ public sealed class JobItemViewModel : QueueItem
         }
         // The whole backup's state comes from the job (read on its thread); a waiting card says when a paused job holds it.
         headline = JobCard.Headline(CardName, progress.Status, Job.Report, DestNames, Job.Backup, owner.BlockedByPaused(this));
+        RefreshCard();
         Raise(string.Empty);   // every binding of the card may have changed
     }
 
@@ -103,10 +104,7 @@ public sealed class JobItemViewModel : QueueItem
         get
         {
             if (Job.Plan is { } p)
-            {
-                clipCount ??= ClipDetector.Detect(p.Scan.Files).Count;
-                return JobCard.Sub(new JobCardFacts(p.Scan.Files.Count, clipCount.Value, p.Scan.TotalBytes, facts?.Camera, p.Mode == PlanMode.Append));
-            }
+                return JobCard.Sub(new JobCardFacts(p.Scan.Files.Count, PlanClips.Count, p.Scan.TotalBytes, facts?.Camera, p.Mode == PlanMode.Append));
             return facts is { } f ? JobCard.Sub(f) : FilesText;
         }
     }
@@ -169,7 +167,13 @@ public sealed class JobItemViewModel : QueueItem
     public double Progress => progress.PhaseProgress;
     public string DetailText => progress.DetailText;
 
-    public string Title => Job.Plan is { Mode: PlanMode.Append } p ? AppendRules.Title(p.CardName) : Job.Plan?.CardName ?? sourceName;
+    public string Title => Job.Plan switch
+    {
+        { Mode: PlanMode.Append } p => AppendRules.Title(p.CardName),
+        { Mode: PlanMode.Repair } p => RepairRules.Title(p.CardName),
+        { } p => p.CardName,
+        _ => sourceName,
+    };
     /// The card folder's name (notifications, spec 4.3).
     internal string CardName => Job.Plan?.CardName ?? sourceName;
     public string FilesText

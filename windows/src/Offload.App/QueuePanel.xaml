@@ -57,7 +57,8 @@
 
         <!-- ── Running (obr. 2) ── -->
         <DataTemplate x:Key="RunningCard">
-            <Border CornerRadius="16" BorderBrush="{DynamicResource RunBorder}" BorderThickness="1" Background="{DynamicResource RunBg}" Padding="24,22" Margin="0,0,0,18">
+            <StackPanel Margin="0,0,0,18">
+            <Border CornerRadius="16" BorderBrush="{DynamicResource RunBorder}" BorderThickness="1" Background="{DynamicResource RunBg}" Padding="24,22">
                 <StackPanel>
                     <DockPanel>
                         <Border DockPanel.Dock="Left" Width="42" Height="42" CornerRadius="10" Background="{DynamicResource AccentSoft}" Margin="0,0,14,0">
@@ -66,24 +67,76 @@
                         <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
                             <TextBlock Text="{Binding PercentText}" FontSize="30" FontWeight="SemiBold" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"
                                        AutomationProperties.AutomationId="JobPercentText" />
-                            <TextBlock Text="{Binding StatusText}" Style="{StaticResource TextMuted}" HorizontalAlignment="Right" AutomationProperties.AutomationId="JobStatusText" />
+                            <TextBlock Text="{Binding RemainingText}" Style="{StaticResource TextMuted}" HorizontalAlignment="Right" TextWrapping="NoWrap"
+                                       Visibility="{Binding RemainingText, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="JobRemainingText" />
+                            <TextBlock Text="{Binding StatusText}" Style="{StaticResource TextFaint}" HorizontalAlignment="Right" AutomationProperties.AutomationId="JobStatusText" />
                         </StackPanel>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding Sub}" Style="{StaticResource TextMuted}" Margin="0,2,0,0" />
                         </StackPanel>
                     </DockPanel>
-                    <StackPanel Margin="0,22,0,0">
-                        <ProgressBar Style="{StaticResource ProgressThin}" Value="{Binding Progress, Mode=OneWay}" />
-                        <TextBlock Text="{Binding DetailText}" Style="{StaticResource TextMuted}" Margin="0,8,0,0" />
-                        <ItemsControl ItemsSource="{Binding ChainLines}" Margin="0,8,0,0" Visibility="{Binding HasChain, Converter={StaticResource BoolToVisible}}">
+                    <!-- Phase indicator (nová věc 2): Kopírování · Ověření · Proxy · Report -->
+                    <ItemsControl ItemsSource="{Binding Steps}" Margin="0,22,0,0" AutomationProperties.AutomationId="JobSteps">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Rows="1" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,8,0">
+                                    <ProgressBar Style="{StaticResource ProgressSegment}" Value="{Binding Fill, Mode=OneWay}" />
+                                    <TextBlock Text="{Binding Text}" FontSize="13" Margin="0,8,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource Text3}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="Active">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="Done">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <!-- Speed table (nová věc 1): Čtení karty + every destination — name, share, MB/s -->
+                    <Border CornerRadius="12" Background="{DynamicResource Input}" BorderBrush="{DynamicResource LineSoft}" BorderThickness="1" Margin="0,22,0,0" ClipToBounds="True"
+                            Visibility="{Binding Rows.Count, Converter={StaticResource CountToVisible}}">
+                        <ItemsControl ItemsSource="{Binding Rows}" AutomationProperties.AutomationId="JobRows">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding}" Style="{StaticResource TextMonoFaint}" />
+                                    <Border BorderBrush="{DynamicResource RowLine}" BorderThickness="0,0,0,1" Padding="16,12" ToolTip="{Binding Tooltip}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="1.4*" />
+                                                <ColumnDefinition Width="3*" />
+                                                <ColumnDefinition Width="0.9*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Border Width="18" Height="18" CornerRadius="9" Background="{DynamicResource Track}" Margin="0,0,8,0"
+                                                        Visibility="{Binding HasNumber, Converter={StaticResource BoolToVisible}}">
+                                                    <TextBlock Text="{Binding Number}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconCardPlain}" Width="15" Height="15" Margin="0,0,8,0"
+                                                                Foreground="{DynamicResource TextSoft}" Visibility="{Binding HasNumber, Converter={StaticResource BoolToCollapsed}}" />
+                                                <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextSoft}" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <ProgressBar Grid.Column="1" Style="{StaticResource ProgressThin}" Value="{Binding Share, Mode=OneWay}" Margin="16,0" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="{Binding RateText}" Style="{StaticResource TextMono}" Foreground="{DynamicResource Text}" TextAlignment="Right" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </StackPanel>
+                    </Border>
                     <TextBlock Text="{Binding WarningText}" Style="{StaticResource TextWarn}" Margin="0,12,0,0" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobWarningText" />
                     <TextBlock Text="{Binding ProfileNote}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding ProfileNote, Converter={StaticResource NullToCollapsed}}"
@@ -94,12 +147,31 @@
                                 Visibility="{Binding ShowEjectButton, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="EjectButton" />
                         <TextBlock Text="{Binding SafeText}" Foreground="{DynamicResource Success}" TextWrapping="Wrap" VerticalAlignment="Center" />
                     </DockPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                        <Button Style="{StaticResource DangerButton}" Content="Zrušit" Command="{Binding CancelCommand}" AutomationProperties.AutomationId="CancelButton"
-                                Visibility="{Binding CanCancel, Converter={StaticResource BoolToVisible}}" />
-                    </StackPanel>
+                    <TextBlock Text="{Binding PauseText}" Style="{StaticResource TextWarn}" Margin="0,12,0,0" Visibility="{Binding PauseText, Converter={StaticResource NullToCollapsed}}"
+                               AutomationProperties.AutomationId="JobPauseText" />
+                    <!-- "Soubor 10 / 24" + the file, Pozastavit / Pokračovat (nová věc 9), Zrušit -->
+                    <DockPanel Margin="0,16,0,0">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource SecondaryButton}" Height="36" Padding="14,0" Content="Pozastavit" Command="{Binding PauseCommand}" Margin="0,0,8,0"
+                                    Visibility="{Binding IsPaused, Converter={StaticResource BoolToCollapsed}}" AutomationProperties.AutomationId="PauseButton" />
+                            <Button Style="{StaticResource SecondaryButton}" Height="36" Padding="14,0" Content="Pokračovat" Command="{Binding ResumeCommand}" Margin="0,0,8,0"
+                                    Visibility="{Binding IsPaused, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="ResumeButton" />
+                            <Button Style="{StaticResource DangerButton}" Content="Zrušit" Command="{Binding CancelCommand}" AutomationProperties.AutomationId="CancelButton"
+                                    Visibility="{Binding CanCancel, Converter={StaticResource BoolToVisible}}" />
+                        </StackPanel>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding FileCaption}" FontSize="12" Foreground="{DynamicResource Text3}" AutomationProperties.AutomationId="JobFileCaption" />
+                            <TextBlock Text="{Binding FileValue}" Style="{StaticResource TextMono}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0" ToolTip="{Binding DetailText}" />
+                        </StackPanel>
+                    </DockPanel>
                 </StackPanel>
             </Border>
+            <!-- "Nejpomalejší článek: …" (progress.Brake) -->
+            <DockPanel Margin="4,14,4,0" Visibility="{Binding BrakeText, Converter={StaticResource NullToCollapsed}}">
+                <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconInfo}" Width="15" Height="15" Foreground="{DynamicResource Text3}" Margin="0,0,10,0" />
+                <TextBlock Text="{Binding BrakeText}" FontSize="13" Foreground="{DynamicResource Text3}" TextWrapping="Wrap" AutomationProperties.AutomationId="JobBrakeText" />
+            </DockPanel>
+            </StackPanel>
         </DataTemplate>
 
         <!-- ── Done, green (obr. 3) ── -->
@@ -123,10 +195,53 @@
                             <TextBlock Text="Karta vysunuta" Foreground="{DynamicResource SuccessLabel}" Margin="0,4,0,0" Visibility="{Binding Ejected, Converter={StaticResource BoolToVisible}}" />
                         </StackPanel>
                     </DockPanel>
-                    <Border BorderBrush="{DynamicResource SuccessLine}" BorderThickness="0,1,0,0" Padding="24,18">
-                        <TextBlock Text="{Binding SummaryText}" Foreground="{DynamicResource SuccessText2}" TextWrapping="Wrap" />
+                    <!-- Kopie · Ověření · Proxy · Celkem (nová věc 3) -->
+                    <Border BorderBrush="{DynamicResource SuccessLine}" BorderThickness="0,1,0,1" Padding="24,18" Visibility="{Binding SummaryFields.Count, Converter={StaticResource CountToVisible}}">
+                        <ItemsControl ItemsSource="{Binding SummaryFields}" ToolTip="{Binding SummaryText}" AutomationProperties.AutomationId="JobSummary">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Rows="1" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource SuccessLabel}" />
+                                        <TextBlock Text="{Binding Value}" FontSize="18" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Border>
-                    <StackPanel Margin="24,0,24,18">
+                    <!-- the first five clips (middle frame) and "+N" -->
+                    <ItemsControl ItemsSource="{Binding Thumbs}" Margin="24,18,24,0" Visibility="{Binding HasThumbs, Converter={StaticResource BoolToVisible}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Rows="1" Columns="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="6" Background="{DynamicResource ThumbBg}" Margin="0,0,8,0" ClipToBounds="True">
+                                    <Viewbox Stretch="Uniform">
+                                        <Grid Width="160" Height="90">
+                                            <Image Source="{Binding Image}" Stretch="UniformToFill" />
+                                            <TextBlock Text="{Binding Clip}" FontFamily="{StaticResource MonoFont}" FontSize="10" Foreground="White" Margin="6"
+                                                       VerticalAlignment="Bottom" HorizontalAlignment="Left">
+                                                <TextBlock.Effect>
+                                                    <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.8" />
+                                                </TextBlock.Effect>
+                                            </TextBlock>
+                                            <!-- the last tile: "+18" more clips -->
+                                            <TextBlock Text="{Binding More}" FontSize="12" Foreground="{DynamicResource SuccessText2}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Visibility="{Binding More, Converter={StaticResource NullToCollapsed}}" />
+                                        </Grid>
+                                    </Viewbox>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Margin="24,14,24,18">
                         <TextBlock Text="{Binding NoteText}" Foreground="{DynamicResource SuccessText2}" TextWrapping="Wrap" Margin="0,0,0,10"
                                    Visibility="{Binding NoteText, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="JobNoteText" />
                         <TextBlock Text="{Binding WarningText}" Style="{StaticResource TextWarn}" Margin="0,0,0,10" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
@@ -152,6 +267,14 @@
                                         <TextBlock Text="Otevřít složku" />
                                     </StackPanel>
                                 </Button>
+                                <Button Style="{StaticResource SuccessSecondaryButton}" Command="{Binding OpenProxyCommand}" Margin="0,0,8,0" AutomationProperties.AutomationId="ProxyFolderOpenButton"
+                                        Visibility="{Binding HasProxies, Converter={StaticResource BoolToVisible}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconVideo}" Width="15" Height="15" Margin="0,0,8,0"
+                                                        Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                        <TextBlock Text="Proxy" />
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </DockPanel>
                     </StackPanel>
@@ -167,13 +290,59 @@
                         <Border DockPanel.Dock="Left" Width="40" Height="40" CornerRadius="11" Background="{DynamicResource WarnFill}" Margin="0,0,14,0" VerticalAlignment="Top">
                             <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconWarning}" Width="22" Height="22" Tag="2" Foreground="{DynamicResource OnWarn}" />
                         </Border>
+                        <!-- "Zkopírovat znovu": only the failed files, only where they failed (nová věc 4) -->
+                        <Button DockPanel.Dock="Right" Style="{StaticResource WarnButton}" Content="Zkopírovat znovu" Command="{Binding RepairCommand}" VerticalAlignment="Top"
+                                Visibility="{Binding CanRepair, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="RepairButton"
+                                ToolTip="Znovu zkopíruje jen nesouhlasné soubory a jen na disk, kde nesouhlasí; nesouhlasnou kopii odloží do _REPORT\neshoda_NNNN." />
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="{Binding HeadTitle}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" AutomationProperties.AutomationId="JobHeadTitle" />
                             <TextBlock Text="{Binding HeadSub}" Foreground="{DynamicResource WarnText2}" TextWrapping="Wrap" Margin="0,3,0,0" AutomationProperties.AutomationId="JobHeadSub" />
                         </StackPanel>
                     </DockPanel>
-                    <TextBlock Text="{Binding FailedText}" Foreground="{DynamicResource WarnText2}" TextWrapping="Wrap" Margin="0,12,0,0"
-                               Visibility="{Binding FailedText, Converter={StaticResource NullToCollapsed}}" />
+                    <!-- path · state on each destination ("RAID_A ✓", "SHUTTLE_B ✕ hash") -->
+                    <Border CornerRadius="10" Background="{DynamicResource WarnListBg}" BorderBrush="{DynamicResource WarnListBorder}" BorderThickness="1" Padding="14,10" Margin="0,14,0,0"
+                            Visibility="{Binding FailedRows.Count, Converter={StaticResource CountToVisible}}">
+                        <StackPanel>
+                            <ItemsControl ItemsSource="{Binding FailedRows}" AutomationProperties.AutomationId="FailedFiles">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="2*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Path}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextWrapping="Wrap" Margin="0,0,12,0" />
+                                            <ItemsControl Grid.Column="1" ItemsSource="{Binding Disks}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <UniformGrid Rows="1" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Text}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextTrimming="CharacterEllipsis">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource DangerText2}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Ok}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource SuccessText2}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{Binding MoreFailed}" FontSize="12" Foreground="{DynamicResource WarnText2}" Margin="0,6,0,0"
+                                       Visibility="{Binding MoreFailed, Converter={StaticResource NullToCollapsed}}" />
+                        </StackPanel>
+                    </Border>
                     <TextBlock Text="{Binding ErrorText}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding ErrorText, Converter={StaticResource NullToCollapsed}}" />
                     <TextBlock Text="{Binding WarningText}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobWarningText" />

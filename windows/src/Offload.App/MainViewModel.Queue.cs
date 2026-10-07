@@ -379,6 +379,44 @@ public sealed partial class MainViewModel
     /// The copied card is in its drive per the last scan (not pulled out, not replaced by another card).
     internal bool CardInDrive(JobItemViewModel item) => QueueRules.CardInDrive(item.Job.Config.Source, item.Runner.SourceIdentity, volumes);
 
+    /// "Zkopírovat znovu" needs the card the job copied: a drive root must hold that card now; a folder is taken as there
+    /// (the repair's planner reads it first and refuses a changed one). Memory only.
+    internal bool SourcePresent(JobItemViewModel item)
+    {
+        var source = item.Job.Config.Source;
+        try
+        {
+            bool driveRoot = string.Equals(Layout.DriveRootOf(source)?.TrimEnd('\\'), source.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+            return !driveRoot || CardInDrive(item);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    /// A repair of the same backup is queued or running (one at a time; the folder lock would refuse a second).
+    internal bool RepairPending(JobItemViewModel item) => item.Job.Plan is { } plan && Jobs.OfType<JobItemViewModel>().Any(j =>
+        !ReferenceEquals(j, item) && !j.IsFinished && j.Job.Config.RepairInto is { } into && RepairRules.SameBackup(into, plan.CardPaths));
+
+    /// "Zkopírovat znovu" (UI návrh 4): a repair job — only the failed files, only where they failed — with the finished
+    /// job's own settings; it waits in the copy queue like any card (it reads the card).
+    internal void Repair(JobItemViewModel item)
+    {
+        if (closing || item.Job.Plan is not { } plan || !item.CanRepair) return;
+        // The finished job's own settings and the identity of the card it copied (ruling I1): another card is refused.
+        var repair = new JobItemViewModel(this, new OffloadJob(JobConfigs.Repair(item.Job)), plan.CardName, item.CanEject);
+        Jobs.Insert(0, repair);
+        queue.Enqueue(repair.Runner);
+        RaiseMany(nameof(HasJobs), nameof(HasFinished));
+    }
+
+    /// The rest of a running job (its phase's ETA and what follows), from what this session measured; null when not known.
+    internal double? RemainingTotal(JobItemViewModel item, double? phaseEta) => item.Job.Plan is { } plan
+        ? rates.Remaining(item.Phase, phaseEta, plan.Scan.TotalBytes, item.PlanClips, item.Job.Config.Verify,
+            item.Job.Config.AnalyzeClips && plan.Mode != PlanMode.Repair, plan.Mode == PlanMode.Repair ? new ProxySettings() : item.Job.Config.Proxy)
+        : null;
+
     QueueItem? Find(IQueuedJob job) => Jobs.FirstOrDefault(j => ReferenceEquals(j.Queued, job));
 
     void OnCopyFinished(IQueuedJob job)
