@@ -23,36 +23,45 @@ static class CopyCommand
         var dryRun = new Option<bool>("--dry-run") { Description = "Only scan and check, do not copy." };
         var noHistory = new Option<bool>("--no-history") { Description = "Do not read or write the offload history (%APPDATA%\\Offload\\history.json)." };
         var hash = new Option<string>("--hash") { Description = "Checksums: xxh64 (default) or both (xxh64 + MD5; MD5 is slower on fast cards).", DefaultValueFactory = _ => "xxh64" };
+        var project = CliProject.Create();
         var stageTwo = new StageTwoOptions();
 
         var cmd = new Command("copy", "Copy a card to <dest>/<date>/<card name>/ on every destination and verify.");
         cmd.Arguments.Add(source);
-        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noHistory, hash }) cmd.Options.Add(o);
+        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noHistory, hash, project }) cmd.Options.Add(o);
         stageTwo.AddTo(cmd);
         cmd.SetAction(r =>
         {
             JobConfig config;
+            ProjectSettings? profile;
             try
             {
-                config = new JobConfig(CliPath.Full(r.GetValue(source)!), r.GetValue(dest)!.Select(CliPath.Full).ToList())
+                // Spec 4.1: the project's values are the defaults, what is written here wins (-d replaces its destinations).
+                profile = CliProject.Load(r.GetValue(project));
+                bool Given(Option o) => CliProject.Given(r, profile, o);
+                config = new JobConfig(CliPath.Full(r.GetValue(source)!), (Given(dest) ? r.GetValue(dest)! : [.. profile!.DestRoots]).Select(CliPath.Full).ToList())
                 {
                     CardName = r.GetValue(name) is string n && !n.Equals("auto", StringComparison.OrdinalIgnoreCase) ? n : null,
                     Date = r.GetValue(date),
                     ChunkMB = r.GetValue(chunkMb),
                     Buffers = r.GetValue(buffers),
-                    Verify = !r.GetValue(noVerify),
+                    Verify = Given(noVerify) ? !r.GetValue(noVerify) : profile!.Verify,
                     AllowSameDevice = r.GetValue(allowSame),
                     RecordHistory = !r.GetValue(noHistory),
-                    Hashes = HashKinds.TryParseWire(r.GetValue(hash), out var kinds) ? kinds : throw new ArgumentException(Msg.UnknownHash(r.GetValue(hash))),
+                    Hashes = !Given(hash) ? HashKinds.FromSetting(profile!.Hash)
+                        : HashKinds.TryParseWire(r.GetValue(hash), out var kinds) ? kinds : throw new ArgumentException(Msg.UnknownHash(r.GetValue(hash))),
+                    Project = profile?.Name,
                 };
-                stageTwo.Apply(r, config);
+                stageTwo.Apply(r, config, profile);
             }
             catch (Exception e)
             {
                 Console.Error.WriteLine(Msg.CliError + e.Message);
                 return 1;
             }
-            bool autoName = r.GetValue(name) is string a && a.Equals("auto", StringComparison.OrdinalIgnoreCase);
+            if (profile != null) Console.WriteLine(Msg.CliProject(profile.Name));
+            // A project that proposes names from the clips (naming.suggestFromClips) acts as --name auto unless --name is given.
+            bool autoName = r.GetValue(name) is string a ? a.Equals("auto", StringComparison.OrdinalIgnoreCase) : profile?.Naming.SuggestFromClips == true;
             var insight = config.RecordHistory || autoName ? Inspect(config.Source, withHistory: config.RecordHistory) : null;
             if (insight?.History is { } known)
                 Console.WriteLine(HistoryText.Line(known, fullPaths: true).Text);   // no question: a script has nobody to ask

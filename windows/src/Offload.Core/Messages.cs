@@ -98,6 +98,7 @@ public static class Msg
     public const string CardSwapped = "Karta se během čtení vyměnila.";
     public const string CardNameAutoNone = "Návrh názvu nenalezen, použije se jmenovka svazku.";
     public static string CardNameAuto(string name) => $"Název karty: {name} (podle klipů)";
+    public static string CliProject(string name) => $"Projekt: {name} (výchozí hodnoty z nastavení aplikace, volby z příkazové řádky mají přednost)";
     public static string CardUnreadable(string detail) => $"Kartu nejde přečíst: {detail}";
 
     // Append (spec 2.2)
