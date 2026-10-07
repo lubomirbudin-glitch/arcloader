@@ -124,6 +124,66 @@ Vše níže zatím nikdo neověřil na skutečné kartě — GUI je jinak zkouš
 - [ ] 9. Proxy z log klipu má přirozené barvy; v reportu je u klipu LUT a důvod
 - [ ] 10. BRAW klip: proxy, tři snímky v reportu, LUT podle gamy v reportu (viz „Vzorek BRAW“ výše)
 
+Plán 6 (karty a bezpečnost dat, 0.2.0):
+
+- [ ] 11. Zkopírovanou kartu vytáhnout a vložit znovu → pod kartou šedě „Zjišťuji, jestli už je karta zálohovaná…“,
+      pak zeleně „Zálohováno <datum čas> na <cíle> — ověřeno“; Start → okno „Karta už je zálohovaná“: „Zrušit“ nic
+      nespustí, „Vynechat zálohované“ kartu odškrtne a nic nezkopíruje, „Kopírovat znovu celé“ vytvoří `<karta>_2`
+- [ ] 12. **Karta ve dvou čtečkách:** tutéž kartu vložit do jiné čtečky (jiné písmeno, jiný GUID svazku) → stále
+      „Zálohováno …“ (párování podle sériového čísla FS + kapacity, R1); kartu naformátovat v kameře a vložit → žádný
+      řádek historie (nová karta)
+- [ ] 13. Rychlá výměna dvou karet ve stejné čtečce během „Zjišťuji…“ → řádek patří vždy kartě, která je ve čtečce
+      (výsledek staré karty se zahodí), napsaný název zmizí
+- [ ] 14. Kamerou natočit na zálohovanou kartu další klipy → oranžově „· nové soubory: N (… GB)“ a zaškrtávátko
+      „Doplnit jen nové klipy do dřívější zálohy (N souborů · … GB)“; zaškrtnout → místo názvu „Složka: <datum>\<karta>
+      na 2 cílech“, Start jde i s prázdnými Cíli a bez okna „Karta už je zálohovaná“; úloha „<karta> · doplnění“ →
+      na obou cílech `_REPORT\offload_report_0002.json/.txt`, `<karta>_report_0002.html/.pdf`, `ascmhl\0002_…Z.mhl`,
+      `ascmhl_chain.xml` se dvěma záznamy, `<karta>.xxh64` delší; původní `offload_report.json`, HTML/PDF a
+      `0001_…mhl` beze změny (datum změny souboru); nové proxy v `_PROXY` bez přepsání starých; kartu vložit znovu →
+      „Zálohováno … — ověřeno“ bez nových souborů; doplnit znovu z CLI `offload append E:\` → „Nic nového — záloha je
+      úplná.“, kód 0
+- [ ] 14b. Doplnění odmítnuté česky, nic se nezapíše: jeden z dřívějších cílů odpojit → zaškrtávátko se nenabídne
+      (po ⟳); z CLI `offload append E:\` → „Chyba: Dřívější záloha není dostupná: … — připojte disk, nebo udělejte celou
+      kopii.“; spustit doplnění v GUI a hned v PowerShellu `offload append E:\` téže karty → druhé skončí „Do této
+      zálohy právě doplňuje jiná úloha (…) — počkejte, až skončí.“
+- [ ] 15. **`ascmhl verify` po doplnění** (na macOS/Linuxu, kapitola „ASC MHL a ascmhl na Windows“): `ascmhl verify
+      <cíl>/<datum>/<karta>` projde bez chyb přes obě generace (a `ascmhl info` ukáže generace 1 a 2); na Windows
+      `offload verify <cíl>\<datum>\<karta>` → „… — vše v pořádku.“, kód 0
+- [ ] 16. **Posun času na FAT32:** kartu naformátovanou ve FAT32 (např. malá SD) zkopírovat, pak ve Windows změnit
+      časové pásmo o hodinu (Nastavení → Čas a jazyk; simuluje přechod letní/zimní čas) a kartu vložit znovu → stále
+      „Zálohováno … — ověřeno“ (ne „karta se od té doby změnila“); přidat na kartu nový soubor a doplnit → projde bez
+      konfliktu (žádné „jiná velikost nebo datum“); pásmo vrátit
+- [ ] 16b. **Posun času na exFAT (karta z kamery):** totéž s kartou exFAT, na kterou **natáčela kamera** (karta
+      naformátovaná a zapsaná ve Windows má u časů posun UTC, takže se neposune — ta test nic neověří). Zapsat, co se
+      stane: a) „Zálohováno … — ověřeno“ = kamera zapisuje čas s posunem UTC, v pořádku; b) „…, ale karta se od té doby
+      změnila (N souborů jinak) — doplnit nejde, jen celá kopie“ = kamera zapisuje místní čas bez posunu → nález M27:
+      rozšířit toleranci celých hodin (R3) i na exFAT (`FileTimes.StoresLocalTime`, `AppendPlanner`). Kameru a model
+      uvést v nálezu. Pásmo vrátit
+- [ ] 17. Název z klipů: karta ARRI/Venice/RED/Blackmagic → šedě „A001“ + „podle názvů klipů (A001C001…)“; CLI
+      `offload E:\ -d D:\Zaloha --name auto --dry-run` u téže karty vypíše „Název karty: A001 (podle klipů)“ a cestu
+      `…\A001`; karta Sony XAVC (`C0001`) po kartě `A001` téhož dne → GUI „A002“ + „další v řadě po A001 (dnes)“
+      (CLI `--name auto` „další v řadě“ neumí: vypíše „Návrh názvu nenalezen, použije se jmenovka svazku.“); **dvě
+      neznámé karty najednou** (obě XAVC, po `A001`) → řádky ukážou „A002“ a „A003“ a po Startu vzniknou složky
+      `A002` a `A003` (ne `A002_2`); volba „Navrhovat název karty podle klipů“ vypnutá → jmenovka svazku
+- [ ] 18. Nástroje → Ověřit zálohu… (Ctrl+Shift+O) na složku karty i na složku dne → položky „Ověření …“ ve frontě po
+      kopiích, „Ověřeno: všech N souborů sedí (ASC MHL, 2 generace, xxHash64).“, tlačítko „Report ověření“ otevře
+      `_REPORT\<karta>_verify_…Z.html`; ve zkušební kopii změnit bajt souboru → červeně „Nesedí 1 soubor, chybí 0,
+      nečitelný 0 — podrobnosti v reportu ověření.“; během ověření odpojit disk → nečitelné soubory, „… disk se možná
+      odpojil.“; „Zrušit“ → „Ověření zrušeno po …“ bez reportu; složka zálohy z jiného programu (MHL bez `_REPORT`
+      v ignore) → poznámka „Report ověření je uložený mimo složku karty …“ a report v `<datum>\_REPORT\`
+- [ ] 19. Místo: cíl s málo místem (např. malý USB disk) → červeně „Na cíli … není dost místa: potřeba … (karty …,
+      proxy ~…, report …), volno …“ a Start šedý; dvě karty na tentýž disk se sečtou; zapnout proxy → potřeba vzroste;
+      složka pro proxy na stejném disku jako cíl se přičte; během běžící kopie vybrat další kartu → počítá se i zbytek
+      běžící úlohy; skoro plný disk → oranžově „… zbude po offloadu jen … — rezerva pod 5 %, odhad proxy je
+      přibližný.“ (Start jde); uvolnit místo → červený text do pár sekund zmizí
+- [ ] 19b. Start hned po vložení velké karty, kterou historie zná (řádek ještě „Zjišťuji…“) → pod lištou „Prověřuji
+      kartu, než začnu kopírovat…“, pak okno „Karta už je zálohovaná“ (ne tichá celá kopie); pomalá karta, která se do
+      10 s neprověří → otázka „Karta … se ještě prověřuje — nevím, jestli už je zálohovaná. Spustit přesto celou
+      kopii?“, „Ne“ nic nespustí; zavřít okno během čekání → zavře se bez hlášky
+- [ ] 20. Hlášky česky: odpojený cíl při startu z CLI (`offload E:\ -d X:\nic`) → „Chyba: Cíl nenalezen: X:\nic — je
+      disk připojený?“; neznámá volba (`offload E:\ -d D:\ --xyz`) → chyba parseru česky (satelit `cs` v `bin\cs\`);
+      v GUI chyba před kopií na kartě úlohy česky
+
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
 ## Použití

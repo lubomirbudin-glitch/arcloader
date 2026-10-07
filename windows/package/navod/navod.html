@@ -532,6 +532,8 @@ Když stejnou kartu (stejný název) zkopírujete týž den znovu, nová kopie d
       a do reportu se vloží tři snímky. Čte se z cílových disků, ne z karty. Potřebuje ffmpeg a ffprobe (jsou přibalené).</td></tr>
 </table>
 
+<p class="note"><b>Nevracejte se ke starší verzi než 0.2.0</b> — verze 0.1.0 by z nastavení smazala údaje, kterým nerozumí.</p>
+
 <h3>Jak kopie probíhá</h3>
 <ul>
   <li>Karta se čte jednou, data jdou současně na všechny cíle. Pomalejší disk může chvíli zaostávat, aniž by brzdil čtení karty.</li>
@@ -1093,7 +1095,7 @@ upřesní) a <code>--no-history</code> (potom je <code>--into</code> povinné). 
   <tr><td>„Historie ASC MHL v … je poškozená — … doplnit nejde.“</td><td>Soubor MHL někdo změnil nebo ve složce <code>ascmhl</code> přibyl soubor mimo řetěz. Ověřte zálohu; doplnění jde až po opravě, celá kopie vždy.</td></tr>
   <tr><td>„Na kartě není žádný soubor z dřívější zálohy — jde o jinou kartu? Udělejte celou kopii.“</td><td>Doplňujete jinou kartu, než která se zálohovala (nebo kopie, která se zrušila ještě před prvním souborem). Udělejte celou kopii.</td></tr>
   <tr><td>„Doplnění zastaveno — nic se nezkopírovalo. N souborů se neshoduje se zálohou: …“</td><td>Na kartě se změnily už zálohované soubory („jiná velikost nebo datum“, jiná karta se stejným sériovým číslem, úprava v kameře) nebo na cíli je soubor, který žádný report nezná (nedokončené doplnění). Udělejte celou kopii.</td></tr>
-  <tr><td>„Na …: chybí soubor z dřívější zálohy: …“, „… se při dřívější záloze na … nezkopíroval správně …“</td><td>Dřívější záloha je neúplná. Ověřte ji (Nástroje → Ověřit zálohu…) a kartu zkopírujte celou.</td></tr>
+  <tr><td>„Na … chybí soubor z dřívější zálohy: …“, „… se při dřívější záloze na … nezkopíroval správně …“</td><td>Dřívější záloha je neúplná. Ověřte ji (Nástroje → Ověřit zálohu…) a kartu zkopírujte celou.</td></tr>
   <tr><td>„Do této zálohy právě doplňuje jiná úloha (…) — počkejte, až skončí.“</td><td>Stejnou složku karty doplňuje jiná úloha (i z druhého okna Offloadu nebo z <code>offload append</code>). Počkejte na její konec; pak spusťte doplnění znovu — doplní se jen to, co mezitím nepřibylo.</td></tr>
   <tr><td>„Nic nového — záloha je úplná.“</td><td>Není chyba — všechny soubory karty už v záloze jsou.</td></tr>
   <tr><td>„Ve složce … není ASC MHL ani seznam součtů — není s čím porovnat.“</td><td>Vybraná složka není složka karty ani dne z Offloadu (nebo v ní chybí <code>ascmhl</code> i <code>_REPORT</code>). Vyberte složku karty <code>&lt;cíl&gt;\&lt;datum&gt;\&lt;karta&gt;</code>.</td></tr>

@@ -106,6 +106,19 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void NamingSettings_UnknownKeys_RoundTrip()
+    {
+        using var dir = new TempDir();
+        var s = LoadJson(dir, """{"naming":{"suggestFromClips":false,"future":7}}""");
+        var path = Path.Combine(dir.Path, "out.json");
+        SettingsStore.Save(s, path);
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var naming = doc.RootElement.GetProperty("naming");
+        Assert.False(naming.GetProperty("suggestFromClips").GetBoolean());
+        Assert.Equal(7, naming.GetProperty("future").GetInt32());
+    }
+
+    [Fact]
     public void UnknownKeys_KeptByClone_NoneForFreshSettings()
     {
         using var dir = new TempDir();

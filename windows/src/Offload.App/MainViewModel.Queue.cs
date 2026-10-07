@@ -156,7 +156,10 @@ public sealed partial class MainViewModel
     {
         var gone = new List<string>();
         var targets = SpaceTargets();
-        foreach (var src in SelectedSources())
+        var selectedNow = SelectedSources();
+        // Names as the rows show them now: Placeholder numbers against the cards still ticked, and the loop unticks cards.
+        var names = selectedNow.ToDictionary(p => p, p => Placeholder(p).Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var src in selectedNow)
         {
             var space = CardSpace(src, targets);   // the job card keeps counting it until it has copied (spec 2.5)
             if (skip.Contains(src, StringComparer.OrdinalIgnoreCase))
@@ -179,6 +182,7 @@ public sealed partial class MainViewModel
                 // The engine plans again under the folder lock and refuses with a Czech message when anything is off.
                 var appendConfig = new JobConfig(src, known.Entry.Destinations.Select(d => d.Root).ToList())
                 {
+                    AllowSameDevice = true,   // the destinations are fixed by the earlier backup (it may have been made with --allow-same-device)
                     AppendInto = known.Entry.Destinations.Select(d => d.CardPath).ToList(),
                     Verify = Settings.Verify,
                     AnalyzeClips = Settings.AnalyzeClips,
@@ -195,7 +199,7 @@ public sealed partial class MainViewModel
             }
             // Exactly what the row shows: the typed name, else a suggestion (spec 2.3); null = the volume label.
             var name = cardNames.GetValueOrDefault(src) is { Length: > 0 } n && n.Trim().Length > 0 ? n.Trim()
-                : Placeholder(src).Name is var shown && shown != DefaultCardName(src) ? shown
+                : names[src] is var shown && shown != DefaultCardName(src) ? shown
                 : null;
             var config = new JobConfig(src, Settings.DestRoots.ToList())
             {

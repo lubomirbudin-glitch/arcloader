@@ -8,6 +8,9 @@ public sealed class NamingSettings
 {
     /// Propose the card folder name from the clip names ("A001C003…" → "A001") or the next in line (spec 2.3).
     [JsonPropertyName("suggestFromClips")] public bool SuggestFromClips { get; set; } = true;
+
+    /// Keys of this section a newer version wrote: kept and written back (R24).
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
 /// The app's settings — the Mac `AppSettings` keys (destRoots, verify, analyzeClips, proxy, tools);

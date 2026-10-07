@@ -60,6 +60,19 @@ public class SpaceCheckTests
         Assert.Equal(("vol-d", SpaceEstimator.CardBytes(3 * GB, 1)), (d.Volume, d.Need.Card));
     }
 
+    [Fact]
+    public void Append_KeepsTheOriginalDestinationIndex_ProxyStaysOnTheFirstDestination()
+    {
+        var e = HistoryFixtures.Entry(HistoryFixtures.T0);   // D:\Zaloha (first), F:\Zaloha (second)
+        var clip = new SourceFile("CLIP/A001C003.mov", 3 * GB, HistoryFixtures.T0);
+        var m = new HistoryMatch(e, HistoryMatchKind.NewFiles, [clip], 3 * GB, [], 0);
+        var proxy = new ProxySettings { Enabled = true, CopyToAllDestinations = false };
+        var onlyF = SpaceCheck.ForAppend(m, proxy, Tools, [F], null);
+        Assert.Equal(0, Assert.Single(onlyF).Need.Proxy);   // F is the second destination: no proxy there
+        var both = SpaceCheck.ForAppend(m, proxy, Tools, [D, F], null);
+        Assert.True(both[0].Need.Proxy >= 0 && both[1].Need.Proxy == 0);
+    }
+
     [Theory]
     [InlineData(JobPhase.Waiting, 100, 10)]
     [InlineData(JobPhase.Copying, 60, 10)]

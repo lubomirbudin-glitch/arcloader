@@ -29,17 +29,20 @@ public static class SpaceCheck
     public static List<VolumeDemand> ForAppend(HistoryMatch match, ProxySettings proxy, ExternalTools tools,
         IReadOnlyList<SpaceTarget> targets, SpaceTarget? folder)
     {
-        var mine = match.Entry.Destinations
-            .Select(d => targets.FirstOrDefault(t => string.Equals(t.Root.TrimEnd('\\'), d.Root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)))
-            .OfType<SpaceTarget>()
-            .ToList();
+        // Each destination keeps its index in the backup (the proxy goes to the first one), even when others are not in `targets`.
+        var mine = new List<(SpaceTarget Target, int Index)>();
+        var all = match.Entry.Destinations;
+        for (int i = 0; i < all.Count; i++)
+            if (targets.FirstOrDefault(t => string.Equals(t.Root.TrimEnd('\\'), all[i].Root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) is { } t)
+                mine.Add((t, i));
         var clips = ClipDetector.Detect(match.New);
-        return Demands(SpaceEstimator.CardBytes(match.NewBytes, match.New.Count), SpaceEstimator.Extra(clips, proxy, tools), mine, folder);
+        return Demands(SpaceEstimator.CardBytes(match.NewBytes, match.New.Count), SpaceEstimator.Extra(clips, proxy, tools),
+            mine.Select(m => m.Target).ToList(), folder, mine.Select(m => m.Index).ToList());
     }
 
-    static List<VolumeDemand> Demands(long card, SpaceExtra extra, IReadOnlyList<SpaceTarget> targets, SpaceTarget? folder)
+    static List<VolumeDemand> Demands(long card, SpaceExtra extra, IReadOnlyList<SpaceTarget> targets, SpaceTarget? folder, IReadOnlyList<int>? indexes = null)
     {
-        var demands = targets.Select((t, i) => new VolumeDemand(t.Volume, t.Label, extra.ForDestination(i, card))).ToList();
+        var demands = targets.Select((t, i) => new VolumeDemand(t.Volume, t.Label, extra.ForDestination(indexes?.ElementAt(i) ?? i, card))).ToList();
         if (folder != null && extra.ProxyFolder != null && extra.Proxy > 0)
             demands.Add(new VolumeDemand(folder.Volume, folder.Label, new SpaceNeed(0, extra.Proxy, 0)));
         return demands;

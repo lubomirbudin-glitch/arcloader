@@ -184,7 +184,7 @@ podle `finished` se smažou i se seznamem souborů). Poškozený soubor se přej
 | `success`, `verified` | bool | všechny generace bez chyb / ověřené |
 | `failedFiles` | číslo? | jen když `success` = false |
 | `hashAlgorithms` | string[] | `["xxh64"]` |
-| `files`, `bytes` | číslo | karta naposledy |
+| `files`, `bytes` | číslo | sjednocení všech generací |
 | `fingerprint`, `shape` | string | SHA-256 (hex) přes řádky seřazené podle cesty `relpath\tsize\tmtimeTicksUtc\n` resp. `relpath\tsize\n` |
 | `fileList` | string | `history/<id>.files.gz` — gzip řádků `relpath\tsize\tmtimeTicksUtc\n` (seznam po všech generacích) |
 | `destinations[]` | objekt | `root`, `cardPath` |
