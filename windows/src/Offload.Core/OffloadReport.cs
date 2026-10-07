@@ -58,15 +58,12 @@ public sealed partial class OffloadReport
     [JsonIgnore] public double VerifySeconds => (Finished - CopyFinished).TotalSeconds;
 
     [JsonIgnore]
-    public IReadOnlyList<ReportFile> FailedFiles
-    {
-        get
-        {
-            // A cancelled verification leaves files "written" or already "verified": both are fine then.
-            bool IsOk(string d) => d == "verified" || (!Verified && d == "written");
-            return Files.Where(f => f.SourceError != null || f.Destinations.Any(d => !IsOk(d))).ToList();
-        }
-    }
+    public IReadOnlyList<ReportFile> FailedFiles => Files.Where(IsFailed).ToList();
+
+    /// The card could not be read, or a destination does not hold a good copy. A cancelled verification leaves files
+    /// "written" or already "verified": both are fine then.
+    public bool IsFailed(ReportFile f) =>
+        f.SourceError != null || f.Destinations.Any(d => !(d == "verified" || (!Verified && d == "written")));
 
     [JsonIgnore] public bool Success => FailedFiles.Count == 0;
     /// Every file is on every destination and was read back with a matching hash.

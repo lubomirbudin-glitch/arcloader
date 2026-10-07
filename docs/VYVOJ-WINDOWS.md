@@ -18,6 +18,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 5 | vestavěné LUTy Log → Rec.709 (ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI, Fuji), automatický výběr podle metadat klipu | hotovo (čeká ruční test s klipy z kamer) |
 | 6 | karty a bezpečnost dat: historie karet, doplnění nových klipů, název z klipů, ověření zálohy proti ASC MHL, kontrola místa, české hlášky (0.2.0) | hotovo (čeká ruční test s kartou) |
 
+## 2026-10-07 — plán 7: výstupy pro produkci a střih
+
+- Úkol 1 — `CardRecord` úplný: klipy všech generací (doplnění za dřívějšími, tatáž cesta = nejnovější záznam), součty přes generace (soubory, data, začátek–konec), selhané soubory podle nejnovějšího záznamu, „ověřeno“ jen když jsou ověřené všechny generace a žádný report doplnění není nečitelný; generace bez analýzy klipů dostane klipy nalezené v jejích souborech (bez metadat); snese report z Macu (bez `generation`, `lut`, `proxyEncoder`, `md5`) i `"clips": null`
+
 ## 2026-10-06 — plán 6: karty a bezpečnost dat
 
 - Závěrečné opravy — Start pojmenuje karty podle názvů zobrazených před spuštěním (dvě neznámé karty A002, A003, ne A002_2); kontrola místa při doplnění drží původní pořadí cíle (proxy na prvním cíli zálohy); `naming` v settings.json zachová neznámé klíče; doplnění v GUI s `AllowSameDevice` (cíle určuje dřívější záloha); FORMATY (`files`/`bytes` = všechny generace); návod (text hlášky, poznámka „nevracejte se k verzi před 0.2.0“, nové PDF); ruční test plánu 6 v README
