@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -126,7 +127,8 @@ public static partial class ClipList
     /// Writes `<name>_clips.csv` and `<name>_clips[_<fps>].ale` into `dir` as `outputs` asks; an ALE of an earlier write
     /// that this one no longer makes (the rates changed) is removed. A list that is switched off but already there is
     /// rewritten all the same (it is derived, R25: left alone it would show only the earlier generations) — never
-    /// deleted, the user may still use it, and never created. Throws on an I/O error (the caller logs it).
+    /// deleted, the user may still use it, and never created. Each file is written on its own (task 6 review): a CSV
+    /// held open in Excel does not stop the ALE; the first error is thrown once the rest is written (the caller logs it).
     /// Not under the append lock: a stage-2 rewrite racing an append of the same card from another process can leave
     /// the older snapshot behind; accepted (R25, ruling M10) — the next copy or append of the card rebuilds the list.
     public static void Write(string dir, string name, IReadOnlyList<Row> rows, OutputSettings outputs)
@@ -139,20 +141,30 @@ public static partial class ClipList
             : [];
         if (!csv && !outputs.ClipListAle && existingAle.Count == 0) return;
         NativeIO.Mkdirs(dir);
-        if (csv)
-            NativeIO.WriteFileReplacing(csvPath, [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(Csv(rows))]);
-        if (!outputs.ClipListAle && existingAle.Count == 0) return;
-        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (suffix, text) in Ale(rows))
+        Exception? first = null;
+        void Each(Action write)
         {
-            var file = suffix == null ? $"{name}_clips.ale" : $"{name}_clips_{suffix}.ale";
-            if (!outputs.ClipListAle && !existingAle.Contains(file, StringComparer.OrdinalIgnoreCase)) continue;
-            NativeIO.WriteFileReplacing(Path.Combine(dir, file), new UTF8Encoding(false).GetBytes(text));
-            written.Add(file);
+            try { write(); }
+            catch (Exception e) { first ??= e; }
         }
-        if (!outputs.ClipListAle) return;
-        foreach (var stale in existingAle.Where(f => !written.Contains(f!)))
-            NativeIO.Delete(Path.Combine(dir, stale!));
+        if (csv)
+            Each(() => NativeIO.WriteFileReplacing(csvPath, [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(Csv(rows))]));
+        if (outputs.ClipListAle || existingAle.Count > 0)
+        {
+            // Rates the ALE has now, also when a write below fails: the stale cleanup must not take a file that is still made.
+            var made = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (suffix, text) in Ale(rows))
+            {
+                var file = suffix == null ? $"{name}_clips.ale" : $"{name}_clips_{suffix}.ale";
+                made.Add(file);
+                if (!outputs.ClipListAle && !existingAle.Contains(file, StringComparer.OrdinalIgnoreCase)) continue;
+                Each(() => NativeIO.WriteFileReplacing(Path.Combine(dir, file), new UTF8Encoding(false).GetBytes(text)));
+            }
+            if (outputs.ClipListAle)
+                foreach (var stale in existingAle.Where(f => !made.Contains(f!)))
+                    Each(() => NativeIO.Delete(Path.Combine(dir, stale!)));
+        }
+        if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
     }
 
     /// The clip lists of one card folder (all generations) into its `_REPORT`.

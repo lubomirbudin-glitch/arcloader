@@ -161,6 +161,32 @@ public class ClipListTests
         Assert.DoesNotContain("\r\nB,", File.ReadAllText(csvPath));
     }
 
+    // Task 6 review: each list is written on its own — a CSV held open in Excel (no delete sharing) does not stop the
+    // ALE or the stale-ALE cleanup; the first error is thrown afterwards (the caller logs it), the CSV stays as it was.
+    [Fact]
+    public void Write_CsvHeldOpen_AleStillWritten_ErrorThrownAfter()
+    {
+        using var dir = new TempDir();
+        var both = new OutputSettings { ClipListCsv = true, ClipListAle = true };
+        var csvPath = Path.Combine(dir.Path, "A001_clips.csv");
+        var alePath = Path.Combine(dir.Path, "A001_clips.ale");
+        ClipList.Write(dir.Path, "A001", [Row("A", new ClipInfo { FrameRate = "25/1", Frames = 25 })], both);
+        var csvBefore = File.ReadAllBytes(csvPath);
+        File.WriteAllText(Path.Combine(dir.Path, "A001_clips_50.ale"), "stale");
+
+        using (new FileStream(csvPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var e = Record.Exception(() =>
+                ClipList.Write(dir.Path, "A001", [Row("A", new ClipInfo { FrameRate = "25/1", Frames = 25 }), Row("B", new ClipInfo { FrameRate = "25/1", Frames = 25 })], both));
+            Assert.True(e is IOException or UnauthorizedAccessException, e?.ToString());
+        }
+
+        Assert.Contains("\r\nB\t", File.ReadAllText(alePath));
+        Assert.False(File.Exists(Path.Combine(dir.Path, "A001_clips_50.ale")));
+        Assert.Equal(csvBefore, File.ReadAllBytes(csvPath));
+        Assert.Empty(Directory.GetFiles(dir.Path, ".*"));
+    }
+
     static OffloadJob Job(string card, IReadOnlyList<string> dests, string history, OutputSettings outputs, IReadOnlyList<string>? appendInto = null) =>
         new(new JobConfig(card, dests) { Date = "2026-10-07", AnalyzeClips = false, HistoryFolder = history, Outputs = outputs, AppendInto = appendInto },
             AppendFixtures.Options());

@@ -152,6 +152,12 @@ public static class Msg
         $"Neznámý kodek proxy „{x}“ — použijte h264, hevc, proresProxy, proresLT, prores422 nebo prores422HQ.";
     public static string LutNotFound(string path) => $"LUT nenalezen: {path}";
     public static string UnknownHash(string? x) => $"Neznámý kontrolní součet „{x}“ — použijte xxh64 nebo both (xxh64 + MD5).";
+
+    // Day report (spec 3.2)
+    public static string DayNotFound(string path) => $"Složka dne nenalezena: {path}";
+    public static string NotADayFolder(string path) => $"Ve složce {path} není žádná karta s reportem — vyberte složku dne na cíli (<cíl>\\<datum>).";
+    public static string DayReportFolderIsCard(string path) =>
+        $"Ve složce dne {path} je karta „{Layout.ReportDirName}“ — denní report by se zapsal do ní, proto se nevytvoří.";
     public static string ProxyFolderNotFound(string path) => $"Složka pro proxy nenalezena: {path}";
     public const string ProxyFolderNoEffect = "Poznámka: --proxy-folder bez --proxy nic nedělá.";
     public const string Cancelling = "Ruším — dokončuji aktuální blok, rozpracované soubory se smažou…";
