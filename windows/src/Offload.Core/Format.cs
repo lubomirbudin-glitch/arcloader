@@ -1,10 +1,14 @@
 using System.Globalization;
+using System.Reflection;
 
 namespace Offload.Core;
 
 public static class OffloadVersion
 {
-    public const string String = "0.3.0-win";
+    /// "x.y.z-win": InformationalVersion of Directory.Build.props (R22 - the one place a version is set), read from this
+    /// assembly. The report's `version`, the HTML footers and the update check use it.
+    public static readonly string String =
+        typeof(OffloadVersion).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0-win";
 }
 
 public static class Format

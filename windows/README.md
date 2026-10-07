@@ -25,12 +25,65 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 ```powershell
 cd windows
 dotnet test
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1   # → build\Offload\Offload.exe, build\Offload\bin\offload.exe, build\Offload-win-x64.zip
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1   # → build\Offload\Offload.exe, build\Offload\bin\offload.exe, build\Offload-win-x64-<verze>.zip
 ```
 
-Balíček `build\Offload-win-x64.zip` obsahuje složku `Offload` (`Offload.exe` + `bin\` s `offload.exe`, `braw-decode.exe`, `ffmpeg.exe`, `ffprobe.exe`);
+Balíček `build\Offload-win-x64-<verze>.zip` (verze z `Directory.Build.props`) obsahuje složku `Offload` (`Offload.exe` + `bin\` s `offload.exe`, `braw-decode.exe`, `ffmpeg.exe`, `ffprobe.exe`);
 stačí ho rozbalit kamkoli a spustit `Offload.exe`. Neobsahuje nic, co by se muselo instalovat. Knihovnu `BlackmagicRawAPI.dll`
 balíček neobsahuje — bez ní se BRAW jen zkopíruje a ověří, proxy a náhledy se přeskočí.
+
+### Vydání verze
+
+Verze je jen na jednom místě: `windows\Directory.Build.props` (`Version`, např. `0.4.0`, a `InformationalVersion`, např. `0.4.0-win`);
+aplikace, CLI a report ji čtou odtud (`OffloadVersion`). Číslování: plán 6 → 0.2.0, 7 → 0.3.0, 8 → 0.4.0, opravy
+zvyšují poslední číslo, 1.0.0 po ostrém testu s kartou.
+
+1. Zvyšte verzi v `Directory.Build.props` (obě hodnoty) a spusťte `dotnet test`.
+2. `powershell -ExecutionPolicy Bypass -File scripts\build.ps1 [-Sign …] -ReleaseUrl <kam zip dáte> [-Notes "<co je nového>"]`
+   — vznikne `build\Offload-win-x64-<verze>.zip` a `build\offload-update.json` (`{"version", "url", "notes"}`, UTF-8).
+   `-ReleaseUrl` je adresa, kterou uživatel otevře tlačítkem *Otevřít* (https adresa, `\\NAS\Offload\`, sdílená složka).
+3. Nahrajte zip na web / NAS a **až potom** manifest (manifest nesmí ukazovat na zip, který tam ještě není).
+
+Kontrola aktualizací v aplikaci (Nástroje → Aktualizace…) čte manifest z adresy, kterou tam zadáte (`https://…`,
+`\\NAS\Offload\offload-update.json`, místní cesta); nejvýš jednou za 24 h, 5 s po startu, nic nestahuje ani nespouští,
+čte nejvýš 64 KB. Tlačítko *Otevřít* otevře jen adresu `https://…` nebo existující složku / zip (v Průzkumníku); cokoli
+jiného se jen zobrazí. Prázdná adresa = vypnuto (výchozí). Repozitář je soukromý, proto se nečte GitHub.
+
+### Podepisování
+
+`build.ps1 -Sign` podepíše `Offload.exe`, `bin\offload.exe` a `bin\braw-decode.exe` (ffmpeg ne — není náš) před
+zabalením: `signtool sign /fd SHA256 /td SHA256 /tr <razítko> /d Offload …`, pak `signtool verify /pa /all`.
+
+```powershell
+# certifikát v úložišti Windows (CurrentUser\My, pak LocalMachine\My; funguje i s hardwarovým tokenem)
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Sign -CertThumbprint 0123456789ABCDEF0123456789ABCDEF01234567
+# nebo soubor .pfx — heslo jen v proměnné prostředí, nikdy na příkazové řádce build.ps1
+$env:OFFLOAD_SIGN_PFX = 'C:\certs\offload.pfx'; $env:OFFLOAD_SIGN_PFX_PASSWORD = '…'
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Sign -TimestampUrl http://timestamp.digicert.com
+```
+
+- `signtool.exe` se hledá v proměnné `SIGNTOOL`, pak v `PATH`, pak v nejnovějším `Windows Kits\10\bin\10.*\x64\`
+  (Windows SDK, komponenta *Signing Tools for Desktop Apps*). Chybí-li, build hned na začátku skončí: „signtool nenalezen —
+  nainstalujte Windows SDK (Signing Tools for Desktop Apps), nebo nastavte SIGNTOOL.“ Stejně hned skončí neexistující
+  otisk, prošlý certifikát, certifikát bez soukromého klíče nebo ne pro podepisování kódu, chybějící
+  `OFFLOAD_SIGN_PFX_PASSWORD`. Je-li zadán otisk i `OFFLOAD_SIGN_PFX`, použije se otisk (a skript to řekne).
+- Časové razítko (výchozí `http://timestamp.digicert.com`): 3 pokusy po 5 s, pak „Časové razítko se nepodařilo získat z …“.
+- Heslo se nikdy nevypisuje (v chybách je `***`). Pozor: `signtool /p` je vidět v seznamu procesů — na sdíleném počítači
+  raději certifikát v úložišti nebo na tokenu.
+- Bez `-Sign` se build nemění.
+
+Jak získat certifikát (nic se nekupuje automaticky; ceny orientační, k datu nákupu ověřit):
+
+| Možnost | Co to je | Cena (orientačně) | Poznámka |
+|---|---|---|---|
+| OV (Organization Validation) | ověřená firma nebo živnost | ~200–500 USD/rok | od 2023 je klíč povinně na tokenu / HSM (USB token, `-CertThumbprint`) |
+| EV (Extended Validation) | přísnější ověření firmy | ~300–700 USD/rok | také token; od 2024 už nedává okamžitou reputaci SmartScreen — ověřit aktuální stav |
+| Microsoft Artifact Signing (Azure Trusted Signing) | cloudové podepisování | ~10 USD/měsíc | podmínky podle země a historie firmy — ověřit pro ČR; signtool s jejich doplňkem |
+| Certum (polská CA) | OV i pro jednotlivce | levnější OV | token / cloud podle nabídky |
+
+SmartScreen buduje reputaci počtem stažení — první verze mohou varovat i s podpisem. Certifikát podepsaný sám sebou
+(self-signed) SmartScreenu nepomůže; hodí se jen k vyzkoušení skriptu (`signtool verify /pa` projde jen s certifikátem,
+kterému počítač důvěřuje).
 
 ### Vzorek BRAW (testy dekodéru Blackmagic RAW)
 
