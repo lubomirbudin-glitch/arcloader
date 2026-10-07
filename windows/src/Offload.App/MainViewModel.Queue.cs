@@ -264,6 +264,7 @@ public sealed partial class MainViewModel
     {
         if (Find(job) is { } item)
         {
+            if (item is JobItemViewModel j) j.LeftQueue = true;
             item.Refresh();
             bool error = item.IsError;   // a job the user cancelled is no error
             if (!closing)

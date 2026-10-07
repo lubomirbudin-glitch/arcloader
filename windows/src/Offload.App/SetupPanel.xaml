@@ -199,6 +199,7 @@
                           AutomationProperties.AutomationId="SuggestCardNames" />
                 <CheckBox Content="Seznam klipů CSV" IsChecked="{Binding ClipListCsv}" AutomationProperties.AutomationId="ClipListCsv" />
                 <CheckBox Content="Seznam klipů pro Avid (ALE)" IsChecked="{Binding ClipListAle}" AutomationProperties.AutomationId="ClipListAle" />
+                <CheckBox Content="Denní report po každé kartě" IsChecked="{Binding DayReportAfterEachCard}" AutomationProperties.AutomationId="DayReportAfterEachCard" />
 
                 <!-- Proxy -->
                 <StackPanel Orientation="Horizontal" Margin="0,18,0,0">

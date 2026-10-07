@@ -60,6 +60,20 @@ public class SettingsStoreTests
         Assert.Contains("\"future\": 1", text);
     }
 
+    // Spec 5.1: "outputs.dayReport" — on by default, off survives a save.
+    [Fact]
+    public void Outputs_DayReport_DefaultOn_RoundTrip()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        Assert.True(SettingsStore.Load(path).Outputs.DayReport);
+        var s = LoadJson(dir, """{"outputs":{"dayReport":false}}""");
+        Assert.False(s.Outputs.DayReport);
+        Assert.True(s.Outputs.ClipListCsv);   // the other keys of the section keep their defaults
+        SettingsStore.Save(s, path);
+        Assert.False(SettingsStore.Load(path).Outputs.DayReport);
+    }
+
     [Fact]
     public void Corrupt_Defaults()
     {

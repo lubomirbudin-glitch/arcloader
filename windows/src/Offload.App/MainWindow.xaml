@@ -22,6 +22,12 @@
                     </MenuItem>
                     <MenuItem Header="Ukládat report ověření" IsCheckable="True" IsChecked="{Binding SaveVerifyReport}"
                               AutomationProperties.AutomationId="SaveVerifyReportMenuItem" />
+                    <MenuItem Header="Denní report…" Command="{Binding DayReportCommand}"
+                              AutomationProperties.AutomationId="DayReportMenuItem">
+                        <MenuItem.Icon>
+                            <TextBlock Style="{StaticResource Icon}" FontSize="14" Text="&#xE8A5;" />
+                        </MenuItem.Icon>
+                    </MenuItem>
                     <Separator />
                     <MenuItem Header="Prověřit USB porty…" InputGestureText="Ctrl+U" Command="{Binding OpenHardwareCommand}"
                               AutomationProperties.AutomationId="CheckPortsMenuItem">

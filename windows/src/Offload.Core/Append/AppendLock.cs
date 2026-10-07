@@ -25,15 +25,8 @@ public sealed class AppendLock : IDisposable
 
     /// `Local\Offload-append-<sha256 hex>` of "<volume id>|<card folder relative to the volume root>", upper-cased — the
     /// same for every spelling of the folder (case, trailing slash) and for the same disk under another letter.
-    public static string Name(string cardPath)
-    {
-        var full = Path.GetFullPath(cardPath).TrimEnd('\\');
-        var root = NativeIO.VolumeRoot(full);
-        var key = root != null && NativeIO.VolumeId(root) is string volume && full.StartsWith(root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)
-            ? volume + "|" + Path.GetRelativePath(root, full)
-            : "|" + full;
-        return Prefix + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key.ToUpperInvariant())));
-    }
+    public static string Name(string cardPath) =>
+        Prefix + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(NativeIO.FolderKey(cardPath))));
 
     /// Takes the folders' locks, or throws OffloadError.Preflight(AppendBusy) naming the busy folder (nothing held then).
     /// Release on the thread that took them (Dispose).

@@ -10,6 +10,8 @@ namespace Offload.Core.Outputs;
 /// "outputs" in settings.json (spec 5.1) and in a job: the files made for production and editing.
 public sealed class OutputSettings
 {
+    /// The day report after every job (spec 3.2) — on by default.
+    [JsonPropertyName("dayReport")] public bool DayReport { get; set; } = true;
     /// `_REPORT\<card>_clips.csv` (and the day's) — on by default (R13).
     [JsonPropertyName("clipListCsv")] public bool ClipListCsv { get; set; } = true;
     /// `_REPORT\<card>_clips.ale` for Avid — off by default (R13).

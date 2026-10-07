@@ -437,6 +437,13 @@ public sealed partial class MainViewModel
         set { Settings.Outputs.ClipListAle = value; SettingsChanged(); Raise(); }
     }
 
+    /// "Denní report po každé kartě" (spec 3.2).
+    public bool DayReportAfterEachCard
+    {
+        get => Settings.Outputs.DayReport;
+        set { Settings.Outputs.DayReport = value; SettingsChanged(); Raise(); }
+    }
+
     public bool AnalyzeClips
     {
         get => Settings.AnalyzeClips;

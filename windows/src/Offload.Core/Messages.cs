@@ -158,6 +158,9 @@ public static class Msg
     public static string NotADayFolder(string path) => $"Ve složce {path} není žádná karta s reportem — vyberte složku dne na cíli (<cíl>\\<datum>).";
     public static string DayReportFolderIsCard(string path) =>
         $"Ve složce dne {path} je karta „{Layout.ReportDirName}“ — denní report by se zapsal do ní, proto se nevytvoří.";
+    public static string DayReportBusy(string path) => $"Denní report ve složce {path} právě vytváří jiná úloha — zkuste to za chvíli.";
+    public static string DayReportFailed(string detail) => $"Denní report se nepodařilo vytvořit: {detail}";
+    public static string DayReportWritten(string path) => $"Denní report: {path}";
     public static string ProxyFolderNotFound(string path) => $"Složka pro proxy nenalezena: {path}";
     public const string ProxyFolderNoEffect = "Poznámka: --proxy-folder bez --proxy nic nedělá.";
     public const string Cancelling = "Ruším — dokončuji aktuální blok, rozpracované soubory se smažou…";
