@@ -42,7 +42,8 @@ public static class Mhl
         var folder = Path.GetFileName(cardPath.TrimEnd('\\'));
         var fileName = $"{generation:0000}_{folder}_{now.ToUniversalTime().ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture)}Z.mhl";
         int listed = report.Files.Count(f => f.Xxh64 != null);
-        var comment = report.IsRepair ? Msg.MhlRepairComment(listed, report.Source)
+        int copied = report.Files.Count(f => f.Xxh64 != null && f.Rewritten?.Any(w => w) == true);
+        var comment = report.IsRepair ? Msg.MhlRepairComment(copied, listed - copied, report.Source)
             : generation > 1
             ? $"Offload doplnění: {listed} {Texts.Plural(listed, "nový soubor", "nové soubory", "nových souborů")} z {report.Source}"
             : $"Offload of {report.CardName} from {report.Source}";

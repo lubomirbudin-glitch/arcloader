@@ -154,11 +154,11 @@ public class RepairJobTests
         Assert.True(Verification.BackupVerifier.Verify(paths[0], chunkSize: 4096).Success);
     }
 
-    // Ruling I2: "kartu lze vysunout" is judged on the whole backup. A backup copied without verification, one file
-    // failed on d1: the repair copies and verifies that file — but the other one was never read back, so the job is
-    // not safe to eject, says so, and no "lze vysunout" notification goes out.
+    // Ruling I2 with fix round 2, item B: "kartu lze vysunout" is judged on the whole backup. A backup copied without
+    // verification, one file failed on d1: the repair copies that file there and reads back every copy that was never
+    // read back (no card read for those) — only then is the card safe to eject, and history and the day report agree.
     [Fact]
-    public void UnverifiedBackup_Repaired_NotSafeToEject_WarningShown()
+    public void UnverifiedBackup_Repaired_EveryCopyReadBack_SafeToEject()
     {
         using var dir = new TempDir();
         var history = dir.Sub("history");
@@ -169,15 +169,35 @@ public class RepairJobTests
         repair.Run();
 
         var s = repair.Status();
-        Assert.Equal((JobPhase.Done, (string?)null), (s.Phase, s.Error));
-        Assert.True(repair.Report!.SafeToEject);   // the repaired file alone would say so …
-        Assert.False(s.SafeToEject);                // … the whole backup does not
-        Assert.Equal(Msg.UnverifiedEarlier(1), s.Warning);
-        Assert.Null(JobOutcomes.CopyDone("A001", s with { Phase = JobPhase.Analyzing }, proxies: false));
-        Assert.Equal(OutcomeKind.Attention, JobOutcomes.Final("A001", s, repair.Report)!.Kind);
+        Assert.Equal((JobPhase.Done, (string?)null, (string?)null), (s.Phase, s.Error, s.Warning));
+        Assert.True(s.SafeToEject);
+        var files = repair.Report!.Files.ToDictionary(f => f.Path);
+        Assert.Equal([true, false], files["CLIP/A001C001.mov"].Rewritten);
+        Assert.Equal([false, false], files["CLIP/A001C002.mov"].Rewritten);   // only read back
+        Assert.All(files.Values, f => Assert.Equal(["verified", "verified"], f.Destinations));
         var entry = Assert.Single(new HistoryStore(history).Load());
-        Assert.True(entry.Success);
-        Assert.False(entry.Verified);
+        Assert.True(entry.Success && entry.Verified);
+        Assert.All(failed.Plan!.CardPaths, p => Assert.True(CardRecord.Load(p).Verified));
+    }
+
+    // Ruling I2 on its own: a repair of a backup whose copy the repair could not read back (its read-back cancelled)
+    // is not safe to eject; the warning says why.
+    [Fact]
+    public void RepairCancelledDuringVerify_NotSafeToEject_Warning()
+    {
+        using var dir = new TempDir();
+        var failed = UnverifiedJobWithAWriteError(dir, dir.Sub("history"));
+        var options = AppendFixtures.Options();
+        var repair = Repair(failed, options: options);
+        options.BeforeVerify = () => repair.Cancel();
+
+        repair.Run();
+
+        var s = repair.Status();
+        Assert.Equal(JobPhase.Cancelled, s.Phase);
+        Assert.False(s.SafeToEject);
+        Assert.Equal(Msg.UnverifiedEarlier(2), s.Warning);
+        Assert.Null(JobOutcomes.CopyDone("A001", s with { Phase = JobPhase.Analyzing }, proxies: false));
     }
 
     // Fix round 1, item 1: a clip shot onto the card after the backup is in no report — the repair fixes what failed,
@@ -237,22 +257,116 @@ public class RepairJobTests
         });
     }
 
-    // Fix round 1, item 3: nothing to repair on a backup copied without verification — the note, and the warning
-    // that the earlier copy was not read back (as an append with nothing new says it).
+    // Fix round 1, item 3 / round 2, item B: "Nic k opravě" — history learns the backup from its reports (here a repair
+    // that ran without history fixed it); nothing is unverified then, so no warning (the planner reads back every copy
+    // that was not, so "Nic k opravě" never hides one).
     [Fact]
-    public void NothingToRepair_UnverifiedBackup_Warning()
+    public void NothingToRepair_HistoryLearnsTheBackup()
     {
         using var dir = new TempDir();
-        var failed = UnverifiedJobWithAWriteError(dir, dir.Sub("history"));
-        Repair(failed).Run();
+        var history = dir.Sub("history");
+        var failed = UnverifiedJobWithAWriteError(dir, history);
+        var config = JobConfigs.Repair(failed);
+        config.RecordHistory = false;
+        new OffloadJob(config, AppendFixtures.Options()) { Identify = _ => null }.Run();
+        var stale = Assert.Single(new HistoryStore(history).Load());
+        Assert.False(stale.Success || stale.Verified);
 
         var again = Repair(failed);
         again.Run();
 
         var s = again.Status();
-        Assert.Equal((JobPhase.Done, Msg.RepairNothing, Msg.UnverifiedEarlier(1)), (s.Phase, s.Note, s.Warning));
-        Assert.Equal(OutcomeKind.Attention, JobOutcomes.Final("A001", s, null)!.Kind);
+        Assert.Equal((JobPhase.Done, Msg.RepairNothing, (string?)null), (s.Phase, s.Note, s.Warning));
+        var entry = Assert.Single(new HistoryStore(history).Load());
+        Assert.Equal((true, true, (int?)null), (entry.Success, entry.Verified, entry.FailedFiles));
     }
+
+    // Fix round 2, item B: a repair cancelled during its read-back leaves its new copy "written" in a report that was not
+    // read back; the next repair reads it back (nothing copied, nothing moved) — never "Nic k opravě" for ever — and
+    // the card, history and the day report all say verified.
+    [Fact]
+    public void RepairCancelledDuringVerify_NextRepairReadsBack_EverythingAgrees()
+    {
+        using var dir = new TempDir();
+        var history = dir.Sub("history");
+        var failed = FailedJob(dir, history, dayReport: true);
+        var options = AppendFixtures.Options();
+        var cancelled = Repair(failed, options: options);
+        options.BeforeVerify = () => cancelled.Cancel();
+        cancelled.Run();
+        Assert.Equal(JobPhase.Cancelled, cancelled.Status().Phase);
+        Assert.Equal(["verified", "written"], Assert.Single(cancelled.Report!.Files).Destinations);
+        var paths = failed.Plan!.CardPaths;
+        var before = paths.Select(RepairFixtures.Snapshot).ToList();
+
+        var repair = Repair(failed);
+        repair.Run();
+
+        Assert.True(repair.Status().SafeToEject);
+        var f = Assert.Single(repair.Report!.Files);
+        Assert.Equal(RepairFixtures.Bad, f.Path);
+        Assert.Equal([false, false], f.Rewritten);   // nothing copied: only read back
+        Assert.Equal(["verified", "verified"], f.Destinations);
+        Assert.Null(repair.Report.SetAside);
+        for (int d = 0; d < paths.Count; d++)
+        {
+            // The chain and the clip list (derived from the reports, plan 7) are rewritten; the copies only read.
+            var added = RepairFixtures.AssertUntouchedExcept(before[d], paths[d], "ascmhl/ascmhl_chain.xml", "_REPORT/A001_clips.csv");
+            Assert.All(added, a => Assert.Matches(@"^(_REPORT/.*_0003\.(json|txt|html|pdf)|ascmhl/0003_A001_.*\.mhl)$", a));
+            Assert.True(CardRecord.Load(paths[d]).Verified);
+        }
+        var entry = Assert.Single(new HistoryStore(history).Load());
+        Assert.True(entry.Success && entry.Verified);
+        Assert.All(repair.DayReports, p => Assert.Contains("<td class=\"ok\">ověřeno</td>", File.ReadAllText(p)));
+    }
+
+    // Fix round 2, item C (from plan 6): an append cancelled during its read-back is not in history, but its copies are
+    // on the disks unverified — after a successful append, history and the day report both say NEOVĚŘENO, until a
+    // repair reads those copies back; then both say verified.
+    [Fact]
+    public void AppendCancelledDuringVerify_HistoryAndDayReportAgree()
+    {
+        using var dir = new TempDir();
+        var history = dir.Sub("history");
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 100_000, 1);
+        var full = Job(card, [dir.Sub("d1"), dir.Sub("d2")], history);
+        full.Run();
+        var paths = full.Plan!.CardPaths;
+        AppendFixtures.NewClip(card, "A001C002.mov", seed: 2);
+        var options = AppendFixtures.Options();
+        var cancelled = Job(card, [], history, paths, options);
+        options.BeforeVerify = () => cancelled.Cancel();
+        cancelled.Run();
+        Assert.Equal(JobPhase.Cancelled, cancelled.Status().Phase);
+        AppendFixtures.NewClip(card, "A001C003.mov", seed: 3);
+
+        var append = Job(card, [], history, paths);
+        append.Run();
+
+        Assert.True(append.Report!.SafeToEject);
+        Assert.False(append.Status().SafeToEject);
+        Assert.False(Assert.Single(new HistoryStore(history).Load()).Verified);
+        Assert.All(paths, p => Assert.False(CardRecord.Load(p).Verified));
+        Assert.All(append.DayReports, p => Assert.Contains("NEOVĚŘENO", File.ReadAllText(p)));
+
+        var repair = new OffloadJob(JobConfigs.Repair(append), AppendFixtures.Options()) { Identify = _ => null };
+        repair.Run();
+
+        Assert.True(repair.Status().SafeToEject);
+        Assert.Equal(["CLIP/A001C002.mov"], repair.Report!.Files.Select(f => f.Path));
+        Assert.True(Assert.Single(new HistoryStore(history).Load()).Verified);
+        Assert.All(paths, p => Assert.True(CardRecord.Load(p).Verified));
+        Assert.All(repair.DayReports, p => Assert.DoesNotContain("NEOVĚŘENO", File.ReadAllText(p)));
+    }
+
+    static OffloadJob Job(string card, IReadOnlyList<string> dests, string history, IReadOnlyList<string>? appendInto = null,
+        OffloadOptions? options = null) =>
+        new(new JobConfig(card, dests)
+        {
+            Date = "2026-10-07", AnalyzeClips = false, HistoryFolder = history, AppendInto = appendInto,
+            Outputs = new OutputSettings { DayReport = true }, Notify = new Notify.NotifySettings { Windows = false },
+        }, options ?? AppendFixtures.Options()) { Identify = _ => null };
 
     // Fix round 1, item 4: Ověřit zálohu does not take AppendLock — it runs while a repair holds the card folders, and
     // only reads (so at worst it sees a copy that is being set aside as missing for a moment).

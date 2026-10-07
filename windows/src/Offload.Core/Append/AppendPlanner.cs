@@ -131,7 +131,7 @@ public static class AppendPlanner
                     continue;
                 }
                 goodInRecord++;
-                if (state == "written" || !rec.Report.Verified) unverifiedFile = true;
+                if (!CardRecord.ReadBack(rec, paths[d])) unverifiedFile = true;   // ruling R2: the one definition
                 if (rec.File.Size != f.Size || !FileTimes.Close(rec.File.Modified, f.ModifiedUtc, cardLocalTime))
                     conflicts.Add(Conflict(f, Disk(paths[d]), rec.File.Size, rec.File.Modified));
                 else if (!exists)

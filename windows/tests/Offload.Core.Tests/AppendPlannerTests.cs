@@ -397,6 +397,27 @@ public class AppendPlannerTests
         Assert.Equal(2, AppendPlanner.Plan(card, paths).UnverifiedEarlier);
     }
 
+    // Plan 9 fix round 2, item D (ruling R2): the planner counts unverified files by the one definition
+    // (CardRecord.ReadBack), as the day report does — a copy recorded "verified" was read back, also in a report whose
+    // read-back as a whole did not end (cancelled after the last file).
+    [Fact]
+    public void UnverifiedEarlier_TheSharedDefinition()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        foreach (var p in paths)
+        {
+            var json = Path.Combine(p, "_REPORT", "offload_report.json");
+            var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(json))!;
+            node["verified"] = false;
+            File.WriteAllText(json, node.ToJsonString());
+            Assert.True(CardRecord.Load(p).Verified);
+        }
+        AppendFixtures.NewClip(card);
+
+        Assert.Equal(0, AppendPlanner.Plan(card, paths).UnverifiedEarlier);
+    }
+
     [Fact]
     public void MissingBackup_Report_Mhl()
     {

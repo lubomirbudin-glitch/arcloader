@@ -15,7 +15,7 @@ public sealed record BackupState(int Failed, int Unverified)
             var record = CardRecord.Load(cardPaths[d]);
             failed.UnionWith(record.FailedFiles);
             foreach (var (path, rec) in record.Files)
-                if (!CardRecord.ReadBack(rec, cardPaths[d], d)) unverified.Add(path);
+                if (!CardRecord.ReadBack(rec, cardPaths[d])) unverified.Add(path);
         }
         unverified.ExceptWith(failed);
         return new BackupState(failed.Count, unverified.Count);

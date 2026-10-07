@@ -344,10 +344,13 @@ public sealed class OffloadJob
         {
             // Not an error: every file is good everywhere (another repair or an append got there first). Nothing to
             // copy does not make an earlier copy verified (fix round 1, item 3; as NothingNew says it).
+            // Fix round 2, item B: history learns the backup as its reports say it is now (another job — the CLI, a
+            // job without history — may have repaired or read it back since).
             try
             {
-                if (BackupState.Of(Config.RepairInto!) is { Unverified: > 0 } whole)
-                    Update(s => s.WithWarning(Msg.UnverifiedEarlier(whole.Unverified)));
+                var whole = BackupState.Of(Config.RepairInto!);
+                if (whole.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(whole.Unverified)));
+                RefreshFromBackup(Config.RepairInto!, whole, log);
             }
             catch (Exception x) when (x is IOException or UnauthorizedAccessException)
             {
@@ -454,6 +457,9 @@ public sealed class OffloadJob
             var cardPaths = plan.CardPaths;
             // The id only finds the entry; everything about it is read and changed under the lock below.
             var id = (plan.Mode == PlanMode.Append ? EntryOf(store, cardPaths)?.Id : null) ?? HistoryStore.NewId(report.Finished);
+            // Fix round 2, item C (ruling R2): verified as the card folders' reports say it now — the one definition the
+            // day report uses too (a generation cancelled during its read-back is not in history, but is on the disks).
+            var whole = BackupState.Of(cardPaths);
             store.UpdateWithFiles(id, existing =>
             {
                 var entry = existing ?? new HistoryEntry
@@ -470,7 +476,7 @@ public sealed class OffloadJob
                 };
                 entry.Finished = report.Finished;
                 entry.Success &= report.Success;
-                entry.Verified &= report.Verified;
+                entry.Verified = whole.Unverified == 0;
                 entry.FailedFiles = entry.Success ? null : (entry.FailedFiles ?? 0) + report.FailedFiles.Count;
                 entry.Generations.RemoveAll(g => g.Seq == plan.Generation);
                 entry.Generations.Add(new HistoryGeneration
@@ -510,15 +516,42 @@ public sealed class OffloadJob
             {
                 if (existing == null) return null;
                 existing.Finished = report.Finished;
-                existing.Success = whole.Failed == 0;
-                existing.FailedFiles = whole.Failed == 0 ? null : whole.Failed;
-                existing.Verified = whole.Failed == 0 && whole.Unverified == 0;
+                Apply(existing, whole);
                 existing.Generations.RemoveAll(g => g.Seq == plan.Generation);
                 existing.Generations.Add(new HistoryGeneration
                 {
                     Seq = plan.Generation, Kind = HistoryGeneration.Repair, Finished = report.Finished,
                     Files = plan.Scan.Files.Count, Bytes = plan.Scan.TotalBytes, Verified = report.Verified,
                 });
+                return existing;
+            });
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
+        }
+    }
+
+    /// Ruling R2: whether the backup is complete and read back, as BackupState read it from the card folders — the one
+    /// definition the day report (CardRecord.Verified) and the eject verdict use.
+    static void Apply(HistoryEntry entry, BackupState whole)
+    {
+        entry.Success = whole.Failed == 0;
+        entry.FailedFiles = whole.Failed == 0 ? null : whole.Failed;
+        entry.Verified = whole.Unverified == 0;
+    }
+
+    /// "Nic k opravě": the entry of the backup learns its state from the reports — no new generation.
+    void RefreshFromBackup(IReadOnlyList<string> cardPaths, BackupState whole, Action<string>? log)
+    {
+        if (!Config.RecordHistory) return;
+        try
+        {
+            var store = Store(log);
+            if (EntryOf(store, cardPaths) is not { } found) return;
+            store.Update(found.Id, existing =>
+            {
+                if (existing != null) Apply(existing, whole);
                 return existing;
             });
         }
@@ -537,7 +570,13 @@ public sealed class OffloadJob
             var store = Store(log);
             if (EntryOf(store, a.CardPaths) is not { } found) return;
             var (fingerprint, shape) = CardFingerprint.Compute(a.FullScan);
-            store.UpdateWithFiles(found.Id, existing => existing == null ? null : WithCard(store, existing, existing, a.FullScan, fingerprint, shape));
+            var whole = BackupState.Of(a.CardPaths);   // fix round 2, item C: as the reports say it now
+            store.UpdateWithFiles(found.Id, existing =>
+            {
+                if (existing == null) return null;
+                Apply(existing, whole);
+                return WithCard(store, existing, existing, a.FullScan, fingerprint, shape);
+            });
         }
         catch (Exception e)
         {

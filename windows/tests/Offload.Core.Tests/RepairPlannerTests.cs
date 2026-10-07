@@ -95,6 +95,28 @@ public class RepairPlannerTests
         Assert.Equal(1, plan.NotInBackup);
     }
 
+    // Fix round 2, item B: a good copy whose newest record was not read back (a repair cancelled during its read-back)
+    // is planned as a read-back only — nothing written, nothing set aside, and the card is not needed for it.
+    [Fact]
+    public void GoodCopyNotReadBack_ReadBackOnly_CardNotNeeded()
+    {
+        using var dir = new TempDir();
+        var (card, paths, _) = RepairFixtures.Mismatch(dir);
+        var options = AppendFixtures.Options();
+        var engine = new OffloadEngine(options);
+        var first = engine.PrepareRepair(engine.PlanRepair(card, paths));
+        options.BeforeVerify = () => engine.Cancel();
+        Assert.Equal(["verified", "written"], Assert.Single(engine.Run(first).Files).Destinations);
+        File.Delete(Path.Combine(card, "CLIP", "A001C002.mov"));
+
+        var plan = RepairPlanner.Plan(card, paths);
+
+        Assert.Equal([RepairFixtures.Bad], plan.Files.Select(f => f.RelPath));
+        Assert.Equal([false, false], plan.Write[0]);
+        Assert.All(plan.SetAside[0], Assert.Null);
+        Assert.Empty(plan.Dirs);
+    }
+
     [Fact]
     public void EverythingGood_RepairNothing()
     {

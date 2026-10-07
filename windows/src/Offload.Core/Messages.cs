@@ -167,9 +167,10 @@ public static class Msg
     public static string RepairCardUnreadable(string path, string detail) => $"{path}: na kartě nejde přečíst ({detail})";
     /// Ruling M16: a repair always reads back — a kept copy is recorded "verified" only after it was.
     public const string RepairNeedsVerify = "Oprava se vždy ověřuje zpětným čtením — bez ověření ji spustit nejde.";
-    /// The comment of a repair's ASC MHL generation.
-    public static string MhlRepairComment(int n, string source) =>
-        $"Offload oprava: {n} {Desktop.Texts.Plural(n, "soubor", "soubory", "souborů")} znovu z {source}";
+    /// The comment of a repair's ASC MHL generation: the files copied again, and those only read back (fix round 2, B).
+    public static string MhlRepairComment(int copied, int readBack, string source) =>
+        $"Offload oprava: {copied} {Desktop.Texts.Plural(copied, "soubor", "soubory", "souborů")} znovu z {source}"
+        + (readBack > 0 ? $"; {readBack} {Desktop.Texts.Plural(readBack, "soubor jen přečten", "soubory jen přečteny", "souborů jen přečteno")} zpět" : "");
     /// Ruling I1: the card in the drive is not the one the repaired backup was copied from.
     public const string RepairOtherCard =
         "Ve čtečce není karta, ze které se záloha dělala (jiná karta, nebo žádná) — nic se nezkopírovalo. Vložte původní kartu a spusťte Zkopírovat znovu.";

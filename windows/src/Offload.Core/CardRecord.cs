@@ -42,7 +42,7 @@ public sealed partial class CardRecord
     /// one read back no longer leaves the card unverified for ever. A folder whose reports list no file: every report
     /// was read back.
     public bool Verified => Generations.Count > 0 && Problems.Count == 0
-        && (Files.Count == 0 ? Generations.All(g => g.Report.Verified) : Files.Values.All(f => ReadBack(f, CardPath, 0)));
+        && (Files.Count == 0 ? Generations.All(g => g.Report.Verified) : Files.Values.All(f => ReadBack(f, CardPath)));
     /// Paths whose newest record failed (the card or a destination), sorted.
     public IReadOnlyList<string> FailedFiles =>
         Files.Values.Where(f => f.Report.IsFailed(f.File)).Select(f => f.File.Path).Order(StringComparer.Ordinal).ToList();
@@ -159,14 +159,40 @@ public sealed partial class CardRecord
         return column < rec.File.Destinations.Count ? rec.File.Destinations[column] : "pending";
     }
 
-    /// The one definition of "read back" (the day report's Verified, history and a repair's eject verdict, BackupState):
-    /// the newest record of the copy in `cardPath` says it was read back with the recorded hash — or it failed in a copy
-    /// that was read back (a failure counts as a failure, not as unverified). "Written", or anything in a copy that was
-    /// not read back (cancelled, made without verification), is not.
-    public static bool ReadBack(RecordedFile rec, string cardPath, int position)
+    /// Controller ruling R2 — THE one definition of "verified for this destination folder" (the day report's Verified,
+    /// history, a repair's eject verdict and warnings via BackupState, AppendPlanner's and RepairPlanner's unverified
+    /// files): the newest record of the copy in `cardPath` says it was read back with the recorded hash — or it failed in
+    /// a copy that was read back (a failure counts as a failure, not as unverified). "Written", or anything in a copy that
+    /// was not read back (cancelled, made without verification), is not. The column is the report destination whose card
+    /// path is this folder (ColumnOf); when none is (a Mac report, the disk under another letter) every column must say
+    /// so — never falsely green.
+    public static bool ReadBack(RecordedFile rec, string cardPath)
     {
-        var state = StateOf(rec, cardPath, position);
-        return state == "verified" || (rec.Report.Verified && state != "written");
+        int column = ColumnOf(rec.Report, cardPath);
+        var states = column >= 0
+            ? [column < rec.File.Destinations.Count ? rec.File.Destinations[column] : "pending"]
+            : rec.File.Destinations.Count > 0 ? rec.File.Destinations : ["pending"];
+        return states.All(state => state == "verified" || (rec.Report.Verified && state != "written"));
+    }
+
+    /// The column of `report` whose destination card path is `cardPath` (full path, any case, trailing separator), or
+    /// -1 when none is. A path that is not a full Windows path (a Mac `/Volumes/…`) is compared as written.
+    public static int ColumnOf(OffloadReport report, string cardPath)
+    {
+        var me = Normal(cardPath);
+        for (int i = 0; i < report.Destinations.Count; i++)
+            if (string.Equals(Normal(report.Destinations[i].CardPath), me, StringComparison.OrdinalIgnoreCase)) return i;
+        return -1;
+    }
+
+    static string Normal(string path)
+    {
+        try
+        {
+            if (Path.IsPathFullyQualified(path)) path = Path.GetFullPath(path);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) { }
+        return path.TrimEnd('\\', '/');
     }
 
     /// Which column of a report's per-destination states belongs to `cardPath`: the destination with that card path;

@@ -38,8 +38,9 @@ public sealed class RepairPlan
 /// Reads only — the card is never written, nor any destination. Refuses (OffloadError.Preflight) before anything is
 /// written when the repair would not reproduce what the backup recorded. The rules, against plan 6:
 /// - the earlier backup must pass AppendPlanner's steps 0 and 1 (folders, reports, chains, generations);
-/// - only a file whose newest record failed is touched, and only on a destination where it failed; a good copy is
-///   never written (it is read back and compared with the recorded hash);
+/// - only a file whose newest record failed is written, and only on a destination where it failed; a good copy is
+///   never written (it is read back and compared with the recorded hash) — and a good copy whose newest record was
+///   never read back (CardRecord.ReadBack, ruling R2) is read back only, without the card (fix round 2, item B);
 /// - the card file must still be what the backup recorded: size and time, and (ruling C1) its hash — the card is read
 ///   here, before anything is moved or written; a different hash refuses the repair, the new hash only in the message;
 /// - a failed copy that is on the disk is moved to `_REPORT\neshoda_NNNN\<path>` before the new one takes its place —
@@ -68,12 +69,15 @@ public static class RepairPlanner
         }
         var (paths, roots, date, cardName, records, generation) = backup;
 
-        // What failed, from the reports on the destinations (never from memory): the newest record of each path.
-        var failed = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        // What to do, from the reports on the destinations (never from memory), on the newest record of each path: a
+        // copy that failed is copied again there; a good copy that was never read back (a copy made without
+        // verification, a repair or an append cancelled during its read-back) is read back — fix round 2, item B:
+        // otherwise such a copy would stay unverified for ever behind "Nic k opravě".
+        var todo = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int d = 0; d < paths.Count; d++)
             foreach (var (path, rec) in records[d].Files)
-                if (rec.File.SourceError != null || !Good(rec, paths[d], d)) failed.Add(path);
-        if (failed.Count == 0) throw OffloadError.Preflight(PreflightCode.RepairNothing, Msg.RepairNothing);
+                if (rec.File.SourceError != null || !Good(rec, paths[d], d) || !CardRecord.ReadBack(rec, paths[d])) todo.Add(path);
+        if (todo.Count == 0) throw OffloadError.Preflight(PreflightCode.RepairNothing, Msg.RepairNothing);
 
         var scan = Scanner.Scan(source, ct);
         var onCard = scan.Files.ToDictionary(f => f.RelPath, StringComparer.OrdinalIgnoreCase);
@@ -85,21 +89,10 @@ public static class RepairPlanner
         var expected = new List<FileHashes>();
         var setAside = new List<string?[]>();
         var readBack = new List<bool[]>();
-        foreach (var path in failed)
+        foreach (var path in todo)
         {
             ct.ThrowIfCancellationRequested();
             var recorded = records.Select(r => r.Files.GetValueOrDefault(path)).First(r => r != null)!;
-            if (!onCard.TryGetValue(path, out var card))
-            {
-                conflicts.Add(Msg.RepairNotOnCard(path));
-                continue;
-            }
-            if (recorded.File.Size != card.Size || !FileTimes.Close(recorded.File.Modified, card.ModifiedUtc, cardLocalTime))
-            {
-                conflicts.Add(AppendPlanner.Conflict(card, "záloha", recorded.File.Size, recorded.File.Modified));
-                continue;
-            }
-            if (taken.Contains(DestWriter.PartName(path))) conflicts.Add(Msg.AppendPartNameTaken(path, DestWriter.PartName(path)));
             var mask = new bool[paths.Count];
             var aside = new string?[paths.Count];
             var before = new bool[paths.Count];
@@ -111,13 +104,32 @@ public static class RepairPlanner
                 {
                     // A good copy: never written — but it must be there to be read back (as an append requires).
                     if (!exists) throw OffloadError.Preflight(PreflightCode.AppendMissingFile, Msg.AppendMissingFile(AppendPlanner.Disk(paths[d]), path));
-                    before[d] = CardRecord.ReadBack(rec, paths[d], d);
+                    before[d] = CardRecord.ReadBack(rec, paths[d]);
                     continue;
                 }
                 mask[d] = true;
                 if (exists) aside[d] = FreeSetAside(paths[d], generation, path);
             }
-            files.Add(card);
+            SourceFile file;
+            if (mask.Any(m => m))
+            {
+                // Copied again: the card must still have the file as the backup recorded it.
+                if (!onCard.TryGetValue(path, out var card))
+                {
+                    conflicts.Add(Msg.RepairNotOnCard(path));
+                    continue;
+                }
+                if (recorded.File.Size != card.Size || !FileTimes.Close(recorded.File.Modified, card.ModifiedUtc, cardLocalTime))
+                {
+                    conflicts.Add(AppendPlanner.Conflict(card, "záloha", recorded.File.Size, recorded.File.Modified));
+                    continue;
+                }
+                if (taken.Contains(DestWriter.PartName(path))) conflicts.Add(Msg.AppendPartNameTaken(path, DestWriter.PartName(path)));
+                file = card;
+            }
+            // Only read back: the card is not read for it — the copies are compared with the recorded hash.
+            else file = new SourceFile(recorded.File.Path, recorded.File.Size, recorded.File.Modified);
+            files.Add(file);
             write.Add(mask);
             setAside.Add(aside);
             readBack.Add(before);
@@ -125,10 +137,11 @@ public static class RepairPlanner
         }
         // Ruling C1(c): the card read now must give what the backup recorded — checked before anything is written (one
         // read of the few files to repair); the hash it gives instead goes only into the refusal.
-        if (conflicts.Count == 0) CheckCardHashes(source, files, expected, conflicts, ct);
+        if (conflicts.Count == 0) CheckCardHashes(source, files, write, expected, conflicts, ct);
         if (conflicts.Count > 0) throw OffloadError.Preflight(PreflightCode.RepairConflict, Msg.RepairConflict(conflicts));
 
-        var dirs = files.SelectMany(f => Ancestors(f.RelPath)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        var dirs = files.Where((_, i) => write[i].Any(w => w)).SelectMany(f => Ancestors(f.RelPath))
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         return new RepairPlan
         {
             Source = Path.GetFullPath(source), CardPaths = paths, DestRoots = roots, Date = date, CardName = cardName, Generation = generation,
@@ -139,11 +152,13 @@ public static class RepairPlanner
         };
     }
 
-    static void CheckCardHashes(string source, List<SourceFile> files, List<FileHashes> expected, List<string> conflicts, CancellationToken ct)
+    static void CheckCardHashes(string source, List<SourceFile> files, List<bool[]> write, List<FileHashes> expected, List<string> conflicts,
+        CancellationToken ct)
     {
         using var buffer = new AlignedBuffer(1 << 20);
         for (int i = 0; i < files.Count; i++)
         {
+            if (!write[i].Any(w => w)) continue;      // only read back: the card is not copied from
             if (expected[i].Xxh64 == null) continue;   // never recorded: nothing to compare with (the copy records it)
             FileHashes now;
             try
