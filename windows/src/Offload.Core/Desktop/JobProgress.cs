@@ -35,6 +35,26 @@ public sealed class JobProgress
 
     public void Update(JobStatus s, DateTime now)
     {
+        if (s.Paused)
+        {
+            // Nothing moves: no rate and no ETA, the brake forgets its window; after Pokračovat the rates are measured
+            // from the moment the job runs again, never over the pause.
+            ReadRate = 0;
+            DestRates = new double[DestRates.Length];
+            Eta = null;
+            Brake = null;
+            brakes?.Reset();
+            if (s.Copy is { } held)
+            {
+                bool copying = s.Phase == JobPhase.Copying;
+                lastBytes = copying ? held.ReadBytes : (held.VerifiedBytes.Length > 0 ? held.VerifiedBytes.Min() : 0);
+                lastDest = (copying ? held.WrittenBytes : held.VerifiedBytes).ToArray();
+            }
+            lastPhase = s.Phase;
+            lastTime = now;
+            Status = s;
+            return;
+        }
         double dt = (now - lastTime).TotalSeconds;
         if (s.Copy is { } c && dt > 0.2)
         {
@@ -80,7 +100,20 @@ public sealed class JobProgress
         _ => 0,
     };
 
-    public string StatusText => Status.Phase == JobPhase.Done && Status.CopySucceeded == false ? "Chyba" : Status.Phase.Label();
+    public string StatusText => PauseLabel ?? (Status.Phase == JobPhase.Done && Status.CopySucceeded == false ? "Chyba" : Status.Phase.Label());
+
+    /// "Pozastaveno" once the job stands, "Pozastavuje se" until then; null while it runs.
+    string? PauseLabel => !Status.Paused ? null : Status.PauseHeld ? "Pozastaveno" : "Pozastavuje se";
+
+    /// What the card says while paused, or null: stage 2 finishes the clip it is on first.
+    public string? PauseText => Status switch
+    {
+        { Paused: false } => null,
+        { PauseHeld: true } => "Pozastaveno — Pokračovat spustí úlohu od místa, kde stojí.",
+        { Phase: JobPhase.Proxies, ClipName: { Length: > 0 } clip } => $"Pozastaví se po proxy klipu {clip}…",
+        { Phase: JobPhase.Analyzing, ClipName: { Length: > 0 } clip } => $"Pozastaví se po klipu {clip}…",
+        _ => "Pozastavuje se…",
+    };
 
     /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound or flash).
     public bool IsError => Tone == CardTone.Error;

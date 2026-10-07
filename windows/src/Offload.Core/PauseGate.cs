@@ -14,6 +14,7 @@ public sealed class PauseGate
     TimeSpan total;
     int holding;
     long holds;
+    bool frozen;
 
     /// `clock`: UTC now; tests pass a fake one.
     public PauseGate(Func<DateTime>? clock = null) => this.clock = clock ?? (() => DateTime.UtcNow);
@@ -32,7 +33,7 @@ public sealed class PauseGate
     {
         lock (gate)
         {
-            if (!open.IsSet) return;
+            if (frozen || !open.IsSet) return;
             pausedAt = clock();
             open.Reset();
         }
@@ -44,6 +45,19 @@ public sealed class PauseGate
         {
             if (open.IsSet) return;
             total += clock() - pausedAt!.Value;
+            pausedAt = null;
+            open.Set();
+        }
+    }
+
+    /// The job has ended (minors M1): a pause still on is counted up to now and closed, the gate opens and later presses
+    /// change nothing — PausedTotal stays what the job really stood.
+    public void Freeze()
+    {
+        lock (gate)
+        {
+            frozen = true;
+            if (pausedAt is DateTime at) total += clock() - at;
             pausedAt = null;
             open.Set();
         }

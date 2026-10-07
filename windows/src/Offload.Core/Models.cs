@@ -32,6 +32,8 @@ public sealed class OffloadOptions
     /// Tests only: H.264/HEVC proxies with this encoder (e.g. libx264) instead of the probed one — parallel
     /// NVENC sessions from concurrently running tests can collide.
     internal string? ProxyEncoder { get; set; }
+    /// Tests only: the proxy stall watchdog's limit instead of ProxyRenderer.DefaultStallTimeout.
+    internal TimeSpan? ProxyStallTimeout { get; set; }
 }
 
 public enum FileState { Pending, Written, Verified, Failed }

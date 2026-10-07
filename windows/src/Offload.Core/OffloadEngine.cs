@@ -29,6 +29,9 @@ public sealed partial class OffloadEngine
     /// "Pozastavit": the copy and the read-back stop before their next block; the job's stage 2 waits at the same gate.
     public PauseGate Pauses { get; } = new();
 
+    /// Waits while paused; false when the job was cancelled meanwhile (stage 2 uses it before every clip).
+    public bool WaitWhilePaused() => Pauses.WaitWhilePaused(cts.Token);
+
     /// The file error (report JSON, English like every file error) of the files left out because the card in the drive
     /// was not the copied one after a pause (ruling I1); the HTML says it in Czech.
     public const string CardChangedWhilePaused = "card changed while paused";

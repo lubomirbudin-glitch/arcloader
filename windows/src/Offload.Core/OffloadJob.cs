@@ -76,6 +76,12 @@ public sealed record JobStatus
     public string? Error { get; init; }
     /// Information for the job card, e.g. "Nic nového — záloha je úplná."
     public string? Note { get; init; }
+    /// Pozastavit was pressed and not resumed (only while the job runs): it stops at its next safe point.
+    public bool Paused { get; init; }
+    /// The job really stands now — a worker waits at the gate ("Pozastaveno"; before that "Pozastavuje se…").
+    public bool PauseHeld { get; init; }
+    /// How long the job has stood paused so far (from Pozastavit to Pokračovat).
+    public TimeSpan PausedTotal { get; init; }
     /// Warnings that do not fail the job (orange), one per line — e.g. unverified files of the earlier backup.
     public string? Warning { get; init; }
 
@@ -114,6 +120,10 @@ public sealed class OffloadJob
     /// Tests: what CardIdentity.Of / CardVolume.Of would read from the drive.
     internal Func<string, string?> Identify { get; init; } = CardIdentity.Of;
     internal Func<string, CardVolume?> VolumeOf { get; init; } = CardVolume.Of;
+    /// Tests: NativeIO.KeepAwake. Ruling M6: the PC is kept awake for the whole of stage 1 and of stage 2 — also while
+    /// the job stands paused (a sleep would drop the USB disks with open `.offload-part` files) — and released on
+    /// cancel, at the end and on a failure (`using`); a crashed process ends its thread's request with it.
+    internal Func<IDisposable> KeepAwake { get; init; } = NativeIO.KeepAwake;
 
     public OffloadJob(JobConfig config)
         : this(config, new OffloadOptions
@@ -166,6 +176,16 @@ public sealed class OffloadJob
 
     public bool IsCancelled => Engine.IsCancelled;
 
+    /// "Pozastavit" (UI návrh 9): stage 1 stops before its next block of the card or of the read-back, stage 2 before
+    /// its next clip and before the PDF and the day report — never in the middle of a block, a clip, a report or a lock
+    /// it would hold (an append's or a repair's folder lock stays held through stage 1). Cancel while paused ends the
+    /// job as a cancel does.
+    public void Pause() => Engine.Pauses.Pause();
+
+    public void Resume() => Engine.Pauses.Resume();
+
+    public bool IsPaused => Engine.Pauses.IsPaused;
+
     public JobStatus Status()
     {
         JobStatus s;
@@ -188,12 +208,20 @@ public sealed class OffloadJob
         }
         // Cancelled while still queued: it never runs, so say so instead of "Čeká" forever.
         if (s.Phase == JobPhase.Waiting && !wasStarted && IsCancelled) s = s with { Phase = JobPhase.Cancelled };
-        return s;
+        var pauses = Engine.Pauses;
+        bool running = s.Phase != JobPhase.Waiting && !s.Phase.IsFinished();
+        return s with { Paused = running && pauses.IsPaused, PauseHeld = running && pauses.IsHolding, PausedTotal = pauses.PausedTotal };
     }
 
     void Update(Func<JobStatus, JobStatus> change)
     {
-        lock (gate) state = change(state);
+        bool ended;
+        lock (gate)
+        {
+            state = change(state);
+            ended = state.Phase.IsFinished();
+        }
+        if (ended) Engine.Pauses.Freeze();   // M1: the paused time stops with the job, also when it ended paused
     }
 
     /// Runs the whole job synchronously. Never throws: the outcome is in Status() and the returned report.
@@ -219,10 +247,11 @@ public sealed class OffloadJob
             if (IsCancelled)
             {
                 state = state with { Phase = JobPhase.Cancelled };
+                Engine.Pauses.Freeze();
                 return false;
             }
         }
-        using var awake = NativeIO.KeepAwake();
+        using var awake = KeepAwake();
         AppendLock? folders = null;
         bool copying = false;   // the engine may have written to the destinations: a day report is due even on failure
         try
@@ -442,7 +471,7 @@ public sealed class OffloadJob
         {
             try
             {
-                using var keepAwake = NativeIO.KeepAwake();
+                using var keepAwake = KeepAwake();
                 if (Plan is { } p) RegenerateDayReports(p, log);
             }
             finally
@@ -452,11 +481,12 @@ public sealed class OffloadJob
             return;
         }
         if (Plan is not { } plan || Report is not { } report) return;
-        using var awake = NativeIO.KeepAwake();
+        using var awake = KeepAwake();
         try
         {
             var final = AnalyzeAndRender(plan, report, log);
             Report = final;
+            Engine.WaitWhilePaused();   // before the PDF and the day report (a cancel meanwhile still writes them)
             Update(s => s with { Phase = JobPhase.Reporting });
             WritePdfReports(final, plan, log);
             RegenerateDayReports(plan, log);
@@ -498,6 +528,7 @@ public sealed class OffloadJob
         using var renderer = new ProxyRenderer(Config.Proxy, Config.Tools.Resolved())
         {
             ForcedEncoder = Engine.Options.ProxyEncoder,
+            StallTimeout = Engine.Options.ProxyStallTimeout ?? ProxyRenderer.DefaultStallTimeout,
             Log = log,
             ReplaceExisting = plan.Mode == PlanMode.Full,   // an append never overwrites a proxy (spec 2.2)
         };
@@ -516,7 +547,9 @@ public sealed class OffloadJob
         Update(s => s with { Phase = JobPhase.Analyzing, ClipCount = entries.Count });
         for (int i = 0; i < entries.Count; i++)
         {
-            if (IsCancelled) break;
+            // A pause waits between clips: the clip being probed or rendered finishes first (no ffmpeg is suspended, so
+            // its stall watchdog never sees the pause).
+            if (IsCancelled || !Engine.WaitWhilePaused()) break;
             var clip = entries[i].Clip;
             int index = i;
             Update(s => s with { ClipIndex = index, ClipName = clip.Name, ClipFraction = 0 });
@@ -586,7 +619,7 @@ public sealed class OffloadJob
         if (plan.Mode == PlanMode.Append) usedNames.UnionWith(ExistingProxyNames(cardPaths));
         for (int i = 0; i < entries.Count; i++)
         {
-            if (IsCancelled) break;
+            if (IsCancelled || !Engine.WaitWhilePaused()) break;
             var clip = entries[i].Clip;  // may have been reclassified during analysis (MXF → ARRIRAW)
             int index = i;
             Update(s => s with { ClipIndex = index, ClipName = clip.Name, ClipFraction = 0 });
