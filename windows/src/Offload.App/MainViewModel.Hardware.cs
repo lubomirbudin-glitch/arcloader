@@ -148,8 +148,8 @@ public sealed partial class MainViewModel
 
     internal void SetPortName(string id, string name)
     {
-        if (string.IsNullOrWhiteSpace(name)) Settings.PortNames.Remove(id);
-        else Settings.PortNames[id] = name.Trim();
+        if (string.IsNullOrWhiteSpace(name)) AllSettings.PortNames.Remove(id);
+        else AllSettings.PortNames[id] = name.Trim();
         SettingsChanged();
     }
 }

@@ -68,13 +68,24 @@ public sealed partial class MainViewModel
     {
         if (!CanStart) return;
         starting = true;
-        Raise(nameof(CanStart));
+        RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
+        // Ruling I1: every check below is made for the profile shown now. The project switcher and the Projekt menu are
+        // off until Start ends; should another profile be shown anyway, Start stops — its checks were not for that one.
+        var stamp = ProfileStamp.Of(AllSettings);
+        bool Switched()
+        {
+            if (!stamp.ChangedIn(AllSettings)) return false;
+            AppLog.Write("start: another project was shown during the checks — not started");
+            ShowMessage(ProfileStamp.NotStarted);
+            return true;
+        }
         try
         {
             while (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is string lut)
             {
                 var check = Task.Run(() => File.Exists(lut));
                 bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
+                if (Switched()) return;
                 bool exists = answered && check.IsCompletedSuccessfully && check.Result;
                 if (!answered) AppLog.Write($"LUT check before start: no answer from {lut} in 5 s");
                 if (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) != lut) continue;   // changed meanwhile
@@ -86,6 +97,7 @@ public sealed partial class MainViewModel
             {
                 var check = Task.Run(() => ProbeFolder(folder));
                 bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
+                if (Switched()) return;
                 bool exists = answered && check.IsCompletedSuccessfully && check.Result.Exists;
                 if (!answered) AppLog.Write($"proxy folder check before start: no answer from {folder} in 5 s");
                 if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) != folder) continue;   // changed meanwhile
@@ -99,7 +111,7 @@ public sealed partial class MainViewModel
             List<string> Pending() => StartWait.PendingInspections(SelectedSources(), p => Insight(p) != null, inspections.IsRunning, history != null);
             bool looked = await StartWait.UntilAsync(() => Pending().Count, n => SetStartStatus(StartWait.InspectionStatus(n)),
                 TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(200), lifetime.Token);
-            if (closing) return;
+            if (closing || Switched()) return;
             if (!looked)
             {
                 // Ruling S1: not knowing whether a card is backed up, a full copy needs the user's yes (default Ne).
@@ -107,13 +119,13 @@ public sealed partial class MainViewModel
                 AppLog.Write("start: the card inspection did not finish in 10 s");
                 SetStartStatus(null);
                 if (!StartWait.ContinueAfterWait(false, names, q => AskYesNo?.Invoke(q) ?? false)) return;
-                if (closing) return;
+                if (closing || Switched()) return;
             }
             // The free space of every destination is read again now (ruling I4): a fixed disk is otherwise probed only
             // once, long before a running copy filled it.
             SetStartStatus(StartWait.FreeSpaceStatus);
             await ProbeFreeSpaceAsync(TimeSpan.FromSeconds(5));
-            if (closing) return;
+            if (closing || Switched()) return;
             SetStartStatus(null);
             if (SpaceProblem != null) return;   // the red text says why
             // Spec 2.1: cards history already knows are copied again in full only when the user says so.
@@ -131,6 +143,7 @@ public sealed partial class MainViewModel
                         skip.AddRange(backedUp);
                         break;
                 }
+                if (Switched()) return;
             }
             if (ReadyToStart) StartJobs(skip);   // anything may have changed while the LUT was checked
         }
@@ -147,7 +160,7 @@ public sealed partial class MainViewModel
         {
             starting = false;
             SetStartStatus(null);
-            Raise(nameof(CanStart));
+            RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
         }
     }
 
@@ -180,16 +193,10 @@ public sealed partial class MainViewModel
             {
                 // Spec 2.2: only the new files, into the card folders of the earlier backup — not into the Cíle section.
                 // The engine plans again under the folder lock and refuses with a Czech message when anything is off.
-                var appendConfig = new JobConfig(src, known.Entry.Destinations.Select(d => d.Root).ToList())
-                {
-                    AllowSameDevice = true,   // the destinations are fixed by the earlier backup (it may have been made with --allow-same-device)
-                    AppendInto = known.Entry.Destinations.Select(d => d.CardPath).ToList(),
-                    Verify = Settings.Verify,
-                    AnalyzeClips = Settings.AnalyzeClips,
-                    Proxy = SettingsStore.Clone(Settings.Proxy),
-                    Tools = SettingsStore.Clone(Settings.Tools),
-                    Outputs = SettingsStore.Clone(Settings.Outputs),
-                };
+                // Ruling I2: with the profile of the project that backup was made in, not the one shown now.
+                var appendConfig = JobConfigs.Append(AllSettings, src, known.Entry);
+                if (AppendRules.ProfileFor(AllSettings, known.Entry.Project).Gone)
+                    AppLog.Write($"append {src}: project {known.Entry.Project} no longer exists — the profile shown is used");
                 var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), AppendRules.Title(known.Entry.CardName),
                     canEject: isVolume && CardEject.CanEject(src), space);
                 Jobs.Insert(0, appendItem);
@@ -202,17 +209,8 @@ public sealed partial class MainViewModel
             var name = cardNames.GetValueOrDefault(src) is { Length: > 0 } n && n.Trim().Length > 0 ? n.Trim()
                 : names[src] is var shown && shown != DefaultCardName(src) ? shown
                 : null;
-            var config = new JobConfig(src, Settings.DestRoots.ToList())
-            {
-                CardName = name,
-                Date = DateString,
-                Hashes = HashKinds.FromSetting(Settings.Hash),   // an append (above) keeps the earlier backup's (spec 3.5)
-                Verify = Settings.Verify,
-                AnalyzeClips = Settings.AnalyzeClips,
-                Proxy = SettingsStore.Clone(Settings.Proxy),
-                Tools = SettingsStore.Clone(Settings.Tools),
-                Outputs = SettingsStore.Clone(Settings.Outputs),
-            };
+            // The profile shown now, as the job's own copy (a later switch or edit does not change it), and its project.
+            var config = JobConfigs.Full(AllSettings, src, name, DateString);
             var item = new JobItemViewModel(this, new OffloadJob(config), name ?? DefaultCardName(src),
                 canEject: isVolume && CardEject.CanEject(src), space);
             Jobs.Insert(0, item);
@@ -324,7 +322,7 @@ public sealed partial class MainViewModel
             inspections.CancelAll();
             foreach (var j in Jobs) j.Cancel();
             foreach (var j in Jobs) j.Refresh();
-            Raise(nameof(CanStart));
+            RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
             // A queued job reports Zrušeno at once; if nothing is left running, close right away.
             if (Jobs.Any(Busy)) return false;
         }

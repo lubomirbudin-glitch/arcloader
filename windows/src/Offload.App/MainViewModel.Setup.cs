@@ -64,7 +64,7 @@ public sealed partial class MainViewModel
         Task.Run(() => LutCatalog.Default).ContinueWith(t =>
         {
             if (closing) return;
-            if (t.IsCompletedSuccessfully) Proxy.CatalogLoaded(t.Result);
+            if (t.IsCompletedSuccessfully) Proxy.CatalogLoaded(lutCatalog = t.Result);
             else AppLog.Write($"LUT catalog: {t.Exception?.GetBaseException().Message}");
         }, TaskScheduler.FromCurrentSynchronizationContext());
         healthTimer.Tick += (_, _) => HealthCheck();
@@ -262,7 +262,7 @@ public sealed partial class MainViewModel
         var paths = SelectedSources();
         if (!paths.Contains(path, StringComparer.OrdinalIgnoreCase)) paths.Add(path);
         var cards = paths.Select(p => new CardNameInput(p, cardNames.GetValueOrDefault(p), Insight(p), DefaultCardName(p))).ToList();
-        return CardNaming.Resolve(Settings.Naming.SuggestFromClips, cards, history, DateString, Layout.Today())[path];
+        return CardNaming.Resolve(Settings.Naming.SuggestFromClips, cards, history, DateString, Layout.Today(), ActiveProjectName)[path];
     }
 
     void NamingChanged()
@@ -578,7 +578,7 @@ public sealed partial class MainViewModel
 
     void RefreshTools()
     {
-        resolvedTools = Settings.Tools.Resolved();
+        resolvedTools = AllSettings.Tools.Resolved();
         Tools.Clear();
         void Row(string name, string purpose, string? path, Action<string> set) =>
             Tools.Add(new ToolRowViewModel(name, purpose, path, () =>
@@ -588,11 +588,11 @@ public sealed partial class MainViewModel
                 SettingsChanged();
                 RefreshTools();
             }));
-        Row("ffmpeg", "proxy, náhledy", resolvedTools.Ffmpeg, p => Settings.Tools.Ffmpeg = p);
-        Row("ffprobe", "metadata klipů", resolvedTools.Ffprobe, p => Settings.Tools.Ffprobe = p);
-        Row("braw-decode", "Blackmagic RAW", resolvedTools.BrawDecoder, p => Settings.Tools.BrawDecoder = p);
-        Row("REDline", "RED R3D", resolvedTools.Redline, p => Settings.Tools.Redline = p);
-        Row("art-cmd", "ARRIRAW", resolvedTools.ArtCmd, p => Settings.Tools.ArtCmd = p);
+        Row("ffmpeg", "proxy, náhledy", resolvedTools.Ffmpeg, p => AllSettings.Tools.Ffmpeg = p);
+        Row("ffprobe", "metadata klipů", resolvedTools.Ffprobe, p => AllSettings.Tools.Ffprobe = p);
+        Row("braw-decode", "Blackmagic RAW", resolvedTools.BrawDecoder, p => AllSettings.Tools.BrawDecoder = p);
+        Row("REDline", "RED R3D", resolvedTools.Redline, p => AllSettings.Tools.Redline = p);
+        Row("art-cmd", "ARRIRAW", resolvedTools.ArtCmd, p => AllSettings.Tools.ArtCmd = p);
         Raise(nameof(ToolsWarning));
     }
 }

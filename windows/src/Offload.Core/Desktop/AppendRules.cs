@@ -35,4 +35,14 @@ public static class AppendRules
 
     /// How many of the selected cards are full copies (those without the append ticked).
     public static int FullCopies(IEnumerable<string> selected, Func<string, bool> appendChosen) => selected.Count(p => !appendChosen(p));
+
+    /// The profile an append runs with (ruling I2): that of the project the earlier backup was made in — verify, stage 2,
+    /// outputs and, from task 9, notifications follow the card, not the project shown now (its ntfy topic may be another
+    /// client's). No project = "Bez projektu" (the top level, always there). A project deleted since: the active profile,
+    /// `Gone` = true (the app notes it in the log; the job still records the entry's project).
+    public static (SettingsProfile Profile, bool Gone) ProfileFor(AppSettings s, string? entryProject)
+    {
+        if (entryProject == null) return (s, false);
+        return Projects.Find(s, entryProject) is { } p ? (p, false) : (s.Active, true);
+    }
 }

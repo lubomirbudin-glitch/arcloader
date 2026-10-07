@@ -39,8 +39,18 @@ public sealed partial class MainViewModel
     /// What starting `path` now would need on each destination volume (also handed to its job card).
     List<VolumeDemand> CardSpace(string path, IReadOnlyList<SpaceTarget> targets) =>
         AppendChosen(path) && Insight(path)?.History is { } known
-            ? SpaceCheck.ForAppend(known, Settings.Proxy, resolvedTools, targets, folderTarget)
+            ? AppendSpace(known, targets)
             : SpaceCheck.ForCard(Insight(path), UsedOnVolume(path), Settings.Proxy, resolvedTools, targets, folderTarget);
+
+    /// An append renders proxies as the project of its earlier backup says (ruling I2). The proxy folder's free space is
+    /// known only for the folder shown now: another project's folder is not counted.
+    List<VolumeDemand> AppendSpace(HistoryMatch known, IReadOnlyList<SpaceTarget> targets)
+    {
+        var proxy = AppendRules.ProfileFor(AllSettings, known.Entry.Project).Profile.Proxy;
+        var folder = folderTarget != null && string.Equals(ProxyPreflight.ExtraFolderInUse(proxy), folderTarget.Root, StringComparison.OrdinalIgnoreCase)
+            ? folderTarget : null;
+        return SpaceCheck.ForAppend(known, proxy, resolvedTools, targets, folder);
+    }
 
     /// Reads the free space of every destination and of the proxy folder again, off the UI thread, at most `bound`;
     /// when every one answered, the written bytes of the running jobs from before the reads become the baseline their

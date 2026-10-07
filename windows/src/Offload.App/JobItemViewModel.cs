@@ -68,7 +68,7 @@ public sealed class JobItemViewModel : QueueItem
     /// Where the card and each destination are connected — resolved once, off the UI thread.
     void ResolveChain(OffloadPlan plan)
     {
-        var names = new Dictionary<string, string>(owner.Settings.PortNames, StringComparer.OrdinalIgnoreCase);
+        var names = new Dictionary<string, string>(owner.AllSettings.PortNames, StringComparer.OrdinalIgnoreCase);
         Task.Run(() =>
         {
             var l = new List<RoleLink> { new("Karta", DriveLinks.Resolve(plan.Source)) };

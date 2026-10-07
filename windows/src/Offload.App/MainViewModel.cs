@@ -13,7 +13,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Options = options;
         this.settingsPath = settingsPath ?? SettingsStore.DefaultPath;
-        Settings = SettingsStore.Load(this.settingsPath);
+        AllSettings = SettingsStore.Load(this.settingsPath);
         saveTimer.Tick += (_, _) =>
         {
             saveTimer.Stop();
@@ -25,10 +25,15 @@ public sealed partial class MainViewModel : ObservableObject
         InitHistory();
         InitVerify();
         InitDayReport();
+        InitProjects();
     }
 
     public StartupOptions Options { get; }
-    public AppSettings Settings { get; }
+    /// The whole settings.json: the global keys (tools, port names) and every project.
+    public AppSettings AllSettings { get; }
+    /// The profile the window shows and edits: the active project, else "Bez projektu" (spec 4.1). Every change goes
+    /// into it; a started job keeps its own copy.
+    public SettingsProfile Settings => AllSettings.Active;
 
     public event Action<string>? MessageRequested;
 
@@ -44,7 +49,7 @@ public sealed partial class MainViewModel : ObservableObject
         saveTimer.Stop();
         try
         {
-            SettingsStore.Save(Settings, settingsPath);
+            SettingsStore.Save(AllSettings, settingsPath);
         }
         catch (Exception e)
         {

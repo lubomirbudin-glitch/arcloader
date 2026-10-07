@@ -91,3 +91,16 @@ public static class Projects
         ? $"Projekt „{name}“ neexistuje. Žádný projekt není uložený."
         : $"Projekt „{name}“ neexistuje. Projekty: {string.Join(", ", s.Projects.Select(p => p.Name))}.";
 }
+
+/// What Start saw when it began (ruling I1): the profile shown and its project's name. Start awaits checks of that
+/// profile (LUT, proxy folder, card inspections, free space, questions); if another profile is shown afterwards
+/// (switched, renamed, deleted, saved as a new project), those checks were not made for it and Start stops.
+/// Values edited inside the same profile do not count — Start's own loops re-check those.
+public readonly record struct ProfileStamp(SettingsProfile Profile, string? Name)
+{
+    public const string NotStarted = "Během přípravy startu se změnil projekt — offload se nespustil. Spusťte ho znovu.";
+
+    public static ProfileStamp Of(AppSettings s) => new(s.Active, Projects.ActiveName(s));
+
+    public bool ChangedIn(AppSettings s) => !ReferenceEquals(Profile, s.Active) || !string.Equals(Name, Projects.ActiveName(s), StringComparison.Ordinal);
+}
