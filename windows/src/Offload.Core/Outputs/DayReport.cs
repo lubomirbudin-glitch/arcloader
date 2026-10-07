@@ -43,6 +43,15 @@ public sealed class DayModel
     /// The cards among them (ruling M13): what the tiles, "N / M" and the badge count.
     public IReadOnlyList<DayCard> Cards => Folders.Where(f => f.IsCard).ToList();
     public int VerifiedCards => Cards.Count(c => c.Record.Verified && c.Record.FailedFiles.Count == 0);
+    /// The project in the header (spec 3.2): only when every card with a readable report names the same one (any case).
+    public string? Project
+    {
+        get
+        {
+            var read = Cards.Where(c => c.Record.Generations.Count > 0).Select(c => c.Record.Project).ToList();
+            return read.Count > 0 && read[0] is string first && read.All(p => string.Equals(p, first, StringComparison.OrdinalIgnoreCase)) ? first : null;
+        }
+    }
 }
 
 /// The day report (spec 3.2, R12): `<root>\<date>\_REPORT\<date>_day_report.html/.pdf` and the day's clip lists
@@ -132,7 +141,9 @@ public static class DayReport
         int verified = day.VerifiedCards;
         var (badge, badgeClass) = verified == cards.Count && cards.Count > 0 ? ("VŠE OVĚŘENO", "ok") : ("VYŽADUJE POZORNOST", "warn");
         h.Append($"<header><h1>Denní report — {E(DateText(day.Date))}</h1><span class=\"badge {badgeClass}\">{badge}</span>\n");
-        h.Append($"<span class=\"sub\">Cíl: <span class=\"mono\">{E(day.Root)}</span></span></header>\n");
+        h.Append($"<span class=\"sub\">Cíl: <span class=\"mono\">{E(day.Root)}</span></span>");
+        if (day.Project is string project) h.Append($"<span class=\"sub\">Projekt: {E(project)}</span>");
+        h.Append("</header>\n");
         h.Append("<div class=\"stats\">\n");
         Stat(h, cards.Count.ToString(Inv), Texts.Plural(cards.Count, "karta", "karty", "karet"));
         Stat(h, cards.Sum(c => c.Record.TotalFiles).ToString(Inv), "souborů");

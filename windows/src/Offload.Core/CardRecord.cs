@@ -33,6 +33,8 @@ public sealed partial class CardRecord
     /// The first start and the last end over the generations read; null when none was.
     public DateTime? Started => Generations.Count > 0 ? Generations.Min(g => g.Report.Started) : null;
     public DateTime? Finished => Generations.Count > 0 ? Generations.Max(g => g.Report.Finished) : null;
+    /// The project of the card (spec 4.1): the first generation's that names one; null = none (or older reports only).
+    public string? Project => Generations.Select(g => g.Report.Project).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
     public int TotalFiles => Files.Count;
     public long TotalBytes => Files.Values.Sum(f => f.File.Size);
     /// Every generation was read back — an append report nobody can read leaves it unknown, so not verified.

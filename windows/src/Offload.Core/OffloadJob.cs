@@ -33,6 +33,8 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     /// Clip lists CSV / ALE and the day report (spec 3.2, 3.3; settings `outputs`, CLI --no-clip-list, --ale,
     /// --no-day-report).
     public OutputSettings Outputs { get; set; } = new();
+    /// The project the job was started in (spec 4.1), null = "Bez projektu": into history.json and the report.
+    public string? Project { get; set; }
 }
 
 public enum JobPhase { Waiting, Copying, Flushing, Verifying, Reporting, Analyzing, Proxies, Done, Failed, Cancelled }
@@ -136,9 +138,16 @@ public sealed class OffloadJob
         if (Config.AppendInto is { Count: > 0 } into)
         {
             var a = appendPlan = Engine.PlanAppend(Config.Source, into);
-            return Plan = Engine.PrepareAppend(a, EstimateExtra);
+            var append = Engine.PrepareAppend(a, EstimateExtra);
+            // M4: an append records the project of the earlier backup (its first generation), never a different one;
+            // Config.Project only stands in when that report cannot be read.
+            var earlier = CardRecord.Load(into[0]);
+            append.Project = earlier.Generations.Count > 0 ? earlier.Project : Config.Project;
+            return Plan = append;
         }
-        return Plan = Engine.Prepare(Config.Source, Config.DestRoots, Config.CardName, Config.Date, EstimateExtra);
+        var full = Engine.Prepare(Config.Source, Config.DestRoots, Config.CardName, Config.Date, EstimateExtra);
+        full.Project = Config.Project;
+        return Plan = full;
     }
 
     /// Spec 2.5: proxies and report on top of the card, from the clip names (the clips are not read before the copy).
@@ -333,6 +342,7 @@ public sealed class OffloadJob
                     Source = plan.Source,
                     CardName = plan.CardName,
                     Date = plan.Date,
+                    Project = plan.Project,   // a new entry only: an append keeps the project of the entry it adds to
                     Success = true,
                     Verified = true,
                     HashAlgorithms = [.. report.Algorithms],

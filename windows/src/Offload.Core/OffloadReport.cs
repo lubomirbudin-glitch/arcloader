@@ -58,6 +58,8 @@ public sealed partial class OffloadReport
     [JsonPropertyName("proxyEncoder")] public string? ProxyEncoder { get; set; }
     /// The ASC MHL generation this report belongs to: absent (= 1) for the full copy, 2, 3 … for appends (spec 2.2).
     [JsonPropertyName("generation")] public int? Generation { get; set; }
+    /// The project the card was copied in (spec 4.1); absent for "Bez projektu" and in older reports. The Mac ignores it.
+    [JsonPropertyName("project")] public string? Project { get; set; }
 
     /// The hashes of this copy: `hashAlgorithms`, else the one `hashAlgorithm` (reports without the key, the Mac).
     [JsonIgnore] public IReadOnlyList<string> Algorithms => HashAlgorithms is { Count: > 0 } all ? all : [HashAlgorithm];
@@ -119,6 +121,7 @@ public sealed partial class OffloadReport
             Files = files,
             Skipped = plan.Scan.Skipped,
             Generation = plan.Generation > 1 ? plan.Generation : null,
+            Project = plan.Project,
             HashAlgorithms = HashKinds.Normalize(plan.Hashes).HasFlag(HashKind.Md5) ? HashKinds.Names(plan.Hashes) : null,
         };
     }
