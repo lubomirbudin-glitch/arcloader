@@ -122,6 +122,9 @@ public sealed class OffloadError : Exception
     public bool IsPreflight { get; }
     /// Which check failed (preflight errors only); tests and the GUI tell the cases apart by it, not by the text.
     public PreflightCode? Code { get; }
+    /// `RepairNothing` only: files on the card that no report of the backup records (shot after it) — nothing to
+    /// repair, but the card must not be ejected (batch 10–12 review: counted before the refusal, never skipped).
+    public int NotInBackup { get; private init; }
 
     OffloadError(string message, bool preflight, PreflightCode? code) : base(message)
     {
@@ -131,4 +134,6 @@ public sealed class OffloadError : Exception
 
     public static OffloadError Preflight(PreflightCode code, string message) => new(message, true, code);
     public static OffloadError Failed(string message) => new(message, false, null);
+    public static OffloadError RepairNothing(int notInBackup) =>
+        new(Msg.RepairNothing, true, PreflightCode.RepairNothing) { NotInBackup = notInBackup };
 }

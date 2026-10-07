@@ -281,6 +281,66 @@ public class RepairJobTests
         Assert.Equal((true, true, (int?)null), (entry.Success, entry.Verified, entry.FailedFiles));
     }
 
+    // Batch 10–12 review: "Nic k opravě" on a card with a file shot after the backup — no report has it, so the card
+    // is not "kartu lze vysunout": the warning says so (the planner counts it before refusing).
+    [Fact]
+    public void NothingToRepair_CardHasAFileNotInTheBackup_NotSafe()
+    {
+        using var dir = new TempDir();
+        var failed = FailedJob(dir, dir.Sub("history"));
+        Repair(failed).Run();
+        TestFs.WriteRandom(Path.Combine(failed.Config.Source, "CLIP", "A001C003.mov"), 10_000, 3);
+
+        var again = Repair(failed);
+        again.Run();
+
+        var s = again.Status();
+        Assert.Equal((JobPhase.Done, Msg.RepairNothing), (s.Phase, s.Note));
+        Assert.Equal(Msg.CardFilesNotInBackup(1), s.Warning);
+        Assert.False(s.SafeToEject);
+        Assert.Equal(1, Assert.Throws<OffloadError>(() => RepairPlanner.Plan(failed.Config.Source, failed.Plan!.CardPaths)).NotInBackup);
+    }
+
+    // Batch 10–12 review: "Nic k opravě" but the backup's reports cannot be read afterwards — nothing was checked, so a
+    // warning and never safe.
+    [Fact]
+    public void NothingToRepair_BackupStateUnreadable_NotSafe()
+    {
+        using var dir = new TempDir();
+        var failed = FailedJob(dir, dir.Sub("history"));
+        Repair(failed).Run();
+
+        var again = new OffloadJob(JobConfigs.Repair(failed), AppendFixtures.Options())
+        {
+            Identify = _ => null, ReadBackupState = _ => throw new IOException("Zařízení není připojeno."),
+        };
+        again.Run();
+
+        var s = again.Status();
+        Assert.Equal((JobPhase.Done, Msg.RepairNothing), (s.Phase, s.Note));
+        Assert.Equal(Msg.BackupStateUnreadable("Zařízení není připojeno."), s.Warning);
+        Assert.False(s.SafeToEject);
+    }
+
+    // Batch 10–12 review: the reports read after the planner record a failed file (another job meanwhile) — warned.
+    [Fact]
+    public void NothingToRepair_BackupStateHasFailedFiles_NotSafe()
+    {
+        using var dir = new TempDir();
+        var failed = FailedJob(dir, dir.Sub("history"));
+        Repair(failed).Run();
+
+        var again = new OffloadJob(JobConfigs.Repair(failed), AppendFixtures.Options())
+        {
+            Identify = _ => null, ReadBackupState = _ => new BackupState(2, 0),
+        };
+        again.Run();
+
+        var s = again.Status();
+        Assert.Equal(Msg.BackupStillFailed(2), s.Warning);
+        Assert.False(s.SafeToEject);
+    }
+
     // Fix round 2, item B: a repair cancelled during its read-back leaves its new copy "written" in a report that was not
     // read back; the next repair reads it back (nothing copied, nothing moved) — never "Nic k opravě" for ever — and
     // the card, history and the day report all say verified.

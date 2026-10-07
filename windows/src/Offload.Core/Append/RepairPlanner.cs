@@ -77,9 +77,12 @@ public static class RepairPlanner
         for (int d = 0; d < paths.Count; d++)
             foreach (var (path, rec) in records[d].Files)
                 if (rec.File.SourceError != null || !Good(rec, paths[d], d) || !CardRecord.ReadBack(rec, paths[d])) todo.Add(path);
-        if (todo.Count == 0) throw OffloadError.Preflight(PreflightCode.RepairNothing, Msg.RepairNothing);
-
+        // The card is scanned before "Nic k opravě" (batch 10–12 review): a file shot after the backup is in no report,
+        // and with nothing to repair it must still keep the card from "kartu lze vysunout".
         var scan = Scanner.Scan(source, ct);
+        int notInBackup = scan.Files.Count(f => !records.Any(r => r.Files.ContainsKey(f.RelPath)));
+        if (todo.Count == 0) throw OffloadError.RepairNothing(notInBackup);
+
         var onCard = scan.Files.ToDictionary(f => f.RelPath, StringComparer.OrdinalIgnoreCase);
         bool cardLocalTime = FileTimes.StoresLocalTime(sourceFilesystem ?? NativeIO.FilesystemType(source));
         var taken = scan.Files.Select(f => f.RelPath).Concat(records.SelectMany(r => r.Files.Keys)).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -148,7 +151,7 @@ public static class RepairPlanner
             Files = files, Dirs = dirs, Write = write, Expected = expected, SetAside = setAside, ReadBackBefore = readBack,
             HashAlgorithms = records[0].Generations[0].Report.Algorithms,
             // Fix round 1, item 1: a file shot after the backup is in no report — not repaired, but counted.
-            NotInBackup = scan.Files.Count(f => !records.Any(r => r.Files.ContainsKey(f.RelPath))),
+            NotInBackup = notInBackup,
         };
     }
 

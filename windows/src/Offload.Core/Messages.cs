@@ -181,6 +181,13 @@ public static class Msg
     /// repair does not copy them, so the card must not be ejected as backed up.
     public static string CardFilesNotInBackup(int n) =>
         $"Na kartě {Desktop.Texts.Plural(n, "je", "jsou", "je")} {n} {Desktop.Texts.Plural(n, "soubor, který", "soubory, které", "souborů, které")} záloha nemá — kartu nevysouvejte, zálohu doplňte.";
+    /// Batch 10–12 review: "Nic k opravě", but the backup's reports (read again after the planner) record failed files —
+    /// another job wrote them meanwhile.
+    public static string BackupStillFailed(int n) =>
+        $"V záloze {n} {Desktop.Texts.Plural(n, "soubor stále nesouhlasí", "soubory stále nesouhlasí", "souborů stále nesouhlasí")} — kartu nevysouvejte, spusťte Zkopírovat znovu.";
+    /// Batch 10–12 review: the backup's reports could not be read after "Nic k opravě" — nothing was checked.
+    public static string BackupStateUnreadable(string detail) =>
+        $"Stav zálohy nejde přečíst ({detail}) — nic se nezkontrolovalo, kartu zatím nevysouvejte.";
     /// Minor M5: the checks of the earlier backup are an append's; refusing a repair they say "opravit".
     public static string ForRepair(string appendRefusal) =>
         appendRefusal.Replace("doplnit nejde", "opravit nejde").Replace("doplnit jde jen", "opravit jde jen");

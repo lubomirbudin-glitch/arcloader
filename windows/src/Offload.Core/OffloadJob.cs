@@ -130,6 +130,8 @@ public sealed class OffloadJob
     /// the job stands paused (a sleep would drop the USB disks with open `.offload-part` files) — and released on
     /// cancel, at the end and on a failure (`using`); a crashed process ends its thread's request with it.
     internal Func<IDisposable> KeepAwake { get; init; } = NativeIO.KeepAwake;
+    /// The whole backup's state after "Nic k opravě" (tests replace it to make it unreadable).
+    internal Func<IReadOnlyList<string>, BackupState> ReadBackupState { get; init; } = BackupState.Of;
 
     public OffloadJob(JobConfig config)
         : this(config, new OffloadOptions
@@ -346,15 +348,21 @@ public sealed class OffloadJob
             // copy does not make an earlier copy verified (fix round 1, item 3; as NothingNew says it).
             // Fix round 2, item B: history learns the backup as its reports say it is now (another job — the CLI, a
             // job without history — may have repaired or read it back since).
+            // Batch 10–12 review: SafeToEject = (Warning == null) below, so every reason not to eject sets a warning —
+            // card files no report records, files failed or unverified in the reports read now, or reports not read.
+            if (e.NotInBackup > 0) Update(s => s.WithWarning(Msg.CardFilesNotInBackup(e.NotInBackup)));
             try
             {
-                var whole = BackupState.Of(Config.RepairInto!);
+                var whole = ReadBackupState(Config.RepairInto!);
+                if (whole.Failed > 0) Update(s => s.WithWarning(Msg.BackupStillFailed(whole.Failed)));
                 if (whole.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(whole.Unverified)));
                 RefreshFromBackup(Config.RepairInto!, whole, log);
             }
-            catch (Exception x) when (x is IOException or UnauthorizedAccessException)
+            catch (Exception x)
             {
+                // Not read means not checked: never "kartu lze vysunout" on it.
                 log?.Invoke($"backup state: {x.Message}");
+                Update(s => s.WithWarning(Msg.BackupStateUnreadable(x.Message)));
             }
             Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null });
             return false;
