@@ -41,6 +41,16 @@ public static class JobCard
     /// The name a destination is shown with: its folder's name ("RAID_A"), a drive root as it is ("E:\").
     public static string DiskName(string root) => Path.GetFileName(root.TrimEnd('\\')) is { Length: > 0 } n ? n : root;
 
+    /// The names of a job's destinations (minor M12): DiskName, with the drive when two would read the same
+    /// ("Backup (D:)", "Backup (E:)") — a "✕ hash" row must say which disk it is.
+    public static IReadOnlyList<string> DiskNames(IReadOnlyList<string> roots)
+    {
+        var names = roots.Select(DiskName).ToList();
+        return names.Select((n, i) => names.Count(m => string.Equals(m, n, StringComparison.OrdinalIgnoreCase)) > 1
+            && Path.GetPathRoot(roots[i])?.TrimEnd('\\') is { Length: > 0 } drive && !string.Equals(drive, n.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)
+                ? $"{n} ({drive})" : n).ToList();
+    }
+
     /// "661 MB/s"; a paused job shows a dash.
     public static string Rate(double bytesPerSecond, bool paused = false) =>
         paused ? "—" : (bytesPerSecond / 1_000_000).ToString("0", CultureInfo.InvariantCulture) + " MB/s";
@@ -242,6 +252,10 @@ public static class JobCard
 
     /// The sub of a waiting card whose queue stands behind a paused job (a paused job keeps its place).
     public const string WaitingForPaused = "čeká na pozastavenou úlohu";
+
+    /// The line under a waiting card that stands behind a paused job, capitalised as a sentence of its own; else null.
+    public static string? WaitingHint(CardHeadline h) =>
+        h is { Kind: JobCardKind.Waiting, Sub: WaitingForPaused } ? "Čeká na pozastavenou úlohu." : null;
 
     /// "Všech 24 souborů je na 2 discích a ověřených (xxHash64)."
     public static string SafeText(int files, int disks, string hash)

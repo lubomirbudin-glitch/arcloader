@@ -48,6 +48,7 @@ public class RepairJobTests
         Assert.Equal(JobPhase.Done, s.Phase);
         Assert.True(s.SafeToEject);
         Assert.Null(s.Warning);
+        Assert.Equal(new BackupState(0, 0), repair.Backup);   // what the card's words are read from (no disk in the UI)
         Assert.Equal((PlanMode.Repair, 2, "Film X"), (repair.Plan!.Mode, repair.Plan.Generation, repair.Plan.Project));
         var entry = Assert.Single(store.Load());
         Assert.True(entry.Success);
@@ -339,6 +340,7 @@ public class RepairJobTests
         var s = again.Status();
         Assert.Equal(Msg.BackupStillFailed(2), s.Warning);
         Assert.False(s.SafeToEject);
+        Assert.Equal(new BackupState(2, 0), again.Backup);
     }
 
     // Fix round 2, item B: a repair cancelled during its read-back leaves its new copy "written" in a report that was not

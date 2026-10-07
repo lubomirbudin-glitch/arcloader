@@ -2,6 +2,9 @@ using Offload.Core.Desktop;
 
 namespace Offload.App;
 
+/// One icon of the empty queue's flow: its label, which icon (card, disk, verify, proxy, report), the first is blue.
+public sealed record FlowStep(string Label, string Icon, bool First);
+
 /// One project in the switcher's list: its name, whether it is shown now, and the command that switches to it.
 public sealed record ProjectItem(string Name, bool IsActive, RelayCommand Select);
 
@@ -56,6 +59,6 @@ public sealed partial class MainViewModel
         if (pill == queuePill && badge == queueBadge) return;
         queuePill = pill;
         queueBadge = badge;
-        RaiseMany(nameof(QueuePill), nameof(QueueBadge));
+        RaiseMany(nameof(QueuePill), nameof(QueueBadge), nameof(QueueBadgeText));
     }
 }

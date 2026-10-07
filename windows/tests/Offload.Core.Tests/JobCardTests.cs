@@ -287,4 +287,23 @@ public class JobCardTests
         seenFinished.Update(new JobStatus { Phase = JobPhase.Done }, T0.AddSeconds(5));
         Assert.Null(seenFinished.Elapsed);                     // never seen running: the report's times count
     }
+
+    // Minor M12: two destinations with the same folder name are told apart by their drive; a drive root stays as it is.
+    [Fact]
+    public void DiskNames_DriveOnlyWhenNamesCollide()
+    {
+        Assert.Equal(["RAID_A", "SHUTTLE_B"], JobCard.DiskNames([@"D:\RAID_A", @"E:\SHUTTLE_B\"]));
+        Assert.Equal(["Backup (D:)", "backup (e:)"], JobCard.DiskNames([@"D:\Backup", @"e:\backup\"]));
+        Assert.Equal(["E:\\", "F:\\"], JobCard.DiskNames([@"E:\", @"F:\"]));
+    }
+
+    // Tasks 1–3 review, minor 3: the waiting card behind a paused job says so as a sentence of its own.
+    [Fact]
+    public void WaitingHint_OnlyBehindAPausedJob()
+    {
+        var waiting = new JobStatus { Phase = JobPhase.Waiting };
+        Assert.Equal("Čeká na pozastavenou úlohu.", JobCard.WaitingHint(JobCard.Headline("B012", waiting, null, Disks, blockedByPaused: true)));
+        Assert.Null(JobCard.WaitingHint(JobCard.Headline("B012", waiting, null, Disks)));
+        Assert.Null(JobCard.WaitingHint(JobCard.Headline("B012", new JobStatus { Phase = JobPhase.Copying }, null, Disks, blockedByPaused: true)));
+    }
 }

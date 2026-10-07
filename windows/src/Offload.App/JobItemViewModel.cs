@@ -23,13 +23,21 @@ public sealed class JobItemViewModel : QueueItem
     bool chainRequested, ejected, ejecting, openingReport;
 
     readonly IReadOnlyList<VolumeDemand> space;
+    // What the card header says before the plan exists (from the look at the card when it was started).
+    readonly JobCardFacts? facts;
+    CardHeadline headline;
+    IReadOnlyList<string>? destNames;
+    int? clipCount;
 
     /// `space`: what the card needs on each destination volume (spec 2.5) — counted while this job is queued or copies.
     /// `profileNote`: orange, for the whole life of the card — e.g. an append whose project no longer exists.
+    /// `facts`: the clips, size and camera the card had when it was started (the header while the job waits).
     public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject, IReadOnlyList<VolumeDemand>? space = null,
-        string? profileNote = null)
+        string? profileNote = null, JobCardFacts? facts = null)
     {
         this.owner = owner;
+        this.facts = facts;
+        headline = new CardHeadline(JobCardKind.Waiting, sourceName, "");
         ProfileNote = profileNote;
         this.sourceName = sourceName;
         this.space = space ?? [];
@@ -67,8 +75,51 @@ public sealed class JobItemViewModel : QueueItem
             chainRequested = true;
             ResolveChain(plan);
         }
+        // The whole backup's state comes from the job (read on its thread); a waiting card says when a paused job holds it.
+        headline = JobCard.Headline(CardName, progress.Status, Job.Report, DestNames, Job.Backup, owner.BlockedByPaused(this));
         Raise(string.Empty);   // every binding of the card may have changed
     }
+
+    // ── The new card (UI návrh obr. 2, 3) ──────────────────────────────────────────────────────────────────────
+    /// Waiting, Running, Done (green), Problem (yellow), Failed (red), Cancelled (grey) — which look the card has.
+    public JobCardKind Kind => headline.Kind;
+    /// "A035_ARRI — kartu lze vysunout" / "B012_FX6 — kartu zatím nevysunujte" …
+    public string HeadTitle => headline.Title;
+    /// "Všech 24 souborů je na 2 discích a ověřených (xxHash64)." / "1 soubor na disku SHUTTLE_B nesouhlasí s kartou. …"
+    public string HeadSub => headline.Sub;
+
+    /// The destinations as the card names them ("RAID_A").
+    internal IReadOnlyList<string> DestNames => destNames ??= JobCard.DiskNames(Job.Plan?.DestRoots ?? Job.Config.DestRoots);
+
+    /// "Čeká na pozastavenou úlohu." under a waiting card that stands behind a paused job, or null.
+    public string? WaitingHint => JobCard.WaitingHint(headline);
+
+    /// Minor M12: every card folder of the job, one per line (the tooltip of the path on a finished card).
+    public string? PathsTooltip => Job.Plan is { } plan ? string.Join("\n", plan.CardPaths) : null;
+
+    /// "24 klipů · 1,70 GB · ALEXA 35"; before the plan, what the card had when it was started.
+    public string Sub
+    {
+        get
+        {
+            if (Job.Plan is { } p)
+            {
+                clipCount ??= ClipDetector.Detect(p.Scan.Files).Count;
+                return JobCard.Sub(new JobCardFacts(p.Scan.Files.Count, clipCount.Value, p.Scan.TotalBytes, facts?.Camera, p.Mode == PlanMode.Append));
+            }
+            return facts is { } f ? JobCard.Sub(f) : FilesText;
+        }
+    }
+
+    /// The waiting row: "B012_FX6" + " — doplnění" (or " — oprava").
+    public string TitleName => CardName;
+    public string TitleSuffix => Job.Config.AppendInto != null ? " — doplnění" : Job.Config.RepairInto != null ? " — oprava" : "";
+
+    /// "38 %" — the phase's share (the indicator shows which phase).
+    public string PercentText => $"{Math.Round(Progress * 100):0} %";
+
+    /// "…\2026-10-07\A035_ARRI\" on the finished card.
+    public string PathText => Job.Plan is { } plan ? SetupTexts.PathPreview(plan.Date, plan.CardName) : "";
 
     /// Where the card and each destination are connected — resolved once, off the UI thread.
     void ResolveChain(OffloadPlan plan)

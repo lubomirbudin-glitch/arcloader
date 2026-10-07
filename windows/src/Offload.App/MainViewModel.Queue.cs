@@ -47,7 +47,8 @@ public sealed partial class MainViewModel
         ticker.Tick += (_, _) => Tick();
         ticker.Start();
         SetupChanged += () => RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart), nameof(StartProblem),
-            nameof(StartCounts), nameof(StartSize), nameof(EstimateText), nameof(AfterCopyRows), nameof(AfterCopyLine), nameof(PathPreview));
+            nameof(StartCounts), nameof(StartSize), nameof(EstimateText), nameof(AfterCopyRows), nameof(AfterCopyLine), nameof(PathPreview),
+            nameof(FlowSteps), nameof(QueueEmptyTitle), nameof(QueueEmptyText));
         RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart));
     }
 
@@ -70,6 +71,10 @@ public sealed partial class MainViewModel
             Settings.AnalyzeClips, Settings.Proxy), Settings.Proxy.Enabled)
         : null;
 
+    /// A waiting card stands behind a job paused in its copy (memory only).
+    internal bool BlockedByPaused(JobItemViewModel item) =>
+        QueueRules.BlockedByPaused(item.Phase, Jobs.OfType<JobItemViewModel>().Where(j => !ReferenceEquals(j, item)).Select(j => (j.Phase, j.IsPaused)));
+
     /// "Spustit offload", or "Zařadit do fronty" while a card waits for or is in its copy.
     public string StartLabel => QueueSummary.StartLabel(Jobs.Select(j => j.Phase));
 
@@ -85,6 +90,23 @@ public sealed partial class MainViewModel
         SetupTexts.AfterCopy(Settings, lutCatalog, SelectedSources().Select(p => Insight(p)?.Camera).FirstOrDefault(c => c != null));
     public string AfterCopyLine => SetupTexts.AfterCopyLine(Settings);
     public string VerifyOffWarning => SetupTexts.VerifyOffWarning;
+
+    // ── The empty queue (obr. 1) ───────────────────────────────────────────────────────────────────────────────
+    /// Karta → 2 disky naráz → Ověření → Proxy → Report (only what the profile shown does).
+    public IReadOnlyList<FlowStep> FlowSteps => SetupTexts.Flow(Settings.DestRoots.Count, Settings.Verify, Settings.AnalyzeClips, Settings.Proxy.Enabled)
+        .Select((label, i) => new FlowStep(label, i switch
+        {
+            0 => "card",
+            1 => "disk",
+            _ => label switch { "Ověření" => "verify", "Proxy" or "Analýza" => "proxy", _ => "report" },
+        }, i == 0)).ToList();
+
+    /// "Připraveno — A035_ARRI na 2 disky" with a ticked card, else "Zatím žádný offload".
+    public string QueueEmptyTitle => SetupTexts.QueueEmpty(SelectedSources().Select(PlannedName).ToList(), Settings.DestRoots.Count, Settings.Verify).Title;
+    public string QueueEmptyText => SetupTexts.QueueEmpty(SelectedSources().Select(PlannedName).ToList(), Settings.DestRoots.Count, Settings.Verify).Text;
+
+    /// " 2" after "Fronta" (the unfinished jobs), nothing for none.
+    public string QueueBadgeText => QueueBadge > 0 ? $" {QueueBadge}" : "";
 
     /// The parts of the left column that follow the queue (checked every tick, raised only when they change).
     void RefreshLayout()
@@ -303,8 +325,9 @@ public sealed partial class MainViewModel
                     AppLog.Write($"append {src}: project {known.Entry.Project} no longer exists — the Bez projektu settings are used");
                     profileNote = AppendRules.GoneNote(known.Entry.Project!);
                 }
-                var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), AppendRules.Title(known.Entry.CardName),
-                    canEject: isVolume && CardEject.CanEject(src), space, profileNote);
+                var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), known.Entry.CardName,
+                    canEject: isVolume && CardEject.CanEject(src), space, profileNote,
+                    new JobCardFacts(known.New.Count, ClipDetector.Detect(known.New).Count, known.NewBytes, null, Append: true));
                 Jobs.Insert(0, appendItem);
                 selected.Remove(src);
                 appendTicks.Untick(src);
@@ -318,7 +341,8 @@ public sealed partial class MainViewModel
             // The profile shown now, as the job's own copy (a later switch or edit does not change it), and its project.
             var config = JobConfigs.Full(AllSettings, src, name, DateString);
             var item = new JobItemViewModel(this, new OffloadJob(config), name ?? DefaultCardName(src),
-                canEject: isVolume && CardEject.CanEject(src), space);
+                canEject: isVolume && CardEject.CanEject(src), space, facts: Insight(src) is { Error: null } look
+                    ? new JobCardFacts(look.FileCount, look.Clips.Count, look.TotalBytes, look.Camera?.Camera, Append: false) : null);
             Jobs.Insert(0, item);
             selected.Remove(src);
             queue.Enqueue(item.Runner);

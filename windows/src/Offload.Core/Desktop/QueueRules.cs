@@ -51,6 +51,11 @@ public static class QueueRules
     public static bool CardInDrive(string source, string? copied, IEnumerable<VolumeItem> scanned) =>
         copied != null && scanned.Any(v => SameDrive(v.Path, source) && string.Equals(v.Identity, copied, StringComparison.OrdinalIgnoreCase));
 
+    /// A waiting job stands behind a paused one (Tasks 1–3 review, minor 3): the copy queue runs one stage 1 at a time,
+    /// so a job paused in stage 1 holds every waiting card; one paused in stage 2 holds none of them.
+    public static bool BlockedByPaused(JobPhase phase, IEnumerable<(JobPhase Phase, bool Paused)> others) =>
+        phase == JobPhase.Waiting && others.Any(o => o.Paused && o.Phase is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying or JobPhase.Reporting);
+
     /// Measuring writes 1 GB to the destinations — not while a copy writes or verifies them.
     public static bool MeasureBlocked(IEnumerable<JobPhase> phases) =>
         phases.Any(p => p is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying);

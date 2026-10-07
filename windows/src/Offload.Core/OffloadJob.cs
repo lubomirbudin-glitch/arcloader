@@ -117,6 +117,10 @@ public sealed class OffloadJob
     /// Set on a worker thread, read by the app's UI thread.
     public OffloadPlan? Plan { get => planValue; private set => planValue = value; }
     public OffloadReport? Report { get => reportValue; private set => reportValue = value; }
+    /// A repair (also "Nic k opravě"): the whole backup as its reports said it after the job (BackupState, ruling I2) —
+    /// read on the job's thread, so the card's words need no disk on the UI thread; null for other jobs or unread.
+    public BackupState? Backup { get => backupValue; private set => backupValue = value; }
+    volatile BackupState? backupValue;
     /// The card in the source's drive when the copy started (`CardIdentity`), read on the copy thread; null before
     /// that or when unknown. "Vysunout kartu" ejects only this card.
     public string? SourceIdentity => sourceIdentity;
@@ -299,7 +303,7 @@ public sealed class OffloadJob
             {
                 // Ruling I2: a repair's report lists only the repaired files — whether the card may be ejected is read
                 // from the whole backup after it (every card folder's reports, still under the folder lock).
-                var w = whole = BackupState.Of(plan.CardPaths);
+                var w = whole = Backup = BackupState.Of(plan.CardPaths);
                 safe &= w.Failed == 0 && w.Unverified == 0;
                 if (w.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(w.Unverified)));
                 // Fix round 1, item 1: files shot after the backup are in no report — a repair does not copy them, and
@@ -353,7 +357,7 @@ public sealed class OffloadJob
             if (e.NotInBackup > 0) Update(s => s.WithWarning(Msg.CardFilesNotInBackup(e.NotInBackup)));
             try
             {
-                var whole = ReadBackupState(Config.RepairInto!);
+                var whole = Backup = ReadBackupState(Config.RepairInto!);
                 if (whole.Failed > 0) Update(s => s.WithWarning(Msg.BackupStillFailed(whole.Failed)));
                 if (whole.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(whole.Unverified)));
                 RefreshFromBackup(Config.RepairInto!, whole, log);
