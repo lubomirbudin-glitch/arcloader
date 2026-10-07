@@ -50,6 +50,9 @@ public sealed class ClipInfo
     [JsonPropertyName("frames")] public int? Frames { get; set; }
     [JsonPropertyName("timecode")] public string? Timecode { get; set; }
     [JsonPropertyName("audioChannels")] public int AudioChannels { get; set; }
+    /// Channels of each audio stream, in stream order (ffprobe) - the proxy gets every one of them (R14). Known only right
+    /// after the probe (not in the report); empty for RAW decoders and reports read back.
+    [JsonIgnore] public List<int> AudioStreams { get; set; } = [];
     [JsonPropertyName("camera")] public string? Camera { get; set; }
     /// Log curve the camera recorded in (e.g. "LogC4"), when the format reports it.
     [JsonPropertyName("logEncoding")] public string? LogEncoding { get; set; }

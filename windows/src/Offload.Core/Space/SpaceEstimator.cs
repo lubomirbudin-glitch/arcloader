@@ -35,14 +35,19 @@ public static class SpaceEstimator
         _ => Path.GetExtension(clip.Path).Equals(".mxf", StringComparison.OrdinalIgnoreCase) ? 100 : 50,
     };
 
-    /// The proxy's data rate: H.264/HEVC the set bitrate × 1.1 + 0.2 Mb/s per audio track; ProRes Apple's 1080p30 rates
-    /// (Proxy 45, LT 102, 422 147, HQ 220 Mb/s) × (height/1080)².
-    public static double ProxyMbps(ProxySettings p, int audioTracks, int height) => p.Codec switch
+    /// The proxy's data rate: H.264/HEVC the set bitrate × 1.1 + each audio stream's AAC rate (64 kb/s a channel,
+    /// 128-512 kb/s, as `Encoders.AacKbps`); ProRes Apple's 1080p30 rates (Proxy 45, LT 102, 422 147, HQ 220 Mb/s) ×
+    /// (height/1080)² + 16-bit PCM at 48 kHz, 0.768 Mb/s a channel of every stream (ruling M6 amends spec 2.5).
+    public static double ProxyMbps(ProxySettings p, IReadOnlyList<int> audioStreams, int height) => p.Codec switch
     {
-        ProxyCodec.H264 or ProxyCodec.Hevc => p.BitrateMbps * 1.1 + 0.2 * audioTracks,
+        ProxyCodec.H264 or ProxyCodec.Hevc => p.BitrateMbps * 1.1 + audioStreams.Sum(Encoders.AacKbps) / 1000.0,
         _ => (p.Codec switch { ProxyCodec.ProresProxy => 45, ProxyCodec.ProresLT => 102, ProxyCodec.Prores422 => 147, _ => 220 })
-             * Math.Pow(height / 1080.0, 2),
+             * Math.Pow(height / 1080.0, 2) + 0.768 * audioStreams.Sum(),
     };
+
+    /// `audioTracks` mono streams.
+    public static double ProxyMbps(ProxySettings p, int audioTracks, int height) =>
+        ProxyMbps(p, Enumerable.Repeat(1, audioTracks).ToList(), height);
 
     /// A clip that a proxy can be made of with these tools (a missing decoder makes none).
     public static bool Renderable(Clip clip, ExternalTools resolved) => resolved.Ffmpeg != null && clip.Format switch
@@ -65,7 +70,9 @@ public static class SpaceEstimator
             if ((c.IsCameraProxy && p.SkipCameraProxies) || !renderable(c)) continue;
             var i = info?.Invoke(c);
             double seconds = i?.Duration ?? c.Bytes * 8.0 / (SourceMbps(c) * 1e6);
-            int audio = p.Audio && (i == null || i.AudioChannels > 0) ? 1 : 0;
+            // Every audio stream becomes a track of the proxy (R14); before the analysis one stereo stream is assumed,
+            // a probed clip without the stream list (a RAW intermediate) has one stream of its channels.
+            IReadOnlyList<int> audio = !p.Audio ? [] : i == null ? [2] : i.AudioStreams.Count > 0 ? i.AudioStreams : i.AudioChannels > 0 ? [i.AudioChannels] : [];
             int height = Math.Min(p.Height, i?.Height ?? p.Height);
             bytes += seconds * ProxyMbps(p, audio, height) * 1e6 / 8;
         }

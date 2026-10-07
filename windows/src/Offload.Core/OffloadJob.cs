@@ -517,6 +517,8 @@ public sealed class OffloadJob
                     f => Update(s => s with { ClipFraction = f }), () => IsCancelled);
                 entries[i].ProxyStatus = ProxyStatus.Done;
                 entries[i].ProxyPath = rel;
+                // Spec 3.4: relinking goes by name - a proxy that had to be renamed must be attached by hand.
+                if (name != clip.Name) entries[i].ProxyNote = entries[i].ProxyNote is string earlier ? $"{earlier}; {Msg.ProxyRenamed(name)}" : Msg.ProxyRenamed(name);
                 if (Config.Proxy.CopyToAllDestinations)
                 {
                     // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.

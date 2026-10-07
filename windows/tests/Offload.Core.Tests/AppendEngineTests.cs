@@ -609,6 +609,7 @@ public class AppendEngineTests
         Assert.Equal(JobPhase.Done, append.Status().Phase);
         Assert.Equal(first, File.ReadAllBytes(Path.Combine(cardPath, "_PROXY", "C0001.mov")));
         Assert.Equal("_PROXY/C0001_2.mov", Assert.Single(report!.Clips).ProxyPath);
+        Assert.Equal("Proxy přejmenována na C0001_2 (shoda jmen) — přelinkujte ji ručně.", report.Clips[0].ProxyNote);
         Assert.True(File.Exists(Path.Combine(cardPath, "_REPORT", "A001_report_0002.html")));
     }
 }

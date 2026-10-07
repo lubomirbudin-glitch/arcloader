@@ -62,6 +62,7 @@ public class ClipDetectorTests
         Assert.Equal(4.01, i.Duration);
         Assert.Equal("01:00:00:00", i.Timecode);
         Assert.Equal(4, i.AudioChannels);
+        Assert.Equal([2, 2], i.AudioStreams);
         Assert.Equal("Sony", i.Camera);
     }
 

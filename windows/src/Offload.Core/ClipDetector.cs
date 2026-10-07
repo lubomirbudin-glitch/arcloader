@@ -117,7 +117,8 @@ public static class FFProbe
             info.ColorRange = Str(v, "color_range");
             info.Duration = Dbl(Str(v, "duration"));
         }
-        info.AudioChannels = streams.Where(x => Str(x, "codec_type") == "audio").Sum(x => Int(x, "channels") ?? 0);
+        info.AudioStreams = streams.Where(x => Str(x, "codec_type") == "audio").Select(x => Int(x, "channels") ?? 0).ToList();
+        info.AudioChannels = info.AudioStreams.Sum();
         if (Dbl(Str(format, "duration")) is double fd) info.Duration = fd;
         var ftags = Tags(format);
         info.Timecode ??= Str(ftags, "timecode") ?? streams.Select(x => Str(Tags(x), "timecode")).FirstOrDefault(t => t != null);

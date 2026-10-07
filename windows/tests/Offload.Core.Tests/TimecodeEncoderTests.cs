@@ -41,9 +41,19 @@ public class TimecodeEncoderTests
             Encoders.VideoArgs("libx264", ProxyCodec.H264, 10));
         Assert.Equal(["-c:v", "prores_ks", "-profile:v", "1", "-vendor", "apl0"],
             Encoders.VideoArgs("prores_ks", ProxyCodec.ProresLT, 10));
-        Assert.Equal(["-c:a", "pcm_s16le"], Encoders.AudioArgs(ProxyCodec.Prores422HQ));
         Assert.Equal("yuv422p10le", Encoders.PixelFormat(ProxyCodec.ProresProxy));
         Assert.Equal("yuv420p", Encoders.PixelFormat(ProxyCodec.Hevc));
+    }
+
+    // Spec 3.4, R14: every audio stream — AAC 64 kb/s per channel of each stream (128k-512k), ProRes 16-bit PCM.
+    [Fact]
+    public void AudioArgs_EveryStream()
+    {
+        Assert.Equal(["-c:a", "pcm_s16le"], Encoders.AudioArgs(ProxyCodec.Prores422HQ, [1, 1, 1, 1]));
+        Assert.Equal(["-c:a", "aac", "-b:a:0", "128k", "-b:a:1", "128k", "-b:a:2", "384k", "-b:a:3", "512k"],
+            Encoders.AudioArgs(ProxyCodec.H264, [1, 2, 6, 16]));
+        Assert.Equal(["-c:a", "aac", "-b:a:0", "128k"], Encoders.AudioArgs(ProxyCodec.Hevc, [0]));
+        Assert.Equal(["-c:a", "aac", "-b:a", "192k"], Encoders.AudioArgs(ProxyCodec.H264, []));
     }
 
     [Fact]

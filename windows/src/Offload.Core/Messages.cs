@@ -161,6 +161,7 @@ public static class Msg
 
     // Clip notes (report, job card)
     public const string NoVerifiedCopy = "žádná ověřená kopie";
+    public static string ProxyRenamed(string name) => $"Proxy přejmenována na {name} (shoda jmen) — přelinkujte ji ručně.";
     public const string FfmpegNotFound = "ffmpeg nenalezen";
     public const string FfprobeNotFound = "ffprobe nenalezen";
     public const string UnknownFormat = "neznámý formát";
