@@ -214,7 +214,7 @@ public static class JobCard
                 : new(JobCardKind.Failed, $"{card} — offload selhal", s.Error ?? "Kopie se nepodařila.");
         string notYet = $"{card} — kartu zatím nevysunujte";
         if (!r.Success) return new(JobCardKind.Problem, notYet, backup is { Failed: > 0 } b ? $"V záloze {Files(b.Failed)} stále nesouhlasí." : ProblemText(r, destNames));
-        if (!r.Verified) return new(JobCardKind.Problem, $"{card} — zkopírováno bez ověření", "Bez ověření není jisté, že data na disku jsou v pořádku.");
+        if (!r.Verified) return new(JobCardKind.Problem, $"{card} — zkopírováno bez ověření", SetupTexts.VerifyOffWarning);
         if (!s.SafeToEject)
         {
             // This job's files are good, but the backup as a whole is not (earlier files never read back, files of the
