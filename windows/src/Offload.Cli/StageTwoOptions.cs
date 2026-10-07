@@ -12,7 +12,8 @@ sealed class StageTwoOptions
     readonly Option<bool> proxy = new("--proxy") { Description = "Render proxies after the copy is verified." };
     readonly Option<string?> lut = new("--lut") { Description = "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path." };
     readonly Option<string?> lutFallback = new("--lut-fallback") { Description = "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto." };
-    readonly Option<int> proxyHeight = new("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
+    readonly Option<string[]> lutRule = new("--lut-rule") { Description = "Own LUT rule before the camera detection (with --lut auto), repeat in priority order: <camera|serial|reel|folder>=<value>:<lut id|none|path.cube>, e.g. camera=FX6:sony-slog3-sgamut3cine.", DefaultValueFactory = _ => [] };
+    readonly Option<int> proxyHeight =new("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
     readonly Option<double?> frameAspect = new("--frame-aspect") { Description = "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.", CustomParser = a => CliParse.Parse(a) };
     readonly Option<double> frameScale = new("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
     readonly Option<string> proxyCodec = new("--proxy-codec") { Description = "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.", DefaultValueFactory = _ => "h264" };
@@ -25,7 +26,7 @@ sealed class StageTwoOptions
 
     public void AddTo(Command cmd)
     {
-        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder, noClipList, ale, noDayReport })
+        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder, noClipList, ale, noDayReport })
             cmd.Options.Add(o);
     }
 
@@ -53,6 +54,18 @@ sealed class StageTwoOptions
                 if (p.LutPath != null && !File.Exists(p.LutPath)) throw new ArgumentException(Msg.LutNotFound(p.LutPath));
             }
             if (Given(lutFallback)) p.LutFallback = lutFb;
+        }
+        if (Given(lutRule))
+        {
+            var rules = new List<LutRule>();
+            foreach (var spec in r.GetValue(lutRule)!)
+            {
+                var (rule, error) = LutRules.ParseOption(spec, LutCatalog.Default);
+                if (rule == null) throw new ArgumentException(error);
+                if (rule.LutPath != null) rule.LutPath = CliPath.Full(rule.LutPath);
+                rules.Add(rule);
+            }
+            p.LutRules = rules;   // written rules replace the project's (their order is the priority)
         }
         if (Given(proxy)) p.Enabled = r.GetValue(proxy);
         if (Given(proxyHeight)) p.Height = r.GetValue(proxyHeight);

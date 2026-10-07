@@ -133,6 +133,40 @@ public static class LutRules
         new("^" + Regex.Escape(pattern.Replace('\\', '/')).Replace(@"\*", ".*").Replace(@"\?", ".") + "$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(200));
 
+    /// The first rule the editor cannot save, in Czech ("Pravidlo 2: vyplňte hodnotu."), or null. A rule of a newer
+    /// version (read-only in the editor, ruling I3) is not looked at, but it keeps its number.
+    public static string? Problem(IReadOnlyList<LutRule> rules)
+    {
+        for (int i = 0; i < rules.Count; i++)
+        {
+            var r = rules[i];
+            if (IsFuture(r)) continue;
+            if (string.IsNullOrWhiteSpace(r.Value)) return $"Pravidlo {i + 1}: vyplňte hodnotu.";
+            if (string.IsNullOrWhiteSpace(r.Lut) == string.IsNullOrWhiteSpace(r.LutPath)) return $"Pravidlo {i + 1}: vyberte LUT.";
+        }
+        return null;
+    }
+
+    /// CLI `--lut-rule <match>=<value>:<lut>` (spec 4.2): `lut` is a built-in id, "none" or a path to a .cube (anything
+    /// with ".cube" or a path separator — returned as written). The value ends at the first ":" after "=", so it cannot
+    /// contain one.
+    public static (LutRule? Rule, string? Error) ParseOption(string spec, LutCatalog cat)
+    {
+        int eq = spec.IndexOf('=');
+        int colon = eq < 0 ? -1 : spec.IndexOf(':', eq + 1);
+        if (eq <= 0 || colon < 0) return (null, Msg.BadLutRule(spec));
+        var match = spec[..eq].Trim().ToLowerInvariant();
+        var value = spec[(eq + 1)..colon].Trim();
+        var lut = spec[(colon + 1)..].Trim();
+        if (!LutRule.Kinds.Contains(match) || value.Length == 0 || lut.Length == 0) return (null, Msg.BadLutRule(spec));
+        if (lut.Equals("none", StringComparison.OrdinalIgnoreCase)) return (new LutRule { Match = match, Value = value, Lut = "none" }, null);
+        if (lut.EndsWith(".cube", StringComparison.OrdinalIgnoreCase) || lut.Contains('\\') || lut.Contains('/'))
+            return (new LutRule { Match = match, Value = value, LutPath = lut }, null);
+        return cat.Find(lut) != null
+            ? (new LutRule { Match = match, Value = value, Lut = lut }, null)
+            : (null, Msg.UnknownLut(lut, string.Join(", ", cat.Luts.Select(l => l.Id))));
+    }
+
     /// How the report gives the reason: "pravidlo 2: kamera obsahuje „FX6“".
     public static string Describe(int number, LutRule r) => $"pravidlo {number}: " + r.Match switch
     {

@@ -264,6 +264,10 @@
                                 <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Vybrat…" Command="{Binding PickLutCommand}" />
                                 <TextBlock Text="{Binding LutName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding LutPath}" />
                             </DockPanel>
+                            <Button Style="{StaticResource SmallButton}" Content="{Binding RulesButtonText}" Command="{Binding EditRulesCommand}"
+                                    HorizontalAlignment="Left" Margin="0,4,0,0" ToolTip="Vlastní pořadí: kamera / sériové číslo / cívka / složka → LUT"
+                                    Visibility="{Binding ShowRules, Converter={StaticResource BoolToVisible}}"
+                                    AutomationProperties.AutomationId="LutRulesButton" />
                         </StackPanel>
                     </Grid>
                     <CheckBox Content="Burn-in názvu klipu" IsChecked="{Binding BurnFilename}" />

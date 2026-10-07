@@ -24,6 +24,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         BitrateUpCommand = new RelayCommand(() => BitrateMbps++, () => p.BitrateMbps < 50);
         ScaleDownCommand = new RelayCommand(() => ScalePercent--, () => ScalePercent > 50);
         ScaleUpCommand = new RelayCommand(() => ScalePercent++, () => ScalePercent < 100);
+        EditRulesCommand = new RelayCommand(() => owner.EditLutRules(catalog));
         BuildLutLists();
     }
 
@@ -95,7 +96,15 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         }
     }
 
-    static readonly string[] LutProperties = [nameof(LutChoice), nameof(ShowFallback), nameof(ShowCustom), nameof(LutName), nameof(LutPath)];
+    static readonly string[] LutProperties = [nameof(LutChoice), nameof(ShowFallback), nameof(ShowCustom), nameof(LutName), nameof(LutPath), nameof(ShowRules)];
+
+    /// "Pravidla LUTů… (2)" (spec 4.2) — only with "Automaticky podle kamery": the rules apply in that mode only (R18).
+    public bool ShowRules => Mode == LutMode.Auto;
+    public string RulesButtonText => $"Pravidla LUTů… ({p.LutRules.Count})";
+    public RelayCommand EditRulesCommand { get; }
+
+    /// The rules were edited (MainViewModel.EditLutRules wrote them into the profile).
+    internal void RulesChanged() => Changed(nameof(RulesButtonText));
 
     public Option<string> Fallback
     {

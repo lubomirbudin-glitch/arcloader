@@ -255,6 +255,6 @@ public static class LutOption
         LutMode.None => "none",
         LutMode.Custom => p.LutPath,
         LutMode.Builtin => p.LutBuiltin,
-        _ => "auto" + (p.LutFallback != null ? $" (fallback {p.LutFallback})" : ""),
+        _ => "auto" + (p.LutFallback != null ? $" (fallback {p.LutFallback})" : "") + (p.LutRules.Count > 0 ? $" + {p.LutRules.Count} own rule(s)" : ""),
     };
 }

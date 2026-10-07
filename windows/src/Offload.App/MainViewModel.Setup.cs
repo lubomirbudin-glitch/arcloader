@@ -568,6 +568,17 @@ public sealed partial class MainViewModel
         SetupChanged?.Invoke();
     }
 
+    /// Opens "Vlastní pravidla LUTů" (set by the window): the rules to edit, the built-in LUTs; the new rules or null.
+    public Func<IReadOnlyList<LutRule>, LutCatalog, List<LutRule>?>? EditLutRulesDialog { get; set; }
+
+    /// "Pravidla LUTů…": OK writes the rules into the active profile; their .cube files are checked again (off the UI thread).
+    internal void EditLutRules(LutCatalog catalog)
+    {
+        if (EditLutRulesDialog?.Invoke(Settings.Proxy.LutRules, catalog) is not { } rules) return;
+        Settings.Proxy.LutRules = rules;
+        Proxy.RulesChanged();   // saves (ProxyChanged) and rechecks the LUT files
+    }
+
     internal void ProxyChanged()
     {
         SettingsChanged();
