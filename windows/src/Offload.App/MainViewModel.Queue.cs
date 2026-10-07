@@ -17,6 +17,7 @@ public sealed partial class MainViewModel
     // What the jobs of this session took — the start bar's estimate (UI návrh 10).
     readonly RateMemory rates = new();
     bool shownCompact, shownJobsRunning;
+    DateTime shownDay = DateTime.Today;
     string? shownStartLabel;
     readonly DispatcherTimer ticker = new() { Interval = TimeSpan.FromMilliseconds(330) };
     bool closing, closeRaised, waitNoticeShown, shownHasFinished, shownCopyRunning, starting;
@@ -111,6 +112,12 @@ public sealed partial class MainViewModel
     /// The parts of the left column that follow the queue (checked every tick, raised only when they change).
     void RefreshLayout()
     {
+        // DNES and the day titles of the history tab move on at midnight (memory only, history as loaded).
+        if (DateTime.Today != shownDay)
+        {
+            shownDay = DateTime.Today;
+            RaiseMany(nameof(Today), nameof(HistoryDays));
+        }
         if (IsCompact != shownCompact)
         {
             shownCompact = IsCompact;

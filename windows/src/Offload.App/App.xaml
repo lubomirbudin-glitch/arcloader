@@ -20,6 +20,7 @@
         <local:EqualsConverter x:Key="Equals" />
         <local:EqualsToVisibleConverter x:Key="EqualsToVisible" />
         <local:CountToVisibleConverter x:Key="CountToVisible" />
+        <local:CountToCollapsedConverter x:Key="CountToCollapsed" />
         <local:IsNullConverter x:Key="IsNull" />
         <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
         <Style x:Key="SectionTitle" TargetType="TextBlock">

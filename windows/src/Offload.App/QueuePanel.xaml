@@ -402,6 +402,40 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+        <!-- One card of the history (nová věc 7): name · size · time · "✓ 2 kopie ověřeny" -->
+        <DataTemplate x:Key="HistoryRowTemplate">
+            <Border BorderBrush="{DynamicResource RowLine}" BorderThickness="0,0,0,1" Padding="16,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="1*" />
+                        <ColumnDefinition Width="1*" />
+                        <ColumnDefinition Width="1.2*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding CardName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Project}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Size}" Foreground="{DynamicResource Text2}" />
+                    <TextBlock Grid.Column="2" Text="{Binding Time}" Foreground="{DynamicResource Text2}" />
+                    <TextBlock Grid.Column="3" Text="{Binding Status}" FontSize="13" TextTrimming="CharacterEllipsis">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Tone}" Value="Ok">
+                                        <Setter Property="Foreground" Value="{DynamicResource Success}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Tone}" Value="Warning">
+                                        <Setter Property="Foreground" Value="{DynamicResource Warn}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Tone}" Value="Error">
+                                        <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+            </Border>
+        </DataTemplate>
     </UserControl.Resources>
 
     <DockPanel Background="{DynamicResource Bg}">
@@ -409,16 +443,21 @@
         <DockPanel DockPanel.Dock="Top" Margin="28,22,28,0">
             <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Vyčistit hotové" Command="{Binding ClearFinishedCommand}"
                     Visibility="{Binding HasFinished, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="ClearFinishedButton" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Denní report…" Command="{Binding DayReportCommand}" Margin="0,0,16,0"
+                    Visibility="{Binding QueueTab, Converter={StaticResource EqualsToVisible}, ConverterParameter=history}" AutomationProperties.AutomationId="HistoryDayReportButton" />
             <StackPanel Orientation="Horizontal">
-                <RadioButton Style="{StaticResource TabButton}" IsChecked="True" AutomationProperties.AutomationId="QueueTab">
+                <RadioButton Style="{StaticResource TabButton}" IsChecked="{Binding QueueTab, Converter={StaticResource Equals}, ConverterParameter=queue}"
+                             AutomationProperties.AutomationId="QueueTab">
                     <TextBlock>
                         <Run Text="Fronta" /><Run Text="{Binding QueueBadgeText, Mode=OneWay}" Foreground="{DynamicResource AccentText}" />
                     </TextBlock>
                 </RadioButton>
+                <RadioButton Style="{StaticResource TabButton}" Content="Historie karet" Margin="4,0,0,0"
+                             IsChecked="{Binding QueueTab, Converter={StaticResource Equals}, ConverterParameter=history}" AutomationProperties.AutomationId="HistoryTab" />
             </StackPanel>
         </DockPanel>
         <Grid>
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding QueueTab, Converter={StaticResource EqualsToVisible}, ConverterParameter=queue}">
                 <StackPanel Margin="28,18,28,28">
                     <!-- Empty queue: the flow Karta → disks → Ověření → Proxy → Report and what a start does -->
                     <Border CornerRadius="16" BorderBrush="{DynamicResource LineSoft}" BorderThickness="1" Background="{DynamicResource BgHeader}" Padding="32,44" Margin="0,0,0,22"
@@ -570,6 +609,43 @@
                                 </local:QueueItemTemplateSelector.VerifyTemplate>
                             </local:QueueItemTemplateSelector>
                         </ItemsControl.ItemTemplateSelector>
+                    </ItemsControl>
+
+                    <!-- DNES (nová věc 7): the cards finished today, from history.json -->
+                    <StackPanel Margin="0,4,0,0" Visibility="{Binding Today, Converter={StaticResource NullToCollapsed}}">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Denní report…" Command="{Binding DayReportCommand}" Margin="14,0,0,0"
+                                    AutomationProperties.AutomationId="DayReportButton" />
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding Today.Summary}" FontSize="13" Foreground="{DynamicResource Text3}" VerticalAlignment="Center"
+                                       AutomationProperties.AutomationId="TodaySummary" />
+                            <TextBlock Text="DNES" Style="{StaticResource StepTitle}" />
+                        </DockPanel>
+                        <Border Style="{StaticResource ListBorder}" Margin="0,10,0,0">
+                            <ItemsControl ItemsSource="{Binding Today.Rows}" ItemTemplate="{StaticResource HistoryRowTemplate}" AutomationProperties.AutomationId="TodayRows" />
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Historie karet: every day with a card, newest first -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding QueueTab, Converter={StaticResource EqualsToVisible}, ConverterParameter=history}">
+                <StackPanel Margin="28,18,28,28">
+                    <TextBlock Text="Zatím žádná zálohovaná karta." Style="{StaticResource TextMuted}" FontSize="14"
+                               Visibility="{Binding HistoryDays.Count, Converter={StaticResource CountToCollapsed}}" />
+                    <ItemsControl ItemsSource="{Binding HistoryDays}" AutomationProperties.AutomationId="HistoryDays">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,22">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Summary}" FontSize="13" Foreground="{DynamicResource Text3}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Title}" Style="{StaticResource StepTitle}" />
+                                    </DockPanel>
+                                    <Border Style="{StaticResource ListBorder}" Margin="0,10,0,0">
+                                        <ItemsControl ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource HistoryRowTemplate}" />
+                                    </Border>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
             </ScrollViewer>

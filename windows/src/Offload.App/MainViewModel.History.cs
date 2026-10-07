@@ -40,6 +40,7 @@ public sealed partial class MainViewModel
                 AppLog.Write($"history load: {t.Exception?.GetBaseException().Message}");
                 history ??= [];
             }
+            RaiseMany(nameof(Today), nameof(HistoryDays));   // the right column's DNES and the history tab
             InspectAll();
             if (historyReload)
             {
@@ -103,6 +104,21 @@ public sealed partial class MainViewModel
 
     SourceItemViewModel? RowFor(string path) =>
         Sources.FirstOrDefault(s => string.Equals(s.Path, path, StringComparison.OrdinalIgnoreCase));
+
+    string queueTab = "queue";
+
+    /// "queue" (Fronta) or "history" (Historie karet).
+    public string QueueTab
+    {
+        get => queueTab;
+        set => Set(ref queueTab, value ?? "queue");
+    }
+
+    /// DNES under the queue (UI návrh 7): the cards finished today, from history.json as loaded; null hides it.
+    public HistoryDay? Today => history is { } h ? HistoryView.Today(h, DateTime.Now) : null;
+
+    /// The history tab: every day with a card, newest first.
+    public IReadOnlyList<HistoryDay> HistoryDays => history is { } h ? HistoryView.Days(h, DateTime.Now) : [];
 
     /// The last look at the card that is at `path` now, or null.
     internal CardInsight? Insight(string path) => inspections.Result(path, IdentityOf(path));
