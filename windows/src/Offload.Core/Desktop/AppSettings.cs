@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Offload.Core.Notify;
 using Offload.Core.Outputs;
+using Offload.Core.Updates;
 
 namespace Offload.Core.Desktop;
 
@@ -68,6 +69,9 @@ public sealed class AppSettings : SettingsProfile
     }
     private Dictionary<string, string> _portNames = new(StringComparer.OrdinalIgnoreCase);
 
+    /// The update check (spec 4.4): global, off until a manifest is set.
+    [JsonPropertyName("updates")] public UpdateSettings Updates { get; set; } = new();
+
     /// The named profiles (spec 4.1), in the order they were created.
     [JsonPropertyName("projects")] public List<ProjectSettings> Projects { get; set; } = [];
     /// The project in use, or null = "Bez projektu" (the top-level keys).
@@ -90,7 +94,7 @@ public static class SettingsStore
     /// The keys of a profile (top level and every project) Load reads into properties.
     static readonly string[] ProfileKeys = ["destRoots", "verify", "analyzeClips", "proxy", "naming", "hash", "outputs", "notify"];
     /// The global top-level keys; every other top-level key goes to AppSettings.Extra.
-    static readonly string[] GlobalKeys = ["tools", "portNames", "projects", "activeProject"];
+    static readonly string[] GlobalKeys = ["tools", "portNames", "updates", "projects", "activeProject"];
 
     static readonly JsonSerializerOptions Json = new()
     {
@@ -116,6 +120,7 @@ public static class SettingsStore
             var root = Members(doc.RootElement);
             ReadProfile(root, s, GlobalKeys);
             Kept(root, s, "tools", (ExternalTools v) => s.Tools = v, () => new ExternalTools());
+            Kept(root, s, "updates", (UpdateSettings v) => s.Updates = v, () => new UpdateSettings());
             Section(root, "portNames", e =>
             {
                 var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -224,6 +229,8 @@ public static class SettingsStore
     internal static AppSettings Normalize(AppSettings s, LutCatalog catalog)
     {
         s.Tools ??= new ExternalTools();
+        s.Updates ??= new UpdateSettings();
+        s.Updates.Manifest = string.IsNullOrWhiteSpace(s.Updates.Manifest) ? null : s.Updates.Manifest.Trim();
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (id, name) in s.PortNames ?? [])
             if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name)) names[id] = name.Trim();

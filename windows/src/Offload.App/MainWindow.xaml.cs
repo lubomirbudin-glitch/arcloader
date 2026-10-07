@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         vm.ShowNotification = tray.Show;
         vm.WindowInFront = () => tray.WindowInFront;
         vm.EditNotifyDialog = settings => NotifyWindow.Edit(this, settings, vm.ActiveProjectName);
+        vm.ShowUpdatesDialog = m => UpdateWindow.Show(this, m);
         Closed += (_, _) => tray.Dispose();
         vm.MessageRequested += text => MessageBox.Show(this, text, "Offload");
         Closed += (_, _) => vm.SaveNow();

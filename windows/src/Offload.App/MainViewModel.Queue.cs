@@ -392,6 +392,7 @@ public sealed partial class MainViewModel
         inspections.CancelAll();
         ticker.Stop();
         healthTimer.Stop();
+        updateTimer.Stop();
         queue.Dispose();
         SaveNow();
         return true;

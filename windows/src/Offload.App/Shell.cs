@@ -18,6 +18,23 @@ static class Shell
         }
     }
 
+    /// Explorer on a folder (never a ShellExecute of a path that could be a program).
+    public static string? OpenFolder(string folder)
+    {
+        try
+        {
+            Process.Start("explorer.exe", $"\"{folder}\"").Dispose();
+            return null;
+        }
+        catch (Exception e)
+        {
+            return $"Nejde otevřít Průzkumník: {e.Message}";
+        }
+    }
+
+    /// A web address in the default browser — https only (the caller checked).
+    public static string? OpenWeb(string url) => Open(url);
+
     public static string? Reveal(string path)
     {
         try

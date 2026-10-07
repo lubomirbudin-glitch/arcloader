@@ -12,6 +12,14 @@
     </Window.InputBindings>
     <DockPanel>
         <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+          <DockPanel>
+            <!-- Spec 4.4: a quiet link when the manifest names a newer version. -->
+            <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,12,0" FontSize="12"
+                       Visibility="{Binding NewVersionText, Converter={StaticResource NullToCollapsed}}">
+                <Hyperlink Command="{Binding UpdatesCommand}" AutomationProperties.AutomationId="NewVersionLink">
+                    <Run Text="{Binding NewVersionText, Mode=OneWay}" />
+                </Hyperlink>
+            </TextBlock>
             <Menu Padding="6,2">
                 <!-- Ruling I1: off while Start checks and asks (CanSwitchProject) -->
                 <MenuItem Header="_Projekt" IsEnabled="{Binding CanSwitchProject}" AutomationProperties.AutomationId="ProjectMenu">
@@ -32,6 +40,7 @@
                     <MenuItem Header="Ukládat report ověření" IsCheckable="True" IsChecked="{Binding SaveVerifyReport}"
                               AutomationProperties.AutomationId="SaveVerifyReportMenuItem" />
                     <MenuItem Header="Oznámení…" Command="{Binding NotifySettingsCommand}" AutomationProperties.AutomationId="NotifyMenuItem" />
+                    <MenuItem Header="Aktualizace…" Command="{Binding UpdatesCommand}" AutomationProperties.AutomationId="UpdatesMenuItem" />
                     <MenuItem Header="Denní report…" Command="{Binding DayReportCommand}"
                               AutomationProperties.AutomationId="DayReportMenuItem">
                         <MenuItem.Icon>
@@ -47,6 +56,7 @@
                     </MenuItem>
                 </MenuItem>
             </Menu>
+          </DockPanel>
         </Border>
         <Grid>
             <Grid.ColumnDefinitions>
