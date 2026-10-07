@@ -42,6 +42,7 @@ public sealed partial class MainViewModel
     {
         IReadOnlyList<string> now = [Projects.NoProject, .. AllSettings.Projects.Select(p => p.Name)];
         if (!now.SequenceEqual(projectChoices, StringComparer.Ordinal)) projectChoices = now;
+        RebuildProjectItems();   // the top bar's switcher (the active one may have changed too)
     }
 
     public string ActiveProjectChoice

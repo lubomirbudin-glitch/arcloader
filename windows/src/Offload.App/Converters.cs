@@ -17,6 +17,19 @@ public sealed class NullToCollapsedConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
+public sealed class NotConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is not true;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => value is not true;
+}
+
+/// true → Visible, false → Hidden (keeps its place: the tick column of the project list).
+public sealed class BoolToHiddenConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is true ? Visibility.Visible : Visibility.Hidden;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 public sealed class EmptyToVisibleConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object parameter, CultureInfo culture) =>

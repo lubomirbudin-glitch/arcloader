@@ -151,7 +151,7 @@ public class AppendPlannerTests
         File.Delete(Layout.Join(paths[1], "CLIP/A001C002.mov"));
         var e = Refused(card, paths);
         Assert.Equal(PreflightCode.AppendMissingFile, e.Code);
-        Assert.Equal($"Na {AppendPlanner.Disk(paths[1])} chybí soubor z dřívější zálohy: CLIP/A001C002.mov — zkontrolujte zálohu přes Nástroje → Ověřit zálohu…", e.Message);
+        Assert.Equal($"Na {AppendPlanner.Disk(paths[1])} chybí soubor z dřívější zálohy: CLIP/A001C002.mov — zkontrolujte zálohu přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify)", e.Message);
     }
 
     static void MarkFailed(string cardPath, string rel)
@@ -202,7 +202,7 @@ public class AppendPlannerTests
 
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
         var disk = AppendPlanner.Disk(paths[0]);
-        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Nástroje → Ověřit zálohu…; doplnit nejde.", e.Message);
+        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify); doplnit nejde.", e.Message);
     }
 
     // Ruling I1: an append whose reports landed but whose MHL generation did not — the next one must not reuse 0002.
@@ -223,7 +223,7 @@ public class AppendPlannerTests
 
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
         Assert.Equal($"V {paths[0]} nesouhlasí reporty s ASC MHL (poslední report je generace 2, poslední generace MHL 1) — dřívější doplnění se nedokončilo. "
-            + "Zkontrolujte zálohu přes Nástroje → Ověřit zálohu… a složku opravte ručně; doplnit nejde.", e.Message);
+            + "Zkontrolujte zálohu přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify) a složku opravte ručně; doplnit nejde.", e.Message);
     }
 
     [Fact]
@@ -353,7 +353,7 @@ public class AppendPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.AppendMhlDamaged, e.Code);
-        Assert.Equal($"Historie ASC MHL v {paths[1]} je poškozená — zkontrolujte ji přes Nástroje → Ověřit zálohu…; doplnit nejde.", e.Message);
+        Assert.Equal($"Historie ASC MHL v {paths[1]} je poškozená — zkontrolujte ji přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify); doplnit nejde.", e.Message);
 
         File.WriteAllText(gen1, File.ReadAllText(gen1)[..^1]);
         Assert.Single(AppendPlanner.Plan(card, paths).NewFiles);   // repaired: fine again

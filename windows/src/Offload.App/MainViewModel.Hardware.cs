@@ -128,7 +128,7 @@ public sealed partial class MainViewModel
     internal void HardwareTestFinished(HwTestResult result)
     {
         lastHwTest = result;
-        Raise(nameof(HardwareSummary));
+        RaiseMany(nameof(HardwareSummary), nameof(HardwareDot), nameof(HardwareTooltip));
         // A quick test never replaces a saved measurement on disk (only the summary shows it).
         bool measured = result.Measurements.Count > 0;
         if (!measured && savedMeasured) return;

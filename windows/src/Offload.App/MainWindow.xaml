@@ -2,8 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Offload.App"
-        Title="{Binding WindowTitle}" Width="1240" Height="860" MinWidth="940" MinHeight="640"
-        WindowStartupLocation="CenterScreen"
+        Title="{Binding WindowTitle}" Width="1360" Height="900" MinWidth="940" MinHeight="640"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource Bg}" Foreground="{DynamicResource Text}"
+        FontFamily="{StaticResource UiFont}" FontSize="14"
         Icon="pack://application:,,,/Offload.ico">
     <Window.InputBindings>
         <KeyBinding Gesture="Ctrl+Enter" Command="{Binding StartCommand}" />
@@ -11,52 +12,134 @@
         <KeyBinding Gesture="Ctrl+Shift+O" Command="{Binding VerifyBackupCommand}" />
     </Window.InputBindings>
     <DockPanel>
-        <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
-          <DockPanel>
-            <!-- Spec 4.4: a quiet link when the manifest names a newer version. -->
-            <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,12,0" FontSize="12"
-                       Visibility="{Binding NewVersionText, Converter={StaticResource NullToCollapsed}}">
-                <Hyperlink Command="{Binding UpdatesCommand}" AutomationProperties.AutomationId="NewVersionLink">
-                    <Run Text="{Binding NewVersionText, Mode=OneWay}" />
-                </Hyperlink>
-            </TextBlock>
-            <Menu Padding="6,2">
-                <!-- Ruling I1: off while Start checks and asks (CanSwitchProject) -->
-                <MenuItem Header="_Projekt" IsEnabled="{Binding CanSwitchProject}" AutomationProperties.AutomationId="ProjectMenu">
-                    <MenuItem Header="Uložit jako projekt…" Command="{Binding SaveAsProjectCommand}"
-                              AutomationProperties.AutomationId="SaveAsProjectMenuItem" />
-                    <MenuItem Header="Přejmenovat…" Command="{Binding RenameProjectCommand}"
-                              AutomationProperties.AutomationId="RenameProjectMenuItem" />
-                    <MenuItem Header="Smazat…" Command="{Binding DeleteProjectCommand}"
-                              AutomationProperties.AutomationId="DeleteProjectMenuItem" />
-                </MenuItem>
-                <MenuItem Header="_Nástroje">
-                    <MenuItem Header="Ověřit zálohu…" InputGestureText="Ctrl+Shift+O" Command="{Binding VerifyBackupCommand}"
-                              AutomationProperties.AutomationId="VerifyBackupMenuItem">
-                        <MenuItem.Icon>
-                            <TextBlock Style="{StaticResource Icon}" FontSize="14" Text="&#xE9D5;" />
-                        </MenuItem.Icon>
-                    </MenuItem>
-                    <MenuItem Header="Ukládat report ověření" IsCheckable="True" IsChecked="{Binding SaveVerifyReport}"
-                              AutomationProperties.AutomationId="SaveVerifyReportMenuItem" />
-                    <MenuItem Header="Oznámení…" Command="{Binding NotifySettingsCommand}" AutomationProperties.AutomationId="NotifyMenuItem" />
-                    <MenuItem Header="Aktualizace…" Command="{Binding UpdatesCommand}" AutomationProperties.AutomationId="UpdatesMenuItem" />
-                    <MenuItem Header="Denní report…" Command="{Binding DayReportCommand}"
-                              AutomationProperties.AutomationId="DayReportMenuItem">
-                        <MenuItem.Icon>
-                            <TextBlock Style="{StaticResource Icon}" FontSize="14" Text="&#xE8A5;" />
-                        </MenuItem.Icon>
-                    </MenuItem>
-                    <Separator />
-                    <MenuItem Header="Prověřit USB porty…" InputGestureText="Ctrl+U" Command="{Binding OpenHardwareCommand}"
-                              AutomationProperties.AutomationId="CheckPortsMenuItem">
-                        <MenuItem.Icon>
-                            <TextBlock Style="{StaticResource Icon}" FontSize="14" Text="&#xE88E;" />
-                        </MenuItem.Icon>
-                    </MenuItem>
-                </MenuItem>
-            </Menu>
-          </DockPanel>
+        <!-- Top bar (UI návrh): logo · project switcher (in the place of the preset switcher) · … · Ověřit zálohu · Hardware · more -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource BgHeader}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="20,10">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="28" Height="28" CornerRadius="7" Background="{DynamicResource Accent}">
+                        <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconLogo}" Tag="2.2" Foreground="{DynamicResource OnAccent}" />
+                    </Border>
+                    <TextBlock Text="Offload" FontSize="15" FontWeight="SemiBold" Margin="10,0,0,0" VerticalAlignment="Center" />
+                    <Border Width="1" Height="22" Background="{DynamicResource Line}" Margin="12,0" />
+                    <!-- Projekt ▾ — off while Start checks and asks (ruling I1, CanSwitchProject). -->
+                    <Grid>
+                        <ToggleButton x:Name="ProjectButton" Style="{StaticResource SecondaryButton}" IsChecked="{Binding ProjectMenuOpen}"
+                                      IsEnabled="{Binding CanSwitchProject}"
+                                      IsHitTestVisible="{Binding IsOpen, ElementName=ProjectPopup, Converter={StaticResource Not}}"
+                                      ToolTip="Projekt — pojmenované nastavení (cíle, kontrola, výstupy, proxy, oznámení)"
+                                      AutomationProperties.AutomationId="ProjectChoice" AutomationProperties.Name="Projekt">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Projekt" Foreground="{DynamicResource Text3}" Margin="0,0,8,0" />
+                                <TextBlock Text="{Binding ProjectLabel}" FontWeight="Medium" MaxWidth="320" TextTrimming="CharacterEllipsis" />
+                                <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconChevronDown}" Width="14" Height="14" Tag="2"
+                                                Foreground="{DynamicResource Text2}" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <Popup x:Name="ProjectPopup" IsOpen="{Binding ProjectMenuOpen}" PlacementTarget="{Binding ElementName=ProjectButton}" Placement="Bottom"
+                               StaysOpen="False" AllowsTransparency="True" VerticalOffset="6">
+                            <Border Background="{DynamicResource Raised}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" CornerRadius="10"
+                                    Padding="6" MinWidth="260">
+                                <StackPanel>
+                                    <ItemsControl ItemsSource="{Binding ProjectItems}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource GhostButton}" Command="{Binding Select}" HorizontalContentAlignment="Left"
+                                                        Foreground="{DynamicResource Text}" AutomationProperties.Name="{Binding Name}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconCheck}" Width="14" Height="14" Tag="2.4"
+                                                                        Foreground="{DynamicResource AccentText}" Margin="0,0,8,0"
+                                                                        Visibility="{Binding IsActive, Converter={StaticResource BoolToHidden}}" />
+                                                        <TextBlock Text="{Binding Name}" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Border Height="1" Background="{DynamicResource LineSoft}" Margin="4,6" />
+                                    <Button Style="{StaticResource GhostButton}" Content="Uložit jako nový projekt…" Command="{Binding SaveAsProjectCommand}"
+                                            HorizontalContentAlignment="Left" AutomationProperties.AutomationId="SaveAsProjectMenuItem" />
+                                    <Button Style="{StaticResource GhostButton}" Content="Přejmenovat…" Command="{Binding RenameProjectCommand}"
+                                            HorizontalContentAlignment="Left" AutomationProperties.AutomationId="RenameProjectMenuItem" />
+                                    <Button Style="{StaticResource GhostButton}" Content="Smazat…" Command="{Binding DeleteProjectCommand}"
+                                            HorizontalContentAlignment="Left" AutomationProperties.AutomationId="DeleteProjectMenuItem" />
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Spec 4.4: a quiet link when the manifest names a newer version. -->
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" FontSize="13"
+                               Visibility="{Binding NewVersionText, Converter={StaticResource NullToCollapsed}}">
+                        <Hyperlink Command="{Binding UpdatesCommand}" Foreground="{DynamicResource AccentText}" AutomationProperties.AutomationId="NewVersionLink">
+                            <Run Text="{Binding NewVersionText, Mode=OneWay}" />
+                        </Hyperlink>
+                    </TextBlock>
+                    <!-- ● Běží 1 offload · 1 ve frontě -->
+                    <Border CornerRadius="8" Background="{DynamicResource AccentSoft2}" Height="34" Padding="12,0" Margin="0,0,8,0"
+                            Visibility="{Binding QueuePill, Converter={StaticResource NullToCollapsed}}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentBar}" Margin="0,0,8,0" />
+                            <TextBlock Text="{Binding QueuePill}" Foreground="{DynamicResource PillRunText}" FontSize="13" FontWeight="Medium"
+                                       AutomationProperties.AutomationId="QueuePill" />
+                        </StackPanel>
+                    </Border>
+                    <Button Style="{StaticResource GhostButton}" Command="{Binding VerifyBackupCommand}" ToolTip="Ověřit zálohu… (Ctrl+Shift+O)"
+                            AutomationProperties.AutomationId="VerifyBackupButton">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconShield}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Margin="0,0,8,0" />
+                            <TextBlock Text="Ověřit zálohu" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Command="{Binding OpenHardwareCommand}" ToolTip="{Binding HardwareTooltip}"
+                            AutomationProperties.AutomationId="HardwareButton">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconChip}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Margin="0,0,8,0" />
+                            <TextBlock Text="Hardware" />
+                            <Ellipse Width="7" Height="7" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{DynamicResource SuccessFill}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HardwareDot}" Value="Warning">
+                                                <Setter Property="Fill" Value="{DynamicResource WarnFill}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding HardwareDot}" Value="None">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                        </StackPanel>
+                    </Button>
+                    <!-- More: the former Nástroje items until the settings page has them (next task). -->
+                    <Grid>
+                        <ToggleButton x:Name="MoreButton" Style="{StaticResource IconButton}" IsChecked="{Binding MoreMenuOpen}" ToolTip="Další"
+                                      IsHitTestVisible="{Binding IsOpen, ElementName=MorePopup, Converter={StaticResource Not}}"
+                                      AutomationProperties.AutomationId="SettingsButton" AutomationProperties.Name="Nastavení">
+                            <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconSliders}" Width="17" Height="17"
+                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
+                        </ToggleButton>
+                        <Popup x:Name="MorePopup" IsOpen="{Binding MoreMenuOpen}" PlacementTarget="{Binding ElementName=MoreButton}" Placement="Bottom"
+                               HorizontalOffset="-220" StaysOpen="False" AllowsTransparency="True" VerticalOffset="6">
+                            <Border Background="{DynamicResource Raised}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" CornerRadius="10" Padding="6" MinWidth="250">
+                                <StackPanel>
+                                    <Button Style="{StaticResource GhostButton}" Content="Denní report…" Command="{Binding DayReportCommand}" HorizontalContentAlignment="Left"
+                                            AutomationProperties.AutomationId="DayReportMenuItem" />
+                                    <Button Style="{StaticResource GhostButton}" Content="Oznámení…" Command="{Binding NotifySettingsCommand}" HorizontalContentAlignment="Left"
+                                            AutomationProperties.AutomationId="NotifyMenuItem" />
+                                    <Button Style="{StaticResource GhostButton}" Content="Aktualizace…" Command="{Binding UpdatesCommand}" HorizontalContentAlignment="Left"
+                                            AutomationProperties.AutomationId="UpdatesMenuItem" />
+                                    <CheckBox Style="{StaticResource Check}" Content="Ukládat report ověření" IsChecked="{Binding SaveVerifyReport}" Margin="12,8"
+                                              FontSize="13" AutomationProperties.AutomationId="SaveVerifyReportMenuItem" />
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                </StackPanel>
+                <Border />
+            </DockPanel>
         </Border>
         <Grid>
             <Grid.ColumnDefinitions>
@@ -65,7 +148,7 @@
                 <ColumnDefinition Width="*" MinWidth="520" />
             </Grid.ColumnDefinitions>
             <local:SetupPanel Grid.Column="0" />
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+            <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Stretch" Background="{DynamicResource Line}" />
             <local:QueuePanel Grid.Column="2" />
         </Grid>
     </DockPanel>

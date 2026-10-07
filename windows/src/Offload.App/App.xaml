@@ -15,6 +15,8 @@
         <local:BoolToCollapsedConverter x:Key="BoolToCollapsed" />
         <local:NullToCollapsedConverter x:Key="NullToCollapsed" />
         <local:EmptyToVisibleConverter x:Key="EmptyToVisible" />
+        <local:NotConverter x:Key="Not" />
+        <local:BoolToHiddenConverter x:Key="BoolToHidden" />
         <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="15" />

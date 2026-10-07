@@ -233,7 +233,7 @@ public class AppendEngineTests
 
         Assert.Equal(JobPhase.Failed, append.Status().Phase);
         var disk = AppendPlanner.Disk(paths[0]);
-        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Nástroje → Ověřit zálohu…; doplnit nejde.",
+        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify); doplnit nejde.",
             append.Status().Error);
         for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
     }

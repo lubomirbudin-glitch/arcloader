@@ -105,6 +105,7 @@ public sealed class JobItemViewModel : QueueItem
     internal IEnumerable<VolumeDemand> SpaceDemands(long writtenAtProbe) =>
         space.Select(d => d with { Need = SpaceCheck.Remaining(d.Need, Phase, writtenAtProbe) });
     public bool IsRunning => progress.IsRunning;
+    public override bool IsPaused => progress.Status.Paused;
     public override bool IsFinished => Phase.IsFinished();
     public bool SafeToEject => progress.Status.SafeToEject;
     public bool? CopySucceeded => progress.Status.CopySucceeded;

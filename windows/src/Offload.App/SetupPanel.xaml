@@ -44,15 +44,6 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="Sections" Margin="18">
 
-                <!-- Projekt (spec 4.1); off while Start checks and asks (ruling I1) -->
-                <DockPanel Margin="0,0,0,14">
-                    <TextBlock Text="Projekt:" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <ComboBox ItemsSource="{Binding ProjectChoices}" SelectedItem="{Binding ActiveProjectChoice}"
-                              IsEnabled="{Binding CanSwitchProject}"
-                              ToolTip="Pojmenované nastavení (cíle, kontrola, výstupy, proxy, oznámení) — menu Projekt"
-                              AutomationProperties.AutomationId="ProjectChoice" AutomationProperties.Name="Projekt" />
-                </DockPanel>
-
                 <!-- Karty -->
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">

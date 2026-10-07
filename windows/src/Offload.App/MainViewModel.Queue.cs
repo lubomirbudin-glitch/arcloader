@@ -84,6 +84,7 @@ public sealed partial class MainViewModel
     {
         if (!CanStart) return;
         starting = true;
+        ProjectMenuOpen = false;
         RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
         // Ruling I1: every check below is made for the profile shown now. The project switcher and the Projekt menu are
         // off until Start ends; should another profile be shown anyway, Start stops — its checks were not for that one.
@@ -276,6 +277,7 @@ public sealed partial class MainViewModel
         foreach (var j in Jobs)
             if (!j.IsFinished) j.Refresh();
         RefreshSpace();   // memory only: a running job needs less as it copies (against its baseline)
+        RefreshQueueSummary();   // the top bar's pill and the queue tab's number
         // A queued job cancelled behind a running copy is finished before the queue reports it.
         if (HasFinished != shownHasFinished)
         {
