@@ -27,7 +27,7 @@ public sealed partial class MainViewModel
     {
         lastHwTest = HwTest.Load(HwTest.DefaultPath);
         savedMeasured = lastHwTest?.Measurements.Count > 0;
-        OpenHardwareCommand = new RelayCommand(OpenHardware);
+        OpenHardwareCommand = new RelayCommand(OpenHardware, () => Allowed(DemoCommand.MeasurePorts));
     }
 
     public string HardwareSummary => lastHwTest is { } r
@@ -39,6 +39,7 @@ public sealed partial class MainViewModel
     /// brought to the front — no second run.
     public void OpenHardware()
     {
+        if (!Allowed(DemoCommand.MeasurePorts)) return;
         if (openHardware is { } open)
         {
             HardwareRequested?.Invoke(open);
@@ -128,7 +129,7 @@ public sealed partial class MainViewModel
     internal void HardwareTestFinished(HwTestResult result)
     {
         lastHwTest = result;
-        Raise(nameof(HardwareSummary));
+        RaiseMany(nameof(HardwareSummary), nameof(HardwareDot), nameof(HardwareTooltip));
         // A quick test never replaces a saved measurement on disk (only the summary shows it).
         bool measured = result.Measurements.Count > 0;
         if (!measured && savedMeasured) return;

@@ -20,6 +20,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | Karty a bezpečnost dat (plán 6, 0.2.0): historie, doplnění, název z klipů, ověření zálohy, místo, české hlášky | hotovo (čeká ruční test s kartou) |
 | Výstupy pro produkci a střih (plán 7, 0.3.0): denní report, seznam klipů CSV/ALE, proxy pro přelinkování, MD5 | hotovo (čeká ruční test v Resolve, Premiere, Avid, Excelu) |
 | Nastavení, oznámení, distribuce (plán 8, 0.4.0): projekty, vlastní pravidla LUTů, BRAW Film Gen 4 → Gen 5, oznámení Windows a ntfy, kontrola aktualizací, podpis | hotovo (čeká ruční test: projekty a oznámení v GUI, podpis s certifikátem; převod Gen 4 je neověřený, čeká vzorek .braw Gen 4) |
+| Nový vzhled (plán 9, 0.5.0, návrh `docs/ui-navrh/`): tmavé i světlé téma podle Windows, horní lišta, kroky 1–3, karty úloh s průběhem po cílech, Pozastavit, Zkopírovat znovu (oprava), dnes a historie karet, stránka Nastavení, štítek kamery a připojení, odhad času | hotovo (čeká ruční test 40–49 s kartou; snímky ukázkového režimu porovnané s `docs/ui-navrh/screeny`) |
 
 ## Build a testy
 
@@ -36,7 +37,7 @@ balíček neobsahuje — bez ní se BRAW jen zkopíruje a ověří, proxy a náh
 ### Vydání verze
 
 Verze je jen na jednom místě: `windows\Directory.Build.props` (`Version`, např. `0.4.0`, a `InformationalVersion`, např. `0.4.0-win`);
-aplikace, CLI a report ji čtou odtud (`OffloadVersion`). Číslování: plán 6 → 0.2.0, 7 → 0.3.0, 8 → 0.4.0, opravy
+aplikace, CLI a report ji čtou odtud (`OffloadVersion`). Číslování: plán 6 → 0.2.0, 7 → 0.3.0, 8 → 0.4.0, 9 → 0.5.0, opravy
 zvyšují poslední číslo, 1.0.0 po ostrém testu s kartou.
 
 1. Zvyšte verzi v `Directory.Build.props` (obě hodnoty) a spusťte `dotnet test`.
@@ -45,7 +46,7 @@ zvyšují poslední číslo, 1.0.0 po ostrém testu s kartou.
    `-ReleaseUrl` je adresa, kterou uživatel otevře tlačítkem *Otevřít* (https adresa, `\\NAS\Offload\`, sdílená složka).
 3. Nahrajte zip na web / NAS a **až potom** manifest (manifest nesmí ukazovat na zip, který tam ještě není).
 
-Kontrola aktualizací v aplikaci (Nástroje → Aktualizace…) čte manifest z adresy, kterou tam zadáte (`https://…`,
+Kontrola aktualizací v aplikaci (Nastavení → Aplikace → Aktualizace…) čte manifest z adresy, kterou tam zadáte (`https://…`,
 `\\NAS\Offload\offload-update.json`, místní cesta); nejvýš jednou za 24 h, 5 s po startu, nic nestahuje ani nespouští,
 čte nejvýš 64 KB. Tlačítko *Otevřít* otevře jen adresu `https://…` nebo existující složku / zip (v Průzkumníku); cokoli
 jiného se jen zobrazí. Prázdná adresa = vypnuto (výchozí). Repozitář je soukromý, proto se nečte GitHub.
@@ -133,30 +134,44 @@ Spuštění: `Offload\Offload.exe` (jeden soubor, .NET v něm je; první start t
 Bez podpisu (build bez `-Sign`, viz Podepisování) Windows při prvním spuštění ukáže „Windows ochránil váš počítač“ —
 klikněte na „Další informace“ → „Přesto spustit“.
 
-- **Projekt:** nahoře v levém panelu „Projekt: [Bez projektu ▾]“ — pojmenovaná nastavení (cíle, kontrola, součet, název
-  z klipů, výstupy, oznámení, proxy včetně LUTu, pravidel LUTů a složky pro proxy). Menu *Projekt*: „Uložit jako
-  projekt…“, „Přejmenovat…“, „Smazat…“. Titulek okna „Offload — Film X“. Přepnutí nezmění úlohy ve frontě (mají svou
+- **Vzhled (0.5.0, návrh `docs/ui-navrh/`):** horní lišta (Projekt, stav fronty, Ověřit zálohu, Hardware s tečkou,
+  Nastavení), vlevo kroky „1 · Karty“, „2 · Cíle“, „3 · Po zkopírování“ s připnutou lištou Spustit offload, vpravo
+  Fronta / Historie karet a „DNES“; volby jsou na stránce Nastavení (ikona s posuvníky, Ctrl+,; Esc zavře). Tmavé
+  i světlé téma podle Windows (`Themes/Dark.xaml`, `Light.xaml`); `OFFLOAD_THEME=dark|light` téma vynutí (pro snímky).
+  Ukázkový režim pro vizuální kontrolu: `Offload.exe --demo pripraveno|probiha|hotovo|nastaveni` (stavy obrazovek
+  z `docs/ui-navrh/screeny`; výchozí vypnutý). Demo je zapečetěné: vlastní složka dat v %TEMP% (nastavení, historie i log;
+  `OFFLOAD_SETTINGS_DIR` se ignoruje), nic nekopíruje ani nezapisuje, Spustit, Doplnit, Zkopírovat znovu, měření portů,
+  úpravy projektů, oznámení, aktualizace, Ověřit zálohu, Denní report i Vysunout jsou vypnuté; jen Pozastavit / Pokračovat /
+  Zrušit na ukázkové úloze mění, co karta ukazuje. Snímky přes `scripts\app-drive.ps1` (`Start-Offload -Arguments '--demo probiha'`,
+  `Resize-Offload $p 1000 900`).
+- **Projekt:** rozbalovací „Projekt <název> ▾“ v horní liště — pojmenovaná nastavení (cíle, kontrola, součet, název
+  z klipů, výstupy, oznámení, proxy včetně LUTu, pravidel LUTů a složky pro proxy). V seznamu: „Uložit jako nový
+  projekt…“, „Přejmenovat…“, „Smazat…“; „Upravit projekt“ u kroku 3 otevře Nastavení. Titulek okna „Offload — Film X“. Přepnutí nezmění úlohy ve frontě (mají svou
   kopii nastavení); během přípravy startu je přepínač i menu zamčené (a když se projekt přesto změní, start se
   zruší s hláškou). Doplnění karty se řídí projektem dřívější zálohy; když ten už neexistuje (smazaný, přejmenovaný),
   běží s nastavením „Bez projektu“ a karta úlohy to napíše. Start kontroluje jen LUTy a složky, které se opravdu
-  použijí. Nástroje, názvy USB portů a kontrola aktualizací jsou společné.
+  použijí. Cesty k nástrojům, názvy USB portů a kontrola aktualizací jsou společné.
 - **Pravidla LUTů:** u „Automaticky podle kamery“ tlačítko „Pravidla LUTů… (N)“ — řádky *kamera / sériové číslo / cívka /
   složka → LUT*, zkoušejí se shora dolů před rozpoznáním kamery; report u klipu ukáže „pravidlo 2: …“. Cíl „Bez LUT“
   dá klipu bez LUTu. Pravidlo z novější verze Offloadu (neznámý druh, např. `lens`) editor ukáže jen ke čtení,
   přeskočí ho a při OK ho zapíše beze změny.
-- **Oznámení:** Nástroje → Oznámení… — oznámení Windows (když okno není v popředí) a volitelně ntfy na telefon (jen
-  název karty, výsledek a počty, nikdy cesty). Selhání kopie se oznámí hned, když kopie skončí. Nástroje → Aktualizace…
-  — adresa manifestu (výchozí prázdná = kontrola vypnutá) a „Zkontrolovat teď“; nová verze se ukáže odkazem vpravo
-  v řádku menu. *Otevřít* otevře jen https adresu nebo místní složku / zip; síťové cesty (UNC, namapovaný síťový disk)
+- **Oznámení:** Nastavení → Oznámení → Upravit oznámení… — oznámení Windows (když okno není v popředí) a volitelně ntfy
+  na telefon (jen název karty, výsledek a počty, nikdy cesty). Selhání kopie se oznámí hned, když kopie skončí.
+  Nastavení → Aplikace → Aktualizace… — adresa manifestu (výchozí prázdná = kontrola vypnutá) a „Zkontrolovat teď“;
+  nová verze se ukáže odkazem v horní liště. *Otevřít* otevře jen https adresu nebo místní složku / zip; síťové cesty (UNC, namapovaný síťový disk)
   se nikdy neotevírají, jen zobrazí k ručnímu zkopírování.
 
-- **Karty:** karta vložená do čtečky se objeví sama a je zaškrtnutá; složku lze přidat tlačítkem „Složka…“ nebo přetažením
-  složky na `Offload.exe`. Název složky v cíli lze upravit.
-- **Cíle:** tlačítkem „Přidat…“ (pamatují se; zobrazí volné místo a souborový systém, u disku exFAT/FAT32 aplikace upozorní „Doporučeno NTFS“).
+- **Karty:** karta vložená do čtečky se objeví sama a je zaškrtnutá; složku lze přidat tlačítkem „Ze složky…“ nebo přetažením
+  složky na `Offload.exe`. Dlaždice ukáže kameru („ALEXA 35 · LogC4“ z prvního klipu, ffprobe nejvýš 5 s, jen čtení)
+  a připojení („čtečka USB 3 · 5 Gb/s“ z HW diagnostiky; Thunderbolt Windows nerozliší). Název složky v cíli lze upravit;
+  „Doplnit“ přepne kartu na doplnění nových klipů.
+- **Cíle:** tlačítkem „+ Přidat disk“ (pamatují se; zobrazí „… volných z … · FS · připojení“ a pruh místa, u disku
+  exFAT/FAT32 aplikace upozorní „Doporučeno NTFS“).
 - **Proxy:** „Kopírovat proxy i do složky“ → „Vybrat…“: každá hotová proxy se kromě `_PROXY` na cílech zkopíruje
   i do `<složka>\<datum>\<karta>\` (nic se nepřepíše, shodné jméno dostane `_2`, `_3`…); křížek volbu zruší.
-  Když složka není dostupná (odpojený disk), start nejde a v sekci Proxy je červeně „Složka pro proxy není dostupná“.
-- **LUT:** v sekci Proxy seznam „Automaticky podle kamery“ (výchozí) / vestavěné LUTy / „Bez LUT“ / „Vlastní…“ (`.cube`).
+  Když složka není dostupná (odpojený disk), start nejde a pod krokem 3 i v Nastavení → Proxy je červeně „Složka pro
+  proxy není dostupná“.
+- **LUT:** v Nastavení → Proxy seznam „Automaticky podle kamery“ (výchozí) / vestavěné LUTy / „Bez LUT“ / „Vlastní…“ (`.cube`).
   „Když kameru nepoznám:“ je záložní LUT pro klipy, které automatika nepozná (výchozí Bez LUT). Automaticky se pozná:
   Sony podle sidecaru `M01.XML` (jen S-Log3 s S-Gamut3.Cine nebo S-Gamut3, jiná gama = bez LUTu), ARRI podle modelu
   kamery (ALEXA 35 → LogC4, ostatní ALEXA/AMIRA → LogC3), ARRIRAW podle metadat, Blackmagic RAW (BRAW) podle gamy klipu (Film Gen 5 → vestavěný LUT; Film starší generace = bez LUTu, s volbou „převést na Gen 5“ (Dekodéry; **neověřené**, čeká vzorek Gen 4) LUT Gen 5; Video, Extended Video a další gamy = bez LUTu; bez údaje o gamě se předpokládá Film Gen 5),
@@ -164,15 +179,23 @@ klikněte na „Další informace“ → „Přesto spustit“.
   takové klipy dostanou záložní LUT. U ARRI jde o předpoklad pro ProRes: klip nahraný přímo v Rec.709 by LUT dostal
   neprávem, pak zvolte „Bez LUT“. Report ukáže u každého klipu použitý LUT a důvod. Na vzorcích z kamer se ještě
   ověří rozsah: R3D a ARRIRAW (přes ProRes/MXF mezisoubor) a ProRes z ALEXA 35 (LogC4) se berou jako legální video.
-- **Spuštění:** tlačítko „Spustit offload“ nebo Ctrl+Enter. Každá karta má v pravém panelu kartu úlohy: průběh, rychlosti,
-  odhad času, řetěz připojení (karta → řadič → disk) a „Úzké hrdlo“. Karty se kopírují za sebou, proxy předchozí karty
-  se renderují souběžně s kopií další.
-- **Po dokončení:** zelený pruh, „Vysunout kartu“ (karta ve čtečce se vysune jako médium, čtečka zůstane; interní disky
-  a složky se nevysouvají nikdy; vysune se jen ta karta, která se kopírovala — po výměně karty ve čtečce tlačítko zmizí),
-  „Report“ (HTML z prvního připojeného cíle, PDF je vedle) a „Průzkumník“. Zrušená úloha ukáže oranžové
-  „Zrušeno — karta není kompletně zálohovaná.“. Upozornění: zvuk a blikání tlačítka v hlavním panelu.
-- **Hardware:** kontrola USB portů se nespouští při startu, jen na vyžádání — menu „Nástroje → Prověřit USB porty…“ (Ctrl+U)
-  nebo tlačítko „Prověřit…“ v sekci Hardware. Okno Hardware ukazuje připojení, doporučení, měření rychlosti
+- **Spuštění:** tlačítko „▶ Spustit offload“ (s úlohou ve frontě „Zařadit do fronty“) nebo Ctrl+Enter; nad ním
+  „1 karta → 2 disky · 1,70 GB“ a odhad času (jen z rychlostí naměřených v tomto spuštění; jinak jen velikost). Každá karta
+  má v pravém sloupci kartu úlohy: ukazatel fází, velké procento, „zbývá …“, tabulka rychlostí (Čtení karty + každý cíl;
+  bublina = zařízení a připojení), „Soubor 10 / 24“, Pozastavit / Pokračovat, Zrušit a „Nejpomalejší článek: …“.
+  Karty se kopírují za sebou, proxy předchozí karty se renderují souběžně s kopií další.
+- **Pozastavit:** kopie a ověření stojí mezi 16MB bloky, 2. fáze mezi klipy (ffmpeg se neuspává); čas pauzy se do
+  rychlostí nepočítá (report `copyPausedSeconds` / `verifyPausedSeconds`); Zrušit a zavření aplikace fungují i během pauzy.
+- **Po dokončení:** zelená karta „… — kartu lze vysunout“ se souhrnem Kopie · Ověření · Proxy · Celkem a náhledy,
+  „Vysunout kartu“ (karta ve čtečce se vysune jako médium, čtečka zůstane; interní disky a složky se nevysouvají nikdy;
+  vysune se jen ta karta, která se kopírovala — po výměně karty ve čtečce tlačítko zmizí), „Report PDF“, „Otevřít
+  složku“, „Proxy“. Žlutá karta („… — kartu zatím nevysunujte“) vypíše nesouhlasné soubory po discích a nabídne
+  **Zkopírovat znovu**: úloha „A001 · oprava“ zkopíruje jen ty soubory a jen na disky, kde nesouhlasí (dobrá kopie se jen
+  znovu přečte, nesouhlasná se odloží do `_REPORT\neshoda_NNNN\`), jako další generace ASC MHL; jen s kartou ve čtečce.
+  Zrušená úloha je šedá. Upozornění: zvuk a blikání tlačítka v hlavním panelu. Pod frontou „DNES“, záložka
+  „Historie karet“ (z `history.json`).
+- **Hardware:** kontrola USB portů se nespouští při startu, jen na vyžádání — tlačítko „Hardware“ v horní liště (Ctrl+U;
+  tečka = výsledek posledního testu) nebo Nastavení → Aplikace → „Prověřit USB porty…“. Okno Hardware ukazuje připojení, doporučení, měření rychlosti
   (s potvrzením) a USB porty s vlastními názvy. Přepínač `--no-hw-prompt` se stále přijímá, ale nic nedělá.
 - **Soubory:** nastavení `%APPDATA%\Offload\settings.json`, historie offloadů `history.json` + `history\` (seznamy souborů),
   log `%APPDATA%\Offload\app.log`, poslední test HW `hwtest.json`
@@ -181,10 +204,13 @@ klikněte na „Další informace“ → „Přesto spustit“.
 ### Checklist ručního testu (s kartou)
 
 Vše níže zatím nikdo neověřil na skutečné kartě — GUI je jinak zkoušené jen automaticky a na snímcích.
+Od 0.5.0 jsou volby dřívějších sekcí „Struktura a kontrola“, „Proxy“ a „Dekodéry“ na stránce Nastavení (Ctrl+,), menu
+„Nástroje“ nahradila horní lišta (Ověřit zálohu, Hardware) a Nastavení (Oznámení, Aktualizace, Denní report) — mapování
+je v plánu 9 (`docs/superpowers/plans/2026-10-07-offload-windows-9-ui.md`).
 
 - [ ] 1. Vložit kartu do čtečky → objeví se v „Karty“ a je zaškrtnutá
 - [ ] 2. Přidat dva cíle na různých discích
-- [ ] 3. Spustit (Ctrl+Enter) → průběh, rychlosti, řetěz připojení a „Úzké hrdlo“
+- [ ] 3. Spustit (Ctrl+Enter) → průběh, tabulka rychlostí (bublina = zařízení a připojení) a „Nejpomalejší článek“
 - [ ] 4. Kartu vysunujte až po zeleném pruhu: „Vysunout kartu“ → karta zmizí ze seznamu, čtečka zůstane; vložit další
       kartu → objeví se (skutečné vysunutí je zatím nevyzkoušené — nejdůležitější bod testu)
 - [ ] 5. „Report“ otevře HTML report, PDF je vedle
@@ -239,7 +265,7 @@ Plán 6 (karty a bezpečnost dat, 0.2.0):
       (CLI `--name auto` „další v řadě“ neumí: vypíše „Návrh názvu nenalezen, použije se jmenovka svazku.“); **dvě
       neznámé karty najednou** (obě XAVC, po `A001`) → řádky ukážou „A002“ a „A003“ a po Startu vzniknou složky
       `A002` a `A003` (ne `A002_2`); volba „Navrhovat název karty podle klipů“ vypnutá → jmenovka svazku
-- [ ] 18. Nástroje → Ověřit zálohu… (Ctrl+Shift+O) na složku karty i na složku dne → položky „Ověření …“ ve frontě po
+- [ ] 18. Ověřit zálohu… (horní lišta) (Ctrl+Shift+O) na složku karty i na složku dne → položky „Ověření …“ ve frontě po
       kopiích, „Ověřeno: všech N souborů sedí (ASC MHL, 2 generace, xxHash64).“, tlačítko „Report ověření“ otevře
       `_REPORT\<karta>_verify_…Z.html`; ve zkušební kopii změnit bajt souboru → červeně „Nesedí 1 soubor, chybí 0,
       nečitelný 0 — podrobnosti v reportu ověření.“; během ověření odpojit disk → nečitelné soubory, „… disk se možná
@@ -262,7 +288,7 @@ Plán 7 (výstupy pro produkci a střih, 0.3.0):
 
 - [ ] 21. **MD5:** Struktura a kontrola → Kontrolní součet „xxHash64 + MD5“ → pod volbou oranžové „MD5 je pomalejší …“,
       zaškrtávátko „Ověřit kopie zpětným čtením (xxHash64 + MD5)“; offload karty → `_REPORT\<karta>.md5`, v HTML dlaždice
-      „XXH64 + MD5“ a sloupec md5; Nástroje → Ověřit zálohu… → „… (ASC MHL, 1 generace, xxHash64 + MD5).“; **rychlá karta
+      „XXH64 + MD5“ a sloupec md5; Ověřit zálohu… (horní lišta) → „… (ASC MHL, 1 generace, xxHash64 + MD5).“; **rychlá karta
       (CFexpress)**: změřit dobu kopie s xxHash64 a s MD5 (a `offload bench --hash md5`) a zapsat do „Naměřeno“
 - [ ] 22. **Proxy v Resolve:** naimportovat originály, proxy z `_PROXY` připojit (Link Proxy Media) — sedí jméno, TC; sloupec
       Reel ukazuje cívku (u ARRI/RED/Blackmagic `A001`, jinak tag kamery nebo složku karty)
@@ -274,10 +300,10 @@ Plán 7 (výstupy pro produkci a střih, 0.3.0):
       End, Tape, Tracks); karta se smíšenými fps (25 a 23.976) → dva soubory `_clips_25.ale`, `_clips_23.976.ale`
 - [ ] 26. **Denní report:** dvě karty týž den na dva cíle → na obou `<datum>\_REPORT\<datum>_day_report.html/.pdf` s oběma
       kartami, dlaždice „ověřené karty 2 / 2“; během kopie třetí karty ji denní report ukáže „bez reportu (probíhá …)“;
-      Nástroje → Denní report… na složku dne (i na složku karty) report vytvoří a otevře; na složku bez karty s reportem → česká chyba
+      Denní report… (Nastavení → Report, nebo odkaz u DNES) na složku dne (i na složku karty) report vytvoří a otevře; na složku bez karty s reportem → česká chyba
       „… není žádná karta s reportem …“, na kořen disku „… je kořen disku …“; nic se nezapíše; GUI a `offload day-report` téhož dne zároveň → oba projdou
 - [ ] 27. **Otevřené v Excelu:** denní CSV a `<karta>_clips.csv` otevřít v Excelu, pak doplnit kartu → úloha „Hotovo“,
-      v `app.log` řádky „clip list …“ / „day report …“; po zavření Excelu Nástroje → Denní report… soubory obnoví;
+      v `app.log` řádky „clip list …“ / „day report …“; po zavření Excelu Denní report… (Nastavení → Report, nebo odkaz u DNES) soubory obnoví;
       volba „Denní report po každé kartě“ vypnutá → po úloze se denní report nezmění
 - [ ] 28. **Doplnění s MD5:** záloha s „xxHash64 + MD5“, pak doplnit kartu → `<karta>.md5` je delší o nové řádky (dřívější
       řádky beze změny; je to třetí soubor, který doplnění přepíše, vedle `.xxh64` a řetězu ascmhl), Ověřit zálohu projde
@@ -318,12 +344,12 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
       (s proxy), po konci „Offload: A001 hotovo“; s chybou červená ikona; selhaná kopie ohlásí „CHYBA“ hned po konci
       kopie; kliknutí na oznámení / ikonu vrátí okno; okno v popředí → žádné oznámení, jen zvuk a blikání; oznámení zůstane
       v Centru oznámení; po zavření aplikace ikona zmizí; restart Průzkumníka → další oznámení ikonu přidá znovu;
-      Nástroje → Oznámení… → „Oznámení Windows“ vypnout → nic
+      Nastavení → Oznámení… → „Oznámení Windows“ vypnout → nic
 - [ ] 37. **ntfy:** téma `offload-<náhodné>` → „Poslat zkušební oznámení“ → „Odesláno.“ a zpráva v aplikaci ntfy na
       telefonu; server `https://nic.invalid` → „Nepodařilo se: …“ do 10 s, aplikace celou dobu reaguje; téma s diakritikou
       → OK nejde, česky proč; v textu na telefonu žádná cesta ani jméno PC (jen název karty, výsledek, počty); CLI
       `--ntfy https://ntfy.sh/<téma>` (po konci čeká nejvýš 11 s, i s nedostupným serverem)
-- [ ] 38. **Aktualizace:** `build.ps1 -ReleaseUrl \\NAS\Offload\` → `offload-update.json`; Nástroje → Aktualizace… → cesta
+- [ ] 38. **Aktualizace:** `build.ps1 -ReleaseUrl \\NAS\Offload\` → `offload-update.json`; Nastavení → Aplikace → Aktualizace… → cesta
       k manifestu → „Zkontrolovat teď“ → „Je k dispozici verze …“ / „Máte nejnovější verzi …“, odkaz „Nová verze …“ vpravo
       v menu; s `https://` adresou v manifestu *Otevřít* otevře prohlížeč, s místní složkou nebo zipem Průzkumník
       s výběrem; **adresa na NAS (`\\NAS\…`) nebo namapovaný síťový disk → bez tlačítka, jen text a „Síťová cesta —
@@ -335,6 +361,41 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
       3 pokusy, „Časové razítko se nepodařilo získat …“; heslo se nikde nevypíše. (b) **skutečný certifikát (až bude
       koupený, viz Podepisování):** `build.ps1 -Sign -CertThumbprint …` → `signtool verify /pa` projde, SmartScreen na
       čistém počítači po stažení zipu ukáže vydavatele (reputace se buduje časem)
+- [ ] 40. **Vzhled (0.5.0):** Windows v tmavém režimu → tmavé okno jako `docs/ui-navrh/screeny`; přepnout Režim aplikací na
+      světlý za běhu → okno se přebarví bez restartu, všechny texty čitelné (karty úloh, žlutá / červená hlášení, Nastavení);
+      dialogy (Hardware, Oznámení, Karty už jsou zálohované) jsou ve stejném tématu; okno 1000 px široké → nic se neořízne
+- [ ] 41. **Dlaždice karty:** karta z ALEXA 35 → „ALEXA 35 · LogC4“, z FX6 → „FX6 · S-Log3“, BRAW → „Blackmagic RAW“;
+      čtečka USB 3 → „čtečka USB 3 · 5 Gb/s“, SD čtečka v notebooku → „SD čtečka“, CFexpress přes Thunderbolt → „NVMe“;
+      karta s novými klipy → žluté „Doplnit“ (bublina = počet a velikost), po stisku „Složka: … na 2 cílech“
+- [ ] 42. **Pozastavit při kopii:** karta 50+ GB na 2 disky → Pozastavit během kopie → „Pozastavuje se…“, do pár sekund
+      „Pozastaveno“, rychlosti „—“, Správce úloh ukáže 0 MB/s na kartě i discích; po 2 min Pokračovat → kopie doběhne,
+      „kartu lze vysunout“; v reportu „pozastaveno · mimo rychlosti“ a rychlost kopie bez pauzy; totéž během ověření
+- [ ] 43. **Pozastavit ve 2. fázi:** během proxy → „Pozastaví se po proxy klipu …“, ffmpeg po doběhnutí klipu zmizí ze
+      Správce úloh a nic se neobnoví; po 3 min Pokračovat → proxy pokračují (žádné „ffmpeg se zasekl“); během pauzy jiná
+      karta ve frontě čeká; denní report se mezitím vytvořit dá (Denní report… u DNES)
+- [ ] 44. **Pauza a výpadek:** pozastavit, vytáhnout druhý cílový disk, Pokračovat → soubory na něm selžou, první disk
+      dokončí, karta žlutá „… nesouhlasí“ s „✕ zápis“; pozastavit a zavřít aplikaci → dotaz, po Ano se okno zavře do pár
+      sekund a na discích nezůstane `.offload-part`; pozastavené doplnění + druhé okno se stejným doplněním → „Do této
+      zálohy právě doplňuje jiná úloha …“
+- [ ] 45. **Zkopírovat znovu:** po bodu 44 připojit disk → Zkopírovat znovu → úloha „A001 · oprava“ zkopíruje jen selhané
+      soubory na druhý disk, první disk se jen přečte (Správce úloh: zápis jen na druhý); zelená karta; ve složce karty
+      `_REPORT\offload_report_0002.json` s `"kind": "repair"`, `ascmhl\0002_…mhl` na obou discích (`verified` na prvním,
+      `original` na druhém), řádek u karty zase „— ověřeno“; `offload verify` a `ascmhl verify` (na macOS) projdou.
+      Ručně poškodit jeden soubor na disku (hex editor, stejná velikost) → Ověřit zálohu → nesedí; nová kopie → žlutá →
+      Zkopírovat znovu → poškozený soubor je v `_REPORT\neshoda_0003\…`, nový sedí
+- [ ] 46. **Zkopírovat znovu odmítne:** vyměnit kartu ve čtečce → tlačítko zmizí; zformátovat a nahrát jiný klip stejného
+      jména → „Oprava zastavena — nic se nezkopírovalo …“, na discích se nic nezměnilo
+- [ ] 47. **Odhad a dnešek:** první karta po spuštění → lišta jen „1 karta → 2 disky · … GB“; po první dokončené kartě
+      (od 200 MB) druhá karta stejného projektu → „odhad ~… vč. proxy“, po dokončení porovnat se skutečností (±30 %);
+      DNES ukazuje obě karty, Historie karet včerejší karty pod „Včera“, „Denní report…“ otevře report dne
+- [ ] 48. **Pozastavená úloha drží PC vzhůru (M6) a frontu:** nastavit v systému uspání po 1–2 min nečinnosti, spustit dvě karty,
+      první pozastavit → druhá čeká („Čeká na pozastavenou úlohu.“), PC po uplynutí doby neusne (`powercfg /requests`
+      ukáže Offload u SYSTEM) a disky zůstanou připojené; Pokračovat → první doběhne, pak se rozběhne druhá; Pozastavit a
+      Zrušit → po zrušení `powercfg /requests` Offload už neukazuje
+- [ ] 49. **Ukázkový režim (`--demo`):** `Offload.exe --demo pripraveno` / `probiha` / `hotovo` / `nastaveni` ukáže čtyři
+      obrazovky z `docs/ui-navrh/screeny` (01–04), srovnat se snímky v tmavém i světlém tématu (`OFFLOAD_THEME`) a v úzkém okně
+      (`Resize-Offload $p 1000 900`); Spustit, Doplnit, Zkopírovat znovu, Vysunout a Ověřit zálohu jsou vypnuté, v `%APPDATA%\Offload`
+      se nic nezměnilo (nastavení, historie ani log), složka dat je `%TEMP%\Offload-demo-…`; bez `--demo` se okno chová jako dřív
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 

@@ -35,6 +35,12 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     public OutputSettings Outputs { get; set; } = new();
     /// The project the job was started in (spec 4.1), null = "Bez projektu": into history.json and the report.
     public string? Project { get; set; }
+    /// "Zkopírovat znovu" (UI návrh 4): repair the files that failed in these card folders (`<root>\<date>\<card>` of the
+    /// backup), each only where it failed (RepairPlanner); DestRoots, CardName and Date are taken from them.
+    public IReadOnlyList<string>? RepairInto { get; set; }
+    /// Ruling I1: the card the repaired backup was copied from (CardIdentity of the finished job) — a repair refuses
+    /// another card in the drive before anything is read or written. Null = not known (a folder source): not checked.
+    public string? RepairCardIdentity { get; set; }
     /// Where the end of the job is announced (spec 4.3): the copy taken when the job was started.
     public Notify.NotifySettings Notify { get; set; } = new();
 }
@@ -76,6 +82,12 @@ public sealed record JobStatus
     public string? Error { get; init; }
     /// Information for the job card, e.g. "Nic nového — záloha je úplná."
     public string? Note { get; init; }
+    /// Pozastavit was pressed and not resumed (only while the job runs): it stops at its next safe point.
+    public bool Paused { get; init; }
+    /// The job really stands now — a worker waits at the gate ("Pozastaveno"; before that "Pozastavuje se…").
+    public bool PauseHeld { get; init; }
+    /// How long the job has stood paused so far (from Pozastavit to Pokračovat).
+    public TimeSpan PausedTotal { get; init; }
     /// Warnings that do not fail the job (orange), one per line — e.g. unverified files of the earlier backup.
     public string? Warning { get; init; }
 
@@ -105,6 +117,10 @@ public sealed class OffloadJob
     /// Set on a worker thread, read by the app's UI thread.
     public OffloadPlan? Plan { get => planValue; private set => planValue = value; }
     public OffloadReport? Report { get => reportValue; private set => reportValue = value; }
+    /// A repair (also "Nic k opravě"): the whole backup as its reports said it after the job (BackupState, ruling I2) —
+    /// read on the job's thread, so the card's words need no disk on the UI thread; null for other jobs or unread.
+    public BackupState? Backup { get => backupValue; private set => backupValue = value; }
+    volatile BackupState? backupValue;
     /// The card in the source's drive when the copy started (`CardIdentity`), read on the copy thread; null before
     /// that or when unknown. "Vysunout kartu" ejects only this card.
     public string? SourceIdentity => sourceIdentity;
@@ -114,6 +130,12 @@ public sealed class OffloadJob
     /// Tests: what CardIdentity.Of / CardVolume.Of would read from the drive.
     internal Func<string, string?> Identify { get; init; } = CardIdentity.Of;
     internal Func<string, CardVolume?> VolumeOf { get; init; } = CardVolume.Of;
+    /// Tests: NativeIO.KeepAwake. Ruling M6: the PC is kept awake for the whole of stage 1 and of stage 2 — also while
+    /// the job stands paused (a sleep would drop the USB disks with open `.offload-part` files) — and released on
+    /// cancel, at the end and on a failure (`using`); a crashed process ends its thread's request with it.
+    internal Func<IDisposable> KeepAwake { get; init; } = NativeIO.KeepAwake;
+    /// The whole backup's state after "Nic k opravě" (tests replace it to make it unreadable).
+    internal Func<IReadOnlyList<string>, BackupState> ReadBackupState { get; init; } = BackupState.Of;
 
     public OffloadJob(JobConfig config)
         : this(config, new OffloadOptions
@@ -133,6 +155,14 @@ public sealed class OffloadJob
         Engine = new OffloadEngine(options);
     }
 
+    // A preview job (DemoScenario): its status comes from here; it never runs.
+    Func<JobStatus>? preview;
+
+    /// `Offload.exe --demo` only (DemoScenario): a job that never runs — Status() returns `status()`, Plan and Report are
+    /// the given ones. RunCopy and RunPost do nothing.
+    public static OffloadJob ForPreview(JobConfig config, OffloadPlan? plan, Func<JobStatus> status, OffloadReport? report = null) =>
+        new(config) { preview = status, Plan = plan, Report = report };
+
     /// The project of the earlier backup: the first destination whose report can be read decides; `fallback` only when
     /// none can (M4).
     public static string? EarlierProject(IReadOnlyList<string> cardPaths, string? fallback)
@@ -145,6 +175,12 @@ public sealed class OffloadJob
     public OffloadPlan Prepare()
     {
         if (Plan is { } done) return done;
+        if (Config.RepairInto is { Count: > 0 } broken)
+        {
+            var repair = Engine.PrepareRepair(Engine.PlanRepair(Config.Source, broken));
+            repair.Project = EarlierProject(broken, Config.Project);   // the backup's project, as an append (M4)
+            return Plan = repair;
+        }
         if (Config.AppendInto is { Count: > 0 } into)
         {
             var a = appendPlan = Engine.PlanAppend(Config.Source, into);
@@ -165,13 +201,34 @@ public sealed class OffloadJob
     public void Cancel() => Engine.Cancel();
 
     public bool IsCancelled => Engine.IsCancelled;
+    /// A DemoScenario preview: it never runs (`Offload.exe --demo`).
+    public bool IsPreview => preview != null;
+
+    /// "Pozastavit" (UI návrh 9): stage 1 stops before its next block of the card or of the read-back, stage 2 before
+    /// its next clip and before the PDF and the day report — never in the middle of a block, a clip, a report or a lock
+    /// it would hold (an append's or a repair's folder lock stays held through stage 1). Cancel while paused ends the
+    /// job as a cancel does.
+    public void Pause() => Engine.Pauses.Pause();
+
+    public void Resume() => Engine.Pauses.Resume();
+
+    public bool IsPaused => Engine.Pauses.IsPaused;
 
     public JobStatus Status()
     {
+        if (preview != null)
+        {
+            var p = preview();
+            if (IsCancelled && !p.Phase.IsFinished()) return p with { Phase = JobPhase.Cancelled };   // closing the demo cancels it
+            // Pozastavit in the demo: nothing runs, so the pause holds at once.
+            bool live = p.Phase != JobPhase.Waiting && !p.Phase.IsFinished();
+            return live && Engine.Pauses.IsPaused ? p with { Paused = true, PauseHeld = true, PausedTotal = Engine.Pauses.PausedTotal } : p;
+        }
         JobStatus s;
         bool wasStarted;
         lock (gate) { s = state; wasStarted = started; }
-        if (s.Phase is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying or JobPhase.Reporting)
+        bool stage1 = s.Phase is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying or JobPhase.Reporting;
+        if (stage1)
         {
             var snap = Engine.Snapshot();
             s = s with
@@ -188,12 +245,22 @@ public sealed class OffloadJob
         }
         // Cancelled while still queued: it never runs, so say so instead of "Čeká" forever.
         if (s.Phase == JobPhase.Waiting && !wasStarted && IsCancelled) s = s with { Phase = JobPhase.Cancelled };
-        return s;
+        var pauses = Engine.Pauses;
+        bool running = s.Phase != JobPhase.Waiting && !s.Phase.IsFinished();
+        // Stage 1 stands only when the destinations are idle too (the engine's snapshot says so — fix round 1).
+        bool held = stage1 ? s.Copy!.PauseHeld : pauses.IsHolding;
+        return s with { Paused = running && pauses.IsPaused, PauseHeld = running && held, PausedTotal = pauses.PausedTotal };
     }
 
     void Update(Func<JobStatus, JobStatus> change)
     {
-        lock (gate) state = change(state);
+        bool ended;
+        lock (gate)
+        {
+            state = change(state);
+            ended = state.Phase.IsFinished();
+        }
+        if (ended) Engine.Pauses.Freeze();   // M1: the paused time stops with the job, also when it ended paused
     }
 
     /// Runs the whole job synchronously. Never throws: the outcome is in Status() and the returned report.
@@ -208,7 +275,14 @@ public sealed class OffloadJob
     /// After this the card is no longer needed, so the app can start the next card while stage 2 runs.
     public bool RunCopy(Action<string>? log = null)
     {
+        if (preview != null) return false;
         IdentifyCard(log);
+        // Ruling I1: a repair copies only from the card the backup was made from (asked again like after a pause — a
+        // reader may answer late once); the answer is checked below, where a refusal fails the job.
+        bool otherCard = Config.RepairInto is { Count: > 0 } && Config.RepairCardIdentity is string want && !CardInDrive(want);
+        // Ruling I1: after a pause the copy asks again which card is in the drive; a folder source (no identity) is not asked.
+        if (sourceIdentity is string copied)
+            Engine.SameCard = () => string.Equals(Identify(Config.Source), copied, StringComparison.OrdinalIgnoreCase);
         lock (gate)
         {
             started = true;
@@ -216,10 +290,11 @@ public sealed class OffloadJob
             if (IsCancelled)
             {
                 state = state with { Phase = JobPhase.Cancelled };
+                Engine.Pauses.Freeze();
                 return false;
             }
         }
-        using var awake = NativeIO.KeepAwake();
+        using var awake = KeepAwake();
         AppendLock? folders = null;
         bool copying = false;   // the engine may have written to the destinations: a day report is due even on failure
         try
@@ -227,7 +302,9 @@ public sealed class OffloadJob
             // An append holds its card folders until stage 1 ends (fix round 1, item 1) and plans under that hold — a
             // plan made before (the CLI prints one first) is made again, another append may have finished meanwhile.
             // Released in `finally`, so the NothingNew path below still holds them while it heals the hash list.
-            folders = Config.AppendInto is { Count: > 0 } into ? AppendLock.Acquire(into) : null;
+            // A repair takes the same lock: an append and a repair never number the same generation.
+            if (otherCard) throw OffloadError.Preflight(PreflightCode.RepairConflict, Msg.RepairOtherCard);
+            folders = (Config.RepairInto ?? Config.AppendInto) is { Count: > 0 } into ? AppendLock.Acquire(into) : null;
             if (folders != null)
             {
                 Plan = null;
@@ -239,7 +316,24 @@ public sealed class OffloadJob
             copying = true;
             var report = Engine.Run(plan);
             Report = report;
-            Update(s => s with { SafeToEject = report.SafeToEject, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
+            bool safe = report.SafeToEject;
+            BackupState? whole = null;
+            if (plan.Mode == PlanMode.Repair)
+            {
+                // Ruling I2: a repair's report lists only the repaired files — whether the card may be ejected is read
+                // from the whole backup after it (every card folder's reports, still under the folder lock).
+                var w = whole = Backup = BackupState.Of(plan.CardPaths);
+                safe &= w.Failed == 0 && w.Unverified == 0;
+                if (w.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(w.Unverified)));
+                // Fix round 1, item 1: files shot after the backup are in no report — a repair does not copy them, and
+                // the card formatted now would lose them.
+                safe &= plan.NotInBackup == 0;
+                if (plan.NotInBackup > 0) Update(s => s.WithWarning(Msg.CardFilesNotInBackup(plan.NotInBackup)));
+            }
+            // The same for an append (fix round 1, item 1, plan 6's verdict checked): its new files are verified, but
+            // files of the earlier backup that were never read back keep the card from "kartu lze vysunout".
+            if (plan.Mode == PlanMode.Append) safe &= plan.UnverifiedEarlier == 0;
+            Update(s => s with { SafeToEject = safe, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
             if (IsCancelled)
             {
                 // Marked before the phase changes: whoever sees it finished also sees the day report pending (fix round 1, item 3).
@@ -247,8 +341,20 @@ public sealed class OffloadJob
                 Update(s => s with { Phase = JobPhase.Cancelled });
                 return cancelled;
             }
-            RecordHistory(plan, report, log);
-            if (!Config.AnalyzeClips && !Config.Proxy.Enabled)
+            if (whole is { } state) RecordRepair(plan, report, state, log);
+            else RecordHistory(plan, report, log);
+            if (Engine.CardChanged)
+            {
+                // Ruling I1: another card (or none) after Pokračovat — the files copied before the pause are in the
+                // report and in history; the rest was never read. The job fails; no stage 2 (lists and PDF as without it).
+                WriteClipLists(plan, log);
+                WritePdfReports(report, plan, log);
+                var next = DayReportNext();
+                Update(s => s with { Phase = JobPhase.Failed, Error = Msg.CardChangedWhilePaused });
+                return next;
+            }
+            // A repair rewrites files whose clips were analysed with the backup: no stage 2, only its PDF and the lists.
+            if (plan.Mode == PlanMode.Repair || (!Config.AnalyzeClips && !Config.Proxy.Enabled))
             {
                 WriteClipLists(plan, log);   // the clips found in the files, without metadata (spec 3.3)
                 WritePdfReports(report, plan, log);
@@ -258,6 +364,31 @@ public sealed class OffloadJob
             }
             Update(s => s with { Phase = JobPhase.Analyzing });
             return true;
+        }
+        catch (OffloadError e) when (e.Code == PreflightCode.RepairNothing)
+        {
+            // Not an error: every file is good everywhere (another repair or an append got there first). Nothing to
+            // copy does not make an earlier copy verified (fix round 1, item 3; as NothingNew says it).
+            // Fix round 2, item B: history learns the backup as its reports say it is now (another job — the CLI, a
+            // job without history — may have repaired or read it back since).
+            // Batch 10–12 review: SafeToEject = (Warning == null) below, so every reason not to eject sets a warning —
+            // card files no report records, files failed or unverified in the reports read now, or reports not read.
+            if (e.NotInBackup > 0) Update(s => s.WithWarning(Msg.CardFilesNotInBackup(e.NotInBackup)));
+            try
+            {
+                var whole = Backup = ReadBackupState(Config.RepairInto!);
+                if (whole.Failed > 0) Update(s => s.WithWarning(Msg.BackupStillFailed(whole.Failed)));
+                if (whole.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(whole.Unverified)));
+                RefreshFromBackup(Config.RepairInto!, whole, log);
+            }
+            catch (Exception x)
+            {
+                // Not read means not checked: never "kartu lze vysunout" on it.
+                log?.Invoke($"backup state: {x.Message}");
+                Update(s => s.WithWarning(Msg.BackupStateUnreadable(x.Message)));
+            }
+            Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null });
+            return false;
         }
         catch (OffloadError e) when (e.Code == PreflightCode.NothingNew)
         {
@@ -281,7 +412,7 @@ public sealed class OffloadJob
                 // Nothing to copy does not make the earlier backup verified (fix round 1, item 3).
                 if (a.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(a.UnverifiedEarlier)));
             }
-            Update(s => s with { Phase = JobPhase.Done, Note = e.Message });
+            Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null });
             return false;
         }
         catch (OperationCanceledException)
@@ -317,6 +448,20 @@ public sealed class OffloadJob
     /// keeps running until it is (closing waits for it, as for stage 2).
     public bool DayReportPending => dayReportPending;
 
+    /// Ruling I1 for a repair: the card in the drive is `want`. A different or unreadable answer is asked again
+    /// OffloadEngine.IdentifyRetries times 250 ms apart, as after a pause.
+    bool CardInDrive(string want)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            if (string.Equals(sourceIdentity, want, StringComparison.OrdinalIgnoreCase)) return true;
+            if (attempt >= OffloadEngine.IdentifyRetries || IsCancelled) return false;
+            Thread.Sleep(250);
+            try { sourceIdentity = Identify(Config.Source); }
+            catch (Exception) { sourceIdentity = null; }
+        }
+    }
+
     /// Which card is in the drive — read on the copy thread before anything else (the UI never waits on a card).
     void IdentifyCard(Action<string>? log)
     {
@@ -343,6 +488,9 @@ public sealed class OffloadJob
             var cardPaths = plan.CardPaths;
             // The id only finds the entry; everything about it is read and changed under the lock below.
             var id = (plan.Mode == PlanMode.Append ? EntryOf(store, cardPaths)?.Id : null) ?? HistoryStore.NewId(report.Finished);
+            // Fix round 2, item C (ruling R2): verified as the card folders' reports say it now — the one definition the
+            // day report uses too (a generation cancelled during its read-back is not in history, but is on the disks).
+            var whole = BackupState.Of(cardPaths);
             store.UpdateWithFiles(id, existing =>
             {
                 var entry = existing ?? new HistoryEntry
@@ -359,7 +507,7 @@ public sealed class OffloadJob
                 };
                 entry.Finished = report.Finished;
                 entry.Success &= report.Success;
-                entry.Verified &= report.Verified;
+                entry.Verified = whole.Unverified == 0;
                 entry.FailedFiles = entry.Success ? null : (entry.FailedFiles ?? 0) + report.FailedFiles.Count;
                 entry.Generations.RemoveAll(g => g.Seq == plan.Generation);
                 entry.Generations.Add(new HistoryGeneration
@@ -381,6 +529,69 @@ public sealed class OffloadJob
         }
     }
 
+    /// A repair adds its generation to the entry of the card folders it repaired; whether the card is now backed up and
+    /// verified is read from the reports on the destinations (R4, `whole`) — so a repair that fixed the last file makes
+    /// the entry good again. The card's files, fingerprint and reels stay as they were (nothing new was copied).
+    void RecordRepair(OffloadPlan plan, OffloadReport report, BackupState whole, Action<string>? log)
+    {
+        if (!Config.RecordHistory) return;
+        try
+        {
+            var store = Store(log);
+            if (EntryOf(store, plan.CardPaths) is not { } found)
+            {
+                log?.Invoke("history: the repaired backup is not in history — nothing recorded");
+                return;
+            }
+            store.Update(found.Id, existing =>
+            {
+                if (existing == null) return null;
+                existing.Finished = report.Finished;
+                Apply(existing, whole);
+                existing.Generations.RemoveAll(g => g.Seq == plan.Generation);
+                existing.Generations.Add(new HistoryGeneration
+                {
+                    Seq = plan.Generation, Kind = HistoryGeneration.Repair, Finished = report.Finished,
+                    Files = plan.Scan.Files.Count, Bytes = plan.Scan.TotalBytes, Verified = report.Verified,
+                });
+                return existing;
+            });
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
+        }
+    }
+
+    /// Ruling R2: whether the backup is complete and read back, as BackupState read it from the card folders — the one
+    /// definition the day report (CardRecord.Verified) and the eject verdict use.
+    static void Apply(HistoryEntry entry, BackupState whole)
+    {
+        entry.Success = whole.Failed == 0;
+        entry.FailedFiles = whole.Failed == 0 ? null : whole.Failed;
+        entry.Verified = whole.Unverified == 0;
+    }
+
+    /// "Nic k opravě": the entry of the backup learns its state from the reports — no new generation.
+    void RefreshFromBackup(IReadOnlyList<string> cardPaths, BackupState whole, Action<string>? log)
+    {
+        if (!Config.RecordHistory) return;
+        try
+        {
+            var store = Store(log);
+            if (EntryOf(store, cardPaths) is not { } found) return;
+            store.Update(found.Id, existing =>
+            {
+                if (existing != null) Apply(existing, whole);
+                return existing;
+            });
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
+        }
+    }
+
     /// "Nic nového" (minors M17): the entry of that backup learns the card as it is now — no new generation.
     void RefreshHistory(AppendPlan a, Action<string>? log)
     {
@@ -390,7 +601,13 @@ public sealed class OffloadJob
             var store = Store(log);
             if (EntryOf(store, a.CardPaths) is not { } found) return;
             var (fingerprint, shape) = CardFingerprint.Compute(a.FullScan);
-            store.UpdateWithFiles(found.Id, existing => existing == null ? null : WithCard(store, existing, existing, a.FullScan, fingerprint, shape));
+            var whole = BackupState.Of(a.CardPaths);   // fix round 2, item C: as the reports say it now
+            store.UpdateWithFiles(found.Id, existing =>
+            {
+                if (existing == null) return null;
+                Apply(existing, whole);
+                return WithCard(store, existing, existing, a.FullScan, fingerprint, shape);
+            });
         }
         catch (Exception e)
         {
@@ -425,11 +642,12 @@ public sealed class OffloadJob
     /// A failure here never changes the copy's result (SafeToEject stays as stage 1 left it).
     public void RunPost(Action<string>? log = null)
     {
+        if (preview != null) return;
         if (dayReportOnly)
         {
             try
             {
-                using var keepAwake = NativeIO.KeepAwake();
+                using var keepAwake = KeepAwake();
                 if (Plan is { } p) RegenerateDayReports(p, log);
             }
             finally
@@ -439,11 +657,12 @@ public sealed class OffloadJob
             return;
         }
         if (Plan is not { } plan || Report is not { } report) return;
-        using var awake = NativeIO.KeepAwake();
+        using var awake = KeepAwake();
         try
         {
             var final = AnalyzeAndRender(plan, report, log);
             Report = final;
+            Engine.WaitWhilePaused();   // before the PDF and the day report (a cancel meanwhile still writes them)
             Update(s => s with { Phase = JobPhase.Reporting });
             WritePdfReports(final, plan, log);
             RegenerateDayReports(plan, log);
@@ -485,6 +704,7 @@ public sealed class OffloadJob
         using var renderer = new ProxyRenderer(Config.Proxy, Config.Tools.Resolved())
         {
             ForcedEncoder = Engine.Options.ProxyEncoder,
+            StallTimeout = Engine.Options.ProxyStallTimeout ?? ProxyRenderer.DefaultStallTimeout,
             Log = log,
             ReplaceExisting = plan.Mode == PlanMode.Full,   // an append never overwrites a proxy (spec 2.2)
         };
@@ -503,7 +723,9 @@ public sealed class OffloadJob
         Update(s => s with { Phase = JobPhase.Analyzing, ClipCount = entries.Count });
         for (int i = 0; i < entries.Count; i++)
         {
-            if (IsCancelled) break;
+            // A pause waits between clips: the clip being probed or rendered finishes first (no ffmpeg is suspended, so
+            // its stall watchdog never sees the pause).
+            if (IsCancelled || !Engine.WaitWhilePaused()) break;
             var clip = entries[i].Clip;
             int index = i;
             Update(s => s with { ClipIndex = index, ClipName = clip.Name, ClipFraction = 0 });
@@ -573,7 +795,7 @@ public sealed class OffloadJob
         if (plan.Mode == PlanMode.Append) usedNames.UnionWith(ExistingProxyNames(cardPaths));
         for (int i = 0; i < entries.Count; i++)
         {
-            if (IsCancelled) break;
+            if (IsCancelled || !Engine.WaitWhilePaused()) break;
             var clip = entries[i].Clip;  // may have been reclassified during analysis (MXF → ARRIRAW)
             int index = i;
             Update(s => s with { ClipIndex = index, ClipName = clip.Name, ClipFraction = 0 });

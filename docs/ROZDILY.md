@@ -16,7 +16,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.1.0 | 0.3.0-win (ve vývoji) |
+| Verze | 0.1.0 | 0.5.0-win (ve vývoji) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
@@ -58,7 +58,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Oznámení** (Windows: oznamovací oblast; ntfy na telefon, `--ntfy`) | Mac má notifikace; ntfy ⏳ naplánováno | ✅ CLI (ntfy) + GUI (čeká ruční test) |
 | **Kontrola aktualizací** (manifest z URL / NAS, 1× za 24 h, ve výchozím stavu vypnuto) | ⏳ naplánováno (vlastní manifest) | ✅ GUI (čeká ruční test) |
 | **Podpis exe** (`build.ps1 -Sign`, signtool) | `codesign` + notarizace (mimo tento návrh) | ✅ skript (čeká certifikát; nic se nekupuje) |
-| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
+| **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI (od 0.5.0): tabulka rychlostí po cílech, bublina se zařízením a připojením, „Nejpomalejší článek: …“ (% linky a součet na řadiči jen v okně Hardware) |
+| **Nový vzhled** (`docs/ui-navrh/`: horní lišta, kroky 1–3, karty úloh po stavech, stránka Nastavení, tmavé i světlé téma) | ⏳ po schválení Windows verze | ✅ GUI 0.5.0 (čeká ruční test) |
+| **Pozastavit / Pokračovat** (kopie, ověření, 2. fáze mezi klipy; `copyPausedSeconds`, `verifyPausedSeconds`) | ⏳ naplánováno | ✅ GUI (CLI ne) |
+| **Zkopírovat znovu** (oprava: jen nesouhlasné soubory, jen na postižený disk, generace ASC MHL N, `kind: "repair"`, `_REPORT/neshoda_NNNN/`) | ⏳ naplánováno | ✅ GUI (CLI ne) |
+| **Dnes a historie karet** (z `history.json`), štítek kamery a připojení, odhad času | ⏳ naplánováno | ✅ GUI |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
 
@@ -168,6 +172,16 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Proxy pro přelinkování** (zatím jen Windows): s timecodem `reel_name` ve stopě TC proxy (cívka: tag kamery, název
   klipu, složka karty; v reportu `clips[].info.reel`), všechny zvukové stopy zdroje (AAC 64 kb/s na kanál, ProRes PCM);
   přejmenovaná proxy (`_2`) má poznámku. Mac dává proxy jen první zvukovou stopu a bez cívky.
+- **Oprava — „Zkopírovat znovu“** (zatím jen Windows GUI, od 0.5.0): další generace ASC MHL N ve stejné složce karty
+  na **všech** cílech (jako doplnění, stejný zámek složky), report `offload_report_NNNN.*` s `kind: "repair"`,
+  `files[].rewritten` a `setAside`; dobrá kopie má v MHL `action="verified"`, nová `original`; nesouhlasná kopie se
+  přesune do `_REPORT/neshoda_NNNN/<cesta>` (nemaže se). Mac takovou složku ověří ze seznamu `<karta>.xxh64` (oprava
+  neopakuje řádky) a klíče ignoruje; `ascmhl verify` projde, protože `_REPORT` je ignorovaný. CLI opravu nemá.
+- **Pozastavení** (zatím jen Windows GUI, od 0.5.0): report `copyPausedSeconds` / `verifyPausedSeconds` (chybí, když se
+  nepozastavovalo), rychlosti a TXT `Paused:` bez pauzy. Mac klíče ignoruje — jeho rychlosti by pauzu zahrnuly.
+- **Vzhled** (Windows od 0.5.0): podle `docs/ui-navrh/` s přepínačem **projektů** místo presetů, systémovým písmem
+  (Segoe UI, Cascadia Mono) a tmavým i světlým tématem podle Windows; Mac převezme po schválení Windows verze. Thunderbolt
+  Windows nerozliší (čtečka za ním je „NVMe“ / „USB“), Mac ano.
 - **Chyby souborů v HTML česky** (Windows): JSON je sdílený, takže chyby v něm zůstávají anglicky (`size mismatch`,
   `HASH MISMATCH` …); HTML/PDF report je zobrazí česky.
 - **Historie karet** (zatím jen Windows, pro Mac naplánováno): `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,

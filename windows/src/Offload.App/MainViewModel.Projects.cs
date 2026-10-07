@@ -22,14 +22,16 @@ public sealed partial class MainViewModel
 
     void InitProjects()
     {
-        SaveAsProjectCommand = new RelayCommand(SaveAsProject, () => CanSwitchProject);
-        RenameProjectCommand = new RelayCommand(RenameProject, () => CanSwitchProject && ActiveProjectName != null);
-        DeleteProjectCommand = new RelayCommand(DeleteProject, () => CanSwitchProject && ActiveProjectName != null);
+        SaveAsProjectCommand = new RelayCommand(SaveAsProject, () => CanEditProjects);
+        RenameProjectCommand = new RelayCommand(RenameProject, () => CanEditProjects && ActiveProjectName != null);
+        DeleteProjectCommand = new RelayCommand(DeleteProject, () => CanEditProjects && ActiveProjectName != null);
         RebuildProjectChoices();
     }
 
     /// Ruling I1: no switch, save as, rename or delete while Start checks and asks (its checks are for the profile shown).
     public bool CanSwitchProject => !starting && !closing;
+    /// Save as, rename, delete: they write settings.json (off in the demo).
+    bool CanEditProjects => CanSwitchProject && Allowed(DemoCommand.ProjectEdit);
 
     /// The active project's name; null = "Bez projektu" — also when activeProject names a project this version cannot
     /// read (never `ActiveProject == null`). What a started job, history and the report get.
@@ -42,6 +44,7 @@ public sealed partial class MainViewModel
     {
         IReadOnlyList<string> now = [Projects.NoProject, .. AllSettings.Projects.Select(p => p.Name)];
         if (!now.SequenceEqual(projectChoices, StringComparer.Ordinal)) projectChoices = now;
+        RebuildProjectItems();   // the top bar's switcher (the active one may have changed too)
     }
 
     public string ActiveProjectChoice
@@ -75,27 +78,27 @@ public sealed partial class MainViewModel
 
     void SaveAsProject()
     {
-        if (!CanSwitchProject) return;
+        if (!CanEditProjects) return;
         if (AskProjectName?.Invoke("Uložit jako projekt", "", n => Projects.NameProblem(n, AllSettings.Projects.Select(p => p.Name))) is not string name) return;
-        if (!CanSwitchProject) return;
+        if (!CanEditProjects) return;
         Projects.SaveAs(AllSettings, name);   // the values shown now: nothing on screen changes but the name
         ProfileChanged();
     }
 
     void RenameProject()
     {
-        if (!CanSwitchProject || ActiveProjectName is not string current) return;
+        if (!CanEditProjects || ActiveProjectName is not string current) return;
         if (AskProjectName?.Invoke("Přejmenovat projekt", current, n => Projects.NameProblem(n, AllSettings.Projects.Select(p => p.Name), except: current)) is not string name) return;
-        if (!CanSwitchProject || ActiveProjectName != current) return;
+        if (!CanEditProjects || ActiveProjectName != current) return;
         Projects.Rename(AllSettings, current, name);
         ProfileChanged();
     }
 
     void DeleteProject()
     {
-        if (!CanSwitchProject || ActiveProjectName is not string current) return;
+        if (!CanEditProjects || ActiveProjectName is not string current) return;
         if (AskYesNo?.Invoke(Projects.DeleteQuestion(current)) != true) return;
-        if (!CanSwitchProject || ActiveProjectName != current) return;
+        if (!CanEditProjects || ActiveProjectName != current) return;
         Projects.Delete(AllSettings, current);
         ProfileChanged();
     }

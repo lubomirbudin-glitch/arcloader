@@ -37,8 +37,12 @@ public sealed partial class CardRecord
     public string? Project => Generations.Select(g => g.Report.Project).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
     public int TotalFiles => Files.Count;
     public long TotalBytes => Files.Values.Sum(f => f.File.Size);
-    /// Every generation was read back — an append report nobody can read leaves it unknown, so not verified.
-    public bool Verified => Generations.Count > 0 && Problems.Count == 0 && Generations.All(g => g.Report.Verified);
+    /// Every file's newest record was read back here (ReadBack) — an append report nobody can read leaves it unknown, so
+    /// not verified. Per file, not per report (plan 9 fix round 1, item 2): a cancelled generation whose files a later
+    /// one read back no longer leaves the card unverified for ever. A folder whose reports list no file: every report
+    /// was read back.
+    public bool Verified => Generations.Count > 0 && Problems.Count == 0
+        && (Files.Count == 0 ? Generations.All(g => g.Report.Verified) : Files.Values.All(f => ReadBack(f, CardPath)));
     /// Paths whose newest record failed (the card or a destination), sorted.
     public IReadOnlyList<string> FailedFiles =>
         Files.Values.Where(f => f.Report.IsFailed(f.File)).Select(f => f.File.Path).Order(StringComparer.Ordinal).ToList();
@@ -114,10 +118,12 @@ public sealed partial class CardRecord
             foreach (var f in g.Report.Files) files[f.Path] = new RecordedFile(f, g.Generation, g.Report);
             var generationClips = g.Report.Clips.Count > 0 ? g.Report.Clips
                 : ClipDetector.Detect(g.Report.Files.Select(f => new SourceFile(f.Path, f.Size, f.Modified)).ToList()).Select(c => new ClipEntry { Clip = c });
+            bool analysed = g.Report.Clips.Count > 0;
             foreach (var c in generationClips)
             {
                 var recorded = new RecordedClip(c, g.Generation);
-                if (clipAt.TryGetValue(c.Clip.Path, out var i)) clips[i] = recorded;
+                // A generation without analysis (a repair rewrites a clip's file) never replaces a clip described before.
+                if (clipAt.TryGetValue(c.Clip.Path, out var i)) { if (analysed || clips[i].Entry.Info == null) clips[i] = recorded; }
                 else
                 {
                     clipAt[c.Clip.Path] = clips.Count;
@@ -143,6 +149,50 @@ public sealed partial class CardRecord
             throw new InvalidOperationException("chybí seznam souborů nebo cílů");
         r.Clips = (r.Clips ?? []).Where(c => c?.Clip?.Path != null && c.Clip.Name != null && c.Clip.Segments != null).ToList();
         return r;
+    }
+
+    /// The state the newest record of a file gives the copy in `cardPath` ("verified", "written", "failed", "pending");
+    /// `position`: the folder's place among the backup's destinations, for a report that names it differently.
+    public static string StateOf(RecordedFile rec, string cardPath, int position)
+    {
+        int column = DestinationIndex(rec.Report, cardPath, position);
+        return column < rec.File.Destinations.Count ? rec.File.Destinations[column] : "pending";
+    }
+
+    /// Controller ruling R2 — THE one definition of "verified for this destination folder" (the day report's Verified,
+    /// history, a repair's eject verdict and warnings via BackupState, AppendPlanner's and RepairPlanner's unverified
+    /// files): the newest record of the copy in `cardPath` says it was read back with the recorded hash — or it failed in
+    /// a copy that was read back (a failure counts as a failure, not as unverified). "Written", or anything in a copy that
+    /// was not read back (cancelled, made without verification), is not. The column is the report destination whose card
+    /// path is this folder (ColumnOf); when none is (a Mac report, the disk under another letter) every column must say
+    /// so — never falsely green.
+    public static bool ReadBack(RecordedFile rec, string cardPath)
+    {
+        int column = ColumnOf(rec.Report, cardPath);
+        var states = column >= 0
+            ? [column < rec.File.Destinations.Count ? rec.File.Destinations[column] : "pending"]
+            : rec.File.Destinations.Count > 0 ? rec.File.Destinations : ["pending"];
+        return states.All(state => state == "verified" || (rec.Report.Verified && state != "written"));
+    }
+
+    /// The column of `report` whose destination card path is `cardPath` (full path, any case, trailing separator), or
+    /// -1 when none is. A path that is not a full Windows path (a Mac `/Volumes/…`) is compared as written.
+    public static int ColumnOf(OffloadReport report, string cardPath)
+    {
+        var me = Normal(cardPath);
+        for (int i = 0; i < report.Destinations.Count; i++)
+            if (string.Equals(Normal(report.Destinations[i].CardPath), me, StringComparison.OrdinalIgnoreCase)) return i;
+        return -1;
+    }
+
+    static string Normal(string path)
+    {
+        try
+        {
+            if (Path.IsPathFullyQualified(path)) path = Path.GetFullPath(path);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) { }
+        return path.TrimEnd('\\', '/');
     }
 
     /// Which column of a report's per-destination states belongs to `cardPath`: the destination with that card path;

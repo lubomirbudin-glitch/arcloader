@@ -14,6 +14,11 @@ namespace Offload.App;
 public sealed partial class MainViewModel
 {
     readonly JobQueue queue = new(m => AppLog.Write(m));
+    // What the jobs of this session took — the start bar's estimate (UI návrh 10).
+    readonly RateMemory rates = new();
+    bool shownCompact, shownJobsRunning;
+    DateTime shownDay = DateTime.Today;
+    string? shownStartLabel;
     readonly DispatcherTimer ticker = new() { Interval = TimeSpan.FromMilliseconds(330) };
     bool closing, closeRaised, waitNoticeShown, shownHasFinished, shownCopyRunning, starting;
     string? startStatus;
@@ -36,19 +41,99 @@ public sealed partial class MainViewModel
 
     void InitQueue()
     {
-        StartCommand = new RelayCommand(Start, () => CanStart);
+        StartCommand = new RelayCommand(Start, () => CanStart && Allowed(DemoCommand.Start));
         ClearFinishedCommand = new RelayCommand(ClearFinished);
         queue.CopyFinished += j => Dispatch(() => OnCopyFinished(j));
         queue.JobFinished += j => Dispatch(() => OnJobFinished(j));
         ticker.Tick += (_, _) => Tick();
         ticker.Start();
-        SetupChanged += () => RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart), nameof(StartProblem));
+        SetupChanged += () => RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart), nameof(StartProblem),
+            nameof(StartCounts), nameof(StartSize), nameof(EstimateText), nameof(AfterCopyRows), nameof(AfterCopyLine), nameof(PathPreview),
+            nameof(FlowSteps), nameof(QueueEmptyTitle), nameof(QueueEmptyText));
         RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart));
     }
 
     static void Dispatch(Action action) => Application.Current?.Dispatcher.BeginInvoke(action);
 
     public string CardsText => Texts.Cards(selected.Count);
+
+    // ── The start bar and step 3 (UI návrh obr. 1) ─────────────────────────────────────────────────────────────
+    /// What each ticked card will copy (an append only its new files), null while one is not known yet.
+    long? SelectedBytes => SetupTexts.Total(SelectedSources().Select(p => AppendChosen(p) && Insight(p)?.History is { } h
+        ? h.NewBytes : Insight(p) is { Error: null } i ? i.TotalBytes : (long?)null));
+
+    /// "1 karta → 2 disky" (bold) and " · 1,70 GB".
+    public string StartCounts => SetupTexts.StartSummary(selected.Count, Settings.DestRoots.Count, SelectedBytes).Counts;
+    public string? StartSize => SetupTexts.StartSummary(selected.Count, Settings.DestRoots.Count, SelectedBytes).Size;
+
+    /// "odhad ~8:00 vč. proxy" — only from what this session measured (RateMemory); null shows only the size.
+    public string? EstimateText => SelectedBytes is long bytes && selected.Count > 0
+        ? RateMemory.StartText(rates.Estimate(bytes, SelectedSources().SelectMany(p => Insight(p)?.Clips ?? []).ToList(), Settings.Verify,
+            Settings.AnalyzeClips, Settings.Proxy), Settings.Proxy.Enabled)
+        : null;
+
+    /// A waiting card stands behind a job paused in its copy (memory only).
+    internal bool BlockedByPaused(JobItemViewModel item) =>
+        QueueRules.BlockedByPaused(item.Phase, Jobs.OfType<JobItemViewModel>().Where(j => !ReferenceEquals(j, item)).Select(j => (j.Phase, j.IsPaused)));
+
+    /// "Spustit offload", or "Zařadit do fronty" while a card waits for or is in its copy.
+    public string StartLabel => QueueSummary.StartLabel(Jobs.Select(j => j.Phase));
+
+    /// No card and jobs in the queue: steps 2 and 3 compact (obr. 2, 3).
+    public bool IsCompact => SetupTexts.Compact(HasSources, HasJobs);
+
+    bool JobsRunning => Jobs.Any(j => !j.IsFinished);
+    public string NoCardTitle => SetupTexts.NoCard(JobsRunning).Title;
+    public string NoCardText => SetupTexts.NoCard(JobsRunning).Text;
+
+    /// Step 3: Ověření · Analýza · Proxy · Report of the profile shown (the camera of the first ticked card names the LUT).
+    public IReadOnlyList<AfterCopyRow> AfterCopyRows =>
+        SetupTexts.AfterCopy(Settings, lutCatalog, SelectedSources().Select(p => Insight(p)?.Camera).FirstOrDefault(c => c != null));
+    public string AfterCopyLine => SetupTexts.AfterCopyLine(Settings);
+    public string VerifyOffWarning => SetupTexts.VerifyOffWarning;
+
+    // ── The empty queue (obr. 1) ───────────────────────────────────────────────────────────────────────────────
+    /// Karta → 2 disky naráz → Ověření → Proxy → Report (only what the profile shown does).
+    public IReadOnlyList<FlowStep> FlowSteps => SetupTexts.Flow(Settings.DestRoots.Count, Settings.Verify, Settings.AnalyzeClips, Settings.Proxy.Enabled)
+        .Select((label, i) => new FlowStep(label, i switch
+        {
+            0 => "card",
+            1 => "disk",
+            _ => label switch { "Ověření" => "verify", "Proxy" or "Analýza" => "proxy", _ => "report" },
+        }, i == 0)).ToList();
+
+    /// "Připraveno — A035_ARRI na 2 disky" with a ticked card, else "Zatím žádný offload".
+    public string QueueEmptyTitle => SetupTexts.QueueEmpty(SelectedSources().Select(PlannedName).ToList(), Settings.DestRoots.Count, Settings.Verify).Title;
+    public string QueueEmptyText => SetupTexts.QueueEmpty(SelectedSources().Select(PlannedName).ToList(), Settings.DestRoots.Count, Settings.Verify).Text;
+
+    /// " 2" after "Fronta" (the unfinished jobs), nothing for none.
+    public string QueueBadgeText => QueueBadge > 0 ? $" {QueueBadge}" : "";
+
+    /// The parts of the left column that follow the queue (checked every tick, raised only when they change).
+    void RefreshLayout()
+    {
+        // DNES and the day titles of the history tab move on at midnight (memory only, history as loaded).
+        if (DateTime.Today != shownDay)
+        {
+            shownDay = DateTime.Today;
+            RaiseMany(nameof(Today), nameof(HistoryDays));
+        }
+        if (IsCompact != shownCompact)
+        {
+            shownCompact = IsCompact;
+            Raise(nameof(IsCompact));
+        }
+        if (JobsRunning != shownJobsRunning)
+        {
+            shownJobsRunning = JobsRunning;
+            RaiseMany(nameof(NoCardTitle), nameof(NoCardText));
+        }
+        if (StartLabel != shownStartLabel)
+        {
+            shownStartLabel = StartLabel;
+            Raise(nameof(StartLabel));
+        }
+    }
     public string DestinationsText => Texts.Destinations(Settings.DestRoots.Count) + (Settings.Proxy.Enabled ? " · proxy" : "");
     /// In memory only (evaluated 3×/s): the LUT, the proxy folder and the destinations come from checks made off the UI thread.
     public bool CanStart => !starting && ReadyToStart;
@@ -82,8 +167,9 @@ public sealed partial class MainViewModel
     /// thread never waits on a card or a disk (spec 2.5, ruling I4).
     async void Start()
     {
-        if (!CanStart) return;
+        if (!CanStart || !Allowed(DemoCommand.Start)) return;
         starting = true;
+        ProjectMenuOpen = false;
         RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
         // Ruling I1: every check below is made for the profile shown now. The project switcher and the Projekt menu are
         // off until Start ends; should another profile be shown anyway, Start stops — its checks were not for that one.
@@ -246,8 +332,9 @@ public sealed partial class MainViewModel
                     AppLog.Write($"append {src}: project {known.Entry.Project} no longer exists — the Bez projektu settings are used");
                     profileNote = AppendRules.GoneNote(known.Entry.Project!);
                 }
-                var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), AppendRules.Title(known.Entry.CardName),
-                    canEject: isVolume && CardEject.CanEject(src), space, profileNote);
+                var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), known.Entry.CardName,
+                    canEject: isVolume && CardEject.CanEject(src), space, profileNote,
+                    new JobCardFacts(known.New.Count, ClipDetector.Detect(known.New).Count, known.NewBytes, null, Append: true));
                 Jobs.Insert(0, appendItem);
                 selected.Remove(src);
                 appendTicks.Untick(src);
@@ -261,7 +348,8 @@ public sealed partial class MainViewModel
             // The profile shown now, as the job's own copy (a later switch or edit does not change it), and its project.
             var config = JobConfigs.Full(AllSettings, src, name, DateString);
             var item = new JobItemViewModel(this, new OffloadJob(config), name ?? DefaultCardName(src),
-                canEject: isVolume && CardEject.CanEject(src), space);
+                canEject: isVolume && CardEject.CanEject(src), space, facts: Insight(src) is { Error: null } look
+                    ? new JobCardFacts(look.FileCount, look.Clips.Count, look.TotalBytes, look.Camera?.Camera, Append: false) : null);
             Jobs.Insert(0, item);
             selected.Remove(src);
             queue.Enqueue(item.Runner);
@@ -276,6 +364,8 @@ public sealed partial class MainViewModel
         foreach (var j in Jobs)
             if (!j.IsFinished) j.Refresh();
         RefreshSpace();   // memory only: a running job needs less as it copies (against its baseline)
+        RefreshQueueSummary();   // the top bar's pill and the queue tab's number
+        RefreshLayout();   // compact steps, the empty card text, the start button's label
         // A queued job cancelled behind a running copy is finished before the queue reports it.
         if (HasFinished != shownHasFinished)
         {
@@ -295,6 +385,56 @@ public sealed partial class MainViewModel
 
     /// The copied card is in its drive per the last scan (not pulled out, not replaced by another card).
     internal bool CardInDrive(JobItemViewModel item) => QueueRules.CardInDrive(item.Job.Config.Source, item.Runner.SourceIdentity, volumes);
+
+    /// "Zkopírovat znovu" needs the card the job copied: a drive root must hold that card now; a folder is taken as there
+    /// (the repair's planner reads it first and refuses a changed one). Memory only.
+    internal bool SourcePresent(JobItemViewModel item)
+    {
+        var source = item.Job.Config.Source;
+        try
+        {
+            bool driveRoot = string.Equals(Layout.DriveRootOf(source)?.TrimEnd('\\'), source.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+            return !driveRoot || CardInDrive(item);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    /// A repair of the same backup is queued or running (one at a time; the folder lock would refuse a second).
+    internal bool RepairPending(JobItemViewModel item) => item.Job.Plan is { } plan && Jobs.OfType<JobItemViewModel>().Any(j =>
+        !ReferenceEquals(j, item) && !j.IsFinished && j.Job.Config.RepairInto is { } into && RepairRules.SameBackup(into, plan.CardPaths));
+
+    /// A later repair of this backup has finished successfully (the jobs above it in the list were started after it).
+    internal bool RepairedLater(JobItemViewModel item) => item.Job.Plan is { } plan && RepairRules.RepairedLater(plan.CardPaths,
+        Jobs.TakeWhile(j => !ReferenceEquals(j, item)).OfType<JobItemViewModel>().Select(j => (j.Job.Config.RepairInto, j.Phase, j.Job.Report)));
+
+    /// The finished cards show the repair button by what the queue holds now (they are not refreshed every tick).
+    void RaiseRepairOffers()
+    {
+        foreach (var j in Jobs.OfType<JobItemViewModel>())
+            if (j.IsFinished) j.RepairChanged();
+    }
+
+    /// "Zkopírovat znovu" (UI návrh 4): a repair job — only the failed files, only where they failed — with the finished
+    /// job's own settings; it waits in the copy queue like any card (it reads the card).
+    internal void Repair(JobItemViewModel item)
+    {
+        if (closing || !Allowed(DemoCommand.Repair) || item.Job.Plan is not { } plan || !item.CanRepair) return;
+        // The finished job's own settings and the identity of the card it copied (ruling I1): another card is refused.
+        var repair = new JobItemViewModel(this, new OffloadJob(JobConfigs.Repair(item.Job)), plan.CardName, item.CanEject);
+        Jobs.Insert(0, repair);
+        queue.Enqueue(repair.Runner);
+        RaiseMany(nameof(HasJobs), nameof(HasFinished));
+        RaiseRepairOffers();   // the offer on the finished card goes while this repair is queued
+    }
+
+    /// The rest of a running job (its phase's ETA and what follows), from what this session measured; null when not known.
+    internal double? RemainingTotal(JobItemViewModel item, double? phaseEta) => item.Job.Plan is { } plan
+        ? rates.Remaining(item.Phase, phaseEta, plan.Scan.TotalBytes, item.PlanClips, item.Job.Config.Verify,
+            item.Job.Config.AnalyzeClips && plan.Mode != PlanMode.Repair, plan.Mode == PlanMode.Repair ? new ProxySettings() : item.Job.Config.Proxy)
+        : null;
 
     QueueItem? Find(IQueuedJob job) => Jobs.FirstOrDefault(j => ReferenceEquals(j.Queued, job));
 
@@ -319,7 +459,11 @@ public sealed partial class MainViewModel
     {
         if (Find(job) is { } item)
         {
-            if (item is JobItemViewModel j) j.LeftQueue = true;
+            if (item is JobItemViewModel j)
+            {
+                j.LeftQueue = true;
+                if (j.Job.Report is { } r) rates.Learn(r, j.Job.Config.AnalyzeClips, j.Job.Config.Proxy, j.Stage2Elapsed, endedAs: j.Phase);   // the next estimate (M2)
+            }
             item.Refresh();
             if (!item.Alerted) Alert(item);
             if (QueueRules.NotifyAtJobEnd(item.Notified) && item is JobItemViewModel ended)
@@ -329,6 +473,7 @@ public sealed partial class MainViewModel
             }
         }
         Raise(nameof(HasFinished));
+        RaiseRepairOffers();   // a finished repair takes the button off the earlier card
         CheckCloseReady();
     }
 
@@ -402,7 +547,7 @@ public sealed partial class MainViewModel
     /// with the one recorded when the copy started; never while another job still needs the card.
     internal async void Eject(JobItemViewModel item)
     {
-        if (item.Ejecting || item.Ejected) return;   // a double click must not start a second eject
+        if (!Allowed(DemoCommand.Eject) || item.Ejecting || item.Ejected) return;   // a double click must not start a second eject
         var source = item.Job.Config.Source;
         var copied = item.Runner.SourceIdentity;
         bool inUse = QueueRules.CardInUse(source, Jobs.OfType<JobItemViewModel>().Where(j => !ReferenceEquals(j, item)).Select(j => (j.Job.Config.Source, j.Phase)));

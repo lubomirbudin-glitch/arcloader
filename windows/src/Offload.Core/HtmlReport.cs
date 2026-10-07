@@ -82,12 +82,18 @@ public static partial class HtmlReport
     [GeneratedRegex(@"^(?<algo>md5|xxh64) hash failed: ")]
     private static partial Regex HashFailed();
 
+    /// OffloadEngine.CardDiffers: a repair's card read differently from what the backup recorded.
+    [GeneratedRegex(@"^card differs from the backup: (?<algo>xxh64|md5) (?<now>\S+) != recorded (?<recorded>\S+)$")]
+    private static partial Regex CardDiffers();
+
     /// A file error as the report JSON keeps it (English, shared with the Mac — spec 2.6) in Czech for the HTML/PDF.
     /// Texts it does not know (the Mac's, the system's) stay as they are.
     public static string ErrorText(string error)
     {
         if (error.StartsWith("source: ", StringComparison.Ordinal)) return "karta: " + ErrorText(error["source: ".Length..]);
         if (error.StartsWith("verify: ", StringComparison.Ordinal)) return "chyba při ověření: " + ErrorText(error["verify: ".Length..]);
+        if (error.StartsWith("set aside: ", StringComparison.Ordinal))
+            return "nesouhlasnou kopii nejde odložit, zůstala na místě: " + error["set aside: ".Length..];
         if (Mismatch().Match(error) is { Success: true } m)
             return $"{(error.StartsWith("MD5", StringComparison.Ordinal) ? "nesouhlasí MD5" : "nesouhlasí kontrolní součet")} (cíl {m.Groups["dest"].Value}, karta {m.Groups["source"].Value})";
         if (HashFailed().Match(error) is { Success: true } h)
@@ -97,6 +103,9 @@ public static partial class HtmlReport
             return "soubor na kartě se během kopie změnil " + error["source size changed during copy ".Length..];
         if (error == "write failed") return "zápis selhal";
         if (error == "cancelled") return "zrušeno";
+        if (error == OffloadEngine.CardChangedWhilePaused) return "karta se během pozastavení vyměnila nebo vytáhla";
+        if (CardDiffers().Match(error) is { Success: true } c)
+            return $"karta se od zálohy liší ({c.Groups["algo"].Value} {c.Groups["now"].Value}, v záloze {c.Groups["recorded"].Value}) — nic se nepřesunulo ani nezapsalo";
         return Retries().Replace(error, " (po ${n} opakováních)");
     }
 
@@ -130,7 +139,7 @@ public static partial class HtmlReport
         h.Append($"<title>Offload {Esc(r.CardName)} – {Esc(r.Date)}</title>\n<style>\n");
         h.Append(Styles(forPrint));
         h.Append("</style></head><body><main>\n");
-        var append = r.Generation > 1 ? $" <span class=\"sub\">· doplnění (generace {r.Generation})</span>" : "";
+        var append = r.Generation > 1 ? $" <span class=\"sub\">· {(r.IsRepair ? "oprava" : "doplnění")} (generace {r.Generation})</span>" : "";
         h.Append($"<header><h1>{Esc(r.CardName)}{append}</h1><span class=\"badge {statusClass}\">{status}</span>\n");
         h.Append($"<span class=\"sub\">{DateTimeText(r.Started)} – {TimeText(r.Finished)}</span></header>\n");
         h.Append("<div class=\"stats\">\n");
@@ -139,6 +148,7 @@ public static partial class HtmlReport
         Stat(h, videoClips.Count.ToString(Inv), "klipů" + (totalDuration > 0 ? " · " + Duration(totalDuration) : ""));
         Stat(h, Duration(r.CopySeconds), "kopírování · " + Format.Rate(r.TotalBytes, r.CopySeconds));
         Stat(h, r.Verified ? Duration(r.VerifySeconds) : "—", "ověření · " + (r.Verified ? Format.Rate(r.TotalBytes, r.VerifySeconds) : "neprovedeno"));
+        if (r.PausedSeconds > 0) Stat(h, Duration(r.PausedSeconds), "pozastaveno · mimo rychlosti");
         Stat(h, Esc(string.Join(" + ", r.Algorithms.Select(a => a.ToUpperInvariant()))), "kontrolní součet");
         h.Append("</div>\n\n");
 

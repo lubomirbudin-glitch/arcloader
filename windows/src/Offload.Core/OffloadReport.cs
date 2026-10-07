@@ -29,7 +29,16 @@ public sealed class ReportFile
     [JsonPropertyName("sourceError")] public string? SourceError { get; init; }
     [JsonPropertyName("destinations")] public required IReadOnlyList<string> Destinations { get; init; }
     [JsonPropertyName("errors")] public required IReadOnlyList<string?> Errors { get; init; }
+    /// Repair only (Windows from 0.5.0): per destination, true = a new copy was written there, false = the good copy there
+    /// was only read back (its state carries on the earlier one). The Mac ignores it.
+    [JsonPropertyName("rewritten")] public IReadOnlyList<bool>? Rewritten { get; init; }
 }
+
+/// Repair: a copy that did not match the card, moved aside before the new copy took its place (never deleted).
+public sealed record SetAsideCopy(
+    [property: JsonPropertyName("destination")] int Destination,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("movedTo")] string MovedTo);
 
 public sealed partial class OffloadReport
 {
@@ -60,12 +69,24 @@ public sealed partial class OffloadReport
     [JsonPropertyName("generation")] public int? Generation { get; set; }
     /// The project the card was copied in (spec 4.1); absent for "Bez projektu" and in older reports. The Mac ignores it.
     [JsonPropertyName("project")] public string? Project { get; set; }
+    /// Seconds the copy / the read-back stood paused (Pozastavit, Windows from 0.5.0); absent when never paused. The speeds
+    /// leave the pause out; the Mac ignores the keys (its speeds then include it).
+    [JsonPropertyName("copyPausedSeconds")] public double? CopyPausedSeconds { get; set; }
+    [JsonPropertyName("verifyPausedSeconds")] public double? VerifyPausedSeconds { get; set; }
+    /// "repair" for "Zkopírovat znovu" (Windows from 0.5.0); absent for a full copy and an append. The Mac ignores it.
+    [JsonPropertyName("kind")] public string? Kind { get; set; }
+    /// Repair: the non-matching copies moved aside (`_REPORT/neshoda_NNNN/…`); absent when none was.
+    [JsonPropertyName("setAside")] public IReadOnlyList<SetAsideCopy>? SetAside { get; set; }
+
+    public const string RepairKind = "repair";
+    [JsonIgnore] public bool IsRepair => Kind == RepairKind;
 
     /// The hashes of this copy: `hashAlgorithms`, else the one `hashAlgorithm` (reports without the key, the Mac).
     [JsonIgnore] public IReadOnlyList<string> Algorithms => HashAlgorithms is { Count: > 0 } all ? all : [HashAlgorithm];
 
-    [JsonIgnore] public double CopySeconds => (CopyFinished - Started).TotalSeconds;
-    [JsonIgnore] public double VerifySeconds => (Finished - CopyFinished).TotalSeconds;
+    [JsonIgnore] public double CopySeconds => Math.Max(0, (CopyFinished - Started).TotalSeconds - (CopyPausedSeconds ?? 0));
+    [JsonIgnore] public double VerifySeconds => Math.Max(0, (Finished - CopyFinished).TotalSeconds - (VerifyPausedSeconds ?? 0));
+    [JsonIgnore] public double PausedSeconds => (CopyPausedSeconds ?? 0) + (VerifyPausedSeconds ?? 0);
 
     [JsonIgnore]
     public IReadOnlyList<ReportFile> FailedFiles => Files.Where(IsFailed).ToList();
@@ -73,7 +94,11 @@ public sealed partial class OffloadReport
     /// The card could not be read, or a destination does not hold a good copy. A cancelled verification leaves files
     /// "written" or already "verified": both are fine then.
     public bool IsFailed(ReportFile f) =>
-        f.SourceError != null || f.Destinations.Any(d => !(d == "verified" || (!Verified && d == "written")));
+        f.SourceError != null || f.Destinations.Any(d => !IsGood(d));
+
+    /// THE per-destination definition of a good copy in this report (a job card shows it per disk): read back, or — in a
+    /// report made without read-back — written.
+    public bool IsGood(string state) => state == "verified" || (!Verified && state == "written");
 
     [JsonIgnore] public bool Success => FailedFiles.Count == 0;
     /// Every file is on every destination and was read back with a matching hash.
@@ -81,8 +106,9 @@ public sealed partial class OffloadReport
 
     public static OffloadReport Build(OffloadPlan plan, IReadOnlyList<FileHashes> hashes, IReadOnlyList<string?> sourceErrors,
         IReadOnlyList<DestFileResult[]> destResults, IReadOnlyList<bool> unbuffered, bool verified,
-        DateTime started, DateTime copyFinished, DateTime finished)
+        DateTime started, DateTime copyFinished, DateTime finished, TimeSpan copyPaused = default, TimeSpan verifyPaused = default)
     {
+        static double? Seconds(TimeSpan t) => t > TimeSpan.Zero ? Math.Round(t.TotalSeconds, 1) : null;
         bool IsOk(FileState s) => s == FileState.Verified || (!verified && s == FileState.Written);
         var files = plan.Scan.Files.Select((f, i) => new ReportFile
         {
@@ -94,6 +120,7 @@ public sealed partial class OffloadReport
             SourceError = sourceErrors[i],
             Destinations = destResults.Select(r => r[i].State.Wire()).ToList(),
             Errors = destResults.Select(r => r[i].Error).ToList(),
+            Rewritten = plan.Write?[i].ToList(),
         }).ToList();
         var cardPaths = plan.CardPaths;
         var dests = plan.DestRoots.Select((root, d) => new ReportDestination
@@ -122,6 +149,9 @@ public sealed partial class OffloadReport
             Skipped = plan.Scan.Skipped,
             Generation = plan.Generation > 1 ? plan.Generation : null,
             Project = plan.Project,
+            Kind = plan.Mode == PlanMode.Repair ? RepairKind : null,
+            CopyPausedSeconds = Seconds(copyPaused),
+            VerifyPausedSeconds = Seconds(verifyPaused),
             HashAlgorithms = HashKinds.Normalize(plan.Hashes).HasFlag(HashKind.Md5) ? HashKinds.Names(plan.Hashes) : null,
         };
     }
@@ -159,6 +189,7 @@ public sealed partial class OffloadReport
             s.Append($"Files:       {TotalFiles}  ({Format.Bytes(TotalBytes)})\n");
             s.Append($"Copy:        {CopySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, CopySeconds)}\n");
             s.Append("Verify:      " + (Verified ? $"{VerifySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, VerifySeconds)}" : "NOT VERIFIED") + "\n");
+            if (PausedSeconds > 0) s.Append($"Paused:      {PausedSeconds.ToString("0.0", inv)} s (not in the speeds)\n");
             s.Append($"Hash:        {string.Join("+", Algorithms)}\n");
             foreach (var d in Destinations)
                 s.Append($"Destination: {d.CardPath} [{d.Filesystem}]  ok {d.FilesOK}  failed {d.FilesFailed}{(d.Unbuffered == false ? "  (buffered I/O)" : "")}\n");
@@ -247,8 +278,19 @@ public sealed partial class OffloadReport
                 continue;
             }
             var (earlier, missed) = HashListAndMissed(hashList, cardPath, Files.Select(f => f.Path), algorithm);
-            NativeIO.WriteFileReplacing(hashList, [.. earlier, .. missed, .. lines]);
+            byte[] added = [.. missed, .. NotIn(earlier, lines)];
+            if (added.Length == 0 && File.Exists(hashList)) continue;   // nothing new (a repair): the list is left as it is
+            NativeIO.WriteFileReplacing(hashList, [.. earlier, .. added]);
         }
+    }
+
+    /// The lines of `lines` the list does not have word for word yet: a repair's file is listed already with the hash the
+    /// card gave then (a repair records only that one — ruling C1), so the list keeps one line per path and hash.
+    static byte[] NotIn(byte[] earlier, byte[] lines)
+    {
+        var have = Encoding.UTF8.GetString(earlier).Split('\n').Select(l => l.TrimEnd('\r')).ToHashSet(StringComparer.Ordinal);
+        var keep = Encoding.UTF8.GetString(lines).Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(l => !have.Contains(l));
+        return Encoding.UTF8.GetBytes(string.Concat(keep.Select(l => l + "\n")));
     }
 
     /// `<card>/_REPORT/<card name>.xxh64` (and `.md5` when the ASC MHL history has MD5) gets the lines of every path the

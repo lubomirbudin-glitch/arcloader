@@ -2,10 +2,12 @@
 #   . .\scripts\app-drive.ps1
 #   $env:OFFLOAD_SETTINGS_DIR = 'D:\tmp\offload-settings'   # isolated settings for the run
 #   $p = Start-Offload -Exe .\src\Offload.App\bin\Debug\net10.0-windows\Offload.exe
-#   Invoke-OffloadButton $p 'HardwareButton'                 # USB check on demand (or Ctrl+U / Nástroje menu)
+#   Invoke-OffloadButton $p 'HardwareButton'                 # USB check on demand (Hardware in the top bar, or Ctrl+U)
 #   Invoke-OffloadButton $p 'StartButton'
 #   Save-OffloadScreenshot $p 'D:\tmp\shot.png'
 #   Stop-Offload $p
+#   $p = Start-Offload -Exe <Offload.exe> -Arguments '--demo probiha'   # a state of docs/ui-navrh/screeny (off by default)
+#   Resize-Offload $p 1000 900                                         # the narrow screenshot
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
 if (-not ('OffloadWin' -as [type])) {
 Add-Type @'
@@ -16,6 +18,7 @@ public static class OffloadWin {
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
 }
 '@
 }
@@ -110,6 +113,13 @@ function Save-OffloadScreenshot($Process, [string]$Path, [string]$WindowTitle = 
     $g.Dispose()
     $bmp.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
+}
+
+# Sets the window's outer size in pixels (docs/ui-navrh: 1360 px wide, the narrow screen 1000 px), keeping its position.
+function Resize-Offload($Process, [int]$Width, [int]$Height, [string]$WindowTitle = 'Offload') {
+    $h = [IntPtr]([int](Find-OffloadWindow $Process $WindowTitle).Current.NativeWindowHandle)
+    [OffloadWin]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, $Width, $Height, 0x0016) | Out-Null   # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
+    Start-Sleep -Milliseconds 700
 }
 
 function Stop-Offload($Process) {

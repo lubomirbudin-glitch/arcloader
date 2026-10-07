@@ -247,4 +247,15 @@ public class QueueRulesTests
         Assert.True(QueueRules.NotifyAtJobEnd(notified: false));
         Assert.False(QueueRules.NotifyAtJobEnd(notified: true));
     }
+
+    // Tasks 1–3 review, minor 3: a job paused in stage 1 holds the waiting cards; paused in stage 2 it does not.
+    [Fact]
+    public void BlockedByPaused_OnlyAPausedStage1()
+    {
+        Assert.True(QueueRules.BlockedByPaused(JobPhase.Waiting, [(JobPhase.Copying, true)]));
+        Assert.True(QueueRules.BlockedByPaused(JobPhase.Waiting, [(JobPhase.Done, false), (JobPhase.Verifying, true)]));
+        Assert.False(QueueRules.BlockedByPaused(JobPhase.Waiting, [(JobPhase.Copying, false)]));
+        Assert.False(QueueRules.BlockedByPaused(JobPhase.Waiting, [(JobPhase.Proxies, true)]));
+        Assert.False(QueueRules.BlockedByPaused(JobPhase.Copying, [(JobPhase.Verifying, true)]));
+    }
 }

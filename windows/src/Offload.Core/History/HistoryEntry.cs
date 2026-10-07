@@ -24,6 +24,8 @@ public sealed class HistoryGeneration
 {
     public const string Full = "full";
     public const string Append = "append";
+    /// "Zkopírovat znovu": the files that failed, copied again where they failed (Windows from 0.5.0).
+    public const string Repair = "repair";
 
     [JsonPropertyName("seq")] public int Seq { get; set; }
     [JsonPropertyName("kind")] public string Kind { get; set; } = Full;

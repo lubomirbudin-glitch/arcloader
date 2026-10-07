@@ -35,6 +35,11 @@ public enum PreflightCode
     AppendBusy,
     /// Not an error: the backup already has everything (the job ends "Hotovo").
     NothingNew,
+    /// Not an error: a repair found every file good on every destination (the job ends "Hotovo").
+    RepairNothing,
+    /// A repair would not copy what the backup recorded: the card or the card folders changed since — or it may not run
+    /// as asked (without verification, another card in the drive).
+    RepairConflict,
 }
 
 /// Every message a user sees from checks and validation (GUI job card, CLI) — Czech, one method per message, no resx.
@@ -103,6 +108,9 @@ public static class Msg
     public static string CliAppendProject(string name) => $"Nastavení z projektu: {name} (projekt zálohy zůstane podle dřívějšího reportu)";
     public static string CardUnreadable(string detail) => $"Kartu nejde přečíst: {detail}";
 
+    /// Where a backup is checked: the top bar of the window (since the new look, UI návrh) or the CLI.
+    public const string VerifyHint = "Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify)";
+
     // Append (spec 2.2)
     public static string AppendUnavailable(string cardPath) =>
         $"Dřívější záloha není dostupná: {cardPath} — připojte disk, nebo udělejte celou kopii.";
@@ -113,11 +121,11 @@ public static class Msg
     public static string AppendNoMhl(string cardPath) =>
         $"V {cardPath} chybí ASC MHL (ascmhl\\ascmhl_chain.xml) — doplnit nejde.";
     public static string AppendDiverged(string details) =>
-        $"Zálohy na cílech se liší ({details}) — zkontrolujte je přes Nástroje → Ověřit zálohu…; doplnit nejde.";
+        $"Zálohy na cílech se liší ({details}) — zkontrolujte je přes {VerifyHint}; doplnit nejde.";
     /// Ruling I1: the numbered reports and the ASC MHL chain of one card folder disagree (an append stopped half way).
     public static string AppendReportsMismatch(string cardPath, int report, int mhl) =>
         $"V {cardPath} nesouhlasí reporty s ASC MHL (poslední report je generace {report}, poslední generace MHL {mhl}) — dřívější doplnění se nedokončilo. "
-        + "Zkontrolujte zálohu přes Nástroje → Ověřit zálohu… a složku opravte ručně; doplnit nejde.";
+        + $"Zkontrolujte zálohu přes {VerifyHint} a složku opravte ručně; doplnit nejde.";
     public static string AppendNotACardFolder(string path) =>
         $"{path} není složka karty v záloze (<cíl>\\<datum>\\<karta>) — doplnit nejde.";
     public static string AppendDifferentFolders(IEnumerable<string> cardPaths) =>
@@ -128,12 +136,12 @@ public static class Msg
         + string.Join("\n  ", lines.Take(10)) + (lines.Count > 10 ? "\n  …" : "")
         + $"\nUdělejte celou kopii (vznikne {fullCopyFolder}).";
     public static string AppendMissingFile(string disk, string path) =>
-        $"Na {disk} chybí soubor z dřívější zálohy: {path} — zkontrolujte zálohu přes Nástroje → Ověřit zálohu…";
+        $"Na {disk} chybí soubor z dřívější zálohy: {path} — zkontrolujte zálohu přes {VerifyHint}";
     public static string AppendFailedFile(string path, string disk) =>
         $"{path} se při dřívější záloze na {disk} nezkopíroval správně — doplnit nejde, udělejte celou kopii.";
     public const string AppendOtherCard = "Na kartě není žádný soubor z dřívější zálohy — jde o jinou kartu? Udělejte celou kopii.";
     public static string AppendMhlDamaged(string cardPath) =>
-        $"Historie ASC MHL v {cardPath} je poškozená — zkontrolujte ji přes Nástroje → Ověřit zálohu…; doplnit nejde.";
+        $"Historie ASC MHL v {cardPath} je poškozená — zkontrolujte ji přes {VerifyHint}; doplnit nejde.";
     /// One line of the AppendConflict list: a file on a destination that no report records (a crashed append leaves one).
     public static string AppendUnknownFile(string disk, string path) =>
         $"na {disk} je soubor {path}, který žádný report nezná (nedokončené doplnění?)";
@@ -145,6 +153,47 @@ public static class Msg
     public static string AppendBusy(string cardPath) =>
         $"Do této zálohy právě doplňuje jiná úloha ({cardPath}) — počkejte, až skončí.";
     public const string NothingNew = "Nic nového — záloha je úplná.";
+
+    // Repair — "Zkopírovat znovu" (UI návrh, nová věc 4)
+    public const string RepairNothing = "Nic k opravě — všechny soubory jsou na všech cílech v pořádku.";
+    public static string RepairConflict(IReadOnlyList<string> lines) =>
+        $"Oprava zastavena — nic se nezkopírovalo. {lines.Count} {Desktop.Texts.Plural(lines.Count, "soubor nejde opravit", "soubory nejde opravit", "souborů nejde opravit")}:\n  "
+        + string.Join("\n  ", lines.Take(10)) + (lines.Count > 10 ? "\n  …" : "")
+        + "\nKarta se od zálohy změnila nebo ve složce zálohy chybí soubor — zkontrolujte ji přes Ověřit zálohu, nebo udělejte celou kopii.";
+    /// One line of RepairConflict: the file is no longer on the card.
+    public static string RepairNotOnCard(string path) => $"{path}: na kartě už není";
+    /// One line of RepairConflict (ruling C1): same size and time, but the card gives another hash than the backup
+    /// recorded — the new hash is only ever here, never in a record.
+    public static string RepairCardDiffers(string path, string algorithm, string now, string recorded) =>
+        $"{path}: na kartě je jiný obsah než při záloze ({algorithm} {now}, v záloze {recorded})";
+    /// One line of RepairConflict: the card file could not be read to compare it.
+    public static string RepairCardUnreadable(string path, string detail) => $"{path}: na kartě nejde přečíst ({detail})";
+    /// Ruling M16: a repair always reads back — a kept copy is recorded "verified" only after it was.
+    public const string RepairNeedsVerify = "Oprava se vždy ověřuje zpětným čtením — bez ověření ji spustit nejde.";
+    /// The comment of a repair's ASC MHL generation: the files copied again, and those only read back (fix round 2, B).
+    public static string MhlRepairComment(int copied, int readBack, string source) =>
+        $"Offload oprava: {copied} {Desktop.Texts.Plural(copied, "soubor", "soubory", "souborů")} znovu z {source}"
+        + (readBack > 0 ? $"; {readBack} {Desktop.Texts.Plural(readBack, "soubor jen přečten", "soubory jen přečteny", "souborů jen přečteno")} zpět" : "");
+    /// Ruling I1: the card in the drive is not the one the repaired backup was copied from.
+    public const string RepairOtherCard =
+        "Ve čtečce není karta, ze které se záloha dělala (jiná karta, nebo žádná) — nic se nezkopírovalo. Vložte původní kartu a spusťte Zkopírovat znovu.";
+    /// Fix round 1 (plan 9, tasks 4–5), item 1: card files that no report of the backup records (shot after it) — a
+    /// repair does not copy them, so the card must not be ejected as backed up.
+    public static string CardFilesNotInBackup(int n) =>
+        $"Na kartě {Desktop.Texts.Plural(n, "je", "jsou", "je")} {n} {Desktop.Texts.Plural(n, "soubor, který", "soubory, které", "souborů, které")} záloha nemá — kartu nevysouvejte, zálohu doplňte.";
+    /// Batch 10–12 review: "Nic k opravě", but the backup's reports (read again after the planner) record failed files —
+    /// another job wrote them meanwhile.
+    public static string BackupStillFailed(int n) =>
+        $"V záloze {n} {Desktop.Texts.Plural(n, "soubor stále nesouhlasí", "soubory stále nesouhlasí", "souborů stále nesouhlasí")} — kartu nevysouvejte, spusťte Zkopírovat znovu.";
+    /// Batch 10–12 review: the backup's reports could not be read after "Nic k opravě" — nothing was checked.
+    public static string BackupStateUnreadable(string detail) =>
+        $"Stav zálohy nejde přečíst ({detail}) — nic se nezkontrolovalo, kartu zatím nevysouvejte.";
+    /// Minor M5: the checks of the earlier backup are an append's; refusing a repair they say "opravit".
+    public static string ForRepair(string appendRefusal) =>
+        appendRefusal.Replace("doplnit nejde", "opravit nejde").Replace("doplnit jde jen", "opravit jde jen");
+    /// Ruling I1 (plan 9): the card in the drive after Pokračovat is not the one being copied.
+    public const string CardChangedWhilePaused =
+        "Během pozastavení se karta ve čtečce vyměnila nebo vytáhla — zbylé soubory se nezkopírovaly. Vložte původní kartu a zálohu doplňte.";
     public static string UnverifiedEarlier(int n) =>
         $"{n} {Desktop.Texts.Plural(n, "soubor", "soubory", "souborů")} z dřívější zálohy {Desktop.Texts.Plural(n, "nebyl ověřen", "nebyly ověřeny", "nebylo ověřeno")} — doporučeno Ověřit zálohu.";
     public const string CardNotInHistory = "Karta není v historii — zadejte složky zálohy volbou --into.";

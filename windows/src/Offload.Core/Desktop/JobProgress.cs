@@ -9,6 +9,8 @@ public enum CardTone { Waiting, Active, Ok, Warning, Error }
 public sealed class JobProgress
 {
     readonly DateTime started;
+    DateTime? firstActive, ended, stage2Start;
+    TimeSpan pausedBeforeStage2;
     DateTime lastTime;
     long lastBytes;
     long[] lastDest = [];
@@ -31,10 +33,62 @@ public sealed class JobProgress
 
     public void AttachBrakeMeter(BrakeMeter meter) => brakes = meter;
 
+    /// How long stage 2 (clips, proxies, PDF, day report) took without its pauses; null without a stage 2, before the end,
+    /// and for a job that did not end Done (a cancelled or failed stage 2 would teach RateMemory a far too low cost, M2).
+    public TimeSpan? Stage2Elapsed
+    {
+        get
+        {
+            if (stage2Start is not DateTime a || ended is not DateTime e || Status.Phase != JobPhase.Done) return null;
+            var t = e - a - (Status.PausedTotal - pausedBeforeStage2);
+            return t > TimeSpan.Zero ? t : TimeSpan.Zero;
+        }
+    }
+
+    /// How long the job took, without its pauses — from the first tick it ran to the first tick it was finished; null
+    /// before (the "Celkem" of the finished card).
+    public TimeSpan? Elapsed
+    {
+        get
+        {
+            // Never seen running (the first tick found it finished): the report's times say it instead.
+            if (firstActive is not DateTime a || ended is not DateTime e || a == e) return null;
+            var t = e - a - Status.PausedTotal;
+            return t > TimeSpan.Zero ? t : TimeSpan.Zero;
+        }
+    }
+
     public bool IsRunning => Status.Phase != JobPhase.Waiting && !Status.Phase.IsFinished();
 
     public void Update(JobStatus s, DateTime now)
     {
+        if (firstActive == null && s.Phase != JobPhase.Waiting) firstActive = now;
+        if (ended == null && s.Phase.IsFinished()) ended = now;
+        if (stage2Start == null && s.Phase is JobPhase.Analyzing or JobPhase.Proxies)
+        {
+            stage2Start = now;
+            pausedBeforeStage2 = s.PausedTotal;
+        }
+        if (s.Paused)
+        {
+            // Nothing moves: no rate and no ETA, the brake forgets its window; after Pokračovat the rates are measured
+            // from the moment the job runs again, never over the pause.
+            ReadRate = 0;
+            DestRates = new double[DestRates.Length];
+            Eta = null;
+            Brake = null;
+            brakes?.Reset();
+            if (s.Copy is { } held)
+            {
+                bool copying = s.Phase == JobPhase.Copying;
+                lastBytes = copying ? held.ReadBytes : (held.VerifiedBytes.Length > 0 ? held.VerifiedBytes.Min() : 0);
+                lastDest = (copying ? held.WrittenBytes : held.VerifiedBytes).ToArray();
+            }
+            lastPhase = s.Phase;
+            lastTime = now;
+            Status = s;
+            return;
+        }
         double dt = (now - lastTime).TotalSeconds;
         if (s.Copy is { } c && dt > 0.2)
         {
@@ -74,13 +128,26 @@ public sealed class JobProgress
     {
         { Phase: JobPhase.Copying, Copy: { TotalBytes: > 0 } c } => (double)c.ReadBytes / c.TotalBytes,
         { Phase: JobPhase.Verifying, Copy: { TotalBytes: > 0 } v } =>
-            v.VerifiedBytes.Sum() / ((double)v.TotalBytes * Math.Max(1, v.VerifiedBytes.Length)),
+            v.ToVerifyTotal == 0 ? 1 : v.VerifiedBytes.Sum() / (double)v.ToVerifyTotal,
         { Phase: JobPhase.Analyzing or JobPhase.Proxies, ClipCount: > 0 } s => (s.ClipIndex + s.ClipFraction) / s.ClipCount,
         { Phase: JobPhase.Done } => 1,
         _ => 0,
     };
 
-    public string StatusText => Status.Phase == JobPhase.Done && Status.CopySucceeded == false ? "Chyba" : Status.Phase.Label();
+    public string StatusText => PauseLabel ?? (Status.Phase == JobPhase.Done && Status.CopySucceeded == false ? "Chyba" : Status.Phase.Label());
+
+    /// "Pozastaveno" once the job stands, "Pozastavuje se" until then; null while it runs.
+    string? PauseLabel => !Status.Paused ? null : Status.PauseHeld ? "Pozastaveno" : "Pozastavuje se";
+
+    /// What the card says while paused, or null: stage 2 finishes the clip it is on first.
+    public string? PauseText => Status switch
+    {
+        { Paused: false } => null,
+        { PauseHeld: true } => "Pozastaveno — Pokračovat spustí úlohu od místa, kde stojí.",
+        { Phase: JobPhase.Proxies, ClipName: { Length: > 0 } clip } => $"Pozastaví se po proxy klipu {clip}…",
+        { Phase: JobPhase.Analyzing, ClipName: { Length: > 0 } clip } => $"Pozastaví se po klipu {clip}…",
+        _ => "Pozastavuje se…",
+    };
 
     /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound or flash).
     public bool IsError => Tone == CardTone.Error;

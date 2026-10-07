@@ -5,10 +5,23 @@
              ThemeMode="System"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
+        <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+            <!-- Index 0: the colour tokens, Dark.xaml or Light.xaml — ThemeWatcher swaps it by the Windows setting. -->
+            <ResourceDictionary Source="Themes/Dark.xaml" />
+            <ResourceDictionary Source="Themes/Offload.xaml" />
+        </ResourceDictionary.MergedDictionaries>
         <BooleanToVisibilityConverter x:Key="BoolToVisible" />
         <local:BoolToCollapsedConverter x:Key="BoolToCollapsed" />
         <local:NullToCollapsedConverter x:Key="NullToCollapsed" />
         <local:EmptyToVisibleConverter x:Key="EmptyToVisible" />
+        <local:NotConverter x:Key="Not" />
+        <local:BoolToHiddenConverter x:Key="BoolToHidden" />
+        <local:EqualsConverter x:Key="Equals" />
+        <local:EqualsToVisibleConverter x:Key="EqualsToVisible" />
+        <local:CountToVisibleConverter x:Key="CountToVisible" />
+        <local:CountToCollapsedConverter x:Key="CountToCollapsed" />
+        <local:IsNullConverter x:Key="IsNull" />
         <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="15" />
@@ -40,5 +53,6 @@
         <Style x:Key="ErrorText" TargetType="TextBlock" BasedOn="{StaticResource WarningText}">
             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
         </Style>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

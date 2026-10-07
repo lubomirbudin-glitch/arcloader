@@ -13,6 +13,9 @@ public abstract class QueueItem : ObservableObject
     /// As a copy phase — a running verification counts as Verifying (no speed measurement meanwhile).
     public abstract JobPhase Phase { get; }
     public abstract bool IsFinished { get; }
+    /// Pozastaveno (the top bar's pill counts it apart); only an offload can be paused.
+    public virtual bool IsPaused => false;
+    public virtual bool IsPauseHeld => false;
     /// Failed or with problems: the error sound and flash.
     public abstract bool IsError { get; }
     /// Still needs the app when closing (not finished, or an eject in flight).

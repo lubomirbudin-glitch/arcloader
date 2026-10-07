@@ -233,7 +233,7 @@ public class AppendEngineTests
 
         Assert.Equal(JobPhase.Failed, append.Status().Phase);
         var disk = AppendPlanner.Disk(paths[0]);
-        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Nástroje → Ověřit zálohu…; doplnit nejde.",
+        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify); doplnit nejde.",
             append.Status().Error);
         for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
     }
@@ -302,6 +302,10 @@ public class AppendEngineTests
 
         Assert.Equal(JobPhase.Done, append.Status().Phase);
         Assert.Equal("2 soubory z dřívější zálohy nebyly ověřeny — doporučeno Ověřit zálohu.", append.Status().Warning);
+        // Plan 9 fix round 1, item 1 (as ruling I2 for a repair): the new files are verified, the card is not —
+        // no "kartu lze vysunout".
+        Assert.True(append.Report!.SafeToEject);
+        Assert.False(append.Status().SafeToEject);
     }
 
     // Fix round 1, item 1: two appends into the same card folders at once (GUI + CLI). The second refuses before it

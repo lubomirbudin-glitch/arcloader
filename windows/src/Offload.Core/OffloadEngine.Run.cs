@@ -4,8 +4,12 @@ public sealed partial class OffloadEngine
 {
     public OffloadReport Run(OffloadPlan plan)
     {
+        // Ruling M16: a repair records its kept copies "verified" — only ever after reading them back.
+        if (plan.Mode == PlanMode.Repair && !Options.Verify) throw OffloadError.Preflight(PreflightCode.RepairConflict, Msg.RepairNeedsVerify);
         var files = plan.Scan.Files;
         var started = DateTime.UtcNow;
+        var pausedBefore = Pauses.PausedTotal;
+        long holdsChecked = Pauses.Holds;
         var cardPaths = plan.CardPaths;
         foreach (var path in cardPaths)
         {
@@ -17,10 +21,12 @@ public sealed partial class OffloadEngine
             foreach (var d in plan.Scan.Dirs) NativeIO.Mkdirs(Layout.Join(path, d));
         }
         var ws = cardPaths.Select((p, i) => new DestWriter(i, p, files.Count, Options)).ToArray();
+        var plannedNow = ws.Select(w => files.Where((f, i) => plan.Writes(i, w.Index)).Sum(f => f.Size)).ToArray();
         lock (gate)
         {
             this.plan = plan;
             writers = ws;
+            planned = plan.Write == null ? null : plannedNow;
         }
         // Created before the try and disposed last: writer queues may still hold chunks that point into the pool's native buffers.
         BufferPool? pool = null;
@@ -35,29 +41,56 @@ public sealed partial class OffloadEngine
             for (int i = 0; i < files.Count; i++)
             {
                 var f = files[i];
+                // A repair writes a file only where it failed; a destination with a good copy only reads it back (Keep) —
+                // also when the repair is cancelled before this file: its good copy must never look unwritten.
+                var targets = ws.Where(w => plan.Writes(i, w.Index)).ToArray();
+                foreach (var w in ws.Except(targets)) w.Keep(i);
+                if (targets.Length == 0) continue;   // nothing to copy: the card is not read for it
                 if (IsCancelled)
                 {
                     sourceErrors[i] = "cancelled";
                     continue;
                 }
-                Options.BeforeFileCopy?.Invoke(i);
+                if (!cardChanged)
+                {
+                    Options.BeforeFileCopy?.Invoke(i);
+                    if (!Pauses.WaitWhilePaused(cts.Token))
+                    {
+                        sourceErrors[i] = "cancelled";
+                        continue;
+                    }
+                    // Ruling I1: a pause held the copy since the last file — the card is identified again before
+                    // anything more is read from it; another card (or none) means nothing more of it is copied.
+                    if (Pauses.Holds != holdsChecked)
+                    {
+                        holdsChecked = Pauses.Holds;
+                        cardChanged = !StillSameCard();
+                    }
+                }
+                if (cardChanged)
+                {
+                    sourceErrors[i] = CardChangedWhilePaused;
+                    lock (gate) errorCount++;
+                    continue;
+                }
                 lock (gate)
                 {
                     fileIndex = i;
                     currentFile = f.RelPath;
                 }
-                var failure = CopyFile(plan.Source, f, ws, hashers, pool);
+                var failure = CopyFile(plan.Source, f, targets, hashers, pool);
                 if (failure != null)
                 {
                     sourceErrors[i] = failure;
                     foreach (var h in hashers) h.Abort();
-                    foreach (var w in ws) w.Abort(i, "source: " + failure);
+                    foreach (var w in targets) w.Abort(i, "source: " + failure);
                     lock (gate) errorCount++;
                 }
                 else
                 {
                     foreach (var h in hashers) h.Finish(i);
-                    foreach (var w in ws) w.Finish(i, f);
+                    // A repair's new copy waits under its temporary name until the card's hash is known (below).
+                    foreach (var w in targets) w.Finish(i, f, hold: plan.Expected != null);
                 }
             }
             foreach (var h in hashers) h.Wait();
@@ -70,22 +103,36 @@ public sealed partial class OffloadEngine
                 sourceErrors[i] = hashError;
                 lock (gate) errorCount++;
             }
+            var recorded = plan.Expected == null ? hashes : PlaceRepairCopies(plan, ws, hashes, sourceErrors);
 
             SetPhase(CopyPhase.Flush);
             OnEachDestination(ws, w => w.FlushDevice());
             var copyFinished = DateTime.UtcNow;
+            var copyPaused = Pauses.PausedTotal - pausedBefore;
 
             Options.BeforeVerify?.Invoke();
             if (Options.Verify && !IsCancelled)
             {
                 SetPhase(CopyPhase.Verify);
-                OnEachDestination(ws, w => w.Verify(files, hashes, plan.Hashes, cts.Token));
+                // A repair compares every copy — kept or new — with what the backup recorded (ruling C1).
+                OnEachDestination(ws, w => w.Verify(files, recorded, plan.Hashes, cts.Token, Pauses));
             }
+            // A kept copy this repair did not get to read again (cancelled) is untouched: its earlier read-back stands.
+            for (int i = 0; plan.ReadBackBefore is { } before && i < files.Count; i++)
+                foreach (var w in ws)
+                    if (!plan.Writes(i, w.Index) && before[i][w.Index] && w.Results[i].State == FileState.Written)
+                        w.Results[i] = new DestFileResult(FileState.Verified, null);
             var finished = DateTime.UtcNow;
+            var verifyPaused = Pauses.PausedTotal - pausedBefore - copyPaused;
 
             SetPhase(CopyPhase.Report);
-            var report = OffloadReport.Build(plan, hashes, sourceErrors, ws.Select(w => w.Results).ToList(),
-                ws.Select(w => w.Unbuffered).ToList(), Options.Verify && !IsCancelled, started, copyFinished, finished);
+            var report = OffloadReport.Build(plan, recorded, sourceErrors, ws.Select(w => w.Results).ToList(),
+                ws.Select(w => w.Unbuffered).ToList(), Options.Verify && !IsCancelled, started, copyFinished, finished, copyPaused, verifyPaused);
+            if (plan.Mode == PlanMode.Repair)
+            {
+                var moved = ws.SelectMany(w => w.MovedAside.Select(m => new SetAsideCopy(w.Index, files[m.File].RelPath, m.MovedTo))).ToList();
+                report.SetAside = moved.Count > 0 ? moved : null;
+            }
             var reportErrors = new List<string>();
             foreach (var path in cardPaths)
             {
@@ -104,6 +151,62 @@ public sealed partial class OffloadEngine
         }
     }
 
+    /// The file error of a repaired file whose card did not give the hash the backup recorded (English, report JSON; the
+    /// HTML says it in Czech): "card differs from the backup: xxh64 <now> != recorded <then>".
+    internal static string? CardDiffers(FileHashes expected, FileHashes now)
+    {
+        if (expected.Xxh64 is ulong want && now.Xxh64 is ulong got && got != want)
+            return $"card differs from the backup: xxh64 {Format.Hex64(got)} != recorded {Format.Hex64(want)}";
+        if (expected.Md5 is { } wantMd5 && now.Md5 is { } gotMd5 && !gotMd5.AsSpan().SequenceEqual(wantMd5))
+            return $"card differs from the backup: md5 {now.Md5Hex} != recorded {expected.Md5Hex}";
+        return null;
+    }
+
+    /// Repair, after the copy (every writer idle): ruling C1 — a new copy takes its place (the copy that did not match
+    /// moved aside first) only when the card gave exactly what the backup recorded; otherwise it is thrown away and the
+    /// file fails, nothing at its place moved. Returns the hashes the report records and the read-back compares with:
+    /// always the recorded ones (the card's own only where the backup has none).
+    FileHashes[] PlaceRepairCopies(OffloadPlan plan, DestWriter[] ws, FileHashes[] hashes, string?[] sourceErrors)
+    {
+        var files = plan.Scan.Files;
+        var recorded = new FileHashes[files.Count];
+        for (int i = 0; i < files.Count; i++)
+        {
+            var expected = plan.Expected![i];
+            // MD5 of a backup whose MD5 failed: the card's, when its xxh64 is the recorded one.
+            recorded[i] = expected.Xxh64 == null ? hashes[i]
+                : new FileHashes(expected.Xxh64, expected.Md5 ?? (hashes[i].Xxh64 == expected.Xxh64 ? hashes[i].Md5 : null));
+            if (sourceErrors[i] == null && CardDiffers(expected, hashes[i]) is string differs)
+            {
+                sourceErrors[i] = differs;
+                lock (gate) errorCount++;
+            }
+            foreach (var w in ws.Where(w => plan.Writes(i, w.Index)))
+            {
+                if (sourceErrors[i] == null) w.Commit(i, files[i], plan.SetAside?[i][w.Index]);
+                else w.Discard(i, "source: " + sourceErrors[i]);
+            }
+        }
+        return recorded;
+    }
+
+    /// Ruling I1: the card in the drive is the copied one (no check without SameCard). A different, unreadable (null) or
+    /// failing answer is asked again IdentifyRetries times 250 ms apart, like a card read — only then the card changed.
+    bool StillSameCard()
+    {
+        if (SameCard is not { } same) return true;
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                if (same()) return true;
+            }
+            catch (Exception) { /* unreadable now: asked again */ }
+            if (attempt >= IdentifyRetries || IsCancelled) return false;
+            Thread.Sleep(250);
+        }
+    }
+
     /// Reads one file block by block and hands every block to the hashers and all writers. Returns the failure, or null.
     string? CopyFile(string sourceRoot, SourceFile f, DestWriter[] ws, IReadOnlyList<SourceHasher> hashers, BufferPool pool)
     {
@@ -117,7 +220,8 @@ public sealed partial class OffloadEngine
         long offset = 0;
         using (reader)
         {
-            while (!IsCancelled)
+            // A pause waits here, between blocks and before taking a buffer: the writers drain what they hold and idle.
+            while (!IsCancelled && Pauses.WaitWhilePaused(cts.Token))
             {
                 var buf = pool.Take();
                 int n;

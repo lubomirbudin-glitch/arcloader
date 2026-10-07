@@ -6,10 +6,8 @@ using Offload.Core.Space;
 
 namespace Offload.App;
 
-public sealed record DestinationLine(string Name, string Sub, string FullPath);
-
 /// One card in the queue: mirrors the job's status every tick (Mac `JobItem` + `JobCard`).
-public sealed class JobItemViewModel : QueueItem
+public sealed partial class JobItemViewModel : QueueItem
 {
     readonly MainViewModel owner;
     readonly string sourceName;
@@ -17,29 +15,36 @@ public sealed class JobItemViewModel : QueueItem
     IReadOnlyList<RoleLink>? links;
     IReadOnlyList<UsbConnector>? connectors;
     IReadOnlyDictionary<string, string>? portNames;
-    IReadOnlyList<DestinationLine>? destinationLines;
     string? filesText;
-    List<string> chainLines = [];
     bool chainRequested, ejected, ejecting, openingReport;
 
     readonly IReadOnlyList<VolumeDemand> space;
+    // What the card header says before the plan exists (from the look at the card when it was started).
+    readonly JobCardFacts? facts;
+    CardHeadline headline;
+    IReadOnlyList<string>? destNames;
 
     /// `space`: what the card needs on each destination volume (spec 2.5) — counted while this job is queued or copies.
     /// `profileNote`: orange, for the whole life of the card — e.g. an append whose project no longer exists.
+    /// `facts`: the clips, size and camera the card had when it was started (the header while the job waits).
     public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject, IReadOnlyList<VolumeDemand>? space = null,
-        string? profileNote = null)
+        string? profileNote = null, JobCardFacts? facts = null)
     {
         this.owner = owner;
+        this.facts = facts;
+        headline = new CardHeadline(JobCardKind.Waiting, sourceName, "");
         ProfileNote = profileNote;
         this.sourceName = sourceName;
         this.space = space ?? [];
         Job = job;
         CanEject = canEject;
         Runner = new JobQueue.Runner(job, m => AppLog.Write($"{sourceName}: {m}"));
-        CancelCommand = new RelayCommand(() => { Job.Cancel(); Refresh(); });
-        EjectCommand = new RelayCommand(() => owner.Eject(this), () => !Ejecting);
+        CancelCommand = new RelayCommand(() => { if (owner.AllowedFor(DemoCommand.Cancel, Job.IsPreview)) { Job.Cancel(); Refresh(); } },
+            () => owner.AllowedFor(DemoCommand.Cancel, Job.IsPreview));
+        EjectCommand = new RelayCommand(() => owner.Eject(this), () => !Ejecting && owner.Allowed(DemoCommand.Eject));
         OpenReportCommand = new RelayCommand(OpenReport);
         RevealCommand = new RelayCommand(Reveal);
+        InitCard();
     }
 
     public OffloadJob Job { get; }
@@ -67,8 +72,49 @@ public sealed class JobItemViewModel : QueueItem
             chainRequested = true;
             ResolveChain(plan);
         }
+        // The whole backup's state comes from the job (read on its thread); a waiting card says when a paused job holds it.
+        headline = JobCard.Headline(CardName, progress.Status, Job.Report, DestNames, Job.Backup, owner.BlockedByPaused(this));
+        RefreshCard();
         Raise(string.Empty);   // every binding of the card may have changed
     }
+
+    // ── The new card (UI návrh obr. 2, 3) ──────────────────────────────────────────────────────────────────────
+    /// Waiting, Running, Done (green), Problem (yellow), Failed (red), Cancelled (grey) — which look the card has.
+    public JobCardKind Kind => headline.Kind;
+    /// "A035_ARRI — kartu lze vysunout" / "B012_FX6 — kartu zatím nevysunujte" …
+    public string HeadTitle => headline.Title;
+    /// "Všech 24 souborů je na 2 discích a ověřených (xxHash64)." / "1 soubor na disku SHUTTLE_B nesouhlasí s kartou. …"
+    public string HeadSub => headline.Sub;
+
+    /// The destinations as the card names them ("RAID_A").
+    internal IReadOnlyList<string> DestNames => destNames ??= JobCard.DiskNames(Job.Plan?.DestRoots ?? Job.Config.DestRoots);
+
+    /// "Čeká na pozastavenou úlohu." under a waiting card that stands behind a paused job, or null.
+    public string? WaitingHint => JobCard.WaitingHint(headline);
+
+    /// Minor M12: every card folder of the job, one per line (the tooltip of the path on a finished card).
+    public string? PathsTooltip => Job.Plan is { } plan ? string.Join("\n", plan.CardPaths) : null;
+
+    /// "24 klipů · 1,70 GB · ALEXA 35"; before the plan, what the card had when it was started.
+    public string Sub
+    {
+        get
+        {
+            if (Job.Plan is { } p)
+                return JobCard.Sub(new JobCardFacts(p.Scan.Files.Count, PlanClips.Count, p.Scan.TotalBytes, facts?.Camera, p.Mode == PlanMode.Append));
+            return facts is { } f ? JobCard.Sub(f) : FilesText;
+        }
+    }
+
+    /// The waiting row: "B012_FX6" + " — doplnění" (or " — oprava").
+    public string TitleName => CardName;
+    public string TitleSuffix => Job.Config.AppendInto != null ? " — doplnění" : Job.Config.RepairInto != null ? " — oprava" : "";
+
+    /// "38 %" — the phase's share (the indicator shows which phase).
+    public string PercentText => $"{Math.Round(Progress * 100):0} %";
+
+    /// "…\2026-10-07\A035_ARRI\" on the finished card.
+    public string PathText => Job.Plan is { } plan ? SetupTexts.PathPreview(plan.Date, plan.CardName) : "";
 
     /// Where the card and each destination are connected — resolved once, off the UI thread.
     void ResolveChain(OffloadPlan plan)
@@ -105,6 +151,11 @@ public sealed class JobItemViewModel : QueueItem
     internal IEnumerable<VolumeDemand> SpaceDemands(long writtenAtProbe) =>
         space.Select(d => d with { Need = SpaceCheck.Remaining(d.Need, Phase, writtenAtProbe) });
     public bool IsRunning => progress.IsRunning;
+    public override bool IsPaused => progress.Status.Paused;
+    /// The copy or the read-back really waits now (the pill counts only these as paused).
+    public override bool IsPauseHeld => progress.Status.PauseHeld;
+    /// How long stage 2 took without pauses, once finished (RateMemory learns the next estimate from it).
+    public TimeSpan? Stage2Elapsed => progress.Stage2Elapsed;
     public override bool IsFinished => Phase.IsFinished();
     public bool SafeToEject => progress.Status.SafeToEject;
     public bool? CopySucceeded => progress.Status.CopySucceeded;
@@ -115,7 +166,13 @@ public sealed class JobItemViewModel : QueueItem
     public double Progress => progress.PhaseProgress;
     public string DetailText => progress.DetailText;
 
-    public string Title => Job.Plan is { Mode: PlanMode.Append } p ? AppendRules.Title(p.CardName) : Job.Plan?.CardName ?? sourceName;
+    public string Title => Job.Plan switch
+    {
+        { Mode: PlanMode.Append } p => AppendRules.Title(p.CardName),
+        { Mode: PlanMode.Repair } p => RepairRules.Title(p.CardName),
+        { } p => p.CardName,
+        _ => sourceName,
+    };
     /// The card folder's name (notifications, spec 4.3).
     internal string CardName => Job.Plan?.CardName ?? sourceName;
     public string FilesText
@@ -127,38 +184,6 @@ public sealed class JobItemViewModel : QueueItem
         }
     }
 
-    /// Computed once the plan exists (it never changes) — a new list every tick would rebuild the rows.
-    public IReadOnlyList<DestinationLine> DestinationLines
-    {
-        get
-        {
-            if (destinationLines != null) return destinationLines;
-            if (Job.Plan is not { } p) return [];
-            return destinationLines = p.DestRoots.Select((root, i) => new DestinationLine(
-                Path.GetFileName(root.TrimEnd('\\')) is { Length: > 0 } n ? n : root, $"› {p.Date}/{p.CardName}", p.CardPaths[i])).ToList();
-        }
-    }
-
-    /// The hardware chain with live throughput and the brake (spec 8a.3), while copying or verifying.
-    /// The same list instance comes back while the lines are unchanged, so the rows are not rebuilt every tick.
-    public IReadOnlyList<string> ChainLines
-    {
-        get
-        {
-            List<string> lines = [];
-            if (links != null && Phase is JobPhase.Copying or JobPhase.Verifying)
-            {
-                var rates = new List<double> { Phase == JobPhase.Copying ? progress.ReadRate / 1e6 : 0 };
-                rates.AddRange(progress.DestRates.Select(r => r / 1e6));
-                var chain = ChainView.Build(links, rates, connectors, portNames);
-                lines = ChainView.Lines(chain, Phase == JobPhase.Copying ? progress.Brake : null);
-            }
-            if (!lines.SequenceEqual(chainLines)) chainLines = lines;
-            return chainLines;
-        }
-    }
-
-    public bool HasChain => links != null && Phase is JobPhase.Copying or JobPhase.Verifying;
 
     public bool Ejected
     {
@@ -177,12 +202,12 @@ public sealed class JobItemViewModel : QueueItem
     public bool ShowEjectButton => ShowSafe && CanEject && owner.CardInDrive(this);
 
     /// A volume scan finished (a finished card is not refreshed every tick).
-    internal void VolumesChanged() => Raise(nameof(ShowEjectButton));
+    internal void VolumesChanged() => RaiseMany(nameof(ShowEjectButton), nameof(CanRepair));
+    /// A repair of this backup was queued or finished: the "Zkopírovat znovu" button may have to go (a finished card is not refreshed).
+    internal void RepairChanged() => Raise(nameof(CanRepair));
     public string SafeText => Texts.SafeToEject(Job.Plan?.CardPaths.Count ?? 0);
     // Cancelled (unlike the Mac): no red "N souborů selhalo" and no rate of a copy that was cut short — one orange line.
     bool IsCancelled => Phase == JobPhase.Cancelled;
-    public string? FailedText => !IsCancelled && Job.Report is { Success: false } r ? Texts.Failed(r.FailedFiles.Count) : null;
-    public string? CancelledText => IsCancelled && !SafeToEject ? "Zrušeno — karta není kompletně zálohovaná." : null;
     public string? ErrorText => progress.Status.Error;
     /// "Nic nového — záloha je úplná." (spec 2.2) and similar information.
     public string? NoteText => progress.Status.Note;

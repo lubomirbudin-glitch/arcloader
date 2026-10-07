@@ -91,6 +91,10 @@ public static class FFProbe
     public static ClipInfo Probe(string ffprobe, string path) =>
         Parse(ToolProcess.Run(ffprobe, ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", path]));
 
+    /// The same with a time limit (a card that was just put in must never hold its inspection): ToolError after it.
+    public static ClipInfo Probe(string ffprobe, string path, TimeSpan timeout) =>
+        Parse(ToolProcess.Run(ffprobe, ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", path], timeout: timeout));
+
     public static ClipInfo Parse(string json)
     {
         using var doc = JsonDocument.Parse(json);

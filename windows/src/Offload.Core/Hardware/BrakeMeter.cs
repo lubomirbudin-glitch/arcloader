@@ -32,6 +32,9 @@ public sealed class BrakeMeter
         this.linkMBps = linkMBps ?? [];
     }
 
+    /// Forgets the window (a pause: nothing moved meanwhile, the backlog says nothing about the disks).
+    public void Reset() => samples.Clear();
+
     /// Feed one progress snapshot (seconds from any fixed start). Returns the brake once the window holds
     /// enough history (half the window), else null.
     public Brake? Add(double seconds, long readBytes, IReadOnlyList<long> writtenBytes)

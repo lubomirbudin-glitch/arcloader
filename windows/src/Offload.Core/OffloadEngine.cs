@@ -14,6 +14,7 @@ public sealed partial class OffloadEngine
     int errorCount;
     long readBytes;
     DestWriter[] writers = [];
+    long[]? planned;
     OffloadPlan? plan;
 
     static readonly System.Text.RegularExpressions.Regex DateFormat = new(@"^\d{4}-\d{2}-\d{2}\z");
@@ -25,6 +26,29 @@ public sealed partial class OffloadEngine
     public void Cancel() => cts.Cancel();
 
     public bool IsCancelled => cts.IsCancellationRequested;
+
+    /// "Pozastavit": the copy and the read-back stop before their next block; the job's stage 2 waits at the same gate.
+    public PauseGate Pauses { get; } = new();
+
+    /// Waits while paused; false when the job was cancelled meanwhile (stage 2 uses it before every clip).
+    public bool WaitWhilePaused() => Pauses.WaitWhilePaused(cts.Token);
+
+    /// The file error (report JSON, English like every file error) of the files left out because the card in the drive
+    /// was not the copied one after a pause (ruling I1); the HTML says it in Czech.
+    public const string CardChangedWhilePaused = "card changed while paused";
+
+    /// Ruling I1: is the card in the drive still the one being copied? Asked on the copy thread before the next file
+    /// after a pause held the copy (the card may have been swapped or pulled meanwhile — same names, sizes and times are
+    /// no proof); false or an exception = it is not. Null = never asked (a folder source has no card identity).
+    internal Func<bool>? SameCard { get; set; }
+
+    /// Fix round 1: how many times more the card is identified, 250 ms apart, before it counts as changed — a reader
+    /// that answers late once after a pause must not fail the job.
+    internal const int IdentifyRetries = 3;
+
+    /// The card was not the copied one after a pause: the remaining files were left out (CardChangedWhilePaused).
+    public bool CardChanged => cardChanged;
+    volatile bool cardChanged;
 
     /// Scans the card and checks the destinations before a single byte is written. `extra`: what proxies and the report
     /// will need besides the card (spec 2.5), worked out from the scan; null = the card alone.
@@ -83,6 +107,48 @@ public sealed partial class OffloadEngine
             Mode = PlanMode.Append, Generation = a.Generation, FullScan = a.FullScan, UnverifiedEarlier = a.UnverifiedEarlier,
             Space = space, SpaceWarnings = warnings,
             Hashes = HashKinds.FromNames(a.HashAlgorithms),   // the earlier backup's, not the current setting (spec 3.5)
+        };
+    }
+
+    /// A repair ("Zkopírovat znovu", UI návrh 4): the checks of an append (options, source, the earlier backup and its
+    /// destinations), then what RepairPlanner finds — the card compared with the backup by size, time and hash before
+    /// anything is written. `RepairNothing` when every file is good everywhere. Cancel() stops it too.
+    public RepairPlan PlanRepair(string source, IReadOnlyList<string> cardPaths, CancellationToken ct = default)
+    {
+        CheckOptions();
+        source = CheckSource(source);
+        FullRoots(cardPaths);
+        CheckNotAnOffload(source);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, cts.Token);
+        var r = RepairPlanner.Plan(source, cardPaths, linked.Token);
+        CheckDestinations(source, r.DestRoots);
+        return r;
+    }
+
+    /// The plan of a repair: only the files that failed, only onto the destinations where they failed (FAT32 and the
+    /// space checked there), generation N in the same card folders. Always read back (ruling M16).
+    public OffloadPlan PrepareRepair(RepairPlan r)
+    {
+        if (!Options.Verify) throw OffloadError.Preflight(PreflightCode.RepairConflict, Msg.RepairNeedsVerify);
+        var scan = new SourceScan { Root = r.Source, Files = r.Files, Dirs = r.Dirs, Skipped = [] };
+        var places = new List<SpacePlace>();
+        for (int d = 0; d < r.DestRoots.Count; d++)
+        {
+            var written = r.Files.Where((_, i) => r.Write[i][d]).ToList();
+            if (Fat32Problem(NativeIO.FilesystemType(r.DestRoots[d]), written) is string fat)
+                throw OffloadError.Preflight(PreflightCode.Fat32, $"{r.DestRoots[d]}: {fat}");
+            long card = written.Count == 0 ? 0 : SpaceEstimator.CardBytes(written.Sum(f => f.Size), written.Count);
+            places.Add(new SpacePlace(r.DestRoots[d], HistoryText.DiskName(r.DestRoots[d]), new SpaceNeed(card, 0, SpaceEstimator.ReportBytes(0))));
+        }
+        var (problems, lines) = SpacePlanner.CheckPlaces(places, FreeBytes);
+        if (problems.FirstOrDefault(p => p.Severity == SpaceSeverity.Blocking) is { } blocking)
+            throw OffloadError.Preflight(PreflightCode.NoSpace, blocking.Text);
+        return new OffloadPlan
+        {
+            Source = r.Source, Scan = scan, Date = r.Date, CardName = r.CardName, DestRoots = r.DestRoots,
+            Mode = PlanMode.Repair, Generation = r.Generation, Space = lines, SpaceWarnings = problems.Select(p => p.Text).ToList(),
+            Hashes = HashKinds.FromNames(r.HashAlgorithms), Write = r.Write, Expected = r.Expected, SetAside = r.SetAside,
+            ReadBackBefore = r.ReadBackBefore, NotInBackup = r.NotInBackup,
         };
     }
 
@@ -196,7 +262,8 @@ public sealed partial class OffloadEngine
         lock (gate)
         {
             return new ProgressSnapshot(phase, plan?.Scan.TotalBytes ?? 0, plan?.Scan.Files.Count ?? 0, fileIndex, currentFile,
-                Interlocked.Read(ref readBytes), writers.Select(w => w.Written).ToArray(), writers.Select(w => w.Verified).ToArray(), errorCount);
+                Interlocked.Read(ref readBytes), writers.Select(w => w.Written).ToArray(), writers.Select(w => w.Verified).ToArray(), errorCount,
+                Pauses.IsPaused, Pauses.IsHolding && writers.All(w => w.IsIdle), planned, writers.Select(w => w.VerifyPlanned).ToArray());
         }
     }
 

@@ -151,7 +151,7 @@ public class AppendPlannerTests
         File.Delete(Layout.Join(paths[1], "CLIP/A001C002.mov"));
         var e = Refused(card, paths);
         Assert.Equal(PreflightCode.AppendMissingFile, e.Code);
-        Assert.Equal($"Na {AppendPlanner.Disk(paths[1])} chybí soubor z dřívější zálohy: CLIP/A001C002.mov — zkontrolujte zálohu přes Nástroje → Ověřit zálohu…", e.Message);
+        Assert.Equal($"Na {AppendPlanner.Disk(paths[1])} chybí soubor z dřívější zálohy: CLIP/A001C002.mov — zkontrolujte zálohu přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify)", e.Message);
     }
 
     static void MarkFailed(string cardPath, string rel)
@@ -202,7 +202,7 @@ public class AppendPlannerTests
 
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
         var disk = AppendPlanner.Disk(paths[0]);
-        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Nástroje → Ověřit zálohu…; doplnit nejde.", e.Message);
+        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify); doplnit nejde.", e.Message);
     }
 
     // Ruling I1: an append whose reports landed but whose MHL generation did not — the next one must not reuse 0002.
@@ -223,7 +223,7 @@ public class AppendPlannerTests
 
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
         Assert.Equal($"V {paths[0]} nesouhlasí reporty s ASC MHL (poslední report je generace 2, poslední generace MHL 1) — dřívější doplnění se nedokončilo. "
-            + "Zkontrolujte zálohu přes Nástroje → Ověřit zálohu… a složku opravte ručně; doplnit nejde.", e.Message);
+            + "Zkontrolujte zálohu přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify) a složku opravte ručně; doplnit nejde.", e.Message);
     }
 
     [Fact]
@@ -353,7 +353,7 @@ public class AppendPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.AppendMhlDamaged, e.Code);
-        Assert.Equal($"Historie ASC MHL v {paths[1]} je poškozená — zkontrolujte ji přes Nástroje → Ověřit zálohu…; doplnit nejde.", e.Message);
+        Assert.Equal($"Historie ASC MHL v {paths[1]} je poškozená — zkontrolujte ji přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify); doplnit nejde.", e.Message);
 
         File.WriteAllText(gen1, File.ReadAllText(gen1)[..^1]);
         Assert.Single(AppendPlanner.Plan(card, paths).NewFiles);   // repaired: fine again
@@ -395,6 +395,27 @@ public class AppendPlannerTests
         var (card, paths) = AppendFixtures.CopiedCard(dir, verify: false);
         AppendFixtures.NewClip(card);
         Assert.Equal(2, AppendPlanner.Plan(card, paths).UnverifiedEarlier);
+    }
+
+    // Plan 9 fix round 2, item D (ruling R2): the planner counts unverified files by the one definition
+    // (CardRecord.ReadBack), as the day report does — a copy recorded "verified" was read back, also in a report whose
+    // read-back as a whole did not end (cancelled after the last file).
+    [Fact]
+    public void UnverifiedEarlier_TheSharedDefinition()
+    {
+        using var dir = new TempDir();
+        var (card, paths) = AppendFixtures.CopiedCard(dir);
+        foreach (var p in paths)
+        {
+            var json = Path.Combine(p, "_REPORT", "offload_report.json");
+            var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(json))!;
+            node["verified"] = false;
+            File.WriteAllText(json, node.ToJsonString());
+            Assert.True(CardRecord.Load(p).Verified);
+        }
+        AppendFixtures.NewClip(card);
+
+        Assert.Equal(0, AppendPlanner.Plan(card, paths).UnverifiedEarlier);
     }
 
     [Fact]

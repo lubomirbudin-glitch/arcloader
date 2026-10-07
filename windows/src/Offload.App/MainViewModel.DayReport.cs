@@ -13,10 +13,11 @@ public sealed partial class MainViewModel
 
     public RelayCommand DayReportCommand { get; private set; } = null!;
 
-    void InitDayReport() => DayReportCommand = new RelayCommand(PickAndMakeDayReport, () => !closing && !makingDayReport);
+    void InitDayReport() => DayReportCommand = new RelayCommand(PickAndMakeDayReport, () => !closing && !makingDayReport && Allowed(DemoCommand.DayReport));
 
     async void PickAndMakeDayReport()
     {
+        if (!Allowed(DemoCommand.DayReport)) return;
         if (Dialogs.PickFolder("Vyberte složku dne na cíli") is not string folder) return;
         makingDayReport = true;
         var all = SettingsStore.Clone(AllSettings);   // a snapshot for the background thread

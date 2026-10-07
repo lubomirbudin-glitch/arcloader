@@ -59,22 +59,27 @@ public static class Hashing
     }
 
     /// Every hash in `kinds` (xxh64 always) in one read of the file — the read-back verification of a copy.
-    public static (FileHashes Hashes, long Size) HashFile(string path, AlignedBuffer buffer, HashKind kinds, Action<int>? progress = null, CancellationToken ct = default)
+    /// `beforeBlock`: called before every block is read (a pause waits there).
+    public static (FileHashes Hashes, long Size) HashFile(string path, AlignedBuffer buffer, HashKind kinds, Action<int>? progress = null, CancellationToken ct = default,
+        Action? beforeBlock = null)
     {
         var xx = HashAlgo.Create("xxh64");
         var md5 = HashKinds.Normalize(kinds).HasFlag(HashKind.Md5) ? HashAlgo.Create("md5") : null;
-        long size = HashFile(path, buffer, md5 == null ? [xx] : [xx, md5], progress, ct);
+        long size = HashFile(path, buffer, md5 == null ? [xx] : [xx, md5], progress, ct, beforeBlock);
         return (new FileHashes(Convert.ToUInt64(xx.Finish(), 16), md5 == null ? null : Convert.FromHexString(md5.Finish())), size);
     }
 
     /// The one read loop: the file is read once, straight from the media, and every hash in `hashers` is fed each block.
     /// Returns the size read.
-    public static long HashFile(string path, AlignedBuffer buffer, IReadOnlyList<IFileHash> hashers, Action<int>? progress = null, CancellationToken ct = default)
+    public static long HashFile(string path, AlignedBuffer buffer, IReadOnlyList<IFileHash> hashers, Action<int>? progress = null, CancellationToken ct = default,
+        Action? beforeBlock = null)
     {
         using var reader = new FileReader(path);
         long offset = 0;
         while (true)
         {
+            ct.ThrowIfCancellationRequested();
+            beforeBlock?.Invoke();
             ct.ThrowIfCancellationRequested();
             int n = reader.Read(buffer.Span, offset);
             if (n == 0) break;

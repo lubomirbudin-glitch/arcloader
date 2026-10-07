@@ -2,16 +2,20 @@ namespace Offload.Core.Desktop;
 
 /// Offload.exe arguments: `--no-hw-prompt` is still accepted (older scripts) but has no effect — the USB check
 /// is on demand only since 2026-10-05 (spec 8a.2), there is no start-up question; every argument that is
-/// an existing folder becomes a ticked manual source (drag a folder onto Offload.exe).
-public sealed record StartupOptions(bool NoHwPrompt, IReadOnlyList<string> Sources)
+/// an existing folder becomes a ticked manual source (drag a folder onto Offload.exe). `--demo <stav>` (pripraveno,
+/// probiha, hotovo, nastaveni) fills the window with a state of docs/ui-navrh for the visual check — off by default.
+public sealed record StartupOptions(bool NoHwPrompt, IReadOnlyList<string> Sources, DemoState? Demo = null)
 {
     public static StartupOptions Parse(IReadOnlyList<string> args)
     {
         bool noPrompt = false;
+        DemoState? demo = null;
         var sources = new List<string>();
-        foreach (var a in args)
+        for (int i = 0; i < args.Count; i++)
         {
+            var a = args[i];
             if (a.Equals("--no-hw-prompt", StringComparison.OrdinalIgnoreCase)) noPrompt = true;
+            else if (a.Equals("--demo", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count) demo = DemoScenario.Parse(args[++i]);
             else if (!a.StartsWith("--", StringComparison.Ordinal))
             {
                 try
@@ -25,6 +29,6 @@ public sealed record StartupOptions(bool NoHwPrompt, IReadOnlyList<string> Sourc
                 }
             }
         }
-        return new StartupOptions(noPrompt, sources);
+        return new StartupOptions(noPrompt, sources, demo);
     }
 }
