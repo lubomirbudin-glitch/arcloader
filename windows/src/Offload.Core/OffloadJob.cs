@@ -537,7 +537,7 @@ public sealed class OffloadJob
                 info.Reel = ReelResolver.Resolve(entries[i].Clip, info, plan.CardName);
                 entries[i].Info = info;
                 // The Sony XML is read from the destination: it sits next to the clip on the card, so it was copied too.
-                entries[i].Lut = LutResolver.Resolve(entries[i].Clip, info, Layout.Join(cardPaths[d], entries[i].Clip.Path), Config.Proxy, LutCatalog.Default);
+                entries[i].Lut = LutResolver.Resolve(entries[i].Clip, info, Layout.Join(cardPaths[d], entries[i].Clip.Path), Config.Proxy, LutCatalog.Default, plan.CardName);
                 // RED and ARRI raw cannot give a single frame directly; their thumbnails come from the proxy later.
                 if (entries[i].Clip.Format is not (ClipFormat.R3d or ClipFormat.Arriraw))
                     entries[i].Thumbnails = TryThumbnails(renderer, entries[i].Clip, cardPaths[d], info, entries[i].Lut, () => IsCancelled, log);

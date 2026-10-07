@@ -69,7 +69,7 @@ public sealed partial class MainViewModel
     /// A LUT or proxy folder of the profile shown that this Start uses and the last check found missing (its red text
     /// says why). The profile shown does not block a Start of appends only — they do not use it.
     bool ShownCheckMissing() => StartChecksNow().Any(c => c.Shown && (c.Kind == StartCheckKind.Lut
-        ? lutExists == false && string.Equals(c.Path, lutCheckedPath, StringComparison.OrdinalIgnoreCase)
+        ? lutMissing != null && lutCheckedKey == ProxyPreflight.LutKey(LutFiles) && string.Equals(c.Path, lutMissing.Path, StringComparison.OrdinalIgnoreCase)
         : folderExists == false && string.Equals(c.Path, folderCheckedPath, StringComparison.OrdinalIgnoreCase)));
     /// The hint under the start bar: why Start is off when the setup itself does not say it (a speed measurement runs).
     public string? StartProblem => QueueRules.StartProblem(Measuring);
@@ -176,7 +176,13 @@ public sealed partial class MainViewModel
                 exists = answered && check.IsCompletedSuccessfully && check.Result;
                 if (!answered) AppLog.Write($"LUT check before start: no answer from {c.Path} in 5 s");
                 if (!StartChecksNow().Any(n => Key(n) == Key(c))) continue;   // changed meanwhile
-                if (c.Shown) SetLutState(c.Path, exists);
+                if (c.Shown)
+                {
+                    // The shown profile's red text: a rule's file names its rule (LutFile.Rule), not just the file.
+                    if (!exists) SetLutState(ProxyPreflight.LutKey(LutFiles), new LutFile(c.Path, c.Rule));
+                    else if (lutMissing is { } was && string.Equals(was.Path, c.Path, StringComparison.OrdinalIgnoreCase))
+                        SetLutState(ProxyPreflight.LutKey(LutFiles), null);
+                }
             }
             else
             {

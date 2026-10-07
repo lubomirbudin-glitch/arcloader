@@ -130,6 +130,24 @@ public static class SonyXml
             return null;
         }
     }
+
+    /// The camera's serial number from the same sidecar (`<Device … serialNo="…"/>`), or null.
+    public static string? Serial(string clipFullPath)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(clipFullPath);
+            if (dir == null) return null;
+            var xml = Path.Combine(dir, Path.GetFileNameWithoutExtension(clipFullPath) + "M01.XML");
+            if (!System.IO.File.Exists(xml)) return null;
+            var device = System.Xml.Linq.XDocument.Load(xml).Descendants().FirstOrDefault(e => e.Name.LocalName == "Device");
+            return device?.Attribute("serialNo")?.Value.Trim() is { Length: > 0 } serial ? serial : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 }
 
 /// Which LUT a clip gets (spec: luts design §3). Pure rules over metadata; never throws.
@@ -137,7 +155,8 @@ public static class LutResolver
 {
     public static LutMode EffectiveMode(ProxySettings s) => s.LutMode ?? (!string.IsNullOrEmpty(s.LutPath) ? LutMode.Custom : LutMode.Auto);
 
-    public static LutUse Resolve(Clip clip, ClipInfo? info, string clipFullPath, ProxySettings s, LutCatalog cat)
+    /// `cardName`: the card folder - own rules match folders below it and fall back to it as the reel (spec 4.2).
+    public static LutUse Resolve(Clip clip, ClipInfo? info, string clipFullPath, ProxySettings s, LutCatalog cat, string cardName = "")
     {
         switch (EffectiveMode(s))
         {
@@ -150,6 +169,9 @@ public static class LutResolver
             case LutMode.Builtin:
                 return Builtin(cat, s.LutBuiltin, "builtin", "vybraný v nastavení") ?? LutUse.None("vestavěný LUT nenalezen");
         }
+        // R18: own rules first, only here in Auto mode.
+        if (s.LutRules.Count > 0 && LutRules.Match(s.LutRules, clip, info, info?.Reel ?? ReelResolver.Resolve(clip, info, cardName), cardName) is { } rule)
+            return LutRules.Use(rule.Number, rule.Rule, cat);
         if (cat.Luts.Count == 0) return LutUse.None("vestavěné LUTy chybí");
         var (id, reason) = Detect(clip, info, clipFullPath);
         if (id == "") return LutUse.None(reason);                     // recognised, but not log footage

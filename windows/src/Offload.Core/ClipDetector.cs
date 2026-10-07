@@ -125,7 +125,23 @@ public static class FFProbe
         info.Camera = Camera(Str(ftags, "com.apple.quicktime.make"), Str(ftags, "com.apple.quicktime.model"))
             ?? Str(ftags, "product_name") ?? Str(ftags, "company_name");
         info.Reel = new[] { format }.Concat(streams).Select(x => Reel(Tags(x))).FirstOrDefault(r => r != null);
+        info.CameraSerial = new[] { format }.Concat(streams).Select(x => Tag(Tags(x), SerialTags)).FirstOrDefault(t => t != null);
         return info;
+    }
+
+    /// Tags that carry the camera body's serial number (spec 4.2): QuickTime (Apple, Blackmagic, Canon), others.
+    static readonly string[] SerialTags = ["com.apple.quicktime.camera.identifier", "camera_serial_number"];
+
+    /// The first of `names` the tags have (regardless of case), trimmed and not empty; else null.
+    static string? Tag(JsonElement tags, IReadOnlyList<string> names)
+    {
+        if (tags.ValueKind != JsonValueKind.Object) return null;
+        foreach (var name in names)
+            foreach (var p in tags.EnumerateObject())
+                if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.String
+                    && p.Value.GetString()!.Trim() is { Length: > 0 } value)
+                    return value;
+        return null;
     }
 
     /// Tags that name the reel: MOV keeps it on the timecode track (tmcd "reel_name"), MXF on every stream.

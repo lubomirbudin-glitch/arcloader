@@ -171,12 +171,14 @@ public class SettingsStoreTests
     public void UnknownKeys_KeptByClone_NoneForFreshSettings()
     {
         using var dir = new TempDir();
-        var s = LoadJson(dir, """{"proxy":{"lutRules":[]},"updates":{"manifest":null}}""");
-        Assert.True(SettingsStore.Clone(s.Proxy).Extra!.ContainsKey("lutRules"));
-        Assert.True(SettingsStore.Clone(s).Extra!.ContainsKey("updates"));
+        // Keys no version knows yet (plan 8 made "lutRules" and "updates" known keys).
+        var s = LoadJson(dir, """{"proxy":{"futureRules":[]},"futureTop":{"manifest":null}}""");
+        Assert.True(SettingsStore.Clone(s.Proxy).Extra!.ContainsKey("futureRules"));
+        Assert.True(SettingsStore.Clone(s).Extra!.ContainsKey("futureTop"));
         var fresh = Path.Combine(dir.Path, "fresh.json");
         SettingsStore.Save(new AppSettings(), fresh);
         Assert.DoesNotContain("Extra", File.ReadAllText(fresh));
+        Assert.DoesNotContain("futureRules", File.ReadAllText(fresh));
         Assert.DoesNotContain("lutRules", File.ReadAllText(fresh));
     }
 

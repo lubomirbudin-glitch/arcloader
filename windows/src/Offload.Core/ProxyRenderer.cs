@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.ExceptionServices;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Offload.Core;
@@ -26,10 +27,10 @@ public sealed class ProxyRenderer : IDisposable
         }
     }
     readonly string workDir;
-    readonly bool hasCustomLut;
     readonly bool hasFont;
-    /// Built-in LUT ids already copied into the work folder.
-    readonly HashSet<string> builtinLuts = new(StringComparer.Ordinal);
+    /// The LUT files already copied into the work folder (by their name there), and the ones that could not be.
+    readonly HashSet<string> copiedLuts = new(StringComparer.Ordinal);
+    readonly HashSet<string> failedLuts = new(StringComparer.Ordinal);
 
     public ProxySettings Settings { get; }
     public ExternalTools Tools { get; }
@@ -71,12 +72,7 @@ public sealed class ProxyRenderer : IDisposable
         Directory.CreateDirectory(workDir);
         try
         {
-            // The custom LUT is copied up front as before; built-in ones lazily, per clip (PrepareLut).
-            if (LutResolver.EffectiveMode(settings) == LutMode.Custom && !string.IsNullOrEmpty(settings.LutPath) && File.Exists(settings.LutPath))
-            {
-                File.Copy(settings.LutPath, Path.Combine(workDir, FilterGraph.LutFile));
-                hasCustomLut = true;
-            }
+            // LUTs are copied lazily, per clip and once each (PrepareLut): built-in ones, the custom one, own rules' ones.
             if (FontCandidates.FirstOrDefault(File.Exists) is string font)
             {
                 File.Copy(font, Path.Combine(workDir, FilterGraph.FontFile));
@@ -117,7 +113,9 @@ public sealed class ProxyRenderer : IDisposable
         if (clip.Format == ClipFormat.Video)
         {
             var ffprobe = Tools.Ffprobe ?? throw new ToolError("ffprobe", -1, Msg.FfprobeNotFound);
-            return FFProbe.Probe(ffprobe, path);
+            var info = FFProbe.Probe(ffprobe, path);
+            info.CameraSerial ??= SonyXml.Serial(path);   // Sony keeps it in the XML next to the clip (spec 4.2)
+            return info;
         }
         if (!backends.TryGetValue(clip.Format, out var b) || !b.IsAvailable(Tools))
             throw new ToolError(clip.Format.Label(), -1, UnsupportedReason(clip) ?? "");
@@ -190,25 +188,36 @@ public sealed class ProxyRenderer : IDisposable
         return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt));
     }
 
-    /// The .cube for this clip by its name in the work folder, or null for no LUT. The custom LUT was copied
-    /// in the constructor (null when it was missing); a built-in one is copied on first use, once per id.
-    string? PrepareLut(LutUse? lut)
+    /// The .cube for this clip by its name in the work folder, or null for no LUT. Copied on first use, once per file:
+    /// a built-in one as `lut-<id>.cube`, an own one (the custom LUT, a rule's) as `lut-custom-<8 hex of SHA-1 of its
+    /// path>.cube` — two rules with two .cube files in one job each get their own (spec 4.2). A file that cannot be
+    /// read (gone since the check before the start) means no LUT, logged once.
+    internal string? PrepareLut(LutUse? lut)
     {
         if (lut?.File is not string file) return null;
-        if (!lut.IsBuiltin) return hasCustomLut ? FilterGraph.LutFile : null;
-        var name = $"lut-{lut.Id}.cube";
-        if (!builtinLuts.Contains(lut.Id!))
+        var name = lut.IsBuiltin
+            ? $"lut-{lut.Id}.cube"
+            : $"lut-custom-{Convert.ToHexStringLower(SHA1.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(file).ToUpperInvariant())))[..8]}.cube";
+        if (copiedLuts.Contains(name)) return name;
+        if (failedLuts.Contains(name)) return null;
+        try
         {
             File.Copy(file, Path.Combine(workDir, name), overwrite: true);
-            builtinLuts.Add(lut.Id!);
         }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            failedLuts.Add(name);
+            Log?.Invoke($"LUT {file}: {e.Message} — no LUT");
+            return null;
+        }
+        copiedLuts.Add(name);
         return name;
     }
 
-    /// Plan 8 fix round 1: a clip whose custom LUT was missing when this renderer was made renders without it — the
-    /// proxy says so (null otherwise; built-in LUTs ship with the app).
+    /// Plan 8: a clip whose own LUT (the custom one, or a rule's) cannot be read renders without it — the proxy says so
+    /// (null otherwise; built-in LUTs ship with the app).
     public string? LutNote(LutUse? lut) =>
-        lut is { IsBuiltin: false, File: string file } && !hasCustomLut ? Msg.ProxyWithoutLut(Path.GetFileName(file)) : null;
+        lut is { IsBuiltin: false, File: string file } && PrepareLut(lut) == null ? Msg.ProxyWithoutLut(Path.GetFileName(file)) : null;
 
     /// RAW decoders hand over log whenever a LUT follows; ARRI's target space must match a built-in ARRI LUT.
     internal static RawLook LookFor(LutUse? lut, ClipInfo info)

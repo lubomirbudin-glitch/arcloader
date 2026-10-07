@@ -69,12 +69,13 @@ public static class AppendRules
         {
             bool shown = ReferenceEquals(p, s.Active);
             var name = p is ProjectSettings named ? named.Name : Projects.NoProject;
-            void Add(StartCheckKind kind, string? path)
+            void Add(StartCheckKind kind, string? path, int? rule = null)
             {
                 if (path != null && !checks.Any(c => c.Kind == kind && string.Equals(c.Path, path, StringComparison.OrdinalIgnoreCase)))
-                    checks.Add(new StartCheck(kind, path, name, shown));
+                    checks.Add(new StartCheck(kind, path, name, shown, rule));
             }
-            Add(StartCheckKind.Lut, ProxyPreflight.LutInUse(p.Proxy, p.AnalyzeClips));
+            // The custom LUT, or the own .cube files of the rules that apply (Auto mode, rules this version knows).
+            foreach (var f in ProxyPreflight.LutFilesInUse(p.Proxy, p.AnalyzeClips)) Add(StartCheckKind.Lut, f.Path, f.Rule);
             Add(StartCheckKind.ProxyFolder, ProxyPreflight.ExtraFolderInUse(p.Proxy));
         }
         return checks;
@@ -84,11 +85,14 @@ public static class AppendRules
 public enum StartCheckKind { Lut, ProxyFolder }
 
 /// A file or folder a Start uses (AppendRules.StartChecks): `Project` is the profile's name ("Bez projektu" for the top
-/// level); `Shown` = of the profile shown now.
-public sealed record StartCheck(StartCheckKind Kind, string Path, string Project, bool Shown)
+/// level); `Shown` = of the profile shown now; `Rule` = the number of the LUT rule whose own .cube it is (null: the custom
+/// LUT or a folder).
+public sealed record StartCheck(StartCheckKind Kind, string Path, string Project, bool Shown, int? Rule = null)
 {
     /// Why the Start is refused when it is missing — for another project's file (the shown one has its red text).
     public string Problem => Kind == StartCheckKind.Lut
-        ? $"LUT projektu {Project} nenalezen: {System.IO.Path.GetFileName(Path)} — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte."
+        ? Rule is int n
+            ? $"LUT z pravidla {n} projektu {Project} nenalezen: {System.IO.Path.GetFileName(Path)} — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte."
+            : $"LUT projektu {Project} nenalezen: {System.IO.Path.GetFileName(Path)} — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte."
         : $"Složka pro proxy projektu {Project} není dostupná: {Path} — doplnění karty se nespustí.";
 }

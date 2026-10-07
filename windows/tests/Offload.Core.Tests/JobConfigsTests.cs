@@ -320,4 +320,31 @@ public class JobConfigsTests
 
         Assert.Equal([new StartCheck(StartCheckKind.Lut, @"C:\Luty\bez.cube", "Bez projektu", Shown: false)], checks);
     }
+
+    // Task 5: a rule's own .cube is a start check too, naming the rule and the project; only rules that apply.
+    [Fact]
+    public void StartChecks_RuleCubes_OfTheShownProfileAndOfAnAppendsProject()
+    {
+        var s = Settings("Reklama Y");
+        s.Active.Proxy.Enabled = true;
+        s.Active.Proxy.LutMode = LutMode.Auto;
+        s.Active.Proxy.LutRules = [new LutRule { Match = "camera", Value = "FX6", Lut = "none" },
+            new LutRule { Match = "lens", Value = "35", LutPath = @"C:\Luty\future.cube" },
+            new LutRule { Match = "reel", Value = "A", LutPath = @"C:\Luty\show.cube" }];
+        var film = s.Projects[0];
+        film.Proxy.Enabled = true;
+        film.Proxy.LutMode = LutMode.Auto;
+        film.Proxy.LutRules = [new LutRule { Match = "folder", Value = "*", LutPath = @"C:\Luty\film.cube" }];
+
+        var checks = AppendRules.StartChecks(s, fullCopies: 1, [Entry("Film X")]);
+
+        Assert.Equal(
+            [new StartCheck(StartCheckKind.Lut, @"C:\Luty\show.cube", "Reklama Y", Shown: true, Rule: 3),
+             new StartCheck(StartCheckKind.Lut, @"C:\Luty\film.cube", "Film X", Shown: false, Rule: 1)],
+            checks);
+        Assert.Equal("LUT z pravidla 1 projektu Film X nenalezen: film.cube — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte.", checks[1].Problem);
+        // Auto mode only: rules do not count while another LUT mode is chosen.
+        film.Proxy.LutMode = LutMode.None;
+        Assert.Single(AppendRules.StartChecks(s, fullCopies: 1, [Entry("Film X")]));
+    }
 }

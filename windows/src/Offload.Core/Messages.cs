@@ -153,6 +153,7 @@ public static class Msg
     public static string UnknownProxyCodec(string? x) =>
         $"Neznámý kodek proxy „{x}“ — použijte h264, hevc, proresProxy, proresLT, prores422 nebo prores422HQ.";
     public static string LutNotFound(string path) => $"LUT nenalezen: {path}";
+    public static string RuleLutNotFound(int rule, string name) => $"LUT z pravidla {rule} nenalezen: {name}";
     /// A proxy rendered without its custom LUT (the file was gone when stage 2 began).
     public static string ProxyWithoutLut(string file) => $"LUT nenalezen: {file} — proxy bez LUTu";
     public static string UnknownHash(string? x) => $"Neznámý kontrolní součet „{x}“ — použijte xxh64 nebo both (xxh64 + MD5).";

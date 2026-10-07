@@ -268,6 +268,7 @@ public static class SettingsStore
             if (p.LutMode == LutMode.Builtin && p.LutBuiltin == null) p.LutMode = LutMode.Auto;
         }
         p.ExtraFolder = string.IsNullOrWhiteSpace(p.ExtraFolder) ? null : p.ExtraFolder.Trim();
+        p.LutRules = LutRules.Valid(p.LutRules);   // spec 4.2: an invalid rule is dropped when the settings are read (rules of a newer version stay, I3)
     }
 
     /// Written to a temporary file next to it, then moved over — a crash never leaves a half-written file.
@@ -304,17 +305,45 @@ public static class SettingsStore
     public static T Clone<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.SerializeToUtf8Bytes(value, Json), Json)!;
 }
 
+/// An own .cube a start needs: the custom LUT (Rule null) or the one of own rule number `Rule` (spec 4.2).
+public sealed record LutFile(string Path, int? Rule);
+
 /// Checks before a start that the proxy/thumbnail settings can work.
 public static class ProxyPreflight
 {
+    /// Every own .cube the next start uses (only when proxies or thumbnails are made): the custom LUT in custom mode, the
+    /// rules' files in Auto mode (numbered by position; a rule of a newer version never applies, I3). Built-in LUTs ship
+    /// with the app and are not checked.
+    public static IReadOnlyList<LutFile> LutFilesInUse(ProxySettings p, bool analyzeClips)
+    {
+        if (!p.Enabled && !analyzeClips) return [];
+        return LutResolver.EffectiveMode(p) switch
+        {
+            LutMode.Custom => p.LutPath is string path ? [new LutFile(path, null)] : [],
+            LutMode.Auto => p.LutRules.Select((r, i) => (Rule: r, Number: i + 1)).Where(x => LutRules.IsValid(x.Rule) && x.Rule.LutPath != null)
+                .Select(x => new LutFile(x.Rule.LutPath!, x.Number)).ToList(),
+            _ => [],
+        };
+    }
+
+    /// What the files are — the cache key of a check made off the UI thread.
+    public static string LutKey(IReadOnlyList<LutFile> files) => string.Join("\n", files.Select(f => $"{f.Rule}|{f.Path}"));
+
+    /// The first file that is not there, or null. Touches the disk.
+    public static LutFile? FirstMissing(IReadOnlyList<LutFile> files) => files.FirstOrDefault(f => !File.Exists(f.Path));
+
+    /// The red text for a missing file: "LUT z pravidla 2 nenalezen: show.cube" (spec 4.2) or the custom LUT's.
+    public static string? MissingText(LutFile? missing) => missing == null ? null
+        : missing.Rule is int n ? Msg.RuleLutNotFound(n, Path.GetFileName(missing.Path))
+        : $"LUT nenalezen: {Path.GetFileName(missing.Path)} — vyberte jiný nebo ho odeberte.";
+
     /// The custom .cube that must exist before a start (only in custom mode — built-in LUTs ship with the app).
     public static string? LutInUse(ProxySettings p, bool analyzeClips) =>
         (p.Enabled || analyzeClips) && LutResolver.EffectiveMode(p) == LutMode.Custom ? p.LutPath : null;
 
-    /// Why "Spustit offload" must stay disabled, or null. A missing LUT would break thumbnails and proxies.
-    /// Touches the disk — the GUI uses the overload with a cached answer instead.
-    public static string? Blocking(ProxySettings p, bool analyzeClips) =>
-        Blocking(p, analyzeClips, LutInUse(p, analyzeClips) is string lut ? File.Exists(lut) : null);
+    /// Why "Spustit offload" must stay disabled, or null: a missing custom LUT or a rule's .cube would break thumbnails
+    /// and proxies. Touches the disk — the GUI checks off the UI thread and keeps the answer (LutFilesInUse, FirstMissing).
+    public static string? Blocking(ProxySettings p, bool analyzeClips) => MissingText(FirstMissing(LutFilesInUse(p, analyzeClips)));
 
     /// The same from an answer checked off the UI thread: `lutExists` null = not checked yet (does not block).
     public static string? Blocking(ProxySettings p, bool analyzeClips, bool? lutExists) =>

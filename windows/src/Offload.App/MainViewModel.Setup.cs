@@ -29,9 +29,10 @@ public sealed partial class MainViewModel
     // Every ~5 s off the UI thread: missing destinations (a NAS that came back), present network/removable ones
     // (a NAS that dropped out), the LUT and the proxy folder are checked again.
     readonly DispatcherTimer healthTimer = new() { Interval = TimeSpan.FromSeconds(5) };
-    // The LUT's existence, checked off the UI thread (CanStart is evaluated 3×/s and must never touch a disk).
-    string? lutCheckedPath;
-    bool? lutExists;
+    // The own LUT files' existence (custom LUT, rules), checked off the UI thread (CanStart is evaluated 3×/s and must
+    // never touch a disk): the files checked and the first missing one.
+    string? lutCheckedKey;
+    LutFile? lutMissing;
     bool lutChecking, lutRecheck;
     // The same for the extra proxy folder (a disk that may be disconnected).
     string? folderCheckedPath;
@@ -459,15 +460,14 @@ public sealed partial class MainViewModel
 
     // ── Proxy a dekodéry ───────────────────────────────────────────────────
 
-    /// A missing LUT blocks the start (red); missing ffmpeg only warns (orange). From the cached check — no disk here.
-    public string? LutProblem => ProxyPreflight.Blocking(Settings.Proxy, Settings.AnalyzeClips, CachedLutExists);
+    /// A missing LUT (custom, or an own rule's) blocks the start (red); missing ffmpeg only warns (orange). From the cached
+    /// check — no disk here; while the files in use have not been checked yet, nothing blocks.
+    public string? LutProblem =>
+        lutCheckedKey != null && lutCheckedKey == ProxyPreflight.LutKey(LutFiles) ? ProxyPreflight.MissingText(lutMissing) : null;
 
-    bool? CachedLutExists =>
-        ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is string lut && string.Equals(lut, lutCheckedPath, StringComparison.OrdinalIgnoreCase)
-            ? lutExists
-            : null;
+    IReadOnlyList<LutFile> LutFiles => ProxyPreflight.LutFilesInUse(Settings.Proxy, Settings.AnalyzeClips);
 
-    /// Checks the LUT off the UI thread; a request during a check runs once more afterwards.
+    /// Checks the LUT files off the UI thread; a request during a check runs once more afterwards.
     void RefreshLut()
     {
         if (lutChecking)
@@ -475,16 +475,17 @@ public sealed partial class MainViewModel
             lutRecheck = true;
             return;
         }
-        if (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is not string lut)
+        var files = LutFiles;
+        if (files.Count == 0)
         {
             SetLutState(null, null);
             return;
         }
         lutChecking = true;
-        Task.Run(() => File.Exists(lut)).ContinueWith(t =>
+        Task.Run(() => ProxyPreflight.FirstMissing(files)).ContinueWith(t =>
         {
             lutChecking = false;
-            if (t.IsCompletedSuccessfully) SetLutState(lut, t.Result);
+            if (t.IsCompletedSuccessfully) SetLutState(ProxyPreflight.LutKey(files), t.Result);
             else AppLog.Write($"LUT check: {t.Exception?.GetBaseException().Message}");
             if (lutRecheck)
             {
@@ -494,12 +495,12 @@ public sealed partial class MainViewModel
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    /// A new answer about the LUT: the red text and the start button follow it.
-    void SetLutState(string? lut, bool? exists)
+    /// A new answer about the LUT files (`key` = which, null = none in use): the red text and the start button follow it.
+    void SetLutState(string? key, LutFile? missing)
     {
         var before = LutProblem;
-        lutCheckedPath = lut;
-        lutExists = exists;
+        lutCheckedKey = key;
+        lutMissing = missing;
         if (LutProblem == before) return;
         RaiseMany(nameof(LutProblem), nameof(CanStart));
         SetupChanged?.Invoke();
