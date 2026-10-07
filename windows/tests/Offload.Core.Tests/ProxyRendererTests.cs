@@ -27,6 +27,24 @@ public class ProxyRendererTests
         Assert.Equal(["0.000000", "0.020000", "0.000000"], ProxyRenderer.FramePositions(shortClip).Select(p => ProxyRenderer.SeekSeconds(shortClip, p)));
     }
 
+    // Plan 8 fix round 1, item 2b: only a custom LUT missing when stage 2 began gets the note.
+    [Fact]
+    public void LutNote_CustomLutGone()
+    {
+        using var dir = new TempDir();
+        var present = Path.Combine(dir.Path, "look.cube");
+        File.WriteAllText(present, "LUT_3D_SIZE 2\n");
+        var gone = Path.Combine(dir.Path, "gone.cube");
+        using var missing = new ProxyRenderer(new ProxySettings { LutMode = LutMode.Custom, LutPath = gone }, Tools);
+        using var found = new ProxyRenderer(new ProxySettings { LutMode = LutMode.Custom, LutPath = present }, Tools);
+
+        Assert.Equal("LUT nenalezen: gone.cube — proxy bez LUTu", missing.LutNote(CustomLut(gone)));
+        Assert.Null(found.LutNote(CustomLut(present)));
+        Assert.Null(missing.LutNote(null));
+        Assert.Null(missing.LutNote(LutUse.None("vypnuto v nastavení")));
+        Assert.Null(missing.LutNote(new LutUse("auto", "sony-slog3-sgamut3cine", "S-Log3", "x") { File = gone }));   // built-in
+    }
+
     [Fact]
     public void FramePositions_UnknownLengthOrSingleFrame_OnlyFirst()
     {

@@ -56,12 +56,29 @@ public class JobConfigsTests
     }
 
     [Fact]
-    public void ProfileFor_AProjectThatIsGone_TheActiveProfile_Noted()
+    public void ProfileFor_AProjectThatIsGone_BezProjektu_Noted()
     {
+        // Fix round 1, item 1: never the project shown now (its settings and ntfy topic may be another client's).
         var s = Settings("Reklama Y");
         var (profile, gone) = AppendRules.ProfileFor(s, "Smazaný film");
-        Assert.Same(s.Active, profile);
+        Assert.Same(s, profile);
         Assert.True(gone);
+    }
+
+    [Fact]
+    public void ProfileFor_RenamedProject_BezProjektu_Noted()
+    {
+        var s = Settings("Film X");
+        Projects.Rename(s, "Film X", "Film X (2)");
+        var (profile, gone) = AppendRules.ProfileFor(s, "Film X");
+        Assert.Same(s, profile);
+        Assert.True(gone);
+    }
+
+    [Fact]
+    public void GoneNote_ForTheJobCard()
+    {
+        Assert.Equal("Projekt Film X už neexistuje — doplnění běží s nastavením Bez projektu", AppendRules.GoneNote("Film X"));
     }
 
     // A card backed up in "Bez projektu" (or before projects existed) is appended with "Bez projektu", whose profile is
@@ -94,14 +111,15 @@ public class JobConfigsTests
     }
 
     [Fact]
-    public void Append_ProjectGone_ActiveProfile_TheEntrysNameStillRecorded()
+    public void Append_ProjectGone_BezProjektuSettings_TheEntrysNameStillRecorded()
     {
         var s = Settings("Reklama Y");
         var c = JobConfigs.Append(s, @"K:\", Entry("Smazaný film"));
 
         Assert.Equal("Smazaný film", c.Project);
-        Assert.Equal((ProxyCodec.Hevc, 540), (c.Proxy.Codec, c.Proxy.Height));
+        Assert.Equal((ProxyCodec.H264, 1080), (c.Proxy.Codec, c.Proxy.Height));   // not Reklama's HEVC 540
         Assert.True(c.Verify);
+        Assert.False(c.Outputs.ClipListAle);
     }
 
     [Fact]
@@ -212,5 +230,94 @@ public class JobConfigsTests
         Assert.False(stamp.ChangedIn(s));
         Projects.SaveAs(s, "Nový");
         Assert.True(stamp.ChangedIn(s));
+    }
+
+    // ── Fix round 1, item 2a: the LUTs and proxy folders a Start really uses ──
+
+    static void CustomLut(SettingsProfile p, string path, string? folder = null)
+    {
+        p.Proxy.LutMode = LutMode.Custom;
+        p.Proxy.LutPath = path;
+        p.Proxy.Enabled = true;
+        p.Proxy.ExtraFolder = folder;
+    }
+
+    [Fact]
+    public void StartChecks_FullCopy_TheShownProfilesLutAndFolder()
+    {
+        var s = Settings("Film X");
+        CustomLut(s.Active, @"C:\Luty\film.cube", @"P:\Proxy");
+
+        var checks = AppendRules.StartChecks(s, fullCopies: 1, []);
+
+        Assert.Equal(
+            [new StartCheck(StartCheckKind.Lut, @"C:\Luty\film.cube", "Film X", Shown: true),
+             new StartCheck(StartCheckKind.ProxyFolder, @"P:\Proxy", "Film X", Shown: true)],
+            checks);
+    }
+
+    // The shown profile's missing LUT does not block an append-only Start: that LUT is not used.
+    [Fact]
+    public void StartChecks_AppendsOnly_NotTheShownProfile()
+    {
+        var s = Settings("Film X");
+        CustomLut(s.Active, @"C:\Luty\film.cube", @"P:\Proxy");
+
+        Assert.Empty(AppendRules.StartChecks(s, fullCopies: 0, [Entry("Reklama Y"), Entry(null)]));
+    }
+
+    [Fact]
+    public void StartChecks_AnAppendsProject_NamedInTheRefusal()
+    {
+        var s = Settings("Reklama Y");
+        CustomLut(s.Projects[0], @"C:\Luty\x.cube", @"Q:\Film proxy");
+
+        var checks = AppendRules.StartChecks(s, fullCopies: 1, [Entry("Film X")]);
+
+        var lut = Assert.Single(checks, c => c.Kind == StartCheckKind.Lut);
+        Assert.Equal(new StartCheck(StartCheckKind.Lut, @"C:\Luty\x.cube", "Film X", Shown: false), lut);
+        Assert.Equal("LUT projektu Film X nenalezen: x.cube — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte.", lut.Problem);
+        var folder = Assert.Single(checks, c => c.Kind == StartCheckKind.ProxyFolder);
+        Assert.Equal(@"Složka pro proxy projektu Film X není dostupná: Q:\Film proxy — doplnění karty se nespustí.", folder.Problem);
+    }
+
+    // The shown profile used by an append (append-only Start) is checked as the shown one: its red text says why.
+    [Fact]
+    public void StartChecks_AppendInTheShownProject_Shown_Once()
+    {
+        var s = Settings("Film X");
+        CustomLut(s.Active, @"C:\Luty\film.cube");
+
+        var checks = AppendRules.StartChecks(s, fullCopies: 0, [Entry("film x"), Entry("Film X")]);
+
+        Assert.Equal([new StartCheck(StartCheckKind.Lut, @"C:\Luty\film.cube", "Film X", Shown: true)], checks);
+    }
+
+    // One file used by several profiles is checked once (any case); the shown profile comes first.
+    [Fact]
+    public void StartChecks_SameFileInTwoProfiles_Once_ShownFirst()
+    {
+        var s = Settings("Reklama Y");
+        CustomLut(s.Projects[0], @"C:\LUTY\SPOLECNY.cube");
+        CustomLut(s.Active, @"C:\Luty\spolecny.cube");
+
+        var checks = AppendRules.StartChecks(s, fullCopies: 1, [Entry("Film X")]);
+
+        Assert.Equal([new StartCheck(StartCheckKind.Lut, @"C:\Luty\spolecny.cube", "Reklama Y", Shown: true)], checks);
+    }
+
+    [Fact]
+    public void StartChecks_GoneProject_BezProjektu_AndNothingUnused()
+    {
+        var s = Settings("Film X");
+        CustomLut(s, @"C:\Luty\bez.cube");
+        s.Proxy.Enabled = false;   // the LUT still counts: the thumbnails (analyzeClips) use it
+        s.Projects[1].Proxy.LutMode = LutMode.Custom;
+        s.Projects[1].Proxy.LutPath = @"C:\Luty\reklama.cube";
+        s.Projects[1].AnalyzeClips = false;   // neither proxies nor thumbnails: no LUT is used
+
+        var checks = AppendRules.StartChecks(s, fullCopies: 0, [Entry("Smazaný"), Entry("Reklama Y")]);
+
+        Assert.Equal([new StartCheck(StartCheckKind.Lut, @"C:\Luty\bez.cube", "Bez projektu", Shown: false)], checks);
     }
 }

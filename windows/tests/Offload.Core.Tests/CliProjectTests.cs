@@ -1,5 +1,6 @@
 using Offload.Cli;
 using Offload.Core.Desktop;
+using Offload.Core.History;
 
 namespace Offload.Core.Tests;
 
@@ -208,7 +209,9 @@ public class CliProjectTests
         var r = Run(folder, seen, AppendCommand.Create(), card, "--into", into, "--project", "Reklama Y", "--no-history");
 
         Assert.Equal(0, r.Exit);
-        Assert.Contains("Projekt: Reklama Y", r.Out);
+        // Fix round 1, item 3: the append's own line — the card keeps the earlier backup's project.
+        Assert.Contains("Nastavení z projektu: Reklama Y (projekt zálohy zůstane podle dřívějšího reportu)", r.Out);
+        Assert.DoesNotContain("Projekt: Reklama Y", r.Out);
         var c = seen[1];
         Assert.False(c.Verify);
         Assert.False(c.AnalyzeClips);
@@ -216,6 +219,71 @@ public class CliProjectTests
         var report = Path.Combine(into, "_REPORT");
         Assert.True(File.Exists(Path.Combine(report, "A001_clips.ale")));
         Assert.Contains("\"project\": \"Film X\"", File.ReadAllText(Path.Combine(report, "offload_report_0002.json")));
+    }
+
+    // Fix round 1, item 5: without --into the folders come from history, and so does the fallback project (M4).
+    [Fact]
+    public void Append_FromHistory_TheEntrysProject_NotTheOneGiven()
+    {
+        using var dir = new TempDir();
+        var d1 = dir.Sub("d1");
+        var folder = Settings(dir, d1);
+        var s = SettingsStore.Load(Path.Combine(folder, "settings.json"));
+        Projects.SaveAs(s, "Reklama Y");
+        SettingsStore.Save(s, Path.Combine(folder, "settings.json"));
+        var card = Card(dir);
+        var seen = new List<JobConfig>();
+        var oldHistory = HistoryStore.DefaultFolderOverride;
+        HistoryStore.DefaultFolderOverride = dir.Sub("history");   // this test's own history (the Console collection runs alone)
+        try
+        {
+            var copy = Run(folder, seen, CopyCommand.Create(), card, "--project", "Film X", "--date", "2026-10-07");
+            Assert.True(copy.Exit == 0, copy.Out + copy.Err);
+            AppendFixtures.NewClip(card);
+            // A card volume is found in history by its serial; a test folder only by its shape, which the new clip
+            // changed — the entry gets the new shape, as if the card were the same volume.
+            var historyFile = Path.Combine(dir.Path, "history", "history.json");
+            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(historyFile))!;
+            var entry = Assert.Single(json["entries"]!.AsArray())!;
+            Assert.Equal("Film X", (string?)entry["project"]);
+            entry["shape"] = CardFingerprint.Compute(Scanner.Scan(card)).Shape;
+            File.WriteAllText(historyFile, json.ToJsonString());
+
+            var r = Run(folder, seen, AppendCommand.Create(), card, "--project", "Reklama Y");
+
+            Assert.True(r.Exit == 0, r.Out + r.Err);
+            Assert.Equal("Film X", seen[1].Project);
+            Assert.Equal([Path.Combine(d1, "2026-10-07", "A001")], seen[1].AppendInto);
+        }
+        finally
+        {
+            HistoryStore.DefaultFolderOverride = oldHistory;
+        }
+    }
+
+    // Fix round 1, item 4: "Bez projektu" is the top-level profile, not an unknown project; the job has no project.
+    [Fact]
+    public void BezProjektu_TheTopLevelProfile()
+    {
+        using var dir = new TempDir();
+        var folder = dir.Sub("appdata");
+        var d0 = dir.Sub("d0");
+        var s = new AppSettings { DestRoots = [d0], Verify = false, Hash = "both" };
+        s.Proxy.Height = 540;
+        Projects.SaveAs(s, "Film X").DestRoots = [dir.Sub("d1")];
+        SettingsStore.Save(s, Path.Combine(folder, "settings.json"));
+        var seen = new List<JobConfig>();
+
+        var r = Run(folder, seen, CopyCommand.Create(), Card(dir), "--project", "bez projektu", "--dry-run", "--no-history");
+
+        Assert.Equal(0, r.Exit);
+        Assert.Contains("Projekt: Bez projektu", r.Out);
+        var c = Assert.Single(seen);
+        Assert.Null(c.Project);
+        Assert.Equal([d0], c.DestRoots);
+        Assert.False(c.Verify);
+        Assert.Equal(HashKind.Both, c.Hashes);
+        Assert.Equal(540, c.Proxy.Height);
     }
 
     [Fact]

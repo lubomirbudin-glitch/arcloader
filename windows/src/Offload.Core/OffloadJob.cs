@@ -607,6 +607,12 @@ public sealed class OffloadJob
                 entries[i].ProxyPath = rel;
                 // Spec 3.4: relinking goes by name - a proxy that had to be renamed must be attached by hand.
                 if (name != clip.Name) entries[i].ProxyNote = entries[i].ProxyNote is string earlier ? $"{earlier}; {Msg.ProxyRenamed(name)}" : Msg.ProxyRenamed(name);
+                // A custom LUT gone since the start: the proxy exists, but without the look — never silently.
+                if (renderer.LutNote(entries[i].Lut) is string lutNote)
+                {
+                    entries[i].ProxyNote = entries[i].ProxyNote is string before ? $"{before}; {lutNote}" : lutNote;
+                    log?.Invoke($"proxy {clip.Name}: {lutNote}");
+                }
                 if (Config.Proxy.CopyToAllDestinations)
                 {
                     // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.

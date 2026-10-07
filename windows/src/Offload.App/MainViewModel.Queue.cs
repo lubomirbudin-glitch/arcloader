@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.History;
 using Offload.Core.Space;
 
 namespace Offload.App;
@@ -54,13 +55,28 @@ public sealed partial class MainViewModel
     /// The Cíle section is needed only by full copies: appends go to the destinations of their earlier backup (spec 2.2).
     bool ReadyToStart => !closing && selected.Count > 0
         && (!AppendRules.NeedsDestinations(AppendRules.FullCopies(selected, AppendWanted)) || (Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)))
-        && LutProblem == null && ProxyFolderProblem == null && StartProblem == null && SpaceProblem == null;
+        && !ShownCheckMissing() && StartProblem == null && SpaceProblem == null;
+
+    /// The LUTs and proxy folders a Start now would use (memory only): the profile shown only with a full copy selected,
+    /// and the profile of every append's project (fix round 1, item 2a).
+    List<StartCheck> StartChecksNow()
+    {
+        var sources = SelectedSources();
+        var appends = sources.Where(AppendWanted).Select(Insight).Where(AppendRules.Offer).Select(i => i!.History!.Entry).ToList();
+        return [.. AppendRules.StartChecks(AllSettings, AppendRules.FullCopies(sources, AppendWanted), appends)];
+    }
+
+    /// A LUT or proxy folder of the profile shown that this Start uses and the last check found missing (its red text
+    /// says why). The profile shown does not block a Start of appends only — they do not use it.
+    bool ShownCheckMissing() => StartChecksNow().Any(c => c.Shown && (c.Kind == StartCheckKind.Lut
+        ? lutExists == false && string.Equals(c.Path, lutCheckedPath, StringComparison.OrdinalIgnoreCase)
+        : folderExists == false && string.Equals(c.Path, folderCheckedPath, StringComparison.OrdinalIgnoreCase)));
     /// The hint under the start bar: why Start is off when the setup itself does not say it (a speed measurement runs).
     public string? StartProblem => QueueRules.StartProblem(Measuring);
     public bool HasJobs => Jobs.Count > 0;
     public bool HasFinished => Jobs.Any(j => j.IsFinished);
 
-    /// The LUT and the proxy folder are checked once more right before the start (they may sit on a disk that just
+    /// The LUTs and proxy folders the start uses are checked once more right before it (they may sit on a disk that just
     /// went away) — off the UI thread, at most 5 s each; meanwhile the start button is disabled. Then the inspections
     /// of the selected cards (at most 10 s) and the free space of every destination (at most 5 s) — all awaited, the UI
     /// thread never waits on a card or a disk (spec 2.5, ruling I4).
@@ -81,31 +97,8 @@ public sealed partial class MainViewModel
         }
         try
         {
-            while (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is string lut)
-            {
-                var check = Task.Run(() => File.Exists(lut));
-                bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
-                if (Switched()) return;
-                bool exists = answered && check.IsCompletedSuccessfully && check.Result;
-                if (!answered) AppLog.Write($"LUT check before start: no answer from {lut} in 5 s");
-                if (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) != lut) continue;   // changed meanwhile
-                SetLutState(lut, exists);
-                if (!exists) return;   // the red text says why
-                break;
-            }
-            while (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is string folder)
-            {
-                var check = Task.Run(() => ProbeFolder(folder));
-                bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
-                if (Switched()) return;
-                bool exists = answered && check.IsCompletedSuccessfully && check.Result.Exists;
-                if (!answered) AppLog.Write($"proxy folder check before start: no answer from {folder} in 5 s");
-                if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) != folder) continue;   // changed meanwhile
-                if (answered && check.IsCompletedSuccessfully) ApplyFolderProbe(folder, check.Result);
-                else SetProxyFolderState(folder, false);
-                if (!exists) return;   // the red text says why
-                break;
-            }
+            var verified = new HashSet<string>(StringComparer.Ordinal);
+            if (!await CheckStartFilesAsync(verified, Switched)) return;
             // Without the inspections a card history knows would be copied again in full, with no prompt: wait for the
             // ones still looking, at most 10 s (a card that does not answer never blocks the start - then what is known counts).
             List<string> Pending() => StartWait.PendingInspections(SelectedSources(), p => Insight(p) != null, inspections.IsRunning, history != null);
@@ -145,6 +138,8 @@ public sealed partial class MainViewModel
                 }
                 if (Switched()) return;
             }
+            // A card ticked for an append meanwhile may use another project's LUT: checked too (nothing to do otherwise).
+            if (!await CheckStartFilesAsync(verified, Switched)) return;
             if (ReadyToStart) StartJobs(skip);   // anything may have changed while the LUT was checked
         }
         catch (OperationCanceledException) when (closing)
@@ -162,6 +157,49 @@ public sealed partial class MainViewModel
             SetStartStatus(null);
             RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
         }
+    }
+
+    /// Every LUT and proxy folder this Start uses (StartChecksNow), checked off the UI thread, at most 5 s each. One of the
+    /// profile shown keeps its answer for the red text, which says why; another project's is refused naming the project.
+    /// False = do not start. `verified`: what already passed during this Start (checked once).
+    async Task<bool> CheckStartFilesAsync(HashSet<string> verified, Func<bool> switched)
+    {
+        static string Key(StartCheck c) => $"{c.Kind}|{c.Path.ToUpperInvariant()}";
+        while (StartChecksNow().FirstOrDefault(c => !verified.Contains(Key(c))) is { } c)
+        {
+            bool exists;
+            if (c.Kind == StartCheckKind.Lut)
+            {
+                var check = Task.Run(() => File.Exists(c.Path));
+                bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
+                if (switched()) return false;
+                exists = answered && check.IsCompletedSuccessfully && check.Result;
+                if (!answered) AppLog.Write($"LUT check before start: no answer from {c.Path} in 5 s");
+                if (!StartChecksNow().Any(n => Key(n) == Key(c))) continue;   // changed meanwhile
+                if (c.Shown) SetLutState(c.Path, exists);
+            }
+            else
+            {
+                var check = Task.Run(() => ProbeFolder(c.Path));
+                bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
+                if (switched()) return false;
+                exists = answered && check.IsCompletedSuccessfully && check.Result.Exists;
+                if (!answered) AppLog.Write($"proxy folder check before start: no answer from {c.Path} in 5 s");
+                if (!StartChecksNow().Any(n => Key(n) == Key(c))) continue;   // changed meanwhile
+                if (c.Shown)
+                {
+                    if (answered && check.IsCompletedSuccessfully) ApplyFolderProbe(c.Path, check.Result);
+                    else SetProxyFolderState(c.Path, false);
+                }
+            }
+            if (!exists)
+            {
+                if (!c.Shown) ShowMessage(c.Problem);   // the profile shown: the red text says why
+                return false;
+            }
+            verified.Add(Key(c));
+        }
+        return true;
     }
 
     /// `skip`: backed-up cards the user chose not to copy again — they are unticked, not started.
@@ -195,10 +233,15 @@ public sealed partial class MainViewModel
                 // The engine plans again under the folder lock and refuses with a Czech message when anything is off.
                 // Ruling I2: with the profile of the project that backup was made in, not the one shown now.
                 var appendConfig = JobConfigs.Append(AllSettings, src, known.Entry);
+                string? profileNote = null;
                 if (AppendRules.ProfileFor(AllSettings, known.Entry.Project).Gone)
-                    AppLog.Write($"append {src}: project {known.Entry.Project} no longer exists — the profile shown is used");
+                {
+                    // Deleted or renamed since: "Bez projektu", never the project shown (fix round 1, item 1).
+                    AppLog.Write($"append {src}: project {known.Entry.Project} no longer exists — the Bez projektu settings are used");
+                    profileNote = AppendRules.GoneNote(known.Entry.Project!);
+                }
                 var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), AppendRules.Title(known.Entry.CardName),
-                    canEject: isVolume && CardEject.CanEject(src), space);
+                    canEject: isVolume && CardEject.CanEject(src), space, profileNote);
                 Jobs.Insert(0, appendItem);
                 selected.Remove(src);
                 appendTicks.Untick(src);

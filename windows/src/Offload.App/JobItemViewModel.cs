@@ -25,9 +25,12 @@ public sealed class JobItemViewModel : QueueItem
     readonly IReadOnlyList<VolumeDemand> space;
 
     /// `space`: what the card needs on each destination volume (spec 2.5) — counted while this job is queued or copies.
-    public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject, IReadOnlyList<VolumeDemand>? space = null)
+    /// `profileNote`: orange, for the whole life of the card — e.g. an append whose project no longer exists.
+    public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject, IReadOnlyList<VolumeDemand>? space = null,
+        string? profileNote = null)
     {
         this.owner = owner;
+        ProfileNote = profileNote;
         this.sourceName = sourceName;
         this.space = space ?? [];
         Job = job;
@@ -40,6 +43,8 @@ public sealed class JobItemViewModel : QueueItem
     }
 
     public OffloadJob Job { get; }
+    /// "Projekt Film X už neexistuje — doplnění běží s nastavením Bez projektu" (AppendRules.GoneNote), or null.
+    public string? ProfileNote { get; }
     public JobQueue.Runner Runner { get; }
     public bool CanEject { get; }
     public RelayCommand CancelCommand { get; }

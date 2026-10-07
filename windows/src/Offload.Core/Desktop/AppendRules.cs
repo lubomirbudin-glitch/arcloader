@@ -38,11 +38,57 @@ public static class AppendRules
 
     /// The profile an append runs with (ruling I2): that of the project the earlier backup was made in — verify, stage 2,
     /// outputs and, from task 9, notifications follow the card, not the project shown now (its ntfy topic may be another
-    /// client's). No project = "Bez projektu" (the top level, always there). A project deleted since: the active profile,
-    /// `Gone` = true (the app notes it in the log; the job still records the entry's project).
+    /// client's). No project = "Bez projektu" (the top level, always there). A project deleted or renamed since: also
+    /// "Bez projektu" — never the project shown now — with `Gone` = true (the job card says so, GoneNote; the job still
+    /// records the entry's project).
     public static (SettingsProfile Profile, bool Gone) ProfileFor(AppSettings s, string? entryProject)
     {
         if (entryProject == null) return (s, false);
-        return Projects.Find(s, entryProject) is { } p ? (p, false) : (s.Active, true);
+        return Projects.Find(s, entryProject) is { } p ? (p, false) : (s, true);
     }
+
+    /// The job card's note for an append whose project is gone.
+    public static string GoneNote(string project) => $"Projekt {project} už neexistuje — doplnění běží s nastavením {Projects.NoProject}";
+
+    /// The LUTs and proxy folders a Start really uses, each once (any case), checked off the UI thread before it starts:
+    /// the profile shown — only when a full copy is selected (appends do not use it) — and the profile of every append
+    /// (ProfileFor). The profile shown comes first; its checks are `Shown` (its red text in the panel says why).
+    public static IReadOnlyList<StartCheck> StartChecks(AppSettings s, int fullCopies, IEnumerable<HistoryEntry> appendEntries)
+    {
+        var profiles = new List<SettingsProfile>();
+        if (fullCopies > 0) profiles.Add(s.Active);
+        foreach (var e in appendEntries)
+        {
+            var p = ProfileFor(s, e.Project).Profile;
+            if (!profiles.Contains(p)) profiles.Add(p);
+        }
+        // The profile shown first, whichever card brought it in.
+        if (profiles.Remove(s.Active)) profiles.Insert(0, s.Active);
+        var checks = new List<StartCheck>();
+        foreach (var p in profiles)
+        {
+            bool shown = ReferenceEquals(p, s.Active);
+            var name = p is ProjectSettings named ? named.Name : Projects.NoProject;
+            void Add(StartCheckKind kind, string? path)
+            {
+                if (path != null && !checks.Any(c => c.Kind == kind && string.Equals(c.Path, path, StringComparison.OrdinalIgnoreCase)))
+                    checks.Add(new StartCheck(kind, path, name, shown));
+            }
+            Add(StartCheckKind.Lut, ProxyPreflight.LutInUse(p.Proxy, p.AnalyzeClips));
+            Add(StartCheckKind.ProxyFolder, ProxyPreflight.ExtraFolderInUse(p.Proxy));
+        }
+        return checks;
+    }
+}
+
+public enum StartCheckKind { Lut, ProxyFolder }
+
+/// A file or folder a Start uses (AppendRules.StartChecks): `Project` is the profile's name ("Bez projektu" for the top
+/// level); `Shown` = of the profile shown now.
+public sealed record StartCheck(StartCheckKind Kind, string Path, string Project, bool Shown)
+{
+    /// Why the Start is refused when it is missing — for another project's file (the shown one has its red text).
+    public string Problem => Kind == StartCheckKind.Lut
+        ? $"LUT projektu {Project} nenalezen: {System.IO.Path.GetFileName(Path)} — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte."
+        : $"Složka pro proxy projektu {Project} není dostupná: {Path} — doplnění karty se nespustí.";
 }

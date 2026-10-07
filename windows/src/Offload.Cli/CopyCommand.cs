@@ -33,11 +33,13 @@ static class CopyCommand
         cmd.SetAction(r =>
         {
             JobConfig config;
-            ProjectSettings? profile;
+            CliProfile? picked;
+            SettingsProfile? profile;
             try
             {
                 // Spec 4.1: the project's values are the defaults, what is written here wins (-d replaces its destinations).
-                profile = CliProject.Load(r.GetValue(project));
+                picked = CliProject.Load(r.GetValue(project));
+                profile = picked?.Settings;
                 bool Given(Option o) => CliProject.Given(r, profile, o);
                 config = new JobConfig(CliPath.Full(r.GetValue(source)!), (Given(dest) ? r.GetValue(dest)! : [.. profile!.DestRoots]).Select(CliPath.Full).ToList())
                 {
@@ -50,7 +52,7 @@ static class CopyCommand
                     RecordHistory = !r.GetValue(noHistory),
                     Hashes = !Given(hash) ? HashKinds.FromSetting(profile!.Hash)
                         : HashKinds.TryParseWire(r.GetValue(hash), out var kinds) ? kinds : throw new ArgumentException(Msg.UnknownHash(r.GetValue(hash))),
-                    Project = profile?.Name,
+                    Project = picked?.Project,
                 };
                 stageTwo.Apply(r, config, profile);
             }
@@ -59,7 +61,7 @@ static class CopyCommand
                 Console.Error.WriteLine(Msg.CliError + e.Message);
                 return 1;
             }
-            if (profile != null) Console.WriteLine(Msg.CliProject(profile.Name));
+            if (picked != null) Console.WriteLine(Msg.CliProject(picked.Name));
             // A project that proposes names from the clips (naming.suggestFromClips) acts as --name auto unless --name is given.
             bool autoName = r.GetValue(name) is string a ? a.Equals("auto", StringComparison.OrdinalIgnoreCase) : profile?.Naming.SuggestFromClips == true;
             var insight = config.RecordHistory || autoName ? Inspect(config.Source, withHistory: config.RecordHistory) : null;

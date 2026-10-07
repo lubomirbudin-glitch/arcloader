@@ -28,11 +28,13 @@ static class AppendCommand
         cmd.SetAction(r =>
         {
             JobConfig config;
-            ProjectSettings? profile;
+            CliProfile? picked;
+            SettingsProfile? profile;
             try
             {
                 // The destinations and checksums come from the earlier backup; the project gives verify and stage 2.
-                profile = CliProject.Load(r.GetValue(project));
+                picked = CliProject.Load(r.GetValue(project));
+                profile = picked?.Settings;
                 config = new JobConfig(CliPath.Full(r.GetValue(source)!), [])
                 {
                     ChunkMB = r.GetValue(chunkMb),
@@ -42,7 +44,7 @@ static class AppendCommand
                     RecordHistory = !r.GetValue(noHistory),
                     // Ruling M4: the report records the earlier backup's project (the engine reads it from that report);
                     // this is only the fallback — --project gives the settings, not the card's project.
-                    Project = profile?.Name,
+                    Project = picked?.Project,
                 };
                 stageTwo.Apply(r, config, profile);
                 var folders = r.GetValue(into)!.Select(CliPath.Full).ToList();
@@ -60,7 +62,7 @@ static class AppendCommand
                 Console.Error.WriteLine(Msg.CliError + e.Message);
                 return 1;
             }
-            if (profile != null) Console.WriteLine(Msg.CliProject(profile.Name));
+            if (picked != null) Console.WriteLine(Msg.CliAppendProject(picked.Name));
             return CopyCommand.RunJob(config, r.GetValue(dryRun));
         });
         return cmd;

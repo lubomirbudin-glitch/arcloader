@@ -205,6 +205,11 @@ public sealed class ProxyRenderer : IDisposable
         return name;
     }
 
+    /// Plan 8 fix round 1: a clip whose custom LUT was missing when this renderer was made renders without it — the
+    /// proxy says so (null otherwise; built-in LUTs ship with the app).
+    public string? LutNote(LutUse? lut) =>
+        lut is { IsBuiltin: false, File: string file } && !hasCustomLut ? Msg.ProxyWithoutLut(Path.GetFileName(file)) : null;
+
     /// RAW decoders hand over log whenever a LUT follows; ARRI's target space must match a built-in ARRI LUT.
     internal static RawLook LookFor(LutUse? lut, ClipInfo info)
     {
