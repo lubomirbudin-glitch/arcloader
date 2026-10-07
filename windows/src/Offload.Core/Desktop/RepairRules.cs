@@ -4,9 +4,15 @@ namespace Offload.Core.Desktop;
 public static class RepairRules
 {
     /// Offered on a job that ended (not cancelled) with files that are not on every destination — while the card it was
-    /// copied from is in its drive (a folder is always there) and no repair of the same card folders is queued or running.
-    public static bool Offer(JobPhase phase, OffloadReport? report, bool cardPresent, bool repairPending) =>
-        phase is JobPhase.Done or JobPhase.Failed && report is { Success: false } r && r.FailedFiles.Count > 0 && cardPresent && !repairPending;
+    /// copied from is in its drive (a folder is always there), no repair of the same card folders is queued or running and no
+    /// later repair of them has already finished successfully (`repairedLater`).
+    public static bool Offer(JobPhase phase, OffloadReport? report, bool cardPresent, bool repairPending, bool repairedLater = false) =>
+        phase is JobPhase.Done or JobPhase.Failed && report is { Success: false } r && r.FailedFiles.Count > 0 && cardPresent && !repairPending && !repairedLater;
+
+    /// A repair job (`RepairInto` = the card folders it repairs) of the same backup finished successfully: the failed files
+    /// are on every disk now. `laterJobs` are the jobs started after the card in question.
+    public static bool RepairedLater(IReadOnlyList<string> cardPaths, IEnumerable<(IReadOnlyList<string>? RepairInto, JobPhase Phase, OffloadReport? Report)> laterJobs) =>
+        laterJobs.Any(j => j.RepairInto is { } into && j.Phase == JobPhase.Done && j.Report is { Success: true } && SameBackup(into, cardPaths));
 
     /// The job card's title: "A001 · oprava".
     public static string Title(string cardName) => $"{cardName} · oprava";

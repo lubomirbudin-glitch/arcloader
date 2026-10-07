@@ -538,6 +538,21 @@ public class RepairJobTests
     }
 
     [Fact]
+    public void Offer_HiddenOnceALaterRepairSucceeded()
+    {
+        var report = Reports.Sample(@"D:\dst\2026-10-07\A001", destError: "HASH MISMATCH: dest 1 != source 2");
+        var ok = Reports.Sample(@"D:\dst\2026-10-07\A001");
+        string[] cards = [@"D:\dst\2026-10-07\A001"];
+        Assert.False(RepairRules.Offer(JobPhase.Done, report, true, false, repairedLater: true));
+        Assert.True(RepairRules.RepairedLater(cards, [(cards, JobPhase.Done, ok)]));
+        Assert.True(RepairRules.RepairedLater(cards, [(new[] { @"d:\DST\2026-10-07\a001\" }, JobPhase.Done, ok)]));
+        Assert.False(RepairRules.RepairedLater(cards, [(cards, JobPhase.Done, report)]));          // that repair failed too
+        Assert.False(RepairRules.RepairedLater(cards, [(cards, JobPhase.Copying, null)]));          // still running
+        Assert.False(RepairRules.RepairedLater(cards, [(null, JobPhase.Done, ok)]));                // not a repair
+        Assert.False(RepairRules.RepairedLater(cards, [(new[] { @"D:\dst\2026-10-07\B002" }, JobPhase.Done, ok)]));   // another backup
+    }
+
+    [Fact]
     public void Title_AndSameBackup()
     {
         Assert.Equal("A001 · oprava", RepairRules.Title("A001"));

@@ -316,13 +316,14 @@ public static class JobCard
 /// The pill in the top bar and the queue tab's number (UI návrh: „● Běží 1 offload · 1 ve frontě“).
 public static class QueueSummary
 {
-    public static (int Running, int Paused, int Waiting) Count(IEnumerable<(JobPhase Phase, bool Paused)> jobs)
+    /// A job counts as paused only while it really waits (`PauseHeld`); between Pozastavit and the stop it still runs.
+    public static (int Running, int Paused, int Waiting) Count(IEnumerable<(JobPhase Phase, bool PauseHeld)> jobs)
     {
         int running = 0, paused = 0, waiting = 0;
-        foreach (var (phase, isPaused) in jobs)
+        foreach (var (phase, held) in jobs)
         {
             if (phase == JobPhase.Waiting) waiting++;
-            else if (!phase.IsFinished()) { if (isPaused) paused++; else running++; }
+            else if (!phase.IsFinished()) { if (held) paused++; else running++; }
         }
         return (running, paused, waiting);
     }

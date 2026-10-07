@@ -6,8 +6,6 @@ using Offload.Core.Space;
 
 namespace Offload.App;
 
-public sealed record DestinationLine(string Name, string Sub, string FullPath);
-
 /// One card in the queue: mirrors the job's status every tick (Mac `JobItem` + `JobCard`).
 public sealed partial class JobItemViewModel : QueueItem
 {
@@ -17,9 +15,7 @@ public sealed partial class JobItemViewModel : QueueItem
     IReadOnlyList<RoleLink>? links;
     IReadOnlyList<UsbConnector>? connectors;
     IReadOnlyDictionary<string, string>? portNames;
-    IReadOnlyList<DestinationLine>? destinationLines;
     string? filesText;
-    List<string> chainLines = [];
     bool chainRequested, ejected, ejecting, openingReport;
 
     readonly IReadOnlyList<VolumeDemand> space;
@@ -156,6 +152,8 @@ public sealed partial class JobItemViewModel : QueueItem
         space.Select(d => d with { Need = SpaceCheck.Remaining(d.Need, Phase, writtenAtProbe) });
     public bool IsRunning => progress.IsRunning;
     public override bool IsPaused => progress.Status.Paused;
+    /// The copy or the read-back really waits now (the pill counts only these as paused).
+    public override bool IsPauseHeld => progress.Status.PauseHeld;
     /// How long stage 2 took without pauses, once finished (RateMemory learns the next estimate from it).
     public TimeSpan? Stage2Elapsed => progress.Stage2Elapsed;
     public override bool IsFinished => Phase.IsFinished();
@@ -186,38 +184,6 @@ public sealed partial class JobItemViewModel : QueueItem
         }
     }
 
-    /// Computed once the plan exists (it never changes) — a new list every tick would rebuild the rows.
-    public IReadOnlyList<DestinationLine> DestinationLines
-    {
-        get
-        {
-            if (destinationLines != null) return destinationLines;
-            if (Job.Plan is not { } p) return [];
-            return destinationLines = p.DestRoots.Select((root, i) => new DestinationLine(
-                Path.GetFileName(root.TrimEnd('\\')) is { Length: > 0 } n ? n : root, $"› {p.Date}/{p.CardName}", p.CardPaths[i])).ToList();
-        }
-    }
-
-    /// The hardware chain with live throughput and the brake (spec 8a.3), while copying or verifying.
-    /// The same list instance comes back while the lines are unchanged, so the rows are not rebuilt every tick.
-    public IReadOnlyList<string> ChainLines
-    {
-        get
-        {
-            List<string> lines = [];
-            if (links != null && Phase is JobPhase.Copying or JobPhase.Verifying)
-            {
-                var rates = new List<double> { Phase == JobPhase.Copying ? progress.ReadRate / 1e6 : 0 };
-                rates.AddRange(progress.DestRates.Select(r => r / 1e6));
-                var chain = ChainView.Build(links, rates, connectors, portNames);
-                lines = ChainView.Lines(chain, Phase == JobPhase.Copying ? progress.Brake : null);
-            }
-            if (!lines.SequenceEqual(chainLines)) chainLines = lines;
-            return chainLines;
-        }
-    }
-
-    public bool HasChain => links != null && Phase is JobPhase.Copying or JobPhase.Verifying;
 
     public bool Ejected
     {
@@ -236,12 +202,12 @@ public sealed partial class JobItemViewModel : QueueItem
     public bool ShowEjectButton => ShowSafe && CanEject && owner.CardInDrive(this);
 
     /// A volume scan finished (a finished card is not refreshed every tick).
-    internal void VolumesChanged() => Raise(nameof(ShowEjectButton));
+    internal void VolumesChanged() => RaiseMany(nameof(ShowEjectButton), nameof(CanRepair));
+    /// A repair of this backup was queued or finished: the "Zkopírovat znovu" button may have to go (a finished card is not refreshed).
+    internal void RepairChanged() => Raise(nameof(CanRepair));
     public string SafeText => Texts.SafeToEject(Job.Plan?.CardPaths.Count ?? 0);
     // Cancelled (unlike the Mac): no red "N souborů selhalo" and no rate of a copy that was cut short — one orange line.
     bool IsCancelled => Phase == JobPhase.Cancelled;
-    public string? FailedText => !IsCancelled && Job.Report is { Success: false } r ? Texts.Failed(r.FailedFiles.Count) : null;
-    public string? CancelledText => IsCancelled && !SafeToEject ? "Zrušeno — karta není kompletně zálohovaná." : null;
     public string? ErrorText => progress.Status.Error;
     /// "Nic nového — záloha je úplná." (spec 2.2) and similar information.
     public string? NoteText => progress.Status.Note;

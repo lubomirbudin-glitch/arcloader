@@ -16,9 +16,6 @@ public static class Texts
     public static string SafeToEject(int disks) =>
         $"Všechny soubory jsou na {disks} {Plural(disks, "disku", "discích", "discích")} a ověřené — kartu lze vysunout.";
 
-    public static string Failed(int n) =>
-        $"{n} {Plural(n, "soubor selhal", "soubory selhaly", "souborů selhalo")} — karta NENÍ bezpečně zálohovaná. Podrobnosti v reportu.";
-
     public static string Warnings(int n) => n == 0 ? "bez varování" : $"{n} varování";
 
     /// The verify checkbox names the checksum it reads back with (spec 3.5).

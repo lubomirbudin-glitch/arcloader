@@ -395,6 +395,12 @@
                                AutomationProperties.AutomationId="JobWarningText" />
                     <TextBlock Text="{Binding ProfileNote}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding ProfileNote, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobProfileNote" />
+                    <!-- cancelled in stage 2 with a verified copy: the card may still be ejected -->
+                    <DockPanel Margin="0,12,0,0" Visibility="{Binding ShowSafe, Converter={StaticResource BoolToVisible}}">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SuccessSecondaryButton}" Content="Vysunout kartu" Command="{Binding EjectCommand}"
+                                Visibility="{Binding ShowEjectButton, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="EjectButton" />
+                        <TextBlock Text="{Binding SafeText}" Foreground="{DynamicResource Success}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </DockPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Visibility="{Binding HasReport, Converter={StaticResource BoolToVisible}}">
                         <Button Style="{StaticResource SecondaryButton}" Content="Report PDF" Command="{Binding OpenReportCommand}" Margin="0,0,8,0" AutomationProperties.AutomationId="ReportButton" />
                         <Button Style="{StaticResource SecondaryButton}" Content="Otevřít složku" Command="{Binding RevealCommand}" AutomationProperties.AutomationId="ExplorerButton" />

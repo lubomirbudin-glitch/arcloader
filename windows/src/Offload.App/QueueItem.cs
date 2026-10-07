@@ -15,6 +15,7 @@ public abstract class QueueItem : ObservableObject
     public abstract bool IsFinished { get; }
     /// Pozastaveno (the top bar's pill counts it apart); only an offload can be paused.
     public virtual bool IsPaused => false;
+    public virtual bool IsPauseHeld => false;
     /// Failed or with problems: the error sound and flash.
     public abstract bool IsError { get; }
     /// Still needs the app when closing (not finished, or an eject in flight).

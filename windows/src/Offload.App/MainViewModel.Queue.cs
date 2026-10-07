@@ -406,6 +406,17 @@ public sealed partial class MainViewModel
     internal bool RepairPending(JobItemViewModel item) => item.Job.Plan is { } plan && Jobs.OfType<JobItemViewModel>().Any(j =>
         !ReferenceEquals(j, item) && !j.IsFinished && j.Job.Config.RepairInto is { } into && RepairRules.SameBackup(into, plan.CardPaths));
 
+    /// A later repair of this backup has finished successfully (the jobs above it in the list were started after it).
+    internal bool RepairedLater(JobItemViewModel item) => item.Job.Plan is { } plan && RepairRules.RepairedLater(plan.CardPaths,
+        Jobs.TakeWhile(j => !ReferenceEquals(j, item)).OfType<JobItemViewModel>().Select(j => (j.Job.Config.RepairInto, j.Phase, j.Job.Report)));
+
+    /// The finished cards show the repair button by what the queue holds now (they are not refreshed every tick).
+    void RaiseRepairOffers()
+    {
+        foreach (var j in Jobs.OfType<JobItemViewModel>())
+            if (j.IsFinished) j.RepairChanged();
+    }
+
     /// "Zkopírovat znovu" (UI návrh 4): a repair job — only the failed files, only where they failed — with the finished
     /// job's own settings; it waits in the copy queue like any card (it reads the card).
     internal void Repair(JobItemViewModel item)
@@ -416,6 +427,7 @@ public sealed partial class MainViewModel
         Jobs.Insert(0, repair);
         queue.Enqueue(repair.Runner);
         RaiseMany(nameof(HasJobs), nameof(HasFinished));
+        RaiseRepairOffers();   // the offer on the finished card goes while this repair is queued
     }
 
     /// The rest of a running job (its phase's ETA and what follows), from what this session measured; null when not known.
@@ -461,6 +473,7 @@ public sealed partial class MainViewModel
             }
         }
         Raise(nameof(HasFinished));
+        RaiseRepairOffers();   // a finished repair takes the button off the earlier card
         CheckCloseReady();
     }
 

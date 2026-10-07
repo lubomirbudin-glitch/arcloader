@@ -184,5 +184,5 @@ public sealed partial class JobItemViewModel
     public int DiskCount => DestNames.Count;
 
     /// "Zkopírovat znovu": only the failed files, only where they failed (a repair job, RepairRules).
-    public bool CanRepair => RepairRules.Offer(Phase, Job.Report, owner.SourcePresent(this), owner.RepairPending(this));
+    public bool CanRepair => RepairRules.Offer(Phase, Job.Report, owner.SourcePresent(this), owner.RepairPending(this), owner.RepairedLater(this));
 }

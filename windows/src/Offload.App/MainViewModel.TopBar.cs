@@ -53,7 +53,7 @@ public sealed partial class MainViewModel
     /// Every tick: the pill and the tab's number follow the queue (raised only when they changed).
     void RefreshQueueSummary()
     {
-        var (running, paused, waiting) = QueueSummary.Count(Jobs.Select(j => (j.Phase, j.IsPaused)));
+        var (running, paused, waiting) = QueueSummary.Count(Jobs.Select(j => (j.Phase, j.IsPauseHeld)));
         var pill = QueueSummary.Pill(running, paused, waiting);
         int badge = running + paused + waiting;
         if (pill == queuePill && badge == queueBadge) return;

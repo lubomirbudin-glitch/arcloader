@@ -262,6 +262,9 @@ public class JobCardTests
     {
         var counts = QueueSummary.Count([(JobPhase.Copying, false), (JobPhase.Waiting, false), (JobPhase.Done, false), (JobPhase.Proxies, true)]);
         Assert.Equal((1, 1, 1), counts);
+        // Pozastavit pressed but not yet holding: still running
+        Assert.Equal((2, 0, 0), QueueSummary.Count([(JobPhase.Copying, false), (JobPhase.Copying, false)]));
+        Assert.Equal((0, 0, 0), QueueSummary.Count([(JobPhase.Done, true)]));
         Assert.Equal("Běží 1 offload · 1 ve frontě", QueueSummary.Pill(1, 0, 1));
         Assert.Equal("Běží 2 offloady · 1 pozastavený · 3 ve frontě", QueueSummary.Pill(2, 1, 3));
         Assert.Equal("Pozastaveno: 1 offload", QueueSummary.Pill(0, 1, 0));
