@@ -56,6 +56,66 @@ public class CliNtfyTests
         Assert.Contains("ntfy: sent", r.Err);
     }
 
+    // Final fix 1: an append notifies the EARLIER backup's project (Film X), not the --project given (Reklama Y); an
+    // explicit --ntfy still wins.
+    [Fact]
+    public void Append_NotifiesTheEarlierProject_NotTheOneGiven_NtfyWins()
+    {
+        using var dir = new TempDir();
+        using var film = new LocalHttp();
+        using var reklama = new LocalHttp();
+        using var explicitly = new LocalHttp();
+        var folder = dir.Sub("appdata");
+        var s = new AppSettings();
+        var x = Projects.SaveAs(s, "Film X");
+        x.Notify.Ntfy = new NtfySettings { Enabled = true, Server = film.Url.TrimEnd('/'), Topic = "film-x" };
+        var y = Projects.SaveAs(s, "Reklama Y");
+        y.Notify.Ntfy = new NtfySettings { Enabled = true, Server = reklama.Url.TrimEnd('/'), Topic = "reklama-y" };
+        Projects.Activate(s, null);
+        SettingsStore.Save(s, Path.Combine(folder, "settings.json"));
+        var card = Card(dir);
+        var d1 = dir.Sub("d1");
+        Assert.Equal(0, Run(folder, card, "--project", "Film X", "-d", d1, "--date", "2026-10-07", "--no-history", "--no-analyze").Exit);
+        Assert.Single(film.Requests);
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C002.mov"), 1_000, 2);
+        var into = Path.Combine(d1, "2026-10-07", "A001");
+
+        var r = RunAppend(folder, card, "--into", into, "--project", "Reklama Y", "--no-history", "--no-analyze");
+
+        Assert.Equal(0, r.Exit);
+        Assert.Contains("Oznámení podle projektu dřívější zálohy: Film X", r.Out);
+        Assert.Equal(2, film.Requests.Count);
+        Assert.Empty(reklama.Requests);
+
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C003.mov"), 1_000, 3);
+        Assert.Equal(0, RunAppend(folder, card, "--into", into, "--project", "Reklama Y", "--no-history", "--no-analyze", "--ntfy", explicitly.Url + "primo").Exit);
+        Assert.Equal("primo", Body(explicitly).GetProperty("topic").GetString());
+        Assert.Equal(2, film.Requests.Count);
+        Assert.Empty(reklama.Requests);
+    }
+
+    static (int Exit, string Out, string Err) RunAppend(string settingsDir, params string[] args)
+    {
+        var o = Console.Out;
+        var e = Console.Error;
+        var so = new StringWriter();
+        var se = new StringWriter();
+        var oldFactory = CopyCommand.JobFactory;
+        var oldPath = CliProject.SettingsPath;
+        Console.SetOut(so);
+        Console.SetError(se);
+        CliProject.SettingsPath = () => Path.Combine(settingsDir, "settings.json");
+        CopyCommand.JobFactory = c => new OffloadJob(c, AppendFixtures.Options());
+        try { return (AppendCommand.Create().Parse(args).Invoke(), so.ToString(), se.ToString()); }
+        finally
+        {
+            Console.SetOut(o);
+            Console.SetError(e);
+            CopyCommand.JobFactory = oldFactory;
+            CliProject.SettingsPath = oldPath;
+        }
+    }
+
     [Fact]
     public void BadUrl_Exit1_Czech_NothingCopied()
     {

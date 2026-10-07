@@ -133,6 +133,47 @@ public class SettingsStoreTests
         Assert.DoesNotContain("Extra", names);
     }
 
+    // Final fix 4: a plain section of the wrong type is kept raw and written back unchanged (top level and in projects);
+    // the live value is the default.
+    [Fact]
+    public void WrongTypedPlainSections_KeptRaw_ByteStable_LiveDefault()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        File.WriteAllText(path, """
+            {"destRoots":"E-Zaloha","verify":"ano","analyzeClips":5,"hash":7,"portNames":[1],"activeProject":42,
+             "projects":[{"name":"Film X","destRoots":{"a":1},"verify":"ne","analyzeClips":"x","hash":false}]}
+            """);
+        var s = SettingsStore.Load(path);
+        Assert.Empty(s.DestRoots);
+        Assert.True(s.Verify);
+        Assert.True(s.AnalyzeClips);
+        Assert.Equal("xxh64", s.Hash);
+        Assert.Null(s.ActiveProject);
+        var x = Assert.Single(s.Projects);
+        Assert.Empty(x.DestRoots);
+        Assert.True(x.Verify);
+
+        var first = Path.Combine(dir.Path, "a.json");
+        SettingsStore.Save(s, first);
+        var bytes = File.ReadAllBytes(first);
+        var second = Path.Combine(dir.Path, "b.json");
+        SettingsStore.Save(SettingsStore.Load(first), second);
+        Assert.Equal(bytes, File.ReadAllBytes(second));   // byte-stable
+
+        using var doc = JsonDocument.Parse(bytes);
+        var root = doc.RootElement;
+        Assert.Equal("E-Zaloha", root.GetProperty("destRoots").GetString());
+        Assert.Equal("ano", root.GetProperty("verify").GetString());
+        Assert.Equal(5, root.GetProperty("analyzeClips").GetInt32());
+        Assert.Equal(7, root.GetProperty("hash").GetInt32());
+        Assert.Equal(42, root.GetProperty("activeProject").GetInt32());
+        var project = root.GetProperty("projects")[0];
+        Assert.Equal(1, project.GetProperty("destRoots").GetProperty("a").GetInt32());
+        Assert.Equal("ne", project.GetProperty("verify").GetString());
+        Assert.False(project.GetProperty("hash").GetBoolean());
+    }
+
     // A "proxy" section with a value this version cannot parse is kept raw: the next save does not drop it.
     [Fact]
     public void UnparsableProxySection_SurvivesRoundTrip_KnownFieldsStillWork()

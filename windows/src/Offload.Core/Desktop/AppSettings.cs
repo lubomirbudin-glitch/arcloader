@@ -104,7 +104,8 @@ public static class SettingsStore
 
     /// Missing or corrupt file → defaults; never throws (a settings file must never stop the app from starting).
     /// Each section is read on its own: a section that does not parse (a newer codec name, a wrong type) falls back to
-    /// its defaults and the others are kept. A key given twice: the last one wins; so does a project name given twice.
+    /// its defaults, is kept raw (written back unchanged) and the others are kept. A key given twice: the last one wins; a project name given
+    /// twice: the first wins, a later entry is kept unchanged.
     public static AppSettings Load(string path)
     {
         var s = new AppSettings();
@@ -121,7 +122,7 @@ public static class SettingsStore
             ReadProfile(root, s, GlobalKeys);
             Kept(root, s, "tools", (ExternalTools v) => s.Tools = v, () => new ExternalTools());
             Kept(root, s, "updates", (UpdateSettings v) => s.Updates = v, () => new UpdateSettings());
-            Section(root, "portNames", e =>
+            Section(root, s, "portNames", e =>
             {
                 var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var p in e.EnumerateObject())
@@ -129,7 +130,7 @@ public static class SettingsStore
                 s.PortNames = names;
             });
             ReadProjects(root, s);
-            Section(root, "activeProject", e => s.ActiveProject = e.GetString());
+            Section(root, s, "activeProject", e => s.ActiveProject = e.GetString());
             return Normalize(s);
         }
         catch (Exception)
@@ -147,8 +148,9 @@ public static class SettingsStore
         return members;
     }
 
-    /// A plain section: one that does not parse keeps its defaults.
-    static void Section(Dictionary<string, JsonElement> obj, string key, Action<JsonElement> read)
+    /// A plain section: one that does not parse (a wrong type) keeps its default as the live value and is kept raw,
+    /// written back as it was (like `Kept`).
+    static void Section(Dictionary<string, JsonElement> obj, SettingsProfile owner, string key, Action<JsonElement> read)
     {
         if (!obj.TryGetValue(key, out var e) || e.ValueKind == JsonValueKind.Null) return;
         try
@@ -157,7 +159,8 @@ public static class SettingsStore
         }
         catch (Exception)
         {
-            // This section keeps its defaults.
+            (owner.RawSections ??= [])[key] = e;
+            System.Diagnostics.Trace.WriteLine($"settings: section \"{key}\" kept as-is (could not be read)");
         }
     }
 
@@ -176,11 +179,11 @@ public static class SettingsStore
     /// The profile keys of `obj` into `p`; any key that is neither a profile key nor in `alsoKnown` goes to p.Extra.
     static void ReadProfile(Dictionary<string, JsonElement> obj, SettingsProfile p, IReadOnlyCollection<string> alsoKnown)
     {
-        Section(obj, "destRoots", e => p.DestRoots = e.EnumerateArray()
+        Section(obj, p, "destRoots", e => p.DestRoots = e.EnumerateArray()
             .Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList());
-        Section(obj, "verify", e => p.Verify = e.GetBoolean());
-        Section(obj, "analyzeClips", e => p.AnalyzeClips = e.GetBoolean());
-        Section(obj, "hash", e => p.Hash = e.GetString() is { Length: > 0 } h ? h : "xxh64");
+        Section(obj, p, "verify", e => p.Verify = e.GetBoolean());
+        Section(obj, p, "analyzeClips", e => p.AnalyzeClips = e.GetBoolean());
+        Section(obj, p, "hash", e => p.Hash = e.GetString() is { Length: > 0 } h ? h : "xxh64");
         Kept(obj, p, "proxy", (ProxySettings v) => p.Proxy = v, () => new ProxySettings());
         Kept(obj, p, "naming", (NamingSettings v) => p.Naming = v, () => new NamingSettings());
         Kept(obj, p, "outputs", (OutputSettings v) => p.Outputs = v, () => new OutputSettings());
@@ -190,7 +193,7 @@ public static class SettingsStore
     }
 
     /// `projects` (spec 4.1): an entry that is no object or has no valid name is kept raw (M3: written back after the readable ones); a name given twice
-    /// (a hand-edited file) — the last entry wins. A `projects` that is no array is kept raw until a project is saved.
+    /// (a hand-edited file) — the first wins, a later one is kept raw. A `projects` that is no array is kept raw until a project is saved.
     static void ReadProjects(Dictionary<string, JsonElement> root, AppSettings s)
     {
         if (!root.TryGetValue("projects", out var e) || e.ValueKind == JsonValueKind.Null) return;

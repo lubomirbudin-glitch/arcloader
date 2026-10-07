@@ -75,10 +75,10 @@ public static partial class NtfyClient
             };
             request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
             request.Headers.UserAgent.ParseAdd($"Offload/{UpdateChecker.Plain(OffloadVersion.String)}");
-            using var response = await Http.SendAsync(request, cts.Token).ConfigureAwait(false);
+            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
             return response.IsSuccessStatusCode
                 ? new(true, null)
-                : new(false, $"Server odpověděl {(int)response.StatusCode} {response.ReasonPhrase}".TrimEnd() + ".");
+                : new(false, $"Server odpověděl {(int)response.StatusCode} {UpdateChecker.Clean(response.ReasonPhrase ?? "")}".TrimEnd() + ".");
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {

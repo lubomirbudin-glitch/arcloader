@@ -258,8 +258,9 @@ Pravidla (Windows od 0.3.0):
 - Projekty (Windows od 0.4.0): klíče profilu na horní úrovni (`destRoots`, `verify`, `analyzeClips`, `hash`, `naming`,
   `outputs`, `notify`, `proxy`) jsou profil „Bez projektu“; `projects` je pole pojmenovaných profilů stejného tvaru
   s klíčem `name` (oříznutý, 1–60 znaků, jedinečný bez ohledu na velikost písmen, „Bez projektu“ vyhrazené);
-  `activeProject` je jméno nebo `null` (jméno, které nepatří žádnému čitelnému projektu, se zachová a platí „Bez
-  projektu“). Duplicity se **nemažou**: platí první položka, další se stejným jménem a položky bez platného jména
+  `activeProject` je jméno nebo `null` (jméno neexistujícího projektu se při čtení změní na `null`; zachová se jen
+  jméno projektu uloženého beze změny — položka, kterou tato verze nečte — a platí „Bez projektu“; `activeProject`
+  jiného typu než text se zachová beze změny). Duplicity se **nemažou**: platí první položka, další se stejným jménem a položky bez platného jména
   zůstanou v souboru beze změny a při uložení se zapíšou zpět za čitelné projekty (nic se neztratí ani nenásobí).
   `projects`, které není pole, se zachová beze změny, dokud se v aplikaci neuloží projekt. Společné zůstávají `tools`,
   `portNames` a `updates`.

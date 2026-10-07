@@ -212,4 +212,32 @@ public class NtfyClientTests
         await NtfyClient.SendOutcomeAsync(settings, outcome with { Kind = OutcomeKind.Ejectable }, log.Add);
         Assert.Single(server.Requests);   // off, and "kartu lze vysunout": nothing sent
     }
+
+    // Final fix 2: only the headers are read — a server that streams a huge body after an error status does not hold
+    // the client (and its memory) until the body ends; the reason phrase is capped.
+    [Fact]
+    public async Task ErrorWithEndlessBody_ReturnsPromptly_ReasonPhraseCapped()
+    {
+        using var server = new LocalHttp(async c =>
+        {
+            c.Response.StatusCode = 500;
+            c.Response.StatusDescription = new string('x', 2000);
+            c.Response.SendChunked = true;
+            var chunk = new byte[64 * 1024];
+            var until = DateTime.UtcNow.AddSeconds(8);
+            while (DateTime.UtcNow < until)
+            {
+                await c.Response.OutputStream.WriteAsync(chunk);
+                await c.Response.OutputStream.FlushAsync();
+                await Task.Delay(5);
+            }
+            c.Response.Close();
+        });
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var r = await NtfyClient.SendAsync(server.Url, "t", "a", "b", 3, [], timeout: TimeSpan.FromSeconds(6));
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(3), $"took {watch.Elapsed}");
+        Assert.False(r.Ok);
+        Assert.StartsWith("Server odpověděl 500", r.Error);
+        Assert.True(r.Error!.Length < 600, $"reason phrase not capped: {r.Error.Length}");
+    }
 }

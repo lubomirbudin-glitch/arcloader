@@ -185,7 +185,7 @@ static class CopyCommand
         return status.Phase == JobPhase.Done && (report?.Success == true || (report == null && status.Note != null)) ? 0 : 1;
     }
 
-    /// Spec 4.3: --ntfy (or the project's ntfy) once the job has ended — at most 10 s; a failure is only a line on stderr.
+    /// Spec 4.3: --ntfy (or the project's ntfy) once the job has ended — at most 11 s (10 s send + 1 s grace); a failure is only a line on stderr.
     internal static void Ntfy(JobConfig config, OffloadPlan? plan, JobStatus status, OffloadReport? report)
     {
         // Never the source path itself (spec 5.6): the plan's name, the --name, else the name the engine would give.

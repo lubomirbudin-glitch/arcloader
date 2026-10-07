@@ -135,7 +135,7 @@ public sealed class OffloadJob
 
     /// The project of the earlier backup: the first destination whose report can be read decides; `fallback` only when
     /// none can (M4).
-    internal static string? EarlierProject(IReadOnlyList<string> cardPaths, string? fallback)
+    public static string? EarlierProject(IReadOnlyList<string> cardPaths, string? fallback)
     {
         var earlier = cardPaths.Select(CardRecord.Load).FirstOrDefault(r => r.Generations.Count > 0);
         return earlier != null ? earlier.Project : fallback;

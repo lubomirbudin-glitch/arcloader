@@ -322,7 +322,7 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
 - [ ] 37. **ntfy:** téma `offload-<náhodné>` → „Poslat zkušební oznámení“ → „Odesláno.“ a zpráva v aplikaci ntfy na
       telefonu; server `https://nic.invalid` → „Nepodařilo se: …“ do 10 s, aplikace celou dobu reaguje; téma s diakritikou
       → OK nejde, česky proč; v textu na telefonu žádná cesta ani jméno PC (jen název karty, výsledek, počty); CLI
-      `--ntfy https://ntfy.sh/<téma>` (po konci čeká nejvýš 10 s, i s nedostupným serverem)
+      `--ntfy https://ntfy.sh/<téma>` (po konci čeká nejvýš 11 s, i s nedostupným serverem)
 - [ ] 38. **Aktualizace:** `build.ps1 -ReleaseUrl \\NAS\Offload\` → `offload-update.json`; Nástroje → Aktualizace… → cesta
       k manifestu → „Zkontrolovat teď“ → „Je k dispozici verze …“ / „Máte nejnovější verzi …“, odkaz „Nová verze …“ vpravo
       v menu; s `https://` adresou v manifestu *Otevřít* otevře prohlížeč, s místní složkou nebo zipem Průzkumník
@@ -370,7 +370,7 @@ jeho pravidla); projekt, který navrhuje název z klipů, se chová jako `--name
 `--project` jen nastavení — projekt zálohy zůstane podle dřívějšího reportu.
 `--lut-rule <camera|serial|reel|folder>=<hodnota>:<lut id|none|cesta.cube>` (opakovatelné, pořadí = priorita; hodnota
 nesmí obsahovat `:`; platí jen s `--lut auto` — s jiným `--lut` je to chyba; chybějící `.cube` je chyba, i s `--dry-run`).
-`--ntfy <url>` pošle výsledek (i odmítnutí před kopií) na ntfy, po konci čeká nejvýš 10 s (pak „ntfy: nečekám déle“);
+`--ntfy <url>` pošle výsledek (i odmítnutí před kopií) na ntfy, po konci čeká nejvýš 11 s (10 s odeslání + 1 s rezerva; pak „ntfy: nečekám déle“);
 oznámení Windows CLI neposílá.
 
 Výstupy (plán 7): po každé kopii nebo doplnění vznikne `_REPORT\<karta>_clips.csv` (`--no-clip-list` vypne, `--ale`

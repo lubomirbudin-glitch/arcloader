@@ -692,7 +692,7 @@ implicitní); `-d` není povinné, když projekt má cíle. Neznámý → „Pro
 (kód 1).
 
 **Okrajové případy.** Cíl projektu odpojený → jako dnes červeně; ručně upravený soubor se dvěma stejnými jmény →
-platí poslední; poškozená sekce `projects` → bez projektů, ostatní nastavení zůstane (sekční načítání `SettingsStore`);
+platí první, další se uchovají beze změny; poškozená sekce `projects` → bez projektů, ostatní nastavení zůstane (sekční načítání `SettingsStore`);
 přepnutí během běžící úlohy → nic se jí nestane.
 
 **Testy.** `ProjectsTests` (round-trip, přepnutí tam a zpět beze ztráty, přejmenování aktivního, smazání aktivního,

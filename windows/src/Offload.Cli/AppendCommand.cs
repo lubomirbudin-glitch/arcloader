@@ -30,6 +30,7 @@ static class AppendCommand
         {
             JobConfig? config = null;
             CliProfile? picked;
+            string? notifyNote = null;
             SettingsProfile? profile;
             try
             {
@@ -46,7 +47,7 @@ static class AppendCommand
                     // Ruling M4: the report records the earlier backup's project (the engine reads it from that report);
                     // this is only the fallback — --project gives the settings, not the card's project.
                     Project = picked?.Project,
-                    Notify = CliNtfy.Settings(r, ntfy, profile),
+                    Notify = CliNtfy.Settings(r, ntfy, null),   // until the earlier project is known: --ntfy only
                 };
                 stageTwo.Apply(r, config, profile);
                 var folders = r.GetValue(into)!.Select(CliPath.Full).ToList();
@@ -58,6 +59,9 @@ static class AppendCommand
                     config.Project = known.Entry.Project;   // the fallback is the history entry's project (M4)
                 }
                 config.AppendInto = folders;
+                // Final fix 1: notifications follow the card's earlier project, not --project (its topic may be another client's).
+                var earlier = OffloadJob.EarlierProject(folders, config.Project);
+                config.Notify = CliNtfy.ForAppend(r, ntfy, SettingsStore.Load(CliProject.SettingsPath()), earlier, out notifyNote);
             }
             catch (Exception e)
             {
@@ -65,6 +69,7 @@ static class AppendCommand
                 if (config != null && !r.GetValue(dryRun)) CopyCommand.Ntfy(config, null, new JobStatus { Phase = JobPhase.Failed, Error = e.Message }, null);   // card name only
                 return 1;
             }
+            if (notifyNote != null) Console.WriteLine(notifyNote);
             if (picked != null) Console.WriteLine(Msg.CliAppendProject(picked.Name));
             return CopyCommand.RunJob(config, r.GetValue(dryRun));
         });

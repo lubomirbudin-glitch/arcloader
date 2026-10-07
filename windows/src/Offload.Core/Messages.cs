@@ -99,6 +99,7 @@ public static class Msg
     public const string CardNameAutoNone = "Návrh názvu nenalezen, použije se jmenovka svazku.";
     public static string CardNameAuto(string name) => $"Název karty: {name} (podle klipů)";
     public static string CliProject(string name) => $"Projekt: {name} (výchozí hodnoty z nastavení aplikace, volby z příkazové řádky mají přednost)";
+    public static string CliAppendNotify(string name) => $"Oznámení podle projektu dřívější zálohy: {name}";
     public static string CliAppendProject(string name) => $"Nastavení z projektu: {name} (projekt zálohy zůstane podle dřívějšího reportu)";
     public static string CardUnreadable(string detail) => $"Kartu nejde přečíst: {detail}";
 

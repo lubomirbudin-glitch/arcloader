@@ -24,4 +24,16 @@ static class CliNtfy
         s.Windows = false;
         return s;
     }
+
+    /// An append's notify settings (final fix 1): an explicit --ntfy wins; else those of the EARLIER backup's project
+    /// (AppendRules.ProfileFor: none or gone = "Bez projektu"), never another project's topic given by --project.
+    /// `note` is the Czech line to print when the earlier project's settings are used.
+    public static NotifySettings ForAppend(ParseResult r, Option<string?> ntfy, AppSettings all, string? earlierProject, out string? note)
+    {
+        note = null;
+        if (r.GetValue(ntfy) != null) return Settings(r, ntfy, null);
+        var (profile, gone) = AppendRules.ProfileFor(all, earlierProject);
+        if (earlierProject != null) note = gone ? AppendRules.GoneNote(earlierProject) : Msg.CliAppendNotify(earlierProject);
+        return Settings(r, ntfy, profile);
+    }
 }
