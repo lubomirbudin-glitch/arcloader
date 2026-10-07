@@ -184,6 +184,10 @@ public class UpdateCheckerTests
     [InlineData(@"C:\Builds\Offload", UpdateLinkKind.Folder)]
     [InlineData(@"D:\Builds\Offload-win-x64-0.5.0.zip", UpdateLinkKind.File)]
     [InlineData("file:///C:/Builds/Offload-win-x64-0.5.0.ZIP", UpdateLinkKind.File)]
+    [InlineData(@"C:\Builds\calc.exe"",x", UpdateLinkKind.None)]
+    [InlineData(@"C:\Builds,x\Offload", UpdateLinkKind.None)]
+    [InlineData("file:///C:/Builds/a%22b/", UpdateLinkKind.None)]
+    [InlineData("file:///C:/Builds/a%2Cb.zip", UpdateLinkKind.None)]
     [InlineData("javascript:alert(1)", UpdateLinkKind.None)]
     [InlineData("ms-settings:network", UpdateLinkKind.None)]
     [InlineData("search-ms:query=x", UpdateLinkKind.None)]
@@ -222,6 +226,8 @@ public class UpdateCheckerTests
     [Theory]
     [InlineData("{\"version\":\"0.5.0-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}")]
     [InlineData("{\"version\":\"0.5.0\\nX\"}")]
+    [InlineData("{\"version\":\"0.5.0\\u202e\"}")]
+    [InlineData("{\"version\":\"0.5.0\",\"url\":\"https://x/\\u202egpj.exe\"}")]
     [InlineData("{\"version\":\"0.5.0\",\"url\":\"https://x/\\u001b[2J\"}")]
     public async Task HostileManifest_Refused(string json)
     {
@@ -250,6 +256,30 @@ public class UpdateCheckerTests
 
         var ok = await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":\"0.5.0-win\"}"), "0.4.0", Now, state, force: true);
         Assert.Equal("Je k dispozici verze 0.5.0 (máte 0.4.0).", ok.Text("0.4.0"));
+    }
+
+    // U2: a local drive is resolved as before; DriveType.Network drives are never opened (tested on the first
+    // mapped network drive, if the machine has one).
+    [Fact]
+    public void UpdateLinks_Resolve_NetworkDrive_IsNetwork()
+    {
+        var net = DriveInfo.GetDrives().FirstOrDefault(d => d.DriveType == DriveType.Network);
+        if (net == null) return;   // nothing mapped here: the check is a one-liner on DriveInfo
+        Assert.Equal(UpdateLinkKind.Network, UpdateLinks.Resolve(net.RootDirectory.FullName).Kind);
+        Assert.Equal(UpdateLinkKind.Network, UpdateLinks.Resolve(Path.Combine(net.RootDirectory.FullName, "a.zip")).Kind);
+    }
+
+    // Notes read back from the state file are cut like those of a manifest.
+    [Fact]
+    public async Task StateNotes_CutTo2000()
+    {
+        using var dir = new TempDir();
+        var state = Path.Combine(dir.Path, "update-check.json");
+        var source = Manifest(dir, "{\"version\":\"0.4.0\"}");
+        File.WriteAllText(state, "{\"lastCheck\":\"" + Now.ToString("o") + "\",\"lastSource\":" + JsonSerializer.Serialize(source) + ",\"lastVersion\":\"0.5.0\",\"lastNotes\":\"" + new string('n', 50000) + "\"}");
+        var r = await UpdateChecker.CheckAsync(source, "0.4.0", Now.AddHours(1), state);
+        Assert.Equal(UpdateStatus.NewVersion, r.Status);
+        Assert.Equal(UpdateChecker.MaxNotesLength, r.Info!.Notes!.Length);
     }
 
     // A hostile state file is validated like a manifest.

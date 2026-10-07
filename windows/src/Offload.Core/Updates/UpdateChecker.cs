@@ -79,6 +79,7 @@ public static class UpdateChecker
         // What was remembered belongs to its address: another address starts from nothing.
         bool sameSource = string.Equals(state.LastSource, source, StringComparison.Ordinal);
         if (!sameSource) state.LastVersion = state.LastUrl = state.LastNotes = null;
+        if (state.LastNotes is { Length: > MaxNotesLength } sn) state.LastNotes = sn[..MaxNotesLength];
         if (!force && sameSource && state.LastCheck is DateTime last && last <= nowUtc && nowUtc - last < Interval)
             return state.LastVersion is string v && SafeInfo(new UpdateInfo(v, state.LastUrl, state.LastNotes)) && IsNewer(v, currentVersion)
                 ? new(UpdateStatus.NewVersion, new UpdateInfo(v, state.LastUrl, state.LastNotes), null)
@@ -179,12 +180,15 @@ public static class UpdateChecker
     /// Text that ends up on screen is short and has no control characters (a hostile manifest or state file).
     static void Validate(UpdateInfo info)
     {
-        if (info.Version.Length > MaxVersionLength || info.Version.Any(char.IsControl))
+        if (info.Version.Length > MaxVersionLength || info.Version.Any(Odd))
             throw new UpdateException("verze v manifestu je příliš dlouhá nebo obsahuje zvláštní znaky");
         if (Parts(info.Version) == null) throw new UpdateException("v manifestu chybí platná verze (MAJOR.MINOR.PATCH)");
-        if (info.Url is { } u && (u.Length > MaxUrlLength || u.Any(char.IsControl)))
+        if (info.Url is { } u && (u.Length > MaxUrlLength || u.Any(Odd)))
             throw new UpdateException("adresa vydání v manifestu je příliš dlouhá nebo obsahuje zvláštní znaky");
     }
+
+    /// Control and Unicode Format characters (e.g. U+202E right-to-left override) are never shown.
+    static bool Odd(char c) => char.IsControl(c) || System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format;
 
     static bool SafeInfo(UpdateInfo info)
     {
@@ -266,9 +270,13 @@ public static class UpdateLinks
         if (!uri.IsFile) return (UpdateLinkKind.None, "");
         if (uri.IsUnc) return (UpdateLinkKind.Network, url.Trim());
         var path = uri.LocalPath;
+        // a quote or comma could split the explorer.exe command line
+        if (url.Contains('"') || url.Contains(',') || path.Contains('"') || path.Contains(',')) return (UpdateLinkKind.None, "");
         if (!DriveRoot.IsMatch(path)) return (UpdateLinkKind.Network, url.Trim());
         return (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? UpdateLinkKind.File : UpdateLinkKind.Folder, path);
     }
+
+    static bool IsNetworkDrive(string path) => new DriveInfo(path[..1]).DriveType == DriveType.Network;
 
     /// At the click: Classify, then the disk is asked (call off the UI thread, with a limit): a folder must exist as a
     /// directory, a zip as a file; otherwise None. Web and Network are returned as they are.
@@ -277,6 +285,8 @@ public static class UpdateLinks
         var c = Classify(url);
         try
         {
+            // U2: a mapped network drive can answer "folder" to this check and "file" to Explorer
+            if (c.Kind is UpdateLinkKind.Folder or UpdateLinkKind.File && IsNetworkDrive(c.Target)) return (UpdateLinkKind.Network, c.Target);
             if (c.Kind == UpdateLinkKind.Folder && !Directory.Exists(c.Target)) return (UpdateLinkKind.None, "");
             if (c.Kind == UpdateLinkKind.File && !File.Exists(c.Target)) return (UpdateLinkKind.None, "");
         }
