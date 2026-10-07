@@ -38,6 +38,7 @@ public partial class App : Application
         };
         try
         {
+            ThemeWatcher.Start(this);
             var window = new MainWindow(new MainViewModel(StartupOptions.Parse(e.Args)));
             MainWindow = window;
             window.Show();

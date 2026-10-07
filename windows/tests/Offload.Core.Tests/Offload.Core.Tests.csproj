@@ -16,6 +16,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- WPF itself (part of .NET, no package): ThemeXamlTests load the theme dictionaries of Offload.App with XamlReader.
+         The test project still does not reference Offload.App. -->
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WPF" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Offload.Core\Offload.Core.csproj" />
     <ProjectReference Include="..\..\src\Offload.Cli\Offload.Cli.csproj" />
     <!-- Also copies braw-decode.exe into the test output, so ExternalTools (which searches the exe folder) now finds a
