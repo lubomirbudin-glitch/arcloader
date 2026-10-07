@@ -129,9 +129,11 @@ public static class LutRules
     }
 
     /// `*` = any characters (also "/"), `?` = one character, regardless of case; the whole text must match.
-    static Regex Glob(string pattern) =>
-        new("^" + Regex.Escape(pattern.Replace('\\', '/')).Replace(@"\*", ".*").Replace(@"\?", ".") + "$",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(200));
+    static Regex Glob(string pattern) => GlobCache.GetOrAdd(pattern, p =>
+        new("^" + Regex.Escape(p.Replace('\\', '/')).Replace(@"\*", ".*").Replace(@"\?", ".") + "$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(200)));
+
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Regex> GlobCache = new();
 
     /// The first rule the editor cannot save, in Czech ("Pravidlo 2: vyplňte hodnotu."), or null. A rule of a newer
     /// version (read-only in the editor, ruling I3) is not looked at, but it keeps its number.

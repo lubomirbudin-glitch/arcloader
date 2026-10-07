@@ -13,7 +13,7 @@ sealed class StageTwoOptions
     readonly Option<string?> lut = new("--lut") { Description = "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path." };
     readonly Option<string?> lutFallback = new("--lut-fallback") { Description = "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto." };
     readonly Option<string[]> lutRule = new("--lut-rule") { Description = "Own LUT rule before the camera detection (with --lut auto), repeat in priority order: <camera|serial|reel|folder>=<value>:<lut id|none|path.cube>, e.g. camera=FX6:sony-slog3-sgamut3cine.", DefaultValueFactory = _ => [] };
-    readonly Option<int> proxyHeight =new("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
+    readonly Option<int> proxyHeight = new("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
     readonly Option<double?> frameAspect = new("--frame-aspect") { Description = "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.", CustomParser = a => CliParse.Parse(a) };
     readonly Option<double> frameScale = new("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
     readonly Option<string> proxyCodec = new("--proxy-codec") { Description = "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.", DefaultValueFactory = _ => "h264" };
@@ -62,9 +62,15 @@ sealed class StageTwoOptions
             {
                 var (rule, error) = LutRules.ParseOption(spec, LutCatalog.Default);
                 if (rule == null) throw new ArgumentException(error);
-                if (rule.LutPath != null) rule.LutPath = CliPath.Full(rule.LutPath);
+                if (rule.LutPath != null)
+                {
+                    rule.LutPath = CliPath.Full(rule.LutPath);
+                    if (!File.Exists(rule.LutPath)) throw new ArgumentException(Msg.RuleLutNotFound(rules.Count + 1, Path.GetFileName(rule.LutPath)));
+                }
                 rules.Add(rule);
             }
+            // Rules work in Auto mode only (R18): written ones with another LUT would be silently ignored.
+            if (rules.Count > 0 && LutResolver.EffectiveMode(p) != LutMode.Auto) throw new ArgumentException(Msg.LutRuleNeedsAuto);
             p.LutRules = rules;   // written rules replace the project's (their order is the priority)
         }
         if (Given(proxy)) p.Enabled = r.GetValue(proxy);

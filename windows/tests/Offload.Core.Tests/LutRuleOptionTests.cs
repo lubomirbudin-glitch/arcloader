@@ -137,4 +137,42 @@ public class LutRuleOptionTests
         var replaced = Run(folder, Card(dir), "--project", "Film X", "-d", dir.Sub("d2"), "--dry-run", "--no-history", "--lut-rule", "serial=9:none");
         Assert.Equal(["9"], replaced.Config!.Proxy.LutRules.Select(x => x.Value));
     }
+
+    // Fix round 1: a rule's .cube must exist (as --lut checks), also with --dry-run; the rule number is its position.
+    [Fact]
+    public void Cli_RuleCube_Missing_Refused_NumberedByPosition()
+    {
+        using var dir = new TempDir();
+        var r = Run(null, Card(dir), "-d", dir.Sub("d1"), "--dry-run", "--no-history",
+            "--lut-rule", "camera=FX6:none", "--lut-rule", $"reel=A:{Path.Combine(dir.Path, "gone.cube")}");
+        Assert.Equal(1, r.Exit);
+        Assert.Contains("Chyba: LUT z pravidla 2 nenalezen: gone.cube", r.Err);
+    }
+
+    // Fix round 1: rules work in Auto mode only; written with another LUT they are refused, not silently ignored.
+    [Theory]
+    [InlineData("none")]
+    [InlineData("sony-slog3-sgamut3cine")]
+    public void Cli_Rules_WithAnotherLut_Refused(string lut)
+    {
+        using var dir = new TempDir();
+        var r = Run(null, Card(dir), "-d", dir.Sub("d1"), "--dry-run", "--no-history", "--lut", lut, "--lut-rule", "camera=FX6:none");
+        Assert.Equal(1, r.Exit);
+        Assert.Contains("Chyba: --lut-rule platí jen s --lut auto", r.Err);
+        Assert.Equal(0, Run(null, Card(dir), "-d", dir.Sub("d2"), "--dry-run", "--no-history", "--lut", "auto", "--lut-rule", "camera=FX6:none").Exit);
+    }
+
+    [Fact]
+    public void Cli_Rules_ProjectInCustomMode_Refused()
+    {
+        using var dir = new TempDir();
+        var folder = dir.Sub("appdata");
+        var s = new AppSettings();
+        var p = Projects.SaveAs(s, "Film X");
+        p.Proxy.LutMode = LutMode.None;
+        SettingsStore.Save(s, Path.Combine(folder, "settings.json"));
+        var r = Run(folder, Card(dir), "--project", "Film X", "-d", dir.Sub("d1"), "--dry-run", "--no-history", "--lut-rule", "camera=FX6:none");
+        Assert.Equal(1, r.Exit);
+        Assert.Contains("--lut-rule platí jen s --lut auto", r.Err);
+    }
 }
