@@ -63,6 +63,65 @@ public class EngineTests
         Assert.All(snap.VerifiedBytes, v => Assert.Equal(report.TotalBytes, v));
     }
 
+    // Spec 3.5 / review focus 4: with MD5 a second hasher shares every block — a pool of just two blocks still flows
+    // (a wrong consumer count would hang or hand a block back early), and every file verifies through both hashes.
+    [Fact]
+    public async Task Both_TwoBlockPool_EveryFileVerified()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        var files = MakeCard(card);
+        var options = Options();
+        options.BufferCount = 2;
+        options.Hashes = HashKind.Both;
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-04");
+        Assert.Equal(HashKind.Both, plan.Hashes);
+
+        // A block that never comes back to the pool hangs the copy: TimeoutException instead of a hung test run.
+        var report = await Task.Run(() => engine.Run(plan)).WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.True(report.SafeToEject);
+        foreach (var cardPath in plan.CardPaths)
+            foreach (var (rel, data) in files)
+                Assert.Equal(data, File.ReadAllBytes(Layout.Join(cardPath, rel)));
+        Assert.All(report.Files, f => Assert.Equal(f.Xxh64, Format.Hex64(System.IO.Hashing.XxHash64.HashToUInt64(files[f.Path]))));
+        // One read pass for both hashes: the card is read once, every destination is read back once (not per algorithm).
+        var snap = engine.Snapshot();
+        Assert.Equal(report.TotalBytes, snap.ReadBytes);
+        Assert.All(snap.VerifiedBytes, v => Assert.Equal(report.TotalBytes, v));
+    }
+
+    // Spec 3.5: a byte changed on a destination after the copy fails verification in both modes. xxh64 is compared first,
+    // so both rows fail with HASH MISMATCH; the MD5 path is covered by DestWriterTests.Verify_Both_Md5Mismatch_Fails.
+    [Theory]
+    [InlineData(HashKind.Xxh64, "HASH MISMATCH")]
+    [InlineData(HashKind.Both, "HASH MISMATCH")]
+    public void TamperedDestination_FailsInBothModes(HashKind kinds, string error)
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "a.mov"), 3 * Chunk + 7, 1);
+        var options = Options();
+        options.Hashes = kinds;
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-04");
+        options.BeforeVerify = () =>
+        {
+            var copy = Layout.Join(plan.CardPaths[1], "CLIP/a.mov");
+            var bytes = File.ReadAllBytes(copy);
+            bytes[Chunk + 3] ^= 0x01;
+            File.WriteAllBytes(copy, bytes);
+        };
+
+        var report = engine.Run(plan);
+
+        var f = Assert.Single(report.Files);
+        Assert.Equal(["verified", "failed"], f.Destinations);
+        Assert.StartsWith(error, f.Errors[1]);
+        Assert.False(report.Success);
+    }
+
     [Fact]
     public void DefaultBlockSize_FileOneByteOverBlock()
     {

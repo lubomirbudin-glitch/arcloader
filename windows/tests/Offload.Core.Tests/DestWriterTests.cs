@@ -124,7 +124,7 @@ public class DestWriterTests
         File.WriteAllBytes(Path.Combine(card, "b"), bytes);
         File.WriteAllBytes(Path.Combine(card, "c"), c[..4000]);
 
-        w.Verify(files, [XxHash64.HashToUInt64(a), XxHash64.HashToUInt64(b), XxHash64.HashToUInt64(c)], CancellationToken.None);
+        w.Verify(files, [Xx(a), Xx(b), Xx(c)], HashKind.Xxh64, CancellationToken.None);
 
         Assert.Equal(FileState.Verified, w.Results[0].State);
         Assert.Equal(FileState.Failed, w.Results[1].State);
@@ -150,24 +150,63 @@ public class DestWriterTests
         Assert.Equal("A/B/.x.mov.offload-part", DestWriter.PartName("A/B/x.mov"));
     }
 
+    static FileHashes Xx(byte[] data) => new(XxHash64.HashToUInt64(data), null);
+
+    // Spec 3.5: one hasher per algorithm, each on its own thread, every block shared by both (two consumers).
     [Fact]
-    public void SourceHasher_HashesChunkStream()
+    public void SourceHashers_Xxh64AndMd5_HashTheChunkStream()
     {
         var data = new byte[3 * Chunk + 5];
         new Random(9).NextBytes(data);
         using var pool = new BufferPool(4, Chunk);
-        using var hasher = new SourceHasher(2);
-        hasher.Begin();
-        for (long off = 0; off < data.Length; off += Chunk)
+        var hashers = SourceHasher.For(HashKind.Both, 2);
+        try
         {
-            int n = (int)Math.Min(Chunk, data.Length - off);
-            var buf = pool.Take();
-            data.AsSpan((int)off, n).CopyTo(buf.Span);
-            hasher.Update(new Chunk(buf, n, off, 1, pool));
+            Assert.Equal([HashKind.Xxh64, HashKind.Md5], hashers.Select(h => h.Kind));
+            foreach (var h in hashers) h.Begin();
+            for (long off = 0; off < data.Length; off += Chunk)
+            {
+                int n = (int)Math.Min(Chunk, data.Length - off);
+                var buf = pool.Take();
+                data.AsSpan((int)off, n).CopyTo(buf.Span);
+                var chunk = new Chunk(buf, n, off, hashers.Count, pool);
+                foreach (var h in hashers) h.Update(chunk);
+            }
+            foreach (var h in hashers) h.Finish(1);
+            foreach (var h in hashers) h.Wait();
+            var hashes = SourceHasher.Combine(hashers, 2);
+            Assert.Equal(default, hashes[0]);
+            Assert.Equal(XxHash64.HashToUInt64(data), hashes[1].Xxh64);
+            Assert.Equal(System.Security.Cryptography.MD5.HashData(data), hashes[1].Md5);
+            Assert.Single(SourceHasher.For(HashKind.Xxh64, 1));
         }
-        hasher.Finish(1);
-        hasher.Wait();
-        Assert.Null(hasher.Hashes[0]);
-        Assert.Equal(XxHash64.HashToUInt64(data), hasher.Hashes[1]);
+        finally
+        {
+            foreach (var h in hashers) h.Dispose();
+        }
+    }
+
+    // Spec 3.5: in "both" a copy whose MD5 differs fails even when its xxh64 matches (a wrong source MD5 stands in for it).
+    [Fact]
+    public void Verify_Both_Md5Mismatch_Fails()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var a = new byte[5000]; new Random(1).NextBytes(a);
+        var b = new byte[5000]; new Random(2).NextBytes(b);
+        var files = new[] { new SourceFile("a", 5000, When), new SourceFile("b", 5000, When) };
+        using var pool = new BufferPool(4, Chunk);
+        using var w = new DestWriter(0, card, 2, new OffloadOptions { ChunkSize = Chunk });
+        Feed(w, pool, a, 0, files[0]);
+        Feed(w, pool, b, 1, files[1]);
+        var wrongMd5 = System.Security.Cryptography.MD5.HashData(a);
+
+        w.Verify(files, [new FileHashes(XxHash64.HashToUInt64(a), System.Security.Cryptography.MD5.HashData(a)), new FileHashes(XxHash64.HashToUInt64(b), wrongMd5)],
+            HashKind.Both, CancellationToken.None);
+
+        Assert.Equal(FileState.Verified, w.Results[0].State);
+        Assert.Equal(FileState.Failed, w.Results[1].State);
+        Assert.StartsWith("MD5 MISMATCH: dest ", w.Results[1].Error);
+        Assert.Equal(10000, w.Verified);
     }
 }

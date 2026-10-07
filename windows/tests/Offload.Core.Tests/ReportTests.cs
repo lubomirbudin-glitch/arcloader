@@ -101,7 +101,7 @@ public class ReportTests
                 Dirs = [], Skipped = [],
             },
         };
-        var r = OffloadReport.Build(plan, [1UL, 2UL], [null, null],
+        var r = OffloadReport.Build(plan, [new FileHashes(1UL, null), new FileHashes(2UL, null)], [null, null],
             [[new DestFileResult(FileState.Verified, null), new DestFileResult(FileState.Written, null)]],
             [true], verified: false, DateTime.UtcNow, DateTime.UtcNow, DateTime.UtcNow);
         Assert.Equal(2, r.Destinations[0].FilesOK);
@@ -146,7 +146,7 @@ public class ReportTests
                 Dirs = [], Skipped = [],
             },
         };
-        var r = OffloadReport.Build(plan, [1UL, null], [null, "read failed"],
+        var r = OffloadReport.Build(plan, [new FileHashes(1UL, null), default], [null, "read failed"],
             [
                 [new DestFileResult(FileState.Verified, null), new DestFileResult(FileState.Failed, "source: read failed")],
                 [new DestFileResult(FileState.Verified, null), new DestFileResult(FileState.Failed, "source: read failed")],

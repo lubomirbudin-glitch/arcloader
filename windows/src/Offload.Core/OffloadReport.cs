@@ -69,7 +69,7 @@ public sealed partial class OffloadReport
     /// Every file is on every destination and was read back with a matching hash.
     [JsonIgnore] public bool SafeToEject => Success && Verified;
 
-    public static OffloadReport Build(OffloadPlan plan, IReadOnlyList<ulong?> hashes, IReadOnlyList<string?> sourceErrors,
+    public static OffloadReport Build(OffloadPlan plan, IReadOnlyList<FileHashes> hashes, IReadOnlyList<string?> sourceErrors,
         IReadOnlyList<DestFileResult[]> destResults, IReadOnlyList<bool> unbuffered, bool verified,
         DateTime started, DateTime copyFinished, DateTime finished)
     {
@@ -79,7 +79,7 @@ public sealed partial class OffloadReport
             Path = f.RelPath,
             Size = f.Size,
             Modified = f.ModifiedUtc,
-            Xxh64 = hashes[i] is ulong h ? Format.Hex64(h) : null,
+            Xxh64 = hashes[i].Xxh64Hex,
             SourceError = sourceErrors[i],
             Destinations = destResults.Select(r => r[i].State.Wire()).ToList(),
             Errors = destResults.Select(r => r[i].Error).ToList(),

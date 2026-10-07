@@ -20,6 +20,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-07 — plán 7: výstupy pro produkci a střih
 
+- Úkol 4 — jádro MD5 (R16: jen navíc k xxh64): `HashKind` (`Xxh64`, `Md5`, xxh64 vždy), `FileHashes` místo `ulong?[]`, jeden `SourceHasher` na algoritmus na vlastním vlákně (blok karty má o konzumenta víc, MD5 nebrzdí xxh64 ani čtení karty), zpětné čtení cíle hashuje všemi zvolenými v jednom průchodu („MD5 MISMATCH“ u nesouhlasu); celá kopie podle `OffloadOptions.Hashes`, doplnění podle dřívější zálohy (`OffloadPlan.Hashes`)
 - Úkol 3 — proxy pro přelinkování: s platným TC navíc `reel_name` (muxer MOV ho zapíše do stopy timecodu `tmcd`, ffprobe ho tam ukáže; ověřeno s ffmpeg 8.1), všechny zvukové proudy zdroje (`-map 0:a?`; H.264/HEVC AAC 64 kb/s na kanál každého proudu, 128–512 kb/s; ProRes PCM), bez TC ani `tmcd`, ani cívka; proxy přejmenovaná kvůli shodě jmen má poznámku „Proxy přejmenována na … (shoda jmen) — přelinkujte ji ručně.“; odhad místa počítá zvuk po proudech (AAC podle skutečné rychlosti, ProRes PCM 0,768 Mb/s na kanál; před analýzou jeden stereo proud)
 - Úkol 1, doplnění — `CardRecord.Files` porovnává cesty bez ohledu na velikost písmen (jako `Clips` a `MhlReader`); testy: cesty lišící se jen velikostí písmen, poškozený hlavní report je `Error`, ne pád
 - Úkol 2 — cívka klipu (`ReelResolver`): tag kamery z ffprobe (`reel_name`, `tape_name`, `reel` — u MOV na stopě timecodu, u MXF na každém proudu), jinak cívka z názvu klipu (`A001C003…` → `A001`), jinak název složky karty; v reportu `clips[].info.reel`

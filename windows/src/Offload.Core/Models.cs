@@ -8,6 +8,9 @@ public sealed class OffloadOptions
     public int BufferCount { get; set; } = 16;
     public int ReadRetries { get; set; } = 3;
     public bool Verify { get; set; } = true;
+    /// The checksums of a full copy (spec 3.5): xxh64, or xxh64 + MD5 (R16 — never MD5 alone). An append uses the
+    /// earlier backup's instead (OffloadPlan.Hashes).
+    public HashKind Hashes { get; set; } = HashKind.Xxh64;
     /// Files at least this large are flushed individually; the rest are flushed once at the end.
     public long FullSyncThreshold { get; set; } = 256L << 20;
     public bool AllowSameDevice { get; set; }
@@ -59,6 +62,9 @@ public sealed class OffloadPlan
     public SourceScan? FullScan { get; init; }
     /// Append: files of the earlier backup that were never read back.
     public int UnverifiedEarlier { get; init; }
+    /// What this copy hashes and verifies with (xxh64 always): OffloadOptions.Hashes for a full copy, the earlier
+    /// backup's for an append (spec 3.5).
+    public HashKind Hashes { get; init; } = HashKind.Xxh64;
     /// Spec 2.5: what each destination volume needs and has free (the CLI's --dry-run lists it).
     public IReadOnlyList<Space.SpaceLine> Space { get; init; } = [];
     /// "Na cíli … zbude po offloadu jen … — rezerva pod 5 %…" — never blocks (R11).

@@ -14,6 +14,8 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     public string? Date { get; set; }
     public bool Verify { get; set; } = true;
     public int ChunkMB { get; set; } = 16;
+    /// xxh64, or xxh64 + MD5 (spec 3.5; settings `hash`, CLI --hash). An append keeps the earlier backup's.
+    public HashKind Hashes { get; set; } = HashKind.Xxh64;
     public int Buffers { get; set; } = 16;
     public bool AllowSameDevice { get; set; }
     /// Probe clips and put thumbnails + metadata into the report (stage 2).
@@ -107,6 +109,7 @@ public sealed class OffloadJob
             BufferCount = config.Buffers,
             Verify = config.Verify,
             AllowSameDevice = config.AllowSameDevice,
+            Hashes = config.Hashes,
         })
     {
     }
