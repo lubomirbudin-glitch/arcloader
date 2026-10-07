@@ -35,6 +35,12 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     public OutputSettings Outputs { get; set; } = new();
     /// The project the job was started in (spec 4.1), null = "Bez projektu": into history.json and the report.
     public string? Project { get; set; }
+    /// "Zkopírovat znovu" (UI návrh 4): repair the files that failed in these card folders (`<root>\<date>\<card>` of the
+    /// backup), each only where it failed (RepairPlanner); DestRoots, CardName and Date are taken from them.
+    public IReadOnlyList<string>? RepairInto { get; set; }
+    /// Ruling I1: the card the repaired backup was copied from (CardIdentity of the finished job) — a repair refuses
+    /// another card in the drive before anything is read or written. Null = not known (a folder source): not checked.
+    public string? RepairCardIdentity { get; set; }
     /// Where the end of the job is announced (spec 4.3): the copy taken when the job was started.
     public Notify.NotifySettings Notify { get; set; } = new();
 }
@@ -155,6 +161,12 @@ public sealed class OffloadJob
     public OffloadPlan Prepare()
     {
         if (Plan is { } done) return done;
+        if (Config.RepairInto is { Count: > 0 } broken)
+        {
+            var repair = Engine.PrepareRepair(Engine.PlanRepair(Config.Source, broken));
+            repair.Project = EarlierProject(broken, Config.Project);   // the backup's project, as an append (M4)
+            return Plan = repair;
+        }
         if (Config.AppendInto is { Count: > 0 } into)
         {
             var a = appendPlan = Engine.PlanAppend(Config.Source, into);
@@ -240,6 +252,9 @@ public sealed class OffloadJob
     public bool RunCopy(Action<string>? log = null)
     {
         IdentifyCard(log);
+        // Ruling I1: a repair copies only from the card the backup was made from (asked again like after a pause — a
+        // reader may answer late once); the answer is checked below, where a refusal fails the job.
+        bool otherCard = Config.RepairInto is { Count: > 0 } && Config.RepairCardIdentity is string want && !CardInDrive(want);
         // Ruling I1: after a pause the copy asks again which card is in the drive; a folder source (no identity) is not asked.
         if (sourceIdentity is string copied)
             Engine.SameCard = () => string.Equals(Identify(Config.Source), copied, StringComparison.OrdinalIgnoreCase);
@@ -262,7 +277,9 @@ public sealed class OffloadJob
             // An append holds its card folders until stage 1 ends (fix round 1, item 1) and plans under that hold — a
             // plan made before (the CLI prints one first) is made again, another append may have finished meanwhile.
             // Released in `finally`, so the NothingNew path below still holds them while it heals the hash list.
-            folders = Config.AppendInto is { Count: > 0 } into ? AppendLock.Acquire(into) : null;
+            // A repair takes the same lock: an append and a repair never number the same generation.
+            if (otherCard) throw OffloadError.Preflight(PreflightCode.RepairConflict, Msg.RepairOtherCard);
+            folders = (Config.RepairInto ?? Config.AppendInto) is { Count: > 0 } into ? AppendLock.Acquire(into) : null;
             if (folders != null)
             {
                 Plan = null;
@@ -274,7 +291,17 @@ public sealed class OffloadJob
             copying = true;
             var report = Engine.Run(plan);
             Report = report;
-            Update(s => s with { SafeToEject = report.SafeToEject, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
+            bool safe = report.SafeToEject;
+            BackupState? whole = null;
+            if (plan.Mode == PlanMode.Repair)
+            {
+                // Ruling I2: a repair's report lists only the repaired files — whether the card may be ejected is read
+                // from the whole backup after it (every card folder's reports, still under the folder lock).
+                var w = whole = BackupState.Of(plan.CardPaths);
+                safe &= w.Failed == 0 && w.Unverified == 0;
+                if (w.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(w.Unverified)));
+            }
+            Update(s => s with { SafeToEject = safe, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
             if (IsCancelled)
             {
                 // Marked before the phase changes: whoever sees it finished also sees the day report pending (fix round 1, item 3).
@@ -282,7 +309,8 @@ public sealed class OffloadJob
                 Update(s => s with { Phase = JobPhase.Cancelled });
                 return cancelled;
             }
-            RecordHistory(plan, report, log);
+            if (whole is { } state) RecordRepair(plan, report, state, log);
+            else RecordHistory(plan, report, log);
             if (Engine.CardChanged)
             {
                 // Ruling I1: another card (or none) after Pokračovat — the files copied before the pause are in the
@@ -293,7 +321,8 @@ public sealed class OffloadJob
                 Update(s => s with { Phase = JobPhase.Failed, Error = Msg.CardChangedWhilePaused });
                 return next;
             }
-            if (!Config.AnalyzeClips && !Config.Proxy.Enabled)
+            // A repair rewrites files whose clips were analysed with the backup: no stage 2, only its PDF and the lists.
+            if (plan.Mode == PlanMode.Repair || (!Config.AnalyzeClips && !Config.Proxy.Enabled))
             {
                 WriteClipLists(plan, log);   // the clips found in the files, without metadata (spec 3.3)
                 WritePdfReports(report, plan, log);
@@ -303,6 +332,12 @@ public sealed class OffloadJob
             }
             Update(s => s with { Phase = JobPhase.Analyzing });
             return true;
+        }
+        catch (OffloadError e) when (e.Code == PreflightCode.RepairNothing)
+        {
+            // Not an error: every file is good everywhere (another repair or an append got there first).
+            Update(s => s with { Phase = JobPhase.Done, Note = e.Message });
+            return false;
         }
         catch (OffloadError e) when (e.Code == PreflightCode.NothingNew)
         {
@@ -362,6 +397,20 @@ public sealed class OffloadJob
     /// keeps running until it is (closing waits for it, as for stage 2).
     public bool DayReportPending => dayReportPending;
 
+    /// Ruling I1 for a repair: the card in the drive is `want`. A different or unreadable answer is asked again
+    /// OffloadEngine.IdentifyRetries times 250 ms apart, as after a pause.
+    bool CardInDrive(string want)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            if (string.Equals(sourceIdentity, want, StringComparison.OrdinalIgnoreCase)) return true;
+            if (attempt >= OffloadEngine.IdentifyRetries || IsCancelled) return false;
+            Thread.Sleep(250);
+            try { sourceIdentity = Identify(Config.Source); }
+            catch (Exception) { sourceIdentity = null; }
+        }
+    }
+
     /// Which card is in the drive — read on the copy thread before anything else (the UI never waits on a card).
     void IdentifyCard(Action<string>? log)
     {
@@ -418,6 +467,42 @@ public sealed class OffloadJob
                 });
                 entry.Reels = ReelSuggestion.FromClips(ClipDetector.Detect(card.Files)).Reels.ToList();
                 return WithCard(store, entry, existing, card, fingerprint, shape);
+            });
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
+        }
+    }
+
+    /// A repair adds its generation to the entry of the card folders it repaired; whether the card is now backed up and
+    /// verified is read from the reports on the destinations (R4, `whole`) — so a repair that fixed the last file makes
+    /// the entry good again. The card's files, fingerprint and reels stay as they were (nothing new was copied).
+    void RecordRepair(OffloadPlan plan, OffloadReport report, BackupState whole, Action<string>? log)
+    {
+        if (!Config.RecordHistory) return;
+        try
+        {
+            var store = Store(log);
+            if (EntryOf(store, plan.CardPaths) is not { } found)
+            {
+                log?.Invoke("history: the repaired backup is not in history — nothing recorded");
+                return;
+            }
+            store.Update(found.Id, existing =>
+            {
+                if (existing == null) return null;
+                existing.Finished = report.Finished;
+                existing.Success = whole.Failed == 0;
+                existing.FailedFiles = whole.Failed == 0 ? null : whole.Failed;
+                existing.Verified = whole.Failed == 0 && whole.Unverified == 0;
+                existing.Generations.RemoveAll(g => g.Seq == plan.Generation);
+                existing.Generations.Add(new HistoryGeneration
+                {
+                    Seq = plan.Generation, Kind = HistoryGeneration.Repair, Finished = report.Finished,
+                    Files = plan.Scan.Files.Count, Bytes = plan.Scan.TotalBytes, Verified = report.Verified,
+                });
+                return existing;
             });
         }
         catch (Exception e)

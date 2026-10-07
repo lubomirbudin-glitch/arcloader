@@ -170,6 +170,9 @@ public static class Msg
     /// The comment of a repair's ASC MHL generation.
     public static string MhlRepairComment(int n, string source) =>
         $"Offload oprava: {n} {Desktop.Texts.Plural(n, "soubor", "soubory", "souborů")} znovu z {source}";
+    /// Ruling I1: the card in the drive is not the one the repaired backup was copied from.
+    public const string RepairOtherCard =
+        "Ve čtečce není karta, ze které se záloha dělala (jiná karta, nebo žádná) — nic se nezkopírovalo. Vložte původní kartu a spusťte Zkopírovat znovu.";
     /// Minor M5: the checks of the earlier backup are an append's; refusing a repair they say "opravit".
     public static string ForRepair(string appendRefusal) =>
         appendRefusal.Replace("doplnit nejde", "opravit nejde").Replace("doplnit jde jen", "opravit jde jen");

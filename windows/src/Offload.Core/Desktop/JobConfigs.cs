@@ -25,6 +25,37 @@ public static class JobConfigs
         };
     }
 
+    /// "Zkopírovat znovu" (UI návrh 4) after `finished` ended with failed files: see the overload — with the identity of
+    /// the card it copied (ruling I1).
+    public static JobConfig Repair(OffloadJob finished) =>
+        Repair(finished.Config, finished.Plan ?? throw new InvalidOperationException("The job has no plan: nothing to repair."), finished.SourceIdentity);
+
+    /// "Zkopírovat znovu" (UI návrh 4) after `original` ended with failed files: only those, only where they failed, into
+    /// the same card folders — with the job's own copy of the settings (its project, outputs and notifications; a switch
+    /// of project since changes nothing). Always verified; no clip analysis or proxies (the clips were analysed with the
+    /// backup). `cardIdentity`: the card that was copied (`OffloadJob.SourceIdentity`) — another card is refused.
+    public static JobConfig Repair(JobConfig original, OffloadPlan plan, string? cardIdentity) =>
+        new(original.Source, plan.DestRoots.ToList())
+        {
+            AllowSameDevice = true,   // the destinations are fixed by the backup
+            RepairInto = plan.CardPaths,
+            RepairCardIdentity = cardIdentity,
+            CardName = plan.CardName,
+            Date = plan.Date,
+            Verify = true,
+            ChunkMB = original.ChunkMB,
+            Buffers = original.Buffers,
+            Hashes = original.Hashes,   // the engine uses the backup's (spec 3.5)
+            AnalyzeClips = false,
+            Proxy = new ProxySettings(),
+            Tools = SettingsStore.Clone(original.Tools),
+            Outputs = SettingsStore.Clone(original.Outputs),
+            Project = plan.Project ?? original.Project,
+            Notify = SettingsStore.Clone(original.Notify),
+            RecordHistory = original.RecordHistory,
+            HistoryFolder = original.HistoryFolder,
+        };
+
     /// Spec 2.2: only the new files, into the card folders of the earlier backup — with the profile of the project that
     /// backup was made in (AppendRules.ProfileFor), recording that project even when it has been deleted since.
     public static JobConfig Append(AppSettings s, string source, HistoryEntry entry)
