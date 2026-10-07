@@ -9,6 +9,7 @@ public enum CardTone { Waiting, Active, Ok, Warning, Error }
 public sealed class JobProgress
 {
     readonly DateTime started;
+    DateTime? firstActive, ended;
     DateTime lastTime;
     long lastBytes;
     long[] lastDest = [];
@@ -31,10 +32,25 @@ public sealed class JobProgress
 
     public void AttachBrakeMeter(BrakeMeter meter) => brakes = meter;
 
+    /// How long the job took, without its pauses — from the first tick it ran to the first tick it was finished; null
+    /// before (the "Celkem" of the finished card).
+    public TimeSpan? Elapsed
+    {
+        get
+        {
+            // Never seen running (the first tick found it finished): the report's times say it instead.
+            if (firstActive is not DateTime a || ended is not DateTime e || a == e) return null;
+            var t = e - a - Status.PausedTotal;
+            return t > TimeSpan.Zero ? t : TimeSpan.Zero;
+        }
+    }
+
     public bool IsRunning => Status.Phase != JobPhase.Waiting && !Status.Phase.IsFinished();
 
     public void Update(JobStatus s, DateTime now)
     {
+        if (firstActive == null && s.Phase != JobPhase.Waiting) firstActive = now;
+        if (ended == null && s.Phase.IsFinished()) ended = now;
         if (s.Paused)
         {
             // Nothing moves: no rate and no ETA, the brake forgets its window; after Pokračovat the rates are measured

@@ -94,7 +94,11 @@ public sealed partial class OffloadReport
     /// The card could not be read, or a destination does not hold a good copy. A cancelled verification leaves files
     /// "written" or already "verified": both are fine then.
     public bool IsFailed(ReportFile f) =>
-        f.SourceError != null || f.Destinations.Any(d => !(d == "verified" || (!Verified && d == "written")));
+        f.SourceError != null || f.Destinations.Any(d => !IsGood(d));
+
+    /// THE per-destination definition of a good copy in this report (a job card shows it per disk): read back, or — in a
+    /// report made without read-back — written.
+    public bool IsGood(string state) => state == "verified" || (!Verified && state == "written");
 
     [JsonIgnore] public bool Success => FailedFiles.Count == 0;
     /// Every file is on every destination and was read back with a matching hash.

@@ -39,6 +39,19 @@ public static class Format
         return v.ToString(v < 10 ? "0.#" : "0", Cs) + " " + Units[i];
     }
 
+    /// Three significant digits, as the new window shows sizes (UI návrh): "1,70 GB", "14,2 GB", "412 GB", "850 MB".
+    public static string BytesCs3(long b)
+    {
+        double v = b;
+        int i = 0;
+        while (v >= 1000 && i < Units.Length - 1) { v /= 1000; i++; }
+        if (i == 0) return $"{b} B";
+        if (Math.Round(v, 2) < 10) return Math.Round(v, 2).ToString("0.00", Cs) + " " + Units[i];
+        if (Math.Round(v, 1) < 100) return Math.Round(v, 1).ToString("0.0", Cs) + " " + Units[i];
+        if (Math.Round(v) < 1000 || i == Units.Length - 1) return Math.Round(v).ToString("0", Cs) + " " + Units[i];
+        return (v / 1000).ToString("0.00", Cs) + " " + Units[i + 1];   // 999,6 MB → 1,00 GB
+    }
+
     public static string Rate(long bytes, double seconds) =>
         seconds > 0 ? (bytes / seconds / 1_000_000).ToString("0", CultureInfo.InvariantCulture) + " MB/s" : "-";
 }
