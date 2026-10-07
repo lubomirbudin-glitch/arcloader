@@ -45,6 +45,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         saveTimer.Stop();
         saveTimer.Start();
+        RaiseMany(nameof(AfterCopyRows), nameof(AfterCopyLine), nameof(EstimateText));   // step 3 and the estimate show the profile
     }
 
     public void SaveNow()

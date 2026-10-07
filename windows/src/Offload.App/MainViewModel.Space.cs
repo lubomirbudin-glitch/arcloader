@@ -91,13 +91,22 @@ public sealed partial class MainViewModel
     void RefreshSpace()
     {
         var targets = SpaceTargets();
-        var demands = SelectedSources().SelectMany(p => CardSpace(p, targets)).ToList();
+        var selectedDemands = SelectedSources().SelectMany(p => CardSpace(p, targets)).ToList();
+        var demands = selectedDemands.ToList();
         foreach (var j in Jobs.OfType<JobItemViewModel>()) demands.AddRange(j.SpaceDemands(spaceBaseline.WrittenAtProbe(j)));
         var free = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         foreach (var d in Destinations)
             if (d.SpaceTarget is { } t && d.FreeBytes is long f) free.TryAdd(t.Volume, f);
         if (folderTarget is { } ft && folderFree is long ff) free.TryAdd(ft.Volume, ff);
         var problems = SpacePlanner.Check(demands, free);
+        // Every destination tile: its bar (what the ticked cards need there) and the check's sentence about it.
+        foreach (var d in Destinations)
+        {
+            if (d.SpaceTarget is not { } t) { d.SetSpace(0, null, null); continue; }
+            var severity = DestinationTile.Severity(problems, t.Label);
+            var note = problems.Where(p => p.Label.Split(", ").Contains(t.Label, StringComparer.OrdinalIgnoreCase)).OrderByDescending(p => p.Severity).FirstOrDefault()?.Text;
+            d.SetSpace(DestinationTile.Need(selectedDemands, t.Volume), severity, note);
+        }
         var problem = problems.FirstOrDefault(p => p.Severity == SpaceSeverity.Blocking)?.Text;
         var warning = problem == null ? problems.FirstOrDefault(p => p.Severity == SpaceSeverity.Warning)?.Text : null;
         if (problem == spaceProblem && warning == spaceWarning) return;

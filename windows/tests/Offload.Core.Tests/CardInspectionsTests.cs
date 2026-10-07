@@ -96,4 +96,32 @@ public class CardInspectionsTests
         var (text, tone) = CardInspections.RowText(true, false, new CardInsight { Source = @"E:\", Error = "Karta se nedá přečíst." });
         Assert.Equal(("Karta se nedá přečíst.", HistoryTone.Error), (text, tone));
     }
+
+    // Minor M11: the camera label is set after the look is published, and only while that look is still the card's.
+    [Fact]
+    public void SetCamera_OnlyOnTheLookItWasProbedFrom()
+    {
+        var inspections = new CardInspections();
+        var camera = new CameraLabel("ALEXA 35", "LogC4");
+        inspections.Start(@"E:", "CARD-A");
+        var looked = new CardInsight { Source = @"E:" };
+        inspections.Finished(@"E:", looked, "CARD-A", stillListed: true);
+
+        Assert.True(inspections.SetCamera(@"E:", looked, camera));
+        Assert.Equal(camera, inspections.Result(@"E:", "CARD-A")!.Camera);
+        Assert.False(inspections.SetCamera(@"E:", looked, camera));   // the result is a new record now: a late answer is dropped
+
+        // A newer look replaced it: a late probe of the old look does nothing.
+        var stale = inspections.Result(@"E:", "CARD-A")!;
+        inspections.Start(@"E:", "CARD-A");
+        var newer = new CardInsight { Source = @"E:" };
+        inspections.Finished(@"E:", newer, "CARD-A", stillListed: true);
+        Assert.False(inspections.SetCamera(@"E:", stale, camera));
+        Assert.Null(inspections.Result(@"E:", "CARD-A")!.Camera);
+
+        // The source left: nothing is kept; no label: nothing changes.
+        inspections.Drop(@"E:");
+        Assert.False(inspections.SetCamera(@"E:", newer, camera));
+        Assert.False(inspections.SetCamera(@"F:", newer, null));
+    }
 }

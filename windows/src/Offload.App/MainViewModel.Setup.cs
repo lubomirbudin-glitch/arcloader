@@ -19,6 +19,8 @@ public sealed partial class MainViewModel
     // Volume labels of manual sources that are a drive root the scan does not list (an internal disk, a network
     // letter), read off the UI thread when the source is added.
     readonly Dictionary<string, string?> manualLabels = new(StringComparer.OrdinalIgnoreCase);
+    // How each source's disk is connected (UI návrh 6), looked up off the UI thread once per card in the drive.
+    readonly Dictionary<string, (string? Identity, string? Label)> sourceLinks = new(StringComparer.OrdinalIgnoreCase);
     List<VolumeItem> volumes = [];
     ExternalTools resolvedTools = new();
     bool scanning, rescan, useCustomDate;
@@ -184,6 +186,7 @@ public sealed partial class MainViewModel
             RebuildDestinations();
         }
         InspectMissing();   // new or swapped cards
+        ResolveSourceLinks();   // how the new cards are connected
         foreach (var j in Jobs.OfType<JobItemViewModel>()) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
         RefreshLut();   // the LUT may sit on a disk that just came or went
         RefreshProxyFolder();   // and so may the proxy folder
@@ -217,6 +220,36 @@ public sealed partial class MainViewModel
         RebuildSources();
         ReadManualLabel(path);
         Inspect(path);
+        ResolveSourceLinks();
+    }
+
+    /// The connection of every listed source whose card has not been looked at yet ("čtečka USB 3 · 5 Gb/s"), each off
+    /// the UI thread (DriveLinks asks the device; it never throws).
+    void ResolveSourceLinks()
+    {
+        foreach (var s in Sources)
+        {
+            var path = s.Path;
+            var identity = IdentityOf(path);
+            if (sourceLinks.TryGetValue(path, out var known) && string.Equals(known.Identity, identity, StringComparison.OrdinalIgnoreCase)) continue;
+            sourceLinks[path] = (identity, null);
+            Task.Run(() => ConnectionLabel.Short(Offload.Core.Hardware.DriveLinks.Resolve(path), card: true)).ContinueWith(t =>
+            {
+                if (closing || !t.IsCompletedSuccessfully) return;
+                if (!sourceLinks.TryGetValue(path, out var now) || !string.Equals(now.Identity, identity, StringComparison.OrdinalIgnoreCase)) return;
+                sourceLinks[path] = (identity, t.Result);
+                RowFor(path)?.FactsChanged();
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+    }
+
+    /// The card tile's line: clips, size, file system, connection (memory only).
+    internal string SourceFacts(string path)
+    {
+        var volume = volumes.FirstOrDefault(v => string.Equals(v.Path, path, StringComparison.OrdinalIgnoreCase));
+        var link = sourceLinks.TryGetValue(path, out var l) && string.Equals(l.Identity, IdentityOf(path), StringComparison.OrdinalIgnoreCase) ? l.Label : null;
+        return SetupTexts.CardFacts(Insight(path), volume is { } v ? v.Total - v.Free : null, volume?.Format ?? Insight(path)?.Filesystem, link,
+            volume?.LooksLikeCard ?? true);
     }
 
     /// A drive root picked as a folder: its label is the card name the job will use — read it off the UI thread.
@@ -397,7 +430,8 @@ public sealed partial class MainViewModel
         ? d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
         : Layout.Today();
 
-    public string PathPreview => $@"…\{DateString}\<název karty>\";
+    /// "…\2026-10-07\A035_ARRI\" with one card ticked, else "…\2026-10-07\<název karty>\".
+    public string PathPreview => SetupTexts.PathPreview(DateString, SelectedSources() is [var only] ? PlannedName(only) : null);
 
     public bool Verify
     {

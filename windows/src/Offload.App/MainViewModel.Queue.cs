@@ -14,6 +14,10 @@ namespace Offload.App;
 public sealed partial class MainViewModel
 {
     readonly JobQueue queue = new(m => AppLog.Write(m));
+    // What the jobs of this session took — the start bar's estimate (UI návrh 10).
+    readonly RateMemory rates = new();
+    bool shownCompact, shownJobsRunning;
+    string? shownStartLabel;
     readonly DispatcherTimer ticker = new() { Interval = TimeSpan.FromMilliseconds(330) };
     bool closing, closeRaised, waitNoticeShown, shownHasFinished, shownCopyRunning, starting;
     string? startStatus;
@@ -42,13 +46,65 @@ public sealed partial class MainViewModel
         queue.JobFinished += j => Dispatch(() => OnJobFinished(j));
         ticker.Tick += (_, _) => Tick();
         ticker.Start();
-        SetupChanged += () => RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart), nameof(StartProblem));
+        SetupChanged += () => RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart), nameof(StartProblem),
+            nameof(StartCounts), nameof(StartSize), nameof(EstimateText), nameof(AfterCopyRows), nameof(AfterCopyLine), nameof(PathPreview));
         RaiseMany(nameof(CardsText), nameof(DestinationsText), nameof(CanStart));
     }
 
     static void Dispatch(Action action) => Application.Current?.Dispatcher.BeginInvoke(action);
 
     public string CardsText => Texts.Cards(selected.Count);
+
+    // ── The start bar and step 3 (UI návrh obr. 1) ─────────────────────────────────────────────────────────────
+    /// What each ticked card will copy (an append only its new files), null while one is not known yet.
+    long? SelectedBytes => SetupTexts.Total(SelectedSources().Select(p => AppendChosen(p) && Insight(p)?.History is { } h
+        ? h.NewBytes : Insight(p) is { Error: null } i ? i.TotalBytes : (long?)null));
+
+    /// "1 karta → 2 disky" (bold) and " · 1,70 GB".
+    public string StartCounts => SetupTexts.StartSummary(selected.Count, Settings.DestRoots.Count, SelectedBytes).Counts;
+    public string? StartSize => SetupTexts.StartSummary(selected.Count, Settings.DestRoots.Count, SelectedBytes).Size;
+
+    /// "odhad ~8:00 vč. proxy" — only from what this session measured (RateMemory); null shows only the size.
+    public string? EstimateText => SelectedBytes is long bytes && selected.Count > 0
+        ? RateMemory.StartText(rates.Estimate(bytes, SelectedSources().SelectMany(p => Insight(p)?.Clips ?? []).ToList(), Settings.Verify,
+            Settings.AnalyzeClips, Settings.Proxy), Settings.Proxy.Enabled)
+        : null;
+
+    /// "Spustit offload", or "Zařadit do fronty" while a card waits for or is in its copy.
+    public string StartLabel => QueueSummary.StartLabel(Jobs.Select(j => j.Phase));
+
+    /// No card and jobs in the queue: steps 2 and 3 compact (obr. 2, 3).
+    public bool IsCompact => SetupTexts.Compact(HasSources, HasJobs);
+
+    bool JobsRunning => Jobs.Any(j => !j.IsFinished);
+    public string NoCardTitle => SetupTexts.NoCard(JobsRunning).Title;
+    public string NoCardText => SetupTexts.NoCard(JobsRunning).Text;
+
+    /// Step 3: Ověření · Analýza · Proxy · Report of the profile shown (the camera of the first ticked card names the LUT).
+    public IReadOnlyList<AfterCopyRow> AfterCopyRows =>
+        SetupTexts.AfterCopy(Settings, lutCatalog, SelectedSources().Select(p => Insight(p)?.Camera).FirstOrDefault(c => c != null));
+    public string AfterCopyLine => SetupTexts.AfterCopyLine(Settings);
+    public string VerifyOffWarning => SetupTexts.VerifyOffWarning;
+
+    /// The parts of the left column that follow the queue (checked every tick, raised only when they change).
+    void RefreshLayout()
+    {
+        if (IsCompact != shownCompact)
+        {
+            shownCompact = IsCompact;
+            Raise(nameof(IsCompact));
+        }
+        if (JobsRunning != shownJobsRunning)
+        {
+            shownJobsRunning = JobsRunning;
+            RaiseMany(nameof(NoCardTitle), nameof(NoCardText));
+        }
+        if (StartLabel != shownStartLabel)
+        {
+            shownStartLabel = StartLabel;
+            Raise(nameof(StartLabel));
+        }
+    }
     public string DestinationsText => Texts.Destinations(Settings.DestRoots.Count) + (Settings.Proxy.Enabled ? " · proxy" : "");
     /// In memory only (evaluated 3×/s): the LUT, the proxy folder and the destinations come from checks made off the UI thread.
     public bool CanStart => !starting && ReadyToStart;
@@ -278,6 +334,7 @@ public sealed partial class MainViewModel
             if (!j.IsFinished) j.Refresh();
         RefreshSpace();   // memory only: a running job needs less as it copies (against its baseline)
         RefreshQueueSummary();   // the top bar's pill and the queue tab's number
+        RefreshLayout();   // compact steps, the empty card text, the start button's label
         // A queued job cancelled behind a running copy is finished before the queue reports it.
         if (HasFinished != shownHasFinished)
         {
@@ -321,7 +378,11 @@ public sealed partial class MainViewModel
     {
         if (Find(job) is { } item)
         {
-            if (item is JobItemViewModel j) j.LeftQueue = true;
+            if (item is JobItemViewModel j)
+            {
+                j.LeftQueue = true;
+                if (j.Job.Report is { } r) rates.Learn(r, j.Job.Config.AnalyzeClips, j.Job.Config.Proxy, j.Stage2Elapsed, endedAs: j.Phase);   // the next estimate (M2)
+            }
             item.Refresh();
             if (!item.Alerted) Alert(item);
             if (QueueRules.NotifyAtJobEnd(item.Notified) && item is JobItemViewModel ended)

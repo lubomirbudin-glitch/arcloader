@@ -51,6 +51,35 @@ public static class SetupTexts
 
     public const string VerifyOffWarning = "Bez ověření není jisté, že data na disku jsou v pořádku.";
 
+    /// The card tile's line (obr. 1): "24 klipů · 1,70 GB · exFAT · čtečka USB 3 · 5 Gb/s". Before the card is looked at,
+    /// the used space of its volume stands for the size; a disk that is not a camera card says so.
+    public static string CardFacts(History.CardInsight? insight, long? usedOnVolume, string? filesystem, string? connection, bool looksLikeCard)
+    {
+        var parts = new List<string>();
+        if (insight is { Error: null } i)
+        {
+            parts.Add(i.Clips.Count > 0 ? Texts.Clips(i.Clips.Count) : $"{i.FileCount} {Texts.Plural(i.FileCount, "soubor", "soubory", "souborů")}");
+            parts.Add(Format.BytesCs3(i.TotalBytes));
+        }
+        else if (usedOnVolume is long used) parts.Add(Format.BytesCs3(used));
+        if (!string.IsNullOrEmpty(filesystem)) parts.Add(filesystem);
+        if (connection != null) parts.Add(connection);
+        if (!looksLikeCard) parts.Add("nevypadá jako karta");
+        return string.Join(" · ", parts);
+    }
+
+    /// The size of everything ticked, or null while one card's size is not known (the bar then shows only the counts).
+    public static long? Total(IEnumerable<long?> sizes)
+    {
+        long sum = 0;
+        foreach (var s in sizes)
+        {
+            if (s is not long b) return null;
+            sum += b;
+        }
+        return sum;
+    }
+
     /// "1 karta → 2 disky" (bold in the bar) and " · 1,70 GB" (null while a size is not known); nothing ticked: "Vyberte kartu".
     public static (string Counts, string? Size) StartSummary(int cards, int disks, long? bytes)
     {

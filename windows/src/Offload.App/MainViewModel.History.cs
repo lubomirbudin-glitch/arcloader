@@ -1,3 +1,4 @@
+using Offload.Core;
 using Offload.Core.Desktop;
 using Offload.Core.History;
 
@@ -75,6 +76,24 @@ public sealed partial class MainViewModel
             RowFor(path)?.InsightChanged();
             SetupChanged?.Invoke();
             if (again) Inspect(path);
+            else if (t.IsCompletedSuccessfully && t.Result is { Error: null } looked) ProbeCamera(path, looked);
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// Minor M11: once the look is published, one clip names the camera (UI návrh 6) — off the UI thread, reading only,
+    /// bounded to 5 s (CameraHints.ProbeTimeout for ffprobe, the same as a cancel before it starts); the label is kept
+    /// only while that look is still the card's (CardInspections.SetCamera).
+    void ProbeCamera(string path, CardInsight looked)
+    {
+        var tools = resolvedTools;
+        var limit = new CancellationTokenSource(CameraHints.ProbeTimeout);
+        Task.Run(() => CameraHints.Probe(looked, tools, LutCatalog.Default, limit.Token), limit.Token).ContinueWith(t =>
+        {
+            limit.Dispose();
+            if (t.IsFaulted) AppLog.Write($"camera probe {path}: {t.Exception?.GetBaseException().Message}");
+            if (closing || !t.IsCompletedSuccessfully || !inspections.SetCamera(path, looked, t.Result)) return;
+            RowFor(path)?.InsightChanged();
+            SetupChanged?.Invoke();   // step 3 names the LUT's curve from the camera
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 

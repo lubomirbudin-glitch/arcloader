@@ -106,6 +106,8 @@ public sealed class JobItemViewModel : QueueItem
         space.Select(d => d with { Need = SpaceCheck.Remaining(d.Need, Phase, writtenAtProbe) });
     public bool IsRunning => progress.IsRunning;
     public override bool IsPaused => progress.Status.Paused;
+    /// How long stage 2 took without pauses, once finished (RateMemory learns the next estimate from it).
+    public TimeSpan? Stage2Elapsed => progress.Stage2Elapsed;
     public override bool IsFinished => Phase.IsFinished();
     public bool SafeToEject => progress.Status.SafeToEject;
     public bool? CopySucceeded => progress.Status.CopySucceeded;

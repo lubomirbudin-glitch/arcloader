@@ -65,6 +65,16 @@ public sealed class CardInspections
 
     public bool IsRunning(string path) => running.ContainsKey(path);
 
+    /// Minor M11: the camera label is a step after the look is published (nothing waits on ffprobe). It is kept only
+    /// while `looked` is still the result for `path` — not after a newer look, another card or the source left. True =
+    /// the result changed.
+    public bool SetCamera(string path, CardInsight looked, CameraLabel? camera)
+    {
+        if (camera == null || !results.TryGetValue(path, out var r) || !ReferenceEquals(r.Insight, looked)) return false;
+        results[path] = (r.Identity, looked with { Camera = camera });
+        return true;
+    }
+
     /// The last result for the card that is at `path` now, or null.
     public CardInsight? Result(string path, string? identity) =>
         results.TryGetValue(path, out var r) && Same(r.Identity, identity) ? r.Insight : null;
