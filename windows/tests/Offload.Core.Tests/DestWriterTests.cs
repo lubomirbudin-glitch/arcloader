@@ -186,6 +186,63 @@ public class DestWriterTests
         }
     }
 
+    static (DestWriter W, BufferPool Pool, SourceFile[] Files, byte[] A, byte[] B) TwoWritten(TempDir dir)
+    {
+        var card = dir.Sub("card");
+        var a = new byte[5000]; new Random(1).NextBytes(a);
+        var b = new byte[5000]; new Random(2).NextBytes(b);
+        var files = new[] { new SourceFile("a", 5000, When), new SourceFile("b", 5000, When) };
+        var pool = new BufferPool(4, Chunk);
+        var w = new DestWriter(0, card, 2, new OffloadOptions { ChunkSize = Chunk });
+        Feed(w, pool, a, 0, files[0]);
+        Feed(w, pool, b, 1, files[1]);
+        return (w, pool, files, a, b);
+    }
+
+    static FileHashes Both(byte[] data) => new(XxHash64.HashToUInt64(data), System.Security.Cryptography.MD5.HashData(data));
+
+    // Fix round 1: in "both" a wrong xxh64 fails even when the MD5 matches (every chosen hash must agree).
+    [Fact]
+    public void Verify_Both_Xxh64Mismatch_Md5Right_Fails()
+    {
+        using var dir = new TempDir();
+        var (w, pool, files, a, b) = TwoWritten(dir);
+        using var _ = pool;
+        using var __ = w;
+
+        w.Verify(files, [Both(a), new FileHashes(XxHash64.HashToUInt64(a), System.Security.Cryptography.MD5.HashData(b))],
+            HashKind.Both, CancellationToken.None);
+
+        Assert.Equal(FileState.Verified, w.Results[0].State);
+        Assert.Equal(FileState.Failed, w.Results[1].State);
+        Assert.StartsWith("HASH MISMATCH: dest ", w.Results[1].Error);
+    }
+
+    // Fix round 1: in "both" a file whose source MD5 is missing (its hasher failed) is not verified — the copy was asked
+    // to confirm every chosen hash (spec 3.5 "hashuje všemi zvolenými"), so a matching xxh64 alone is not enough. In
+    // xxh64 mode the missing MD5 is irrelevant.
+    [Fact]
+    public void Verify_Both_SourceMd5Missing_Fails_Xxh64ModeIgnoresIt()
+    {
+        using var dir = new TempDir();
+        var (w, pool, files, a, b) = TwoWritten(dir);
+        using var _ = pool;
+        using var __ = w;
+
+        w.Verify(files, [Both(a), new FileHashes(XxHash64.HashToUInt64(b), null)], HashKind.Both, CancellationToken.None);
+
+        Assert.Equal(FileState.Verified, w.Results[0].State);
+        Assert.Equal(FileState.Failed, w.Results[1].State);
+        Assert.Equal($"MD5 MISMATCH: dest {Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(b))} != source -", w.Results[1].Error);
+
+        using var dir2 = new TempDir();
+        var (w2, pool2, files2, a2, b2) = TwoWritten(dir2);
+        using var ___ = pool2;
+        using var ____ = w2;
+        w2.Verify(files2, [Xx(a2), new FileHashes(XxHash64.HashToUInt64(b2), null)], HashKind.Xxh64, CancellationToken.None);
+        Assert.Equal([FileState.Verified, FileState.Verified], w2.Results.Select(r => r.State));
+    }
+
     // Spec 3.5: in "both" a copy whose MD5 differs fails even when its xxh64 matches (a wrong source MD5 stands in for it).
     [Fact]
     public void Verify_Both_Md5Mismatch_Fails()

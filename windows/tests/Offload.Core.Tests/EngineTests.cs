@@ -92,6 +92,49 @@ public class EngineTests
         Assert.All(snap.VerifiedBytes, v => Assert.Equal(report.TotalBytes, v));
     }
 
+    sealed class ThrowingHash : Verification.IFileHash
+    {
+        public void Append(ReadOnlySpan<byte> data) => throw new IOException("md5 broke");
+        public string Finish() => throw new InvalidOperationException("never finished");
+    }
+
+    // Fix round 1: a source hash that throws still hands every block back to the pool, so a two-block pool does not
+    // hang the copy; the file fails (its MD5 is missing, never a hash of part of it) — with verification off as well.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ThrowingSourceHash_FailsTheFile_DoesNotHang(bool verify)
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "a.mov"), 5 * Chunk + 7, 1);
+        var b = TestFs.WriteRandom(Path.Combine(card, "CLIP", "b.mov"), 5 * Chunk + 3, 2);
+        var options = Options();
+        options.BufferCount = 2;
+        options.Hashes = HashKind.Both;
+        options.Verify = verify;
+        int made = 0;   // the first file's MD5 throws, the second one's is real
+        options.HashFactory = a => a == "md5" && Interlocked.Increment(ref made) == 1 ? new ThrowingHash() : Verification.HashAlgo.Create(a);
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-04");
+
+        var report = await Task.Run(() => engine.Run(plan)).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.False(report.Success);
+        var fa = report.Files.Single(f => f.Path == "CLIP/a.mov");
+        var fb = report.Files.Single(f => f.Path == "CLIP/b.mov");
+        Assert.Equal("md5 hash failed: md5 broke", fa.SourceError);
+        Assert.Null(fa.Md5);
+        Assert.NotNull(fa.Xxh64);
+        Assert.Equal(["CLIP/a.mov"], report.FailedFiles.Select(f => f.Path));
+        Assert.Null(fb.SourceError);
+        Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(b)), fb.Md5);
+        Assert.Equal(verify ? ["verified", "verified"] : ["written", "written"], fb.Destinations);
+        if (verify) Assert.All(fa.Errors, e => Assert.StartsWith("MD5 MISMATCH: dest ", e));
+        Assert.DoesNotContain("CLIP/a.mov", File.ReadAllText(Path.Combine(plan.CardPaths[0], "_REPORT", "A001.md5")));
+        Assert.Equal(1, engine.Snapshot().Errors);
+    }
+
     // Spec 3.5: a byte changed on a destination after the copy fails verification in both modes. xxh64 is compared first,
     // so both rows fail with HASH MISMATCH; the MD5 path is covered by DestWriterTests.Verify_Both_Md5Mismatch_Fails.
     [Theory]

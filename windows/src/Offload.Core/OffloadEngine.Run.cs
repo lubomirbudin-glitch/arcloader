@@ -24,7 +24,7 @@ public sealed partial class OffloadEngine
         try
         {
             pool = new BufferPool(Options.BufferCount, Options.ChunkSize);
-            hashers = SourceHasher.For(plan.Hashes, files.Count);   // xxh64, and MD5 on its own thread (spec 3.5)
+            hashers = SourceHasher.For(plan.Hashes, files.Count, Options.HashFactory);   // xxh64, and MD5 on its own thread (spec 3.5)
             var sourceErrors = new string?[files.Count];
 
             // Copy: the card is read exactly once; every block fans out to the hasher and all destinations.
@@ -59,6 +59,13 @@ public sealed partial class OffloadEngine
             foreach (var h in hashers) h.Wait();
             foreach (var w in ws) w.Wait();
             var hashes = SourceHasher.Combine(hashers, files.Count);
+            // A hash that threw leaves the file without it: the file failed, also when verification is off.
+            for (int i = 0; i < files.Count; i++)
+            {
+                if (sourceErrors[i] != null || SourceHasher.ErrorOf(hashers, i) is not string hashError) continue;
+                sourceErrors[i] = hashError;
+                lock (gate) errorCount++;
+            }
 
             SetPhase(CopyPhase.Flush);
             OnEachDestination(ws, w => w.FlushDevice());

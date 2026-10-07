@@ -22,6 +22,8 @@ public sealed class OffloadOptions
     internal Action<int>? BeforeFileCopy { get; set; }
     /// Tests only: called on the copy thread after every file is copied and flushed, just before verification.
     internal Action? BeforeVerify { get; set; }
+    /// Tests only: creates the source hash of an algorithm ("xxh64", "md5") instead of HashAlgo.Create.
+    internal Func<string, Verification.IFileHash>? HashFactory { get; set; }
     /// Tests only: the free bytes of the volume of a path, instead of NativeIO.AvailableBytes.
     internal Func<string, long?>? FreeSpace { get; set; }
     /// Tests only: H.264/HEVC proxies with this encoder (e.g. libx264) instead of the probed one — parallel

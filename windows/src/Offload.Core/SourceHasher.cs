@@ -9,25 +9,35 @@ internal sealed class SourceHasher : IDisposable
 {
     readonly SerialWorker worker;
     readonly string algorithm;
+    readonly Func<string, IFileHash> create;
     IFileHash? stream;
+    string? error;
 
     public HashKind Kind { get; }
     /// Lower-case hex per file; null when the file was not hashed to the end (it failed).
     public string?[] Values { get; }
+    /// Per file: why this hash could not be computed (the hash itself threw), else null.
+    public string?[] Errors { get; }
 
-    public SourceHasher(HashKind kind, int fileCount)
+    public SourceHasher(HashKind kind, int fileCount, Func<string, IFileHash>? create = null)
     {
         Kind = kind;
+        this.create = create ?? HashAlgo.Create;
         algorithm = kind == HashKind.Md5 ? "md5" : "xxh64";
         worker = new SerialWorker("offload.hash." + algorithm);
         Values = new string?[fileCount];
+        Errors = new string?[fileCount];
     }
 
+    /// "md5 hash failed: …" when a hasher could not hash file `index` (English: it goes into the report JSON).
+    public static string? ErrorOf(IReadOnlyList<SourceHasher> hashers, int index) =>
+        hashers.FirstOrDefault(h => h.Errors[index] != null) is { } h ? $"{h.algorithm} hash failed: {h.Errors[index]}" : null;
+
     /// One hasher per kind in `kinds` (xxh64 always first).
-    public static List<SourceHasher> For(HashKind kinds, int fileCount)
+    public static List<SourceHasher> For(HashKind kinds, int fileCount, Func<string, IFileHash>? create = null)
     {
-        var all = new List<SourceHasher> { new(HashKind.Xxh64, fileCount) };
-        if (HashKinds.Normalize(kinds).HasFlag(HashKind.Md5)) all.Add(new SourceHasher(HashKind.Md5, fileCount));
+        var all = new List<SourceHasher> { new(HashKind.Xxh64, fileCount, create) };
+        if (HashKinds.Normalize(kinds).HasFlag(HashKind.Md5)) all.Add(new SourceHasher(HashKind.Md5, fileCount, create));
         return all;
     }
 
@@ -41,21 +51,44 @@ internal sealed class SourceHasher : IDisposable
             md5?.Values[i] is string m ? Convert.FromHexString(m) : null)).ToArray();
     }
 
-    public void Begin() => worker.Post(() => stream = HashAlgo.Create(algorithm));
+    public void Begin() => worker.Post(() =>
+    {
+        error = null;
+        stream = null;
+        try { stream = create(algorithm); }
+        catch (Exception e) { error = e.Message; }
+    });
 
+    /// The block always goes back to the pool, even when the hash throws — otherwise the pool runs dry and the copy
+    /// hangs in BufferPool.Take. A hash that threw stops hashing this file; Finish records the error instead of a value.
     public void Update(Chunk c) => worker.Post(() =>
     {
-        stream?.Append(c.Buffer.Span[..c.Length]);
-        c.Release();
+        try { stream?.Append(c.Buffer.Span[..c.Length]); }
+        catch (Exception e)
+        {
+            error ??= e.Message;
+            stream = null;
+        }
+        finally { c.Release(); }
     });
 
     public void Finish(int index) => worker.Post(() =>
     {
-        Values[index] = stream?.Finish();
+        try
+        {
+            if (error == null) Values[index] = stream?.Finish();
+        }
+        catch (Exception e) { error = e.Message; }
+        Errors[index] = error;
         stream = null;
+        error = null;
     });
 
-    public void Abort() => worker.Post(() => stream = null);
+    public void Abort() => worker.Post(() =>
+    {
+        stream = null;
+        error = null;
+    });
 
     public void Wait() => worker.Wait();
 
