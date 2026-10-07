@@ -23,7 +23,8 @@ static class Shell
     {
         try
         {
-            Process.Start("explorer.exe", $"\"{folder}\"").Dispose();
+            // the trailing backslash makes Explorer treat it as a folder, never as a file to run
+            Process.Start("explorer.exe", $"\"{folder.TrimEnd('\\')}\\\"").Dispose();
             return null;
         }
         catch (Exception e)

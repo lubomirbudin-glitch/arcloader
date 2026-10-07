@@ -176,6 +176,32 @@ public class ReleaseScriptTests
         Assert.DoesNotContain("spatne-heslo-9", wrong.Out);
     }
 
+    // A thumbprint is 40 hex characters - anything else (wildcards, paths) is refused before any lookup.
+    [Fact]
+    public void Thumbprint_MustBe40HexCharacters()
+    {
+        using var dir = new TempDir();
+        var env = new Dictionary<string, string?> { ["SIGNTOOL"] = FakeSigntool(dir.Path) };
+        foreach (var bad in new[] { "ABCD", "*", @"..\..\x", new string('G', 40), new string('0', 41) })
+        {
+            var r = Ps($"Get-OffloadSignSetup -CertThumbprint '{bad}' -StoreRoots '{EmptyStore(dir.Path)}' | Out-Null", env);
+            Assert.Equal(1, r.Code);
+            Assert.Contains("ERROR: Otisk certifikátu musí mít 40 hexadecimálních znaků", r.Out);
+        }
+        // spaces (as copied from the certificate dialog) are fine
+        var ok = Ps($"Get-OffloadSignSetup -CertThumbprint '{string.Join(" ", Enumerable.Repeat("0000", 10))}' -StoreRoots '{EmptyStore(dir.Path)}' | Out-Null", env);
+        Assert.Contains($@"ERROR: Certifikát s otiskem {new string('0', 40)} nenalezen", ok.Out);
+    }
+
+    // The manual names the versioned zip.
+    [Fact]
+    public void Manual_NamesTheVersionedZip()
+    {
+        var html = File.ReadAllText(Path.Combine(WindowsDir, "package", "navod", "navod.html"));
+        Assert.DoesNotContain("Offload-win-x64.zip", html);
+        Assert.Contains("Offload-win-x64-&lt;verze&gt;.zip", html);
+    }
+
     // M8: a certificate that could not sign (no private key, not for code signing) is refused before the build.
     [Fact]
     public void Certificate_NoPrivateKey_WrongPurpose_Refused()

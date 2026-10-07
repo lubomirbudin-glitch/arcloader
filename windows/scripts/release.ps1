@@ -61,13 +61,15 @@ function Get-OffloadSignSetup([string]$CertThumbprint, [string[]]$StoreRoots = @
     $signtool = Find-SignTool
     if ($CertThumbprint) {
         $t = ($CertThumbprint -replace '\s', '').ToUpperInvariant()
+        # A thumbprint is 40 hex characters; nothing else (wildcards, paths) reaches the certificate lookup.
+        if ($t -notmatch '^[0-9A-F]{40}$') { throw 'Otisk certifikátu musí mít 40 hexadecimálních znaků (SHA-1, bez dvojteček).' }
         if ($env:OFFLOAD_SIGN_PFX) { Write-Host 'Je zadán otisk i OFFLOAD_SIGN_PFX — použije se certifikát podle otisku, OFFLOAD_SIGN_PFX se nepoužije.' }
         $cert = $null
         if ($CertLookup) {
             $cert = & $CertLookup $t
         } else {
             foreach ($root in $StoreRoots) {
-                if (-not $cert) { $cert = Get-ChildItem -Path (Join-Path $root $t) -ErrorAction SilentlyContinue }
+                if (-not $cert) { $cert = Get-ChildItem -LiteralPath (Join-Path $root $t) -ErrorAction SilentlyContinue }
             }
         }
         if (-not $cert) { throw "Certifikát s otiskem $t nenalezen v CurrentUser\My ani LocalMachine\My." }

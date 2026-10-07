@@ -23,7 +23,8 @@
                 <TextBlock Text="{Binding NewVersionText}" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding NewVersion.Notes}" TextWrapping="Wrap" Margin="0,4,0,0" />
                 <!-- Ruling I5: the address is plain text, never a link; "Otevřít" only for https or an existing folder / zip. -->
-                <TextBlock Text="{Binding NewVersion.Url}" Style="{StaticResource Caption}" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,4,0,0" />
+                <TextBox Text="{Binding NewVersion.Url, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" FontFamily="Consolas"
+                         TextWrapping="Wrap" Margin="0,4,0,0" AutomationProperties.AutomationId="UpdateUrl" />
                 <TextBlock Text="{Binding NewVersionNote}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,0"
                            Visibility="{Binding NewVersionNote, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="UpdateNote" />
                 <Button Content="Otevřít" Click="Open_Click" HorizontalAlignment="Left" Margin="0,8,0,0" Padding="12,5"

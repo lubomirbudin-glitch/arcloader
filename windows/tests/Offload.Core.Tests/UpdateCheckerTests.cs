@@ -170,30 +170,114 @@ public class UpdateCheckerTests
         Assert.EndsWith("neodpověděl do 0.3 s", r.Error);
     }
 
-    // Ruling I5: "Otevřít" opens only an https URL, or an existing folder / zip through Explorer — never anything else.
+    // Ruling I5 + U1: what "Otevřít" may open, decided WITHOUT touching the disk (Classify): an https URL, or a local
+    // (drive letter) path; network paths are never clickable. The disk is touched only on the click (Resolve).
+    [Theory]
+    [InlineData("https://example.com/offload", UpdateLinkKind.Web)]
+    [InlineData("http://example.com/offload", UpdateLinkKind.None)]
+    [InlineData(@"\\nas\Offload\", UpdateLinkKind.Network)]
+    [InlineData(@"\\nas\Offload\Offload-win-x64-0.5.0.zip", UpdateLinkKind.Network)]
+    [InlineData("file://nas/Offload/", UpdateLinkKind.Network)]
+    [InlineData("file://nas/Offload/setup.exe", UpdateLinkKind.Network)]
+    [InlineData(@"\\.\pipe\x", UpdateLinkKind.None)]
+    [InlineData("file:///C:/Builds/Offload/", UpdateLinkKind.Folder)]
+    [InlineData(@"C:\Builds\Offload", UpdateLinkKind.Folder)]
+    [InlineData(@"D:\Builds\Offload-win-x64-0.5.0.zip", UpdateLinkKind.File)]
+    [InlineData("file:///C:/Builds/Offload-win-x64-0.5.0.ZIP", UpdateLinkKind.File)]
+    [InlineData("javascript:alert(1)", UpdateLinkKind.None)]
+    [InlineData("ms-settings:network", UpdateLinkKind.None)]
+    [InlineData("search-ms:query=x", UpdateLinkKind.None)]
+    [InlineData("ftp://example.com/x", UpdateLinkKind.None)]
+    [InlineData("offload", UpdateLinkKind.None)]
+    [InlineData("", UpdateLinkKind.None)]
+    [InlineData(null, UpdateLinkKind.None)]
+    public void UpdateLinks_Classify_NoDisk_Table(string? url, UpdateLinkKind kind) => Assert.Equal(kind, UpdateLinks.Classify(url).Kind);
+
+    // U1: on the click the local path is checked on the disk: a folder (shown with a trailing backslash), a zip; a
+    // local exe or a missing path is refused; network and web are passed through for the caller to refuse / open.
     [Fact]
-    public void UpdateLinks_Target_Table()
+    public void UpdateLinks_Resolve_AtClick()
     {
         using var dir = new TempDir();
         var zip = Path.Combine(dir.Path, "Offload-win-x64-0.5.0.zip");
         File.WriteAllText(zip, "x");
         var exe = Path.Combine(dir.Path, "setup.exe");
         File.WriteAllText(exe, "x");
-        var lnk = Path.Combine(dir.Path, "a.lnk");
-        File.WriteAllText(lnk, "x");
 
-        Assert.Equal((UpdateLinkKind.Web, "https://example.com/offload"), UpdateLinks.Target("https://example.com/offload"));
-        Assert.Equal((UpdateLinkKind.Folder, dir.Path), UpdateLinks.Target(dir.Path));
-        Assert.Equal((UpdateLinkKind.Folder, dir.Path), UpdateLinks.Target(new Uri(dir.Path).AbsoluteUri));
-        Assert.Equal((UpdateLinkKind.File, zip), UpdateLinks.Target(zip));
+        Assert.Equal((UpdateLinkKind.Folder, dir.Path), UpdateLinks.Resolve(dir.Path));
+        Assert.Equal((UpdateLinkKind.Folder, dir.Path), UpdateLinks.Resolve(new Uri(dir.Path).AbsoluteUri));
+        Assert.Equal((UpdateLinkKind.File, zip), UpdateLinks.Resolve(zip));
+        Assert.Equal((UpdateLinkKind.Web, "https://example.com/x"), UpdateLinks.Resolve("https://example.com/x"));
+        foreach (var bad in new[] { exe, new Uri(exe).AbsoluteUri, Path.Combine(dir.Path, "gone"), Path.Combine(dir.Path, "gone.zip"),
+                     "http://example.com/x", "ms-settings:network", @"\\nas-that-does-not-exist-xyz\share\x.exe" })
+            Assert.NotEqual(UpdateLinkKind.Folder, UpdateLinks.Resolve(bad).Kind);
+        foreach (var bad in new[] { exe, new Uri(exe).AbsoluteUri, Path.Combine(dir.Path, "gone"), Path.Combine(dir.Path, "gone.zip"), "http://example.com/x", "ms-settings:network" })
+            Assert.Equal(UpdateLinkKind.None, UpdateLinks.Resolve(bad).Kind);
+        Assert.Equal(UpdateLinkKind.Network, UpdateLinks.Resolve(@"\\nas-that-does-not-exist-xyz\share\x.exe").Kind);
+        Assert.Equal("Síťová cesta — zkopírujte ji a otevřete ručně.", UpdateLinks.NetworkNote);
+    }
 
-        foreach (var bad in new[]
-        {
-            "http://example.com/offload", exe, lnk, @"C:\Windows\System32\cmd.exe", "ms-settings:network", "javascript:alert(1)",
-            new Uri(exe).AbsoluteUri, "search-ms:query=x", "ftp://example.com/x", Path.Combine(dir.Path, "gone"), Path.Combine(dir.Path, "gone.zip"),
-            "", "   ", null, "offload",
-        })
-            Assert.Equal((UpdateLinkKind.None, ""), UpdateLinks.Target(bad));
+    // Hostile manifest text: a long or control-character version / URL is refused, error texts are capped, the version
+    // is shown without its suffix.
+    [Theory]
+    [InlineData("{\"version\":\"0.5.0-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}")]
+    [InlineData("{\"version\":\"0.5.0\\nX\"}")]
+    [InlineData("{\"version\":\"0.5.0\",\"url\":\"https://x/\\u001b[2J\"}")]
+    public async Task HostileManifest_Refused(string json)
+    {
+        using var dir = new TempDir();
+        var r = await UpdateChecker.CheckAsync(Manifest(dir, json), "0.4.0", Now, Path.Combine(dir.Path, "s.json"));
+        Assert.Equal(UpdateStatus.Failed, r.Status);
+        Assert.DoesNotContain('\u001b', r.Error!);
+        Assert.DoesNotContain('\n', r.Error!);
+    }
+
+    [Fact]
+    public async Task HostileManifest_LongUrl_Refused_ErrorCapped_VersionShownPlain()
+    {
+        using var dir = new TempDir();
+        var state = Path.Combine(dir.Path, "s.json");
+        var longUrl = await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":\"0.5.0\",\"url\":\"https://x/" + new string('a', 1200) + "\"}"), "0.4.0", Now, state);
+        Assert.Equal(UpdateStatus.Failed, longUrl.Status);
+
+        var huge = "0.5.0-" + new string('A', 10000);
+        Assert.Equal(UpdateStatus.Failed, (await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":\"" + huge + "\"}"), "0.4.0", Now, state, force: true)).Status);
+
+        using var server = new LocalHttp(async c => { c.Response.StatusDescription = new string('x', 3000); await LocalHttp.Reply(c, 404, "no"); });
+        var h = await UpdateChecker.CheckAsync(server.Url, "0.4.0", Now, state, force: true);
+        Assert.Equal(UpdateStatus.Failed, h.Status);
+        Assert.True(h.Error!.Length <= UpdateChecker.MaxErrorLength, h.Error.Length.ToString());
+
+        var ok = await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":\"0.5.0-win\"}"), "0.4.0", Now, state, force: true);
+        Assert.Equal("Je k dispozici verze 0.5.0 (máte 0.4.0).", ok.Text("0.4.0"));
+    }
+
+    // A hostile state file is validated like a manifest.
+    [Fact]
+    public async Task HostileState_NotTrusted()
+    {
+        using var dir = new TempDir();
+        var state = Path.Combine(dir.Path, "update-check.json");
+        var source = Manifest(dir, "{\"version\":\"0.4.0\"}");
+        File.WriteAllText(state, "{\"lastCheck\":\"" + Now.ToString("o") + "\",\"lastSource\":" + JsonSerializer.Serialize(source) + ",\"lastVersion\":\"0.9.0\\nEVIL\"}");
+        var r = await UpdateChecker.CheckAsync(source, "0.4.0", Now.AddHours(1), state);
+        Assert.NotEqual(UpdateStatus.NewVersion, r.Status);
+    }
+
+    // The remembered version belongs to its address: A newer, then B unreadable, then B again an hour later must not
+    // report A's version.
+    [Fact]
+    public async Task ChangedSource_StaleVersionCleared()
+    {
+        using var dir = new TempDir();
+        var state = Path.Combine(dir.Path, "update-check.json");
+        var a = Manifest(dir, "{\"version\":\"0.5.0\"}");
+        Assert.Equal(UpdateStatus.NewVersion, (await UpdateChecker.CheckAsync(a, "0.4.0", Now, state)).Status);
+        var b = Path.Combine(dir.Path, "missing.json");
+        Assert.Equal(UpdateStatus.Failed, (await UpdateChecker.CheckAsync(b, "0.4.0", Now.AddMinutes(5), state)).Status);
+        var again = await UpdateChecker.CheckAsync(b, "0.4.0", Now.AddHours(1), state);
+        Assert.Equal(UpdateStatus.NotDue, again.Status);
+        Assert.Null(again.Info);
     }
 
     [Fact]

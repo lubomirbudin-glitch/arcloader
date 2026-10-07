@@ -29,7 +29,7 @@ public sealed record UpdateResult(UpdateStatus Status, UpdateInfo? Info, string?
     /// The line under "Zkontrolovat teď" (Czech), or null.
     public string? Text(string currentVersion) => Status switch
     {
-        UpdateStatus.NewVersion => $"Je k dispozici verze {Info!.Version} (máte {UpdateChecker.Plain(currentVersion)}).",
+        UpdateStatus.NewVersion => $"Je k dispozici verze {UpdateChecker.Plain(Info!.Version)} (máte {UpdateChecker.Plain(currentVersion)}).",
         UpdateStatus.UpToDate => $"Máte nejnovější verzi {UpdateChecker.Plain(currentVersion)}.",
         UpdateStatus.Failed => $"Manifest nejde načíst: {Error}",
         UpdateStatus.Off => "Adresa manifestu není vyplněná — kontrola je vypnutá.",
@@ -58,6 +58,10 @@ public static class UpdateChecker
     /// A manifest is a few hundred bytes; anything larger is refused (hostile or garbage).
     public const int MaxManifestBytes = 64 * 1024;
     public const int MaxNotesLength = 2000;
+    public const int MaxVersionLength = 32;
+    public const int MaxUrlLength = 1000;
+    /// Texts from a server (reason phrase, JSON error) are cut to this before they reach the UI or the log.
+    public const int MaxErrorLength = 300;
 
     public static string DefaultStatePath => Path.Combine(AppData.Folder, "update-check.json");
 
@@ -72,9 +76,11 @@ public static class UpdateChecker
         if (string.IsNullOrWhiteSpace(source)) return new(UpdateStatus.Off, null, null);
         source = source.Trim();
         var state = LoadState(statePath);
-        if (!force && state.LastCheck is DateTime last && last <= nowUtc && nowUtc - last < Interval
-            && string.Equals(state.LastSource, source, StringComparison.Ordinal))
-            return state.LastVersion is string v && IsNewer(v, currentVersion)
+        // What was remembered belongs to its address: another address starts from nothing.
+        bool sameSource = string.Equals(state.LastSource, source, StringComparison.Ordinal);
+        if (!sameSource) state.LastVersion = state.LastUrl = state.LastNotes = null;
+        if (!force && sameSource && state.LastCheck is DateTime last && last <= nowUtc && nowUtc - last < Interval)
+            return state.LastVersion is string v && SafeInfo(new UpdateInfo(v, state.LastUrl, state.LastNotes)) && IsNewer(v, currentVersion)
                 ? new(UpdateStatus.NewVersion, new UpdateInfo(v, state.LastUrl, state.LastNotes), null)
                 : new(UpdateStatus.NotDue, null, null);
         UpdateResult result;
@@ -89,7 +95,7 @@ public static class UpdateChecker
         }
         catch (Exception e)
         {
-            result = new(UpdateStatus.Failed, null, e is UpdateException ? e.Message : e.GetBaseException().Message);
+            result = new(UpdateStatus.Failed, null, Clean(e is UpdateException ? e.Message : e.GetBaseException().Message));
         }
         state.LastCheck = nowUtc;   // also after a failure: once a day, not at every start
         state.LastSource = source;
@@ -164,9 +170,33 @@ public static class UpdateChecker
         {
             throw new UpdateException($"poškozený JSON ({e.Message})");
         }
-        if (info?.Version is not string v || Parts(v) == null) throw new UpdateException("v manifestu chybí platná verze (MAJOR.MINOR.PATCH)");
+        if (info?.Version is not string v) throw new UpdateException("v manifestu chybí platná verze (MAJOR.MINOR.PATCH)");
+        Validate(info);
         if (info.Notes is { Length: > MaxNotesLength } n) info = info with { Notes = n[..MaxNotesLength] };
         return info;
+    }
+
+    /// Text that ends up on screen is short and has no control characters (a hostile manifest or state file).
+    static void Validate(UpdateInfo info)
+    {
+        if (info.Version.Length > MaxVersionLength || info.Version.Any(char.IsControl))
+            throw new UpdateException("verze v manifestu je příliš dlouhá nebo obsahuje zvláštní znaky");
+        if (Parts(info.Version) == null) throw new UpdateException("v manifestu chybí platná verze (MAJOR.MINOR.PATCH)");
+        if (info.Url is { } u && (u.Length > MaxUrlLength || u.Any(char.IsControl)))
+            throw new UpdateException("adresa vydání v manifestu je příliš dlouhá nebo obsahuje zvláštní znaky");
+    }
+
+    static bool SafeInfo(UpdateInfo info)
+    {
+        try { Validate(info); return true; }
+        catch (UpdateException) { return false; }
+    }
+
+    /// A text from outside: control characters become spaces, the length is capped.
+    public static string Clean(string text)
+    {
+        var s = new string([.. text.Select(c => char.IsControl(c) ? ' ' : c)]).Trim();
+        return s.Length > MaxErrorLength ? s[..(MaxErrorLength - 1)] + "…" : s;
     }
 
     /// `candidate` > `current` by MAJOR.MINOR.PATCH; what follows "-" is ignored ("0.4.0-win" = "0.4.0").
@@ -216,27 +246,44 @@ public static class UpdateChecker
 /// A Czech reason the manifest could not be used.
 public sealed class UpdateException(string message) : Exception(message);
 
-public enum UpdateLinkKind { None, Web, Folder, File }
+public enum UpdateLinkKind { None, Web, Network, Folder, File }
 
-/// Ruling I5: what "Otevřít" may open. Only an https URL (the browser), or an existing folder / .zip (Explorer) — never
-/// anything that would run: an exe, a .lnk, a protocol handler, plain http. Touches the disk (existence): call it off
-/// the UI thread.
+/// Ruling I5 + U1: what "Otevřít" may open. Only an https URL (the browser), or a LOCAL path (a drive letter) that is an
+/// existing folder or .zip (Explorer) — never anything that would run (an exe, a .lnk, a protocol handler, plain http)
+/// and never a network path (UNC, file://host, anything not on a drive letter: opening it contacts SMB/WebDAV).
 public static class UpdateLinks
 {
-    public static (UpdateLinkKind Kind, string Target) Target(string? url)
+    public const string NetworkNote = "Síťová cesta — zkopírujte ji a otevřete ručně.";
+
+    static readonly System.Text.RegularExpressions.Regex DriveRoot = new(@"^[A-Za-z]:[\\/]", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// By the text alone — never touches the disk or the network (safe on the UI thread, at start and from the cache).
+    /// Folder / File are candidates: a local path (.zip = File); Resolve checks them.
+    public static (UpdateLinkKind Kind, string Target) Classify(string? url)
     {
         if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)) return (UpdateLinkKind.None, "");
         if (uri.Scheme == Uri.UriSchemeHttps) return (UpdateLinkKind.Web, uri.AbsoluteUri);
         if (!uri.IsFile) return (UpdateLinkKind.None, "");
+        if (uri.IsUnc) return (UpdateLinkKind.Network, url.Trim());
+        var path = uri.LocalPath;
+        if (!DriveRoot.IsMatch(path)) return (UpdateLinkKind.Network, url.Trim());
+        return (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? UpdateLinkKind.File : UpdateLinkKind.Folder, path);
+    }
+
+    /// At the click: Classify, then the disk is asked (call off the UI thread, with a limit): a folder must exist as a
+    /// directory, a zip as a file; otherwise None. Web and Network are returned as they are.
+    public static (UpdateLinkKind Kind, string Target) Resolve(string? url)
+    {
+        var c = Classify(url);
         try
         {
-            var path = uri.LocalPath;
-            if (Directory.Exists(path)) return (UpdateLinkKind.Folder, path);
-            if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && File.Exists(path)) return (UpdateLinkKind.File, path);
+            if (c.Kind == UpdateLinkKind.Folder && !Directory.Exists(c.Target)) return (UpdateLinkKind.None, "");
+            if (c.Kind == UpdateLinkKind.File && !File.Exists(c.Target)) return (UpdateLinkKind.None, "");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
+            return (UpdateLinkKind.None, "");
         }
-        return (UpdateLinkKind.None, "");
+        return c;
     }
 }
