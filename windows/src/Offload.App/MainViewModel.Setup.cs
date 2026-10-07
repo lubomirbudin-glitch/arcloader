@@ -404,6 +404,46 @@ public sealed partial class MainViewModel
         set { Settings.Verify = value; SettingsChanged(); Raise(); }
     }
 
+    /// "Kontrolní součet" (spec 3.5): xxHash64 or xxHash64 + MD5 — `hash` in settings.json.
+    public IReadOnlyList<HashChoice> HashChoices => HashChoice.All;
+
+    public HashChoice Hash
+    {
+        get => HashChoice.Of(HashKinds.FromSetting(Settings.Hash));
+        set
+        {
+            if (value == null) return;
+            Settings.Hash = HashKinds.Wire(value.Kind);
+            SettingsChanged();
+            RaiseMany(nameof(Hash), nameof(VerifyLabel), nameof(Md5Note));
+        }
+    }
+
+    public string VerifyLabel => Texts.VerifyLabel(HashKinds.FromSetting(Settings.Hash));
+
+    /// Shown under the choice while MD5 is on.
+    public string? Md5Note => HashKinds.FromSetting(Settings.Hash).HasFlag(HashKind.Md5) ? Texts.Md5Slower : null;
+
+    /// "Seznam klipů CSV" / "Seznam klipů pro Avid (ALE)" (spec 3.3) — `outputs` in settings.json.
+    public bool ClipListCsv
+    {
+        get => Settings.Outputs.ClipListCsv;
+        set { Settings.Outputs.ClipListCsv = value; SettingsChanged(); Raise(); }
+    }
+
+    public bool ClipListAle
+    {
+        get => Settings.Outputs.ClipListAle;
+        set { Settings.Outputs.ClipListAle = value; SettingsChanged(); Raise(); }
+    }
+
+    /// "Denní report po každé kartě" (spec 3.2).
+    public bool DayReportAfterEachCard
+    {
+        get => Settings.Outputs.DayReport;
+        set { Settings.Outputs.DayReport = value; SettingsChanged(); Raise(); }
+    }
+
     public bool AnalyzeClips
     {
         get => Settings.AnalyzeClips;

@@ -151,6 +151,18 @@ public static class Msg
     public static string UnknownProxyCodec(string? x) =>
         $"Neznámý kodek proxy „{x}“ — použijte h264, hevc, proresProxy, proresLT, prores422 nebo prores422HQ.";
     public static string LutNotFound(string path) => $"LUT nenalezen: {path}";
+    public static string UnknownHash(string? x) => $"Neznámý kontrolní součet „{x}“ — použijte xxh64 nebo both (xxh64 + MD5).";
+
+    // Day report (spec 3.2)
+    public static string DayNotFound(string path) => $"Složka dne nenalezena: {path}";
+    public static string NotADayFolder(string path) => $"Ve složce {path} není žádná karta s reportem — vyberte složku dne na cíli (<cíl>\\<datum>).";
+    public static string DayReportFolderIsCard(string path) =>
+        $"Ve složce dne {path} je karta „{Layout.ReportDirName}“ — denní report by se zapsal do ní, proto se nevytvoří.";
+    public static string DayIsVolumeRoot(string path) =>
+        $"{path} je kořen disku, ne složka dne — vyberte složku dne na cíli (<cíl>\\<datum>) nebo kartu v ní.";
+    public static string DayReportBusy(string path) => $"Denní report ve složce {path} právě vytváří jiná úloha — zkuste to za chvíli.";
+    public static string DayReportFailed(string detail) => $"Denní report se nepodařilo vytvořit: {detail}";
+    public static string DayReportWritten(string path) => $"Denní report: {path}";
     public static string ProxyFolderNotFound(string path) => $"Složka pro proxy nenalezena: {path}";
     public const string ProxyFolderNoEffect = "Poznámka: --proxy-folder bez --proxy nic nedělá.";
     public const string Cancelling = "Ruším — dokončuji aktuální blok, rozpracované soubory se smažou…";
@@ -161,6 +173,7 @@ public static class Msg
 
     // Clip notes (report, job card)
     public const string NoVerifiedCopy = "žádná ověřená kopie";
+    public static string ProxyRenamed(string name) => $"Proxy přejmenována na {name} (shoda jmen) — přelinkujte ji ručně.";
     public const string FfmpegNotFound = "ffmpeg nenalezen";
     public const string FfprobeNotFound = "ffprobe nenalezen";
     public const string UnknownFormat = "neznámý formát";

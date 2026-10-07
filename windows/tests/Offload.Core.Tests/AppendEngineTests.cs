@@ -25,8 +25,9 @@ public class AppendEngineTests
     static Dictionary<string, byte[]> Snapshot(string dir) =>
         Directory.GetFiles(dir).ToDictionary(f => Path.GetFileName(f), f => File.ReadAllBytes(f));
 
-    /// The only earlier files an append may rewrite (spec 2.2): the hash list (lines added) and the chain (entry added).
-    static readonly string[] Rewritten = [@"_REPORT\A001.xxh64", @"ascmhl\ascmhl_chain.xml"];
+    /// The only earlier files an append may rewrite (spec 2.2): the hash list (lines added) and the chain (entry added) —
+    /// and the clip list, which is derived from every generation and written whole (spec 3.3, R25).
+    static readonly string[] Rewritten = [@"_REPORT\A001.xxh64", @"ascmhl\ascmhl_chain.xml", @"_REPORT\A001_clips.csv"];
 
     [Fact]
     public void Generation2_OnBothDestinations_EarlierFilesUntouched()
@@ -587,6 +588,121 @@ public class AppendEngineTests
         }
     }
 
+    // Spec 3.5: an append hashes with the earlier backup's algorithms, not the current setting — MD5 lines follow the
+    // earlier ones in `<card>.md5`, generation 2 of the MHL has <md5> too.
+    [Fact]
+    public void Append_KeepsTheBackupsHashes()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 100_000, 1);
+        var history = dir.Sub("appdata");
+        var options = AppendFixtures.Options();
+        options.Hashes = HashKind.Both;
+        var full = new OffloadJob(new JobConfig(card, [dir.Sub("d1")]) { Date = "2026-10-06", AnalyzeClips = false, HistoryFolder = history }, options);
+        full.Run();
+        var paths = full.Plan!.CardPaths;
+        var before = File.ReadAllText(Path.Combine(paths[0], "_REPORT", "A001.md5"));
+        AppendFixtures.NewClip(card);
+
+        var append = Job(card, [], history, appendInto: paths);   // the setting is xxh64 only
+        var report = append.Run()!;
+
+        Assert.Equal(HashKind.Both, append.Plan!.Hashes);
+        Assert.Equal(["xxh64", "md5"], report.HashAlgorithms);
+        var list = File.ReadAllText(Path.Combine(paths[0], "_REPORT", "A001.md5"));
+        Assert.StartsWith(before, list);
+        Assert.EndsWith($"{report.Files.Single().Md5}  CLIP/A001C003.mov\n", list);
+        var gen2 = Verification.MhlReader.Read(paths[0])!.Generations[1];
+        Assert.Equal(["xxh64", "md5"], gen2.Files.Single().Hashes.Select(h => h.Algorithm));
+        Assert.Equal(["xxh64", "md5"], new HistoryStore(history).Load().Single().HashAlgorithms);
+    }
+
+    /// A full copy with xxh64 + MD5 (the setting "both").
+    static OffloadJob FullBoth(string card, IReadOnlyList<string> dests, string history)
+    {
+        var options = AppendFixtures.Options();
+        options.Hashes = HashKind.Both;
+        return new OffloadJob(new JobConfig(card, dests) { Date = "2026-10-06", AnalyzeClips = false, HistoryFolder = history }, options);
+    }
+
+    // Preflight ruling I1: in an xxh64 + MD5 backup `<card>.md5` is the third record file an append may rewrite (its
+    // earlier bytes kept, lines added); every other earlier file stays byte for byte, on every destination.
+    [Fact]
+    public void Generation2_Both_EarlierFilesUntouched()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 100_000, 1);
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C002.mov"), 60_000, 2);
+        var history = dir.Sub("appdata");
+        var full = FullBoth(card, [dir.Sub("d1"), dir.Sub("d2")], history);
+        full.Run();
+        var paths = full.Plan!.CardPaths;
+        var trees = paths.Select(AppendFixtures.Tree).ToList();
+        Assert.All(trees, t => Assert.True(t.ContainsKey(@"_REPORT\A001.md5")));
+        AppendFixtures.NewClip(card);
+
+        var append = Job(card, [], history, appendInto: paths);   // the setting is xxh64 only: the backup's MD5 still wins
+        var report = append.Run()!;
+
+        Assert.Equal((JobPhase.Done, PlanMode.Append, 2), (append.Status().Phase, append.Plan!.Mode, append.Plan.Generation));
+        Assert.True(append.Status().SafeToEject);
+        string[] rewritten = [.. Rewritten, @"_REPORT\A001.md5"];
+        for (int d = 0; d < paths.Count; d++)
+        {
+            var after = AppendFixtures.Tree(paths[d]);
+            var changed = trees[d].Where(kv => !kv.Value.AsSpan().SequenceEqual(after[kv.Key])).Select(kv => kv.Key).ToList();
+            Assert.All(changed, name => Assert.Contains(name, rewritten, StringComparer.OrdinalIgnoreCase));
+            Assert.Contains(@"_REPORT\A001.md5", changed, StringComparer.OrdinalIgnoreCase);
+            foreach (var name in new[] { @"_REPORT\A001.xxh64", @"_REPORT\A001.md5" })
+                Assert.Equal(trees[d][name], after[name][..trees[d][name].Length]);   // earlier lines byte for byte
+            var md5 = Encoding.UTF8.GetString(after[@"_REPORT\A001.md5"]);
+            Assert.EndsWith($"{report.Files.Single().Md5}  CLIP/A001C003.mov\n", md5);
+            Assert.Equal(3, md5.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+            var verify = BackupVerifier.Verify(paths[d], chunkSize: 4096);
+            Assert.True(verify.Success);
+            Assert.Equal(3, verify.Ok);
+            Assert.Equal(["xxh64", "md5"], verify.HashAlgorithms);
+        }
+    }
+
+    // Preflight ruling I1: a `<card>.md5` that lost a line (its write failed) is healed by an append with nothing new,
+    // from the MHL's <md5> values — the earlier bytes kept, nothing else touched; once whole, it stays as it is.
+    [Fact]
+    public void NothingNew_Both_HealsTheMd5List()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 100_000, 1);
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C002.mov"), 60_000, 2);
+        var history = dir.Sub("appdata");
+        var full = FullBoth(card, [dir.Sub("d1")], history);
+        full.Run();
+        var paths = full.Plan!.CardPaths;
+        var list = Path.Combine(paths[0], "_REPORT", "A001.md5");
+        var whole = File.ReadAllBytes(list);
+        var lines = Encoding.UTF8.GetString(whole).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(2, lines.Length);
+        var truncated = Encoding.UTF8.GetBytes(lines[0] + "\n");
+        File.WriteAllBytes(list, truncated);   // the last line is lost
+        var tree = AppendFixtures.Tree(paths[0]);
+
+        var nothing = Job(card, [], history, appendInto: paths);
+        nothing.Run();
+
+        Assert.Equal((JobPhase.Done, Msg.NothingNew, null), (nothing.Status().Phase, nothing.Status().Note, nothing.Status().Warning));
+        Assert.Equal(whole, File.ReadAllBytes(list));   // the earlier line, then the healed one from the MHL
+        var after = AppendFixtures.Tree(paths[0]);
+        foreach (var (name, bytes) in tree.Where(kv => !kv.Key.Equals(@"_REPORT\A001.md5", StringComparison.OrdinalIgnoreCase)))
+            Assert.Equal(bytes, after[name]);
+        Assert.Equal(tree.Keys.Order(), after.Keys.Order());
+
+        // Whole now: the next "nothing new" leaves it byte for byte.
+        Job(card, [], history, appendInto: paths).Run();
+        Assert.Equal(whole, File.ReadAllBytes(list));
+    }
+
     // Spec 2.2: an existing proxy is never overwritten; a new clip of the same name gets "_2".
     [FfmpegFact]
     public void Proxies_ExistingNeverOverwritten()
@@ -609,6 +725,7 @@ public class AppendEngineTests
         Assert.Equal(JobPhase.Done, append.Status().Phase);
         Assert.Equal(first, File.ReadAllBytes(Path.Combine(cardPath, "_PROXY", "C0001.mov")));
         Assert.Equal("_PROXY/C0001_2.mov", Assert.Single(report!.Clips).ProxyPath);
+        Assert.Equal("Proxy přejmenována na C0001_2 (shoda jmen) — přelinkujte ji ručně.", report.Clips[0].ProxyNote);
         Assert.True(File.Exists(Path.Combine(cardPath, "_REPORT", "A001_report_0002.html")));
     }
 }

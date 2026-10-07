@@ -22,11 +22,12 @@ static class CopyCommand
         var allowSame = new Option<bool>("--allow-same-device") { Description = "Allow two destinations on the same volume." };
         var dryRun = new Option<bool>("--dry-run") { Description = "Only scan and check, do not copy." };
         var noHistory = new Option<bool>("--no-history") { Description = "Do not read or write the offload history (%APPDATA%\\Offload\\history.json)." };
+        var hash = new Option<string>("--hash") { Description = "Checksums: xxh64 (default) or both (xxh64 + MD5; MD5 is slower on fast cards).", DefaultValueFactory = _ => "xxh64" };
         var stageTwo = new StageTwoOptions();
 
         var cmd = new Command("copy", "Copy a card to <dest>/<date>/<card name>/ on every destination and verify.");
         cmd.Arguments.Add(source);
-        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noHistory }) cmd.Options.Add(o);
+        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noHistory, hash }) cmd.Options.Add(o);
         stageTwo.AddTo(cmd);
         cmd.SetAction(r =>
         {
@@ -42,6 +43,7 @@ static class CopyCommand
                     Verify = !r.GetValue(noVerify),
                     AllowSameDevice = r.GetValue(allowSame),
                     RecordHistory = !r.GetValue(noHistory),
+                    Hashes = HashKinds.TryParseWire(r.GetValue(hash), out var kinds) ? kinds : throw new ArgumentException(Msg.UnknownHash(r.GetValue(hash))),
                 };
                 stageTwo.Apply(r, config);
             }
@@ -158,6 +160,7 @@ static class CopyCommand
             }
             Console.WriteLine($"Report: {QueueRules.ReportPath(plan.CardPaths[0], plan.CardName, plan.Generation)}");
         }
+        foreach (var day in job.DayReports) Console.WriteLine(Msg.DayReportWritten(day));
         if (status.Note != null) Console.WriteLine(status.Note);
         if (status.Warning != null) Console.WriteLine("Varování: " + status.Warning);
         if (status.Error != null) Console.WriteLine(Msg.CliError + status.Error);

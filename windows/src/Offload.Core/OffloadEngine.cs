@@ -42,7 +42,11 @@ public sealed partial class OffloadEngine
 
         var day = date ?? Layout.Today();
         var name = Layout.UniqueCardFolder(roots, day, cardName != null ? Layout.Sanitize(cardName) : Layout.DefaultCardName(source));
-        return new OffloadPlan { Source = source, Scan = scan, Date = day, CardName = name, DestRoots = roots, Space = space, SpaceWarnings = warnings };
+        return new OffloadPlan
+        {
+            Source = source, Scan = scan, Date = day, CardName = name, DestRoots = roots, Space = space, SpaceWarnings = warnings,
+            Hashes = HashKinds.Normalize(Options.Hashes),
+        };
     }
 
     /// An append (spec 2.2): the same checks as Prepare (options, source, destinations, Windows names, FAT32, space),
@@ -78,6 +82,7 @@ public sealed partial class OffloadEngine
             Source = a.Source, Scan = scan, Date = a.Date, CardName = a.CardName, DestRoots = a.DestRoots,
             Mode = PlanMode.Append, Generation = a.Generation, FullScan = a.FullScan, UnverifiedEarlier = a.UnverifiedEarlier,
             Space = space, SpaceWarnings = warnings,
+            Hashes = HashKinds.FromNames(a.HashAlgorithms),   // the earlier backup's, not the current setting (spec 3.5)
         };
     }
 

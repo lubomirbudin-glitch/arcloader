@@ -21,7 +21,7 @@ public class FormatTests
     }
 
     [Fact]
-    public void Version_IsWindowsBuild() => Assert.Equal("0.2.0-win", OffloadVersion.String);
+    public void Version_IsWindowsBuild() => Assert.Equal("0.3.0-win", OffloadVersion.String);
 
     // Spec 2.1/2.5: sizes inside Czech sentences.
     [Theory]

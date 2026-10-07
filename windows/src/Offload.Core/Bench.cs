@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO.Hashing;
 
 namespace Offload.Core;
 
@@ -50,10 +49,10 @@ public static class Bench
         return lines;
     }
 
-    /// Writes a temporary file (unbuffered, flushed to the media), reads it back, deletes it.
-    /// ct: checked before every block of the write and the read-back — a cancelled test throws
+    /// Writes a temporary file (unbuffered, flushed to the media), reads it back through `kinds` (as the copy verifies),
+    /// deletes it. ct: checked before every block of the write and the read-back — a cancelled test throws
     /// OperationCanceledException at once and the temporary file is still deleted.
-    public static IReadOnlyList<Line> Write(string dir, long size, int blockSize, CancellationToken ct = default)
+    public static IReadOnlyList<Line> Write(string dir, long size, int blockSize, CancellationToken ct = default, HashKind kinds = HashKind.Xxh64)
     {
         ct.ThrowIfCancellationRequested();
         var path = Path.Combine(dir, $".offload-bench-{Environment.ProcessId}");
@@ -76,8 +75,8 @@ public static class Bench
             }
             var write = new Line($"write {BlockLabel(blockSize)}", size, sw.Elapsed.TotalSeconds);
             sw.Restart();
-            var (_, read) = Hashing.HashFile(path, buf, ct: ct);
-            return [write, new Line($"read  {BlockLabel(blockSize)} + xxh64", read, sw.Elapsed.TotalSeconds)];
+            var (_, read) = Hashing.HashFile(path, buf, kinds, ct: ct);
+            return [write, new Line($"read  {BlockLabel(blockSize)} + {string.Join(" + ", HashKinds.Names(kinds))}", read, sw.Elapsed.TotalSeconds)];
         }
         finally
         {
@@ -85,16 +84,17 @@ public static class Bench
         }
     }
 
-    /// Raw hashing throughput from memory — must be far above any disk, otherwise it is the bottleneck.
-    public static Line Hash(int size)
+    /// Raw hashing throughput from memory — must be far above any disk, otherwise it is the bottleneck. `algorithm`:
+    /// "xxh64" or "md5" (spec 3.5: MD5 runs on its own thread during a copy, so this is its ceiling per card).
+    public static Line Hash(int size, string algorithm = "xxh64")
     {
         using var buf = new AlignedBuffer(size);
         Random.Shared.NextBytes(buf.Span);
         var sw = Stopwatch.StartNew();
-        var xx = new XxHash64();
-        for (int i = 0; i < 8; i++) xx.Append(buf.Span);
-        xx.GetCurrentHashAsUInt64();
-        return new Line("xxh64 in RAM", (long)size * 8, sw.Elapsed.TotalSeconds);
+        var h = Verification.HashAlgo.Create(algorithm);
+        for (int i = 0; i < 8; i++) h.Append(buf.Span);
+        h.Finish();
+        return new Line($"{algorithm} in RAM", (long)size * 8, sw.Elapsed.TotalSeconds);
     }
 
     internal static string BlockLabel(int bs) => bs >= 1 << 20 ? $"{bs >> 20} MB" : $"{bs >> 10} KB";

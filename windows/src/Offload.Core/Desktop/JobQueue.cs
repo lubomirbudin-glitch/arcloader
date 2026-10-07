@@ -6,9 +6,9 @@ namespace Offload.Core.Desktop;
 public interface IQueuedJob
 {
     bool IsCancelled { get; }
-    /// Stage 1 (card → disks + verification). True when stage 2 should follow.
+    /// Stage 1 (card → disks + verification). True when stage 2 should follow (or only the day report, ruling I2).
     bool RunCopy();
-    /// Stage 2 (clips, proxies, PDF) — reads only the destinations.
+    /// Stage 2 (clips, proxies, PDF, day report) — reads only the destinations, writes only reports.
     void RunPost();
 }
 

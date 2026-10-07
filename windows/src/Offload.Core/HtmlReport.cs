@@ -1,10 +1,11 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Offload.Core;
 
 /// Self-contained HTML report (thumbnails embedded) — can be emailed or opened straight from the disk.
-public static class HtmlReport
+public static partial class HtmlReport
 {
     static readonly CultureInfo Cs = CultureInfo.GetCultureInfo("cs-CZ");
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -72,6 +73,33 @@ public static class HtmlReport
         return t >= 3600 ? $"{t / 3600}:{t / 60 % 60:00}:{t % 60:00}" : $"{t / 60}:{t % 60:00}";
     }
 
+    [GeneratedRegex(@"^(?:HASH|MD5) MISMATCH: dest (?<dest>\S+) != source (?<source>\S+)$")]
+    private static partial Regex Mismatch();
+
+    [GeneratedRegex(@" \(after (?<n>\d+) retries\)$")]
+    private static partial Regex Retries();
+
+    [GeneratedRegex(@"^(?<algo>md5|xxh64) hash failed: ")]
+    private static partial Regex HashFailed();
+
+    /// A file error as the report JSON keeps it (English, shared with the Mac — spec 2.6) in Czech for the HTML/PDF.
+    /// Texts it does not know (the Mac's, the system's) stay as they are.
+    public static string ErrorText(string error)
+    {
+        if (error.StartsWith("source: ", StringComparison.Ordinal)) return "karta: " + ErrorText(error["source: ".Length..]);
+        if (error.StartsWith("verify: ", StringComparison.Ordinal)) return "chyba při ověření: " + ErrorText(error["verify: ".Length..]);
+        if (Mismatch().Match(error) is { Success: true } m)
+            return $"{(error.StartsWith("MD5", StringComparison.Ordinal) ? "nesouhlasí MD5" : "nesouhlasí kontrolní součet")} (cíl {m.Groups["dest"].Value}, karta {m.Groups["source"].Value})";
+        if (HashFailed().Match(error) is { Success: true } h)
+            return $"výpočet {(h.Groups["algo"].Value == "md5" ? "MD5" : "xxHash64")} selhal: " + error[h.Length..];
+        if (error.StartsWith("size mismatch: ", StringComparison.Ordinal)) return "jiná velikost: " + error["size mismatch: ".Length..];
+        if (error.StartsWith("source size changed during copy ", StringComparison.Ordinal))
+            return "soubor na kartě se během kopie změnil " + error["source size changed during copy ".Length..];
+        if (error == "write failed") return "zápis selhal";
+        if (error == "cancelled") return "zrušeno";
+        return Retries().Replace(error, " (po ${n} opakováních)");
+    }
+
     static (string Class, string Label) ProxyLabel(ClipEntry c) => c.ProxyStatus switch
     {
         ProxyStatus.Done => ("ok", "hotovo"),
@@ -111,7 +139,7 @@ public static class HtmlReport
         Stat(h, videoClips.Count.ToString(Inv), "klipů" + (totalDuration > 0 ? " · " + Duration(totalDuration) : ""));
         Stat(h, Duration(r.CopySeconds), "kopírování · " + Format.Rate(r.TotalBytes, r.CopySeconds));
         Stat(h, r.Verified ? Duration(r.VerifySeconds) : "—", "ověření · " + (r.Verified ? Format.Rate(r.TotalBytes, r.VerifySeconds) : "neprovedeno"));
-        Stat(h, Esc(r.HashAlgorithm.ToUpperInvariant()), "kontrolní součet");
+        Stat(h, Esc(string.Join(" + ", r.Algorithms.Select(a => a.ToUpperInvariant()))), "kontrolní součet");
         h.Append("</div>\n\n");
 
         h.Append("<h2>Cíle</h2><div class=\"panel\"><table>\n");
@@ -135,9 +163,9 @@ public static class HtmlReport
             foreach (var f in failed)
             {
                 var msgs = new List<string>();
-                if (f.SourceError != null) msgs.Add("karta: " + f.SourceError);
+                if (f.SourceError != null) msgs.Add("karta: " + ErrorText(f.SourceError));
                 for (int i = 0; i < f.Errors.Count; i++)
-                    if (f.Errors[i] is string e) msgs.Add($"cíl {i + 1}: {e}");
+                    if (f.Errors[i] is string e) msgs.Add($"cíl {i + 1}: {ErrorText(e)}");
                 h.Append($"<tr><td class=\"mono\">{Esc(f.Path)}</td><td class=\"err\">{Esc(string.Join(" · ", msgs))}</td></tr>\n");
             }
             h.Append("</table></div>\n");
@@ -146,12 +174,14 @@ public static class HtmlReport
         if (r.Clips.Count > 0) AppendClips(h, r);
 
         h.Append($"<details{(forPrint ? " open" : "")}><summary>Všechny soubory ({r.Files.Count})</summary><div class=\"panel\"><table>\n");
-        h.Append($"<tr><th>Soubor</th><th class=\"num\">Velikost</th><th>{Esc(r.HashAlgorithm)}</th>");
+        bool md5 = r.Algorithms.Contains("md5");
+        h.Append($"<tr><th>Soubor</th><th class=\"num\">Velikost</th><th>xxh64</th>{(md5 ? "<th>md5</th>" : "")}");
         for (int i = 0; i < r.Destinations.Count; i++) h.Append($"<th>Cíl {i + 1}</th>");
         h.Append("</tr>\n");
         foreach (var f in r.Files)
         {
             h.Append($"<tr><td class=\"mono\">{Esc(f.Path)}</td><td class=\"num\">{Format.Bytes(f.Size)}</td><td class=\"mono\">{Esc(f.Xxh64 ?? "—")}</td>");
+            if (md5) h.Append($"<td class=\"mono\">{Esc(f.Md5 ?? "—")}</td>");
             foreach (var s in f.Destinations)
             {
                 var cls = s == "verified" ? "ok" : (s == "failed" ? "bad" : "warn");

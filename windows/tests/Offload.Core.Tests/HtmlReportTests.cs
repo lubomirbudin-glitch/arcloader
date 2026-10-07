@@ -15,7 +15,7 @@ public class HtmlReportTests
         Assert.Contains("<td class=\"ok\">ověřeno</td>", html);
         Assert.Contains("<details><summary>Všechny soubory (2)</summary>", html);
         Assert.Contains("prefers-color-scheme:dark", html);
-        Assert.Contains("offload 0.2.0-win", html);
+        Assert.Contains("offload 0.3.0-win", html);
     }
 
     [Fact]
@@ -25,6 +25,30 @@ public class HtmlReportTests
         Assert.Contains("<span class=\"badge bad\">CHYBA</span>", html);
         Assert.Contains("Chyby (1)", html);
         Assert.Contains("cíl 1: boom", html);
+    }
+
+    // Spec 2.6/6.2 task 9: the file errors the JSON keeps in English (shared with the Mac) read in Czech in the HTML.
+    [Theory]
+    [InlineData("size mismatch: 4000 != 5000", "jiná velikost: 4000 != 5000")]
+    [InlineData("HASH MISMATCH: dest 0123456789abcdef != source fedcba9876543210", "nesouhlasí kontrolní součet (cíl 0123456789abcdef, karta fedcba9876543210)")]
+    [InlineData("MD5 MISMATCH: dest 900150983cd24fb0d6963f7d28e17f72 != source -", "nesouhlasí MD5 (cíl 900150983cd24fb0d6963f7d28e17f72, karta -)")]
+    [InlineData("verify: The device is not ready.", "chyba při ověření: The device is not ready.")]
+    [InlineData("write failed", "zápis selhal")]
+    [InlineData("source: cancelled", "karta: zrušeno")]
+    [InlineData("source: source size changed during copy (10 != 20)", "karta: soubor na kartě se během kopie změnil (10 != 20)")]
+    [InlineData("source: read E:\\a.mov: The request could not be performed (after 3 retries)", "karta: read E:\\a.mov: The request could not be performed (po 3 opakováních)")]
+    [InlineData("md5 hash failed: out of memory", "výpočet MD5 selhal: out of memory")]
+    [InlineData("xxh64 hash failed: boom", "výpočet xxHash64 selhal: boom")]
+    [InlineData("source: md5 hash failed: boom", "karta: výpočet MD5 selhal: boom")]
+    [InlineData("disk full (Mac)", "disk full (Mac)")]
+    public void ErrorText_Czech(string error, string czech) => Assert.Equal(czech, HtmlReport.ErrorText(error));
+
+    [Fact]
+    public void Failed_ErrorsInCzech()
+    {
+        var html = HtmlReport.Render(Reports.Sample(Card, destError: "HASH MISMATCH: dest 0000000000000001 != source fedcba9876543210"));
+        Assert.Contains("cíl 1: nesouhlasí kontrolní součet (cíl 0000000000000001, karta fedcba9876543210)", html);
+        Assert.DoesNotContain("HASH MISMATCH", html);
     }
 
     [Fact]

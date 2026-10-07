@@ -368,13 +368,19 @@ public sealed class ProxyRenderer : IDisposable
             args.AddRange(["-map", "0:v:0"]);
             if (Settings.Audio && info.AudioChannels > 0 && src.AudioFromInput)
             {
-                args.AddRange(["-map", "0:a:0?"]);
-                args.AddRange(Encoders.AudioArgs(Settings.Codec));
+                args.AddRange(["-map", "0:a?"]);   // every audio stream (R14)
+                args.AddRange(Encoders.AudioArgs(Settings.Codec, info.AudioStreams));
             }
             args.AddRange(["-vf", vf]);
             args.AddRange(Encoders.VideoArgs(EncoderName!, Settings.Codec, Settings.BitrateMbps));
             args.AddRange(Encoders.Rec709Args);
-            if (Timecode.IsValid(info.Timecode)) args.AddRange(["-timecode", info.Timecode!]);
+            if (Timecode.IsValid(info.Timecode))
+            {
+                args.AddRange(["-timecode", info.Timecode!]);
+                // The MOV muxer writes it into the timecode track (tmcd) as its source reference: Premiere reads it as
+                // Tape Name, Resolve as Reel (ffprobe shows `reel_name` on the data stream). Without TC there is no tmcd.
+                if (info.Reel is { Length: > 0 } reel) args.AddRange(["-metadata:s:v:0", $"reel_name={reel}"]);
+            }
 
             var dir = Path.GetDirectoryName(output)!;
             NativeIO.Mkdirs(dir);

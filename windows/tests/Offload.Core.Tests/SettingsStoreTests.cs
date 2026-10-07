@@ -25,6 +25,55 @@ public class SettingsStoreTests
         Assert.Empty(s.PortNames);
     }
 
+    // Spec 5.1: "hash" — "xxh64" by default, "both" round-trips; a value a newer version wrote is kept but read as xxh64.
+    [Fact]
+    public void Hash_DefaultBothAndUnknownValue()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        Assert.Equal("xxh64", SettingsStore.Load(path).Hash);
+        var s = LoadJson(dir, """{"hash":"both"}""");
+        Assert.Equal(HashKind.Both, HashKinds.FromSetting(s.Hash));
+        Assert.Null(s.Extra);
+        SettingsStore.Save(s, path);
+        Assert.Contains("\"hash\": \"both\"", File.ReadAllText(path));
+        var future = LoadJson(dir, """{"hash":"xxh128"}""");
+        Assert.Equal(HashKind.Xxh64, HashKinds.FromSetting(future.Hash));
+        SettingsStore.Save(future, path);
+        Assert.Contains("\"hash\": \"xxh128\"", File.ReadAllText(path));
+    }
+
+    // Spec 5.1: "outputs" — CSV on, ALE off by default; keys of a newer version inside it survive (R24).
+    [Fact]
+    public void Outputs_DefaultsAndUnknownKeys()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        var fresh = SettingsStore.Load(path);
+        Assert.Equal((true, false), (fresh.Outputs.ClipListCsv, fresh.Outputs.ClipListAle));
+        var s = LoadJson(dir, """{"outputs":{"clipListCsv":false,"clipListAle":true,"future":1}}""");
+        Assert.Equal((false, true), (s.Outputs.ClipListCsv, s.Outputs.ClipListAle));
+        Assert.Null(s.Extra);
+        SettingsStore.Save(s, path);
+        var text = File.ReadAllText(path);
+        Assert.Contains("\"clipListAle\": true", text);
+        Assert.Contains("\"future\": 1", text);
+    }
+
+    // Spec 5.1: "outputs.dayReport" — on by default, off survives a save.
+    [Fact]
+    public void Outputs_DayReport_DefaultOn_RoundTrip()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        Assert.True(SettingsStore.Load(path).Outputs.DayReport);
+        var s = LoadJson(dir, """{"outputs":{"dayReport":false}}""");
+        Assert.False(s.Outputs.DayReport);
+        Assert.True(s.Outputs.ClipListCsv);   // the other keys of the section keep their defaults
+        SettingsStore.Save(s, path);
+        Assert.False(SettingsStore.Load(path).Outputs.DayReport);
+    }
+
     [Fact]
     public void Corrupt_Defaults()
     {

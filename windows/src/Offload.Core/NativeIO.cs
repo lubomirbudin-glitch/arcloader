@@ -117,6 +117,22 @@ public static unsafe class NativeIO
         return Win32.GetVolumePathName(Path.GetFullPath(path), buf, 1024) ? new string(buf) : null;
     }
 
+    /// "<volume id>|<folder relative to the volume root>", upper-cased — the same for every spelling of a folder (case,
+    /// trailing slash, another drive letter or the volume GUID path); "|<full path>" when the volume is unknown. The key
+    /// of the append lock and the day-report lock (plan 6 ruling A1, plan 7 ruling M7).
+    /// Not the folder's identity: a mapped drive vs its UNC path, a `subst` drive, a junction or an 8.3 short name of
+    /// the same folder resolve to another volume or path and give another key — two such spellings are not serialized
+    /// (the same gap as AppendLock's; for the day report it goes into the plan 7 docs).
+    public static string FolderKey(string path)
+    {
+        var full = Path.GetFullPath(path).TrimEnd('\\');
+        var root = VolumeRoot(full);
+        var key = root != null && VolumeId(root) is string volume && full.StartsWith(root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)
+            ? volume + "|" + Path.GetRelativePath(root, full)
+            : "|" + full;
+        return key.ToUpperInvariant();
+    }
+
     /// Identity of the volume a path is on: the volume GUID path, or the share root for network paths.
     public static string? VolumeId(string path)
     {

@@ -29,6 +29,16 @@ public class ReelNamesTests
     static Clip C(string name, bool cameraProxy = false) =>
         new() { Name = name, Path = name + ".mov", Format = ClipFormat.Video, Segments = [name + ".mov"], Bytes = 1, IsCameraProxy = cameraProxy };
 
+    // Spec 3.4: the camera's tag first, then the reel in the clip name, then the card folder.
+    [Theory]
+    [InlineData("TAPE07", "A001C003_210101_R1AB", "TAPE07")]
+    [InlineData(" TAPE07 ", "C0001", "TAPE07")]
+    [InlineData("  ", "A001C003_210101_R1AB", "A001")]
+    [InlineData(null, "a002_c004_0101ab", "A002")]
+    [InlineData(null, "C0001", "KARTA")]
+    public void Resolve_TagThenClipNameThenCard(string? tag, string clipName, string reel) =>
+        Assert.Equal(reel, ReelResolver.Resolve(C(clipName), tag == null ? null : new ClipInfo { Reel = tag }, "KARTA"));
+
     [Fact]
     public void OneReel_Suggested_WithHint()
     {

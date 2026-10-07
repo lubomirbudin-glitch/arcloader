@@ -50,6 +50,9 @@ public sealed class ClipInfo
     [JsonPropertyName("frames")] public int? Frames { get; set; }
     [JsonPropertyName("timecode")] public string? Timecode { get; set; }
     [JsonPropertyName("audioChannels")] public int AudioChannels { get; set; }
+    /// Channels of each audio stream, in stream order (ffprobe) - the proxy gets every one of them (R14). Known only right
+    /// after the probe (not in the report); empty for RAW decoders and reports read back.
+    [JsonIgnore] public List<int> AudioStreams { get; set; } = [];
     [JsonPropertyName("camera")] public string? Camera { get; set; }
     /// Log curve the camera recorded in (e.g. "LogC4"), when the format reports it.
     [JsonPropertyName("logEncoding")] public string? LogEncoding { get; set; }
@@ -61,6 +64,10 @@ public sealed class ClipInfo
     [JsonPropertyName("gamma")] public string? Gamma { get; set; }
     [JsonPropertyName("gamut")] public string? Gamut { get; set; }
     [JsonPropertyName("colorScienceGen")] public int? ColorScienceGen { get; set; }
+    /// The reel (tape name): ffprobe's `reel_name` / `tape_name` / `reel` tag after the probe, then ReelResolver's
+    /// answer (tag, else the clip name, else the card folder) once the job has the clip (spec 3.4). Report key
+    /// `clips[].info.reel`, absent when unknown.
+    [JsonPropertyName("reel"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Reel { get; set; }
 
     [JsonIgnore]
     public string FpsLabel

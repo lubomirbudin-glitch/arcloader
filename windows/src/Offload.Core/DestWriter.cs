@@ -169,10 +169,12 @@ internal sealed class DestWriter : IDisposable
 
     public void Wait() => worker.Wait();
 
-    /// Re-reads every written file from the disk and compares it with the source hash.
-    public void Verify(IReadOnlyList<SourceFile> files, ulong?[] sourceHashes, CancellationToken ct)
+    /// Re-reads every written file from the disk — once, through every hash in `kinds` — and compares it with the
+    /// source hashes. The error texts stay English: they go into the report JSON shared with the Mac.
+    public void Verify(IReadOnlyList<SourceFile> files, IReadOnlyList<FileHashes> sourceHashes, HashKind kinds, CancellationToken ct)
     {
         using var buf = new AlignedBuffer(options.ChunkSize);
+        bool md5 = HashKinds.Normalize(kinds).HasFlag(HashKind.Md5);
         for (int i = 0; i < files.Count; i++)
         {
             if (Results[i].State != FileState.Written) continue;
@@ -180,12 +182,14 @@ internal sealed class DestWriter : IDisposable
             var f = files[i];
             try
             {
-                var (hash, size) = Hashing.HashFile(Layout.Join(CardPath, f.RelPath), buf, n => Interlocked.Add(ref verified, n), ct);
+                var (got, size) = Hashing.HashFile(Layout.Join(CardPath, f.RelPath), buf, kinds, n => Interlocked.Add(ref verified, n), ct);
+                var want = sourceHashes[i];
                 if (size != f.Size)
                     Results[i] = new DestFileResult(FileState.Failed, $"size mismatch: {size} != {f.Size}");
-                else if (hash != sourceHashes[i])
-                    Results[i] = new DestFileResult(FileState.Failed,
-                        $"HASH MISMATCH: dest {Format.Hex64(hash)} != source {(sourceHashes[i] is ulong s ? Format.Hex64(s) : "-")}");
+                else if (got.Xxh64 != want.Xxh64)
+                    Results[i] = new DestFileResult(FileState.Failed, $"HASH MISMATCH: dest {got.Xxh64Hex} != source {want.Xxh64Hex ?? "-"}");
+                else if (md5 && (want.Md5 == null || !got.Md5!.AsSpan().SequenceEqual(want.Md5)))
+                    Results[i] = new DestFileResult(FileState.Failed, $"MD5 MISMATCH: dest {got.Md5Hex} != source {want.Md5Hex ?? "-"}");
                 else
                     Results[i] = new DestFileResult(FileState.Verified, null);
             }

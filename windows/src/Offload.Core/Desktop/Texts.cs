@@ -20,4 +20,17 @@ public static class Texts
         $"{n} {Plural(n, "soubor selhal", "soubory selhaly", "souborů selhalo")} — karta NENÍ bezpečně zálohovaná. Podrobnosti v reportu.";
 
     public static string Warnings(int n) => n == 0 ? "bez varování" : $"{n} varování";
+
+    /// The verify checkbox names the checksum it reads back with (spec 3.5).
+    public static string VerifyLabel(HashKind kinds) => $"Ověřit kopie zpětným čtením ({HashKinds.Label(kinds)})";
+
+    public const string Md5Slower = "MD5 je pomalejší — u rychlých karet (CFexpress) může zpomalit kopii.";
+}
+
+/// One choice of "Kontrolní součet" (spec 3.5): xxHash64, or xxHash64 + MD5 — never MD5 alone (R16).
+public sealed record HashChoice(HashKind Kind, string Label)
+{
+    public static readonly IReadOnlyList<HashChoice> All = [new(HashKind.Xxh64, "xxHash64 (rychlý)"), new(HashKind.Both, "xxHash64 + MD5")];
+
+    public static HashChoice Of(HashKind kinds) => All.First(c => c.Kind == (HashKinds.Normalize(kinds).HasFlag(HashKind.Md5) ? HashKind.Both : HashKind.Xxh64));
 }

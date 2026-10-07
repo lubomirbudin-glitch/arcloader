@@ -186,13 +186,13 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
     <li><span class="n">2</span><span>Instalace a první spuštění<span class="sub">rozbalení ZIPu, SmartScreen, požadavky, volitelné doplňky, kde je nastavení a log</span></span></li>
     <li><span class="n">3</span><span>Hlavní okno<span class="sub">karty, cíle, volby, dekodéry, hardware, lišta se spuštěním, fronta</span></span></li>
     <li><span class="n">4</span><span>Krok za krokem: první offload<span class="sub">od vložení karty po vysunutí</span></span></li>
-    <li><span class="n">5</span><span>Volby kopírování a ověření<span class="sub">datum, ověření, analýza klipů, co se kontroluje před kopií</span></span></li>
-    <li><span class="n">6</span><span>Proxy, náhledy a LUTy<span class="sub">nastavení proxy, složka pro proxy navíc, automatický výběr LUTu, RAW formáty</span></span></li>
-    <li><span class="n">7</span><span>Report<span class="sub">co je v HTML a PDF, tři snímky na klip, řádky LUT, kde report najdete</span></span></li>
+    <li><span class="n">5</span><span>Volby kopírování a ověření<span class="sub">datum, kontrolní součet (MD5), ověření, analýza klipů, seznamy klipů, denní report, co se kontroluje před kopií</span></span></li>
+    <li><span class="n">6</span><span>Proxy, náhledy a LUTy<span class="sub">nastavení proxy, přelinkování (reel name, zvukové stopy), složka pro proxy navíc, automatický výběr LUTu, RAW formáty</span></span></li>
+    <li><span class="n">7</span><span>Report<span class="sub">co je v HTML a PDF, tři snímky na klip, řádky LUT, seznam klipů CSV / ALE, denní report</span></span></li>
     <li><span class="n">8</span><span>Fronta úloh, zrušení, vysunutí karty<span class="sub">stavy úlohy, zrušení, zavření aplikace, vysunutí</span></span></li>
     <li><span class="n">9</span><span>Nástroje → Prověřit USB porty… a okno Hardware<span class="sub">zapojení, doporučení, měření, názvy portů, úzké hrdlo při kopii</span></span></li>
-    <li><span class="n">10</span><span>Co se nachází na cílovém disku<span class="sub">struktura složek, _REPORT, ascmhl, _PROXY</span></span></li>
-    <li><span class="n">11</span><span>Příkazová řádka<span class="sub">offload copy, verify, bench, ports, luts</span></span></li>
+    <li><span class="n">10</span><span>Co se nachází na cílovém disku<span class="sub">struktura složek, _REPORT karty i dne, ascmhl, _PROXY</span></span></li>
+    <li><span class="n">11</span><span>Příkazová řádka<span class="sub">offload copy, append, verify, day-report, bench, ports, luts</span></span></li>
     <li><span class="n">12</span><span>Řešení problémů a časté otázky</span></li>
     <li><span class="n">13</span><span>Licence</span></li>
   </ol>
@@ -234,6 +234,8 @@ Offload kartu jen čte. Nic na ní nevytváří, nemaže ani nepřejmenovává. 
     LUTu podle kamery (kapitola 6).</li>
   <li>Historii offloadů: řádek „Zálohováno …“ u karty, doplnění jen nových klipů do dřívější zálohy, název složky z názvů
     klipů, ověření hotové zálohy proti ASC MHL a kontrolu místa před startem (kapitoly 3, 8 a 10).</li>
+  <li>Výstupy pro produkci a střih: denní report celého dne, seznam klipů CSV (Resolve, Excel) a ALE (Avid), MD5 navíc
+    k xxHash64, proxy připravené k přelinkování v Resolve a Premiere (kapitoly 5, 6 a 7).</li>
   <li>Kontrolu USB zapojení čtečky a disků s doporučeními a ukazatel úzkého hrdla během kopie (kapitola 9).</li>
   <li>Stejný formát na disku jako Mac verze Offloadu — kopii z Windows lze ověřit na Macu a naopak.</li>
   <li>Příkazovou řádku <code>bin\offload.exe</code> pro skripty (kapitola 11).</li>
@@ -317,7 +319,7 @@ panelů lze měnit tažením dělicí čáry. Vzhled (světlý / tmavý) se ří
 <figure>
 <div class="win">
   <div class="bar"><span>Offload</span><span>— ☐ ✕</span></div>
-  <div class="menu"><span class="callout">1</span><b>Nástroje</b> &nbsp;›&nbsp; Ověřit zálohu… &nbsp;Ctrl+Shift+O &nbsp;·&nbsp; Prověřit USB porty… &nbsp;Ctrl+U</div>
+  <div class="menu"><span class="callout">1</span><b>Nástroje</b> &nbsp;›&nbsp; Ověřit zálohu… &nbsp;Ctrl+Shift+O &nbsp;·&nbsp; Denní report… &nbsp;·&nbsp; Prověřit USB porty… &nbsp;Ctrl+U</div>
   <div class="body">
     <div class="left">
       <div class="sec">
@@ -375,10 +377,10 @@ panelů lze měnit tažením dělicí čáry. Vzhled (světlý / tmavý) se ří
 </figure>
 
 <div class="legend">
-  <div><span class="callout">1</span><b>Menu Nástroje</b> — <b class="ui">Prověřit USB porty…</b> (<kbd>Ctrl</kbd>+<kbd>U</kbd>), kapitola 9.</div>
+  <div><span class="callout">1</span><b>Menu Nástroje</b> — <b class="ui">Ověřit zálohu…</b> (kapitola 8), <b class="ui">Denní report…</b> (kapitola 7), <b class="ui">Prověřit USB porty…</b> (<kbd>Ctrl</kbd>+<kbd>U</kbd>), kapitola 9.</div>
   <div><span class="callout">2</span><b>Karty</b> — zdroje ke kopírování.</div>
   <div><span class="callout">3</span><b>Cíle</b> — disky a složky, kam se kopíruje.</div>
-  <div><span class="callout">4</span><b>Struktura a kontrola</b> — datum, ověření, analýza klipů.</div>
+  <div><span class="callout">4</span><b>Struktura a kontrola</b> — datum, kontrolní součet a ověření, analýza klipů, seznamy klipů, denní report.</div>
   <div><span class="callout">5</span><b>Proxy</b> — proxy a LUTy, kapitola 6.</div>
   <div><span class="callout">6</span><b>Dekodéry</b> — nalezené nástroje (rozbalovací sekce).</div>
   <div><span class="callout">7</span><b>Hardware</b> — výsledek posledního testu USB.</div>
@@ -520,8 +522,13 @@ Když stejnou kartu (stejný název) zkopírujete týž den znovu, nová kopie d
       <td>Složka s datem na cílech je normálně dnešní datum ve tvaru <code>RRRR-MM-DD</code>. Po zaškrtnutí vyberete jiné
       datum v kalendáři (třeba natáčecí den, který skončil po půlnoci). Pod volbou je náhled cesty
       <code>…\2026-10-06\&lt;název karty&gt;\</code>. Vlastní datum platí do zavření aplikace.</td></tr>
-  <tr><td><b class="ui">Ověřit kopie zpětným čtením (xxHash64)</b></td><td>zapnuto</td>
-      <td>Po kopii se každý soubor z každého cíle přečte znovu a porovná se kontrolní součet. Bez ověření se objeví
+  <tr><td><b class="ui">Kontrolní součet</b></td><td>xxHash64 (rychlý)</td>
+      <td><b class="ui">xxHash64 + MD5</b> spočítá navíc MD5 každého souboru (pro produkce a pojišťovny, které ho chtějí):
+      MD5 je v reportu, v <code>_REPORT\&lt;karta&gt;.md5</code> a v ASC MHL a ověření čte obojí. MD5 nikdy není samotné —
+      xxHash64 je vždy, takže zálohu dál ověří i Mac a starší verze. Pod volbou oranžově <span class="txt-warn">„MD5 je
+      pomalejší — u rychlých karet (CFexpress) může zpomalit kopii.“</span> Doplnění použije součty dřívější zálohy.</td></tr>
+  <tr><td><b class="ui">Ověřit kopie zpětným čtením (xxHash64)</b><br>(s MD5: <b class="ui">(xxHash64 + MD5)</b>)</td><td>zapnuto</td>
+      <td>Po kopii se každý soubor z každého cíle přečte znovu a porovnají se kontrolní součty. Bez ověření se objeví
       oranžové <span class="txt-warn">„Bez ověření není jisté, že data na disku jsou v pořádku.“</span>, report má štítek
       <b>ZKOPÍROVÁNO — NEOVĚŘENO</b> a zelený pruh „kartu lze vysunout“ se <b>neukáže</b>.</td></tr>
   <tr><td><b class="ui">Navrhovat název karty podle klipů</b></td><td>zapnuto</td>
@@ -530,9 +537,17 @@ Když stejnou kartu (stejný název) zkopírujete týž den znovu, nová kopie d
   <tr><td><b class="ui">Analýza klipů a náhledy v reportu</b></td><td>zapnuto</td>
       <td>Po kopii se u každého klipu zjistí formát, kodek, rozlišení, snímková frekvence, délka, timecode a zvukové stopy
       a do reportu se vloží tři snímky. Čte se z cílových disků, ne z karty. Potřebuje ffmpeg a ffprobe (jsou přibalené).</td></tr>
+  <tr><td><b class="ui">Seznam klipů CSV</b></td><td>zapnuto</td>
+      <td><code>_REPORT\&lt;karta&gt;_clips.csv</code> pro Resolve, Excel a produkci (kapitola 7).</td></tr>
+  <tr><td><b class="ui">Seznam klipů pro Avid (ALE)</b></td><td>vypnuto</td>
+      <td><code>_REPORT\&lt;karta&gt;_clips.ale</code> pro import do Avid Media Composeru (kapitola 7).</td></tr>
+  <tr><td><b class="ui">Denní report po každé kartě</b></td><td>zapnuto</td>
+      <td>Po každé úloze se na každém cíli znovu vytvoří přehled celého natáčecího dne
+      <code>&lt;datum&gt;\_REPORT\&lt;datum&gt;_day_report.html</code> (kapitola 7).</td></tr>
 </table>
 
-<p class="note"><b>Nevracejte se ke starší verzi než 0.2.0</b> — verze 0.1.0 by z nastavení smazala údaje, kterým nerozumí.</p>
+<p class="note"><b>Nevracejte se ke starší verzi než 0.2.0</b> — verze 0.1.0 by z nastavení smazala údaje, kterým nerozumí.
+Verze 0.2.0 nové volby 0.3.0 (kontrolní součet, seznamy klipů, denní report) nezná, ale v nastavení je zachová.</p>
 
 <h3>Jak kopie probíhá</h3>
 <ul>
@@ -585,7 +600,9 @@ Hotové proxy jsou ve složce <code>_PROXY</code> ve složce karty jako <code>&l
   <tr><td><b class="ui">LUT</b></td><td>Automaticky podle kamery</td><td>Viz níže, „LUT pro proxy a náhledy“.</td></tr>
   <tr><td><b class="ui">Burn-in názvu klipu</b></td><td>zapnuto</td><td>Název klipu vypálený do obrazu proxy.</td></tr>
   <tr><td><b class="ui">Burn-in timecodu</b></td><td>zapnuto</td><td>Timecode vypálený do obrazu proxy.</td></tr>
-  <tr><td><b class="ui">Zvuk</b></td><td>zapnuto</td><td>Proxy obsahují zvuk klipu.</td></tr>
+  <tr><td><b class="ui">Zvuk</b></td><td>zapnuto</td><td>Proxy obsahují <b>všechny</b> zvukové stopy klipu (např. 8 mono stop z Sony MXF) —
+      Premiere připojí proxy jen se stejným počtem stop. H.264/H.265: AAC 64 kb/s na kanál každé stopy (nejméně 128,
+      nejvýš 512 kb/s); ProRes: nekomprimovaný zvuk (PCM).</td></tr>
   <tr><td><b class="ui">Přeskočit proxy nahrané kamerou (SUB/PROXY)</b></td><td>zapnuto</td><td>Malé soubory, které kamera nahrává sama
       (ve složkách <code>SUB</code> nebo <code>PROXY</code>), se zkopírují a ověří, ale proxy se z nich znovu nedělá. V reportu jsou
       označené <span class="q">„(proxy kamery)“</span> a mají stav <span class="q">„přeskočeno“</span>.</td></tr>
@@ -606,6 +623,16 @@ Hotové proxy jsou ve složce <code>_PROXY</code> ve složce karty jako <code>&l
   <li>Když složka zmizí až během úlohy, proxy zůstanou na cílech a u klipu je v reportu poznámka
     <span class="q">„kopie do … selhala: …“</span>.</li>
 </ul>
+
+<h3>Proxy pro přelinkování (Resolve, Premiere)</h3>
+<p>Proxy se dají připojit k originálům ve střižně: mají stejný základ jména jako klip (<code>A001C003.mov</code>), stejný
+počáteční timecode, stejnou snímkovou frekvenci, všechny zvukové stopy a <b>reel name</b> — cívku, kterou Premiere
+ukazuje jako <i>Tape Name</i> a Resolve jako <i>Reel</i>. Cívka je v pořadí: údaj kamery v klipu (<code>reel_name</code>,
+<code>tape_name</code>), jinak cívka z názvu klipu (<code>A001C003…</code> → <code>A001</code>), jinak název složky karty.
+Je i v reportu a v seznamech klipů. Klip bez timecodu dostane proxy bez timecodu i bez cívky (Resolve ho přelinkuje
+podle jména).</p>
+<p>Když už proxy stejného jména existuje (dva klipy stejného jména, nebo doplnění), nová dostane <code>_2</code> a u klipu je
+poznámka <span class="q">„Proxy přejmenována na A001C003_2 (shoda jmen) — přelinkujte ji ručně.“</span></p>
 
 <h3>Kódování proxy</h3>
 <p>H.264 a H.265 kóduje Offload na grafické kartě, pokud ji najde (zkouší NVIDIA, Intel a AMD v tomto pořadí; ověřeno
@@ -688,15 +715,17 @@ s vloženými snímky). Tlačítko <b class="ui">Report</b> na kartě úlohy ote
 <ul>
   <li><b>Hlavička</b>: název karty, štítek stavu <span class="pill ok">OVĚŘENO</span>, <span class="pill warn">ZKOPÍROVÁNO — NEOVĚŘENO</span>
     nebo <span class="pill bad">CHYBA</span>, datum a čas začátku a konce.</li>
-  <li><b>Souhrn</b>: počet souborů, objem dat, počet klipů a jejich celková délka, doba a rychlost kopírování a ověření, kontrolní součet (XXH64).</li>
+  <li><b>Souhrn</b>: počet souborů, objem dat, počet klipů a jejich celková délka, doba a rychlost kopírování a ověření, kontrolní součet (XXH64, nebo XXH64 + MD5).</li>
   <li><b>Cíle</b>: tabulka disků — disk, složka, souborový systém, počet souborů OK a chyb. Pod ní zdroj a jeho souborový systém.</li>
-  <li><b>Chyby</b> (jen když nějaké jsou): soubor a problém, zvlášť pro kartu a pro každý cíl.</li>
+  <li><b>Chyby</b> (jen když nějaké jsou): soubor a problém česky, zvlášť pro kartu a pro každý cíl — např.
+    <span class="q">„cíl 2: nesouhlasí kontrolní součet (cíl …, karta …)“</span>, <span class="q">„jiná velikost: …“</span>,
+    <span class="q">„zápis selhal“</span>. V <code>offload_report.json</code> zůstávají anglicky (sdílí ho Mac verze).</li>
   <li><b>Klipy</b>: u každého klipu tři snímky, název (u proxy z kamery <span class="q">„(proxy kamery)“</span>), cesta na kartě,
     formát a kodek, rozlišení, FPS, délka, timecode, počet zvukových kanálů, velikost a stav proxy
     (<span class="txt-ok">hotovo</span>, <span class="txt-bad">chyba</span>, <span class="txt-warn">nepodporováno</span>, přeskočeno).
     Pod tabulkou řádek s nastavením proxy, např. <span class="q">„Proxy: H.264 (h264_nvenc), 1080p, výřez 1.85, LUT: automaticky
     podle kamery → _PROXY/ · také ve složce G:\Proxy“</span>.</li>
-  <li><b>Všechny soubory</b>: každý soubor s velikostí, kontrolním součtem a stavem na každém cíli
+  <li><b>Všechny soubory</b>: každý soubor s velikostí, kontrolním součtem (s MD5 i sloupec md5) a stavem na každém cíli
     (<span class="txt-ok">ověřeno</span>, zapsáno, <span class="txt-bad">CHYBA</span>, nezpracováno). V HTML je seznam sbalený, v PDF rozbalený.</li>
   <li>Seznam vynechaných systémových souborů a v patičce verze aplikace.</li>
 </ul>
@@ -725,7 +754,37 @@ U R3D a ARRIRAW se snímky berou z hotové proxy, takže bez proxy je tyto klipy
   <tr><td><code>offload_report.json</code></td><td>úplný strojově čitelný report (pro další nástroje)</td></tr>
   <tr><td><code>offload_report.txt</code></td><td>krátký textový souhrn</td></tr>
   <tr><td><code>&lt;karta&gt;.xxh64</code></td><td>seznam kontrolních součtů xxHash64 všech souborů — z něj ověřuje <code>offload verify</code></td></tr>
+  <tr><td><code>&lt;karta&gt;.md5</code></td><td>jen s volbou <b class="ui">xxHash64 + MD5</b>: součty MD5 ve formátu <code>md5sum</code></td></tr>
+  <tr><td><code>&lt;karta&gt;_clips.csv</code></td><td>seznam klipů (viz níže)</td></tr>
+  <tr><td><code>&lt;karta&gt;_clips.ale</code></td><td>seznam klipů pro Avid, jen se zapnutou volbou (viz níže)</td></tr>
 </table>
+
+<h3>Seznam klipů (CSV a Avid ALE)</h3>
+<p>Při každém zápisu reportu vznikne <code>&lt;karta&gt;_clips.csv</code>: jeden řádek na klip (proxy nahrané kamerou se
+neuvádějí), sloupce <code>Clip Name, File Name, Path, Card, Camera, Reel, Start TC, Duration, FPS, Resolution, Codec,
+LUT, Size (bytes), XXH64, MD5</code> (anglicky, jak je čte Resolve). Kódování UTF-8, oddělovač čárka. Do Resolve se
+načte přes <i>File → Import Metadata To → Media Pool</i>. <b>Excel</b> s českým nastavením čeká středník: soubor
+otevřete přes <i>Data → Z textu/CSV</i> a zvolte oddělovač <i>Čárka</i>. Hodnoty začínající <code>=</code>,
+<code>+</code>, <code>-</code> nebo <code>@</code> se neupravují (úprava by rozbila import do Resolve) — Excel je může
+brát jako vzorec.</p>
+<p>Se zapnutou volbou <b class="ui">Seznam klipů pro Avid (ALE)</b> vznikne i <code>&lt;karta&gt;_clips.ale</code>
+(<i>File → Input → Import</i> v Media Composeru). ALE má jednu snímkovou frekvenci, takže karta se smíšenými fps dostane
+soubor na každou: <code>A001_clips_25.ale</code>, <code>A001_clips_23.976.ale</code>. Bez analýzy klipů mají řádky jen
+název, cestu, cívku, velikost a součty. ALE je UTF-8 <b>bez</b> BOM; starší verze Avidu mohou češtinu (diakritiku)
+přečíst špatně.</p>
+<p>Po doplnění seznamy pokrývají všechny generace karty. Jsou to odvozené soubory: přepisují se celé; seznam otevřený
+v Excelu se nepřepíše (zapíše se jen do logu) a úloha tím neselže. Seznam, který máte vypnutý, ale už ve složce je (např. ALE z dřívější zálohy), se při doplnění přesto přepíše, aby nezůstal zastaralý; nikdy se nemaže a když ho nikdy nebylo, nevznikne.</p>
+
+<h3>Denní report</h3>
+<p>Po každé úloze (i doplnění a zrušené) se na každém cíli vytvoří znovu přehled celého dne
+<code>&lt;cíl&gt;\&lt;datum&gt;\_REPORT\&lt;datum&gt;_day_report.html</code> a <code>.pdf</code>: dlaždice (karty, soubory,
+data, klipy, celková délka, ověřené karty <span class="q">„7 / 8“</span>), tabulka karet (čas, soubory, data, klipy, délka,
+kamery, ověření, chyby, proxy hotovo / selhalo, LUTy, počet generací po doplnění), sekce <b>Problémy</b> (selhané soubory,
+neověřené karty, nečitelné reporty, složka karty <span class="q">„bez reportu (probíhá, nebo byl přerušen)“</span>)
+a <b>LUTy</b>. Vedle je seznam klipů celého dne <code>&lt;datum&gt;_clips.csv</code> (a <code>.ale</code>).
+Vypíná se volbou <b class="ui">Denní report po každé kartě</b>. Ručně: <b class="ui">Nástroje → Denní report…</b>
+a vyberte složku dne na cíli (nebo složku karty v ní) — report se vytvoří a otevře. Dvě úlohy, které skončí zároveň,
+se vystřídají; každý cíl má report podle toho, co je na něm.</p>
 <p>Ve složce <code>ascmhl</code> vedle je ASC MHL (verze 2) se součty všech souborů — lze ji ověřit nástroji třetích stran
 (<code>ascmhl</code>, Silverstack, ShotPut). Snímky z reportu jsou jen v HTML a PDF, ne v JSON.</p>
 </section>
@@ -923,8 +982,13 @@ Cíl 1 … — USB 3 (10 Gb/s a víc), port 3  310 MB/s  39 % linky
 <p>Na každém cíli vznikne stejná struktura. Příklad pro kartu <code>A001</code> zkopírovanou 6. 10. 2026 na cíl
 <code>D:\Zaloha</code> se zapnutými proxy:</p>
 
+
 <pre class="tree">D:\Zaloha\                                  <span class="c">← cíl</span>
 └─ 2026-10-06\                              <span class="c">← datum (nebo Vlastní datum)</span>
+   ├─ _REPORT\                              <span class="c">← denní report (celý den na tomto cíli)</span>
+   │  ├─ 2026-10-06_day_report.html
+   │  ├─ 2026-10-06_day_report.pdf
+   │  └─ 2026-10-06_clips.csv               <span class="c">← seznam klipů dne (+ .ale)</span>
    └─ A001\                                 <span class="c">← karta: jmenovka svazku nebo Název složky</span>
       ├─ …soubory karty ve stejné struktuře…  <span class="c">← např. PRIVATE\M4ROOT\CLIP\…</span>
       ├─ _REPORT\
@@ -933,6 +997,8 @@ Cíl 1 … — USB 3 (10 Gb/s a víc), port 3  310 MB/s  39 % linky
       │  ├─ A001_report.html                 <span class="c">← tlačítko Report</span>
       │  ├─ A001_report.pdf
       │  ├─ A001.xxh64                       <span class="c">← kontrolní součty (po doplnění i nové soubory)</span>
+      │  ├─ A001.md5                         <span class="c">← jen s volbou xxHash64 + MD5</span>
+      │  ├─ A001_clips.csv                   <span class="c">← seznam klipů (+ A001_clips.ale pro Avid)</span>
       │  ├─ offload_report_0002.json         <span class="c">← jen po doplnění: report generace 2</span>
       │  ├─ A001_report_0002.html
       │  └─ A001_verify_2026-10-07_101500Z.html  <span class="c">← jen po Ověřit zálohu (+ .pdf, offload_verify_….json)</span>
@@ -968,6 +1034,9 @@ Cíl 1 … — USB 3 (10 Gb/s a víc), port 3  310 MB/s  39 % linky
     a MHL nesouhlasí, další doplnění se odmítne a složku je třeba opravit ručně; celá kopie do nové složky jde vždy.</li>
   <li>Report ověření jde jen do <code>_REPORT</code> (u cizího MHL bez ignorování <code>_REPORT</code> do
     <code>_REPORT</code> vedle složky karty), do <code>ascmhl</code> se nikdy nezapisuje.</li>
+  <li><code>_REPORT</code> ve složce dne patří dennímu reportu (a reportům ověření cizích záloh); karta se tak jmenovat
+    nemůže. Denní report a seznamy klipů jsou odvozené z reportů karet — přepisují se celé a lze je kdykoli vytvořit
+    znovu (<b class="ui">Nástroje → Denní report…</b>).</li>
 </ul>
 
 <div class="box tip"><span class="t">Ověření kopie později</span>
@@ -991,7 +1060,8 @@ bin\offload.exe copy --help</pre>
   <tr><td><code>copy</code></td><td>zkopíruje kartu na všechny cíle do <code>&lt;cíl&gt;\&lt;datum&gt;\&lt;karta&gt;\</code> a ověří. Je výchozí — slovo <code>copy</code> lze vynechat.</td></tr>
   <tr><td><code>append</code></td><td>doplní jen nové soubory karty do dřívější zálohy (stejné složky karty, další generace ASC MHL)</td></tr>
   <tr><td><code>verify</code></td><td>znovu ověří složku karty (nebo všechny karty složky dne) proti ASC MHL všech generací, bez <code>ascmhl</code> proti seznamu součtů v <code>_REPORT</code>; <code>--report</code> uloží report ověření</td></tr>
-  <tr><td><code>bench</code></td><td>změří rychlost čtení karty a zápisu/čtení disků</td></tr>
+  <tr><td><code>day-report</code></td><td>vytvoří znovu denní report složky dne (nebo dne, ve kterém je zadaná složka karty) a vypíše cestu; <code>--ale</code>, <code>--no-clip-list</code> jako u <code>copy</code></td></tr>
+  <tr><td><code>bench</code></td><td>změří rychlost čtení karty a zápisu/čtení disků; <code>--hash md5</code> navíc rychlost MD5</td></tr>
   <tr><td><code>ports</code></td><td>USB porty, kde a jak rychle jsou karty a disky připojené, doporučení (jako okno Hardware)</td></tr>
   <tr><td><code>luts</code></td><td>vypíše vestavěné LUTy (id — název)</td></tr>
 </table>
@@ -1007,6 +1077,8 @@ offload append E:\                                     # doplnit nové klipy do 
 offload append E:\ --into D:\Zaloha\2026-10-06\A001    # … nebo do zadané složky karty (opakovat pro každý cíl)
 offload verify D:\Zaloha\2026-10-06\A001              # znovu ověřit hotovou kopii
 offload verify D:\Zaloha\2026-10-06 --report           # ověřit všechny karty dne a uložit reporty ověření
+offload E:\ -d D:\Zaloha --hash both --ale            # xxHash64 + MD5, seznam klipů i pro Avid
+offload day-report D:\Zaloha\2026-10-06               # denní report znovu (např. po ruční úpravě)
 offload bench --read E:\ --write D:\ --gb 2           # rychlost karty a disku
 offload ports                                         # porty a doporučení
 offload ports --measure --card E:\ --dest D:\         # + změřit skutečnou rychlost
@@ -1033,11 +1105,16 @@ offload luts                                          # seznam vestavěných LUT
   <tr><td class="k"><code>--lut</code></td><td><code>auto</code> (výchozí, podle kamery), <code>none</code>, id vestavěného LUTu, nebo cesta k <code>.cube</code></td></tr>
   <tr><td class="k"><code>--lut-fallback</code></td><td>id vestavěného LUTu (nebo <code>none</code>) pro klipy, které <code>auto</code> nepozná</td></tr>
   <tr><td class="k"><code>--proxy-folder</code></td><td>každou proxy zkopírovat i do <code>&lt;složka&gt;\&lt;datum&gt;\&lt;karta&gt;\</code> (jen s <code>--proxy</code>)</td></tr>
+  <tr><td class="k"><code>--hash</code></td><td><code>xxh64</code> (výchozí) nebo <code>both</code> = xxHash64 + MD5</td></tr>
+  <tr><td class="k"><code>--no-clip-list</code></td><td>bez seznamu klipů CSV</td></tr>
+  <tr><td class="k"><code>--ale</code></td><td>navíc seznam klipů pro Avid (ALE)</td></tr>
+  <tr><td class="k"><code>--no-day-report</code></td><td>po kopii nevytvářet denní report</td></tr>
 </table>
 
 <h3>Volby příkazu append</h3>
-<p><code>offload append &lt;karta&gt;</code> má stejné volby analýzy a proxy jako <code>copy</code> (<code>--no-analyze</code>,
-<code>--proxy</code>, <code>--lut</code> …) a navíc <code>--into &lt;složka karty&gt;</code> (zopakujte pro každý cíl dřívější
+<p><code>offload append &lt;karta&gt;</code> má stejné volby analýzy, proxy a výstupů jako <code>copy</code> (<code>--no-analyze</code>,
+<code>--proxy</code>, <code>--lut</code>, <code>--ale</code>, <code>--no-day-report</code> …; kontrolní součty určuje dřívější
+záloha, <code>--hash</code> proto nemá) a navíc <code>--into &lt;složka karty&gt;</code> (zopakujte pro každý cíl dřívější
 zálohy; bez ní se složky najdou v historii, jinak <span class="q">„Chyba: Karta není v historii — zadejte složky zálohy
 volbou --into.“</span>), <code>--no-verify</code>, <code>--dry-run</code> (vypíše plán, který se u skutečného běhu ještě
 upřesní) a <code>--no-history</code> (potom je <code>--into</code> povinné). Kód <code>0</code> = doplněno (nebo
@@ -1051,6 +1128,8 @@ upřesní) a <code>--no-history</code> (potom je <code>--into</code> povinné). 
   <li>Návratový kód: <code>0</code> = vše v pořádku, <code>1</code> = chyba (vhodné pro skripty).</li>
   <li><code>copy</code> u karty, kterou historie zná, vypíše před plánem <code>Zálohováno 6. 10. 2026 8:15 na D:\Zaloha,
     F:\Zaloha — ověřeno</code> (bez dotazu).</li>
+  <li>Na konci <code>copy</code> a <code>append</code> vypíšou <code>Denní report: D:\Zaloha\2026-10-06\_REPORT\2026-10-06_day_report.html</code>
+    pro každý cíl.</li>
   <li><code>verify</code> vypíše u problémových souborů <code>MISMATCH</code> (jiný součet), <code>MISSING</code> (chybí),
     <code>ERROR</code> (nečitelný), <code>EXTRA</code> (není v záznamu), <code>FAILED-AT-COPY</code> (selhal už při kopii),
     <code>FAILED-SUPERSEDED</code> (nejnovější záznam selhal, soubor sedí podle starší generace), <code>CHAIN</code>

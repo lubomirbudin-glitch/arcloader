@@ -17,6 +17,8 @@ public abstract class QueueItem : ObservableObject
     public abstract bool IsError { get; }
     /// Still needs the app when closing (not finished, or an eject in flight).
     public virtual bool Busy => !IsFinished;
+    /// The attention flash and sound already came at the end of the copy (QueueRules.AlertAtCopyEnd).
+    public bool Alerted { get; set; }
     public abstract void Refresh();
     public abstract void Cancel();
 }

@@ -163,7 +163,7 @@ public static class AppendPlanner
             NewFiles = newFiles,
             NewDirs = newDirs,
             UnverifiedEarlier = unverified,
-            HashAlgorithms = [first.HashAlgorithm],
+            HashAlgorithms = first.Algorithms,
         };
     }
 

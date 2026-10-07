@@ -10,6 +10,10 @@ public sealed partial class OffloadEngine
         foreach (var path in cardPaths)
         {
             NativeIO.Mkdirs(path);
+            // With the card folder (fix round 1, item 2): a copy in progress or one that stopped is a card for the day
+            // report ("bez reportu"), not a foreign folder. Empty it means "no report" to plan 6 — no verify target
+            // (needs a report or a hash list), no append — and the MHL ignores it.
+            NativeIO.Mkdirs(Path.Combine(path, Layout.ReportDirName));
             foreach (var d in plan.Scan.Dirs) NativeIO.Mkdirs(Layout.Join(path, d));
         }
         var ws = cardPaths.Select((p, i) => new DestWriter(i, p, files.Count, Options)).ToArray();
@@ -20,11 +24,11 @@ public sealed partial class OffloadEngine
         }
         // Created before the try and disposed last: writer queues may still hold chunks that point into the pool's native buffers.
         BufferPool? pool = null;
-        SourceHasher? hasher = null;
+        var hashers = new List<SourceHasher>();
         try
         {
             pool = new BufferPool(Options.BufferCount, Options.ChunkSize);
-            hasher = new SourceHasher(files.Count);
+            hashers = SourceHasher.For(plan.Hashes, files.Count, Options.HashFactory);   // xxh64, and MD5 on its own thread (spec 3.5)
             var sourceErrors = new string?[files.Count];
 
             // Copy: the card is read exactly once; every block fans out to the hasher and all destinations.
@@ -42,22 +46,30 @@ public sealed partial class OffloadEngine
                     fileIndex = i;
                     currentFile = f.RelPath;
                 }
-                var failure = CopyFile(plan.Source, f, ws, hasher, pool);
+                var failure = CopyFile(plan.Source, f, ws, hashers, pool);
                 if (failure != null)
                 {
                     sourceErrors[i] = failure;
-                    hasher.Abort();
+                    foreach (var h in hashers) h.Abort();
                     foreach (var w in ws) w.Abort(i, "source: " + failure);
                     lock (gate) errorCount++;
                 }
                 else
                 {
-                    hasher.Finish(i);
+                    foreach (var h in hashers) h.Finish(i);
                     foreach (var w in ws) w.Finish(i, f);
                 }
             }
-            hasher.Wait();
+            foreach (var h in hashers) h.Wait();
             foreach (var w in ws) w.Wait();
+            var hashes = SourceHasher.Combine(hashers, files.Count);
+            // A hash that threw leaves the file without it: the file failed, also when verification is off.
+            for (int i = 0; i < files.Count; i++)
+            {
+                if (sourceErrors[i] != null || SourceHasher.ErrorOf(hashers, i) is not string hashError) continue;
+                sourceErrors[i] = hashError;
+                lock (gate) errorCount++;
+            }
 
             SetPhase(CopyPhase.Flush);
             OnEachDestination(ws, w => w.FlushDevice());
@@ -67,13 +79,12 @@ public sealed partial class OffloadEngine
             if (Options.Verify && !IsCancelled)
             {
                 SetPhase(CopyPhase.Verify);
-                var hashes = hasher.Hashes;
-                OnEachDestination(ws, w => w.Verify(files, hashes, cts.Token));
+                OnEachDestination(ws, w => w.Verify(files, hashes, plan.Hashes, cts.Token));
             }
             var finished = DateTime.UtcNow;
 
             SetPhase(CopyPhase.Report);
-            var report = OffloadReport.Build(plan, hasher.Hashes, sourceErrors, ws.Select(w => w.Results).ToList(),
+            var report = OffloadReport.Build(plan, hashes, sourceErrors, ws.Select(w => w.Results).ToList(),
                 ws.Select(w => w.Unbuffered).ToList(), Options.Verify && !IsCancelled, started, copyFinished, finished);
             var reportErrors = new List<string>();
             foreach (var path in cardPaths)
@@ -88,17 +99,17 @@ public sealed partial class OffloadEngine
         finally
         {
             foreach (var w in ws) w.Dispose();
-            hasher?.Dispose();
+            foreach (var h in hashers) h.Dispose();
             pool?.Dispose();
         }
     }
 
-    /// Reads one file block by block and hands every block to the hasher and all writers. Returns the failure, or null.
-    string? CopyFile(string sourceRoot, SourceFile f, DestWriter[] ws, SourceHasher hasher, BufferPool pool)
+    /// Reads one file block by block and hands every block to the hashers and all writers. Returns the failure, or null.
+    string? CopyFile(string sourceRoot, SourceFile f, DestWriter[] ws, IReadOnlyList<SourceHasher> hashers, BufferPool pool)
     {
         var src = Layout.Join(sourceRoot, f.RelPath);
         foreach (var w in ws) w.Begin(f);
-        hasher.Begin();
+        foreach (var h in hashers) h.Begin();
         FileReader reader;
         try { reader = new FileReader(src); }
         catch (Exception e) { return e.Message; }
@@ -122,8 +133,9 @@ public sealed partial class OffloadEngine
                     break;
                 }
                 if (n < Options.ChunkSize) buf.Span[n..].Clear();   // unbuffered writes round up to the sector size: zero the overhang
-                var chunk = new Chunk(buf, n, offset, ws.Length + 1, pool);
-                hasher.Update(chunk);
+                // Every hasher and every writer releases the block once (MD5 is one consumer more, spec 3.5).
+                var chunk = new Chunk(buf, n, offset, ws.Length + hashers.Count, pool);
+                foreach (var h in hashers) h.Update(chunk);
                 foreach (var w in ws) w.Write(chunk);
                 offset += n;
                 Interlocked.Add(ref readBytes, n);

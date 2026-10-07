@@ -12,6 +12,18 @@ public class BenchTests
         Assert.Empty(Directory.GetFiles(dir.Path));
     }
 
+    // Spec 3.5: `bench --hash md5` — MD5 in RAM, and the read-back through both hashes as a copy verifies.
+    [Fact]
+    public void Md5_HashLine_AndReadBackThroughBoth()
+    {
+        Assert.Equal("md5 in RAM", Bench.Hash(1 << 20, "md5").Label);
+        Assert.Equal("xxh64 in RAM", Bench.Hash(1 << 20).Label);
+        using var dir = new TempDir();
+        var lines = Bench.Write(dir.Path, 1 << 20, 64 * 1024, kinds: HashKind.Both);
+        Assert.Equal(["write 64 KB", "read  64 KB + xxh64 + md5"], lines.Select(l => l.Label));
+        Assert.Empty(Directory.GetFiles(dir.Path));
+    }
+
     [Fact]
     public void Read_ReadsUpToLimitPerBlockSize()
     {

@@ -188,6 +188,7 @@ public sealed partial class MainViewModel
                     AnalyzeClips = Settings.AnalyzeClips,
                     Proxy = SettingsStore.Clone(Settings.Proxy),
                     Tools = SettingsStore.Clone(Settings.Tools),
+                    Outputs = SettingsStore.Clone(Settings.Outputs),
                 };
                 var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), AppendRules.Title(known.Entry.CardName),
                     canEject: isVolume && CardEject.CanEject(src), space);
@@ -205,10 +206,12 @@ public sealed partial class MainViewModel
             {
                 CardName = name,
                 Date = DateString,
+                Hashes = HashKinds.FromSetting(Settings.Hash),   // an append (above) keeps the earlier backup's (spec 3.5)
                 Verify = Settings.Verify,
                 AnalyzeClips = Settings.AnalyzeClips,
                 Proxy = SettingsStore.Clone(Settings.Proxy),
                 Tools = SettingsStore.Clone(Settings.Tools),
+                Outputs = SettingsStore.Clone(Settings.Outputs),
             };
             var item = new JobItemViewModel(this, new OffloadJob(config), name ?? DefaultCardName(src),
                 canEject: isVolume && CardEject.CanEject(src), space);
@@ -255,22 +258,29 @@ public sealed partial class MainViewModel
         if (!closing && item.SafeToEject) SystemSounds.Asterisk.Play();
         if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Zálohováno"
         if (!closing) _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // the disks changed: free space again (ruling I4)
+        // Ended in stage 1: only the day report is left and it may queue behind other cards' stage 2 — alert now.
+        if (QueueRules.AlertAtCopyEnd(item.Phase)) Alert(item);
     }
 
     void OnJobFinished(IQueuedJob job)
     {
         if (Find(job) is { } item)
         {
+            if (item is JobItemViewModel j) j.LeftQueue = true;
             item.Refresh();
-            bool error = item.IsError;   // a job the user cancelled is no error
-            if (!closing)
-            {
-                if (error) SystemSounds.Hand.Play();
-                AttentionRequested?.Invoke(error);
-            }
+            if (!item.Alerted) Alert(item);
         }
         Raise(nameof(HasFinished));
         CheckCloseReady();
+    }
+
+    void Alert(QueueItem item)
+    {
+        item.Alerted = true;
+        bool error = item.IsError;   // a job the user cancelled is no error
+        if (closing) return;
+        if (error) SystemSounds.Hand.Play();
+        AttentionRequested?.Invoke(error);
     }
 
     /// Still needs the app: a job that has not finished, or an eject in flight.
@@ -286,7 +296,8 @@ public sealed partial class MainViewModel
 
     void ClearFinished()
     {
-        foreach (var j in Jobs.Where(j => j.IsFinished).ToList()) Jobs.Remove(j);
+        // Not one the app still waits for (a day report on the post thread, an eject): closing must still see it.
+        foreach (var j in Jobs.Where(j => j.IsFinished && !j.Busy).ToList()) Jobs.Remove(j);
         RaiseMany(nameof(HasJobs), nameof(HasFinished));
     }
 

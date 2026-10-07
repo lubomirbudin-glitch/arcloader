@@ -30,8 +30,8 @@ public class SpaceEstimatorTests
     public void Proxy_H264_FromBytesBeforeTheCopy()
     {
         var p = new ProxySettings { Enabled = true, Codec = ProxyCodec.H264, BitrateMbps = 10 };
-        // 625 MB of MOV at 50 Mb/s = 100 s; proxy 10 × 1.1 + 0.2 (one audio track) = 11.2 Mb/s → 140 MB
-        Assert.Equal(140_000_000, SpaceEstimator.ProxyBytes([C("A.MOV", 625_000_000)], p, _ => true));
+        // 625 MB of MOV at 50 Mb/s = 100 s; proxy 10 × 1.1 + 0.128 (one assumed stereo AAC stream) = 11.128 Mb/s → 139.1 MB
+        Assert.Equal(139_100_000, SpaceEstimator.ProxyBytes([C("A.MOV", 625_000_000)], p, _ => true));
         p.Audio = false;
         Assert.Equal(137_500_000, SpaceEstimator.ProxyBytes([C("A.MOV", 625_000_000)], p, _ => true));
     }
@@ -42,9 +42,42 @@ public class SpaceEstimatorTests
         var p = new ProxySettings { Enabled = true, Codec = ProxyCodec.ProresProxy, Height = 540 };
         var clip = C("A.MOV", 1);
         var info = new ClipInfo { Duration = 80, Height = 2160, AudioChannels = 2 };
-        // 45 Mb/s × (540/1080)² = 11.25 Mb/s × 80 s = 112.5 MB
-        Assert.Equal(112_500_000, SpaceEstimator.ProxyBytes([clip], p, _ => true, _ => info));
+        // 45 Mb/s × (540/1080)² = 11.25 + 2 ch × 0.768 PCM (ruling M6) = 12.786 Mb/s × 80 s = 127.86 MB
+        Assert.Equal(127_860_000, SpaceEstimator.ProxyBytes([clip], p, _ => true, _ => info));
         Assert.Equal(220, SpaceEstimator.ProxyMbps(new ProxySettings { Codec = ProxyCodec.Prores422HQ }, 0, 1080));
+    }
+
+    // R14: every audio stream becomes a proxy track — 8 mono tracks of a Sony MXF are 8 x 0.2 Mb/s.
+    [Fact]
+    public void Proxy_H264_EveryAudioStreamCounts()
+    {
+        var p = new ProxySettings { Enabled = true, Codec = ProxyCodec.H264, BitrateMbps = 10 };
+        var info = new ClipInfo { Duration = 100, Height = 1080, AudioChannels = 8, AudioStreams = [1, 1, 1, 1, 1, 1, 1, 1] };
+        // (10 x 1.1 + 0.128 x 8) Mb/s x 100 s = 12.024 Mb/s x 100 s = 150.3 MB (AAC floor of 128 kb/s a stream, ruling M6)
+        Assert.Equal(150_300_000, SpaceEstimator.ProxyBytes([C("C0001.MXF", 1)], p, _ => true, _ => info));
+    }
+
+    // Ruling M6: audio is counted per stream and per channel - AAC at the real bitrate (64 kb/s a channel, 128-512k),
+    // ProRes 16-bit PCM at 48 kHz (0.768 Mb/s a channel). The 8 mono PCM tracks of a Sony MXF were left out before.
+    [Fact]
+    public void Proxy_AudioPerStream_AacKbps_AndProResPcm()
+    {
+        var aac = new ProxySettings { Enabled = true, Codec = ProxyCodec.H264, BitrateMbps = 10 };
+        var info = new ClipInfo { Duration = 100, Height = 1080, AudioChannels = 9, AudioStreams = [1, 2, 6] };
+        // 11 + (0.128 + 0.128 + 0.384) = 11.64 Mb/s x 100 s = 145.5 MB
+        Assert.Equal(145_500_000, SpaceEstimator.ProxyBytes([C("A.MOV", 1)], aac, _ => true, _ => info));
+
+        var prores = new ProxySettings { Enabled = true, Codec = ProxyCodec.ProresProxy, Height = 1080 };
+        var mxf = new ClipInfo { Duration = 100, Height = 1080, AudioChannels = 8, AudioStreams = [1, 1, 1, 1, 1, 1, 1, 1] };
+        // 45 + 8 x 0.768 = 51.144 Mb/s x 100 s = 639.3 MB
+        Assert.Equal(639_300_000, SpaceEstimator.ProxyBytes([C("C0001.MXF", 1)], prores, _ => true, _ => mxf));
+        // No audio asked for: no audio term.
+        prores.Audio = false;
+        Assert.Equal(562_500_000, SpaceEstimator.ProxyBytes([C("C0001.MXF", 1)], prores, _ => true, _ => mxf));
+        // A probed clip without the stream list (RAW intermediate): one stream of its channels.
+        var raw = new ClipInfo { Duration = 100, Height = 1080, AudioChannels = 2 };
+        prores.Audio = true;
+        Assert.Equal(45 * 12.5e6 + 2 * 0.768 * 12.5e6, SpaceEstimator.ProxyBytes([C("C0001.MXF", 1)], prores, _ => true, _ => raw));
     }
 
     [Fact]

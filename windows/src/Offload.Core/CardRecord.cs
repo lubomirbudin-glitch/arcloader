@@ -10,8 +10,12 @@ public sealed record CardRecordGeneration(int Generation, OffloadReport Report);
 /// A file as the card folder's reports record it (spec 3.1): the newest generation that lists it.
 public sealed record RecordedFile(ReportFile File, int Generation, OffloadReport Report);
 
+/// A clip as the card folder's reports record it (spec 3.1): the newest generation that lists its path.
+public sealed record RecordedClip(ClipEntry Entry, int Generation);
+
 /// What the reports in `<card>\_REPORT` say about a card folder — every generation, also reports written by the Mac
-/// (no "generation", "lut", "proxyEncoder" …). The core for appends (plan 6); plan 7 adds the day report and clip lists.
+/// (no "generation", "lut", "proxyEncoder", "md5" …). The source of appends (plan 6), the day report and the clip lists
+/// (plan 7).
 public sealed partial class CardRecord
 {
     public const string MainReport = "offload_report.json";
@@ -19,6 +23,23 @@ public sealed partial class CardRecord
     public required string CardPath { get; init; }
     public IReadOnlyList<CardRecordGeneration> Generations { get; init; } = [];
     public IReadOnlyDictionary<string, RecordedFile> Files { get; init; } = new Dictionary<string, RecordedFile>();
+    /// Every clip of every generation, in generation order (an append adds the clips of its new files); a clip path a
+    /// later generation lists again replaces the earlier entry. A generation without clip analysis (no clips in its
+    /// report) gets the clips ClipDetector finds in its files — without metadata (Info null).
+    public IReadOnlyList<RecordedClip> Clips { get; init; } = [];
+
+    /// The card folder's name ("A001") — how the day report and the clip lists call the card.
+    public string FolderName => Path.GetFileName(CardPath.TrimEnd('\\', '/'));
+    /// The first start and the last end over the generations read; null when none was.
+    public DateTime? Started => Generations.Count > 0 ? Generations.Min(g => g.Report.Started) : null;
+    public DateTime? Finished => Generations.Count > 0 ? Generations.Max(g => g.Report.Finished) : null;
+    public int TotalFiles => Files.Count;
+    public long TotalBytes => Files.Values.Sum(f => f.File.Size);
+    /// Every generation was read back — an append report nobody can read leaves it unknown, so not verified.
+    public bool Verified => Generations.Count > 0 && Problems.Count == 0 && Generations.All(g => g.Report.Verified);
+    /// Paths whose newest record failed (the card or a destination), sorted.
+    public IReadOnlyList<string> FailedFiles =>
+        Files.Values.Where(f => f.Report.IsFailed(f.File)).Select(f => f.File.Path).Order(StringComparer.Ordinal).ToList();
     /// _REPORT\offload_report.json is not there.
     public bool ReportMissing { get; init; }
     /// Why the main report could not be read; null when it was read (or is missing).
@@ -83,13 +104,34 @@ public sealed partial class CardRecord
             }
         }
         generations.Sort((a, b) => a.Generation.CompareTo(b.Generation));
-        var files = new Dictionary<string, RecordedFile>(StringComparer.Ordinal);
+        var files = new Dictionary<string, RecordedFile>(StringComparer.OrdinalIgnoreCase);
+        var clips = new List<RecordedClip>();
+        var clipAt = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var g in generations)
+        {
             foreach (var f in g.Report.Files) files[f.Path] = new RecordedFile(f, g.Generation, g.Report);
-        return new CardRecord { CardPath = cardPath, Generations = generations, Files = files, Problems = problems, HighestReportNumber = highest };
+            var generationClips = g.Report.Clips.Count > 0 ? g.Report.Clips
+                : ClipDetector.Detect(g.Report.Files.Select(f => new SourceFile(f.Path, f.Size, f.Modified)).ToList()).Select(c => new ClipEntry { Clip = c });
+            foreach (var c in generationClips)
+            {
+                var recorded = new RecordedClip(c, g.Generation);
+                if (clipAt.TryGetValue(c.Clip.Path, out var i)) clips[i] = recorded;
+                else
+                {
+                    clipAt[c.Clip.Path] = clips.Count;
+                    clips.Add(recorded);
+                }
+            }
+        }
+        return new CardRecord
+        {
+            CardPath = cardPath, Generations = generations, Files = files, Clips = clips, Problems = problems, HighestReportNumber = highest,
+        };
     }
 
     /// A report whose lists are there: a hand-edited null would otherwise surface later as a crash, not as "nejde přečíst".
+    /// A missing or null "clips" (a report without analysis, an older Mac) is an empty list — Load then finds the clips
+    /// in the files; a null clip entry is dropped — the files are the record of the copy, the clips only describe them.
     static OffloadReport Read(string path)
     {
         var r = OffloadReport.FromJson(File.ReadAllText(path));
@@ -97,6 +139,7 @@ public sealed partial class CardRecord
             || r.Files.Any(f => f == null || f.Path == null || f.Destinations == null)
             || r.Destinations.Any(d => d == null || d.CardPath == null))
             throw new InvalidOperationException("chybí seznam souborů nebo cílů");
+        r.Clips = (r.Clips ?? []).Where(c => c?.Clip?.Path != null && c.Clip.Name != null && c.Clip.Segments != null).ToList();
         return r;
     }
 

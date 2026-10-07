@@ -48,7 +48,11 @@ public sealed class JobItemViewModel : QueueItem
     public RelayCommand RevealCommand { get; }
     public override IQueuedJob Queued => Runner;
     public override void Cancel() => Job.Cancel();
-    public override bool Busy => !IsFinished || Ejecting;
+    /// Also the day report the post thread still makes after a job that ended in stage 1 (ruling I2): closing waits for
+    /// it as for stage 2 — until the queue reports the job finished (also when it never got to the post thread).
+    public override bool Busy => QueueRules.StillNeeded(Phase, Ejecting, Job.DayReportPending, LeftQueue);
+    /// JobQueue.JobFinished has fired for this job (set on the UI thread).
+    public bool LeftQueue { get; set; }
 
     public override void Refresh()
     {

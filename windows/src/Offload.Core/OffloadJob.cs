@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Offload.Core.Append;
 using Offload.Core.Desktop;
 using Offload.Core.History;
+using Offload.Core.Outputs;
 using Offload.Core.Space;
 
 namespace Offload.Core;
@@ -14,6 +15,8 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     public string? Date { get; set; }
     public bool Verify { get; set; } = true;
     public int ChunkMB { get; set; } = 16;
+    /// xxh64, or xxh64 + MD5 (spec 3.5; settings `hash`, CLI --hash). An append keeps the earlier backup's.
+    public HashKind Hashes { get; set; } = HashKind.Xxh64;
     public int Buffers { get; set; } = 16;
     public bool AllowSameDevice { get; set; }
     /// Probe clips and put thumbnails + metadata into the report (stage 2).
@@ -27,6 +30,9 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     /// Append (spec 2.2): only the card's new files go into these card folders (`<root>\<date>\<card>` of the earlier
     /// backup); DestRoots, CardName and Date are then taken from them.
     public IReadOnlyList<string>? AppendInto { get; set; }
+    /// Clip lists CSV / ALE and the day report (spec 3.2, 3.3; settings `outputs`, CLI --no-clip-list, --ale,
+    /// --no-day-report).
+    public OutputSettings Outputs { get; set; } = new();
 }
 
 public enum JobPhase { Waiting, Copying, Flushing, Verifying, Reporting, Analyzing, Proxies, Done, Failed, Cancelled }
@@ -85,6 +91,9 @@ public sealed class OffloadJob
     volatile OffloadPlan? planValue;
     volatile OffloadReport? reportValue;
     volatile string? sourceIdentity;
+    volatile IReadOnlyList<string> dayReports = [];
+    /// Ruling I2: stage 1 ended without stage 2 — RunPost only makes the day reports.
+    volatile bool dayReportOnly, dayReportPending;
     CardVolume? cardVolume;
     /// Append: what the planner found (also when there is nothing new); read on the copy thread only.
     AppendPlan? appendPlan;
@@ -95,6 +104,8 @@ public sealed class OffloadJob
     /// The card in the source's drive when the copy started (`CardIdentity`), read on the copy thread; null before
     /// that or when unknown. "Vysunout kartu" ejects only this card.
     public string? SourceIdentity => sourceIdentity;
+    /// The day reports (HTML) this job made again when it ended, one per destination that has it (the CLI prints them).
+    public IReadOnlyList<string> DayReports => dayReports;
 
     /// Tests: what CardIdentity.Of / CardVolume.Of would read from the drive.
     internal Func<string, string?> Identify { get; init; } = CardIdentity.Of;
@@ -107,6 +118,7 @@ public sealed class OffloadJob
             BufferCount = config.Buffers,
             Verify = config.Verify,
             AllowSameDevice = config.AllowSameDevice,
+            Hashes = config.Hashes,
         })
     {
     }
@@ -173,7 +185,8 @@ public sealed class OffloadJob
         return Report;
     }
 
-    /// Stage 1 — card → disks + verification. Returns true when stage 2 should follow.
+    /// Stage 1 — card → disks + verification. Returns true when stage 2 should follow — also when stage 1 ended (done
+    /// without stage 2, cancelled, failed) and only the day report is left: RunPost then makes just that (ruling I2).
     /// After this the card is no longer needed, so the app can start the next card while stage 2 runs.
     public bool RunCopy(Action<string>? log = null)
     {
@@ -190,6 +203,7 @@ public sealed class OffloadJob
         }
         using var awake = NativeIO.KeepAwake();
         AppendLock? folders = null;
+        bool copying = false;   // the engine may have written to the destinations: a day report is due even on failure
         try
         {
             // An append holds its card folders until stage 1 ends (fix round 1, item 1) and plans under that hold — a
@@ -204,20 +218,25 @@ public sealed class OffloadJob
             var plan = Prepare();
             if (plan.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(plan.UnverifiedEarlier)));
             Update(s => s with { Phase = JobPhase.Copying });
+            copying = true;
             var report = Engine.Run(plan);
             Report = report;
             Update(s => s with { SafeToEject = report.SafeToEject, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
             if (IsCancelled)
             {
+                // Marked before the phase changes: whoever sees it finished also sees the day report pending (fix round 1, item 3).
+                var cancelled = DayReportNext();   // the card shows as not complete (spec 3.2); not recorded in history
                 Update(s => s with { Phase = JobPhase.Cancelled });
-                return false;   // a cancelled copy is not recorded in history
+                return cancelled;
             }
             RecordHistory(plan, report, log);
             if (!Config.AnalyzeClips && !Config.Proxy.Enabled)
             {
+                WriteClipLists(plan, log);   // the clips found in the files, without metadata (spec 3.3)
                 WritePdfReports(report, plan, log);
+                var done = DayReportNext();
                 Update(s => s with { Phase = JobPhase.Done });
-                return false;
+                return done;
             }
             Update(s => s with { Phase = JobPhase.Analyzing });
             return true;
@@ -249,19 +268,36 @@ public sealed class OffloadJob
         }
         catch (OperationCanceledException)
         {
+            var next = copying && DayReportNext();
             Update(s => s with { Phase = JobPhase.Cancelled });
-            return false;
+            return next;
         }
         catch (Exception e)
         {
+            var next = copying && DayReportNext();   // ruling M9: best effort after a failed copy too
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
-            return false;
+            return next;
         }
         finally
         {
             folders?.Dispose();
         }
     }
+
+    /// Ruling I2: stage 1 has ended and only the day report is left — RunPost makes it on the post thread, after the
+    /// append lock above is released, so neither the next card's copy nor the card folders wait for it (another writer
+    /// may hold the day for up to DayReportService.DefaultWait). False when the day report is switched off.
+    bool DayReportNext()
+    {
+        if (!Config.Outputs.DayReport || Plan == null) return false;
+        dayReportOnly = true;
+        dayReportPending = true;
+        return true;
+    }
+
+    /// The job has ended (Done, Cancelled, Failed) but its day report is still to be made on the post thread: the app
+    /// keeps running until it is (closing waits for it, as for stage 2).
+    public bool DayReportPending => dayReportPending;
 
     /// Which card is in the drive — read on the copy thread before anything else (the UI never waits on a card).
     void IdentifyCard(Action<string>? log)
@@ -299,7 +335,7 @@ public sealed class OffloadJob
                     Date = plan.Date,
                     Success = true,
                     Verified = true,
-                    HashAlgorithms = [report.HashAlgorithm],
+                    HashAlgorithms = [.. report.Algorithms],
                     Destinations = plan.DestRoots.Select((root, i) => new HistoryDestination { Root = root, CardPath = cardPaths[i] }).ToList(),
                 };
                 entry.Finished = report.Finished;
@@ -370,6 +406,19 @@ public sealed class OffloadJob
     /// A failure here never changes the copy's result (SafeToEject stays as stage 1 left it).
     public void RunPost(Action<string>? log = null)
     {
+        if (dayReportOnly)
+        {
+            try
+            {
+                using var keepAwake = NativeIO.KeepAwake();
+                if (Plan is { } p) RegenerateDayReports(p, log);
+            }
+            finally
+            {
+                dayReportPending = false;
+            }
+            return;
+        }
         if (Plan is not { } plan || Report is not { } report) return;
         using var awake = NativeIO.KeepAwake();
         try
@@ -378,14 +427,36 @@ public sealed class OffloadJob
             Report = final;
             Update(s => s with { Phase = JobPhase.Reporting });
             WritePdfReports(final, plan, log);
+            RegenerateDayReports(plan, log);
             Update(s => s with { Phase = IsCancelled ? JobPhase.Cancelled : JobPhase.Done });
         }
         catch (Exception e)
         {
             log?.Invoke($"stage 2 failed: {e.Message}");
+            WriteClipLists(plan, log);   // the generation must not be missing from the lists
             WritePdfReports(report, plan, log);
+            RegenerateDayReports(plan, log);
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
         }
+    }
+
+    /// How long a cancelled job waits for another writer of its day before it leaves the day report out.
+    internal static readonly TimeSpan CancelledDayReportWait = TimeSpan.FromSeconds(5);
+
+    /// Spec 3.2: the day report of every destination of this job, made again at its end (also an append, also a
+    /// cancelled copy). Waits for another writer of the same day; a failure is only logged — never the job's result.
+    void RegenerateDayReports(OffloadPlan plan, Action<string>? log)
+    {
+        if (!Config.Outputs.DayReport) return;
+        // Cancelled (closing the app cancels every job): a busy day is skipped after a short wait (fix round 1, item 4).
+        TimeSpan? wait = IsCancelled ? CancelledDayReportWait : null;
+        var written = new List<string>();
+        foreach (var root in plan.DestRoots)
+        {
+            try { written.Add(DayReportService.Regenerate(root, plan.Date, Config.Outputs, log, wait)); }
+            catch (Exception e) { log?.Invoke($"day report {Path.Combine(root, plan.Date)}: {e.Message}"); }
+        }
+        dayReports = written;
     }
 
     OffloadReport AnalyzeAndRender(OffloadPlan plan, OffloadReport report, Action<string>? log)
@@ -439,11 +510,14 @@ public sealed class OffloadJob
                     }
                     else
                     {
+                        info.Reel = ReelResolver.Resolve(clip, info, plan.CardName);
                         entries[i].Info = info;
                         entries[i].ProbeError = "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy";
                         continue;
                     }
                 }
+                // Spec 3.4: the camera's tag, else the clip name, else the card folder — into the report and the proxy.
+                info.Reel = ReelResolver.Resolve(entries[i].Clip, info, plan.CardName);
                 entries[i].Info = info;
                 // The Sony XML is read from the destination: it sits next to the clip on the card, so it was copied too.
                 entries[i].Lut = LutResolver.Resolve(entries[i].Clip, info, Layout.Join(cardPaths[d], entries[i].Clip.Path), Config.Proxy, LutCatalog.Default);
@@ -514,6 +588,8 @@ public sealed class OffloadJob
                     f => Update(s => s with { ClipFraction = f }), () => IsCancelled);
                 entries[i].ProxyStatus = ProxyStatus.Done;
                 entries[i].ProxyPath = rel;
+                // Spec 3.4: relinking goes by name - a proxy that had to be renamed must be attached by hand.
+                if (name != clip.Name) entries[i].ProxyNote = entries[i].ProxyNote is string earlier ? $"{earlier}; {Msg.ProxyRenamed(name)}" : Msg.ProxyRenamed(name);
                 if (Config.Proxy.CopyToAllDestinations)
                 {
                     // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.
@@ -637,12 +713,24 @@ public sealed class OffloadJob
         }
     }
 
-    static void RewriteReports(OffloadReport report, OffloadPlan plan, Action<string>? log)
+    void RewriteReports(OffloadReport report, OffloadPlan plan, Action<string>? log)
     {
         foreach (var path in plan.CardPaths)
         {
             try { report.Write(path, includeHashRecords: false); }
             catch (Exception e) { log?.Invoke($"report rewrite {path}: {e.Message}"); /* the first report is already there; this only adds clip details */ }
+        }
+        WriteClipLists(plan, log);
+    }
+
+    /// Spec 3.3: `_REPORT\<card>_clips.csv/.ale` on every destination, from the reports there — every generation (R25).
+    /// Derived files: a failure (a list held open in Excel, a disk gone) is only logged.
+    void WriteClipLists(OffloadPlan plan, Action<string>? log)
+    {
+        foreach (var path in plan.CardPaths)
+        {
+            try { ClipList.WriteForCard(path, Config.Outputs); }
+            catch (Exception e) { log?.Invoke($"clip list {path}: {e.Message}"); }
         }
     }
 }

@@ -379,6 +379,73 @@ public class ProxyRendererTests
         Assert.Equal("prores", FFProbe.Probe(TestMedia.Ffprobe!, output).Codec!.Split(' ')[0]);
     }
 
+    // Spec 3.4: the proxy relinks — start TC and reel name on the timecode track, every audio stream of the source.
+    [FfmpegFact]
+    public void Render_ReelNameOnTimecodeTrack_EveryAudioStream()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeClip(Path.Combine(card, "a.mov"), seconds: 1, timecode: "01:00:00:00", audioStreams: 2);
+        using var r = new ProxyRenderer(new ProxySettings { Height = 360 }, Tools) { ForcedEncoder = "libx264" };
+        var clip = VideoClip("a.mov");
+        var info = r.Probe(clip, card);
+        Assert.Equal([1, 1], info.AudioStreams);
+        info.Reel = "A001";
+        var output = Path.Combine(card, "_PROXY", "a.mov");
+
+        r.Render(clip, card, info, null, output, _ => { }, () => false);
+
+        var streams = TestMedia.Streams(output);
+        var tmcd = Assert.Single(streams, s => s.Type == "data");
+        Assert.Equal(("A001", "01:00:00:00"), (tmcd.Tags["reel_name"], tmcd.Tags["timecode"]));
+        Assert.Equal([("aac", 1), ("aac", 1)], streams.Where(s => s.Type == "audio").Select(s => (s.Codec, s.Channels)));
+        Assert.Equal("A001", FFProbe.Probe(TestMedia.Ffprobe!, output).Reel);
+    }
+
+    // Review focus 5: a Sony MXF with 8 mono tracks — the ProRes proxy keeps all 8 (PCM) and gets the reel.
+    [FfmpegFact]
+    public void Render_SonyMxf_EightMonoTracks()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeMxf(Path.Combine(card, "C0001.MXF"), monoTracks: 8);
+        using var r = new ProxyRenderer(new ProxySettings { Height = 360, Codec = ProxyCodec.ProresProxy }, Tools);
+        var clip = VideoClip("C0001.MXF");
+        var info = r.Probe(clip, card);
+        Assert.Equal(8, info.AudioStreams.Count);
+        info.Reel = "A001";
+        var output = Path.Combine(card, "_PROXY", "C0001.mov");
+
+        r.Render(clip, card, info, null, output, _ => { }, () => false);
+
+        var streams = TestMedia.Streams(output);
+        Assert.Equal(Enumerable.Repeat<(string?, int)>(("pcm_s16le", 1), 8), streams.Where(s => s.Type == "audio").Select(s => (s.Codec, s.Channels)));
+        var tmcd = Assert.Single(streams, s => s.Type == "data");
+        Assert.Equal(("A001", "10:00:00:00"), (tmcd.Tags["reel_name"], tmcd.Tags["timecode"]));
+    }
+
+    // Spec 3.4: without timecode there is no timecode track — and so no reel name (Resolve relinks by name).
+    [FfmpegFact]
+    public void Render_NoTimecode_NoTimecodeTrackNoReel()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeClip(Path.Combine(card, "a.mov"), seconds: 1, timecode: null);
+        using var r = new ProxyRenderer(new ProxySettings { Height = 360 }, Tools) { ForcedEncoder = "libx264" };
+        var clip = VideoClip("a.mov");
+        var info = r.Probe(clip, card);
+        Assert.Null(info.Timecode);
+        info.Reel = "A001";
+        var output = Path.Combine(card, "_PROXY", "a.mov");
+
+        r.Render(clip, card, info, null, output, _ => { }, () => false);
+
+        var streams = TestMedia.Streams(output);
+        Assert.DoesNotContain(streams, s => s.Type == "data");
+        Assert.DoesNotContain(streams, s => s.Tags.ContainsKey("reel_name"));
+        Assert.Single(streams, s => s.Type == "audio");
+    }
+
     [FfmpegFact]
     public void Render_Cancelled_LeavesNothing()
     {

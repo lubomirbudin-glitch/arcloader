@@ -75,6 +75,7 @@ public static class Mhl
             Line("    <hash>");
             Line($"      <path size=\"{f.Size}\" lastmodificationdate=\"{IsoDate(f.Modified)}\">{Esc(f.Path)}</path>");
             Line($"      <xxh64 action=\"{action}\" hashdate=\"{stamp}\">{f.Xxh64}</xxh64>");
+            if (f.Md5 != null) Line($"      <md5 action=\"{action}\" hashdate=\"{stamp}\">{f.Md5}</md5>");   // spec 3.5
             Line("    </hash>");
         }
         Line("  </hashes>");

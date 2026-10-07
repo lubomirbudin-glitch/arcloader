@@ -63,6 +63,168 @@ public class EngineTests
         Assert.All(snap.VerifiedBytes, v => Assert.Equal(report.TotalBytes, v));
     }
 
+    // Spec 3.5 / review focus 4: with MD5 a second hasher shares every block — a pool of just two blocks still flows
+    // (a wrong consumer count would hang or hand a block back early), and every file verifies through both hashes.
+    [Fact]
+    public async Task Both_TwoBlockPool_EveryFileVerified()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        var files = MakeCard(card);
+        var options = Options();
+        options.BufferCount = 2;
+        options.Hashes = HashKind.Both;
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-04");
+        Assert.Equal(HashKind.Both, plan.Hashes);
+
+        // A block that never comes back to the pool hangs the copy: TimeoutException instead of a hung test run.
+        var report = await Task.Run(() => engine.Run(plan)).WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.True(report.SafeToEject);
+        foreach (var cardPath in plan.CardPaths)
+            foreach (var (rel, data) in files)
+                Assert.Equal(data, File.ReadAllBytes(Layout.Join(cardPath, rel)));
+        Assert.All(report.Files, f => Assert.Equal(f.Xxh64, Format.Hex64(System.IO.Hashing.XxHash64.HashToUInt64(files[f.Path]))));
+        // One read pass for both hashes: the card is read once, every destination is read back once (not per algorithm).
+        var snap = engine.Snapshot();
+        Assert.Equal(report.TotalBytes, snap.ReadBytes);
+        Assert.All(snap.VerifiedBytes, v => Assert.Equal(report.TotalBytes, v));
+    }
+
+    sealed class ThrowingHash : Verification.IFileHash
+    {
+        public void Append(ReadOnlySpan<byte> data) => throw new IOException("md5 broke");
+        public string Finish() => throw new InvalidOperationException("never finished");
+    }
+
+    // Fix round 1: a source hash that throws still hands every block back to the pool, so a two-block pool does not
+    // hang the copy; the file fails (its MD5 is missing, never a hash of part of it) — with verification off as well.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ThrowingSourceHash_FailsTheFile_DoesNotHang(bool verify)
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "a.mov"), 5 * Chunk + 7, 1);
+        var b = TestFs.WriteRandom(Path.Combine(card, "CLIP", "b.mov"), 5 * Chunk + 3, 2);
+        var options = Options();
+        options.BufferCount = 2;
+        options.Hashes = HashKind.Both;
+        options.Verify = verify;
+        int made = 0;   // the first file's MD5 throws, the second one's is real
+        options.HashFactory = a => a == "md5" && Interlocked.Increment(ref made) == 1 ? new ThrowingHash() : Verification.HashAlgo.Create(a);
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-04");
+
+        var report = await Task.Run(() => engine.Run(plan)).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.False(report.Success);
+        var fa = report.Files.Single(f => f.Path == "CLIP/a.mov");
+        var fb = report.Files.Single(f => f.Path == "CLIP/b.mov");
+        Assert.Equal("md5 hash failed: md5 broke", fa.SourceError);
+        Assert.Null(fa.Md5);
+        Assert.NotNull(fa.Xxh64);
+        Assert.Equal(["CLIP/a.mov"], report.FailedFiles.Select(f => f.Path));
+        Assert.Null(fb.SourceError);
+        Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(b)), fb.Md5);
+        Assert.Equal(verify ? ["verified", "verified"] : ["written", "written"], fb.Destinations);
+        if (verify) Assert.All(fa.Errors, e => Assert.StartsWith("MD5 MISMATCH: dest ", e));
+        Assert.DoesNotContain("CLIP/a.mov", File.ReadAllText(Path.Combine(plan.CardPaths[0], "_REPORT", "A001.md5")));
+        Assert.Equal(1, engine.Snapshot().Errors);
+    }
+
+    // Spec 3.5: a byte changed on a destination after the copy fails verification in both modes. xxh64 is compared first,
+    // so both rows fail with HASH MISMATCH; the MD5 path is covered by DestWriterTests.Verify_Both_Md5Mismatch_Fails.
+    [Theory]
+    [InlineData(HashKind.Xxh64, "HASH MISMATCH")]
+    [InlineData(HashKind.Both, "HASH MISMATCH")]
+    public void TamperedDestination_FailsInBothModes(HashKind kinds, string error)
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "a.mov"), 3 * Chunk + 7, 1);
+        var options = Options();
+        options.Hashes = kinds;
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-04");
+        options.BeforeVerify = () =>
+        {
+            var copy = Layout.Join(plan.CardPaths[1], "CLIP/a.mov");
+            var bytes = File.ReadAllBytes(copy);
+            bytes[Chunk + 3] ^= 0x01;
+            File.WriteAllBytes(copy, bytes);
+        };
+
+        var report = engine.Run(plan);
+
+        var f = Assert.Single(report.Files);
+        Assert.Equal(["verified", "failed"], f.Destinations);
+        Assert.StartsWith(error, f.Errors[1]);
+        Assert.False(report.Success);
+    }
+
+    // Spec 3.5: xxh64 + MD5 — "md5" per file, `<card>.md5` (md5sum format), MHL <md5> beside <xxh64>, TXT and HTML say
+    // so, and the verification of the backup reads both; xxh64 alone leaves no trace of MD5.
+    [Fact]
+    public void Both_ReportHashListMhlAndBackupVerification()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        var files = MakeCard(card);
+        var options = Options();
+        options.Hashes = HashKind.Both;
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-04");
+
+        var report = engine.Run(plan);
+
+        Assert.Equal(["xxh64", "md5"], report.HashAlgorithms);
+        foreach (var f in report.Files)
+            Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(files[f.Path])), f.Md5);
+        var rep = Path.Combine(plan.CardPaths[0], "_REPORT");
+        var md5List = File.ReadAllText(Path.Combine(rep, "A001.md5"));
+        Assert.Equal(report.HashListOf("md5"), md5List);
+        Assert.Contains($"{report.Files[0].Md5}  {report.Files[0].Path}\n", md5List);
+        Assert.DoesNotContain("\r", md5List);
+        Assert.NotEqual(0xEF, File.ReadAllBytes(Path.Combine(rep, "A001.md5"))[0]);   // no BOM
+        Assert.Contains("Hash:        xxh64+md5", File.ReadAllText(Path.Combine(rep, "offload_report.txt")));
+        var html = File.ReadAllText(Path.Combine(rep, "A001_report.html"));
+        Assert.Contains("XXH64 + MD5", html);
+        Assert.Contains("<th>xxh64</th><th>md5</th>", html);   // a column per algorithm (preflight M3)
+        Assert.All(report.Files, f => Assert.Contains($"<td class=\"mono\">{f.Md5}</td>", html));
+        var mhl = Verification.MhlReader.Read(plan.CardPaths[0])!;
+        Assert.All(mhl.Files.Values, r => Assert.Equal(["xxh64", "md5"], r.Hashes.Select(h => h.Algorithm)));
+        // <md5> carries the same action and hashdate as <xxh64> (spec 3.5, preflight M3).
+        System.Xml.Linq.XNamespace ns = "urn:ASC:MHL:v2.0";
+        var gen = System.Xml.Linq.XDocument.Load(Directory.GetFiles(Path.Combine(plan.CardPaths[0], "ascmhl"), "0001_*.mhl").Single());
+        var hashEls = gen.Descendants(ns + "hash").ToList();
+        Assert.Equal(report.Files.Count, hashEls.Count);
+        foreach (var hashEl in hashEls)
+        {
+            var xx = hashEl.Element(ns + "xxh64")!;
+            var md5 = hashEl.Element(ns + "md5")!;
+            Assert.Equal(((string?)xx.Attribute("action"), (string?)xx.Attribute("hashdate")), ((string?)md5.Attribute("action"), (string?)md5.Attribute("hashdate")));
+            Assert.Equal("original", (string?)md5.Attribute("action"));
+            Assert.Equal(32, md5.Value.Length);
+        }
+        var verify = Verification.BackupVerifier.Verify(plan.CardPaths[0], chunkSize: Chunk);
+        Assert.True(verify.Success);
+        Assert.Equal(["xxh64", "md5"], verify.HashAlgorithms);
+
+        // xxh64 alone (the default): no md5 key, no .md5 list, no <md5> in the MHL.
+        var plain = new OffloadEngine(Options());
+        var plainPlan = plain.Prepare(card, [dir.Sub("d2")], null, "2026-10-04");
+        var plainReport = plain.Run(plainPlan);
+        Assert.Null(plainReport.HashAlgorithms);
+        Assert.All(plainReport.Files, f => Assert.Null(f.Md5));
+        Assert.False(File.Exists(Path.Combine(plainPlan.CardPaths[0], "_REPORT", "A001.md5")));
+        Assert.DoesNotContain("<th>md5</th>", File.ReadAllText(Path.Combine(plainPlan.CardPaths[0], "_REPORT", "A001_report.html")));
+        Assert.All(Verification.MhlReader.Read(plainPlan.CardPaths[0])!.Files.Values, r => Assert.Equal(["xxh64"], r.Hashes.Select(h => h.Algorithm)));
+        Assert.DoesNotContain("md5", plainReport.ToJson());
+    }
+
     [Fact]
     public void DefaultBlockSize_FileOneByteOverBlock()
     {
