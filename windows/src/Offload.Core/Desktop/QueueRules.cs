@@ -65,6 +65,11 @@ public static class QueueRules
     /// behind other cards' stage 2: the attention flash and sound come when the copy ends, not after that report.
     public static bool AlertAtCopyEnd(JobPhase phase) => phase.IsFinished();
 
+    /// Spec 4.3: the end-of-job notification goes out when the copy ends if the job ended there (it must not wait for the
+    /// day report), and once more only if that did not happen: at JobFinished.
+    public static bool NotifyAtCopyEnd(JobPhase phase, bool notified) => !notified && phase.IsFinished();
+    public static bool NotifyAtJobEnd(bool notified) => !notified;
+
     /// The HTML report of generation `generation` (an append has its own, spec 2.2).
     public static string ReportPath(string cardPath, string cardName, int generation = 1) =>
         Path.Combine(cardPath, Layout.ReportDirName, OffloadReport.HtmlName(cardName, generation));

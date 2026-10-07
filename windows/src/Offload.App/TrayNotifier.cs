@@ -60,6 +60,9 @@ sealed unsafe partial class TrayNotifier : IDisposable
     readonly uint taskbarCreated = RegisterWindowMessage("TaskbarCreated");
     HwndSource? source;
     nint icon;
+    nint hwnd;   // cached: RemoveIcon may run on a crashing thread
+    /// The notifier of the running app (the crash handler removes its icon).
+    public static TrayNotifier? Current { get; private set; }
     Task<nint>? iconLoad;
     bool added;
 
@@ -73,6 +76,8 @@ sealed unsafe partial class TrayNotifier : IDisposable
     {
         source = HwndSource.FromHwnd(new WindowInteropHelper(window).Handle);
         source?.AddHook(Hook);
+        hwnd = source?.Handle ?? 0;
+        Current = this;
         // Ruling M2: ExtractIconEx reads the exe from disk — never on the UI thread, never at the first notification.
         if (Environment.ProcessPath is string exe)
             iconLoad = Task.Run(() =>
@@ -120,7 +125,7 @@ sealed unsafe partial class TrayNotifier : IDisposable
     NotifyIconData Data(uint flags) => new()
     {
         Size = (uint)sizeof(NotifyIconData),
-        Window = source?.Handle ?? 0,
+        Window = hwnd,
         Id = 1,
         Flags = flags,
     };
@@ -135,7 +140,8 @@ sealed unsafe partial class TrayNotifier : IDisposable
         data.CallbackMessage = CallbackMessage;
         data.Icon = shown;
         Copy("Offload", data.Tip, 128);
-        added = ShellNotifyIcon(NimAdd, ref data);
+        // NIM_ADD fails when the icon is already there (e.g. a stale one): NIM_MODIFY then counts as added.
+        added = ShellNotifyIcon(NimAdd, ref data) || ShellNotifyIcon(NimModify, ref data);
         if (!added)
         {
             AppLog.Write("tray: the icon could not be added");
@@ -162,7 +168,7 @@ sealed unsafe partial class TrayNotifier : IDisposable
             if (e is NinSelect or NinKeySelect or NinBalloonUserClick or WmLButtonUp) Activated?.Invoke();
             handled = true;
         }
-        else if (taskbarCreated != 0 && msg == (int)taskbarCreated && added)
+        else if (taskbarCreated != 0 && msg == (int)taskbarCreated)
         {
             // Explorer restarted: the icon is gone — put it back right away (if it was there), else the next notification adds it.
             if (added)
@@ -174,16 +180,23 @@ sealed unsafe partial class TrayNotifier : IDisposable
         return 0;
     }
 
+    /// Always attempts NIM_DELETE (also after a crash, from the unhandled-exception handler): it is harmless when no icon is there.
+    public void RemoveIcon()
+    {
+        try
+        {
+            var data = Data(0);
+            ShellNotifyIcon(NimDelete, ref data);
+            added = false;
+        }
+        catch (Exception) { /* closing */ }
+    }
+
     public void Dispose()
     {
         try
         {
-            if (added)
-            {
-                var data = Data(0);
-                ShellNotifyIcon(NimDelete, ref data);
-                added = false;
-            }
+            RemoveIcon();
             if (icon == 0 && iconLoad is { IsCompletedSuccessfully: true }) icon = iconLoad.Result;
             if (icon != 0) DestroyIcon(icon);
             icon = 0;

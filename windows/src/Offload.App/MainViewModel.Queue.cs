@@ -308,6 +308,11 @@ public sealed partial class MainViewModel
         if (!closing) _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // the disks changed: free space again (ruling I4)
         // Ended in stage 1: only the day report is left and it may queue behind other cards' stage 2 — alert now.
         if (QueueRules.AlertAtCopyEnd(item.Phase)) Alert(item);
+        if (QueueRules.NotifyAtCopyEnd(item.Phase, item.Notified) && item is JobItemViewModel ended)
+        {
+            ended.Notified = true;
+            NotifyJobEnd(ended);   // not after the day report, which may queue for hours
+        }
     }
 
     void OnJobFinished(IQueuedJob job)
@@ -317,7 +322,11 @@ public sealed partial class MainViewModel
             if (item is JobItemViewModel j) j.LeftQueue = true;
             item.Refresh();
             if (!item.Alerted) Alert(item);
-            if (item is JobItemViewModel ended) NotifyJobEnd(ended);   // spec 4.3
+            if (QueueRules.NotifyAtJobEnd(item.Notified) && item is JobItemViewModel ended)
+            {
+                ended.Notified = true;
+                NotifyJobEnd(ended);   // spec 4.3
+            }
         }
         Raise(nameof(HasFinished));
         CheckCloseReady();

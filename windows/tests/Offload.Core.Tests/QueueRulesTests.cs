@@ -230,4 +230,21 @@ public class QueueRulesTests
         Assert.True(DestinationHealth.ShouldReprobe(checking: false, exists: true, mayDropOut: true));   // a NAS that may go away
         Assert.False(DestinationHealth.ShouldReprobe(checking: false, exists: true, mayDropOut: false));  // an internal disk
     }
+
+    // The end-of-job notification of a job that ended in stage 1 comes at the copy end, once — not after the day report.
+    [Theory]
+    [InlineData(JobPhase.Failed, false, true)]
+    [InlineData(JobPhase.Done, false, true)]
+    [InlineData(JobPhase.Cancelled, false, true)]
+    [InlineData(JobPhase.Proxies, false, false)]   // stage 2 still runs: the end is JobFinished
+    [InlineData(JobPhase.Failed, true, false)]
+    public void Notify_AtCopyEnd_OnlyForJobsThatEndedThere_Once(JobPhase phase, bool notified, bool expected) =>
+        Assert.Equal(expected, QueueRules.NotifyAtCopyEnd(phase, notified));
+
+    [Fact]
+    public void Notify_AtJobEnd_OnlyWhenNotNotifiedYet()
+    {
+        Assert.True(QueueRules.NotifyAtJobEnd(notified: false));
+        Assert.False(QueueRules.NotifyAtJobEnd(notified: true));
+    }
 }

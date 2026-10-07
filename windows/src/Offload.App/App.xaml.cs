@@ -26,7 +26,11 @@ public partial class App : Application
             }
             ShowError(ex.Exception.Message);
         };
-        AppDomain.CurrentDomain.UnhandledException += (_, ex) => AppLog.Write(ex.ExceptionObject.ToString() ?? "");
+        AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
+        {
+            AppLog.Write(ex.ExceptionObject.ToString() ?? "");
+            TrayNotifier.Current?.RemoveIcon();   // a crash must not leave a ghost icon
+        };
         TaskScheduler.UnobservedTaskException += (_, ex) =>
         {
             AppLog.Write("unobserved task exception: " + ex.Exception);

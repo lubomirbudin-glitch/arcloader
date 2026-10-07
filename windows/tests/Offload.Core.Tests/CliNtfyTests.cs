@@ -165,6 +165,29 @@ public class CliNtfyTests
         }
     }
 
+    // A refusal thrown while the options are built (here: append of a card that is not in the history) is announced too,
+    // with the card name only.
+    [Fact]
+    public void RefusalWhileBuildingTheOptions_Announced_CardNameOnly()
+    {
+        using var dir = new TempDir();
+        using var server = new LocalHttp();
+        var card = dir.Sub("tajny-rodic", "A001");
+        var o = Console.Out;
+        var e = Console.Error;
+        Console.SetOut(new StringWriter());
+        Console.SetError(new StringWriter());
+        int exit;
+        try { exit = AppendCommand.Create().Parse([card, "--no-history", "--ntfy", server.Url + "k"]).Invoke(); }
+        finally { Console.SetOut(o); Console.SetError(e); }
+
+        Assert.Equal(1, exit);
+        var req = Assert.Single(server.Requests);
+        var text = System.Text.Encoding.UTF8.GetString(req.Body);
+        Assert.Contains("Offload: A001 — CHYBA", text);
+        Assert.DoesNotContain("tajny-rodic", text);
+    }
+
     [Fact]
     public void DialogCheck_ServerAndTopic_OnlyWhenOn()
     {

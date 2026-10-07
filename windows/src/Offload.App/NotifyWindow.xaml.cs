@@ -68,11 +68,13 @@ public sealed class NotifyOptionsViewModel : ObservableObject
 
     async void Test()
     {
+        if (testing) return;
         testing = true;
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();   // the button is disabled at once: no double send
         TestResult = "Odesílám…";
         try
         {
-            var test = new NtfySettings { Enabled = true, Server = s.Ntfy.Server.Trim(), Topic = s.Ntfy.Topic.Trim() };
+            var test = new NtfySettings { Enabled = true, Server = string.IsNullOrWhiteSpace(s.Ntfy.Server) ? NtfySettings.DefaultServer : s.Ntfy.Server.Trim(), Topic = s.Ntfy.Topic.Trim() };
             var r = await Task.Run(() => NtfyClient.SendTestAsync(test));   // M1: nothing of the send runs on the UI thread
             TestResult = r.Ok ? "Odesláno." : $"Nepodařilo se: {r.Error}";
         }

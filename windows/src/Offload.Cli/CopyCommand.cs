@@ -34,7 +34,7 @@ static class CopyCommand
         stageTwo.AddTo(cmd);
         cmd.SetAction(r =>
         {
-            JobConfig config;
+            JobConfig? config = null;
             CliProfile? picked;
             SettingsProfile? profile;
             try
@@ -62,6 +62,7 @@ static class CopyCommand
             catch (Exception e)
             {
                 Console.Error.WriteLine(Msg.CliError + e.Message);
+                if (config != null && !r.GetValue(dryRun)) Ntfy(config, null, new JobStatus { Phase = JobPhase.Failed, Error = e.Message }, null);   // card name only
                 return 1;
             }
             if (picked != null) Console.WriteLine(Msg.CliProject(picked.Name));
@@ -185,14 +186,16 @@ static class CopyCommand
     }
 
     /// Spec 4.3: --ntfy (or the project's ntfy) once the job has ended — at most 10 s; a failure is only a line on stderr.
-    static void Ntfy(JobConfig config, OffloadPlan? plan, JobStatus status, OffloadReport? report)
+    internal static void Ntfy(JobConfig config, OffloadPlan? plan, JobStatus status, OffloadReport? report)
     {
         // Never the source path itself (spec 5.6): the plan's name, the --name, else the name the engine would give.
         string card;
         try { card = plan?.CardName ?? config.CardName ?? Layout.DefaultCardName(config.Source); }
         catch (Exception e) when (e is IOException or ArgumentException or NotSupportedException or UnauthorizedAccessException) { card = ""; }
         if (string.IsNullOrWhiteSpace(card)) card = "karta";
-        NtfyClient.SendOutcomeAsync(config.Notify.Ntfy, JobOutcomes.Final(card, status, report), m => Console.Error.WriteLine(m)).GetAwaiter().GetResult();
+        // The wait itself is bounded (the proxy lookup may ignore the client's token).
+        var send = Task.Run(() => NtfyClient.SendOutcomeAsync(config.Notify.Ntfy, JobOutcomes.Final(card, status, report), m => Console.Error.WriteLine(m)));
+        if (!send.Wait(NtfyClient.DefaultTimeout + TimeSpan.FromSeconds(1))) Console.Error.WriteLine("ntfy: nečekám déle");
     }
 
     /// "Card A001: 3 files, 1 GB" for a full copy; an append (Czech, with plural forms): "Doplnění karty A001

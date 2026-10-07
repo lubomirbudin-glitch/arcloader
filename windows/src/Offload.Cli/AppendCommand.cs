@@ -28,7 +28,7 @@ static class AppendCommand
         stageTwo.AddTo(cmd);
         cmd.SetAction(r =>
         {
-            JobConfig config;
+            JobConfig? config = null;
             CliProfile? picked;
             SettingsProfile? profile;
             try
@@ -62,6 +62,7 @@ static class AppendCommand
             catch (Exception e)
             {
                 Console.Error.WriteLine(Msg.CliError + e.Message);
+                if (config != null && !r.GetValue(dryRun)) CopyCommand.Ntfy(config, null, new JobStatus { Phase = JobPhase.Failed, Error = e.Message }, null);   // card name only
                 return 1;
             }
             if (picked != null) Console.WriteLine(Msg.CliAppendProject(picked.Name));

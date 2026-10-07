@@ -19,6 +19,8 @@ public abstract class QueueItem : ObservableObject
     public virtual bool Busy => !IsFinished;
     /// The attention flash and sound already came at the end of the copy (QueueRules.AlertAtCopyEnd).
     public bool Alerted { get; set; }
+    /// The end-of-job notification (Windows / ntfy) was already sent (QueueRules.NotifyAtCopyEnd).
+    public bool Notified { get; set; }
     public abstract void Refresh();
     public abstract void Cancel();
 }
