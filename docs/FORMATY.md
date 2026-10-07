@@ -83,8 +83,9 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | Klíč | Typ | Význam |
 |---|---|---|
 | `tool` | string | `offload` |
-| `version` | string | `0.1.0` (Mac), `0.3.0-win` (Windows) |
+| `version` | string | `0.1.0` (Mac), `0.4.0-win` (Windows) |
 | `generation` | číslo? | jen Windows od 0.2.0 a jen v reportu doplnění (`offload_report_NNNN.json`): číslo generace ASC MHL; chybí = 1 (celá kopie) |
+| `project` | string? | jen Windows od 0.4.0: projekt, ve kterém se karta kopírovala; chybí bez projektu. Doplnění zapíše projekt dřívější zálohy, ne projekt zobrazený v aplikaci. Denní report ho ukáže, když ho mají všechny karty dne stejný |
 | `hashAlgorithm` | string | `xxh64` (vždy, i s MD5 — Mac ho jen zobrazí) |
 | `hashAlgorithms` | string[]? | jen Windows od 0.3.0 a jen když nejsou jen xxh64: `["xxh64", "md5"]` |
 | `cardName`, `date`, `source`, `sourceFilesystem` | string | |
@@ -95,7 +96,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`?, `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky) |
 | `skipped[]` | string | vynechané systémové položky |
 | `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`?, `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje) |
-| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder` — viz níže) |
+| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5` — viz níže) |
 | `proxyEncoder` | string? | jen Windows: enkodér ffmpeg, kterým se renderovaly proxy (`h264_nvenc`, `libx264`, `prores_ks` …); chybí, když se žádná proxy nevyrenderovala |
 
 Hodnoty výčtů:
@@ -107,15 +108,32 @@ Hodnoty výčtů:
 - `proxy.lutMode`: `auto`, `builtin`, `custom`, `none`. Chybí-li (starší soubor): s neprázdným `lutPath` → `custom`
   (vlastní LUT jako dřív), bez `lutPath` → `auto` se záložním „bez LUT“. `lutFallback` je id vestavěného LUTu nebo `null`.
 - `clips[].lut.source`: `auto` (rozpoznaná kamera), `fallback` (kamera nerozpoznaná, záložní LUT), `builtin` (vestavěný
-  LUT vybraný v nastavení), `custom` (vlastní `.cube`), `none` (bez LUTu — důvod v `reason`). `id` je id vestavěného
-  LUTu, u `custom` a `none` `null`.
+  LUT vybraný v nastavení), `custom` (vlastní `.cube`), `rule` (Windows od 0.4.0: vlastní pravidlo, `reason` např. „pravidlo 2: kamera obsahuje
+  „FX6““; `id` je id vestavěného LUTu, u vlastního `.cube` `null`), `none` (bez LUTu — důvod v `reason`; i pravidlo s cílem
+  „Bez LUT“ dává `none`, ne `rule`). `id` je id vestavěného LUTu, u `custom` a `none` `null`.
 - `clips[].info.gamma`, `gamut`, `colorScienceGen` (volitelné, zatím jen Windows): u Blackmagic RAW gama, gamut a generace
   barevné vědy, ve kterých byl klip natočený (z `braw-decode --info`, např. `"Blackmagic Design Film"`, `5`). Podle nich se
   volí LUT. Mac je zatím nezapisuje a při čtení ignoruje.
 - `clips[].info.reel` (volitelné, Windows od 0.3.0): cívka klipu — tag kamery (`reel_name`, `tape_name`, `reel` z ffprobe),
   jinak cívka z názvu klipu (`A001C003…` → `A001`), jinak název složky karty. Je i v proxy (stopa timecodu). Mac ignoruje.
+- `clips[].info.cameraSerial` (volitelné, Windows od 0.4.0): sériové číslo těla kamery — Sony `M01.XML` (`Device serialNo`),
+  ffprobe `com.apple.quicktime.camera.identifier` / `camera_serial_number`; ARRI a BRAW zatím ne (ověří vzorky). Mac ignoruje.
+- `clips[].info.colorScienceGenOriginal` (volitelné, Windows od 0.4.0): u BRAW Film dekódovaného s převodem Gen 4 → Gen 5
+  generace, ve které byl klip natočený (`colorScienceGen` je pak účinná, `5`); chybí, když se převod nepodařil (klip se
+  dekódoval tak, jak byl natočený). Mac ignoruje.
 
 Náhledy klipů (JPEG) se do JSON neukládají — jsou jen v HTML a PDF.
+
+`proxy.lutRules` (pole, volitelné, Windows od 0.4.0; chybí, když žádné není): vlastní pravidla LUTů v pořadí priority,
+každé `{ "match": "camera" | "serial" | "reel" | "folder", "value": "…", "lut": "<id vestavěného>" | "none" }` nebo
+s `"lutPath": "<cesta k .cube>"` místo `lut` (právě jedno z nich). `camera` = model obsahuje hodnotu, `serial` = sériové
+číslo se rovná, `reel` = cívka začíná hodnotou, `folder` = `<karta>/<složka klipu>` odpovídá vzoru s `*` a `?` (bez
+ohledu na velikost písmen). Platí jen v režimu `lutMode: auto`, před rozpoznáním kamery; první shoda rozhoduje, i s cílem
+`none`. Známé pravidlo s neplatným obsahem (prázdná `value`, `lut` i `lutPath` zároveň nebo ani jedno) se při načtení
+zahodí. Pravidlo s neznámým `match` (z novější verze) a položka jiného tvaru se **zachovají beze změny** a při hledání
+se přeskočí; pořadová čísla v hlášeních (`pravidlo 2`) se počítají i přes ně. `proxy.brawGen4ToGen5` (bool, chybí =
+`false`, Windows od 0.4.0): BRAW Film Gen 4 dekódovat jako Gen 5 (`braw-decode --gen5`); týká se jen gamy Blackmagic
+Design Film, Video a Extended Video zůstanou. **Neověřeno** — čeká na vzorek .braw Gen 4. Oba klíče jsou i v `settings.json`.
 
 `proxy.extraFolder` (string, volitelný, zatím jen Windows): složka, do které se každá hotová proxy kopíruje navíc,
 jako `<extraFolder>\<datum>\<karta>\<klip>.mov` (při shodě jména `_2`, `_3`…). Chybí, když není nastavená. Stejný klíč
@@ -237,6 +255,21 @@ Pravidla (Windows od 0.3.0):
   hodnota (z novější verze) se zachová a čte jako `xxh64`.
 - `outputs` (Windows od 0.3.0): `dayReport` (bool, `true`) — denní report po každé úloze; `clipListCsv` (bool, `true`),
   `clipListAle` (bool, `false`) — seznamy klipů. Neznámé klíče sekce se zachovají.
+- Projekty (Windows od 0.4.0): klíče profilu na horní úrovni (`destRoots`, `verify`, `analyzeClips`, `hash`, `naming`,
+  `outputs`, `notify`, `proxy`) jsou profil „Bez projektu“; `projects` je pole pojmenovaných profilů stejného tvaru
+  s klíčem `name` (oříznutý, 1–60 znaků, jedinečný bez ohledu na velikost písmen, „Bez projektu“ vyhrazené);
+  `activeProject` je jméno nebo `null` (jméno, které nepatří žádnému čitelnému projektu, se zachová a platí „Bez
+  projektu“). Duplicity se **nemažou**: platí první položka, další se stejným jménem a položky bez platného jména
+  zůstanou v souboru beze změny a při uložení se zapíšou zpět za čitelné projekty (nic se neztratí ani nenásobí).
+  `projects`, které není pole, se zachová beze změny, dokud se v aplikaci neuloží projekt. Společné zůstávají `tools`,
+  `portNames` a `updates`.
+- `notify` (Windows od 0.4.0, součást projektu): `windows` (bool, `true`) — oznámení Windows; `ntfy` { `enabled` (bool,
+  `false`), `server` (string, `https://ntfy.sh`), `topic` (string, `""`; písmena bez diakritiky, číslice, `-` a `_`,
+  nejvýš 64 znaků) } — bez přihlašovacího tokenu.
+- `updates` (Windows od 0.4.0, společné): `manifest` (string | `null`, výchozí `null` = kontrola vypnutá) — http(s) adresa
+  nebo cesta k `offload-update.json` (`{"version": "0.4.0", "url": "…", "notes": "…"}`, UTF-8). Aplikace přečte nejvýš
+  64 KB; `version` nejvýš 32 znaků, `url` nejvýš 1000, `notes` se zkrátí na 2000; řídicí a formátovací znaky ve verzi
+  nebo adrese manifest vyřadí.
 
 ## Místní soubory (jen tento počítač, Mac převezme stejný tvar)
 
@@ -253,7 +286,7 @@ podle `finished` se smažou i se seznamem souborů). Poškozený soubor se přej
 | `id` | string | `20261006T081500Z-3f2a9c1b` (konec kopie v UTC + 8 hex) |
 | `card` | objekt? | svazek karty: `identity` (`\\?\Volume{…}\|1A2B3C4D`, jen informace), `fsSerial`, `capacity`, `label`, `filesystem`; u ručně přidané složky `null` |
 | `source`, `cardName`, `date` | string | zdroj, název složky karty, složka data |
-| `project` | string? | projekt (plní plán 8), jinak `null` |
+| `project` | string? | projekt, ve kterém se karta kopírovala (Windows od 0.4.0), jinak `null`; doplnění ho nemění |
 | `finished` | datum | konec poslední kopie / doplnění |
 | `success`, `verified` | bool | všechny generace bez chyb / ověřené |
 | `failedFiles` | číslo? | jen když `success` = false |
@@ -267,3 +300,10 @@ podle `finished` se smažou i se seznamem souborů). Poškozený soubor se přej
 
 Karta se pozná podle `fsSerial` + `capacity` (GUID svazku dává Windows podle čtečky, proto se k poznání nepoužije);
 ručně přidaná složka podle `shape`. Doplnění zapíše do záznamu další generaci pod jedním držením zámku.
+
+`%APPDATA%\Offload\update-check.json` (jen Windows, od 0.4.0): stav kontroly aktualizací — `lastCheck` (datum UTC
+posledního čtení manifestu, i neúspěšného), `lastSource` (adresa manifestu, ze které se četlo; jiná adresa = číst hned),
+`lastVersion`, `lastUrl`, `lastNotes` (co manifest naposledy řekl). Manifest se čte nejvýš jednou za 24 h (`lastCheck`
+v budoucnosti = číst hned); poškozený soubor = číst znovu. Odkaz „Nová verze“ otevře jen adresu `https://…`; síťové
+cesty (`\\server\…`, `file://server/…`, namapovaný síťový disk) se nikdy neotevírají, jen zobrazí; místní složku
+a zip otevře Průzkumník výběrem (`/select`).

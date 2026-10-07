@@ -19,6 +19,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | Vestavěné LUTy (plán 5) | hotovo (čeká ruční test s klipy z kamer) |
 | Karty a bezpečnost dat (plán 6, 0.2.0): historie, doplnění, název z klipů, ověření zálohy, místo, české hlášky | hotovo (čeká ruční test s kartou) |
 | Výstupy pro produkci a střih (plán 7, 0.3.0): denní report, seznam klipů CSV/ALE, proxy pro přelinkování, MD5 | hotovo (čeká ruční test v Resolve, Premiere, Avid, Excelu) |
+| Nastavení, oznámení, distribuce (plán 8, 0.4.0): projekty, vlastní pravidla LUTů, BRAW Film Gen 4 → Gen 5, oznámení Windows a ntfy, kontrola aktualizací, podpis | hotovo (čeká ruční test: projekty a oznámení v GUI, podpis s certifikátem; převod Gen 4 je neověřený, čeká vzorek .braw Gen 4) |
 
 ## Build a testy
 
@@ -50,6 +51,8 @@ Kontrola aktualizací v aplikaci (Nástroje → Aktualizace…) čte manifest z 
 jiného se jen zobrazí. Prázdná adresa = vypnuto (výchozí). Repozitář je soukromý, proto se nečte GitHub.
 
 ### Podepisování
+
+Logika vydání (verze, manifest, hledání signtoolu a certifikátu, podpis) je v `scripts\release.ps1`, který `build.ps1` načítá. Podpis je volitelný a nic se při něm nekupuje ani nestahuje.
 
 `build.ps1 -Sign` podepíše `Offload.exe`, `bin\offload.exe` a `bin\braw-decode.exe` (ffmpeg ne — není náš) před
 zabalením: `signtool sign /fd SHA256 /td SHA256 /tr <razítko> /d Offload …`, pak `signtool verify /pa /all`.
@@ -127,8 +130,25 @@ Při vývoji (GUI/CLI z `bin\Debug`) se `braw-decode.exe` hledá ve `windows\too
 ## Aplikace (GUI)
 
 Spuštění: `Offload\Offload.exe` (jeden soubor, .NET v něm je; první start trvá déle, protože se rozbalí nativní knihovny WPF).
-Aplikace není podepsaná, takže při prvním spuštění Windows ukáže „Windows ochránil váš počítač“ —
+Bez podpisu (build bez `-Sign`, viz Podepisování) Windows při prvním spuštění ukáže „Windows ochránil váš počítač“ —
 klikněte na „Další informace“ → „Přesto spustit“.
+
+- **Projekt:** nahoře v levém panelu „Projekt: [Bez projektu ▾]“ — pojmenovaná nastavení (cíle, kontrola, součet, název
+  z klipů, výstupy, oznámení, proxy včetně LUTu, pravidel LUTů a složky pro proxy). Menu *Projekt*: „Uložit jako
+  projekt…“, „Přejmenovat…“, „Smazat…“. Titulek okna „Offload — Film X“. Přepnutí nezmění úlohy ve frontě (mají svou
+  kopii nastavení); během přípravy startu je přepínač i menu zamčené (a když se projekt přesto změní, start se
+  zruší s hláškou). Doplnění karty se řídí projektem dřívější zálohy; když ten už neexistuje (smazaný, přejmenovaný),
+  běží s nastavením „Bez projektu“ a karta úlohy to napíše. Start kontroluje jen LUTy a složky, které se opravdu
+  použijí. Nástroje, názvy USB portů a kontrola aktualizací jsou společné.
+- **Pravidla LUTů:** u „Automaticky podle kamery“ tlačítko „Pravidla LUTů… (N)“ — řádky *kamera / sériové číslo / cívka /
+  složka → LUT*, zkoušejí se shora dolů před rozpoznáním kamery; report u klipu ukáže „pravidlo 2: …“. Cíl „Bez LUT“
+  dá klipu bez LUTu. Pravidlo z novější verze Offloadu (neznámý druh, např. `lens`) editor ukáže jen ke čtení,
+  přeskočí ho a při OK ho zapíše beze změny.
+- **Oznámení:** Nástroje → Oznámení… — oznámení Windows (když okno není v popředí) a volitelně ntfy na telefon (jen
+  název karty, výsledek a počty, nikdy cesty). Selhání kopie se oznámí hned, když kopie skončí. Nástroje → Aktualizace…
+  — adresa manifestu (výchozí prázdná = kontrola vypnutá) a „Zkontrolovat teď“; nová verze se ukáže odkazem vpravo
+  v řádku menu. *Otevřít* otevře jen https adresu nebo místní složku / zip; síťové cesty (UNC, namapovaný síťový disk)
+  se nikdy neotevírají, jen zobrazí k ručnímu zkopírování.
 
 - **Karty:** karta vložená do čtečky se objeví sama a je zaškrtnutá; složku lze přidat tlačítkem „Složka…“ nebo přetažením
   složky na `Offload.exe`. Název složky v cíli lze upravit.
@@ -139,7 +159,7 @@ klikněte na „Další informace“ → „Přesto spustit“.
 - **LUT:** v sekci Proxy seznam „Automaticky podle kamery“ (výchozí) / vestavěné LUTy / „Bez LUT“ / „Vlastní…“ (`.cube`).
   „Když kameru nepoznám:“ je záložní LUT pro klipy, které automatika nepozná (výchozí Bez LUT). Automaticky se pozná:
   Sony podle sidecaru `M01.XML` (jen S-Log3 s S-Gamut3.Cine nebo S-Gamut3, jiná gama = bez LUTu), ARRI podle modelu
-  kamery (ALEXA 35 → LogC4, ostatní ALEXA/AMIRA → LogC3), ARRIRAW podle metadat, Blackmagic RAW (BRAW) podle gamy klipu (Film Gen 5 → vestavěný LUT; Film starší generace, Video, Extended Video a další gamy = bez LUTu; bez údaje o gamě se předpokládá Film Gen 5),
+  kamery (ALEXA 35 → LogC4, ostatní ALEXA/AMIRA → LogC3), ARRIRAW podle metadat, Blackmagic RAW (BRAW) podle gamy klipu (Film Gen 5 → vestavěný LUT; Film starší generace = bez LUTu, s volbou „převést na Gen 5“ (Dekodéry; **neověřené**, čeká vzorek Gen 4) LUT Gen 5; Video, Extended Video a další gamy = bez LUTu; bez údaje o gamě se předpokládá Film Gen 5),
   RED → Log3G10. Canon, Panasonic, DJI a Fuji se zatím nepoznají (chybí vzorové klipy), D-Log M vestavěný LUT nemá —
   takové klipy dostanou záložní LUT. U ARRI jde o předpoklad pro ProRes: klip nahraný přímo v Rec.709 by LUT dostal
   neprávem, pak zvolte „Bez LUT“. Report ukáže u každého klipu použitý LUT a důvod. Na vzorcích z kamer se ještě
@@ -268,6 +288,54 @@ Plán 7 (výstupy pro produkci a střih, 0.3.0):
 - [ ] 30. **ALE v Avidu:** diakritika v názvech klipů se v Avidu zobrazí správně (ALE je UTF-8 bez BOM; starší Avid ji
       může číst špatně — poznamenat verzi)
 
+Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
+
+- [ ] 31. **Projekty:** „Uložit jako projekt…“ „Film X“ → titulek „Offload — Film X“; změnit cíle a proxy, přepnout na „Bez
+      projektu“ a zpět — obojí má svoje hodnoty; přejmenovat a smazat (dotaz „Smazat projekt …? … zálohy na discích
+      zůstanou.“, po smazání „Bez projektu“); jméno prázdné / „bez projektu“ / už použité → červeně pod polem, OK nejde;
+      stisknout „Spustit offload“ a hned (během kontrol) zkusit přepínač a menu Projekt → jsou zamčené
+- [ ] 32. **Přepnutí s frontou:** dvě karty ve frontě z „Film X“ (s proxy) → během renderu proxy přepnout na jiný projekt
+      s jinými cíli a kodekem → úlohy dokončí cíle, kodek, LUT i oznámení „Film X“; report a `history.json` mají `project`
+      „Film X“; další v řadě (A002 …) se počítá zvlášť v každém projektu; denní report dne jen z „Film X“ má v hlavičce
+      „Projekt: Film X“. **Doplnění:** karta zálohovaná ve „Film X“ a doplněná při jiném zobrazeném projektu používá
+      nastavení „Film X“ (proxy, výstupy, ntfy téma), report si ponechá „Film X“; po smazání „Film X“ doplnění běží
+      s „Bez projektu“ a karta úlohy to napíše („… už neexistuje — doplnění běží s nastavením Bez projektu“)
+- [ ] 33. **Starší / ručně upravený settings.json:** dva projekty stejného jména → platí první, druhý po uložení zůstane
+      v souboru; `projects` jako text → aplikace naběhne bez projektů, ostatní nastavení zůstane; spustit 0.3.0 a zase
+      0.4.0 → projekty a pravidla zůstaly
+- [ ] 34. **Pravidla LUTů:** Sony FX6 (`M01.XML` se `serialNo`) → pravidlo „Sériové číslo kamery“ → LUT a v reportu
+      „pravidlo 1: sériové číslo kamery „…““; pravidlo „Složka“ s vlastním `.cube`, pak `.cube` přejmenovat → červeně „LUT
+      z pravidla 1 nenalezen: …“, start nejde; ↑ ↓ ✕ mění pořadí / maže; tlačítko jen u „Automaticky podle kamery“;
+      cíl „Bez LUT“ → klip bez LUTu. **Pravidlo z budoucnosti:** v `settings.json` přidat do `proxy.lutRules` pravidlo
+      `{ "match": "lens", "value": "35mm", "lut": "none" }` (mezi dvě běžná) → editor ho ukáže jen ke čtení
+      „Pravidlo z novější verze (lens) …“, ↑ ↓ ✕ fungují, po OK zůstalo v souboru beze změny, čísla pravidel v reportu
+      počítají i s ním; neplatné známé pravidlo (prázdná hodnota) se při načtení zahodí
+- [ ] 35. **BRAW Gen 4 (až bude vzorek; do té doby neověřeno):** `OFFLOAD_BRAW_SAMPLE=<klip Gen 4>` → `dotnet test
+      --filter BrawSampleTests` (Gen5_ConvertsAGen4Clip_LeavesGen5); v GUI Dekodéry → „Blackmagic RAW Film Gen 4 převést na
+      Gen 5“ → proxy má LUT a vypadá jako v Blackmagic RAW Playeru s Gen 5; v reportu „Blackmagic RAW: Film Gen 4 → Gen 5
+      (převod SDK)“; klip Video / Extended Video Gen 4 se nepřevede. Teprve pak zvážit zapnutí jako výchozí (R26)
+- [ ] 36. **Oznámení Windows (TrayNotifier, jen ručně):** okno na pozadí → po kopii „Offload: A001 — kartu lze vysunout“
+      (s proxy), po konci „Offload: A001 hotovo“; s chybou červená ikona; selhaná kopie ohlásí „CHYBA“ hned po konci
+      kopie; kliknutí na oznámení / ikonu vrátí okno; okno v popředí → žádné oznámení, jen zvuk a blikání; oznámení zůstane
+      v Centru oznámení; po zavření aplikace ikona zmizí; restart Průzkumníka → další oznámení ikonu přidá znovu;
+      Nástroje → Oznámení… → „Oznámení Windows“ vypnout → nic
+- [ ] 37. **ntfy:** téma `offload-<náhodné>` → „Poslat zkušební oznámení“ → „Odesláno.“ a zpráva v aplikaci ntfy na
+      telefonu; server `https://nic.invalid` → „Nepodařilo se: …“ do 10 s, aplikace celou dobu reaguje; téma s diakritikou
+      → OK nejde, česky proč; v textu na telefonu žádná cesta ani jméno PC (jen název karty, výsledek, počty); CLI
+      `--ntfy https://ntfy.sh/<téma>` (po konci čeká nejvýš 10 s, i s nedostupným serverem)
+- [ ] 38. **Aktualizace:** `build.ps1 -ReleaseUrl \\NAS\Offload\` → `offload-update.json`; Nástroje → Aktualizace… → cesta
+      k manifestu → „Zkontrolovat teď“ → „Je k dispozici verze …“ / „Máte nejnovější verzi …“, odkaz „Nová verze …“ vpravo
+      v menu; s `https://` adresou v manifestu *Otevřít* otevře prohlížeč, s místní složkou nebo zipem Průzkumník
+      s výběrem; **adresa na NAS (`\\NAS\…`) nebo namapovaný síťový disk → bez tlačítka, jen text a „Síťová cesta —
+      zkopírujte ji a otevřete ručně.“**; odpojený NAS → „Manifest nejde načíst: … neodpověděl do 5 s“ a okno nezamrzne;
+      prázdná adresa → žádná kontrola; po 24 h se čte znovu
+- [ ] 39. **Podpis:** (a) stroj s Windows SDK: `build.ps1 -Sign` bez signtoolu / s neznámým otiskem → česká chyba hned na
+      začátku; testovací PFX (`New-SelfSignedCertificate -CodeSigningCert`, export) přes `OFFLOAD_SIGN_PFX` → podepíše tři
+      exe, ve vlastnostech souboru je karta Digitální podpisy; nedostupné razítko (`-TimestampUrl http://nic.invalid`) →
+      3 pokusy, „Časové razítko se nepodařilo získat …“; heslo se nikde nevypíše. (b) **skutečný certifikát (až bude
+      koupený, viz Podepisování):** `build.ps1 -Sign -CertThumbprint …` → `signtool verify /pa` projde, SmartScreen na
+      čistém počítači po stažení zipu ukáže vydavatele (reputace se buduje časem)
+
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
 ## Použití
@@ -289,7 +357,21 @@ offload verify D:\Zaloha\2026-10-06 --report                # ověřit všechny 
 offload E:\ -d D:\Zaloha -d F:\Zaloha --hash both --ale     # xxHash64 + MD5, seznam klipů i pro Avid
 offload day-report D:\Zaloha\2026-10-06                     # denní report znovu (HTML, PDF, seznam klipů dne)
 offload bench --hash md5                                    # rychlost MD5 proti xxh64 (CPU)
+offload E:\ --project "Film X"                              # nastavení projektu z aplikace; volby z příkazové řádky mají přednost
+offload E:\ -d D:\Zaloha --proxy --lut-rule camera=FX6:sony-slog3-sgamut3cine --lut-rule "folder=A00*/*:C:\luts\show.cube"
+offload E:\ -d D:\Zaloha --proxy --braw-gen5                 # BRAW Film Gen 4 jako Gen 5 (neověřeno, čeká vzorek Gen 4)
+offload E:\ -d D:\Zaloha --ntfy https://ntfy.sh/muj-tajny-kanal   # výsledek na telefon (jen název karty, výsledek, počty)
 ```
+
+Plán 8: `--project <název>` vezme projekt uložený v aplikaci (`settings.json`; cíle, ověření, součet, výstupy, oznámení,
+proxy) jako výchozí hodnoty — co je napsané na příkazové řádce, má přednost (`-d` nahradí cíle projektu, `--lut-rule`
+jeho pravidla); projekt, který navrhuje název z klipů, se chová jako `--name auto`; neznámý projekt → „Chyba: Projekt
+„X“ neexistuje. Projekty: …“ (kód 1); `--project "Bez projektu"` vezme nastavení bez projektu. U `append` dává
+`--project` jen nastavení — projekt zálohy zůstane podle dřívějšího reportu.
+`--lut-rule <camera|serial|reel|folder>=<hodnota>:<lut id|none|cesta.cube>` (opakovatelné, pořadí = priorita; hodnota
+nesmí obsahovat `:`; platí jen s `--lut auto` — s jiným `--lut` je to chyba; chybějící `.cube` je chyba, i s `--dry-run`).
+`--ntfy <url>` pošle výsledek (i odmítnutí před kopií) na ntfy, po konci čeká nejvýš 10 s (pak „ntfy: nečekám déle“);
+oznámení Windows CLI neposílá.
 
 Výstupy (plán 7): po každé kopii nebo doplnění vznikne `_REPORT\<karta>_clips.csv` (`--no-clip-list` vypne, `--ale`
 přidá `<karta>_clips.ale` pro Avid) a na každém cíli znovu denní report `<datum>\_REPORT\<datum>_day_report.html/.pdf`

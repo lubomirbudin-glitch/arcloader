@@ -52,6 +52,12 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Seznam klipů CSV / Avid ALE** (`_clips.csv/.ale` karty i dne) | ⏳ naplánováno | ✅ CLI + GUI (import do Resolve/Avid čeká ruční test) |
 | **Proxy pro přelinkování** (`reel_name` ve stopě TC, všechny zvukové stopy) | ⏳ naplánováno (1 zvuková stopa) | ✅ (Resolve/Premiere čeká ruční test) |
 | **MD5 navíc k xxh64** (`hash: both`, `--hash both`, `<karta>.md5`, MHL `<md5>`) | ⏳ naplánováno (MD5 ignoruje, xxh64 ověří) | ✅ CLI + GUI |
+| **Projekty** (`projects`, `activeProject`, `--project`, `project` v reportu a historii) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
+| **Vlastní pravidla LUTů** (`proxy.lutRules`, `--lut-rule`, `lut.source = rule`, sériové číslo kamery) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
+| **BRAW Film Gen 4 → Gen 5** (`braw-decode --gen5`, `proxy.brawGen4ToGen5`, `--braw-gen5`) | ⏳ naplánováno (C++ `--gen5`) | ✅ kód, výchozí vypnuto — **neověřeno**, čeká vzorek .braw Gen 4 |
+| **Oznámení** (Windows: oznamovací oblast; ntfy na telefon, `--ntfy`) | Mac má notifikace; ntfy ⏳ naplánováno | ✅ CLI (ntfy) + GUI (čeká ruční test) |
+| **Kontrola aktualizací** (manifest z URL / NAS, 1× za 24 h, ve výchozím stavu vypnuto) | ⏳ naplánováno (vlastní manifest) | ✅ GUI (čeká ruční test) |
+| **Podpis exe** (`build.ps1 -Sign`, signtool) | `codesign` + notarizace (mimo tento návrh) | ✅ skript (čeká certifikát; nic se nekupuje) |
 | **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ❌ | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
@@ -146,6 +152,16 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   rozpracovaná karta je v denním reportu „bez reportu (probíhá, nebo byl přerušen)“.
 - **MD5** (zatím jen Windows): volba xxHash64 + MD5 přidá `hashAlgorithms`, `files[].md5`, `<karta>.md5` a MHL `<md5>`;
   xxh64 je vždy, takže zálohu s MD5 Mac ověří dál (MD5 přeskočí). Doplnění počítá součty dřívější zálohy.
+- **Projekty** (zatím jen Windows): horní klíče `settings.json` jsou profil „Bez projektu“, `projects[]` pojmenované
+  profily, `activeProject` (FORMATY.md, settings.json); duplicitní nebo nečitelné položky Windows zachová beze změny.
+  Report má navíc `project` (Mac ignoruje), `history.json` ho plní; „další v řadě“ počítá karty jen v rámci projektu.
+  Mac uloží totéž do `UserDefaults`.
+- **Vlastní pravidla LUTů** (zatím jen Windows): `proxy.lutRules` před automatikou, `clips[].lut.source = rule`, nové
+  `clips[].info.cameraSerial`; pravidla neznámého typu se zachovají a přeskočí.
+- **Oznámení** (Windows): ikona v oznamovací oblasti přes `Shell_NotifyIconW` (ne WinRT toast — ten u nebalené aplikace
+  potřebuje zástupce s AUMID v nabídce Start), jen když okno není v popředí; ntfy jako JSON POST s pevným textem
+  (název karty, výsledek a počty; nikdy cesty, názvy souborů ani jméno počítače). Mac má `UNUserNotificationCenter`;
+  texty a ntfy převezme.
 - **Denní report a seznamy klipů** (zatím jen Windows): `<datum>/_REPORT/` se denním reportem a `_clips.csv/.ale` karty
   i dne jsou odvozené soubory (přepisují se celé); Mac je nečte a jeho `UniqueCardFolder` s `_REPORT` ve složce dne
   nekoliduje. Kdyby Mac zapisoval stejný den, vyhraje poslední zápis.

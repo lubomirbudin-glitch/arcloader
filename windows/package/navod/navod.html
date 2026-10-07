@@ -183,13 +183,13 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
   <h2>Obsah</h2>
   <ol>
     <li><span class="n">1</span><span>Co Offload dělá<span class="sub">kopie, ověření, report; proxy, náhledy, LUTy; na kartu se nikdy nezapisuje</span></span></li>
-    <li><span class="n">2</span><span>Instalace a první spuštění<span class="sub">rozbalení ZIPu, SmartScreen, požadavky, volitelné doplňky, kde je nastavení a log</span></span></li>
-    <li><span class="n">3</span><span>Hlavní okno<span class="sub">karty, cíle, volby, dekodéry, hardware, lišta se spuštěním, fronta</span></span></li>
+    <li><span class="n">2</span><span>Instalace a první spuštění<span class="sub">rozbalení ZIPu, SmartScreen, požadavky, volitelné doplňky, kde je nastavení a log, aktualizace</span></span></li>
+    <li><span class="n">3</span><span>Hlavní okno<span class="sub">projekt, karty, cíle, volby, dekodéry, hardware, lišta se spuštěním, fronta</span></span></li>
     <li><span class="n">4</span><span>Krok za krokem: první offload<span class="sub">od vložení karty po vysunutí</span></span></li>
     <li><span class="n">5</span><span>Volby kopírování a ověření<span class="sub">datum, kontrolní součet (MD5), ověření, analýza klipů, seznamy klipů, denní report, co se kontroluje před kopií</span></span></li>
-    <li><span class="n">6</span><span>Proxy, náhledy a LUTy<span class="sub">nastavení proxy, přelinkování (reel name, zvukové stopy), složka pro proxy navíc, automatický výběr LUTu, RAW formáty</span></span></li>
+    <li><span class="n">6</span><span>Proxy, náhledy a LUTy<span class="sub">nastavení proxy, přelinkování (reel name, zvukové stopy), složka pro proxy navíc, automatický výběr LUTu, vlastní pravidla LUTů, RAW formáty, BRAW Film Gen 4</span></span></li>
     <li><span class="n">7</span><span>Report<span class="sub">co je v HTML a PDF, tři snímky na klip, řádky LUT, seznam klipů CSV / ALE, denní report</span></span></li>
-    <li><span class="n">8</span><span>Fronta úloh, zrušení, vysunutí karty<span class="sub">stavy úlohy, zrušení, zavření aplikace, vysunutí</span></span></li>
+    <li><span class="n">8</span><span>Fronta úloh, zrušení, vysunutí karty<span class="sub">stavy úlohy, oznámení (Windows, telefon), zrušení, zavření aplikace, vysunutí</span></span></li>
     <li><span class="n">9</span><span>Nástroje → Prověřit USB porty… a okno Hardware<span class="sub">zapojení, doporučení, měření, názvy portů, úzké hrdlo při kopii</span></span></li>
     <li><span class="n">10</span><span>Co se nachází na cílovém disku<span class="sub">struktura složek, _REPORT karty i dne, ascmhl, _PROXY</span></span></li>
     <li><span class="n">11</span><span>Příkazová řádka<span class="sub">offload copy, append, verify, day-report, bench, ports, luts</span></span></li>
@@ -262,7 +262,7 @@ Offload kartu jen čte. Nic na ní nevytváří, nemaže ani nepřejmenovává. 
     <b>Nespouštějte aplikaci přímo z archivu.</b></li>
   <li>Spusťte <code>Offload.exe</code>. První start trvá o pár sekund déle (rozbalí se knihovny), další už ne.</li>
   <li>Při prvním spuštění může Windows ukázat modré okno <span class="q">„Systém Windows ochránil váš počítač“</span>
-    (aplikace není digitálně podepsaná). Klikněte na <b class="ui">Další informace</b> → <b class="ui">Přesto spustit</b>.</li>
+    (pokud je to nepodepsaná verze). Klikněte na <b class="ui">Další informace</b> → <b class="ui">Přesto spustit</b>.</li>
 </ol>
 
 <div class="box tip"><span class="t">Složka jako argument</span>
@@ -298,11 +298,25 @@ vyzkoušená se skutečnými nástroji výrobců.</p>
 <h3>Kde je nastavení a log</h3>
 <table>
   <thead><tr><th class="w40">Soubor</th><th>Obsah</th></tr></thead>
-  <tr><td class="k"><code>%APPDATA%\Offload\settings.json</code></td><td>nastavení: seznam cílů, volby, proxy, cesty k nástrojům, názvy USB portů</td></tr>
+  <tr><td class="k"><code>%APPDATA%\Offload\settings.json</code></td><td>nastavení: projekty, seznam cílů, volby, proxy, oznámení, cesty k nástrojům, názvy USB portů, adresa manifestu aktualizací</td></tr>
+  <tr><td class="k"><code>%APPDATA%\Offload\update-check.json</code></td><td>kdy a co řekla kontrola aktualizací (jen když je zapnutá)</td></tr>
   <tr><td class="k"><code>%APPDATA%\Offload\app.log</code></td><td>log aplikace (hodí se při hlášení chyby)</td></tr>
   <tr><td class="k"><code>%APPDATA%\Offload\hwtest.json</code></td><td>výsledek posledního testu USB portů</td></tr>
 </table>
 <p>Do Průzkumníka stačí do adresního řádku napsat <code>%APPDATA%\Offload</code>.</p>
+
+<h3>Aktualizace</h3>
+<p>Offload sám nic nestahuje a ve výchozím stavu se na novou verzi vůbec neptá. V <b class="ui">Nástroje → Aktualizace…</b>
+zadejte <b>adresu manifestu</b> — webovou adresu <code>https://…</code> nebo cestu na NAS či sdílenou složku (např.
+<code>\\NAS\Offload\offload-update.json</code>), kterou vám dá ten, kdo Offload připravuje. Aplikace se pak nejvýš jednou
+za 24 hodin (5 s po spuštění) podívá, jestli je nová verze; když ano, vpravo v řádku menu se objeví odkaz
+<span class="q">„Nová verze 0.5.0“</span>. Okno ukáže poznámky k verzi a adresu, kde je nový ZIP. Tlačítko
+<b class="ui">Otevřít</b> je jen u adresy <code>https://…</code> (otevře prohlížeč) a u místní složky nebo ZIPu (otevře
+Průzkumník s vybranou položkou). <b>Síťové cesty</b> (<code>\\NAS\…</code>, namapovaný síťový disk) a cokoli jiného se
+neotevírají — zobrazí se jen jako text, který si zkopírujete a otevřete ručně (<span class="q">„Síťová cesta — zkopírujte
+ji a otevřete ručně.“</span>). Tlačítko <b class="ui">Zkontrolovat teď</b> zkusí hned:
+<span class="q">„Máte nejnovější verzi …“</span>, nebo <span class="q">„Manifest nejde načíst: …“</span> (nedostupný disk se
+vzdá do 5 s, web do 10 s; čte se nejvýš 64 KB). Prázdná adresa = kontrola vypnutá.</p>
 
 <h3>Odinstalace</h3>
 <p>Smažte složku s aplikací. Nastavení zůstane v <code>%APPDATA%\Offload</code>, dokud ho nesmažete.</p>
@@ -387,6 +401,24 @@ panelů lze měnit tažením dělicí čáry. Vzhled (světlý / tmavý) se ří
   <div><span class="callout">8</span><b>Lišta se spuštěním</b> — souhrn a <b class="ui">Spustit offload</b>.</div>
   <div><span class="callout">9</span><b>Fronta</b> — karty úloh, kapitola 8.</div>
 </div>
+
+<h3>Projekt</h3>
+<p>Nahoře v levém panelu je <b class="ui">Projekt:</b> se seznamem <b>Bez projektu</b> a uložených projektů. Projekt je
+pojmenované nastavení — cíle, struktura a kontrola (ověření, kontrolní součet, název z klipů, seznamy klipů, denní
+report), oznámení a celá sekce Proxy včetně LUTu, pravidel LUTů a složky pro proxy. Co změníte, uloží se do právě
+vybraného projektu; přepnutím na jiný a zpět se nic neztratí. Úlohy, které už jsou ve frontě, si nastavení vzaly při
+spuštění — přepnutí projektu je nezmění. Během přípravy startu (kontroly, dotazy) je přepínač i menu Projekt zamčené.
+Společné pro všechny projekty zůstávají cesty k nástrojům, názvy USB portů a kontrola aktualizací.</p>
+<p>Menu <b class="ui">Projekt</b>: <b class="ui">Uložit jako projekt…</b> (nový projekt z toho, co je teď nastavené; stane
+se vybraným), <b class="ui">Přejmenovat…</b> a <b class="ui">Smazat…</b> (<span class="q">„Smazat projekt Film X? Nastavení
+projektu se ztratí, zálohy na discích zůstanou.“</span>). Název: 1–60 znaků, nesmí se opakovat (ani jinými velkými
+písmeny) a <span class="q">„Bez projektu“</span> je vyhrazené. Titulek okna ukazuje vybraný projekt, např.
+<span class="q">„Offload — Film X“</span>. Projekt se zapíše do reportu a historie: návrh <span class="q">„další v řadě“</span>
+počítá jen karty stejného projektu a denní report ukáže <span class="q">„Projekt: Film X“</span>, když jsou z něj všechny
+karty dne.</p>
+<p><b>Doplnění karty</b> se řídí projektem, ve kterém se karta původně zálohovala (ne tím, který je zrovna vybraný).
+Když ten projekt už neexistuje (smazaný nebo přejmenovaný), doplnění běží s nastavením <b>Bez projektu</b> a karta úlohy
+to napíše. Start kontroluje jen ty LUTy a složky pro proxy, které se v úlohách opravdu použijí.</p>
 
 <h3>Karty</h3>
 <ul>
@@ -677,7 +709,7 @@ je s NVIDIA), jinak procesorem. ProRes se kóduje vždy procesorem. Použitý ko
   <tr><td>Sony</td><td>sidecar <code>&lt;klip&gt;M01.XML</code> vedle klipu</td><td>S-Log3 + S-Gamut3.Cine nebo S-Gamut3 → odpovídající LUT; jiná gama (i S-Log2) = bez LUTu</td></tr>
   <tr><td>ARRI (ProRes a jiné video)</td><td>model kamery</td><td>ALEXA 35 → LogC4, ostatní ALEXA a AMIRA → LogC3</td></tr>
   <tr><td>ARRIRAW</td><td>metadata klipu</td><td>LogC3 nebo LogC4</td></tr>
-  <tr><td>Blackmagic RAW</td><td>gama klipu</td><td>Blackmagic Design Film Gen 5 → vestavěný LUT; Film starší generace, Video, Extended Video a další gamy = bez LUTu; když klip gamu neuvádí, předpokládá se Film Gen 5</td></tr>
+  <tr><td>Blackmagic RAW</td><td>gama klipu</td><td>Blackmagic Design Film Gen 5 → vestavěný LUT; Film starší generace (Gen 4) = bez LUTu, s volbou převodu na Gen 5 (viz níže, neověřeno) LUT Gen 5; Video, Extended Video a další gamy = bez LUTu; když klip gamu neuvádí, předpokládá se Film Gen 5</td></tr>
   <tr><td>RED R3D</td><td>formát</td><td>Log3G10</td></tr>
 </table>
 <p>Canon, Panasonic, DJI a Fujifilm se zatím automaticky nepoznají a dostanou záložní LUT z volby
@@ -689,6 +721,29 @@ neprávem — v takovém případě zvolte <b class="ui">Bez LUT</b>.</div>
 
 <p>U každého klipu report ukáže, jaký LUT dostal a proč — např. <span class="q">„LUT: Sony S-Log3 / S-Gamut3.Cine → Rec.709
 (Sony XML: …)“</span> nebo <span class="q">„LUT: bez LUT (kamera nerozpoznána)“</span> (kapitola 7).</p>
+
+<h3>Vlastní pravidla LUTů</h3>
+<p>U volby <b class="ui">Automaticky podle kamery</b> je tlačítko <b class="ui">Pravidla LUTů… (N)</b>. V okně
+<b>Vlastní pravidla LUTů</b> má každý řádek <i>podle čeho</i> — <b>Kamera (výrobce/model)</b> (model obsahuje text),
+<b>Sériové číslo kamery</b> (přesně), <b>Cívka (začátek)</b> (např. <code>A</code> = celá kamera A) nebo <b>Složka (vzor s *
+a ?)</b> nad <code>&lt;karta&gt;/&lt;složka klipu&gt;</code>, např. <code>A00*/CLIP</code> — hodnotu a LUT (vestavěný,
+<b>Bez LUT</b>, nebo <b>Vlastní…</b> <code>.cube</code>). Šipkami ↑ ↓ měníte pořadí, ✕ pravidlo smaže. Pravidla se zkoušejí
+shora dolů, <b>před</b> automatickým rozpoznáním kamery; první, které sedí, rozhodne — i pravidlo s cílem
+<b>Bez LUT</b> (klip pak LUT nedostane). Report u klipu napíše např. <span class="q">„pravidlo 2: kamera obsahuje „FX6““</span>.
+Sériové číslo se zatím čte u Sony (soubor <code>M01.XML</code>) a z metadat QuickTime (Blackmagic, Apple, Canon…); kde ho
+kamera neuvádí, pravidlo podle sériového čísla nesedí nikdy. Chybí-li vlastní <code>.cube</code> z pravidla, offload nejde
+spustit (<span class="q">„LUT z pravidla 2 nenalezen: show.cube“</span>). Pravidla patří k projektu. Pravidlo, které zapsala
+novější verze Offloadu a tahle ho nezná (jiný druh než kamera, sériové číslo, cívka a složka), okno ukáže jen ke čtení
+(<span class="q">„Pravidlo z novější verze …“</span>), nikdy ho nepoužije a při uložení ho nechá beze změny; smazat ho
+můžete tlačítkem ✕.</p>
+
+<h3>Blackmagic RAW Film Gen 4</h3>
+<p>Klipy natočené v Blackmagic Design Film <b>Gen 4</b> dostávají proxy bez LUTu (vestavěný LUT je pro Gen 5). Volba
+v sekci Dekodéry <b class="ui">Blackmagic RAW Film Gen 4 převést na Gen 5 (použije se LUT Gen 5)</b> nechá knihovnu
+Blackmagic RAW klip dekódovat s barevnou vědou Gen 5 a použije LUT Gen 5 (důvod v reportu: <span class="q">„Blackmagic RAW:
+Film Gen 4 → Gen 5 (převod SDK)“</span>). Týká se jen gamy <b>Film</b> — Video a Extended Video zůstanou jak jsou. Volba je
+výchozí <b>vypnutá</b> a <b>neověřená</b>: <i>ověří ji až vzorek .braw Gen 4</i>, zatím se ví jen, že kód funguje s fiktivní
+knihovnou. Když knihovna převod odmítne, klip se dekóduje jako dřív (bez LUTu). Z příkazové řádky <code>--braw-gen5</code>.</p>
 
 <h3>RAW formáty</h3>
 <table>
@@ -822,6 +877,22 @@ s kopií další karty. Každá úloha si při spuštění uloží nastavení, s
   <li>Po dokončení souhrn, např. <span class="q">„kopie 305 MB/s · ověření 640 MB/s · 24 klipů · proxy 23, 1 chyba“</span>.</li>
 </ul>
 <p>Po skončení každé úlohy tlačítko Offloadu v hlavním panelu Windows zabliká; při chybě zazní chybový zvuk.</p>
+
+<h3>Oznámení</h3>
+<p>Když okno Offloadu není v popředí, ukáže Windows na konci úlohy oznámení (ikona Offloadu se objeví v oznamovací
+oblasti vpravo dole a zůstane tam do zavření aplikace; kliknutím na oznámení nebo ikonu se okno vrátí):
+<span class="q">„Offload: A001 hotovo“</span> (<span class="q">„Ověřeno na 2 discích. Proxy: 24 hotovo.“</span>),
+<span class="q">„Offload: A001 — vyžaduje pozornost“</span> (neověřeno, selhané proxy, proxy přeskočené kvůli místu…),
+<span class="q">„Offload: A001 — CHYBA“</span> a při renderu proxy už po kopii <span class="q">„Offload: A001 — kartu lze
+vysunout“</span>. Úloha, která selže při kopii, ohlásí chybu hned, jak kopie skončí. Zrušená úloha oznámení nemá. Zvuk
+a blikání tlačítka zůstávají.</p>
+<p><b class="ui">Nástroje → Oznámení…</b>: <b class="ui">Oznámení Windows</b> (zapnuto) a <b class="ui">Posílat na telefon přes
+ntfy</b> — do aplikace ntfy v telefonu (server <code>https://ntfy.sh</code> nebo vlastní, <b>téma</b> jen písmena bez
+diakritiky, číslice, <code>-</code> a <code>_</code>). Tlačítko <b class="ui">Poslat zkušební oznámení</b> ukáže
+<span class="q">„Odesláno.“</span> nebo <span class="q">„Nepodařilo se: …“</span> (nejvýš po 10 s). Téma volte nehádatelné —
+kdo ho zná, oznámení čte. Telefon dostane pevný text: název karty, výsledek a počty (např. <span class="q">„Ověřeno na 2
+discích.“</span>), u varování a chyb jen obecnou větu; nikdy cesty, názvy souborů ani jméno počítače, a „kartu lze
+vysunout“ se na telefon neposílá. Úloha na odeslání nikdy nečeká. Nastavení oznámení patří k projektu.</p>
 
 <h3>Karty už jsou zálohované</h3>
 <p>Když spouštíte celou kopii karty, kterou historie zná, Offload se zeptá v okně <b>Karty už jsou zálohované</b>
@@ -1109,6 +1180,10 @@ offload luts                                          # seznam vestavěných LUT
   <tr><td class="k"><code>--no-clip-list</code></td><td>bez seznamu klipů CSV</td></tr>
   <tr><td class="k"><code>--ale</code></td><td>navíc seznam klipů pro Avid (ALE)</td></tr>
   <tr><td class="k"><code>--no-day-report</code></td><td>po kopii nevytvářet denní report</td></tr>
+  <tr><td class="k"><code>--project</code></td><td>nastavení projektu uloženého v aplikaci jako výchozí hodnoty; co napíšete na příkazovou řádku, má přednost (<code>-d</code> nahradí cíle projektu); neznámý projekt = chyba</td></tr>
+  <tr><td class="k"><code>--lut-rule</code></td><td>vlastní pravidlo LUTu <code>&lt;camera|serial|reel|folder&gt;=&lt;hodnota&gt;:&lt;id|none|cesta.cube&gt;</code>, opakovatelné, pořadí = priorita (jen s <code>--lut auto</code>)</td></tr>
+  <tr><td class="k"><code>--braw-gen5</code></td><td>Blackmagic RAW Film Gen 4 dekódovat jako Gen 5 (neověřeno, čeká vzorek Gen 4)</td></tr>
+  <tr><td class="k"><code>--ntfy</code></td><td>výsledek na telefon přes ntfy, např. <code>https://ntfy.sh/muj-tajny-kanal</code> (i odmítnutí před kopií; po konci čeká nejvýš 10 s)</td></tr>
 </table>
 
 <h3>Volby příkazu append</h3>
@@ -1146,7 +1221,7 @@ upřesní) a <code>--no-history</code> (potom je <code>--into</code> povinné). 
 <h3>Spuštění</h3>
 <table>
   <thead><tr><th class="w35">Problém</th><th>Řešení</th></tr></thead>
-  <tr><td>Modré okno „Systém Windows ochránil váš počítač“</td><td>Aplikace není digitálně podepsaná. Klikněte na <b class="ui">Další informace</b> → <b class="ui">Přesto spustit</b>.</td></tr>
+  <tr><td>Modré okno „Systém Windows ochránil váš počítač“</td><td>Nepodepsaná verze aplikace. Klikněte na <b class="ui">Další informace</b> → <b class="ui">Přesto spustit</b>.</td></tr>
   <tr><td>Spouštíte Offload.exe přímo z otevřeného ZIPu</td><td>Nejdřív rozbalte celý ZIP do obyčejné složky a spusťte aplikaci odtud.</td></tr>
   <tr><td>„Offload se nepodařilo spustit: … Podrobnosti: …“ nebo „Neočekávaná chyba aplikace: …“</td><td>V hlášce je cesta k logu (<code>%APPDATA%\Offload\app.log</code>). Log přiložte k hlášení chyby. Při neočekávané chybě běžící offloady pokračují.</td></tr>
 </table>

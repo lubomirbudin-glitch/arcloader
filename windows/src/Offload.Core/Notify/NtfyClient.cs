@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Offload.Core.Updates;
 
 namespace Offload.Core.Notify;
 
@@ -73,7 +74,7 @@ public static partial class NtfyClient
                 Content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(body.ToJsonString(Json))),
             };
             request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
-            request.Headers.UserAgent.ParseAdd($"Offload/{OffloadVersion.String}");
+            request.Headers.UserAgent.ParseAdd($"Offload/{UpdateChecker.Plain(OffloadVersion.String)}");
             using var response = await Http.SendAsync(request, cts.Token).ConfigureAwait(false);
             return response.IsSuccessStatusCode
                 ? new(true, null)

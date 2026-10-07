@@ -116,7 +116,7 @@ public class NtfyClientTests
         var req = Assert.Single(server.Requests);
         Assert.Equal(("POST", "/"), (req.Method, req.Path));
         Assert.Equal("application/json; charset=utf-8", req.ContentType);
-        Assert.StartsWith("Offload/", req.UserAgent);
+        Assert.Matches(@"^Offload/\d+\.\d+\.\d+$", req.UserAgent);   // M17: no "-win" suffix
         using var doc = JsonDocument.Parse(req.Body);
         var root = doc.RootElement;
         Assert.Equal("film-x_7", root.GetProperty("topic").GetString());
