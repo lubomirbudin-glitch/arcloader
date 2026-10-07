@@ -158,6 +158,8 @@ public static class Msg
     public static string NotADayFolder(string path) => $"Ve složce {path} není žádná karta s reportem — vyberte složku dne na cíli (<cíl>\\<datum>).";
     public static string DayReportFolderIsCard(string path) =>
         $"Ve složce dne {path} je karta „{Layout.ReportDirName}“ — denní report by se zapsal do ní, proto se nevytvoří.";
+    public static string DayIsVolumeRoot(string path) =>
+        $"{path} je kořen disku, ne složka dne — vyberte složku dne na cíli (<cíl>\\<datum>) nebo kartu v ní.";
     public static string DayReportBusy(string path) => $"Denní report ve složce {path} právě vytváří jiná úloha — zkuste to za chvíli.";
     public static string DayReportFailed(string detail) => $"Denní report se nepodařilo vytvořit: {detail}";
     public static string DayReportWritten(string path) => $"Denní report: {path}";

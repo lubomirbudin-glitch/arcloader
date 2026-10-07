@@ -290,7 +290,8 @@ public sealed partial class MainViewModel
 
     void ClearFinished()
     {
-        foreach (var j in Jobs.Where(j => j.IsFinished).ToList()) Jobs.Remove(j);
+        // Not one the app still waits for (a day report on the post thread, an eject): closing must still see it.
+        foreach (var j in Jobs.Where(j => j.IsFinished && !j.Busy).ToList()) Jobs.Remove(j);
         RaiseMany(nameof(HasJobs), nameof(HasFinished));
     }
 

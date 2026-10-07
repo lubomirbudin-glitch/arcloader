@@ -55,6 +55,12 @@ public static class QueueRules
     public static bool MeasureBlocked(IEnumerable<JobPhase> phases) =>
         phases.Any(p => p is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying);
 
+    /// A job card still needs the app (closing waits for it): not finished, an eject in flight, or — ruling I2 — its
+    /// day report is still being made on the post thread until the queue reports the job finished.
+    /// "Vymazat dokončené" therefore removes a card only when it is finished and not still needed (fix round 1, item 3).
+    public static bool StillNeeded(JobPhase phase, bool ejecting, bool dayReportPending, bool leftQueue) =>
+        !phase.IsFinished() || ejecting || (dayReportPending && !leftQueue);
+
     /// The HTML report of generation `generation` (an append has its own, spec 2.2).
     public static string ReportPath(string cardPath, string cardName, int generation = 1) =>
         Path.Combine(cardPath, Layout.ReportDirName, OffloadReport.HtmlName(cardName, generation));

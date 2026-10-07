@@ -10,6 +10,10 @@ public sealed partial class OffloadEngine
         foreach (var path in cardPaths)
         {
             NativeIO.Mkdirs(path);
+            // With the card folder (fix round 1, item 2): a copy in progress or one that stopped is a card for the day
+            // report ("bez reportu"), not a foreign folder. Empty it means "no report" to plan 6 — no verify target
+            // (needs a report or a hash list), no append — and the MHL ignores it.
+            NativeIO.Mkdirs(Path.Combine(path, Layout.ReportDirName));
             foreach (var d in plan.Scan.Dirs) NativeIO.Mkdirs(Layout.Join(path, d));
         }
         var ws = cardPaths.Select((p, i) => new DestWriter(i, p, files.Count, Options)).ToArray();

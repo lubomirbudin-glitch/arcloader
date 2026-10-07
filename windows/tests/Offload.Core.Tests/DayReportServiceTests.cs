@@ -110,7 +110,145 @@ public class DayReportServiceTests
         Assert.Equal(JobPhase.Failed, failed.Status().Phase);
         var html = File.ReadAllText(Assert.Single(failed.DayReports));
         Assert.Contains("<td>A001</td>", html);
-        Assert.Contains("<td>B001</td><td colspan=\"11\" class=\"muted\">jiná složka (bez reportu)</td>", html);
+        // Fix round 1, item 2: the failed card is a card (its _REPORT is made with the folder) — it needs attention.
+        Assert.Contains("<td>B001</td><td colspan=\"11\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", html);
+        Assert.Contains("<tr><td>B001</td><td class=\"warn wrap\">bez reportu (probíhá, nebo byl přerušen)</td></tr>", html);   // Problems
+        Assert.Contains("VYŽADUJE POZORNOST", html);
+        Assert.Contains("<b>1 / 2</b><span>ověřené karty</span>", html);
+    }
+
+    // Fix round 1, item 2: the card folder gets its `_REPORT` when it is made; plan 6 reads an empty one as "no report" —
+    // no append into it, nothing to verify, no crash.
+    [Fact]
+    public void EmptyReportFolder_MadeWithTheCard_IsNoReportForPlan6()
+    {
+        using var dir = new TempDir();
+        var history = dir.Sub("appdata");
+        bool? madeFirst = null;
+        var options = AppendFixtures.Options();
+        OffloadJob? job = null;
+        options.BeforeFileCopy = i => { if (i == 0) madeFirst = Directory.Exists(Path.Combine(job!.Plan!.CardPaths[0], "_REPORT")); };
+        job = Job(Card(dir, "A001", 1), [dir.Sub("d1")], history, options: options);
+        job.Run();
+        Assert.True(madeFirst);
+
+        var card = dir.Sub("d2", "2026-10-07", "B001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "B001C001.mov"), 100, 1);
+        Directory.CreateDirectory(Path.Combine(card, "_REPORT"));
+        var record = CardRecord.Load(card);
+        Assert.True(record.ReportMissing);
+        Assert.Null(record.Error);
+        Assert.Empty(Verification.VerifyTargets.Resolve(card));
+        var noRecord = Assert.Throws<OffloadError>(() => Verification.BackupVerifier.Verify(card));
+        Assert.Equal(PreflightCode.NoHashRecord, noRecord.Code);
+        var append = Job(Card(dir, "B001", 2), [], history, appendInto: [card]);
+        append.Run();
+        Assert.Equal(JobPhase.Failed, append.Status().Phase);
+        Assert.Equal(Msg.AppendNoReport(card), append.Status().Error);
+        Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(card, "_REPORT")));
+    }
+
+    // Fix round 1, item 2: a day report made while a card is still copying shows that card as in progress.
+    [Fact]
+    public void CardInProgress_ShowsAsInProgress()
+    {
+        using var dir = new TempDir();
+        var history = dir.Sub("appdata");
+        var d1 = dir.Sub("d1");
+        Job(Card(dir, "A001", 1), [d1], history).Run();
+        string? during = null;
+        var options = AppendFixtures.Options();
+        options.BeforeFileCopy = i => { if (i == 0) during = File.ReadAllText(DayReportService.RegenerateDay(Path.Combine(d1, "2026-10-07"), new OutputSettings())); };
+
+        var job = Job(Card(dir, "B001", 2), [d1], history, options: options);
+        job.Run();
+
+        Assert.NotNull(during);
+        Assert.Contains("<td>B001</td><td colspan=\"11\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", during);
+        Assert.Contains("<b>1 / 2</b><span>ověřené karty</span>", during);
+        Assert.Contains("<b>2 / 2</b><span>ověřené karty</span>", File.ReadAllText(Assert.Single(job.DayReports)));
+    }
+
+    // Fix round 1, item 4: a cancelled job (closing the app cancels every job) waits for a busy day at most 5 s, then
+    // skips its day report — closing never takes minutes.
+    [Fact]
+    public void Cancelled_BusyDay_GivesUpAfterFiveSeconds()
+    {
+        using var dir = new TempDir();
+        var history = dir.Sub("appdata");
+        var d1 = dir.Sub("d1");
+        Job(Card(dir, "A001", 1), [d1], history).Run();
+        var day = Path.Combine(d1, "2026-10-07");
+        using var inside = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var holder = new Thread(() =>
+        {
+            DayReportService.WhileHeld = _ => { inside.Set(); release.Wait(); };
+            try { DayReportService.RegenerateDay(day, new OutputSettings()); }
+            finally { DayReportService.WhileHeld = null; }
+        });
+        holder.Start();
+        try
+        {
+            Assert.True(inside.Wait(TimeSpan.FromSeconds(30)));
+            var options = AppendFixtures.Options();
+            OffloadJob? job = null;
+            options.BeforeFileCopy = _ => job!.Cancel();
+            job = Job(Card(dir, "B001", 2), [d1], history, options: options);
+            var log = new List<string>();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+
+            job.Run(m => { lock (log) log.Add(m); });
+
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(60), $"{clock.ElapsedMilliseconds} ms");   // DefaultWait is 2 min
+            Assert.True(clock.Elapsed >= TimeSpan.FromSeconds(4.5), $"{clock.ElapsedMilliseconds} ms");
+            Assert.Equal(JobPhase.Cancelled, job.Status().Phase);
+            Assert.Empty(job.DayReports);
+            Assert.Contains(log, m => m == $"day report {day}: {Msg.DayReportBusy(day)}");
+        }
+        finally
+        {
+            release.Set();
+            holder.Join();
+        }
+    }
+
+    // Fix round 1, item 3: when stage 1 has ended, its day report is already marked as pending (closing waits for it).
+    [Fact]
+    public void StageOneEnded_DayReportPendingUntilPost()
+    {
+        using var dir = new TempDir();
+        var job = Job(Card(dir, "A001", 1), [dir.Sub("d1")], dir.Sub("appdata"));
+
+        Assert.True(job.RunCopy());
+
+        Assert.Equal(JobPhase.Done, job.Status().Phase);
+        Assert.True(job.DayReportPending);
+        Assert.Empty(job.DayReports);
+        job.RunPost();
+        Assert.False(job.DayReportPending);
+        Assert.Single(job.DayReports);
+
+        var off = Job(Card(dir, "B001", 2), [dir.Sub("d2")], dir.Sub("appdata2"), new OutputSettings { DayReport = false });
+        Assert.False(off.RunCopy());
+        Assert.False(off.DayReportPending);
+    }
+
+    // Fix round 1, item 1: a drive root keeps its backslash ("E:" alone would mean the current folder on E:) and is
+    // refused — never a `_REPORT` in a destination root.
+    [Fact]
+    public void VolumeRoot_KeepsItsBackslash_Refused()
+    {
+        using var dir = new TempDir();
+        var root = Path.GetPathRoot(dir.Path)!;
+        Assert.EndsWith("\\", root);
+
+        Assert.Equal(root, DayReportService.DayFolderOf(root));
+        Assert.Equal(dir.Path, DayReportService.DayFolderOf(dir.Path + "\\"));
+        var refused = Assert.Throws<InvalidOperationException>(() => DayReportService.RegenerateDay(root, new OutputSettings()));
+        Assert.Equal(Msg.DayIsVolumeRoot(root), refused.Message);
+        Assert.Throws<InvalidOperationException>(() => DayReport.Write(root, new OutputSettings()));
+        Assert.Throws<InvalidOperationException>(() => DayReport.CheckDay(root.TrimEnd('\\') + "\\\\"));
     }
 
     // Ruling M3: a destination that is gone gets no day report, only a log line; the other destination gets its own.
@@ -326,6 +464,35 @@ public class CliDayReportTests
         var bad = Run(DayReportCommand.Create(), missing);
         Assert.Equal(1, bad.Exit);
         Assert.Contains($"Chyba: Složka dne nenalezena: {missing}", bad.Err);
+    }
+
+    // Fix round 1, item 1 (reproduced): `day-report D:\` with the current folder inside a day wrote the day files there
+    // ("D:" = the current folder on D:). A root, also given as a bare "D:", is refused and nothing is written anywhere.
+    [Fact]
+    public void DayReport_DriveRoot_Refused_EvenFromInsideADay()
+    {
+        using var dir = new TempDir();
+        var day = DayFixtures.Day(dir);
+        var root = Path.GetPathRoot(day)!;
+        var before = Directory.GetFiles(Path.Combine(day, "_REPORT"));
+        var rootReportBefore = Directory.Exists(Path.Combine(root, "_REPORT"));
+        var cwd = Environment.CurrentDirectory;
+        Environment.CurrentDirectory = day;
+        try
+        {
+            foreach (var arg in new[] { root, root.TrimEnd('\\') })
+            {
+                var r = Run(DayReportCommand.Create(), arg);
+                Assert.Equal(1, r.Exit);
+                Assert.Contains("Chyba: " + Msg.DayIsVolumeRoot(root), r.Err);
+            }
+        }
+        finally
+        {
+            Environment.CurrentDirectory = cwd;
+        }
+        Assert.Equal(before, Directory.GetFiles(Path.Combine(day, "_REPORT")));
+        Assert.Equal(rootReportBefore, Directory.Exists(Path.Combine(root, "_REPORT")));
     }
 
     [Fact]

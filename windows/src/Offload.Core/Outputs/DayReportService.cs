@@ -27,7 +27,7 @@ public static class DayReportService
     /// The day folder a pick means: a card folder (it has `_REPORT\offload_report.json`) stands for its day.
     public static string DayFolderOf(string picked)
     {
-        var full = Path.GetFullPath(picked).TrimEnd('\\');
+        var full = DayReport.FullPath(picked);   // a root keeps its backslash ("E:" would be the current folder on E:)
         return File.Exists(Path.Combine(full, Layout.ReportDirName, CardRecord.MainReport)) && Path.GetDirectoryName(full) is string day ? day : full;
     }
 
@@ -41,6 +41,7 @@ public static class DayReportService
     /// (logged).
     public static string RegenerateDay(string dayPath, OutputSettings outputs, Action<string>? log = null, TimeSpan? wait = null)
     {
+        dayPath = DayReport.FullPath(dayPath);
         DayReport.CheckDay(dayPath);   // before waiting for anyone: a wrong folder is refused at once
         var limit = wait ?? DefaultWait;
         var clock = Stopwatch.StartNew();

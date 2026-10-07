@@ -224,16 +224,19 @@ public sealed class OffloadJob
             Update(s => s with { SafeToEject = report.SafeToEject, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
             if (IsCancelled)
             {
+                // Marked before the phase changes: whoever sees it finished also sees the day report pending (fix round 1, item 3).
+                var cancelled = DayReportNext();   // the card shows as not complete (spec 3.2); not recorded in history
                 Update(s => s with { Phase = JobPhase.Cancelled });
-                return DayReportNext();   // the card shows as not complete (spec 3.2); not recorded in history
+                return cancelled;
             }
             RecordHistory(plan, report, log);
             if (!Config.AnalyzeClips && !Config.Proxy.Enabled)
             {
                 WriteClipLists(plan, log);   // the clips found in the files, without metadata (spec 3.3)
                 WritePdfReports(report, plan, log);
+                var done = DayReportNext();
                 Update(s => s with { Phase = JobPhase.Done });
-                return DayReportNext();
+                return done;
             }
             Update(s => s with { Phase = JobPhase.Analyzing });
             return true;
@@ -265,13 +268,15 @@ public sealed class OffloadJob
         }
         catch (OperationCanceledException)
         {
+            var next = copying && DayReportNext();
             Update(s => s with { Phase = JobPhase.Cancelled });
-            return copying && DayReportNext();
+            return next;
         }
         catch (Exception e)
         {
+            var next = copying && DayReportNext();   // ruling M9: best effort after a failed copy too
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
-            return copying && DayReportNext();   // ruling M9: best effort after a failed copy too
+            return next;
         }
         finally
         {
@@ -434,15 +439,20 @@ public sealed class OffloadJob
         }
     }
 
+    /// How long a cancelled job waits for another writer of its day before it leaves the day report out.
+    internal static readonly TimeSpan CancelledDayReportWait = TimeSpan.FromSeconds(5);
+
     /// Spec 3.2: the day report of every destination of this job, made again at its end (also an append, also a
     /// cancelled copy). Waits for another writer of the same day; a failure is only logged — never the job's result.
     void RegenerateDayReports(OffloadPlan plan, Action<string>? log)
     {
         if (!Config.Outputs.DayReport) return;
+        // Cancelled (closing the app cancels every job): a busy day is skipped after a short wait (fix round 1, item 4).
+        TimeSpan? wait = IsCancelled ? CancelledDayReportWait : null;
         var written = new List<string>();
         foreach (var root in plan.DestRoots)
         {
-            try { written.Add(DayReportService.Regenerate(root, plan.Date, Config.Outputs, log)); }
+            try { written.Add(DayReportService.Regenerate(root, plan.Date, Config.Outputs, log, wait)); }
             catch (Exception e) { log?.Invoke($"day report {Path.Combine(root, plan.Date)}: {e.Message}"); }
         }
         dayReports = written;

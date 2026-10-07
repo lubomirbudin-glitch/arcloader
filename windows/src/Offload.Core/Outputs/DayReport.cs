@@ -74,16 +74,30 @@ public static class DayReport
     /// not itself a card folder (ruling M8: the day files would land in that card, outside its own `_REPORT`).
     public static void CheckDay(string dayPath)
     {
+        dayPath = FullPath(dayPath);
         if (!Directory.Exists(dayPath)) throw new DirectoryNotFoundException(Msg.DayNotFound(dayPath));
+        if (IsVolumeRoot(dayPath)) throw new InvalidOperationException(Msg.DayIsVolumeRoot(dayPath));
         var report = Path.Combine(dayPath, Layout.ReportDirName);
         if (HasReport(report) || Directory.Exists(Path.Combine(report, Mhl.DirName)))
             throw new InvalidOperationException(Msg.DayReportFolderIsCard(dayPath));
         if (!FoldersOf(dayPath).Any(HasReport)) throw new InvalidOperationException(Msg.NotADayFolder(dayPath));
     }
 
+    /// The full path without a trailing separator — a root keeps its own ("E:\"; "E:" alone would be the current folder
+    /// on E:, fix round 1, item 1).
+    public static string FullPath(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+
+    /// A drive or share root, or the folder a volume is mounted at: a destination root, never a day.
+    static bool IsVolumeRoot(string full)
+    {
+        static bool Same(string? a, string b) => a != null && string.Equals(Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b), StringComparison.OrdinalIgnoreCase);
+        return Same(Path.GetPathRoot(full), full) || Same(NativeIO.VolumeRoot(full), full);
+    }
+
     /// The folders of `dayPath`, in Explorer order. Reads only.
     public static DayModel Load(string dayPath)
     {
+        dayPath = FullPath(dayPath);
         var folders = FoldersOf(dayPath);
         folders.Sort((a, b) => Win32.StrCmpLogicalW(Path.GetFileName(a), Path.GetFileName(b)));
         return new DayModel { DayPath = dayPath, Folders = folders.Select(f => new DayCard { Record = CardRecord.Load(f), IsCard = IsCard(f) }).ToList() };
@@ -145,8 +159,9 @@ public static class DayReport
                 h.Append($"<tr><td>{E(c.Name)}</td><td colspan=\"11\" class=\"warn\">{why}</td></tr>\n");
                 continue;
             }
-            var (vClass, vText) = r.Verified ? ("ok", "ověřeno") : ("warn", "NEOVĚŘENO");
             int failed = r.FailedFiles.Count;
+            // Read back, but a file failed: not green (fix round 1, item 6).
+            var (vClass, vText) = !r.Verified ? ("warn", "NEOVĚŘENO") : failed > 0 ? ("warn", "ověřeno, s chybami") : ("ok", "ověřeno");
             var proxies = c.ProxiesDone + c.ProxiesFailed == 0 ? "—" : $"{c.ProxiesDone} / {c.ProxiesFailed}";
             var lutNames = c.Luts.Count == 0 ? "—" : string.Join(", ", c.Luts.Keys);
             var generations = r.Generations.Count > 1 ? r.Generations.Count.ToString(Inv) : "—";
@@ -209,6 +224,7 @@ public static class DayReport
     /// HTML path. Throws when the folder is no day (CheckDay), cannot be read, or the HTML cannot be written.
     public static string Write(string dayPath, OutputSettings outputs, Action<string>? log = null)
     {
+        dayPath = FullPath(dayPath);
         CheckDay(dayPath);
         var day = Load(dayPath);
         var dir = Path.Combine(dayPath, Layout.ReportDirName);

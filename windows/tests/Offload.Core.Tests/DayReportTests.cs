@@ -121,6 +121,9 @@ public class DayReportTests
         Assert.Contains("<td>SOUND</td><td colspan=\"11\" class=\"muted\">jiná složka (bez reportu)</td>", html);
         Assert.Contains("<td>1 / 1</td><td class=\"wrap\">ARRI LogC4 → Rec.709</td><td class=\"num\">—</td>", html);   // A001
         Assert.Contains("<td class=\"warn\">NEOVĚŘENO</td>", html);   // C001
+        // Fix round 1, item 6: read back, but with a failed file — not green.
+        Assert.Contains("<td class=\"warn\">ověřeno, s chybami</td><td class=\"num bad\">1</td>", html);   // B001
+        Assert.Equal(1, html.Split("<td class=\"ok\">ověřeno</td>").Length - 1);   // A001 only
         Assert.Contains("<td class=\"num\">2</td></tr>", html);      // C001: two generations
         Assert.Contains("1 soubor selhal: CLIP/c 02.mov", html);    // B001
         Assert.Contains("neověřeno — kopie nebyla přečtena zpět", html);
