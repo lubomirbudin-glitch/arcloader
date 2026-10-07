@@ -130,6 +130,24 @@ public static class SonyXml
             return null;
         }
     }
+
+    /// The camera's serial number from the same sidecar (`<Device … serialNo="…"/>`), or null.
+    public static string? Serial(string clipFullPath)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(clipFullPath);
+            if (dir == null) return null;
+            var xml = Path.Combine(dir, Path.GetFileNameWithoutExtension(clipFullPath) + "M01.XML");
+            if (!System.IO.File.Exists(xml)) return null;
+            var device = System.Xml.Linq.XDocument.Load(xml).Descendants().FirstOrDefault(e => e.Name.LocalName == "Device");
+            return device?.Attribute("serialNo")?.Value.Trim() is { Length: > 0 } serial ? serial : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 }
 
 /// Which LUT a clip gets (spec: luts design §3). Pure rules over metadata; never throws.
@@ -137,7 +155,8 @@ public static class LutResolver
 {
     public static LutMode EffectiveMode(ProxySettings s) => s.LutMode ?? (!string.IsNullOrEmpty(s.LutPath) ? LutMode.Custom : LutMode.Auto);
 
-    public static LutUse Resolve(Clip clip, ClipInfo? info, string clipFullPath, ProxySettings s, LutCatalog cat)
+    /// `cardName`: the card folder - own rules match folders below it and fall back to it as the reel (spec 4.2).
+    public static LutUse Resolve(Clip clip, ClipInfo? info, string clipFullPath, ProxySettings s, LutCatalog cat, string cardName = "")
     {
         switch (EffectiveMode(s))
         {
@@ -150,8 +169,11 @@ public static class LutResolver
             case LutMode.Builtin:
                 return Builtin(cat, s.LutBuiltin, "builtin", "vybraný v nastavení") ?? LutUse.None("vestavěný LUT nenalezen");
         }
+        // R18: own rules first, only here in Auto mode.
+        if (s.LutRules.Count > 0 && LutRules.Match(s.LutRules, clip, info, info?.Reel ?? ReelResolver.Resolve(clip, info, cardName), cardName) is { } rule)
+            return LutRules.Use(rule.Number, rule.Rule, cat);
         if (cat.Luts.Count == 0) return LutUse.None("vestavěné LUTy chybí");
-        var (id, reason) = Detect(clip, info, clipFullPath);
+        var (id, reason) = Detect(clip, info, clipFullPath, s.BrawGen4ToGen5);
         if (id == "") return LutUse.None(reason);                     // recognised, but not log footage
         if (id != null) return Builtin(cat, id, "auto", reason) ?? LutUse.None("vestavěný LUT nenalezen");
         return Builtin(cat, s.LutFallback, "fallback", "kamera nerozpoznána — záložní LUT") ?? LutUse.None("kamera nerozpoznána");
@@ -163,23 +185,28 @@ public static class LutResolver
     /// BRAW decodes in the gamma the clip was shot in: only "Blackmagic Design Film" Gen 5 matches the built-in LUT.
     /// Video / Extended Video / Custom / HDR gammas are display-ready already; an older decoder without the gamma
     /// in --info keeps the old assumption (Film Gen 5).
-    static (string? Id, string Reason) Braw(ClipInfo? info)
+    /// `gen5Wanted` (proxy.brawGen4ToGen5): a Gen 4 clip that comes back unconverted says so (M11 a).
+    static (string? Id, string Reason) Braw(ClipInfo? info, bool gen5Wanted)
     {
         var gamma = info?.Gamma;
         if (string.IsNullOrEmpty(gamma)) return ("bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)");
         var label = info!.ColorScienceGen is int gen ? $"{gamma} Gen {gen}" : gamma;
         if (!gamma.Equals("Blackmagic Design Film", StringComparison.OrdinalIgnoreCase))
             return ("", $"Blackmagic RAW: {label} (není log)");
-        if (info.ColorScienceGen is int g && g < 5) return ("", $"Blackmagic RAW: {label} (bez vestavěného LUTu)");
+        // Decoded by braw-decode --gen5 (spec 4.2): recorded in an older generation, now Gen 5 — the Gen 5 LUT fits.
+        if (info.ColorScienceGenOriginal is int original && original < 5 && info.ColorScienceGen is int effective && effective >= 5)
+            return ("bmd-film-gen5", $"Blackmagic RAW: Film Gen {original} → Gen {effective} (převod SDK)");
+        if (info.ColorScienceGen is int g && g < 5)
+            return ("", $"Blackmagic RAW: {label} (bez vestavěného LUTu){(gen5Wanted ? " — převod na Gen 5 se nepodařil" : "")}");
         return ("bmd-film-gen5", $"Blackmagic RAW: {label}");
     }
 
     /// (id, reason): id null = not recognised, "" = recognised as non-log (no LUT).
-    internal static (string? Id, string Reason) Detect(Clip clip, ClipInfo? info, string clipFullPath)
+    internal static (string? Id, string Reason) Detect(Clip clip, ClipInfo? info, string clipFullPath, bool brawGen5 = false)
     {
         switch (clip.Format)
         {
-            case ClipFormat.Braw: return Braw(info);
+            case ClipFormat.Braw: return Braw(info, brawGen5);
             case ClipFormat.R3d: return ("red-log3g10-rwg", "RED R3D (IPP2 Log3G10)");
             case ClipFormat.Arriraw:
                 return ArriBackend.ColorSpace(null, info ?? new ClipInfo()).Contains("LogC4")
@@ -233,6 +260,6 @@ public static class LutOption
         LutMode.None => "none",
         LutMode.Custom => p.LutPath,
         LutMode.Builtin => p.LutBuiltin,
-        _ => "auto" + (p.LutFallback != null ? $" (fallback {p.LutFallback})" : ""),
+        _ => "auto" + (p.LutFallback != null ? $" (fallback {p.LutFallback})" : "") + (p.LutRules.Count > 0 ? $" + {p.LutRules.Count} own rule(s)" : ""),
     };
 }

@@ -12,17 +12,21 @@ internal enum Scale : uint
 }
 
 /// Command line, the same as the Mac braw-decode:
-///   braw-decode --info [--scale S] clip.braw
-///   braw-decode [--scale S] [--start N] [--count N] clip.braw
+///   braw-decode --info [--gen5] [--scale S] clip.braw
+///   braw-decode [--gen5] [--scale S] [--start N] [--count N] clip.braw
+/// `--gen5` (spec 4.2): a Blackmagic Design Film Gen 4 clip is decoded with colour science Gen 5 (and --info reports the
+/// effective values plus "colorScienceGenOriginal").
 internal sealed record Options(bool Info, Scale Scale, ulong Start, ulong? Count, string Path)
 {
-    public const string Usage = "usage: braw-decode [--info] [--scale full|half|quarter|eighth] [--start N] [--count N] clip.braw";
+    public const string Usage = "usage: braw-decode [--info] [--gen5] [--scale full|half|quarter|eighth] [--start N] [--count N] clip.braw";
+
+    public bool Gen5 { get; init; }
 
     /// null = bad command line (print Usage, exit 2). Stricter than the Mac (which falls back to "full" / 0):
     /// Offload never passes anything else, so a typo should fail loudly.
     public static Options? Parse(IReadOnlyList<string> args)
     {
-        bool info = false;
+        bool info = false, gen5 = false;
         var scale = Scale.Full;
         ulong start = 0;
         ulong? count = null;
@@ -35,6 +39,9 @@ internal sealed record Options(bool Info, Scale Scale, ulong Start, ulong? Count
             {
                 case "--info":
                     info = true;
+                    break;
+                case "--gen5":
+                    gen5 = true;
                     break;
                 case "--scale":
                     var s = Value();
@@ -53,7 +60,7 @@ internal sealed record Options(bool Info, Scale Scale, ulong Start, ulong? Count
                     break;
             }
         }
-        return path == null ? null : new Options(info, scale, start, count, path);
+        return path == null ? null : new Options(info, scale, start, count, path) { Gen5 = gen5 };
     }
 
     static bool TryScale(string s, out Scale scale)

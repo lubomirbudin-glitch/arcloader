@@ -12,6 +12,7 @@ sealed class StageTwoOptions
     readonly Option<bool> proxy = new("--proxy") { Description = "Render proxies after the copy is verified." };
     readonly Option<string?> lut = new("--lut") { Description = "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path." };
     readonly Option<string?> lutFallback = new("--lut-fallback") { Description = "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto." };
+    readonly Option<string[]> lutRule = new("--lut-rule") { Description = "Own LUT rule before the camera detection (with --lut auto), repeat in priority order: <camera|serial|reel|folder>=<value>:<lut id|none|path.cube>, e.g. camera=FX6:sony-slog3-sgamut3cine.", DefaultValueFactory = _ => [] };
     readonly Option<int> proxyHeight = new("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
     readonly Option<double?> frameAspect = new("--frame-aspect") { Description = "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.", CustomParser = a => CliParse.Parse(a) };
     readonly Option<double> frameScale = new("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
@@ -21,44 +22,80 @@ sealed class StageTwoOptions
     readonly Option<string?> proxyFolder = new("--proxy-folder") { Description = "Also copy every proxy to <folder>\\<date>\\<card name>\\ (with --proxy; never overwrites)." };
     readonly Option<bool> noClipList = new("--no-clip-list") { Description = "No clip list CSV (_REPORT\\<card>_clips.csv)." };
     readonly Option<bool> ale = new("--ale") { Description = "Also write the clip list for Avid (_REPORT\\<card>_clips.ale)." };
+    readonly Option<bool> brawGen5 = new("--braw-gen5") { Description = "Decode Blackmagic RAW Film Gen 4 as Gen 5 (the Gen 5 LUT then fits). Not yet verified with a Gen 4 sample." };
     readonly Option<bool> noDayReport = new("--no-day-report") { Description = "Do not make the day report (<date>\\_REPORT\\<date>_day_report.html) again after the copy." };
 
     public void AddTo(Command cmd)
     {
-        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder, noClipList, ale, noDayReport })
+        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder, noClipList, ale, noDayReport, brawGen5 })
             cmd.Options.Add(o);
     }
 
-    /// Sets AnalyzeClips and Proxy; throws ArgumentException with a Czech message on a bad value.
-    public void Apply(ParseResult r, JobConfig config)
+    /// Sets AnalyzeClips, Outputs and Proxy; throws ArgumentException with a Czech message on a bad value. `project`
+    /// (--project): its values are the defaults and only the options written on the command line replace them (spec 4.1).
+    public void Apply(ParseResult r, JobConfig config, SettingsProfile? project = null)
     {
-        if (!ProxyCodecExtensions.TryParseWire(r.GetValue(proxyCodec)!, out var codec))
-            throw new ArgumentException(Msg.UnknownProxyCodec(r.GetValue(proxyCodec)));
-        var (lutMode, lutBuiltin, lutRaw, lutFb, lutErr) = LutOption.Parse(r.GetValue(lut), r.GetValue(lutFallback), LutCatalog.Default);
-        if (lutErr != null) throw new ArgumentException(lutErr);
-        var lutPath = lutRaw != null ? CliPath.Full(lutRaw) : null;
-        if (lutPath != null && !File.Exists(lutPath)) throw new ArgumentException(Msg.LutNotFound(lutPath));
-        config.AnalyzeClips = !r.GetValue(noAnalyze);
-        config.Outputs = new OutputSettings { ClipListCsv = !r.GetValue(noClipList), ClipListAle = r.GetValue(ale), DayReport = !r.GetValue(noDayReport) };
-        config.Proxy = new ProxySettings
+        bool Given(Option o) => CliProject.Given(r, project, o);
+        var p = project != null ? SettingsStore.Clone(project.Proxy) : new ProxySettings();
+        if (Given(proxyCodec))
         {
-            Enabled = r.GetValue(proxy),
-            LutMode = lutMode,
-            LutBuiltin = lutBuiltin,
-            LutPath = lutPath,
-            LutFallback = lutFb,
-            Height = r.GetValue(proxyHeight),
-            Codec = codec,
-            BitrateMbps = r.GetValue(proxyBitrate),
-            FrameAspect = r.GetValue(frameAspect),
-            FrameScale = r.GetValue(frameScale) / 100,
-            BurnFilename = !r.GetValue(noBurnIn),
-            BurnTimecode = !r.GetValue(noBurnIn),
-            ExtraFolder = r.GetValue(proxyFolder) is string pf ? CliPath.Full(pf) : null,
-        };
-        if (config.Proxy.ExtraFolder != null && !config.Proxy.Enabled)
+            if (!ProxyCodecExtensions.TryParseWire(r.GetValue(proxyCodec)!, out var codec))
+                throw new ArgumentException(Msg.UnknownProxyCodec(r.GetValue(proxyCodec)));
+            p.Codec = codec;
+        }
+        if (Given(lut) || Given(lutFallback))
+        {
+            var (lutMode, lutBuiltin, lutRaw, lutFb, lutErr) = LutOption.Parse(r.GetValue(lut), r.GetValue(lutFallback), LutCatalog.Default);
+            if (lutErr != null) throw new ArgumentException(lutErr);
+            if (Given(lut))
+            {
+                p.LutMode = lutMode;
+                p.LutBuiltin = lutBuiltin;
+                p.LutPath = lutRaw != null ? CliPath.Full(lutRaw) : null;
+                if (p.LutPath != null && !File.Exists(p.LutPath)) throw new ArgumentException(Msg.LutNotFound(p.LutPath));
+            }
+            if (Given(lutFallback)) p.LutFallback = lutFb;
+        }
+        if (Given(lutRule))
+        {
+            var rules = new List<LutRule>();
+            foreach (var spec in r.GetValue(lutRule)!)
+            {
+                var (rule, error) = LutRules.ParseOption(spec, LutCatalog.Default);
+                if (rule == null) throw new ArgumentException(error);
+                if (rule.LutPath != null)
+                {
+                    rule.LutPath = CliPath.Full(rule.LutPath);
+                    if (!File.Exists(rule.LutPath)) throw new ArgumentException(Msg.RuleLutNotFound(rules.Count + 1, Path.GetFileName(rule.LutPath)));
+                }
+                rules.Add(rule);
+            }
+            // Rules work in Auto mode only (R18): written ones with another LUT would be silently ignored.
+            if (rules.Count > 0 && LutResolver.EffectiveMode(p) != LutMode.Auto) throw new ArgumentException(Msg.LutRuleNeedsAuto);
+            p.LutRules = rules;   // written rules replace the project's (their order is the priority)
+        }
+        if (Given(proxy)) p.Enabled = r.GetValue(proxy);
+        if (Given(proxyHeight)) p.Height = r.GetValue(proxyHeight);
+        if (Given(proxyBitrate)) p.BitrateMbps = r.GetValue(proxyBitrate);
+        if (Given(frameAspect)) p.FrameAspect = r.GetValue(frameAspect);
+        if (Given(frameScale)) p.FrameScale = r.GetValue(frameScale) / 100;
+        if (Given(noBurnIn)) p.BurnFilename = p.BurnTimecode = !r.GetValue(noBurnIn);
+        if (Given(brawGen5)) p.BrawGen4ToGen5 = r.GetValue(brawGen5);
+        if (Given(proxyFolder)) p.ExtraFolder = r.GetValue(proxyFolder) is string pf ? CliPath.Full(pf) : null;
+        config.Proxy = p;
+
+        var outputs = project != null ? SettingsStore.Clone(project.Outputs) : new OutputSettings();
+        if (Given(noClipList)) outputs.ClipListCsv = !r.GetValue(noClipList);
+        if (Given(ale)) outputs.ClipListAle = r.GetValue(ale);
+        if (Given(noDayReport)) outputs.DayReport = !r.GetValue(noDayReport);
+        config.Outputs = outputs;
+        config.AnalyzeClips = Given(noAnalyze) ? !r.GetValue(noAnalyze) : project!.AnalyzeClips;
+
+        if (r.GetValue(proxyFolder) != null && !p.Enabled)
             Console.Error.WriteLine(Msg.ProxyFolderNoEffect);
-        if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string folder && !Directory.Exists(folder))
+        if (ProxyPreflight.ExtraFolderInUse(p) is string folder && !Directory.Exists(folder))
             throw new ArgumentException(Msg.ProxyFolderNotFound(folder));
+        // A project's own LUT (or, from task 5, a rule's) that is gone stops the job before it starts, as in the app.
+        if (ProxyPreflight.Blocking(p, config.AnalyzeClips) is string missing) throw new ArgumentException(missing);
     }
 }

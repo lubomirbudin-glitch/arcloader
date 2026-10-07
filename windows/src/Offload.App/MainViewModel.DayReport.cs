@@ -19,12 +19,16 @@ public sealed partial class MainViewModel
     {
         if (Dialogs.PickFolder("Vyberte složku dne na cíli") is not string folder) return;
         makingDayReport = true;
-        var outputs = SettingsStore.Clone(Settings.Outputs);
+        var all = SettingsStore.Clone(AllSettings);   // a snapshot for the background thread
         try
         {
             // The folder may be on a slow or network disk, the PDF takes seconds, another writer may hold the day:
             // never on the UI thread.
-            var html = await Task.Run(() => DayReportService.RegenerateDay(DayReportService.DayFolderOf(folder), outputs, m => AppLog.Write($"day report: {m}")));
+            var html = await Task.Run(() =>
+            {
+                var day = DayReportService.DayFolderOf(folder);
+                return DayReportService.RegenerateDay(day, DayReportService.OutputsFor(day, all), m => AppLog.Write($"day report: {m}"));
+            });
             if (closing) return;
             if (Shell.Open(html) is string error) ShowMessage(error);
         }

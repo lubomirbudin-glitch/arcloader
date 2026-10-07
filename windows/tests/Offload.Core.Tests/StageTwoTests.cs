@@ -83,6 +83,27 @@ public class StageTwoTests
         Assert.Contains("\"lut\"", File.ReadAllText(Path.Combine(job.Plan!.CardPaths[0], "_REPORT", "offload_report.json")));
     }
 
+    // Plan 8 fix round 1, item 2b: a custom LUT gone at render time is not silent — every proxy says it has none.
+    [FfmpegFact]
+    public void CustomLutGone_ProxiesSayTheyHaveNone()
+    {
+        using var dir = new TempDir();
+        var card = SonyCard(dir);
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")])
+        {
+            Date = "2026-10-05",
+            AnalyzeClips = false,
+            Proxy = new ProxySettings { Enabled = true, Height = 360, LutMode = LutMode.Custom, LutPath = Path.Combine(dir.Path, "gone.cube") },
+        }, Options());
+
+        var report = job.Run();
+
+        Assert.Equal(JobPhase.Done, job.Status().Phase);
+        var rendered = report!.Clips.Where(c => c.ProxyStatus == ProxyStatus.Done).ToList();
+        Assert.Equal(2, rendered.Count);
+        Assert.All(rendered, c => Assert.Equal("LUT nenalezen: gone.cube — proxy bez LUTu", c.ProxyNote));
+    }
+
     // Final review A7: a failed copy to another destination keeps the rendered proxy.
     [FfmpegFact]
     public void ProxyCopyFails_RenderedProxyKept()

@@ -24,6 +24,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         BitrateUpCommand = new RelayCommand(() => BitrateMbps++, () => p.BitrateMbps < 50);
         ScaleDownCommand = new RelayCommand(() => ScalePercent--, () => ScalePercent > 50);
         ScaleUpCommand = new RelayCommand(() => ScalePercent++, () => ScalePercent < 100);
+        EditRulesCommand = new RelayCommand(() => owner.EditLutRules(catalog));
         BuildLutLists();
     }
 
@@ -95,7 +96,15 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         }
     }
 
-    static readonly string[] LutProperties = [nameof(LutChoice), nameof(ShowFallback), nameof(ShowCustom), nameof(LutName), nameof(LutPath)];
+    static readonly string[] LutProperties = [nameof(LutChoice), nameof(ShowFallback), nameof(ShowCustom), nameof(LutName), nameof(LutPath), nameof(ShowRules)];
+
+    /// "Pravidla LUTů… (2)" (spec 4.2) — only with "Automaticky podle kamery": the rules apply in that mode only (R18).
+    public bool ShowRules => Mode == LutMode.Auto;
+    public string RulesButtonText => $"Pravidla LUTů… ({p.LutRules.Count})";
+    public RelayCommand EditRulesCommand { get; }
+
+    /// The rules were edited (MainViewModel.EditLutRules wrote them into the profile).
+    internal void RulesChanged() => Changed(nameof(RulesButtonText));
 
     public Option<string> Fallback
     {
@@ -185,6 +194,8 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     public bool Audio { get => p.Audio; set { p.Audio = value; Changed(nameof(Audio)); } }
     public bool SkipCameraProxies { get => p.SkipCameraProxies; set { p.SkipCameraProxies = value; Changed(nameof(SkipCameraProxies)); } }
     public bool CopyToAllDestinations { get => p.CopyToAllDestinations; set { p.CopyToAllDestinations = value; Changed(nameof(CopyToAllDestinations)); } }
+    /// Spec 4.2, R26: off by default until a Gen 4 sample confirms the SDK conversion.
+    public bool BrawGen4ToGen5 { get => p.BrawGen4ToGen5; set { p.BrawGen4ToGen5 = value; Changed(nameof(BrawGen4ToGen5)); } }
 
     static readonly string[] FolderProperties = [nameof(ExtraFolderName), nameof(ExtraFolderPath), nameof(HasExtraFolder)];
 

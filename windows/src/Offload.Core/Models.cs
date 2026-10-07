@@ -71,6 +71,8 @@ public sealed class OffloadPlan
     public IReadOnlyList<Space.SpaceLine> Space { get; init; } = [];
     /// "Na cíli … zbude po offloadu jen … — rezerva pod 5 %…" — never blocks (R11).
     public IReadOnlyList<string> SpaceWarnings { get; init; } = [];
+    /// The project the job runs in (spec 4.1), null = "Bez projektu" — set by OffloadJob, written into the report.
+    public string? Project { get; set; }
 }
 
 public enum CopyPhase { Copy, Flush, Verify, Report, Done }

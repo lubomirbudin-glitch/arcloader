@@ -44,6 +44,15 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="Sections" Margin="18">
 
+                <!-- Projekt (spec 4.1); off while Start checks and asks (ruling I1) -->
+                <DockPanel Margin="0,0,0,14">
+                    <TextBlock Text="Projekt:" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox ItemsSource="{Binding ProjectChoices}" SelectedItem="{Binding ActiveProjectChoice}"
+                              IsEnabled="{Binding CanSwitchProject}"
+                              ToolTip="Pojmenované nastavení (cíle, kontrola, výstupy, proxy, oznámení) — menu Projekt"
+                              AutomationProperties.AutomationId="ProjectChoice" AutomationProperties.Name="Projekt" />
+                </DockPanel>
+
                 <!-- Karty -->
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
@@ -255,6 +264,10 @@
                                 <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Vybrat…" Command="{Binding PickLutCommand}" />
                                 <TextBlock Text="{Binding LutName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding LutPath}" />
                             </DockPanel>
+                            <Button Style="{StaticResource SmallButton}" Content="{Binding RulesButtonText}" Command="{Binding EditRulesCommand}"
+                                    HorizontalAlignment="Left" Margin="0,4,0,0" ToolTip="Vlastní pořadí: kamera / sériové číslo / cívka / složka → LUT"
+                                    Visibility="{Binding ShowRules, Converter={StaticResource BoolToVisible}}"
+                                    AutomationProperties.AutomationId="LutRulesButton" />
                         </StackPanel>
                     </Grid>
                     <CheckBox Content="Burn-in názvu klipu" IsChecked="{Binding BurnFilename}" />
@@ -321,6 +334,9 @@
                         </ItemsControl>
                         <TextBlock Text="Canon Cinema RAW Light a Sony X-OCN se zkopírují a ověří, proxy pro ně nejde vyrobit." Style="{StaticResource Caption}"
                                    TextWrapping="Wrap" TextTrimming="None" Margin="0,4,0,0" />
+                        <CheckBox Content="Blackmagic RAW Film Gen 4 převést na Gen 5 (použije se LUT Gen 5)" IsChecked="{Binding Proxy.BrawGen4ToGen5}"
+                                  Margin="0,8,0,0" AutomationProperties.AutomationId="BrawGen4ToGen5" />
+                        <TextBlock Text="ověří až vzorek .braw Gen 4" Style="{StaticResource Caption}" Margin="24,0,0,0" />
                     </StackPanel>
                 </Expander>
 

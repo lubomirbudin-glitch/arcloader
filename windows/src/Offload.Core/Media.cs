@@ -64,10 +64,17 @@ public sealed class ClipInfo
     [JsonPropertyName("gamma")] public string? Gamma { get; set; }
     [JsonPropertyName("gamut")] public string? Gamut { get; set; }
     [JsonPropertyName("colorScienceGen")] public int? ColorScienceGen { get; set; }
+    /// With the Gen 4 → Gen 5 conversion (spec 4.2): the generation the clip was recorded in; ColorScienceGen is then
+    /// the effective one. Report key `clips[].info.colorScienceGenOriginal`, absent otherwise.
+    [JsonPropertyName("colorScienceGenOriginal"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? ColorScienceGenOriginal { get; set; }
     /// The reel (tape name): ffprobe's `reel_name` / `tape_name` / `reel` tag after the probe, then ReelResolver's
     /// answer (tag, else the clip name, else the card folder) once the job has the clip (spec 3.4). Report key
     /// `clips[].info.reel`, absent when unknown.
     [JsonPropertyName("reel"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Reel { get; set; }
+    /// The camera body's serial number (spec 4.2, LUT rules "serial"): Sony XML `Device serialNo`, ffprobe
+    /// `com.apple.quicktime.camera.identifier` / `camera_serial_number`. Report key `clips[].info.cameraSerial`, absent
+    /// when unknown — then a "serial" rule never matches.
+    [JsonPropertyName("cameraSerial"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CameraSerial { get; set; }
 
     [JsonIgnore]
     public string FpsLabel
@@ -198,6 +205,19 @@ public sealed class ProxySettings
     [JsonPropertyName("frameAspect")] public double? FrameAspect { get; set; }
     /// How much of the image the frame covers (0.9 = 90 %, i.e. 10 % overscan around it).
     [JsonPropertyName("frameScale")] public double FrameScale { get; set; } = 1.0;
+    /// Blackmagic RAW Film Gen 4 decoded as Gen 5, so the Gen 5 LUT fits (spec 4.2) — off by default until a Gen 4
+    /// sample confirms it (R26); absent while off.
+    [JsonPropertyName("brawGen4ToGen5"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool BrawGen4ToGen5 { get; set; }
+    /// Own LUT rules (spec 4.2), top one first — used only in Auto mode, before the camera is recognised. Rules of a newer
+    /// version stay in their place (ruling I3).
+    [JsonIgnore] public List<LutRule> LutRules { get; set; } = [];
+    /// `lutRules` as settings.json and the report hold it: absent while there is none (older files stay as they were).
+    [JsonPropertyName("lutRules"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull), JsonConverter(typeof(LutRuleListConverter))]
+    public List<LutRule>? LutRulesJson
+    {
+        get => LutRules.Count > 0 ? LutRules : null;
+        set => LutRules = value ?? [];
+    }
     /// Keys a newer version added inside "proxy" (settings.json, report): kept and written back unchanged (R24).
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 

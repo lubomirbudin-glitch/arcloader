@@ -36,8 +36,22 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   stopy, cívka tag → název → složka, klíč `clips[].info.reel`); **MD5** (`Hash.swift` + CommonCrypto MD5, volba
   xxh64/both, `hashAlgorithms`, `files[].md5`, `<karta>.md5`, MHL `<md5>`, `verify` z MHL)); **jména karet** `_REPORT`, `_PROXY`, `ascmhl` s `_` na konci a prázdná `<karta>\_REPORT` hned při začátku kopie (D1); seznam ALE bez BOM a volba doplnění: `<karta>.md5` je třetí soubor, který doplnění přepíše (jako `.xxh64`).
 
+- **Nastavení, oznámení, distribuce (Windows plán 8, 2026-10-07):** návrh
+  [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
+  §4 a §8. Mac převezme: **projekty** (`projects` / `activeProject` v `UserDefaults`, stejné chování přepínače — během
+  startu zamčený, úloha ve frontě má vlastní kopii nastavení; `project` v reportu a historii, doplnění podle projektu
+  dřívější zálohy a „Bez projektu“, když už neexistuje, další v řadě po projektech, projekt v hlavičce denního
+  reportu); **vlastní pravidla LUTů** (`lutRules` v `LutResolver` před automatikou, `lut.source = rule`, cíl „Bez LUT“
+  dává `none`, pravidla neznámého typu zachovat a přeskočit, `cameraSerial` ze Sony XML a QuickTime tagů);
+  **`braw-decode --gen5`** v C++ (jen Film Gen 4; klon atributů klipu, `ColorScienceGen` = 5, `colorScienceGenOriginal`
+  v `--info`; neověřeno bez vzorku Gen 4); **oznámení** (texty `JobOutcome`, ntfy JSON POST s pevným textem bez cest;
+  úloha, která skončí v 1. fázi chybou, oznámí hned při konci kopie); **kontrolu aktualizací** (formát manifestu,
+  limity velikosti, síťové cesty se neotevírají; vlastní soubor pro Mac rozhodne Mac). Podpis má Mac vlastní
+  (`codesign` + notarizace).
+
 - **Mimo plán — zbývá i po něm:**
-  - Blackmagic RAW Film Gen 4: zatím bez LUTu (provizorně, jako Windows) — rozhodne uživatel; platí pro obě verze.
+  - Blackmagic RAW Film Gen 4: Windows od 0.4.0 umí převod na Gen 5 (`--gen5`, výchozí vypnuto, neověřeno — čeká vzorek
+    Gen 4); Mac zatím bez LUTu (provizorně) — rozhodne uživatel.
   - Nastavení nástrojů: řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny Blackmagic RAW (stav BRAW je vidět z poznámky
     u klipu) — otevřené i na Windows.
   - Ověření se vzorkem `.braw` a ostrý test s kartou, REDline a art-cmd — ruční, postup v README-START (oddíly 6–7).

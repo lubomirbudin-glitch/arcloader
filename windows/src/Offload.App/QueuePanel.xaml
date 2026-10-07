@@ -92,6 +92,9 @@
                                     <TextBlock Text="{Binding ErrorText}" Style="{StaticResource ErrorText}" FontSize="13" Margin="0,8,0,0" Visibility="{Binding ErrorText, Converter={StaticResource NullToCollapsed}}" />
                                     <TextBlock Text="{Binding WarningText}" Style="{StaticResource WarningText}" FontSize="13" Margin="0,8,0,0" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
                                                AutomationProperties.AutomationId="JobWarningText" />
+                                    <TextBlock Text="{Binding ProfileNote}" Style="{StaticResource WarningText}" FontSize="13" Margin="0,8,0,0" TextWrapping="Wrap"
+                                               Visibility="{Binding ProfileNote, Converter={StaticResource NullToCollapsed}}"
+                                               AutomationProperties.AutomationId="JobProfileNote" />
                                     <TextBlock Text="{Binding NoteText}" FontSize="13" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="{Binding NoteText, Converter={StaticResource NullToCollapsed}}"
                                                AutomationProperties.AutomationId="JobNoteText" />
                                     <TextBlock Text="{Binding SummaryText}" Style="{StaticResource Caption}" Margin="0,8,0,0" Visibility="{Binding SummaryText, Converter={StaticResource NullToCollapsed}}" />

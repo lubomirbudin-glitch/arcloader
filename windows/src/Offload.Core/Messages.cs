@@ -98,6 +98,9 @@ public static class Msg
     public const string CardSwapped = "Karta se během čtení vyměnila.";
     public const string CardNameAutoNone = "Návrh názvu nenalezen, použije se jmenovka svazku.";
     public static string CardNameAuto(string name) => $"Název karty: {name} (podle klipů)";
+    public static string CliProject(string name) => $"Projekt: {name} (výchozí hodnoty z nastavení aplikace, volby z příkazové řádky mají přednost)";
+    public static string CliAppendNotify(string name) => $"Oznámení podle projektu dřívější zálohy: {name}";
+    public static string CliAppendProject(string name) => $"Nastavení z projektu: {name} (projekt zálohy zůstane podle dřívějšího reportu)";
     public static string CardUnreadable(string detail) => $"Kartu nejde přečíst: {detail}";
 
     // Append (spec 2.2)
@@ -151,6 +154,14 @@ public static class Msg
     public static string UnknownProxyCodec(string? x) =>
         $"Neznámý kodek proxy „{x}“ — použijte h264, hevc, proresProxy, proresLT, prores422 nebo prores422HQ.";
     public static string LutNotFound(string path) => $"LUT nenalezen: {path}";
+    public static string RuleLutNotFound(int rule, string name) => $"LUT z pravidla {rule} nenalezen: {name}";
+    public const string LutRuleNeedsAuto = "--lut-rule platí jen s --lut auto";
+    public static string BadNtfyUrl(string url) =>
+        $"Adresa ntfy „{url}“ nejde použít — zadejte server a téma, např. https://ntfy.sh/muj-tajny-kanal (téma jen písmena bez diakritiky, číslice, - a _).";
+    public static string BadLutRule(string spec) =>
+        $"Pravidlo LUTu „{spec}“ nejde přečíst — použijte <podle>=<hodnota>:<lut>, např. camera=FX6:sony-slog3-sgamut3cine (podle: camera, serial, reel, folder; lut: vestavěný, none nebo cesta k .cube).";
+    /// A proxy rendered without its custom LUT (the file was gone when stage 2 began).
+    public static string ProxyWithoutLut(string file) => $"LUT nenalezen: {file} — proxy bez LUTu";
     public static string UnknownHash(string? x) => $"Neznámý kontrolní součet „{x}“ — použijte xxh64 nebo both (xxh64 + MD5).";
 
     // Day report (spec 3.2)

@@ -29,9 +29,10 @@ public sealed partial class MainViewModel
     // Every ~5 s off the UI thread: missing destinations (a NAS that came back), present network/removable ones
     // (a NAS that dropped out), the LUT and the proxy folder are checked again.
     readonly DispatcherTimer healthTimer = new() { Interval = TimeSpan.FromSeconds(5) };
-    // The LUT's existence, checked off the UI thread (CanStart is evaluated 3×/s and must never touch a disk).
-    string? lutCheckedPath;
-    bool? lutExists;
+    // The own LUT files' existence (custom LUT, rules), checked off the UI thread (CanStart is evaluated 3×/s and must
+    // never touch a disk): the files checked and the first missing one.
+    string? lutCheckedKey;
+    LutFile? lutMissing;
     bool lutChecking, lutRecheck;
     // The same for the extra proxy folder (a disk that may be disconnected).
     string? folderCheckedPath;
@@ -64,7 +65,7 @@ public sealed partial class MainViewModel
         Task.Run(() => LutCatalog.Default).ContinueWith(t =>
         {
             if (closing) return;
-            if (t.IsCompletedSuccessfully) Proxy.CatalogLoaded(t.Result);
+            if (t.IsCompletedSuccessfully) Proxy.CatalogLoaded(lutCatalog = t.Result);
             else AppLog.Write($"LUT catalog: {t.Exception?.GetBaseException().Message}");
         }, TaskScheduler.FromCurrentSynchronizationContext());
         healthTimer.Tick += (_, _) => HealthCheck();
@@ -262,7 +263,7 @@ public sealed partial class MainViewModel
         var paths = SelectedSources();
         if (!paths.Contains(path, StringComparer.OrdinalIgnoreCase)) paths.Add(path);
         var cards = paths.Select(p => new CardNameInput(p, cardNames.GetValueOrDefault(p), Insight(p), DefaultCardName(p))).ToList();
-        return CardNaming.Resolve(Settings.Naming.SuggestFromClips, cards, history, DateString, Layout.Today())[path];
+        return CardNaming.Resolve(Settings.Naming.SuggestFromClips, cards, history, DateString, Layout.Today(), ActiveProjectName)[path];
     }
 
     void NamingChanged()
@@ -459,15 +460,14 @@ public sealed partial class MainViewModel
 
     // ── Proxy a dekodéry ───────────────────────────────────────────────────
 
-    /// A missing LUT blocks the start (red); missing ffmpeg only warns (orange). From the cached check — no disk here.
-    public string? LutProblem => ProxyPreflight.Blocking(Settings.Proxy, Settings.AnalyzeClips, CachedLutExists);
+    /// A missing LUT (custom, or an own rule's) blocks the start (red); missing ffmpeg only warns (orange). From the cached
+    /// check — no disk here; while the files in use have not been checked yet, nothing blocks.
+    public string? LutProblem =>
+        lutCheckedKey != null && lutCheckedKey == ProxyPreflight.LutKey(LutFiles) ? ProxyPreflight.MissingText(lutMissing) : null;
 
-    bool? CachedLutExists =>
-        ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is string lut && string.Equals(lut, lutCheckedPath, StringComparison.OrdinalIgnoreCase)
-            ? lutExists
-            : null;
+    IReadOnlyList<LutFile> LutFiles => ProxyPreflight.LutFilesInUse(Settings.Proxy, Settings.AnalyzeClips);
 
-    /// Checks the LUT off the UI thread; a request during a check runs once more afterwards.
+    /// Checks the LUT files off the UI thread; a request during a check runs once more afterwards.
     void RefreshLut()
     {
         if (lutChecking)
@@ -475,16 +475,17 @@ public sealed partial class MainViewModel
             lutRecheck = true;
             return;
         }
-        if (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is not string lut)
+        var files = LutFiles;
+        if (files.Count == 0)
         {
             SetLutState(null, null);
             return;
         }
         lutChecking = true;
-        Task.Run(() => File.Exists(lut)).ContinueWith(t =>
+        Task.Run(() => ProxyPreflight.FirstMissing(files)).ContinueWith(t =>
         {
             lutChecking = false;
-            if (t.IsCompletedSuccessfully) SetLutState(lut, t.Result);
+            if (t.IsCompletedSuccessfully) SetLutState(ProxyPreflight.LutKey(files), t.Result);
             else AppLog.Write($"LUT check: {t.Exception?.GetBaseException().Message}");
             if (lutRecheck)
             {
@@ -494,12 +495,12 @@ public sealed partial class MainViewModel
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    /// A new answer about the LUT: the red text and the start button follow it.
-    void SetLutState(string? lut, bool? exists)
+    /// A new answer about the LUT files (`key` = which, null = none in use): the red text and the start button follow it.
+    void SetLutState(string? key, LutFile? missing)
     {
         var before = LutProblem;
-        lutCheckedPath = lut;
-        lutExists = exists;
+        lutCheckedKey = key;
+        lutMissing = missing;
         if (LutProblem == before) return;
         RaiseMany(nameof(LutProblem), nameof(CanStart));
         SetupChanged?.Invoke();
@@ -567,6 +568,17 @@ public sealed partial class MainViewModel
         SetupChanged?.Invoke();
     }
 
+    /// Opens "Vlastní pravidla LUTů" (set by the window): the rules to edit, the built-in LUTs; the new rules or null.
+    public Func<IReadOnlyList<LutRule>, LutCatalog, List<LutRule>?>? EditLutRulesDialog { get; set; }
+
+    /// "Pravidla LUTů…": OK writes the rules into the active profile; their .cube files are checked again (off the UI thread).
+    internal void EditLutRules(LutCatalog catalog)
+    {
+        if (EditLutRulesDialog?.Invoke(Settings.Proxy.LutRules, catalog) is not { } rules) return;
+        Settings.Proxy.LutRules = rules;
+        Proxy.RulesChanged();   // saves (ProxyChanged) and rechecks the LUT files
+    }
+
     internal void ProxyChanged()
     {
         SettingsChanged();
@@ -578,7 +590,7 @@ public sealed partial class MainViewModel
 
     void RefreshTools()
     {
-        resolvedTools = Settings.Tools.Resolved();
+        resolvedTools = AllSettings.Tools.Resolved();
         Tools.Clear();
         void Row(string name, string purpose, string? path, Action<string> set) =>
             Tools.Add(new ToolRowViewModel(name, purpose, path, () =>
@@ -588,11 +600,11 @@ public sealed partial class MainViewModel
                 SettingsChanged();
                 RefreshTools();
             }));
-        Row("ffmpeg", "proxy, náhledy", resolvedTools.Ffmpeg, p => Settings.Tools.Ffmpeg = p);
-        Row("ffprobe", "metadata klipů", resolvedTools.Ffprobe, p => Settings.Tools.Ffprobe = p);
-        Row("braw-decode", "Blackmagic RAW", resolvedTools.BrawDecoder, p => Settings.Tools.BrawDecoder = p);
-        Row("REDline", "RED R3D", resolvedTools.Redline, p => Settings.Tools.Redline = p);
-        Row("art-cmd", "ARRIRAW", resolvedTools.ArtCmd, p => Settings.Tools.ArtCmd = p);
+        Row("ffmpeg", "proxy, náhledy", resolvedTools.Ffmpeg, p => AllSettings.Tools.Ffmpeg = p);
+        Row("ffprobe", "metadata klipů", resolvedTools.Ffprobe, p => AllSettings.Tools.Ffprobe = p);
+        Row("braw-decode", "Blackmagic RAW", resolvedTools.BrawDecoder, p => AllSettings.Tools.BrawDecoder = p);
+        Row("REDline", "RED R3D", resolvedTools.Redline, p => AllSettings.Tools.Redline = p);
+        Row("art-cmd", "ARRIRAW", resolvedTools.ArtCmd, p => AllSettings.Tools.ArtCmd = p);
         Raise(nameof(ToolsWarning));
     }
 }

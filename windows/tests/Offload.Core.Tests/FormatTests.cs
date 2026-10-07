@@ -21,7 +21,19 @@ public class FormatTests
     }
 
     [Fact]
-    public void Version_IsWindowsBuild() => Assert.Equal("0.3.0-win", OffloadVersion.String);
+    public void Version_IsWindowsBuild() => Assert.Equal("0.4.0-win", OffloadVersion.String);
+
+    // R22: the version comes from Directory.Build.props (InformationalVersion), shaped x.y.z-win - never typed twice.
+    [Fact]
+    public void Version_FromTheAssembly_ShapeAndProps()
+    {
+        Assert.Matches(@"^\d+\.\d+\.\d+-win$", OffloadVersion.String);
+        var d = AppContext.BaseDirectory;
+        while (d != null && !File.Exists(Path.Combine(d, "Directory.Build.props"))) d = Path.GetDirectoryName(d.TrimEnd('\\'));
+        var props = System.Xml.Linq.XDocument.Load(Path.Combine(d!, "Directory.Build.props"));
+        Assert.Equal(OffloadVersion.String, props.Descendants("InformationalVersion").First().Value);
+        Assert.Equal(OffloadVersion.String, props.Descendants("Version").First().Value + "-win");
+    }
 
     // Spec 2.1/2.5: sizes inside Czech sentences.
     [Theory]

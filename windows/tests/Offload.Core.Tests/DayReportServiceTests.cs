@@ -504,4 +504,29 @@ public class CliDayReportTests
         Assert.DoesNotContain("Denní report", off.Out);
         Assert.False(Directory.Exists(Path.Combine(d2, "2026-10-07", "_REPORT")));
     }
+
+    // Final fix 3: the day's project decides the outputs; no/unknown project = the active profile.
+    [Fact]
+    public void OutputsFor_TheDaysProject_ElseTheActiveProfile()
+    {
+        using var dir = new TempDir();
+        var all = new Offload.Core.Desktop.AppSettings();
+        all.Outputs.DayReport = true;
+        var x = Offload.Core.Desktop.Projects.SaveAs(all, "Film X");
+        x.Outputs.DayReport = false;
+        Offload.Core.Desktop.Projects.Activate(all, null);
+        var snapshot = Offload.Core.Desktop.SettingsStore.Clone(all);
+
+        Assert.False(DayReportService.OutputsForProject("film x", snapshot).DayReport);          // the day's project
+        Assert.True(DayReportService.OutputsForProject("Zmizel", snapshot).DayReport);            // gone: the active (Bez projektu)
+        Assert.True(DayReportService.OutputsForProject((string?)null, snapshot).DayReport);       // mixed or none
+        Offload.Core.Desktop.Projects.Activate(snapshot, "Film X");
+        Assert.False(DayReportService.OutputsForProject((string?)null, snapshot).DayReport);
+
+        var d1 = dir.Sub("d1");
+        static string CardOf(TempDir d) { var c = d.Sub("A001"); TestFs.WriteRandom(Path.Combine(c, "CLIP", "A001C001.mov"), 10_000, 1); return c; }
+        var job = new OffloadJob(new JobConfig(CardOf(dir), [d1]) { Date = "2026-10-07", AnalyzeClips = false, HistoryFolder = dir.Sub("h"), Project = "Film X" }, AppendFixtures.Options());
+        job.Run();
+        Assert.False(DayReportService.OutputsFor(Path.Combine(d1, "2026-10-07"), all).DayReport);   // read from the day's report
+    }
 }

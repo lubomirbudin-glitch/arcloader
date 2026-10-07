@@ -120,7 +120,7 @@ public sealed class HardwareViewModel : ObservableObject
         if (Busy) return;
         var (cards, dests, all) = owner.HardwareRoles();
         var ejected = owner.EjectedRoots;
-        var names = new Dictionary<string, string>(owner.Settings.PortNames, StringComparer.OrdinalIgnoreCase);
+        var names = new Dictionary<string, string>(owner.AllSettings.PortNames, StringComparer.OrdinalIgnoreCase);
         cts = new CancellationTokenSource();
         var token = cts.Token;
         Busy = true;
@@ -177,7 +177,7 @@ public sealed class HardwareViewModel : ObservableObject
     void RebuildNamed()
     {
         if (result is not { } r) return;
-        var names = owner.Settings.PortNames;
+        var names = owner.AllSettings.PortNames;
         Drives.Clear();
         foreach (var d in r.Drives) Drives.Add(new HwDriveRow(d.Role, d.Link.Root, d.Link.Describe(r.Connectors, names)));
         Advice.Clear();
@@ -194,7 +194,7 @@ public sealed class HardwareViewModel : ObservableObject
     {
         PortGroups.Clear();
         if (result is not { } r) return;
-        var names = owner.Settings.PortNames;
+        var names = owner.AllSettings.PortNames;
         foreach (var g in r.Connectors.Where(c => c.UserVisible || ShowInternal).GroupBy(c => c.ControllerId, StringComparer.OrdinalIgnoreCase))
         {
             var rows = g.Select(c =>

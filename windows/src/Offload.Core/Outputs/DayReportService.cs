@@ -1,3 +1,4 @@
+using Offload.Core.Desktop;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
@@ -30,6 +31,14 @@ public static class DayReportService
         var full = DayReport.FullPath(picked);   // a root keeps its backslash ("E:" would be the current folder on E:)
         return File.Exists(Path.Combine(full, Layout.ReportDirName, CardRecord.MainReport)) && Path.GetDirectoryName(full) is string day ? day : full;
     }
+
+    /// The outputs settings Nástroje → Denní report… uses (final fix 3): those of the day's project (DayModel.Project, when
+    /// every card names the same one and it still exists), else the active profile's. Reads the day's reports — call it
+    /// off the UI thread, with a snapshot of the settings.
+    public static OutputSettings OutputsFor(string dayPath, AppSettings all) => OutputsForProject(DayReport.Load(dayPath).Project, all);
+
+    public static OutputSettings OutputsForProject(string? dayProject, AppSettings all) =>
+        (Projects.Find(all, dayProject) as SettingsProfile ?? all.Active).Outputs;
 
     /// `<root>\<date>` after a job on that destination.
     public static string Regenerate(string root, string date, OutputSettings outputs, Action<string>? log = null, TimeSpan? wait = null) =>
