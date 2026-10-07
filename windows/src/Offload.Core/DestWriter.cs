@@ -16,8 +16,14 @@ internal sealed class DestWriter : IDisposable
     long verified;
     volatile bool reading;
 
+    /// Repair: finished copies held under their `.offload-part` name until the card's hash is known (Commit / Discard).
+    readonly Dictionary<int, string> held = [];
+
     public string CardPath { get; }
+    public int Index => index;
     public DestFileResult[] Results { get; }
+    /// Repair: the copies that did not match, moved aside (file index, where to — relative); read after Wait.
+    public List<(int File, string MovedTo)> MovedAside { get; } = [];
     /// False once this volume refused unbuffered writes and the writer fell back to the file cache.
     public bool Unbuffered { get; private set; }
     public long Written => Interlocked.Read(ref written);
@@ -121,7 +127,9 @@ internal sealed class DestWriter : IDisposable
         handle = NativeIO.OpenExisting(partPath);
     }
 
-    public void Finish(int index, SourceFile file) => worker.Post(() =>
+    /// `hold` (repair): the finished copy stays under its `.offload-part` name — nothing at the file's place changes —
+    /// until Commit or Discard; its result stays Pending until then.
+    public void Finish(int index, SourceFile file, bool hold = false) => worker.Post(() =>
     {
         if (handle == null || currentError != null)
         {
@@ -139,6 +147,12 @@ internal sealed class DestWriter : IDisposable
             NativeIO.SetModified(handle, file.ModifiedUtc, partPath);
             handle.Dispose();
             handle = null;
+            if (hold)
+            {
+                held[index] = partPath;
+                partPath = "";   // not this writer's current part any more: Begin and Dispose leave it alone
+                return;
+            }
             NativeIO.Move(partPath, finalPath, replace: false);
             File.SetAttributes(finalPath, File.GetAttributes(finalPath) & ~FileAttributes.Hidden);
             Results[index] = new DestFileResult(FileState.Written, null);
@@ -155,6 +169,66 @@ internal sealed class DestWriter : IDisposable
         CloseAndRemovePart();
         Results[index] = new DestFileResult(FileState.Failed, reason);
     });
+
+    /// Repair: this destination already holds a good copy of file `index` — nothing is written, the read-back checks it.
+    public void Keep(int index) => worker.Post(() => Results[index] = new DestFileResult(FileState.Written, null));
+
+    /// Repair, after Wait (the worker is idle): the card gave what the backup recorded — the held copy of file `index`
+    /// takes its place. A copy there that did not match is first moved to `setAside` (relative to the card folder; same
+    /// volume, never replacing anything, never deleted). A move that fails fails the file here and leaves the copy at
+    /// its place as it was. A file whose write failed (nothing held) keeps its result.
+    public void Commit(int index, SourceFile file, string? setAside)
+    {
+        if (!held.Remove(index, out var part)) return;
+        var finalPath = Layout.Join(CardPath, file.RelPath);
+        var aside = setAside == null ? null : Layout.Join(CardPath, setAside);
+        try
+        {
+            if (aside != null)
+            {
+                NativeIO.Mkdirs(Path.GetDirectoryName(aside)!);
+                NativeIO.Move(finalPath, aside, replace: false);
+            }
+        }
+        catch (Exception e)
+        {
+            NativeIO.Delete(part);
+            Results[index] = new DestFileResult(FileState.Failed, "set aside: " + e.Message);
+            return;
+        }
+        bool placed = false;
+        try
+        {
+            NativeIO.Move(part, finalPath, replace: false);
+            placed = true;
+            if (setAside != null) MovedAside.Add((index, setAside));
+            File.SetAttributes(finalPath, File.GetAttributes(finalPath) & ~FileAttributes.Hidden);
+            Results[index] = new DestFileResult(FileState.Written, null);
+        }
+        catch (Exception e)
+        {
+            if (!placed)
+            {
+                NativeIO.Delete(part);
+                // The bad copy goes back to its place (never over anything); if even that fails it stays set aside.
+                if (aside != null)
+                {
+                    try { NativeIO.Move(aside, finalPath, replace: false); }
+                    catch (Exception) { MovedAside.Add((index, setAside!)); }
+                }
+            }
+            Results[index] = new DestFileResult(FileState.Failed, e.Message);
+        }
+    }
+
+    /// Repair, after Wait: the card did not give what the backup recorded — the held copy of file `index` is thrown away;
+    /// nothing at the file's place is moved or written.
+    public void Discard(int index, string reason)
+    {
+        if (!held.Remove(index, out var part)) return;
+        NativeIO.Delete(part);
+        Results[index] = new DestFileResult(FileState.Failed, reason);
+    }
 
     /// One FlushFileBuffers makes the drive empty its write cache — covering all the small files at once.
     public void FlushDevice() => worker.Invoke(() =>
@@ -248,5 +322,7 @@ internal sealed class DestWriter : IDisposable
     {
         worker.Dispose();
         CloseAndRemovePart();
+        foreach (var part in held.Values) NativeIO.Delete(part);   // a run that stopped before Commit / Discard
+        held.Clear();
     }
 }

@@ -114,10 +114,12 @@ public sealed partial class CardRecord
             foreach (var f in g.Report.Files) files[f.Path] = new RecordedFile(f, g.Generation, g.Report);
             var generationClips = g.Report.Clips.Count > 0 ? g.Report.Clips
                 : ClipDetector.Detect(g.Report.Files.Select(f => new SourceFile(f.Path, f.Size, f.Modified)).ToList()).Select(c => new ClipEntry { Clip = c });
+            bool analysed = g.Report.Clips.Count > 0;
             foreach (var c in generationClips)
             {
                 var recorded = new RecordedClip(c, g.Generation);
-                if (clipAt.TryGetValue(c.Clip.Path, out var i)) clips[i] = recorded;
+                // A generation without analysis (a repair rewrites a clip's file) never replaces a clip described before.
+                if (clipAt.TryGetValue(c.Clip.Path, out var i)) { if (analysed || clips[i].Entry.Info == null) clips[i] = recorded; }
                 else
                 {
                     clipAt[c.Clip.Path] = clips.Count;

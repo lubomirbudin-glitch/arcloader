@@ -51,7 +51,7 @@ public static class FileStateExtensions
 
 public readonly record struct DestFileResult(FileState State, string? Error);
 
-public enum PlanMode { Full, Append }
+public enum PlanMode { Full, Append, Repair }
 
 public sealed class OffloadPlan
 {
@@ -78,15 +78,32 @@ public sealed class OffloadPlan
     public IReadOnlyList<string> SpaceWarnings { get; init; } = [];
     /// The project the job runs in (spec 4.1), null = "Bez projektu" — set by OffloadJob, written into the report.
     public string? Project { get; set; }
+    /// Repair: per file, the destinations that get a new copy — the others hold a good copy, which is only read back.
+    /// Null = every destination (a full copy, an append).
+    public IReadOnlyList<bool[]>? Write { get; init; }
+    /// Repair: per file the hashes the earlier backup recorded from the card (ruling C1: what the report records, what a
+    /// kept copy is compared with, and what the card read now must give — a new copy is never put in place otherwise).
+    public IReadOnlyList<FileHashes>? Expected { get; init; }
+    /// Repair: per file and destination, where its copy that did not match goes before the new one takes its place
+    /// (relative to the card folder), else null.
+    public IReadOnlyList<string?[]>? SetAside { get; init; }
+
+    /// File `file` gets written to destination `dest`.
+    public bool Writes(int file, int dest) => Write?[file][dest] ?? true;
 }
 
 public enum CopyPhase { Copy, Flush, Verify, Report, Done }
 
 /// `Paused`: Pozastavit was pressed (PauseGate); `PauseHeld`: the copy or the read-back really waits now.
+/// `PlannedBytes`: what each destination gets written (null = TotalBytes each).
 public sealed record ProgressSnapshot(
     CopyPhase Phase, long TotalBytes, int TotalFiles, int FileIndex, string CurrentFile,
     long ReadBytes, long[] WrittenBytes, long[] VerifiedBytes, int Errors,
-    bool Paused = false, bool PauseHeld = false);
+    bool Paused = false, bool PauseHeld = false, long[]? PlannedBytes = null)
+{
+    /// What destination `d` gets written: TotalBytes, less for a destination a repair only reads back.
+    public long Planned(int d) => PlannedBytes is { } p && d < p.Length ? p[d] : TotalBytes;
+}
 
 public sealed class OffloadError : Exception
 {

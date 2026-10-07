@@ -35,6 +35,11 @@ public enum PreflightCode
     AppendBusy,
     /// Not an error: the backup already has everything (the job ends "Hotovo").
     NothingNew,
+    /// Not an error: a repair found every file good on every destination (the job ends "Hotovo").
+    RepairNothing,
+    /// A repair would not copy what the backup recorded: the card or the card folders changed since — or it may not run
+    /// as asked (without verification, another card in the drive).
+    RepairConflict,
 }
 
 /// Every message a user sees from checks and validation (GUI job card, CLI) — Czech, one method per message, no resx.
@@ -145,6 +150,29 @@ public static class Msg
     public static string AppendBusy(string cardPath) =>
         $"Do této zálohy právě doplňuje jiná úloha ({cardPath}) — počkejte, až skončí.";
     public const string NothingNew = "Nic nového — záloha je úplná.";
+
+    // Repair — "Zkopírovat znovu" (UI návrh, nová věc 4)
+    public const string RepairNothing = "Nic k opravě — všechny soubory jsou na všech cílech v pořádku.";
+    public static string RepairConflict(IReadOnlyList<string> lines) =>
+        $"Oprava zastavena — nic se nezkopírovalo. {lines.Count} {Desktop.Texts.Plural(lines.Count, "soubor nejde opravit", "soubory nejde opravit", "souborů nejde opravit")}:\n  "
+        + string.Join("\n  ", lines.Take(10)) + (lines.Count > 10 ? "\n  …" : "")
+        + "\nKarta se od zálohy změnila nebo ve složce zálohy chybí soubor — zkontrolujte ji přes Ověřit zálohu, nebo udělejte celou kopii.";
+    /// One line of RepairConflict: the file is no longer on the card.
+    public static string RepairNotOnCard(string path) => $"{path}: na kartě už není";
+    /// One line of RepairConflict (ruling C1): same size and time, but the card gives another hash than the backup
+    /// recorded — the new hash is only ever here, never in a record.
+    public static string RepairCardDiffers(string path, string algorithm, string now, string recorded) =>
+        $"{path}: na kartě je jiný obsah než při záloze ({algorithm} {now}, v záloze {recorded})";
+    /// One line of RepairConflict: the card file could not be read to compare it.
+    public static string RepairCardUnreadable(string path, string detail) => $"{path}: na kartě nejde přečíst ({detail})";
+    /// Ruling M16: a repair always reads back — a kept copy is recorded "verified" only after it was.
+    public const string RepairNeedsVerify = "Oprava se vždy ověřuje zpětným čtením — bez ověření ji spustit nejde.";
+    /// The comment of a repair's ASC MHL generation.
+    public static string MhlRepairComment(int n, string source) =>
+        $"Offload oprava: {n} {Desktop.Texts.Plural(n, "soubor", "soubory", "souborů")} znovu z {source}";
+    /// Minor M5: the checks of the earlier backup are an append's; refusing a repair they say "opravit".
+    public static string ForRepair(string appendRefusal) =>
+        appendRefusal.Replace("doplnit nejde", "opravit nejde").Replace("doplnit jde jen", "opravit jde jen");
     /// Ruling I1 (plan 9): the card in the drive after Pokračovat is not the one being copied.
     public const string CardChangedWhilePaused =
         "Během pozastavení se karta ve čtečce vyměnila nebo vytáhla — zbylé soubory se nezkopírovaly. Vložte původní kartu a zálohu doplňte.";

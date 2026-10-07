@@ -42,7 +42,8 @@ public static class Mhl
         var folder = Path.GetFileName(cardPath.TrimEnd('\\'));
         var fileName = $"{generation:0000}_{folder}_{now.ToUniversalTime().ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture)}Z.mhl";
         int listed = report.Files.Count(f => f.Xxh64 != null);
-        var comment = generation > 1
+        var comment = report.IsRepair ? Msg.MhlRepairComment(listed, report.Source)
+            : generation > 1
             ? $"Offload doplnění: {listed} {Texts.Plural(listed, "nový soubor", "nové soubory", "nových souborů")} z {report.Source}"
             : $"Offload of {report.CardName} from {report.Source}";
         IEnumerable<string> ignore = earlier?.Generations.FirstOrDefault() is { } first
@@ -71,7 +72,16 @@ public static class Mhl
         {
             if (f.Xxh64 == null) continue;
             var state = f.Destinations[d];
-            var action = state is "verified" or "written" ? "original" : "failed";
+            string action;
+            if (f.Rewritten is { } rewritten && d < rewritten.Count)
+            {
+                // A repair (ruling C1: the hash is always the one the backup recorded): a good copy that was only read
+                // back is "verified"; one not read back (a cancelled repair) or not touched at all is not in this
+                // generation; a new copy is "original"; a copy found or left bad "failed".
+                if (state == "pending" || (!rewritten[d] && state == "written")) continue;
+                action = state == "failed" ? "failed" : rewritten[d] ? "original" : "verified";
+            }
+            else action = state is "verified" or "written" ? "original" : "failed";
             Line("    <hash>");
             Line($"      <path size=\"{f.Size}\" lastmodificationdate=\"{IsoDate(f.Modified)}\">{Esc(f.Path)}</path>");
             Line($"      <xxh64 action=\"{action}\" hashdate=\"{stamp}\">{f.Xxh64}</xxh64>");

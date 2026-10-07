@@ -41,10 +41,13 @@ public static class AppendPlanner
     public static AppendPlan Plan(string source, IReadOnlyList<string> cardPaths, CancellationToken ct = default) =>
         Plan(source, cardPaths, ct, sourceFilesystem: null);
 
-    /// `sourceFilesystem`: tests pretend a FAT32 card; null = the card's own. `destFilesystem`: the same for a card
-    /// folder on a destination (ruling I5); null = NativeIO.FilesystemType.
-    internal static AppendPlan Plan(string source, IReadOnlyList<string> cardPaths, CancellationToken ct, string? sourceFilesystem,
-        Func<string, string>? destFilesystem = null)
+    /// The earlier backup as steps 0 and 1 found it (also the start of a repair, RepairPlanner): the card folders in
+    /// their order, their roots, date and name, every folder's reports, and the generation the next copy writes.
+    internal sealed record Backup(List<string> Paths, List<string> Roots, string Date, string CardName, List<CardRecord> Records, int NextGeneration);
+
+    /// Steps 0 and 1: one backup `<root>\<date>\<card>` with the same date and name everywhere, every report readable,
+    /// every ASC MHL chain intact and of the same length, and the numbered reports in agreement with it. Reads only.
+    internal static Backup CheckBackup(IReadOnlyList<string> cardPaths)
     {
         if (cardPaths.Count == 0) throw OffloadError.Preflight(PreflightCode.NoDestination, Msg.NoDestination);
         var paths = cardPaths.Select(p => Path.GetFullPath(p).TrimEnd('\\')).ToList();
@@ -82,6 +85,16 @@ public static class AppendPlanner
         for (int d = 0; d < paths.Count; d++)
             if (records[d].HighestReportNumber != generations[d])
                 throw OffloadError.Preflight(PreflightCode.AppendDiverged, Msg.AppendReportsMismatch(paths[d], records[d].HighestReportNumber, generations[d]));
+        // Ruling I1: max of both (equal here, the check above refused otherwise).
+        return new Backup(paths, roots, date, cardName, records, Math.Max(generations[0], records[0].HighestReportNumber) + 1);
+    }
+
+    /// `sourceFilesystem`: tests pretend a FAT32 card; null = the card's own. `destFilesystem`: the same for a card
+    /// folder on a destination (ruling I5); null = NativeIO.FilesystemType.
+    internal static AppendPlan Plan(string source, IReadOnlyList<string> cardPaths, CancellationToken ct, string? sourceFilesystem,
+        Func<string, string>? destFilesystem = null)
+    {
+        var (paths, roots, date, cardName, records, generation) = CheckBackup(cardPaths);
 
         // 2. The card, compared with every backup: a known file must be the same on the card, in the report and on disk.
         var scan = Scanner.Scan(source, ct);
@@ -157,8 +170,7 @@ public static class AppendPlanner
             DestRoots = roots,
             Date = date,
             CardName = cardName,
-            // Ruling I1: max of both (equal here, the check above refused otherwise).
-            Generation = Math.Max(generations[0], records[0].HighestReportNumber) + 1,
+            Generation = generation,
             FullScan = scan,
             NewFiles = newFiles,
             NewDirs = newDirs,
@@ -198,7 +210,7 @@ public static class AppendPlanner
     }
 
     /// "CLIP/A001C003.mov (karta 1,2 GB · 6. 10. 9:14, D: 1,1 GB · 6. 10. 9:10)"
-    static string Conflict(SourceFile card, string disk, long size, DateTime modifiedUtc)
+    internal static string Conflict(SourceFile card, string disk, long size, DateTime modifiedUtc)
     {
         // A difference smaller than the rounding ("100 KB" on both sides) shows the exact bytes instead.
         var (a, b) = Format.BytesCs(card.Size) == Format.BytesCs(size) && card.Size != size ? ($"{card.Size} B", $"{size} B") : (Format.BytesCs(card.Size), Format.BytesCs(size));
