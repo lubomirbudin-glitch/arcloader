@@ -188,6 +188,7 @@ public sealed partial class MainViewModel
                     AnalyzeClips = Settings.AnalyzeClips,
                     Proxy = SettingsStore.Clone(Settings.Proxy),
                     Tools = SettingsStore.Clone(Settings.Tools),
+                    Outputs = SettingsStore.Clone(Settings.Outputs),
                 };
                 var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), AppendRules.Title(known.Entry.CardName),
                     canEject: isVolume && CardEject.CanEject(src), space);
@@ -210,6 +211,7 @@ public sealed partial class MainViewModel
                 AnalyzeClips = Settings.AnalyzeClips,
                 Proxy = SettingsStore.Clone(Settings.Proxy),
                 Tools = SettingsStore.Clone(Settings.Tools),
+                Outputs = SettingsStore.Clone(Settings.Outputs),
             };
             var item = new JobItemViewModel(this, new OffloadJob(config), name ?? DefaultCardName(src),
                 canEject: isVolume && CardEject.CanEject(src), space);

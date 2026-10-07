@@ -2,7 +2,7 @@ using Offload.Cli;
 
 namespace Offload.Core.Tests;
 
-/// Plan 7: the CLI options of the outputs — `copy --hash`, `bench --hash`.
+/// Plan 7: the CLI options of the outputs — `copy --hash`, `bench --hash`, `--no-clip-list`, `--ale`.
 [Collection("Console")]
 public class CliOutputsTests
 {
@@ -54,6 +54,26 @@ public class CliOutputsTests
         var bad = Run(CopyCommand.Create(), card, "-d", dir.Sub("d2"), "--no-history", "--hash", "md5");
         Assert.Equal(1, bad.Exit);
         Assert.Contains("Chyba: Neznámý kontrolní součet „md5“ — použijte xxh64 nebo both (xxh64 + MD5).", bad.Err);
+    }
+
+    // Spec 3.3: CSV by default, `--no-clip-list` leaves it out, `--ale` adds the Avid list.
+    [Fact]
+    public void ClipListOptions()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        var plain = dir.Sub("plain");
+        var noCsvAle = dir.Sub("ale");
+
+        Assert.Equal(0, Run(CopyCommand.Create(), card, "-d", plain, "--date", "2026-10-07", "--no-history", "--no-analyze").Exit);
+        Assert.Equal(0, Run(CopyCommand.Create(), card, "-d", noCsvAle, "--date", "2026-10-07", "--no-history", "--no-analyze", "--no-clip-list", "--ale").Exit);
+
+        var a = Path.Combine(plain, "2026-10-07", "A001", "_REPORT");
+        Assert.True(File.Exists(Path.Combine(a, "A001_clips.csv")));
+        Assert.False(File.Exists(Path.Combine(a, "A001_clips.ale")));
+        var b = Path.Combine(noCsvAle, "2026-10-07", "A001", "_REPORT");
+        Assert.False(File.Exists(Path.Combine(b, "A001_clips.csv")));
+        Assert.True(File.Exists(Path.Combine(b, "A001_clips.ale")));
     }
 
     // Spec 3.5: `bench --hash md5` adds the MD5 line; an unknown value is refused in Czech.

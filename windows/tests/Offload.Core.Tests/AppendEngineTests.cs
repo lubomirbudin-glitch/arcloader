@@ -25,8 +25,9 @@ public class AppendEngineTests
     static Dictionary<string, byte[]> Snapshot(string dir) =>
         Directory.GetFiles(dir).ToDictionary(f => Path.GetFileName(f), f => File.ReadAllBytes(f));
 
-    /// The only earlier files an append may rewrite (spec 2.2): the hash list (lines added) and the chain (entry added).
-    static readonly string[] Rewritten = [@"_REPORT\A001.xxh64", @"ascmhl\ascmhl_chain.xml"];
+    /// The only earlier files an append may rewrite (spec 2.2): the hash list (lines added) and the chain (entry added) —
+    /// and the clip list, which is derived from every generation and written whole (spec 3.3, R25).
+    static readonly string[] Rewritten = [@"_REPORT\A001.xxh64", @"ascmhl\ascmhl_chain.xml", @"_REPORT\A001_clips.csv"];
 
     [Fact]
     public void Generation2_OnBothDestinations_EarlierFilesUntouched()

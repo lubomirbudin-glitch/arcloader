@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Offload.Core.Append;
 using Offload.Core.Desktop;
 using Offload.Core.History;
+using Offload.Core.Outputs;
 using Offload.Core.Space;
 
 namespace Offload.Core;
@@ -29,6 +30,8 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     /// Append (spec 2.2): only the card's new files go into these card folders (`<root>\<date>\<card>` of the earlier
     /// backup); DestRoots, CardName and Date are then taken from them.
     public IReadOnlyList<string>? AppendInto { get; set; }
+    /// Clip lists CSV / ALE (spec 3.3; settings `outputs`, CLI --no-clip-list, --ale).
+    public OutputSettings Outputs { get; set; } = new();
 }
 
 public enum JobPhase { Waiting, Copying, Flushing, Verifying, Reporting, Analyzing, Proxies, Done, Failed, Cancelled }
@@ -218,6 +221,7 @@ public sealed class OffloadJob
             RecordHistory(plan, report, log);
             if (!Config.AnalyzeClips && !Config.Proxy.Enabled)
             {
+                WriteClipLists(plan, log);   // the clips found in the files, without metadata (spec 3.3)
                 WritePdfReports(report, plan, log);
                 Update(s => s with { Phase = JobPhase.Done });
                 return false;
@@ -645,12 +649,24 @@ public sealed class OffloadJob
         }
     }
 
-    static void RewriteReports(OffloadReport report, OffloadPlan plan, Action<string>? log)
+    void RewriteReports(OffloadReport report, OffloadPlan plan, Action<string>? log)
     {
         foreach (var path in plan.CardPaths)
         {
             try { report.Write(path, includeHashRecords: false); }
             catch (Exception e) { log?.Invoke($"report rewrite {path}: {e.Message}"); /* the first report is already there; this only adds clip details */ }
+        }
+        WriteClipLists(plan, log);
+    }
+
+    /// Spec 3.3: `_REPORT\<card>_clips.csv/.ale` on every destination, from the reports there — every generation (R25).
+    /// Derived files: a failure (a list held open in Excel, a disk gone) is only logged.
+    void WriteClipLists(OffloadPlan plan, Action<string>? log)
+    {
+        foreach (var path in plan.CardPaths)
+        {
+            try { ClipList.WriteForCard(path, Config.Outputs); }
+            catch (Exception e) { log?.Invoke($"clip list {path}: {e.Message}"); }
         }
     }
 }

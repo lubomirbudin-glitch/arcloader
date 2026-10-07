@@ -424,6 +424,19 @@ public sealed partial class MainViewModel
     /// Shown under the choice while MD5 is on.
     public string? Md5Note => HashKinds.FromSetting(Settings.Hash).HasFlag(HashKind.Md5) ? Texts.Md5Slower : null;
 
+    /// "Seznam klipů CSV" / "Seznam klipů pro Avid (ALE)" (spec 3.3) — `outputs` in settings.json.
+    public bool ClipListCsv
+    {
+        get => Settings.Outputs.ClipListCsv;
+        set { Settings.Outputs.ClipListCsv = value; SettingsChanged(); Raise(); }
+    }
+
+    public bool ClipListAle
+    {
+        get => Settings.Outputs.ClipListAle;
+        set { Settings.Outputs.ClipListAle = value; SettingsChanged(); Raise(); }
+    }
+
     public bool AnalyzeClips
     {
         get => Settings.AnalyzeClips;

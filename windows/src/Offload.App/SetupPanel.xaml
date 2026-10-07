@@ -197,6 +197,8 @@
                 <CheckBox Content="Analýza klipů a náhledy v reportu" IsChecked="{Binding AnalyzeClips}" />
                 <CheckBox Content="Navrhovat název karty podle klipů" IsChecked="{Binding SuggestCardNames}"
                           AutomationProperties.AutomationId="SuggestCardNames" />
+                <CheckBox Content="Seznam klipů CSV" IsChecked="{Binding ClipListCsv}" AutomationProperties.AutomationId="ClipListCsv" />
+                <CheckBox Content="Seznam klipů pro Avid (ALE)" IsChecked="{Binding ClipListAle}" AutomationProperties.AutomationId="ClipListAle" />
 
                 <!-- Proxy -->
                 <StackPanel Orientation="Horizontal" Margin="0,18,0,0">

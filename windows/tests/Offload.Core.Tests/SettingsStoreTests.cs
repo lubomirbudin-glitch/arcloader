@@ -43,6 +43,23 @@ public class SettingsStoreTests
         Assert.Contains("\"hash\": \"xxh128\"", File.ReadAllText(path));
     }
 
+    // Spec 5.1: "outputs" — CSV on, ALE off by default; keys of a newer version inside it survive (R24).
+    [Fact]
+    public void Outputs_DefaultsAndUnknownKeys()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        var fresh = SettingsStore.Load(path);
+        Assert.Equal((true, false), (fresh.Outputs.ClipListCsv, fresh.Outputs.ClipListAle));
+        var s = LoadJson(dir, """{"outputs":{"clipListCsv":false,"clipListAle":true,"future":1}}""");
+        Assert.Equal((false, true), (s.Outputs.ClipListCsv, s.Outputs.ClipListAle));
+        Assert.Null(s.Extra);
+        SettingsStore.Save(s, path);
+        var text = File.ReadAllText(path);
+        Assert.Contains("\"clipListAle\": true", text);
+        Assert.Contains("\"future\": 1", text);
+    }
+
     [Fact]
     public void Corrupt_Defaults()
     {
