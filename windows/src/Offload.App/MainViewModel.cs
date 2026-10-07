@@ -26,6 +26,7 @@ public sealed partial class MainViewModel : ObservableObject
         InitVerify();
         InitDayReport();
         InitProjects();
+        InitNotify();
     }
 
     public StartupOptions Options { get; }

@@ -116,6 +116,8 @@ public sealed class JobItemViewModel : QueueItem
     public string DetailText => progress.DetailText;
 
     public string Title => Job.Plan is { Mode: PlanMode.Append } p ? AppendRules.Title(p.CardName) : Job.Plan?.CardName ?? sourceName;
+    /// The card folder's name (notifications, spec 4.3).
+    internal string CardName => Job.Plan?.CardName ?? sourceName;
     public string FilesText
     {
         get

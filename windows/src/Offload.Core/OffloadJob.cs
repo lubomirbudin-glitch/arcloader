@@ -35,6 +35,8 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     public OutputSettings Outputs { get; set; } = new();
     /// The project the job was started in (spec 4.1), null = "Bez projektu": into history.json and the report.
     public string? Project { get; set; }
+    /// Where the end of the job is announced (spec 4.3): the copy taken when the job was started.
+    public Notify.NotifySettings Notify { get; set; } = new();
 }
 
 public enum JobPhase { Waiting, Copying, Flushing, Verifying, Reporting, Analyzing, Proxies, Done, Failed, Cancelled }

@@ -3,6 +3,7 @@ using Offload.Core;
 using Offload.Core.Desktop;
 using Offload.Core.Hardware;
 using Offload.Core.History;
+using Offload.Core.Notify;
 
 namespace Offload.Cli;
 
@@ -24,11 +25,12 @@ static class CopyCommand
         var noHistory = new Option<bool>("--no-history") { Description = "Do not read or write the offload history (%APPDATA%\\Offload\\history.json)." };
         var hash = new Option<string>("--hash") { Description = "Checksums: xxh64 (default) or both (xxh64 + MD5; MD5 is slower on fast cards).", DefaultValueFactory = _ => "xxh64" };
         var project = CliProject.Create();
+        var ntfy = CliNtfy.Create();
         var stageTwo = new StageTwoOptions();
 
         var cmd = new Command("copy", "Copy a card to <dest>/<date>/<card name>/ on every destination and verify.");
         cmd.Arguments.Add(source);
-        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noHistory, hash, project }) cmd.Options.Add(o);
+        foreach (var o in new Option[] { dest, name, date, chunkMb, buffers, noVerify, allowSame, dryRun, noHistory, hash, project, ntfy }) cmd.Options.Add(o);
         stageTwo.AddTo(cmd);
         cmd.SetAction(r =>
         {
@@ -53,6 +55,7 @@ static class CopyCommand
                     Hashes = !Given(hash) ? HashKinds.FromSetting(profile!.Hash)
                         : HashKinds.TryParseWire(r.GetValue(hash), out var kinds) ? kinds : throw new ArgumentException(Msg.UnknownHash(r.GetValue(hash))),
                     Project = picked?.Project,
+                    Notify = CliNtfy.Settings(r, ntfy, profile),
                 };
                 stageTwo.Apply(r, config, profile);
             }
@@ -110,6 +113,7 @@ static class CopyCommand
         catch (Exception e)
         {
             Console.Error.WriteLine(Msg.CliError + e.Message);
+            if (!dryRun) Ntfy(config, null, new JobStatus { Phase = JobPhase.Failed, Error = e.Message }, null);   // a refusal before the copy too
             return 1;
         }
         List<RoleLink>? chainLinks = null;
@@ -175,8 +179,20 @@ static class CopyCommand
         if (status.Note != null) Console.WriteLine(status.Note);
         if (status.Warning != null) Console.WriteLine("Varování: " + status.Warning);
         if (status.Error != null) Console.WriteLine(Msg.CliError + status.Error);
+        Ntfy(config, plan, status, report);
         // "Nic nového" ends Done without a report: that is success (exit 0).
         return status.Phase == JobPhase.Done && (report?.Success == true || (report == null && status.Note != null)) ? 0 : 1;
+    }
+
+    /// Spec 4.3: --ntfy (or the project's ntfy) once the job has ended — at most 10 s; a failure is only a line on stderr.
+    static void Ntfy(JobConfig config, OffloadPlan? plan, JobStatus status, OffloadReport? report)
+    {
+        // Never the source path itself (spec 5.6): the plan's name, the --name, else the name the engine would give.
+        string card;
+        try { card = plan?.CardName ?? config.CardName ?? Layout.DefaultCardName(config.Source); }
+        catch (Exception e) when (e is IOException or ArgumentException or NotSupportedException or UnauthorizedAccessException) { card = ""; }
+        if (string.IsNullOrWhiteSpace(card)) card = "karta";
+        NtfyClient.SendOutcomeAsync(config.Notify.Ntfy, JobOutcomes.Final(card, status, report), m => Console.Error.WriteLine(m)).GetAwaiter().GetResult();
     }
 
     /// "Card A001: 3 files, 1 GB" for a full copy; an append (Czech, with plural forms): "Doplnění karty A001

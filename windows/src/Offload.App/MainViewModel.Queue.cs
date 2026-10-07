@@ -303,6 +303,7 @@ public sealed partial class MainViewModel
         if (Find(job) is not JobItemViewModel item) return;   // a verification has no stage 2: OnJobFinished follows
         item.Refresh();
         if (!closing && item.SafeToEject) SystemSounds.Asterisk.Play();
+        NotifyCopyDone(item);   // spec 4.3: "kartu lze vysunout" while stage 2 still runs
         if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Zálohováno"
         if (!closing) _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // the disks changed: free space again (ruling I4)
         // Ended in stage 1: only the day report is left and it may queue behind other cards' stage 2 — alert now.
@@ -316,6 +317,7 @@ public sealed partial class MainViewModel
             if (item is JobItemViewModel j) j.LeftQueue = true;
             item.Refresh();
             if (!item.Alerted) Alert(item);
+            if (item is JobItemViewModel ended) NotifyJobEnd(ended);   // spec 4.3
         }
         Raise(nameof(HasFinished));
         CheckCloseReady();

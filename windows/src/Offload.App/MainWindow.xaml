@@ -31,6 +31,7 @@
                     </MenuItem>
                     <MenuItem Header="Ukládat report ověření" IsCheckable="True" IsChecked="{Binding SaveVerifyReport}"
                               AutomationProperties.AutomationId="SaveVerifyReportMenuItem" />
+                    <MenuItem Header="Oznámení…" Command="{Binding NotifySettingsCommand}" AutomationProperties.AutomationId="NotifyMenuItem" />
                     <MenuItem Header="Denní report…" Command="{Binding DayReportCommand}"
                               AutomationProperties.AutomationId="DayReportMenuItem">
                         <MenuItem.Icon>

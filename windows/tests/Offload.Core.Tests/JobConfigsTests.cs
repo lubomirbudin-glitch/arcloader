@@ -133,6 +133,26 @@ public class JobConfigsTests
         Assert.True(c.Verify);
     }
 
+    // Rulings I2 / P1 / P2: an append announces to the topic of the earlier backup's project — never the active one's.
+    [Fact]
+    public void Append_Notify_TheEntrysProjectsTopic_BezProjektuWhenNoneOrGone_NeverTheActiveOnes()
+    {
+        var s = Settings("Reklama Y");
+        s.Notify.Ntfy = new Offload.Core.Notify.NtfySettings { Enabled = true, Topic = "bez-projektu" };
+        Projects.Find(s, "Film X")!.Notify.Ntfy = new Offload.Core.Notify.NtfySettings { Enabled = true, Topic = "film-x" };
+        Projects.Find(s, "Reklama Y")!.Notify.Ntfy = new Offload.Core.Notify.NtfySettings { Enabled = true, Topic = "reklama-y" };
+
+        Assert.Equal("film-x", JobConfigs.Append(s, @"K:\", Entry("Film X")).Notify.Ntfy.Topic);
+        Assert.Equal("bez-projektu", JobConfigs.Append(s, @"K:\", Entry(null)).Notify.Ntfy.Topic);
+        Assert.Equal("bez-projektu", JobConfigs.Append(s, @"K:\", Entry("Smazaný film")).Notify.Ntfy.Topic);
+        Assert.Equal("reklama-y", JobConfigs.Full(s, @"K:\", null, "2026-10-06").Notify.Ntfy.Topic);
+
+        // the job's own copy: a later edit of the profile does not reach it
+        var c = JobConfigs.Append(s, @"K:\", Entry("Film X"));
+        Projects.Find(s, "Film X")!.Notify.Ntfy.Topic = "zmeneno";
+        Assert.Equal("film-x", c.Notify.Ntfy.Topic);
+    }
+
     // ── Ruling M15: a started job keeps its own copy ───────────────────────
 
     [Fact]

@@ -21,6 +21,7 @@ public static class JobConfigs
             Tools = SettingsStore.Clone(s.Tools),
             Outputs = SettingsStore.Clone(p.Outputs),
             Project = Projects.ActiveName(s),
+            Notify = SettingsStore.Clone(p.Notify),
         };
     }
 
@@ -39,6 +40,7 @@ public static class JobConfigs
             Tools = SettingsStore.Clone(s.Tools),
             Outputs = SettingsStore.Clone(p.Outputs),
             Project = entry.Project,   // the engine prefers the earlier report's (M4); this is the fallback
+            Notify = SettingsStore.Clone(p.Notify),   // the entry's project's topic, or Bez projektu (I2, P1, P2) — never the active one
         };
     }
 }

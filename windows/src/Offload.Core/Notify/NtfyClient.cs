@@ -35,6 +35,9 @@ public static partial class NtfyClient
             ? null
             : $"Adresa serveru „{server}“ není http(s) adresa.";
 
+    /// Why the ntfy settings cannot be kept (the dialog's OK), or null: switched on, they need a server and a topic.
+    public static string? SettingsProblem(NtfySettings s) => s.Enabled ? ServerProblem(s.Server) ?? TopicProblem(s.Topic) : null;
+
     /// CLI --ntfy <url>: "https://ntfy.sh/muj-tajny-kanal" → ("https://ntfy.sh", "muj-tajny-kanal"); the last path segment
     /// is the topic. Null when the URL has no topic or is no http(s) address.
     public static (string Server, string Topic)? ParseUrl(string url)

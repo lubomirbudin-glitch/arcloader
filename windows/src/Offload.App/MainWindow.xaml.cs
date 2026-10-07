@@ -6,12 +6,23 @@ public partial class MainWindow : Window
 {
     readonly MainViewModel vm;
     readonly VolumeWatcher watcher = new();
+    readonly TrayNotifier tray;
 
     public MainWindow(MainViewModel vm)
     {
         InitializeComponent();
         this.vm = vm;
         DataContext = vm;
+        tray = new TrayNotifier(this);
+        tray.Activated += () =>
+        {
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Activate();
+        };
+        vm.ShowNotification = tray.Show;
+        vm.WindowInFront = () => tray.WindowInFront;
+        vm.EditNotifyDialog = settings => NotifyWindow.Edit(this, settings, vm.ActiveProjectName);
+        Closed += (_, _) => tray.Dispose();
         vm.MessageRequested += text => MessageBox.Show(this, text, "Offload");
         Closed += (_, _) => vm.SaveNow();
         Closing += (_, e) => e.Cancel = !vm.TryClose(() => MessageBox.Show(this,
@@ -58,6 +69,7 @@ public partial class MainWindow : Window
         base.OnSourceInitialized(e);
         WindowSizing.FitToWorkArea(this);
         watcher.Attach(this);
+        tray.Attach();
         watcher.Arrived += vm.VolumesArrived;
         watcher.Changed += vm.RefreshVolumes;
         Closed += (_, _) => watcher.Dispose();

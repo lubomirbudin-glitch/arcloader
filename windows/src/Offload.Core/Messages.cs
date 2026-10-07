@@ -155,6 +155,8 @@ public static class Msg
     public static string LutNotFound(string path) => $"LUT nenalezen: {path}";
     public static string RuleLutNotFound(int rule, string name) => $"LUT z pravidla {rule} nenalezen: {name}";
     public const string LutRuleNeedsAuto = "--lut-rule platí jen s --lut auto";
+    public static string BadNtfyUrl(string url) =>
+        $"Adresa ntfy „{url}“ nejde použít — zadejte server a téma, např. https://ntfy.sh/muj-tajny-kanal (téma jen písmena bez diakritiky, číslice, - a _).";
     public static string BadLutRule(string spec) =>
         $"Pravidlo LUTu „{spec}“ nejde přečíst — použijte <podle>=<hodnota>:<lut>, např. camera=FX6:sony-slog3-sgamut3cine (podle: camera, serial, reel, folder; lut: vestavěný, none nebo cesta k .cube).";
     /// A proxy rendered without its custom LUT (the file was gone when stage 2 began).
