@@ -104,7 +104,7 @@ public sealed partial class CardRecord
             }
         }
         generations.Sort((a, b) => a.Generation.CompareTo(b.Generation));
-        var files = new Dictionary<string, RecordedFile>(StringComparer.Ordinal);
+        var files = new Dictionary<string, RecordedFile>(StringComparer.OrdinalIgnoreCase);
         var clips = new List<RecordedClip>();
         var clipAt = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var g in generations)
