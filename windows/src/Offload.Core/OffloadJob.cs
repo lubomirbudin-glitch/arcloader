@@ -439,11 +439,14 @@ public sealed class OffloadJob
                     }
                     else
                     {
+                        info.Reel = ReelResolver.Resolve(clip, info, plan.CardName);
                         entries[i].Info = info;
                         entries[i].ProbeError = "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy";
                         continue;
                     }
                 }
+                // Spec 3.4: the camera's tag, else the clip name, else the card folder — into the report and the proxy.
+                info.Reel = ReelResolver.Resolve(entries[i].Clip, info, plan.CardName);
                 entries[i].Info = info;
                 // The Sony XML is read from the destination: it sits next to the clip on the card, so it was copied too.
                 entries[i].Lut = LutResolver.Resolve(entries[i].Clip, info, Layout.Join(cardPaths[d], entries[i].Clip.Path), Config.Proxy, LutCatalog.Default);

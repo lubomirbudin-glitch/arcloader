@@ -123,7 +123,22 @@ public static class FFProbe
         info.Timecode ??= Str(ftags, "timecode") ?? streams.Select(x => Str(Tags(x), "timecode")).FirstOrDefault(t => t != null);
         info.Camera = Camera(Str(ftags, "com.apple.quicktime.make"), Str(ftags, "com.apple.quicktime.model"))
             ?? Str(ftags, "product_name") ?? Str(ftags, "company_name");
+        info.Reel = new[] { format }.Concat(streams).Select(x => Reel(Tags(x))).FirstOrDefault(r => r != null);
         return info;
+    }
+
+    /// Tags that name the reel: MOV keeps it on the timecode track (tmcd "reel_name"), MXF on every stream.
+    static readonly string[] ReelTags = ["reel_name", "tape_name", "reel"];
+
+    static string? Reel(JsonElement tags)
+    {
+        if (tags.ValueKind != JsonValueKind.Object) return null;
+        foreach (var name in ReelTags)
+            foreach (var p in tags.EnumerateObject())
+                if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.String
+                    && p.Value.GetString()!.Trim() is { Length: > 0 } reel)
+                    return reel;
+        return null;
     }
 
     /// Make and model together ("ARRI" + "ALEXA 35" → "ARRI ALEXA 35"), unless the model already starts with the make.

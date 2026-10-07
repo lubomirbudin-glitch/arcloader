@@ -14,9 +14,10 @@ public static class TestMedia
     public static string? Ffmpeg => Tools.Ffmpeg;
     public static string? Ffprobe => Tools.Ffprobe;
 
-    /// Test pattern with burnt-in TC track and optional sine audio, H.264 in MOV/MP4 (by extension).
+    /// Test pattern with burnt-in TC track and optional sine audio, H.264 in MOV/MP4 (by extension). `reel`: the
+    /// camera's reel name on the timecode track (MOV `reel_name`).
     public static void MakeClip(string path, double seconds = 2, int fps = 25, string timecode = "01:00:00:00",
-        bool audio = true, int width = 1280, int height = 720)
+        bool audio = true, int width = 1280, int height = 720, string? reel = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var d = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -25,6 +26,7 @@ public static class TestMedia
         if (audio) args.AddRange(["-f", "lavfi", "-i", $"sine=d={d}"]);
         args.AddRange(["-timecode", timecode, "-c:v", "libx264", "-pix_fmt", "yuv420p"]);
         if (audio) args.AddRange(["-c:a", "aac", "-shortest"]);
+        if (reel != null) args.AddRange(["-metadata:s:v:0", $"reel_name={reel}"]);
         args.Add(path);
         ToolProcess.Run(Ffmpeg!, args);
     }

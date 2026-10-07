@@ -30,6 +30,16 @@ public static partial class ReelNames
     public static string? FromClipName(string name) => Match(name)?.Reel;
 }
 
+/// The reel of a clip (spec 3.4) — what the proxy's timecode track, the report, the clip lists and (plan 8) the LUT
+/// rules call it, like DIT tools do: (1) the camera's own tag (ffprobe `reel_name`, `tape_name`, `reel`, in ClipInfo.Reel),
+/// (2) the reel in the clip name (ReelNames: "A001C003…" → "A001"), (3) the card folder's name.
+public static class ReelResolver
+{
+    public static string Resolve(Clip clip, ClipInfo? info, string cardName) =>
+        info?.Reel?.Trim() is { Length: > 0 } tag ? tag
+        : ReelNames.FromClipName(clip.Name) ?? cardName;
+}
+
 /// A card folder name proposed instead of the volume label (spec 2.3). `Hint` is the grey line under the name field.
 public sealed record NameSuggestion(string Name, string Hint);
 

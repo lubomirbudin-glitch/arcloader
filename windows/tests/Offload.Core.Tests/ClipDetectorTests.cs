@@ -102,6 +102,15 @@ one\A.mov", new ProxySettings { LutMode = LutMode.Auto }, LutCatalog.Load(LutCat
         Assert.Equal(0, i.AudioChannels);
     }
 
+    // Spec 3.4: MOV keeps the reel on the timecode track, MXF on every stream; other writers use tape_name or reel.
+    [Theory]
+    [InlineData("""{"streams":[{"codec_type":"video"},{"codec_type":"data","codec_tag_string":"tmcd","tags":{"reel_name":"A001","timecode":"01:00:00:00"}}],"format":{}}""", "A001")]
+    [InlineData("""{"streams":[{"codec_type":"video","tags":{"reel_name":"B002"}},{"codec_type":"audio","tags":{"reel_name":"B002"}}],"format":{}}""", "B002")]
+    [InlineData("""{"streams":[],"format":{"tags":{"tape_name":" T7 "}}}""", "T7")]
+    [InlineData("""{"streams":[{"codec_type":"video","tags":{"Reel":"R9"}}]}""", "R9")]
+    [InlineData("""{"streams":[{"codec_type":"video","tags":{"reel_name":" "}}],"format":{}}""", null)]
+    public void Parse_Reel(string json, string? reel) => Assert.Equal(reel, FFProbe.Parse(json).Reel);
+
     [FfmpegFact]
     public void Probe_RealClip()
     {

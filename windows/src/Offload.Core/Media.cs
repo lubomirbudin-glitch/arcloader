@@ -61,6 +61,10 @@ public sealed class ClipInfo
     [JsonPropertyName("gamma")] public string? Gamma { get; set; }
     [JsonPropertyName("gamut")] public string? Gamut { get; set; }
     [JsonPropertyName("colorScienceGen")] public int? ColorScienceGen { get; set; }
+    /// The reel (tape name): ffprobe's `reel_name` / `tape_name` / `reel` tag after the probe, then ReelResolver's
+    /// answer (tag, else the clip name, else the card folder) once the job has the clip (spec 3.4). Report key
+    /// `clips[].info.reel`, absent when unknown.
+    [JsonPropertyName("reel"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Reel { get; set; }
 
     [JsonIgnore]
     public string FpsLabel

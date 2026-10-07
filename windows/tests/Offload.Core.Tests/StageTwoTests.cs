@@ -182,6 +182,24 @@ public class StageTwoTests
         Assert.False(Directory.Exists(Path.Combine(job.Plan!.CardPaths[0], "_PROXY")));
     }
 
+    // Spec 3.4: the reel of every clip in the report — the camera's tag, else the clip name, else the card folder.
+    [FfmpegFact]
+    public void Report_RecordsReel_TagNameOrCard()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeClip(Path.Combine(card, "CLIP", "A001C003_210101_R1AB.mov"), seconds: 1);
+        TestMedia.MakeClip(Path.Combine(card, "CLIP", "C0001.mov"), seconds: 1);
+        TestMedia.MakeClip(Path.Combine(card, "CLIP", "take.mov"), seconds: 1, reel: "TAPE07");
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")]) { Date = "2026-10-05", CardName = "KARTA" }, Options());
+
+        var report = job.Run();
+
+        Assert.Equal(JobPhase.Done, job.Status().Phase);
+        Assert.Equal(["A001", "KARTA", "TAPE07"], report!.Clips.Select(c => c.Info?.Reel));
+        Assert.Contains("\"reel\": \"TAPE07\"", File.ReadAllText(Path.Combine(job.Plan!.CardPaths[0], "_REPORT", "offload_report.json")));
+    }
+
     [Fact]
     public void NothingToAnalyze_StillDone()
     {

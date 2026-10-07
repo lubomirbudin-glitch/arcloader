@@ -20,6 +20,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-07 — plán 7: výstupy pro produkci a střih
 
+- Úkol 2 — cívka klipu (`ReelResolver`): tag kamery z ffprobe (`reel_name`, `tape_name`, `reel` — u MOV na stopě timecodu, u MXF na každém proudu), jinak cívka z názvu klipu (`A001C003…` → `A001`), jinak název složky karty; v reportu `clips[].info.reel`
 - Úkol 1 — `CardRecord` úplný: klipy všech generací (doplnění za dřívějšími, tatáž cesta = nejnovější záznam), součty přes generace (soubory, data, začátek–konec), selhané soubory podle nejnovějšího záznamu, „ověřeno“ jen když jsou ověřené všechny generace a žádný report doplnění není nečitelný; generace bez analýzy klipů dostane klipy nalezené v jejích souborech (bez metadat); snese report z Macu (bez `generation`, `lut`, `proxyEncoder`, `md5`) i `"clips": null`
 
 ## 2026-10-06 — plán 6: karty a bezpečnost dat
