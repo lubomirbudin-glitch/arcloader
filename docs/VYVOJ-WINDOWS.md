@@ -19,6 +19,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 6 | karty a bezpečnost dat: historie karet, doplnění nových klipů, název z klipů, ověření zálohy proti ASC MHL, kontrola místa, české hlášky (0.2.0) | hotovo (čeká ruční test s kartou) |
 | 7 | výstupy pro produkci a střih: denní report, seznam klipů CSV/ALE, proxy pro přelinkování (reel name, všechny zvukové stopy), MD5 navíc k xxh64 (0.3.0) | hotovo (čeká ruční test: Resolve, Premiere, Avid, Excel) |
 
+## 2026-10-07 — plán 8: nastavení, oznámení, distribuce
+
+- Úkol 1 — projekty v `settings.json` (R17): horní klíče profilu (`destRoots`, `verify`, `analyzeClips`, `hash`, `naming`, `outputs`, `notify`, `proxy`) jsou „Bez projektu“, `projects[]` pojmenované profily stejného tvaru, `activeProject`; každý profil se čte po sekcích (nečitelná sekce se zachová), neznámé klíče i v projektu zůstanou; jména oříznutá, 1–60 znaků, jedinečná bez ohledu na velikost písmen, „Bez projektu“ vyhrazené, dvakrát stejné jméno → platí poslední, `projects`, které není pole, se zachová; uložit jako / přejmenovat / smazat / přepnout (tam a zpět beze ztráty); nová sekce `notify` (`windows`, `ntfy`) Neuložitelné záznamy `projects` (neobjekt, neplatný název) zůstanou syrové a zapíší se zpět za čitelné (M3).
+
 ## 2026-10-07 — plán 7: výstupy pro produkci a střih
 
 - Závěrečné opravy plánu 7 — ALE vypnuté, ale už existující (karta i den): doplnění s novou frekvencí zapíše všechny soubory frekvencí a smaže zastaralý jediný `_clips.ale` (dřív chyběl nový klip); selhání stage 2 přesto zapíše seznamy klipů; úloha, která skončila ve stage 1, upozorní (blesk, zvuk) hned po kopii, ne až po denním reportu za jinými kartami; test kořene disku nic nezapisuje; docs a návod (PDF) o přepsání vypnutého seznamu
