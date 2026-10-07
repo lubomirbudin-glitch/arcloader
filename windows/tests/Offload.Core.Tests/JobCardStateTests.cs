@@ -60,4 +60,40 @@ public class JobCardStateTests
         Assert.True(unverified.IsGood("written"));
         Assert.False(Report(true).IsGood("written"));
     }
+
+    [Fact]
+    public void NothingNew_OnAnUnverifiedBackup_IsNotGreen()
+    {
+        var unsafeDone = new JobStatus { Phase = JobPhase.Done, SafeToEject = false, Note = "Nic nového." }.WithWarning("3 soubory dřívější zálohy nebyly ověřeny.");
+        var h = JobCard.Headline("A001", unsafeDone, null, Disks);
+        Assert.Equal((JobCardKind.Problem, "A001 — kartu zatím nevysunujte", "3 soubory dřívější zálohy nebyly ověřeny."), (h.Kind, h.Title, h.Sub));
+        Assert.Equal("2 soubory dřívější zálohy nebylo ověřeno.", JobCard.Headline("A001", unsafeDone, null, Disks, new BackupState(0, 2)).Sub);
+        // The really complete backup stays green.
+        Assert.Equal((JobCardKind.Done, "A001 — záloha je úplná"),
+            (JobCard.Headline("A001", unsafeDone with { SafeToEject = true }, null, Disks).Kind, JobCard.Headline("A001", unsafeDone with { SafeToEject = true }, null, Disks).Title));
+    }
+
+    [Fact]
+    public void Stage2Failed_AfterAGoodCopy_KeepsTheCopySafeWording_AndSaysTheProcessingFailed()
+    {
+        var r = Report(true, null, F("verified", "verified"));
+        var h = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Failed, CopySucceeded = true, SafeToEject = true, Error = "ffmpeg spadl" }, r, Disks);
+        Assert.Equal((JobCardKind.Done, "A001 — kartu lze vysunout"), (h.Kind, h.Title));
+        Assert.Contains("Zpracování po kopii ale selhalo: ffmpeg spadl", h.Sub);
+        Assert.StartsWith("Soubor je na 2 discích", h.Sub);
+    }
+
+    [Fact]
+    public void RepairReadBack_UsesTheBytesReallyReadBack_AsTheDenominator()
+    {
+        // Repair: disk 1 gets one 100 B file written (and read back); disk 2 keeps its copy, nothing to read back there.
+        var snap = new ProgressSnapshot(CopyPhase.Verify, 1000, 10, 0, "", 100, [100, 0], [50, 0], 0, PlannedBytes: [100, 0], VerifyPlannedBytes: [100, 0]);
+        Assert.Equal(100, snap.ToVerifyTotal);
+        Assert.Equal(100, snap.ToVerify(0));
+        Assert.Equal(0, snap.ToVerify(1));
+        var p = new JobStatus { Phase = JobPhase.Verifying, Copy = snap };
+        Assert.Equal("50 B / 100 B", JobCard.FileLine(p).Value.Replace(" ", " "));
+        // Before the read-back starts (-1) it falls back to what is written.
+        Assert.Equal(100, (snap with { VerifyPlannedBytes = [-1, -1] }).ToVerify(0));
+    }
 }

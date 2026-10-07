@@ -201,7 +201,7 @@ public class JobCardTests
             JobCard.Headline("A", new JobStatus { Phase = JobPhase.Failed, Error = "Cíl nenalezen: D:\\" }, null, Disks) is var f ? (f.Title, f.Sub) : default);
         Assert.Equal(JobCardKind.Failed, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Failed, Error = "x" }, null, Disks).Kind);
         Assert.Equal((JobCardKind.Done, "A — záloha je úplná", Msg.NothingNew),
-            JobCard.Headline("A", new JobStatus { Phase = JobPhase.Done, Note = Msg.NothingNew }, null, Disks) is var n ? (n.Kind, n.Title, n.Sub) : default);
+            JobCard.Headline("A", new JobStatus { Phase = JobPhase.Done, Note = Msg.NothingNew, SafeToEject = true }, null, Disks) is var n ? (n.Kind, n.Title, n.Sub) : default);
         Assert.Equal(JobCardKind.Cancelled, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Cancelled }, null, Disks).Kind);
         Assert.Equal(JobCardKind.Waiting, JobCard.Headline("A", new JobStatus(), null, Disks).Kind);
         Assert.Equal(JobCardKind.Running, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Proxies }, null, Disks).Kind);

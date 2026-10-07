@@ -128,7 +128,7 @@ public sealed class JobProgress
     {
         { Phase: JobPhase.Copying, Copy: { TotalBytes: > 0 } c } => (double)c.ReadBytes / c.TotalBytes,
         { Phase: JobPhase.Verifying, Copy: { TotalBytes: > 0 } v } =>
-            v.VerifiedBytes.Sum() / ((double)v.TotalBytes * Math.Max(1, v.VerifiedBytes.Length)),
+            v.ToVerifyTotal == 0 ? 1 : v.VerifiedBytes.Sum() / (double)v.ToVerifyTotal,
         { Phase: JobPhase.Analyzing or JobPhase.Proxies, ClipCount: > 0 } s => (s.ClipIndex + s.ClipFraction) / s.ClipCount,
         { Phase: JobPhase.Done } => 1,
         _ => 0,

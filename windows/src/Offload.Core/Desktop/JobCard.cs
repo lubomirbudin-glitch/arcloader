@@ -69,7 +69,7 @@ public static class JobCard
         for (int d = 0; d < destNames.Count; d++)
         {
             long done = verifying ? At(c.VerifiedBytes, d) : At(c.WrittenBytes, d);
-            long of = verifying ? c.TotalBytes : c.Planned(d);
+            long of = verifying ? c.ToVerify(d) : c.Planned(d);
             double rate = d < p.DestRates.Length ? p.DestRates[d] : 0;
             // A destination a repair only reads back has nothing to write: full, and no speed while the others copy.
             rows.Add(new TransferRow(destNames[d], d + 1, of == 0 ? 1 : Share(done, of), of == 0 && !verifying ? "jen ověření" : Rate(rate, s.Paused)));
@@ -124,7 +124,7 @@ public static class JobCard
         {
             JobPhase.Copying when c != null => ($"Soubor {Math.Min(c.FileIndex + 1, c.TotalFiles)} / {c.TotalFiles}", Path.GetFileName(c.CurrentFile)),
             JobPhase.Flushing => ("Zápis cache disků", ""),
-            JobPhase.Verifying when c != null => ("Ověřování", $"{Format.BytesCs3(c.VerifiedBytes.Sum())} / {Format.BytesCs3(c.TotalBytes * Math.Max(1, c.VerifiedBytes.Length))}"),
+            JobPhase.Verifying when c != null => ("Ověřování", $"{Format.BytesCs3(c.VerifiedBytes.Sum())} / {Format.BytesCs3(c.ToVerifyTotal)}"),
             JobPhase.Analyzing => ($"Klip {s.ClipIndex + 1} / {s.ClipCount}", s.ClipName),
             JobPhase.Proxies => ($"Proxy {s.ClipIndex + 1} / {s.ClipCount}", $"{s.ClipName} · {(s.ClipFraction * 100).ToString("0", CultureInfo.InvariantCulture)} %"),
             JobPhase.Reporting => ("Report", ""),
@@ -209,9 +209,14 @@ public static class JobCard
                 ? "Kopie je hotová a ověřená, zrušilo se jen zpracování po kopii."
                 : "Karta není kompletně zálohovaná — zkopírujte ji znovu celou.");
         if (r == null)
+        {
+            // Nothing new / nothing to repair: green only when the backup is really complete and verified.
+            if (s.Phase == JobPhase.Done && !s.SafeToEject)
+                return new(JobCardKind.Problem, $"{card} — kartu zatím nevysunujte", NotSafeWhy(s, backup));
             return s.Phase == JobPhase.Done
                 ? new(JobCardKind.Done, $"{card} — záloha je úplná", s.Note ?? Msg.NothingNew)
                 : new(JobCardKind.Failed, $"{card} — offload selhal", s.Error ?? "Kopie se nepodařila.");
+        }
         string notYet = $"{card} — kartu zatím nevysunujte";
         if (!r.Success) return new(JobCardKind.Problem, notYet, backup is { Failed: > 0 } b ? $"V záloze {Files(b.Failed)} stále nesouhlasí." : ProblemText(r, destNames));
         if (!r.Verified) return new(JobCardKind.Problem, $"{card} — zkopírováno bez ověření", SetupTexts.VerifyOffWarning);
@@ -219,17 +224,21 @@ public static class JobCard
         {
             // This job's files are good, but the backup as a whole is not (earlier files never read back, files of the
             // card that are in no report, files that still fail): the card stays in.
-            var why = backup switch
-            {
-                { Failed: > 0 } b => $"V záloze {Files(b.Failed)} stále nesouhlasí.",
-                { Unverified: > 0 } b => $"{Files(b.Unverified)} dřívější zálohy nebylo ověřeno.",
-                _ => s.Warning?.Split('\n')[0] ?? "Záloha ještě není kompletní.",
-            };
-            return new(JobCardKind.Problem, notYet, why);
+            return new(JobCardKind.Problem, notYet, NotSafeWhy(s, backup));
         }
-        return new(JobCardKind.Done, $"{card} — kartu lze vysunout",
-            r.IsRepair ? "Všechny soubory zálohy jsou teď na všech discích a ověřené." : SafeText(r.TotalFiles, r.Destinations.Count, HashKinds.Label(HashKinds.FromNames(r.Algorithms))));
+        var safe = r.IsRepair ? "Všechny soubory zálohy jsou teď na všech discích a ověřené." : SafeText(r.TotalFiles, r.Destinations.Count, HashKinds.Label(HashKinds.FromNames(r.Algorithms)));
+        // Stage 2 (previews, proxies) failed after a good copy: the copy is safe, but say the processing did not finish.
+        if (s.Phase == JobPhase.Failed)
+            safe = $"{safe} Zpracování po kopii ale selhalo: {s.Error ?? "neznámá chyba"}";
+        return new(JobCardKind.Done, $"{card} — kartu lze vysunout", safe);
     }
+
+    static string NotSafeWhy(JobStatus s, BackupState? backup) => backup switch
+    {
+        { Failed: > 0 } b => $"V záloze {Files(b.Failed)} stále nesouhlasí.",
+        { Unverified: > 0 } b => $"{Files(b.Unverified)} dřívější zálohy nebylo ověřeno.",
+        _ => s.Warning?.Split('\n')[0] ?? "Záloha ještě není kompletní.",
+    };
 
     /// The sub of a waiting card whose queue stands behind a paused job (a paused job keeps its place).
     public const string WaitingForPaused = "čeká na pozastavenou úlohu";

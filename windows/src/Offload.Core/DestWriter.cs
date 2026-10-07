@@ -252,6 +252,10 @@ internal sealed class DestWriter : IDisposable
 
     public void Wait() => worker.Wait();
 
+    long verifyPlanned = -1;
+    /// What the read-back will read on this destination (files written in this run); -1 until it starts.
+    public long VerifyPlanned => Interlocked.Read(ref verifyPlanned);
+
     /// Re-reads every written file from the disk — once, through every hash in `kinds` — and compares it with the
     /// source hashes. The error texts stay English: they go into the report JSON shared with the Mac. `pause`: the
     /// read-back waits there before every file and every block (Pozastavit).
@@ -267,6 +271,7 @@ internal sealed class DestWriter : IDisposable
             try { return pause!.WaitWhilePaused(ct); }
             finally { reading = true; }
         }
+        Interlocked.Exchange(ref verifyPlanned, Enumerable.Range(0, files.Count).Where(i => Results[i].State == FileState.Written).Sum(i => files[i].Size));
         reading = true;
         try
         {

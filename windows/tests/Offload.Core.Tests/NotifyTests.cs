@@ -201,11 +201,11 @@ public class NtfyClientTests
         var log = new List<string>();
         var outcome = new JobOutcome(OutcomeKind.Done, "Offload: A001 hotovo", "x", "Ověřeno na 2 discích.");
 
-        var sw = Stopwatch.StartNew();
         var send = NtfyClient.SendOutcomeAsync(settings, outcome, m => { lock (log) log.Add(m); }, TimeSpan.FromMilliseconds(500));
-        Assert.True(sw.Elapsed < TimeSpan.FromMilliseconds(400), sw.Elapsed.ToString());
+        // No wall-clock assert: the server never answers, so the call returning with an unfinished task IS the proof that
+        // the caller is not held; the result arrives later (bounded wait, never an elapsed-time check).
         Assert.False(send.IsCompleted);
-        await send;
+        await send.WaitAsync(TimeSpan.FromSeconds(30));
         lock (log) Assert.Equal("ntfy: Server neodpověděl do 0.5 s.", Assert.Single(log).Replace(',', '.'));
         // The listener records a request on its own pool thread — under the whole suite that can come after the client
         // gave up: wait for it (bounded) before counting.

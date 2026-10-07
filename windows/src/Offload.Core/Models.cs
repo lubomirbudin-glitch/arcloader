@@ -104,8 +104,15 @@ public enum CopyPhase { Copy, Flush, Verify, Report, Done }
 public sealed record ProgressSnapshot(
     CopyPhase Phase, long TotalBytes, int TotalFiles, int FileIndex, string CurrentFile,
     long ReadBytes, long[] WrittenBytes, long[] VerifiedBytes, int Errors,
-    bool Paused = false, bool PauseHeld = false, long[]? PlannedBytes = null)
+    bool Paused = false, bool PauseHeld = false, long[]? PlannedBytes = null, long[]? VerifyPlannedBytes = null)
 {
+    /// What destination `d` really reads back: the files written in this run (a repair trusts the others). Known once the
+    /// read-back starts; before that, what the destination gets written.
+    public long ToVerify(int d) => VerifyPlannedBytes is { } p && d < p.Length && p[d] >= 0 ? p[d] : Planned(d);
+
+    /// The bytes all destinations together read back - the denominator of the read-back progress.
+    public long ToVerifyTotal => Enumerable.Range(0, Math.Max(1, VerifiedBytes.Length)).Sum(ToVerify);
+
     /// What destination `d` gets written: TotalBytes, less for a destination a repair only reads back.
     public long Planned(int d) => PlannedBytes is { } p && d < p.Length ? p[d] : TotalBytes;
 }

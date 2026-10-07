@@ -263,7 +263,7 @@ public sealed partial class OffloadEngine
         {
             return new ProgressSnapshot(phase, plan?.Scan.TotalBytes ?? 0, plan?.Scan.Files.Count ?? 0, fileIndex, currentFile,
                 Interlocked.Read(ref readBytes), writers.Select(w => w.Written).ToArray(), writers.Select(w => w.Verified).ToArray(), errorCount,
-                Pauses.IsPaused, Pauses.IsHolding && writers.All(w => w.IsIdle), planned);
+                Pauses.IsPaused, Pauses.IsHolding && writers.All(w => w.IsIdle), planned, writers.Select(w => w.VerifyPlanned).ToArray());
         }
     }
 

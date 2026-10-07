@@ -356,7 +356,7 @@ public sealed class OffloadJob
             {
                 log?.Invoke($"backup state: {x.Message}");
             }
-            Update(s => s with { Phase = JobPhase.Done, Note = e.Message });
+            Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null });
             return false;
         }
         catch (OffloadError e) when (e.Code == PreflightCode.NothingNew)
@@ -381,7 +381,7 @@ public sealed class OffloadJob
                 // Nothing to copy does not make the earlier backup verified (fix round 1, item 3).
                 if (a.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(a.UnverifiedEarlier)));
             }
-            Update(s => s with { Phase = JobPhase.Done, Note = e.Message });
+            Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null });
             return false;
         }
         catch (OperationCanceledException)
