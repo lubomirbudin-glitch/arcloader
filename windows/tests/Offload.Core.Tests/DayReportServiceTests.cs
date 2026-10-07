@@ -468,31 +468,21 @@ public class CliDayReportTests
 
     // Fix round 1, item 1 (reproduced): `day-report D:\` with the current folder inside a day wrote the day files there
     // ("D:" = the current folder on D:). A root, also given as a bare "D:", is refused and nothing is written anywhere.
+    // Pure checks only (no Write, no CurrentDirectory change): a regression must never be able to create `_REPORT` in a
+    // real drive root. The bare-drive resolution goes through CliPath.Full, which never consults the current folder.
     [Fact]
-    public void DayReport_DriveRoot_Refused_EvenFromInsideADay()
+    public void DayReport_DriveRoot_Refused_PureChecks()
     {
-        using var dir = new TempDir();
-        var day = DayFixtures.Day(dir);
-        var root = Path.GetPathRoot(day)!;
-        var before = Directory.GetFiles(Path.Combine(day, "_REPORT"));
-        var rootReportBefore = Directory.Exists(Path.Combine(root, "_REPORT"));
-        var cwd = Environment.CurrentDirectory;
-        Environment.CurrentDirectory = day;
-        try
+        var root = Path.GetPathRoot(Path.GetTempPath())!;   // e.g. D:\
+        foreach (var arg in new[] { root, root.TrimEnd('\\'), root.ToLowerInvariant().TrimEnd('\\') })
         {
-            foreach (var arg in new[] { root, root.TrimEnd('\\') })
-            {
-                var r = Run(DayReportCommand.Create(), arg);
-                Assert.Equal(1, r.Exit);
-                Assert.Contains("Chyba: " + Msg.DayIsVolumeRoot(root), r.Err);
-            }
+            var full = CliPath.Full(arg);
+            Assert.Equal(root, full, ignoreCase: true);   // "D:" is the root, not the current folder on D:
+            var day = DayReportService.DayFolderOf(full);
+            Assert.Equal(root, DayReport.FullPath(day), ignoreCase: true);
+            var e = Assert.Throws<InvalidOperationException>(() => DayReport.CheckDay(day));
+            Assert.Equal(Msg.DayIsVolumeRoot(DayReport.FullPath(day)), e.Message);
         }
-        finally
-        {
-            Environment.CurrentDirectory = cwd;
-        }
-        Assert.Equal(before, Directory.GetFiles(Path.Combine(day, "_REPORT")));
-        Assert.Equal(rootReportBefore, Directory.Exists(Path.Combine(root, "_REPORT")));
     }
 
     [Fact]
