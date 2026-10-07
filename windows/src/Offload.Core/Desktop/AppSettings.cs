@@ -206,9 +206,15 @@ public static class SettingsStore
                 s.UnreadableProjects.Add(item.Clone());
                 continue;
             }
+            // A name given twice (any case): the first entry is the live project; a later one is kept raw, never lost.
+            if (s.Projects.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                System.Diagnostics.Trace.WriteLine($"settings: project \"{name}\" given twice — the later entry kept as-is");
+                s.UnreadableProjects.Add(item.Clone());
+                continue;
+            }
             var p = new ProjectSettings { Name = name };
             ReadProfile(obj, p, ["name"]);
-            s.Projects.RemoveAll(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
             s.Projects.Add(p);
         }
     }
@@ -226,9 +232,16 @@ public static class SettingsStore
         NormalizeProfile(s, catalog);
         foreach (var p in s.Projects) NormalizeProfile(p, catalog);
         // An active project that is not there (deleted by hand, renamed): "Bez projektu"; otherwise its exact name.
-        s.ActiveProject = Projects.Find(s, s.ActiveProject)?.Name;
+        // One that names a project kept raw (a newer version's) stays as written, so a save does not null it; the live
+        // profile (Active) is "Bez projektu" meanwhile.
+        if (Projects.Find(s, s.ActiveProject) is { } live) s.ActiveProject = live.Name;
+        else if (!NamesUnreadable(s, s.ActiveProject)) s.ActiveProject = null;
         return s;
     }
+
+    static bool NamesUnreadable(AppSettings s, string? name) =>
+        name != null && s.UnreadableProjects.Any(u => u.ValueKind == JsonValueKind.Object && u.TryGetProperty("name", out var n)
+            && n.ValueKind == JsonValueKind.String && string.Equals(n.GetString()?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase));
 
     static void NormalizeProfile(SettingsProfile s, LutCatalog catalog)
     {

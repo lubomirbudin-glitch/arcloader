@@ -160,28 +160,54 @@ public class ProjectsTests
              ]}
             """);
         var s = SettingsStore.Load(path);
-        Assert.Equal(["film x", "Reklama"], s.Projects.Select(p => p.Name));
-        Assert.Equal("film x", s.ActiveProject);                       // canonical name of the match
+        Assert.Equal(["Film X", "Reklama"], s.Projects.Select(p => p.Name));   // a name given twice: the first is live
+        Assert.Equal("Film X", s.ActiveProject);                       // canonical name of the match
         var film = s.Projects[0];
-        Assert.Equal([@"E:\New"], film.DestRoots);
-        Assert.Equal(ProxyCodec.H264, film.Proxy.Codec);                // unparseable section: defaults …
+        Assert.Equal([@"E:\Old"], film.DestRoots);
         var reklama = s.Projects[1];
         Assert.True(reklama.Verify);                                    // missing sections: defaults
         Assert.Equal(1080, reklama.Proxy.Height);
 
         SettingsStore.Save(s, path);
-        using var doc = JsonDocument.Parse(File.ReadAllText(path));
-        var saved = doc.RootElement.GetProperty("projects")[0];
-        Assert.Equal("av1", saved.GetProperty("proxy").GetProperty("codec").GetString());   // … and kept raw
-        Assert.Equal(1, saved.GetProperty("future").GetProperty("a").GetInt32());
-        // M3: entries that could not be read (not an object, no/blank/reserved name) are kept raw, after the readable ones
+        var first = File.ReadAllBytes(path);
+        using var doc = JsonDocument.Parse(first);
         var list = doc.RootElement.GetProperty("projects");
-        Assert.Equal(6, list.GetArrayLength());
-        Assert.Equal(["film x", "Reklama"], list.EnumerateArray().Take(2).Select(x => x.GetProperty("name").GetString()));
+        Assert.Equal(["Film X", "Reklama"], list.EnumerateArray().Take(2).Select(x => x.GetProperty("name").GetString()));
+        Assert.Equal(@"E:\Old", list[0].GetProperty("destRoots")[0].GetString());
+        // everything else is kept raw, after the readable ones, in the order of the file: the later duplicate (its
+        // unparseable section and the key of a newer version too), then the entries without a usable name
+        Assert.Equal(7, list.GetArrayLength());
         Assert.Equal(JsonValueKind.Number, list[2].ValueKind);
         Assert.Equal(@"X:\NoName", list[3].GetProperty("destRoots")[0].GetString());
         Assert.Equal("  ", list[4].GetProperty("name").GetString());
         Assert.Equal("Bez projektu", list[5].GetProperty("name").GetString());
+        var dup = list[6];
+        Assert.Equal("film x", dup.GetProperty("name").GetString());
+        Assert.Equal(@"E:\New", dup.GetProperty("destRoots")[0].GetString());
+        Assert.Equal("av1", dup.GetProperty("proxy").GetProperty("codec").GetString());
+        Assert.Equal(1, dup.GetProperty("future").GetProperty("a").GetInt32());
+
+        SettingsStore.Save(SettingsStore.Load(path), path);              // a second save changes nothing
+        Assert.Equal(first, File.ReadAllBytes(path));
+    }
+
+    // Review: an activeProject that names a project kept raw stays as written (not nulled by a save); the live profile
+    // is "Bez projektu" meanwhile. One that names nothing at all is dropped.
+    [Fact]
+    public void ActiveProject_NamingARawProject_IsKept()
+    {
+        using var dir = new TempDir();
+        var longName = new string('z', 61);
+        var path = Write(dir, "{\"activeProject\":\"" + longName + "\",\"projects\":[{\"name\":\"" + longName + "\"},{\"name\":\"Film X\"}]}");
+        var s = SettingsStore.Load(path);
+        Assert.Equal(longName, s.ActiveProject);
+        Assert.Same(s, s.Active);
+        Assert.Null(Projects.ActiveName(s));
+        SettingsStore.Save(s, path);
+        Assert.Equal(longName, SettingsStore.Load(path).ActiveProject);
+        Projects.Activate(s, "Film X");
+        SettingsStore.Save(s, path);
+        Assert.Equal("Film X", SettingsStore.Load(path).ActiveProject);
     }
 
     // M3 (ruling): a project of a newer version with a name invalid for this one is not erased by a save; saving

@@ -131,6 +131,14 @@ public sealed class OffloadJob
         Engine = new OffloadEngine(options);
     }
 
+    /// The project of the earlier backup: the first destination whose report can be read decides; `fallback` only when
+    /// none can (M4).
+    internal static string? EarlierProject(IReadOnlyList<string> cardPaths, string? fallback)
+    {
+        var earlier = cardPaths.Select(CardRecord.Load).FirstOrDefault(r => r.Generations.Count > 0);
+        return earlier != null ? earlier.Project : fallback;
+    }
+
     /// A full copy, or with Config.AppendInto an append into those card folders (`NothingNew` when it has nothing to copy).
     public OffloadPlan Prepare()
     {
@@ -141,8 +149,7 @@ public sealed class OffloadJob
             var append = Engine.PrepareAppend(a, EstimateExtra);
             // M4: an append records the project of the earlier backup (its first generation), never a different one;
             // Config.Project only stands in when that report cannot be read.
-            var earlier = CardRecord.Load(into[0]);
-            append.Project = earlier.Generations.Count > 0 ? earlier.Project : Config.Project;
+            append.Project = EarlierProject(into, Config.Project);
             return Plan = append;
         }
         var full = Engine.Prepare(Config.Source, Config.DestRoots, Config.CardName, Config.Date, EstimateExtra);

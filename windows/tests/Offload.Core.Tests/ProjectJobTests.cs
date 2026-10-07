@@ -102,6 +102,23 @@ public class ProjectJobTests
         Assert.Null(CardRecord.Load(plain.Plan.CardPaths[0]).Project);
     }
 
+    // Review: the first destination whose report is missing does not decide; the next readable one does.
+    [Fact]
+    public void Append_FirstDestinationReportMissing_SecondDecides()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        var history = dir.Sub("appdata");
+        var full = Job(card, [dir.Sub("d1"), dir.Sub("d2")], history, "Film X");
+        full.Run();
+        var paths = full.Plan!.CardPaths;
+        Directory.Delete(Path.Combine(paths[0], "_REPORT"), true);
+        AppendFixtures.NewClip(card, "A001C002.mov", seed: 2);
+
+        Assert.Equal("Film X", OffloadJob.EarlierProject(paths, "Reklama Y"));
+        Assert.Equal("Reklama Y", OffloadJob.EarlierProject([paths[0]], "Reklama Y"));   // none readable: the fallback
+    }
+
     static HistoryEntry Copied(string cardName, string? project) => new() { CardName = cardName, Date = "2026-10-06", Project = project };
 
     // Spec 2.3 + 4.1: "next in line" counts the cards of the active project only (its name in any case).
