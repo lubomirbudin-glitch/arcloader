@@ -9,7 +9,8 @@ public enum CardTone { Waiting, Active, Ok, Warning, Error }
 public sealed class JobProgress
 {
     readonly DateTime started;
-    DateTime? firstActive, ended;
+    DateTime? firstActive, ended, stage2Start;
+    TimeSpan pausedBeforeStage2;
     DateTime lastTime;
     long lastBytes;
     long[] lastDest = [];
@@ -32,6 +33,18 @@ public sealed class JobProgress
 
     public void AttachBrakeMeter(BrakeMeter meter) => brakes = meter;
 
+    /// How long stage 2 (clips, proxies, PDF, day report) took without its pauses; null without a stage 2, before the end,
+    /// and for a job that did not end Done (a cancelled or failed stage 2 would teach RateMemory a far too low cost, M2).
+    public TimeSpan? Stage2Elapsed
+    {
+        get
+        {
+            if (stage2Start is not DateTime a || ended is not DateTime e || Status.Phase != JobPhase.Done) return null;
+            var t = e - a - (Status.PausedTotal - pausedBeforeStage2);
+            return t > TimeSpan.Zero ? t : TimeSpan.Zero;
+        }
+    }
+
     /// How long the job took, without its pauses — from the first tick it ran to the first tick it was finished; null
     /// before (the "Celkem" of the finished card).
     public TimeSpan? Elapsed
@@ -51,6 +64,11 @@ public sealed class JobProgress
     {
         if (firstActive == null && s.Phase != JobPhase.Waiting) firstActive = now;
         if (ended == null && s.Phase.IsFinished()) ended = now;
+        if (stage2Start == null && s.Phase is JobPhase.Analyzing or JobPhase.Proxies)
+        {
+            stage2Start = now;
+            pausedBeforeStage2 = s.PausedTotal;
+        }
         if (s.Paused)
         {
             // Nothing moves: no rate and no ETA, the brake forgets its window; after Pokračovat the rates are measured
