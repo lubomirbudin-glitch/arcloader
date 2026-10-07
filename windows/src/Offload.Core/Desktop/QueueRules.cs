@@ -61,6 +61,10 @@ public static class QueueRules
     public static bool StillNeeded(JobPhase phase, bool ejecting, bool dayReportPending, bool leftQueue) =>
         !phase.IsFinished() || ejecting || (dayReportPending && !leftQueue);
 
+    /// A job that ended in stage 1 (done without stage 2, cancelled, failed) has only its day report left, which may queue
+    /// behind other cards' stage 2: the attention flash and sound come when the copy ends, not after that report.
+    public static bool AlertAtCopyEnd(JobPhase phase) => phase.IsFinished();
+
     /// The HTML report of generation `generation` (an append has its own, spec 2.2).
     public static string ReportPath(string cardPath, string cardName, int generation = 1) =>
         Path.Combine(cardPath, Layout.ReportDirName, OffloadReport.HtmlName(cardName, generation));

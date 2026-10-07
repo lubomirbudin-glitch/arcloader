@@ -128,7 +128,7 @@ public static partial class ClipList
 
     /// Writes `<name>_clips.csv` and `<name>_clips[_<fps>].ale` into `dir` as `outputs` asks; an ALE of an earlier write
     /// that this one no longer makes (the rates changed) is removed. A list that is switched off but already there is
-    /// rewritten all the same (it is derived, R25: left alone it would show only the earlier generations) — never
+    /// rewritten all the same (an ALE: every rate file, stale ones removed) (it is derived, R25: left alone it would show only the earlier generations) — never
     /// deleted, the user may still use it, and never created. Each file is written on its own (task 6 review): a CSV
     /// held open in Excel does not stop the ALE; the first error is thrown once the rest is written (the caller logs it).
     /// Not under the append lock: a stage-2 rewrite racing an append of the same card from another process can leave
@@ -151,7 +151,9 @@ public static partial class ClipList
         }
         if (csv)
             Each(() => NativeIO.WriteFileReplacing(csvPath, [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(Csv(rows))]));
-        if (outputs.ClipListAle || existingAle.Count > 0)
+        // An ALE that exists is kept whole (all rate files, stale ones removed) even when switched off: derived, R25.
+        bool ale = outputs.ClipListAle || existingAle.Count > 0;
+        if (ale)
         {
             // Rates the ALE has now, also when a write below fails: the stale cleanup must not take a file that is still made.
             var made = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -159,12 +161,10 @@ public static partial class ClipList
             {
                 var file = suffix == null ? $"{name}_clips.ale" : $"{name}_clips_{suffix}.ale";
                 made.Add(file);
-                if (!outputs.ClipListAle && !existingAle.Contains(file, StringComparer.OrdinalIgnoreCase)) continue;
                 Each(() => NativeIO.WriteFileReplacing(Path.Combine(dir, file), new UTF8Encoding(false).GetBytes(text)));
             }
-            if (outputs.ClipListAle)
-                foreach (var stale in existingAle.Where(f => !made.Contains(f!)))
-                    Each(() => NativeIO.Delete(Path.Combine(dir, stale!)));
+            foreach (var stale in existingAle.Where(f => !made.Contains(f!)))
+                Each(() => NativeIO.Delete(Path.Combine(dir, stale!)));
         }
         if (first != null) ExceptionDispatchInfo.Capture(first).Throw();
     }

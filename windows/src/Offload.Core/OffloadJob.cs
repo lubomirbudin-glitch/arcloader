@@ -433,6 +433,7 @@ public sealed class OffloadJob
         catch (Exception e)
         {
             log?.Invoke($"stage 2 failed: {e.Message}");
+            WriteClipLists(plan, log);   // the generation must not be missing from the lists
             WritePdfReports(report, plan, log);
             RegenerateDayReports(plan, log);
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });

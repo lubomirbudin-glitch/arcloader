@@ -201,8 +201,8 @@ Plán 7 (výstupy pro produkci a střih, 0.3.0):
       End, Tape, Tracks); karta se smíšenými fps (25 a 23.976) → dva soubory `_clips_25.ale`, `_clips_23.976.ale`
 - [ ] 26. **Denní report:** dvě karty týž den na dva cíle → na obou `<datum>\_REPORT\<datum>_day_report.html/.pdf` s oběma
       kartami, dlaždice „ověřené karty 2 / 2“; během kopie třetí karty ji denní report ukáže „bez reportu (probíhá …)“;
-      Nástroje → Denní report… na složku dne (i na složku karty) report vytvoří a otevře; na kořen cíle → česká chyba
-      „… není žádná karta s reportem …“, nic se nezapíše; GUI a `offload day-report` téhož dne zároveň → oba projdou
+      Nástroje → Denní report… na složku dne (i na složku karty) report vytvoří a otevře; na složku bez karty s reportem → česká chyba
+      „… není žádná karta s reportem …“, na kořen disku „… je kořen disku …“; nic se nezapíše; GUI a `offload day-report` téhož dne zároveň → oba projdou
 - [ ] 27. **Otevřené v Excelu:** denní CSV a `<karta>_clips.csv` otevřít v Excelu, pak doplnit kartu → úloha „Hotovo“,
       v `app.log` řádky „clip list …“ / „day report …“; po zavření Excelu Nástroje → Denní report… soubory obnoví;
       volba „Denní report po každé kartě“ vypnutá → po úloze se denní report nezmění

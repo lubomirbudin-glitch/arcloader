@@ -245,9 +245,9 @@ public class DayReportServiceTests
 
         Assert.Equal(root, DayReportService.DayFolderOf(root));
         Assert.Equal(dir.Path, DayReportService.DayFolderOf(dir.Path + "\\"));
-        var refused = Assert.Throws<InvalidOperationException>(() => DayReportService.RegenerateDay(root, new OutputSettings()));
+        // Only the checks: never RegenerateDay/Write on a real drive root (a refusal that failed would write there).
+        var refused = Assert.Throws<InvalidOperationException>(() => DayReport.CheckDay(root));
         Assert.Equal(Msg.DayIsVolumeRoot(root), refused.Message);
-        Assert.Throws<InvalidOperationException>(() => DayReport.Write(root, new OutputSettings()));
         Assert.Throws<InvalidOperationException>(() => DayReport.CheckDay(root.TrimEnd('\\') + "\\\\"));
     }
 

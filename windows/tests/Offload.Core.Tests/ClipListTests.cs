@@ -161,6 +161,30 @@ public class ClipListTests
         Assert.DoesNotContain("\r\nB,", File.ReadAllText(csvPath));
     }
 
+    // Final fix 1: ALE switched off but already there, then a new frame rate arrives (append): every rate file is
+    // written, and a single file made stale by the mix is removed; nothing is created when no ALE ever existed.
+    [Fact]
+    public void Write_AleOffButExisting_NewRateGetsItsFile_StaleSingleRemoved()
+    {
+        using var dir = new TempDir();
+        var on = new OutputSettings { ClipListCsv = false, ClipListAle = true };
+        var off = new OutputSettings { ClipListCsv = false, ClipListAle = false };
+        var r24 = Row("A", new ClipInfo { FrameRate = "24000/1001", Frames = 24 });
+        var r25 = Row("B", new ClipInfo { FrameRate = "25/1", Frames = 25 });
+        ClipList.Write(dir.Path, "A001", [r24], on);
+        Assert.True(File.Exists(Path.Combine(dir.Path, "A001_clips.ale")));
+
+        ClipList.Write(dir.Path, "A001", [r24, r25], off);
+
+        Assert.True(File.Exists(Path.Combine(dir.Path, "A001_clips_23.976.ale")));
+        Assert.True(File.Exists(Path.Combine(dir.Path, "A001_clips_25.ale")));
+        Assert.False(File.Exists(Path.Combine(dir.Path, "A001_clips.ale")));
+
+        using var none = new TempDir();
+        ClipList.Write(none.Path, "A001", [r24, r25], off);
+        Assert.Empty(Directory.EnumerateFiles(none.Path, "*.ale"));
+    }
+
     // Task 6 review: each list is written on its own — a CSV held open in Excel (no delete sharing) does not stop the
     // ALE or the stale-ALE cleanup; the first error is thrown afterwards (the caller logs it), the CSV stays as it was.
     [Fact]

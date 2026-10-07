@@ -108,6 +108,17 @@ public class QueueRulesTests
     public void StillNeeded_UntilTheDayReportIsMade(JobPhase phase, bool ejecting, bool dayReportPending, bool leftQueue, bool needed) =>
         Assert.Equal(needed, QueueRules.StillNeeded(phase, ejecting, dayReportPending, leftQueue));
 
+    // Final fix 6: a job that ended in stage 1 alerts when the copy ends, not after its day report queued behind other cards.
+    [Theory]
+    [InlineData(JobPhase.Done, true)]
+    [InlineData(JobPhase.Failed, true)]
+    [InlineData(JobPhase.Cancelled, true)]
+    [InlineData(JobPhase.Proxies, false)]
+    [InlineData(JobPhase.Reporting, false)]
+    [InlineData(JobPhase.Copying, false)]
+    public void AlertAtCopyEnd_OnlyWhenNoStage2Follows(JobPhase phase, bool alert) =>
+        Assert.Equal(alert, QueueRules.AlertAtCopyEnd(phase));
+
     // ── item 11: the report from the first destination that has it ──────────
 
     [Fact]
