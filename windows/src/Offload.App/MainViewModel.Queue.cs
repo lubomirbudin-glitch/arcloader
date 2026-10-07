@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.Space;
 
 namespace Offload.App;
 
@@ -14,8 +15,12 @@ public sealed partial class MainViewModel
     readonly JobQueue queue = new(m => AppLog.Write(m));
     readonly DispatcherTimer ticker = new() { Interval = TimeSpan.FromMilliseconds(330) };
     bool closing, closeRaised, waitNoticeShown, shownHasFinished, shownCopyRunning, starting;
+    string? startStatus;
+    // Cancelled when the window closes: the Start waits stop at once and say nothing.
+    readonly CancellationTokenSource lifetime = new();
 
-    public ObservableCollection<JobItemViewModel> Jobs { get; } = [];
+    /// Offloads and verifications, newest on top.
+    public ObservableCollection<QueueItem> Jobs { get; } = [];
     public RelayCommand StartCommand { get; private set; } = null!;
     public RelayCommand ClearFinishedCommand { get; private set; } = null!;
 
@@ -23,6 +28,10 @@ public sealed partial class MainViewModel
     public event Action<bool>? AttentionRequested;
     /// Closing was requested while jobs ran; they are cancelled and finished now — close the window.
     public event Action? CloseReady;
+    /// Shows "Karty už jsou zálohované" (set by the window; modal, the user answers — no disk is waited on).
+    public Func<BackedUpPromptModel, BackedUpChoice>? AskBackedUp { get; set; }
+    /// A Czech yes/no question (set by the window); without it the answer is Ne.
+    public Func<string, bool>? AskYesNo { get; set; }
 
     void InitQueue()
     {
@@ -42,15 +51,19 @@ public sealed partial class MainViewModel
     public string DestinationsText => Texts.Destinations(Settings.DestRoots.Count) + (Settings.Proxy.Enabled ? " · proxy" : "");
     /// In memory only (evaluated 3×/s): the LUT, the proxy folder and the destinations come from checks made off the UI thread.
     public bool CanStart => !starting && ReadyToStart;
-    bool ReadyToStart => !closing && selected.Count > 0 && Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)
-        && LutProblem == null && ProxyFolderProblem == null && StartProblem == null;
+    /// The Cíle section is needed only by full copies: appends go to the destinations of their earlier backup (spec 2.2).
+    bool ReadyToStart => !closing && selected.Count > 0
+        && (!AppendRules.NeedsDestinations(AppendRules.FullCopies(selected, AppendWanted)) || (Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)))
+        && LutProblem == null && ProxyFolderProblem == null && StartProblem == null && SpaceProblem == null;
     /// The hint under the start bar: why Start is off when the setup itself does not say it (a speed measurement runs).
     public string? StartProblem => QueueRules.StartProblem(Measuring);
     public bool HasJobs => Jobs.Count > 0;
     public bool HasFinished => Jobs.Any(j => j.IsFinished);
 
     /// The LUT and the proxy folder are checked once more right before the start (they may sit on a disk that just
-    /// went away) — off the UI thread, at most 5 s each; meanwhile the start button is disabled.
+    /// went away) — off the UI thread, at most 5 s each; meanwhile the start button is disabled. Then the inspections
+    /// of the selected cards (at most 10 s) and the free space of every destination (at most 5 s) — all awaited, the UI
+    /// thread never waits on a card or a disk (spec 2.5, ruling I4).
     async void Start()
     {
         if (!CanStart) return;
@@ -71,18 +84,61 @@ public sealed partial class MainViewModel
             }
             while (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is string folder)
             {
-                var check = Task.Run(() => Directory.Exists(folder));
+                var check = Task.Run(() => ProbeFolder(folder));
                 bool answered = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(5))) == check;
-                bool exists = answered && check.IsCompletedSuccessfully && check.Result;
+                bool exists = answered && check.IsCompletedSuccessfully && check.Result.Exists;
                 if (!answered) AppLog.Write($"proxy folder check before start: no answer from {folder} in 5 s");
                 if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) != folder) continue;   // changed meanwhile
-                SetProxyFolderState(folder, exists);
+                if (answered && check.IsCompletedSuccessfully) ApplyFolderProbe(folder, check.Result);
+                else SetProxyFolderState(folder, false);
                 if (!exists) return;   // the red text says why
                 break;
             }
-            if (ReadyToStart) StartJobs();   // anything may have changed while the LUT was checked
+            // Without the inspections a card history knows would be copied again in full, with no prompt: wait for the
+            // ones still looking, at most 10 s (a card that does not answer never blocks the start - then what is known counts).
+            List<string> Pending() => StartWait.PendingInspections(SelectedSources(), p => Insight(p) != null, inspections.IsRunning, history != null);
+            bool looked = await StartWait.UntilAsync(() => Pending().Count, n => SetStartStatus(StartWait.InspectionStatus(n)),
+                TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(200), lifetime.Token);
+            if (closing) return;
+            if (!looked)
+            {
+                // Ruling S1: not knowing whether a card is backed up, a full copy needs the user's yes (default Ne).
+                var names = Pending().Select(PlannedName).ToList();
+                AppLog.Write("start: the card inspection did not finish in 10 s");
+                SetStartStatus(null);
+                if (!StartWait.ContinueAfterWait(false, names, q => AskYesNo?.Invoke(q) ?? false)) return;
+                if (closing) return;
+            }
+            // The free space of every destination is read again now (ruling I4): a fixed disk is otherwise probed only
+            // once, long before a running copy filled it.
+            SetStartStatus(StartWait.FreeSpaceStatus);
+            await ProbeFreeSpaceAsync(TimeSpan.FromSeconds(5));
+            if (closing) return;
+            SetStartStatus(null);
+            if (SpaceProblem != null) return;   // the red text says why
+            // Spec 2.1: cards history already knows are copied again in full only when the user says so.
+            var skip = new List<string>();
+            PruneAppend();   // after the awaits above: the cards may have changed meanwhile
+            var backedUp = BackedUpPrompt.CardsToAsk(SelectedSources(), Insight, AppendWanted);
+            if (backedUp.Count > 0 && AskBackedUp is { } ask)
+            {
+                var model = BackedUpPrompt.Build(backedUp.Select(p => (Insight(p)!.History!, PlannedName(p))).ToList(), DateString);
+                switch (ask(model))
+                {
+                    case BackedUpChoice.Cancel:
+                        return;
+                    case BackedUpChoice.SkipBackedUp:
+                        skip.AddRange(backedUp);
+                        break;
+                }
+            }
+            if (ReadyToStart) StartJobs(skip);   // anything may have changed while the LUT was checked
         }
-        catch (Exception e)
+        catch (OperationCanceledException) when (closing)
+        {
+            // the window is closing: nothing to say
+        }
+        catch (Exception e) when (!closing)
         {
             AppLog.Write($"start: {e}");
             ShowMessage($"Offload se nepodařilo spustit: {e.Message}");
@@ -90,16 +146,61 @@ public sealed partial class MainViewModel
         finally
         {
             starting = false;
+            SetStartStatus(null);
             Raise(nameof(CanStart));
         }
     }
 
-    void StartJobs()
+    /// `skip`: backed-up cards the user chose not to copy again — they are unticked, not started.
+    void StartJobs(IReadOnlyCollection<string> skip)
     {
-        var sources = volumes.Select(v => v.Path).Concat(manualSources).Where(selected.Contains).ToList();
-        foreach (var src in sources)
+        var gone = new List<string>();
+        var targets = SpaceTargets();
+        var selectedNow = SelectedSources();
+        // Names as the rows show them now: Placeholder numbers against the cards still ticked, and the loop unticks cards.
+        var names = selectedNow.ToDictionary(p => p, p => Placeholder(p).Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var src in selectedNow)
         {
-            var name = cardNames.GetValueOrDefault(src) is { Length: > 0 } n && n.Trim().Length > 0 ? n.Trim() : null;
+            var space = CardSpace(src, targets);   // the job card keeps counting it until it has copied (spec 2.5)
+            if (skip.Contains(src, StringComparer.OrdinalIgnoreCase))
+            {
+                selected.Remove(src);
+                continue;
+            }
+            bool isVolume = volumes.Any(v => string.Equals(v.Path, src, StringComparison.OrdinalIgnoreCase));
+            // Decided now, on the newest insight (the prompt above may have taken a while): a ticked append that can no
+            // longer be offered is not turned into a full copy — the card stays unstarted and the user is told.
+            var (kind, goneName) = appendTicks.Classify(src, Insight(src));
+            if (kind == StartKind.AppendGone)
+            {
+                gone.Add(goneName ?? DefaultCardName(src));
+                continue;
+            }
+            if (kind == StartKind.Append && Insight(src)?.History is { } known)
+            {
+                // Spec 2.2: only the new files, into the card folders of the earlier backup — not into the Cíle section.
+                // The engine plans again under the folder lock and refuses with a Czech message when anything is off.
+                var appendConfig = new JobConfig(src, known.Entry.Destinations.Select(d => d.Root).ToList())
+                {
+                    AllowSameDevice = true,   // the destinations are fixed by the earlier backup (it may have been made with --allow-same-device)
+                    AppendInto = known.Entry.Destinations.Select(d => d.CardPath).ToList(),
+                    Verify = Settings.Verify,
+                    AnalyzeClips = Settings.AnalyzeClips,
+                    Proxy = SettingsStore.Clone(Settings.Proxy),
+                    Tools = SettingsStore.Clone(Settings.Tools),
+                };
+                var appendItem = new JobItemViewModel(this, new OffloadJob(appendConfig), AppendRules.Title(known.Entry.CardName),
+                    canEject: isVolume && CardEject.CanEject(src), space);
+                Jobs.Insert(0, appendItem);
+                selected.Remove(src);
+                appendTicks.Untick(src);
+                queue.Enqueue(appendItem.Runner);
+                continue;
+            }
+            // Exactly what the row shows: the typed name, else a suggestion (spec 2.3); null = the volume label.
+            var name = cardNames.GetValueOrDefault(src) is { Length: > 0 } n && n.Trim().Length > 0 ? n.Trim()
+                : names[src] is var shown && shown != DefaultCardName(src) ? shown
+                : null;
             var config = new JobConfig(src, Settings.DestRoots.ToList())
             {
                 CardName = name,
@@ -109,21 +210,22 @@ public sealed partial class MainViewModel
                 Proxy = SettingsStore.Clone(Settings.Proxy),
                 Tools = SettingsStore.Clone(Settings.Tools),
             };
-            bool isVolume = volumes.Any(v => string.Equals(v.Path, src, StringComparison.OrdinalIgnoreCase));
             var item = new JobItemViewModel(this, new OffloadJob(config), name ?? DefaultCardName(src),
-                canEject: isVolume && CardEject.CanEject(src));
+                canEject: isVolume && CardEject.CanEject(src), space);
             Jobs.Insert(0, item);
             selected.Remove(src);
             queue.Enqueue(item.Runner);
         }
         RebuildSources();   // the started cards are unticked
         RaiseMany(nameof(HasJobs), nameof(HasFinished));
+        if (gone.Count > 0) ShowMessage(AppendTicks.GoneMessage(gone));
     }
 
     void Tick()
     {
         foreach (var j in Jobs)
             if (!j.IsFinished) j.Refresh();
+        RefreshSpace();   // memory only: a running job needs less as it copies (against its baseline)
         // A queued job cancelled behind a running copy is finished before the queue reports it.
         if (HasFinished != shownHasFinished)
         {
@@ -144,13 +246,15 @@ public sealed partial class MainViewModel
     /// The copied card is in its drive per the last scan (not pulled out, not replaced by another card).
     internal bool CardInDrive(JobItemViewModel item) => QueueRules.CardInDrive(item.Job.Config.Source, item.Runner.SourceIdentity, volumes);
 
-    JobItemViewModel? Find(IQueuedJob job) => Jobs.FirstOrDefault(j => ReferenceEquals(j.Runner, job));
+    QueueItem? Find(IQueuedJob job) => Jobs.FirstOrDefault(j => ReferenceEquals(j.Queued, job));
 
     void OnCopyFinished(IQueuedJob job)
     {
-        if (Find(job) is not { } item) return;
+        if (Find(job) is not JobItemViewModel item) return;   // a verification has no stage 2: OnJobFinished follows
         item.Refresh();
         if (!closing && item.SafeToEject) SystemSounds.Asterisk.Play();
+        if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Zálohováno"
+        if (!closing) _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // the disks changed: free space again (ruling I4)
     }
 
     void OnJobFinished(IQueuedJob job)
@@ -170,7 +274,7 @@ public sealed partial class MainViewModel
     }
 
     /// Still needs the app: a job that has not finished, or an eject in flight.
-    static bool Busy(JobItemViewModel j) => !j.IsFinished || j.Ejecting;
+    static bool Busy(QueueItem j) => j.Busy;
 
     /// Closing waits for the cancelled jobs and ejects; once all are done the window is told to close — once.
     void CheckCloseReady()
@@ -205,13 +309,18 @@ public sealed partial class MainViewModel
             }
             if (Jobs.Any(j => !j.IsFinished) && !confirm()) return false;
             closing = true;
-            foreach (var j in Jobs) j.Job.Cancel();
+            lifetime.Cancel();
+            inspections.CancelAll();
+            foreach (var j in Jobs) j.Cancel();
             foreach (var j in Jobs) j.Refresh();
             Raise(nameof(CanStart));
             // A queued job reports Zrušeno at once; if nothing is left running, close right away.
             if (Jobs.Any(Busy)) return false;
         }
         closeRaised = true;
+        closing = true;   // a late continuation must not start another inspection
+        lifetime.Cancel();
+        inspections.CancelAll();
         ticker.Stop();
         healthTimer.Stop();
         queue.Dispose();
@@ -226,7 +335,7 @@ public sealed partial class MainViewModel
         if (item.Ejecting || item.Ejected) return;   // a double click must not start a second eject
         var source = item.Job.Config.Source;
         var copied = item.Runner.SourceIdentity;
-        bool inUse = QueueRules.CardInUse(source, Jobs.Where(j => !ReferenceEquals(j, item)).Select(j => (j.Job.Config.Source, j.Phase)));
+        bool inUse = QueueRules.CardInUse(source, Jobs.OfType<JobItemViewModel>().Where(j => !ReferenceEquals(j, item)).Select(j => (j.Job.Config.Source, j.Phase)));
         try
         {
             item.Ejecting = true;

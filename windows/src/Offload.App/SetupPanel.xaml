@@ -22,6 +22,12 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Bottom" Text="{Binding StartProblem}" Style="{StaticResource WarningText}" Margin="0,8,0,0" TextWrapping="Wrap"
                            Visibility="{Binding StartProblem, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="StartProblemText" />
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding StartStatus}" FontSize="12" Opacity="0.8" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding StartStatus, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="StartStatusText" />
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding SpaceWarning}" Style="{StaticResource WarningText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding SpaceWarning, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="SpaceWarningText" />
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding SpaceProblem}" Style="{StaticResource ErrorText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding SpaceProblem, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="SpaceProblemText" />
                 <Button DockPanel.Dock="Right" Command="{Binding StartCommand}" Style="{DynamicResource AccentButtonStyle}" MinWidth="150" Padding="16,8"
                         ToolTip="Ctrl+Enter" AutomationProperties.AutomationId="StartButton">
                     <StackPanel Orientation="Horizontal">
@@ -73,15 +79,45 @@
                                     <StackPanel Grid.Column="2">
                                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
                                         <TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" Margin="0,2,0,0" />
-                                        <DockPanel Margin="0,6,0,0" Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisible}}">
-                                            <TextBlock Text="Název složky" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                            <Grid>
-                                                <TextBox Text="{Binding CardName, UpdateSourceTrigger=PropertyChanged}" FontSize="12" />
-                                                <TextBlock Text="{Binding CardNamePlaceholder}" Style="{StaticResource Caption}" Margin="12,0,0,0"
-                                                           VerticalAlignment="Center" IsHitTestVisible="False"
-                                                           Visibility="{Binding CardName, Converter={StaticResource EmptyToVisible}}" />
-                                            </Grid>
-                                        </DockPanel>
+                                        <TextBlock Text="{Binding HistoryText}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
+                                                   AutomationProperties.AutomationId="CardHistoryText"
+                                                   Visibility="{Binding HistoryText, Converter={StaticResource NullToCollapsed}}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HistoryTone}" Value="Ok">
+                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding HistoryTone}" Value="Warning">
+                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding HistoryTone}" Value="Error">
+                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <StackPanel Margin="0,6,0,0" Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisible}}">
+                                            <CheckBox Content="{Binding AppendText}" IsChecked="{Binding AppendNewFiles}" Margin="0,0,0,4"
+                                                      AutomationProperties.AutomationId="AppendNewFiles"
+                                                      Visibility="{Binding AppendText, Converter={StaticResource NullToCollapsed}}" />
+                                            <TextBlock Text="{Binding AppendFolderText}" Style="{StaticResource Caption}" FontFamily="Consolas"
+                                                       Visibility="{Binding AppendFolderText, Converter={StaticResource NullToCollapsed}}" />
+                                            <DockPanel Visibility="{Binding AppendNewFiles, Converter={StaticResource BoolToCollapsed}}">
+                                                <TextBlock Text="Název složky" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <Grid>
+                                                    <TextBox Text="{Binding CardName, UpdateSourceTrigger=PropertyChanged}" FontSize="12" />
+                                                    <TextBlock Text="{Binding CardNamePlaceholder}" Style="{StaticResource Caption}" Margin="12,0,0,0"
+                                                               VerticalAlignment="Center" IsHitTestVisible="False"
+                                                               Visibility="{Binding CardName, Converter={StaticResource EmptyToVisible}}" />
+                                                </Grid>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding NameHint}" Style="{StaticResource Caption}" FontSize="11" Margin="0,2,0,0"
+                                                       AutomationProperties.AutomationId="CardNameHint"
+                                                       Visibility="{Binding NameHint, Converter={StaticResource NullToCollapsed}}" />
+                                        </StackPanel>
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -152,6 +188,8 @@
                 <TextBlock Text="Bez ověření není jisté, že data na disku jsou v pořádku." Style="{StaticResource WarningText}"
                            Visibility="{Binding Verify, Converter={StaticResource BoolToCollapsed}}" />
                 <CheckBox Content="Analýza klipů a náhledy v reportu" IsChecked="{Binding AnalyzeClips}" />
+                <CheckBox Content="Navrhovat název karty podle klipů" IsChecked="{Binding SuggestCardNames}"
+                          AutomationProperties.AutomationId="SuggestCardNames" />
 
                 <!-- Proxy -->
                 <StackPanel Orientation="Horizontal" Margin="0,18,0,0">

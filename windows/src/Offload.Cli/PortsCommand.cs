@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.Globalization;
+using Offload.Core;
 using Offload.Core.Hardware;
 
 namespace Offload.Cli;
@@ -64,7 +65,7 @@ static class PortsCommand
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine($"Error: {e.Message}");
+                Console.Error.WriteLine(Msg.CliError + e.Message);
                 return 1;
             }
             finally

@@ -32,7 +32,7 @@ public class JobTests
         Assert.Null(job.Run());
         var s = job.Status();
         Assert.Equal(JobPhase.Failed, s.Phase);
-        Assert.Contains("Source not found", s.Error);
+        Assert.Contains("Zdroj nenalezen", s.Error);
         Assert.True(s.Phase.IsFinished());
     }
 

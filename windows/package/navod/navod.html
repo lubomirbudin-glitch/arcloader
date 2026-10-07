@@ -173,7 +173,7 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
     náhledy klipů, proxy s LUTy a kontrola USB zapojení. Pro kameramanské asistenty, DITy, data wranglery a střihače.
   </div>
   <div class="meta">
-    Verze aplikace 0.1.0-win · Windows 10 a 11 (64bitové) · přenosná verze bez instalace<br>
+    Verze aplikace 0.2.0-win · Windows 10 a 11 (64bitové) · přenosná verze bez instalace<br>
     Návod popisuje aplikaci <b>Offload.exe</b> a příkazovou řádku <b>bin\offload.exe</b> z balíčku <b>Offload-win-x64.zip</b>.
   </div>
 </div>
@@ -232,6 +232,8 @@ Offload kartu jen čte. Nic na ní nevytváří, nemaže ani nepřejmenovává. 
   <li>Více karet za sebou ve frontě; zatímco se renderují proxy jedné karty, kopíruje se další.</li>
   <li>Vestavěné LUTy Log → Rec.709 pro ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI a Fujifilm a automatický výběr
     LUTu podle kamery (kapitola 6).</li>
+  <li>Historii offloadů: řádek „Zálohováno …“ u karty, doplnění jen nových klipů do dřívější zálohy, název složky z názvů
+    klipů, ověření hotové zálohy proti ASC MHL a kontrolu místa před startem (kapitoly 3, 8 a 10).</li>
   <li>Kontrolu USB zapojení čtečky a disků s doporučeními a ukazatel úzkého hrdla během kopie (kapitola 9).</li>
   <li>Stejný formát na disku jako Mac verze Offloadu — kopii z Windows lze ověřit na Macu a naopak.</li>
   <li>Příkazovou řádku <code>bin\offload.exe</code> pro skripty (kapitola 11).</li>
@@ -315,7 +317,7 @@ panelů lze měnit tažením dělicí čáry. Vzhled (světlý / tmavý) se ří
 <figure>
 <div class="win">
   <div class="bar"><span>Offload</span><span>— ☐ ✕</span></div>
-  <div class="menu"><span class="callout">1</span><b>Nástroje</b> &nbsp;›&nbsp; Prověřit USB porty… &nbsp;Ctrl+U</div>
+  <div class="menu"><span class="callout">1</span><b>Nástroje</b> &nbsp;›&nbsp; Ověřit zálohu… &nbsp;Ctrl+Shift+O &nbsp;·&nbsp; Prověřit USB porty… &nbsp;Ctrl+U</div>
   <div class="body">
     <div class="left">
       <div class="sec">
@@ -395,8 +397,25 @@ panelů lze měnit tažením dělicí čáry. Vzhled (světlý / tmavý) se ří
     <code>.mxf</code>, <code>.mov</code>, <code>.mp4</code>, <code>.ari</code>, <code>.crm</code>…) nejvýš o složku níž.</li>
   <li>Nabízejí se vyměnitelná média a disky připojené přes USB nebo SD. Systémový disk ani disk, na kterém je některý
     cíl, se jako karta nenabízí.</li>
-  <li>U zaškrtnuté karty je pole <b class="ui">Název složky</b> — šedě je předvyplněná jmenovka svazku (u složky její název).
-    Napište jiný název, pokud chcete; použije se jako jméno složky karty na cílech.</li>
+  <li>Pod údaji karty je řádek z <b>historie offloadů</b>: šedě <span class="q">„Zjišťuji, jestli už je karta zálohovaná…“</span>,
+    pak zeleně <span class="txt-ok">„Zálohováno 6. 10. 2026 8:15 na Zaloha (D:), Zaloha2 (F:) — ověřeno“</span>, oranžově
+    s doplňkem <span class="txt-warn">„· nové soubory: 12 (3,2 GB)“</span>, <span class="txt-warn">„— NEOVĚŘENO“</span> nebo
+    <span class="txt-warn">„…, ale karta se od té doby změnila (4 soubory jinak) — doplnit nejde, jen celá kopie“</span>,
+    červeně <span class="txt-bad">„— s chybami (3 soubory)“</span>. Kartu, kterou Offload nikdy nekopíroval, nechá bez řádku;
+    karta vyprázdněná v kameře ukáže neutrálně <span class="q">„Karta je prázdná — dřív zálohováno …“</span>. Kartu pozná podle
+    sériového čísla souborového systému a kapacity, takže i v jiné čtečce; přeformátovaná karta je nová. Historie je jen
+    v tomto počítači (<code>%APPDATA%\Offload\history.json</code>), kopie zrušená uprostřed se do ní nezapíše.</li>
+  <li>U zaškrtnuté karty je pole <b class="ui">Název složky</b>. Šedě je předvyplněný návrh: cívka z názvů klipů
+    (<code>A001C003_…</code> → <code>A001</code>, pod polem <span class="q">„podle názvů klipů (A001C003…)“</span>); u karty bez
+    takových názvů a bez historie <span class="q">„další v řadě po A001 (dnes)“</span> podle karet zkopírovaných do stejné
+    složky data; jinak jmenovka svazku (u složky její název). Víc cívek na jedné kartě návrh nedá
+    (<span class="q">„Na kartě je víc cívek: A001, A002“</span>). Dvě neznámé karty dostanou po sobě A002, A003. Napsaný název má
+    vždy přednost. Návrh vypne volba v kapitole 5.</li>
+  <li>U karty, na které od zálohy přibyly klipy (a dřívější cíle jsou připojené), je zaškrtávátko
+    <b class="ui">Doplnit jen nové klipy do dřívější zálohy (12 souborů · 3,2 GB)</b>. Zaškrtnuté místo názvu ukáže
+    <span class="q">„Složka: 2026-10-06\A001 na 2 cílech“</span>: zkopírují se jen nové soubory do <b>stejné</b> složky
+    karty na disky dřívější zálohy (sekce Cíle může být prázdná). Nenabízí se pro změněnou kartu, jinou kartu ani složku
+    přidanou ručně. Podrobně v kapitolách 8 a 10.</li>
   <li>Tlačítko <b>⟳</b> (<span class="q">„Znovu načíst připojené disky“</span>) načte disky znovu a zkontroluje cíle.</li>
   <li><b class="ui">Složka…</b> přidá libovolnou složku (kopii karty na disku, NAS, kartu ve čtečce, kterou aplikace sama nenabídla).
     Chová se jako karta: lze ji zaškrtnout a pojmenovat.</li>
@@ -436,7 +455,14 @@ otevře okno Hardware (kapitola 9).</p>
 a cílů (<span class="q">„2 cíle“</span>, se zapnutými proxy <span class="q">„2 cíle · proxy“</span>). Tlačítko
 <b class="ui">Spustit offload</b> (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>) je aktivní, když je vybraná aspoň jedna karta,
 existuje aspoň jeden cíl, všechny cíle jsou připojené a nic dalšího nebrání startu (chybějící LUT, nedostupná složka
-pro proxy, běžící měření rychlosti — důvod je vždy napsaný červeně nebo oranžově).</p>
+pro proxy, běžící měření rychlosti, nedostatek místa — důvod je vždy napsaný červeně nebo oranžově).
+Pod lištou se ukáže červeně <span class="txt-bad">„Na cíli Zaloha (D:) není dost místa: potřeba 412 GB (karty 380 GB,
+proxy ~30 GB, report 2 GB), volno 398 GB.“</span> (start nejde) nebo oranžově <span class="txt-warn">„Na cíli Zaloha (D:)
+zbude po offloadu jen 6 GB — rezerva pod 5 %, odhad proxy je přibližný.“</span> (start jde). Počítají se vybrané karty,
+úlohy ve frontě i běžící úlohy, cíle na stejném disku a složka pro proxy dohromady. Když karta ještě není zjištěná,
+Start na ni počká nejvýš 10 sekund (<span class="q">„Prověřuji kartu, než začnu kopírovat…“</span>); když se ani pak
+nedozvíme, jestli je zálohovaná, zeptá se <span class="q">„Karta A001 se ještě prověřuje — nevím, jestli už je zálohovaná.
+Spustit přesto celou kopii?“</span> (výchozí odpověď je Ne).</p>
 
 <h3>Fronta</h3>
 <p>Prázdná fronta ukazuje <span class="q">„Zatím žádný offload — Vyberte kartu a cíle vlevo a stiskněte Ctrl+Enter.“</span>
@@ -498,10 +524,15 @@ Když stejnou kartu (stejný název) zkopírujete týž den znovu, nová kopie d
       <td>Po kopii se každý soubor z každého cíle přečte znovu a porovná se kontrolní součet. Bez ověření se objeví
       oranžové <span class="txt-warn">„Bez ověření není jisté, že data na disku jsou v pořádku.“</span>, report má štítek
       <b>ZKOPÍROVÁNO — NEOVĚŘENO</b> a zelený pruh „kartu lze vysunout“ se <b>neukáže</b>.</td></tr>
+  <tr><td><b class="ui">Navrhovat název karty podle klipů</b></td><td>zapnuto</td>
+      <td>Šedý návrh v poli <b class="ui">Název složky</b> z názvů klipů (ARRI, Sony Venice, Canon Cinema EOS, RED,
+      Blackmagic) nebo „další v řadě“ (kapitola 3). Vypnuto = jmenovka svazku jako dřív.</td></tr>
   <tr><td><b class="ui">Analýza klipů a náhledy v reportu</b></td><td>zapnuto</td>
       <td>Po kopii se u každého klipu zjistí formát, kodek, rozlišení, snímková frekvence, délka, timecode a zvukové stopy
       a do reportu se vloží tři snímky. Čte se z cílových disků, ne z karty. Potřebuje ffmpeg a ffprobe (jsou přibalené).</td></tr>
 </table>
+
+<p class="note"><b>Nevracejte se ke starší verzi než 0.2.0</b> — verze 0.1.0 by z nastavení smazala údaje, kterým nerozumí.</p>
 
 <h3>Jak kopie probíhá</h3>
 <ul>
@@ -520,12 +551,14 @@ Když stejnou kartu (stejný název) zkopírujete týž den znovu, nová kopie d
 
 <h3>Co se kontroluje před kopií</h3>
 <p>Než se cokoli zapíše, Offload ověří následující. Když něco nesedí, úloha skončí stavem <span class="pill bad">Chyba</span>
-a hláškou na kartě úlohy (hlášky jsou zatím anglicky, význam je v kapitole 12):</p>
+a českou hláškou na kartě úlohy (význam a řešení v kapitole 12):</p>
 <ul>
   <li>zdroj existuje a obsahuje soubory; cíle existují a dá se na ně zapisovat;</li>
   <li>cíl není na stejném svazku jako karta a dva cíle nejsou na stejném svazku (to by nebyla druhá kopie);</li>
   <li>zdroj není sám dřívější offload (nemá v kořeni <code>_REPORT</code>, <code>_PROXY</code> ani <code>ascmhl</code>);</li>
-  <li>na každém cíli je dost místa;</li>
+  <li>na každém disku cílů je dost místa pro kartu, proxy a report — sčítají se cíle na stejném disku, složka pro
+    proxy a karty, které už čekají ve frontě; proxy se odhadují z velikosti klipů a před renderem proxy se místo
+    přepočítá podle skutečné délky (když se nevejdou, proxy se přeskočí a kopie zůstane ověřená);</li>
   <li>na kartě nejsou názvy, které Windows neumí uložit (znaky <code>&lt; &gt; : " | ? *</code>, jména jako <code>CON</code>,
     <code>NUL</code>, tečka nebo mezera na konci), ani dva soubory lišící se jen velikostí písmen;</li>
   <li>na cíl s FAT32 nemá jít soubor o velikosti 4 GB a víc.</li>
@@ -731,6 +764,40 @@ s kopií další karty. Každá úloha si při spuštění uloží nastavení, s
 </ul>
 <p>Po skončení každé úlohy tlačítko Offloadu v hlavním panelu Windows zabliká; při chybě zazní chybový zvuk.</p>
 
+<h3>Karty už jsou zálohované</h3>
+<p>Když spouštíte celou kopii karty, kterou historie zná, Offload se zeptá v okně <b>Karty už jsou zálohované</b>
+(u jedné karty <b>Karta už je zálohovaná</b>) se seznamem záloh a složkou, která by vznikla (např. <code>A001_2</code>):
+<b class="ui">Kopírovat znovu celé</b>, <b class="ui">Vynechat zálohované</b> (spustí jen ostatní karty) nebo
+<b class="ui">Zrušit</b> (nespustí nic). Neptá se u karty, která se od zálohy změnila (její řádek už říká, že jde jen
+celá kopie), u prázdné karty ani u karet se zaškrtnutým doplněním. Příkazová řádka se neptá, jen vypíše řádek se zálohou.</p>
+
+<h3>Doplnění nových klipů</h3>
+<p>Úloha doplnění má název <span class="q">„A001 · doplnění“</span> a cíle dřívější zálohy. Zkopíruje jen nové soubory,
+nic nepřepíše a zapíše novou generaci reportu a ASC MHL (kapitola 10). Když není co kopírovat, skončí
+<span class="pill ok">Hotovo</span> s textem <span class="q">„Nic nového — záloha je úplná.“</span> Oranžově může upozornit
+<span class="txt-warn">„5 souborů z dřívější zálohy nebylo ověřeno — doporučeno Ověřit zálohu.“</span> Doplnění se
+odmítne dřív, než cokoli zapíše (červená hláška na kartě úlohy, kapitola 12), když dřívější záloha není dostupná, chybí její
+report nebo ASC MHL, zálohy na cílech nejsou stejné, na kartě není žádný soubor zálohy (jiná karta), je tam soubor
+stejného jména s jinou velikostí či datem, nebo do téže zálohy právě doplňuje jiná úloha (stejná složka karty se
+doplňuje vždy jen jednou, i z druhého okna Offloadu). Pak udělejte celou kopii. Když se karta mezi zaškrtnutím a Startem
+změnila, Start řekne <span class="q">„Karta A001 se změnila — doplnit už nejde. Zkontrolujte ji a spusťte znovu.“</span>
+a tu kartu nespustí (ostatní ano).</p>
+
+<h3>Ověření zálohy</h3>
+<p><b class="ui">Nástroje → Ověřit zálohu…</b> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>) vybere složku karty na cíli,
+nebo celou složku dne (ověří se každá karta zvlášť). Každé ověření je položka fronty <span class="q">„Ověření A001“</span>
+a běží ve stejné frontě jako kopie, jedno po druhém (zatěžuje stejné disky): <span class="q">„Ověřuji 120 / 1 234 souborů
+· 45 GB / 512 GB · 380 MB/s“</span>. Výsledek zeleně <span class="txt-ok">„Ověřeno: všech 1 234 souborů sedí (ASC MHL,
+2 generace, xxHash64).“</span>, červeně <span class="txt-bad">„Nesedí 2 soubory, chybí 1, nečitelný 0 — podrobnosti
+v reportu ověření.“</span>, oranžově soubory navíc, soubory, které selhaly už při kopii, a změněné generace MHL. Tlačítka
+<b class="ui">Report ověření</b> a <b class="ui">Průzkumník</b>; <b class="ui">Zrušit</b> ověření ukončí bez reportu.
+Report ověření se ukládá, dokud je v menu zaškrtnuté <b class="ui">Ukládat report ověření</b>: do <code>_REPORT</code>
+karty, a u zálohy s MHL z jiného programu (který <code>_REPORT</code> neignoruje) do <code>_REPORT</code> vedle složky
+karty, s poznámkou <span class="q">„Report ověření je uložený mimo složku karty, aby nenarušil její historii ASC MHL“</span>.
+Ověřují se všechny generace ASC MHL a všechny jeho kontrolní součty (xxHash64, MD5, SHA-1, xxHash3, xxHash128, C4) —
+i zálohy z jiných programů; bez <code>ascmhl</code> se ověřuje proti <code>_REPORT\&lt;karta&gt;.xxh64</code>. Na kartu ani
+do <code>ascmhl</code> se při ověření nikdy nic nezapisuje.</p>
+
 <h3>Zrušení</h3>
 <p>Tlačítko <b class="ui">Zrušit</b> je na kartě úlohy, dokud úloha čeká nebo běží. Rozpracované soubory
 (<code>.offload-part</code>) se smažou, hotové zůstanou. Zrušená úloha, která ještě nezačala, se rovnou označí
@@ -865,9 +932,13 @@ Cíl 1 … — USB 3 (10 Gb/s a víc), port 3  310 MB/s  39 % linky
       │  ├─ offload_report.txt
       │  ├─ A001_report.html                 <span class="c">← tlačítko Report</span>
       │  ├─ A001_report.pdf
-      │  └─ A001.xxh64                       <span class="c">← kontrolní součty</span>
+      │  ├─ A001.xxh64                       <span class="c">← kontrolní součty (po doplnění i nové soubory)</span>
+      │  ├─ offload_report_0002.json         <span class="c">← jen po doplnění: report generace 2</span>
+      │  ├─ A001_report_0002.html
+      │  └─ A001_verify_2026-10-07_101500Z.html  <span class="c">← jen po Ověřit zálohu (+ .pdf, offload_verify_….json)</span>
       ├─ ascmhl\
       │  ├─ 0001_A001_2026-10-06_081500Z.mhl
+      │  ├─ 0002_A001_2026-10-06_143000Z.mhl <span class="c">← jen po doplnění: jen nové soubory</span>
       │  └─ ascmhl_chain.xml
       └─ _PROXY\                             <span class="c">← jen se zapnutými proxy</span>
          ├─ A001C001.mov
@@ -890,11 +961,18 @@ Cíl 1 … — USB 3 (10 Gb/s a víc), port 3  310 MB/s  39 % linky
   <li>Konečné jméno souboru znamená „plně zapsáno“. Ověřené je to, co report označí jako <b>ověřeno</b>.</li>
   <li>Složky <code>_REPORT</code>, <code>_PROXY</code> a <code>ascmhl</code> nejsou součástí karty a do MHL se nepočítají.</li>
   <li>Formát je stejný jako u Mac verze Offloadu — kopii lze ověřit na kterékoli z nich.</li>
+  <li>Doplnění zapíše do složky karty jen nové soubory a ke stávajícím reportům přidá report s číslem generace
+    (<code>_0002</code>); původní reporty a generace MHL se nikdy nepřepíšou (mění se jen řetěz
+    <code>ascmhl_chain.xml</code> a seznam <code>A001.xxh64</code>, vždy celé najednou). Mac verze generace nečte, ale
+    doplněné soubory ověří ze seznamu <code>A001.xxh64</code>. Kdyby se doplnění uprostřed přerušilo tak, že reporty
+    a MHL nesouhlasí, další doplnění se odmítne a složku je třeba opravit ručně; celá kopie do nové složky jde vždy.</li>
+  <li>Report ověření jde jen do <code>_REPORT</code> (u cizího MHL bez ignorování <code>_REPORT</code> do
+    <code>_REPORT</code> vedle složky karty), do <code>ascmhl</code> se nikdy nezapisuje.</li>
 </ul>
 
 <div class="box tip"><span class="t">Ověření kopie později</span>
-Hotovou kopii můžete kdykoli znovu ověřit proti seznamu součtů v <code>_REPORT</code>:
-<code>bin\offload.exe verify D:\Zaloha\2026-10-06\A001</code> (kapitola 11).</div>
+Hotovou kopii můžete kdykoli znovu ověřit proti ASC MHL: <b class="ui">Nástroje → Ověřit zálohu…</b> (kapitola 8),
+nebo <code>bin\offload.exe verify D:\Zaloha\2026-10-06\A001</code> (kapitola 11).</div>
 </section>
 
 <!-- ============ 11 ============ -->
@@ -902,8 +980,8 @@ Hotovou kopii můžete kdykoli znovu ověřit proti seznamu součtů v <code>_RE
 <h2 class="ch"><span class="n">11</span>Příkazová řádka</h2>
 
 <p>Příkazová řádka <code>bin\offload.exe</code> dělá totéž co aplikace a zapisuje stejné výstupy. Hodí se pro skripty
-a dávkové zpracování. Spusťte ji z PowerShellu nebo příkazového řádku ve složce Offloadu. Nápověda a výpisy jsou
-anglicky.</p>
+a dávkové zpracování. Spusťte ji z PowerShellu nebo příkazového řádku ve složce Offloadu. Nápověda a výpisy průběhu
+jsou anglicky, chyby a souhrny česky.</p>
 <pre class="cmd">bin\offload.exe --help
 bin\offload.exe copy --help</pre>
 
@@ -911,7 +989,8 @@ bin\offload.exe copy --help</pre>
 <table>
   <thead><tr><th class="w20">Příkaz</th><th>K čemu</th></tr></thead>
   <tr><td><code>copy</code></td><td>zkopíruje kartu na všechny cíle do <code>&lt;cíl&gt;\&lt;datum&gt;\&lt;karta&gt;\</code> a ověří. Je výchozí — slovo <code>copy</code> lze vynechat.</td></tr>
-  <tr><td><code>verify</code></td><td>znovu ověří hotovou složku karty proti seznamu součtů v <code>_REPORT</code></td></tr>
+  <tr><td><code>append</code></td><td>doplní jen nové soubory karty do dřívější zálohy (stejné složky karty, další generace ASC MHL)</td></tr>
+  <tr><td><code>verify</code></td><td>znovu ověří složku karty (nebo všechny karty složky dne) proti ASC MHL všech generací, bez <code>ascmhl</code> proti seznamu součtů v <code>_REPORT</code>; <code>--report</code> uloží report ověření</td></tr>
   <tr><td><code>bench</code></td><td>změří rychlost čtení karty a zápisu/čtení disků</td></tr>
   <tr><td><code>ports</code></td><td>USB porty, kde a jak rychle jsou karty a disky připojené, doporučení (jako okno Hardware)</td></tr>
   <tr><td><code>luts</code></td><td>vypíše vestavěné LUTy (id — název)</td></tr>
@@ -923,7 +1002,11 @@ offload E:\ -d D:\Zaloha -d F:\Zaloha --name A001     # vlastní název složky 
 offload E:\ -d D:\Zaloha --proxy --proxy-folder G:\Proxy   # proxy navíc do G:\Proxy\&lt;datum&gt;\&lt;karta&gt;\
 offload E:\ -d D:\Zaloha --proxy --lut sony-slog3-sgamut3   # vestavěný LUT podle id
 offload E:\ -d D:\Zaloha --proxy --lut look.cube --frame-aspect 1.85   # vlastní LUT a výřez
+offload E:\ -d D:\Zaloha -d F:\Zaloha --name auto     # název složky z názvů klipů (A001C003… → A001)
+offload append E:\                                     # doplnit nové klipy do dřívější zálohy (cíle z historie)
+offload append E:\ --into D:\Zaloha\2026-10-06\A001    # … nebo do zadané složky karty (opakovat pro každý cíl)
 offload verify D:\Zaloha\2026-10-06\A001              # znovu ověřit hotovou kopii
+offload verify D:\Zaloha\2026-10-06 --report           # ověřit všechny karty dne a uložit reporty ověření
 offload bench --read E:\ --write D:\ --gb 2           # rychlost karty a disku
 offload ports                                         # porty a doporučení
 offload ports --measure --card E:\ --dest D:\         # + změřit skutečnou rychlost
@@ -933,8 +1016,9 @@ offload luts                                          # seznam vestavěných LUT
 <h3>Volby příkazu copy</h3>
 <table>
   <thead><tr><th class="w30">Volba</th><th>Význam</th></tr></thead>
-  <tr><td class="k"><code>-d</code>, <code>--dest</code></td><td>cílová složka; zopakujte pro každý disk (povinné)</td></tr>
-  <tr><td class="k"><code>--name</code></td><td>název složky karty (výchozí jmenovka svazku)</td></tr>
+  <tr><td class="k"><code>-d</code>, <code>--dest</code></td><td>cílová složka; zopakujte pro každý disk (bez ní <span class="q">„Chyba: Není zadaný žádný cíl.“</span>)</td></tr>
+  <tr><td class="k"><code>--name</code></td><td>název složky karty (výchozí jmenovka svazku); <code>auto</code> = cívka z názvů klipů, jinak jmenovka</td></tr>
+  <tr><td class="k"><code>--no-history</code></td><td>historii offloadů nečíst ani nezapsat</td></tr>
   <tr><td class="k"><code>--date</code></td><td>složka s datem (výchozí dnes, <code>RRRR-MM-DD</code>)</td></tr>
   <tr><td class="k"><code>--no-verify</code></td><td>bez ověření zpětným čtením (nedoporučeno)</td></tr>
   <tr><td class="k"><code>--no-analyze</code></td><td>bez analýzy klipů (metadata a snímky v reportu)</td></tr>
@@ -951,14 +1035,28 @@ offload luts                                          # seznam vestavěných LUT
   <tr><td class="k"><code>--proxy-folder</code></td><td>každou proxy zkopírovat i do <code>&lt;složka&gt;\&lt;datum&gt;\&lt;karta&gt;\</code> (jen s <code>--proxy</code>)</td></tr>
 </table>
 
+<h3>Volby příkazu append</h3>
+<p><code>offload append &lt;karta&gt;</code> má stejné volby analýzy a proxy jako <code>copy</code> (<code>--no-analyze</code>,
+<code>--proxy</code>, <code>--lut</code> …) a navíc <code>--into &lt;složka karty&gt;</code> (zopakujte pro každý cíl dřívější
+zálohy; bez ní se složky najdou v historii, jinak <span class="q">„Chyba: Karta není v historii — zadejte složky zálohy
+volbou --into.“</span>), <code>--no-verify</code>, <code>--dry-run</code> (vypíše plán, který se u skutečného běhu ještě
+upřesní) a <code>--no-history</code> (potom je <code>--into</code> povinné). Kód <code>0</code> = doplněno (nebo
+<span class="q">„Nic nového — záloha je úplná.“</span>), <code>1</code> = odmítnuto nebo chyba, s českým důvodem.</p>
+
 <h3>Během kopie a po ní</h3>
 <ul>
   <li>Před kopií se vypíše plán, seznam <code>Připojení:</code> (<code>D1 = Cíl 1: …</code>) a varování k zapojení.
     Stavový řádek ukazuje, který článek brzdí: <code>brzdí: D1</code>, <code>brzdí: card</code>, případně <code>(linka plná)</code>.</li>
   <li><kbd>Ctrl</kbd>+<kbd>C</kbd> kopii zruší: dokončí aktuální blok a smaže rozpracované soubory.</li>
   <li>Návratový kód: <code>0</code> = vše v pořádku, <code>1</code> = chyba (vhodné pro skripty).</li>
+  <li><code>copy</code> u karty, kterou historie zná, vypíše před plánem <code>Zálohováno 6. 10. 2026 8:15 na D:\Zaloha,
+    F:\Zaloha — ověřeno</code> (bez dotazu).</li>
   <li><code>verify</code> vypíše u problémových souborů <code>MISMATCH</code> (jiný součet), <code>MISSING</code> (chybí),
-    <code>ERROR</code> (nečitelný), <code>EXTRA</code> (není v seznamu) a na konci <code>OK</code> nebo <code>FAILED</code>.</li>
+    <code>ERROR</code> (nečitelný), <code>EXTRA</code> (není v záznamu), <code>FAILED-AT-COPY</code> (selhal už při kopii),
+    <code>FAILED-SUPERSEDED</code> (nejnovější záznam selhal, soubor sedí podle starší generace), <code>CHAIN</code>
+    (problém řetězu ASC MHL) a na konci český souhrn: <span class="q">„Ověřeno 1 234 souborů (512 GB) za 22:10
+    (385 MB/s) — vše v pořádku.“</span> nebo <span class="q">„… — NALEZENY PROBLÉMY: nesedí 2, chybí 1, nečitelné 0,
+    selhalo při kopii 0, navíc 3.“</span> Kód <code>1</code> při jakémkoli problému (soubory navíc samy o sobě nevadí).</li>
 </ul>
 </section>
 
@@ -983,11 +1081,25 @@ offload luts                                          # seznam vestavěných LUT
   <tr><td>Disk má „nevypadá jako karta“ a není zaškrtnutý</td><td>Na disku nejsou typické složky ani klipy kamery. Pokud ho opravdu chcete kopírovat, zaškrtněte ho ručně.</td></tr>
   <tr><td><span class="txt-bad">Disk není připojen</span> u cíle, Spustit offload je šedé</td><td>Připojte disk; do pár sekund se řádek opraví sám (nebo klikněte na ⟳). Cíl, který nepotřebujete, odeberte křížkem.</td></tr>
   <tr><td><span class="txt-warn">Doporučeno NTFS — spolehlivější než exFAT/FAT32</span></td><td>Jen doporučení. Pro offload na Windows je spolehlivější NTFS. Na FAT32 se navíc nevejde soubor 4 GB a víc.</td></tr>
-  <tr><td>„… cannot store files of 4 GB or more (…)“</td><td>Cíl je FAT32 a na kartě je soubor 4 GB a větší. Použijte disk s NTFS nebo exFAT.</td></tr>
-  <tr><td>„Not enough space on …: need …, free …“</td><td>Na cíli není dost místa. Uvolněte místo nebo použijte jiný disk.</td></tr>
-  <tr><td>„Destination … is on the same volume as the source“, „Destinations share a volume …“</td><td>Cíl je na kartě samotné, nebo dva cíle jsou na stejném disku. Druhá kopie musí být na jiném disku.</td></tr>
-  <tr><td>„Source looks like an earlier offload (has _REPORT/_PROXY/ascmhl) …“</td><td>Vybraná složka je už hotový offload. Vyberte původní kartu, nebo (u kopie kopie) složku bez <code>_REPORT</code>, <code>_PROXY</code> a <code>ascmhl</code>.</td></tr>
-  <tr><td>„Names Windows cannot store: …“</td><td>Na kartě jsou názvy, které Windows neuloží (zakázané znaky, jména jako <code>CON</code>, tečka nebo mezera na konci, nebo dva názvy lišící se jen velikostí písmen). Hláška vypíše, kterých souborů se to týká.</td></tr>
+  <tr><td>„FAT32 neumí uložit soubory od 4 GB (…)“</td><td>Cíl je FAT32 a na kartě je soubor 4 GB a větší. Použijte disk s NTFS nebo exFAT.</td></tr>
+  <tr><td>„Na cíli … není dost místa: potřeba … (karty …, proxy ~…, report …), volno …“</td><td>Na disku není dost místa pro kartu, proxy a report (i s kartami ve frontě). Uvolněte místo, použijte jiný disk, nebo vypněte proxy.</td></tr>
+  <tr><td><span class="txt-warn">„Na cíli … zbude po offloadu jen … — rezerva pod 5 %, odhad proxy je přibližný.“</span></td><td>Jen varování, offload jde spustit. Odhad proxy může být vyšší i nižší než skutečnost.</td></tr>
+  <tr><td>„Proxy se nevyrenderovaly: na … chybí místo (potřeba ~…, volno …).“ (na kartě úlohy)</td><td>Kopie je hotová a ověřená, jen proxy se nevešly. Uvolněte místo a proxy vyrobte znovu (nová kopie s proxy, nebo jiný nástroj).</td></tr>
+  <tr><td>„Cíl … je na stejném disku jako zdroj.“, „Dva cíle jsou na stejném disku (…) — to není druhá kopie. …“</td><td>Cíl je na kartě samotné, nebo dva cíle jsou na stejném disku. Druhá kopie musí být na jiném disku.</td></tr>
+  <tr><td>„Zdroj vypadá jako dřívější offload (má _REPORT, _PROXY nebo ascmhl) …“</td><td>Vybraná složka je už hotový offload. Vyberte původní kartu, nebo (u kopie kopie) složku bez <code>_REPORT</code>, <code>_PROXY</code> a <code>ascmhl</code>.</td></tr>
+  <tr><td>„Některé názvy Windows neumí uložit: …“</td><td>Na kartě jsou názvy, které Windows neuloží (zakázané znaky, jména jako <code>CON</code>, tečka nebo mezera na konci, nebo dva názvy lišící se jen velikostí písmen). Hláška vypíše, kterých souborů se to týká.</td></tr>
+  <tr><td>„Dřívější záloha není dostupná: … — připojte disk, nebo udělejte celou kopii.“</td><td>Doplnění potřebuje všechny disky dřívější zálohy. Připojte je, nebo kartu zkopírujte celou (vznikne nová složka).</td></tr>
+  <tr><td>„V … chybí report dřívější zálohy …“, „V … chybí ASC MHL …“, „Report dřívější zálohy v … nejde přečíst …“</td><td>Složka zálohy není úplná (kopie z jiného nástroje bez MHL, smazaný nebo poškozený report). Udělejte celou kopii.</td></tr>
+  <tr><td>„Zálohy na cílech se liší (…) — zkontrolujte je přes Nástroje → Ověřit zálohu…; doplnit nejde.“</td><td>Zálohy na discích nejsou stejné (jedna byla doplněna bez druhé, kopie se přerušila). Ověřte obě zálohy; pak udělejte celou kopii.</td></tr>
+  <tr><td>„V … nesouhlasí reporty s ASC MHL (poslední report je generace …, poslední generace MHL …) — dřívější doplnění se nedokončilo. …“</td><td>Dřívější doplnění se přerušilo uprostřed zápisu reportů. Zálohu ověřte a složku opravte ručně (nebo udělejte celou kopii do nové složky).</td></tr>
+  <tr><td>„Historie ASC MHL v … je poškozená — … doplnit nejde.“</td><td>Soubor MHL někdo změnil nebo ve složce <code>ascmhl</code> přibyl soubor mimo řetěz. Ověřte zálohu; doplnění jde až po opravě, celá kopie vždy.</td></tr>
+  <tr><td>„Na kartě není žádný soubor z dřívější zálohy — jde o jinou kartu? Udělejte celou kopii.“</td><td>Doplňujete jinou kartu, než která se zálohovala (nebo kopie, která se zrušila ještě před prvním souborem). Udělejte celou kopii.</td></tr>
+  <tr><td>„Doplnění zastaveno — nic se nezkopírovalo. N souborů se neshoduje se zálohou: …“</td><td>Na kartě se změnily už zálohované soubory („jiná velikost nebo datum“, jiná karta se stejným sériovým číslem, úprava v kameře) nebo na cíli je soubor, který žádný report nezná (nedokončené doplnění). Udělejte celou kopii.</td></tr>
+  <tr><td>„Na … chybí soubor z dřívější zálohy: …“, „… se při dřívější záloze na … nezkopíroval správně …“</td><td>Dřívější záloha je neúplná. Ověřte ji (Nástroje → Ověřit zálohu…) a kartu zkopírujte celou.</td></tr>
+  <tr><td>„Do této zálohy právě doplňuje jiná úloha (…) — počkejte, až skončí.“</td><td>Stejnou složku karty doplňuje jiná úloha (i z druhého okna Offloadu nebo z <code>offload append</code>). Počkejte na její konec; pak spusťte doplnění znovu — doplní se jen to, co mezitím nepřibylo.</td></tr>
+  <tr><td>„Nic nového — záloha je úplná.“</td><td>Není chyba — všechny soubory karty už v záloze jsou.</td></tr>
+  <tr><td>„Ve složce … není ASC MHL ani seznam součtů — není s čím porovnat.“</td><td>Vybraná složka není složka karty ani dne z Offloadu (nebo v ní chybí <code>ascmhl</code> i <code>_REPORT</code>). Vyberte složku karty <code>&lt;cíl&gt;\&lt;datum&gt;\&lt;karta&gt;</code>.</td></tr>
+  <tr><td><span class="txt-warn">„ASC MHL generace 0002 neodpovídá řetězu (soubor MHL byl změněn).“</span> (ověření)</td><td>Soubor MHL po zápisu někdo změnil. Soubory se ověřily i tak; zálohu zkontrolujte, případně udělejte novou kopii.</td></tr>
   <tr><td>„N souborů selhalo — karta NENÍ bezpečně zálohovaná.“</td><td>Otevřete <b class="ui">Report</b>, v části Chyby je u každého souboru důvod (karta nebo konkrétní cíl). Zkontrolujte kartu, čtečku a disky a kartu offloadujte znovu.</td></tr>
   <tr><td>„Report nenalezen na žádném cíli: …“</td><td>Žádný cíl s reportem není připojený. Připojte cílový disk.</td></tr>
   <tr><td>„Cíl N: svazek nepodporuje přímý zápis, použita systémová cache.“ (v reportu)</td><td>Typicky síťový disk, který neumí zápis mimo systémovou cache. Offload na něj zapsal běžným způsobem a v reportu to uvádí.</td></tr>
@@ -1028,7 +1140,7 @@ offload luts                                          # seznam vestavěných LUT
 <h4>Musím mít dva cíle?</h4>
 <p>Ne, ale aplikace s jedním cílem upozorní, že doporučené jsou dvě nezávislé kopie.</p>
 <h4>Jak ověřím zálohu později, třeba po převozu disku?</h4>
-<p><code>bin\offload.exe verify &lt;cíl&gt;\&lt;datum&gt;\&lt;karta&gt;</code>. Nástroj <code>ascmhl verify</code> na Windows hlásí falešné
+<p><b class="ui">Nástroje → Ověřit zálohu…</b>, nebo <code>bin\offload.exe verify &lt;cíl&gt;\&lt;datum&gt;\&lt;karta&gt;</code>. Nástroj <code>ascmhl verify</code> na Windows hlásí falešné
 „new/missing file“ kvůli lomítkům v cestách — plné <code>ascmhl verify</code> pouštějte na macOS nebo Linuxu, na Windows použijte <code>offload verify</code>.</p>
 <h4>Ověří kopii z Windows i Mac verze Offloadu?</h4>
 <p>Ano, obě verze zapisují stejný formát (seznam součtů, report, MHL).</p>

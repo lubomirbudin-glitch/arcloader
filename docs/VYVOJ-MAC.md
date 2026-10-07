@@ -17,6 +17,17 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   proxy, vestavěné LUTy s výběrem podle kamery, ikonu a Blackmagic RAW jako Windows (gama → LUT, BRAW jen s knihovnou, limit
   `--info`, české poznámky, náhledy pod hlídačem). Průběh zapisují úkoly plánu níže; úkol 26 tuto odrážku smaže.
 
+- **Karty a bezpečnost dat (Windows plán 6, 2026-10-06):** návrh
+  [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
+  §2 a §8. Mac převezme: **historii** (`history.json` v Application Support ve stejném formátu — FORMATY.md „Místní
+  soubory“; klíč karty = sériové číslo souborového systému + kapacita, ověřit, že u FAT/exFAT vyjde na Macu totéž
+  `fsSerial` jako na Windows; řádek u karty a dialog „Karty už jsou zálohované“ ve `Views.swift`); **doplnění** (plánovač
+  doplnění v OffloadKit, `MHL.swift` generace N + nahrazení řetězu, `Report.swift` klíč `generation` a jména `_NNNN`,
+  zámek složky karty, `offload append`); **název z klipů** (vzory `ReelNames`, další v řadě, zástupný text); **ověření
+  zálohy** (čtení MHL všech generací a hashů, report `_verify_<stamp>Z` s výjimkou pro MHL bez ignorování `_REPORT`,
+  menu); **kontrolu místa** (odhad a plán po svazcích, tabulka toků, přepočet před proxy); **české hlášky** (`Msg`
+  a kódy kontrol v `Engine.swift` a `main.swift`).
+
 - **Mimo plán — zbývá i po něm:**
   - Blackmagic RAW Film Gen 4: zatím bez LUTu (provizorně, jako Windows) — rozhodne uživatel; platí pro obě verze.
   - Nastavení nástrojů: řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny Blackmagic RAW (stav BRAW je vidět z poznámky

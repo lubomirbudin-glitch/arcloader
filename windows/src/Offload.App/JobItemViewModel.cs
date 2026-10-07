@@ -2,13 +2,14 @@ using System.IO;
 using Offload.Core;
 using Offload.Core.Desktop;
 using Offload.Core.Hardware;
+using Offload.Core.Space;
 
 namespace Offload.App;
 
 public sealed record DestinationLine(string Name, string Sub, string FullPath);
 
 /// One card in the queue: mirrors the job's status every tick (Mac `JobItem` + `JobCard`).
-public sealed class JobItemViewModel : ObservableObject
+public sealed class JobItemViewModel : QueueItem
 {
     readonly MainViewModel owner;
     readonly string sourceName;
@@ -21,10 +22,14 @@ public sealed class JobItemViewModel : ObservableObject
     List<string> chainLines = [];
     bool chainRequested, ejected, ejecting, openingReport;
 
-    public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject)
+    readonly IReadOnlyList<VolumeDemand> space;
+
+    /// `space`: what the card needs on each destination volume (spec 2.5) — counted while this job is queued or copies.
+    public JobItemViewModel(MainViewModel owner, OffloadJob job, string sourceName, bool canEject, IReadOnlyList<VolumeDemand>? space = null)
     {
         this.owner = owner;
         this.sourceName = sourceName;
+        this.space = space ?? [];
         Job = job;
         CanEject = canEject;
         Runner = new JobQueue.Runner(job, m => AppLog.Write($"{sourceName}: {m}"));
@@ -41,8 +46,11 @@ public sealed class JobItemViewModel : ObservableObject
     public RelayCommand EjectCommand { get; }
     public RelayCommand OpenReportCommand { get; }
     public RelayCommand RevealCommand { get; }
+    public override IQueuedJob Queued => Runner;
+    public override void Cancel() => Job.Cancel();
+    public override bool Busy => !IsFinished || Ejecting;
 
-    public void Refresh()
+    public override void Refresh()
     {
         progress.Update(Job.Status(), DateTime.UtcNow);
         if (!chainRequested && Job.Plan is { } plan && progress.Status.Phase == JobPhase.Copying)
@@ -77,19 +85,28 @@ public sealed class JobItemViewModel : ObservableObject
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    public JobPhase Phase => progress.Status.Phase;
+    public override JobPhase Phase => progress.Status.Phase;
+
+    /// Bytes written so far to the least written destination (the safe side); 0 before the copy.
+    internal long WrittenNow() => progress.Status.Copy?.WrittenBytes is { Length: > 0 } w ? w.Min() : 0;
+
+    /// What this job still needs (spec 2.5): all of it while queued, the rest while copying - `writtenAtProbe` is what had
+    /// been written when the destinations' free space was last read (ruling I4: never what was written since, the free
+    /// figure does not show it yet) - proxies and report in stage 2, nothing once finished.
+    internal IEnumerable<VolumeDemand> SpaceDemands(long writtenAtProbe) =>
+        space.Select(d => d with { Need = SpaceCheck.Remaining(d.Need, Phase, writtenAtProbe) });
     public bool IsRunning => progress.IsRunning;
-    public bool IsFinished => Phase.IsFinished();
+    public override bool IsFinished => Phase.IsFinished();
     public bool SafeToEject => progress.Status.SafeToEject;
     public bool? CopySucceeded => progress.Status.CopySucceeded;
     /// Failed or copied with errors; a cancelled job is not an error.
-    public bool IsError => progress.IsError;
+    public override bool IsError => progress.IsError;
     public CardTone Tone => progress.Tone;
     public string StatusText => progress.StatusText;
     public double Progress => progress.PhaseProgress;
     public string DetailText => progress.DetailText;
 
-    public string Title => Job.Plan?.CardName ?? sourceName;
+    public string Title => Job.Plan is { Mode: PlanMode.Append } p ? AppendRules.Title(p.CardName) : Job.Plan?.CardName ?? sourceName;
     public string FilesText
     {
         get
@@ -156,6 +173,10 @@ public sealed class JobItemViewModel : ObservableObject
     public string? FailedText => !IsCancelled && Job.Report is { Success: false } r ? Texts.Failed(r.FailedFiles.Count) : null;
     public string? CancelledText => IsCancelled && !SafeToEject ? "Zrušeno — karta není kompletně zálohovaná." : null;
     public string? ErrorText => progress.Status.Error;
+    /// "Nic nového — záloha je úplná." (spec 2.2) and similar information.
+    public string? NoteText => progress.Status.Note;
+    /// Orange, never an error: e.g. "5 souborů z dřívější zálohy nebylo ověřeno — doporučeno Ověřit zálohu."
+    public string? WarningText => progress.Status.Warning;
     public string? SummaryText => IsFinished && !IsCancelled && Job.Report is { } r ? JobProgress.SummaryText(r) : null;
     public bool HasReport => Job.Report != null;
     public bool CanCancel => IsRunning || Phase == JobPhase.Waiting;
@@ -169,10 +190,11 @@ public sealed class JobItemViewModel : ObservableObject
         {
             var cards = plan.CardPaths;
             var name = plan.CardName;
-            var path = await Task.Run(() => QueueRules.FirstReport(cards, name));
+            var generation = plan.Generation;
+            var path = await Task.Run(() => QueueRules.FirstReport(cards, name, generation));
             if (path == null)
             {
-                owner.ShowMessage("Report nenalezen na žádném cíli:\n" + string.Join("\n", cards.Select(c => QueueRules.ReportPath(c, name))));
+                owner.ShowMessage("Report nenalezen na žádném cíli:\n" + string.Join("\n", cards.Select(c => QueueRules.ReportPath(c, name, generation))));
                 return;
             }
             if (Shell.Open(path) is string error) owner.ShowMessage(error);

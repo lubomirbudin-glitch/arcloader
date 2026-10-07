@@ -40,13 +40,13 @@ public class ProxyRendererTests
     public void UnsupportedReason()
     {
         using var none = new ProxyRenderer(new ProxySettings(), new ExternalTools { NoSearch = true }.Resolved());
-        Assert.Equal("ffmpeg not found", none.UnsupportedReason(VideoClip("a.mov")));
+        Assert.Equal("ffmpeg nenalezen", none.UnsupportedReason(VideoClip("a.mov")));
         var ff = new ExternalTools { Ffmpeg = @"C:\Windows\System32\cmd.exe", NoSearch = true }.Resolved();
         using var some = new ProxyRenderer(new ProxySettings(), ff);
         Assert.Null(some.UnsupportedReason(VideoClip("a.mov")));
         Assert.StartsWith("RED R3D", some.UnsupportedReason(new Clip { Name = "r", Path = "r.R3D", Format = ClipFormat.R3d, Segments = ["r.R3D"] }));
         Assert.StartsWith("Canon", some.UnsupportedReason(new Clip { Name = "c", Path = "c.CRM", Format = ClipFormat.CanonRaw, Segments = ["c.CRM"] }));
-        Assert.Equal("unknown format", some.UnsupportedReason(new Clip { Name = "u", Path = "u", Format = ClipFormat.Unknown, Segments = ["u"] }));
+        Assert.Equal("neznámý formát", some.UnsupportedReason(new Clip { Name = "u", Path = "u", Format = ClipFormat.Unknown, Segments = ["u"] }));
     }
 
     // Review focus 3

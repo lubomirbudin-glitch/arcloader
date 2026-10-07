@@ -54,6 +54,10 @@ public sealed class ProxyRenderer : IDisposable
     /// Tests only: H.264/HEVC encoder to use instead of the probed one (OffloadOptions.ProxyEncoder).
     internal string? ForcedEncoder { get; init; }
 
+    /// False for an append (spec 2.2): a proxy of that name that appeared meanwhile is never overwritten — the render
+    /// fails instead.
+    public bool ReplaceExisting { get; init; } = true;
+
     /// The video encoder proxies are rendered with (probed once, on first use); null without ffmpeg.
     public string? EncoderName => Tools.Ffmpeg is string ffmpeg
         ? encoderName ??= (ForcedEncoder is string forced && Settings.Codec is ProxyCodec.H264 or ProxyCodec.Hevc ? forced : Encoders.Pick(ffmpeg, Settings.Codec))
@@ -96,14 +100,14 @@ public sealed class ProxyRenderer : IDisposable
     /// null when the clip can be rendered, otherwise the reason it cannot.
     public string? UnsupportedReason(Clip clip)
     {
-        if (Tools.Ffmpeg == null) return "ffmpeg not found";
+        if (Tools.Ffmpeg == null) return Msg.FfmpegNotFound;
         return clip.Format switch
         {
             ClipFormat.Video => null,
-            ClipFormat.Unknown => "unknown format",
+            ClipFormat.Unknown => Msg.UnknownFormat,
             _ => backends.TryGetValue(clip.Format, out var b)
                 ? (b.IsAvailable(Tools) ? null : b.MissingHint)
-                : $"{clip.Format.Label()}: no decoder available",
+                : Msg.NoDecoder(clip.Format.Label()),
         };
     }
 
@@ -112,7 +116,7 @@ public sealed class ProxyRenderer : IDisposable
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
         {
-            var ffprobe = Tools.Ffprobe ?? throw new ToolError("ffprobe", -1, "ffprobe not found");
+            var ffprobe = Tools.Ffprobe ?? throw new ToolError("ffprobe", -1, Msg.FfprobeNotFound);
             return FFProbe.Probe(ffprobe, path);
         }
         if (!backends.TryGetValue(clip.Format, out var b) || !b.IsAvailable(Tools))
@@ -182,7 +186,7 @@ public sealed class ProxyRenderer : IDisposable
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
             return new FrameSource { InputArgs = hwaccel ? ["-hwaccel", "auto", "-i", path] : ["-i", path] };
-        if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, "no decoder");
+        if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, Msg.NoDecoderShort);
         return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt));
     }
 
@@ -235,7 +239,7 @@ public sealed class ProxyRenderer : IDisposable
     /// `lut` null = no LUT (thumbnails taken from a finished proxy, which already has it).
     public List<Thumbnail> Thumbnails(Clip clip, string cardPath, ClipInfo info, LutUse? lut, Func<bool>? isCancelled = null)
     {
-        var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, "ffmpeg not found");
+        var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, Msg.FfmpegNotFound);
         isCancelled ??= () => false;
         var lutFile = PrepareLut(lut);
         var look = LookFor(lutFile != null ? lut : null, info);  // log only when a LUT really follows
@@ -303,7 +307,7 @@ public sealed class ProxyRenderer : IDisposable
     /// clip is then retried once in software — as is one that failed with it; without, the stall fails the proxy.
     public void Render(Clip clip, string cardPath, ClipInfo info, LutUse? lut, string output, Action<double> progress, Func<bool> isCancelled)
     {
-        var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, "ffmpeg not found");
+        var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, Msg.FfmpegNotFound);
         var lutFile = PrepareLut(lut);
         bool hwaccel = clip.Format == ClipFormat.Video && UseHardwareDecoding(info.Codec);
         Exception first;
@@ -379,7 +383,7 @@ public sealed class ProxyRenderer : IDisposable
             try
             {
                 RunFfmpeg(ffmpeg, args, src, info.Duration, progress, isCancelled, StallTimeout);
-                NativeIO.Move(part, output, replace: true);
+                NativeIO.Move(part, output, replace: ReplaceExisting);
             }
             catch
             {
@@ -484,9 +488,11 @@ public sealed class ProxyRenderer : IDisposable
                 throw new ToolError("ffmpeg", -1, "cancelled");
             }
             ff.WaitForExit();
+            ff.DrainStderr();
             if (feeder != null)
             {
                 if (!feeder.WaitForExit(2000)) { feeder.Kill(); feederKilled = true; }
+                else feeder.DrainStderr();   // the decoder's last line must be in StderrTail before it becomes the error
                 pump!.Join(2000);
             }
             // A feeder that died on its own is the real cause; ffmpeg only saw a truncated stream. One that was killed,

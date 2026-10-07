@@ -83,4 +83,18 @@ public class ToolsTests
         Assert.Null(t.Ffprobe);
         Assert.Null(t.Redline);
     }
+
+    // The last stderr line written right before the exit must be in StderrTail once the stream is drained.
+    [Fact]
+    public void DrainStderr_LastLineIsThere_AfterExit()
+    {
+        for (int i = 0; i < 40; i++)
+        {
+            using var p = new ToolProcess(Cmd, ["/c", "ping -n 2 127.0.0.1 >nul & echo last line 1>&2 & exit /b 4"], null, pipeStdin: false);
+            p.Start(null);
+            Assert.True(p.WaitForExit(30000));
+            p.DrainStderr();
+            Assert.Contains("last line", p.StderrTail);
+        }
+    }
 }

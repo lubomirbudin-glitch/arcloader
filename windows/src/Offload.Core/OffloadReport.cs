@@ -51,6 +51,8 @@ public sealed partial class OffloadReport
     [JsonPropertyName("proxy")] public ProxySettings? Proxy { get; set; }
     /// Windows only: the ffmpeg encoder the proxies were rendered with (e.g. "h264_nvenc"); omitted when none were rendered.
     [JsonPropertyName("proxyEncoder")] public string? ProxyEncoder { get; set; }
+    /// The ASC MHL generation this report belongs to: absent (= 1) for the full copy, 2, 3 … for appends (spec 2.2).
+    [JsonPropertyName("generation")] public int? Generation { get; set; }
 
     [JsonIgnore] public double CopySeconds => (CopyFinished - Started).TotalSeconds;
     [JsonIgnore] public double VerifySeconds => (Finished - CopyFinished).TotalSeconds;
@@ -110,8 +112,15 @@ public sealed partial class OffloadReport
             Destinations = dests,
             Files = files,
             Skipped = plan.Scan.Skipped,
+            Generation = plan.Generation > 1 ? plan.Generation : null,
         };
     }
+
+    /// Report file names of generation `generation`: the full copy keeps the plain names, an append adds "_NNNN" (R6).
+    public static string JsonName(int generation) => generation <= 1 ? "offload_report.json" : $"offload_report_{generation:0000}.json";
+    public static string TextName(int generation) => generation <= 1 ? "offload_report.txt" : $"offload_report_{generation:0000}.txt";
+    public static string HtmlName(string cardName, int generation) => generation <= 1 ? $"{cardName}_report.html" : $"{cardName}_report_{generation:0000}.html";
+    public static string PdfName(string cardName, int generation) => generation <= 1 ? $"{cardName}_report.pdf" : $"{cardName}_report_{generation:0000}.pdf";
 
     /// Plain hash list, one "<xxh64>  <path>" per line — readable by humans and by `offload verify`.
     [JsonIgnore]
@@ -174,20 +183,79 @@ public sealed partial class OffloadReport
 
     /// Writes all report files into `<card>/_REPORT`. The hash list and MHL are the record of the copy itself,
     /// so they are written once (`includeHashRecords`); the HTML/JSON are refreshed as clips get analysed.
+    /// An append (Generation > 1) writes its own `_NNNN` files — created, never replacing one (ruling I1; only the
+    /// job's own refresh later replaces them) — and adds its lines to the hash list; the reports of the earlier
+    /// generations are never rewritten (R5, R6).
+    ///
+    /// Order (fix round 1, item 6) — no single failure may leave a folder that ruling I1 refuses for the wrong reason:
+    ///   1. the `_NNNN` reports, created (one that is there already stops everything before a shared file is touched);
+    ///   2. the MHL generation file, created, then the chain, replaced — the chain is the commit point: reports and
+    ///      MHL now agree, and a failure before it leaves reports without their generation, which I1 rightly refuses
+    ///      (those files have no ASC MHL record yet);
+    ///   3. the hash list last: it is derived from the MHL (spec 2.2), so a failure there (a reader holding it without
+    ///      delete sharing, a full disk) leaves reports and chain in agreement — the next append goes ahead and adds the
+    ///      lines that were missed (any MHL-recorded path not in the list).
+    /// The hash list and the chain are swapped with ReplaceFile (NativeIO.WriteFileReplacing), which works while a
+    /// reader holds them with delete sharing.
     public void Write(string cardPath, bool includeHashRecords)
     {
+        int generation = Generation ?? 1;
         var dir = System.IO.Path.Combine(cardPath, Layout.ReportDirName);
         NativeIO.Mkdirs(dir);
         var outputs = new List<(string Name, string Text)>
         {
-            ("offload_report.json", ToJson()),
-            ("offload_report.txt", Summary),
-            ($"{CardName}_report.html", HtmlReport.Render(this)),
+            (JsonName(generation), ToJson()),
+            (TextName(generation), Summary),
+            (HtmlName(CardName, generation), HtmlReport.Render(this)),
         };
-        if (includeHashRecords) outputs.Add(($"{CardName}.xxh64", HashList));
+        bool create = generation > 1 && includeHashRecords;
         foreach (var (name, text) in outputs)
-            NativeIO.WriteFileDurably(System.IO.Path.Combine(dir, name), Encoding.UTF8.GetBytes(text));
-        if (includeHashRecords) Mhl.Write(this, cardPath);
+        {
+            var path = System.IO.Path.Combine(dir, name);
+            if (create) NativeIO.WriteFileNew(path, Encoding.UTF8.GetBytes(text));
+            else NativeIO.WriteFileDurably(path, Encoding.UTF8.GetBytes(text));
+        }
+        if (!includeHashRecords) return;
+        Mhl.Write(this, cardPath);
+        // An append: the earlier lines byte for byte, then the missed ones, then this generation's.
+        var hashList = System.IO.Path.Combine(dir, $"{CardName}.xxh64");
+        var lines = Encoding.UTF8.GetBytes(HashList);
+        if (generation == 1)
+        {
+            NativeIO.WriteFileReplacing(hashList, lines);
+            return;
+        }
+        var (earlier, missed) = HashListAndMissed(hashList, cardPath, Files.Select(f => f.Path));
+        NativeIO.WriteFileReplacing(hashList, [.. earlier, .. missed, .. lines]);
+    }
+
+    /// `<card>/_REPORT/<card name>.xxh64` gets the lines of every path the ASC MHL history records but the list lacks
+    /// (a hash list whose write failed, step 3 of Write) — the one record file that may be rewritten. Used by an append
+    /// with nothing new (fix round 2, item 6b); an append with new files does the same in Write. False: nothing missed.
+    public static bool HealHashList(string cardPath, string cardName)
+    {
+        var hashList = System.IO.Path.Combine(cardPath, Layout.ReportDirName, $"{cardName}.xxh64");
+        var (earlier, missed) = HashListAndMissed(hashList, cardPath, []);
+        if (missed.Length == 0) return false;
+        NativeIO.WriteFileReplacing(hashList, [.. earlier, .. missed]);
+        return true;
+    }
+
+    /// The card's hash list as the earlier generations left it (exact bytes, then a line break if it had none), and
+    /// the xxh64 lines of every path the ASC MHL history records but neither the list nor `alsoListed` has.
+    static (byte[] Earlier, byte[] Missed) HashListAndMissed(string path, string cardPath, IEnumerable<string> alsoListed)
+    {
+        var earlier = File.Exists(path) ? File.ReadAllBytes(path) : [];
+        if (earlier.Length > 0 && earlier[^1] != (byte)'\n') earlier = [.. earlier, (byte)'\n'];
+        var listed = new HashSet<string>(alsoListed, StringComparer.OrdinalIgnoreCase);
+        foreach (var line in Encoding.UTF8.GetString(earlier).Split('\n'))
+            if (line.TrimEnd('\r').IndexOf("  ", StringComparison.Ordinal) is int at and >= 0) listed.Add(line.TrimEnd('\r')[(at + 2)..]);
+        var missed = new StringBuilder();
+        if (Verification.MhlReader.Read(cardPath) is { } mhl)
+            foreach (var r in mhl.LastGood.Values.OrderBy(r => r.Path, StringComparer.Ordinal))
+                if (!listed.Contains(r.Path) && r.Hashes.FirstOrDefault(h => h.Algorithm == "xxh64") is { } h)
+                    missed.Append($"{h.Value}  {r.Path}\n");
+        return (earlier, Encoding.UTF8.GetBytes(missed.ToString()));
     }
 
     static JsonNode? Sorted(JsonNode? node) => node switch
@@ -198,7 +266,7 @@ public sealed partial class OffloadReport
         _ => node?.DeepClone(),
     };
 
-    sealed class IsoSecondsDateConverter : JsonConverter<DateTime>
+    internal sealed class IsoSecondsDateConverter : JsonConverter<DateTime>
     {
         public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
             DateTime.Parse(reader.GetString()!, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);

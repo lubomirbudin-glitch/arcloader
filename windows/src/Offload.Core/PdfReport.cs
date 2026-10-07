@@ -7,6 +7,28 @@ namespace Offload.Core;
 /// from the report's @page rule.
 public static class PdfReport
 {
+    /// How long Edge may take to print one report before the PDF is given up (the HTML report is already written).
+    public const int DefaultTimeoutSeconds = 60;
+
+    /// Tests only (fix round 2, item 9): set for the whole test assembly, every PDF is skipped (a ToolError, which
+    /// every caller logs and goes on) except inside a PrintHere() scope — a headless Edge per job was slow and flaked
+    /// under load. The scope is an AsyncLocal, so it reaches the threads and tasks a test starts.
+    internal static bool SkipUnlessAsked;
+    static readonly AsyncLocal<bool> asked = new();
+
+    internal static bool AskedHere => asked.Value;
+
+    internal static IDisposable PrintHere()
+    {
+        asked.Value = true;
+        return new Asked();
+    }
+
+    sealed class Asked : IDisposable
+    {
+        public void Dispose() => asked.Value = false;
+    }
+
     public static string? FindEdge()
     {
         string[] candidates =
@@ -18,8 +40,14 @@ public static class PdfReport
         return candidates.FirstOrDefault(File.Exists);
     }
 
-    public static void Write(OffloadReport report, string path, int timeoutSeconds = 60)
+    /// `replace`: false for an append's `_NNNN` PDF — it never replaces an existing file (ruling I1).
+    public static void Write(OffloadReport report, string path, int timeoutSeconds = DefaultTimeoutSeconds, bool replace = true) =>
+        WriteHtml(HtmlReport.Render(report, forPrint: true), path, timeoutSeconds, replace);
+
+    /// Any self-contained HTML page (the offload report, the verification report) printed to `path`.
+    public static void WriteHtml(string html, string path, int timeoutSeconds = DefaultTimeoutSeconds, bool replace = true)
     {
+        if (SkipUnlessAsked && !AskedHere) throw new ToolError("Edge", -1, "PDF skipped (tests)");
         var edge = FindEdge() ?? throw new ToolError("Edge", -1, "Microsoft Edge not found — PDF skipped");
         var work = Path.Combine(Path.GetTempPath(), "offload-pdf-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(work);
@@ -27,14 +55,14 @@ public static class PdfReport
         try
         {
             // A file, not a data URL: the report with thumbnails is easily several MB.
-            var html = Path.Combine(work, "report.html");
-            File.WriteAllText(html, HtmlReport.Render(report, forPrint: true), new UTF8Encoding(false));
+            var page = Path.Combine(work, "report.html");
+            File.WriteAllText(page, html, new UTF8Encoding(false));
             NativeIO.Delete(tmp);
             using var p = new ToolProcess(edge,
             [
                 "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
                 $"--user-data-dir={Path.Combine(work, "profile")}",  // never touches the user's own Edge profile
-                "--no-pdf-header-footer", $"--print-to-pdf={tmp}", new Uri(html).AbsoluteUri,
+                "--no-pdf-header-footer", $"--print-to-pdf={tmp}", new Uri(page).AbsoluteUri,
             ], work, pipeStdin: false);
             p.Start(_ => { });
             if (!p.WaitForExit(timeoutSeconds * 1000))
@@ -44,7 +72,7 @@ public static class PdfReport
             }
             var ok = File.Exists(tmp) && new FileInfo(tmp).Length > 4 && File.ReadAllBytes(tmp)[..4] is [0x25, 0x50, 0x44, 0x46];
             if (!ok) throw new ToolError("Edge", p.ExitCode, "PDF: printing did not produce a file\n" + p.StderrTail);
-            NativeIO.Move(tmp, path, replace: true);
+            NativeIO.Move(tmp, path, replace);
         }
         finally
         {

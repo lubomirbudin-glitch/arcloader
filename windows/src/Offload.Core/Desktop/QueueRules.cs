@@ -55,13 +55,14 @@ public static class QueueRules
     public static bool MeasureBlocked(IEnumerable<JobPhase> phases) =>
         phases.Any(p => p is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying);
 
-    public static string ReportPath(string cardPath, string cardName) =>
-        Path.Combine(cardPath, Layout.ReportDirName, $"{cardName}_report.html");
+    /// The HTML report of generation `generation` (an append has its own, spec 2.2).
+    public static string ReportPath(string cardPath, string cardName, int generation = 1) =>
+        Path.Combine(cardPath, Layout.ReportDirName, OffloadReport.HtmlName(cardName, generation));
 
     /// The HTML report from the first destination that has it (a destination may be disconnected), or null.
     /// Touches the destinations — never call it on the UI thread.
-    public static string? FirstReport(IEnumerable<string> cardPaths, string cardName) =>
-        cardPaths.Select(c => ReportPath(c, cardName)).FirstOrDefault(File.Exists);
+    public static string? FirstReport(IEnumerable<string> cardPaths, string cardName, int generation = 1) =>
+        cardPaths.Select(c => ReportPath(c, cardName, generation)).FirstOrDefault(File.Exists);
 
     static bool SameDrive(string a, string b) =>
         Root(a) is string ra && string.Equals(ra, Root(b), StringComparison.OrdinalIgnoreCase);

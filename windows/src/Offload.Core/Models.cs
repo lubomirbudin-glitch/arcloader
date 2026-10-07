@@ -17,6 +17,10 @@ public sealed class OffloadOptions
     internal bool ForceBuffered { get; set; }
     /// Tests only: called on the copy thread just before file i is read (a deterministic point to cancel at).
     internal Action<int>? BeforeFileCopy { get; set; }
+    /// Tests only: called on the copy thread after every file is copied and flushed, just before verification.
+    internal Action? BeforeVerify { get; set; }
+    /// Tests only: the free bytes of the volume of a path, instead of NativeIO.AvailableBytes.
+    internal Func<string, long?>? FreeSpace { get; set; }
     /// Tests only: H.264/HEVC proxies with this encoder (e.g. libx264) instead of the probed one — parallel
     /// NVENC sessions from concurrently running tests can collide.
     internal string? ProxyEncoder { get; set; }
@@ -37,14 +41,28 @@ public static class FileStateExtensions
 
 public readonly record struct DestFileResult(FileState State, string? Error);
 
+public enum PlanMode { Full, Append }
+
 public sealed class OffloadPlan
 {
     public required string Source { get; init; }
+    /// What is copied: the whole card, or for an append only the new files and their folders.
     public required SourceScan Scan { get; init; }
     public required string Date { get; init; }
     public required string CardName { get; init; }
     public required IReadOnlyList<string> DestRoots { get; init; }
     public IReadOnlyList<string> CardPaths => DestRoots.Select(r => Layout.CardPath(r, Date, CardName)).ToList();
+    public PlanMode Mode { get; init; } = PlanMode.Full;
+    /// The ASC MHL generation this copy writes: 1 for a full copy, N for an append (spec 2.2).
+    public int Generation { get; init; } = 1;
+    /// Append: the whole card as it is now (history); null for a full copy (then Scan is the whole card).
+    public SourceScan? FullScan { get; init; }
+    /// Append: files of the earlier backup that were never read back.
+    public int UnverifiedEarlier { get; init; }
+    /// Spec 2.5: what each destination volume needs and has free (the CLI's --dry-run lists it).
+    public IReadOnlyList<Space.SpaceLine> Space { get; init; } = [];
+    /// "Na cíli … zbude po offloadu jen … — rezerva pod 5 %…" — never blocks (R11).
+    public IReadOnlyList<string> SpaceWarnings { get; init; } = [];
 }
 
 public enum CopyPhase { Copy, Flush, Verify, Report, Done }
@@ -56,9 +74,15 @@ public sealed record ProgressSnapshot(
 public sealed class OffloadError : Exception
 {
     public bool IsPreflight { get; }
+    /// Which check failed (preflight errors only); tests and the GUI tell the cases apart by it, not by the text.
+    public PreflightCode? Code { get; }
 
-    OffloadError(string message, bool preflight) : base(message) => IsPreflight = preflight;
+    OffloadError(string message, bool preflight, PreflightCode? code) : base(message)
+    {
+        IsPreflight = preflight;
+        Code = code;
+    }
 
-    public static OffloadError Preflight(string message) => new(message, true);
-    public static OffloadError Failed(string message) => new(message, false);
+    public static OffloadError Preflight(PreflightCode code, string message) => new(message, true, code);
+    public static OffloadError Failed(string message) => new(message, false, null);
 }

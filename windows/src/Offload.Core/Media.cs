@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Offload.Core;
@@ -190,6 +191,8 @@ public sealed class ProxySettings
     [JsonPropertyName("frameAspect")] public double? FrameAspect { get; set; }
     /// How much of the image the frame covers (0.9 = 90 %, i.e. 10 % overscan around it).
     [JsonPropertyName("frameScale")] public double FrameScale { get; set; } = 1.0;
+    /// Keys a newer version added inside "proxy" (settings.json, report): kept and written back unchanged (R24).
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 
     /// Centered crop rectangle (x, y, w, h) inside a W×H image, even-sized, or null when no crop is set.
     public (int X, int Y, int W, int H)? FrameCrop(int width, int height)

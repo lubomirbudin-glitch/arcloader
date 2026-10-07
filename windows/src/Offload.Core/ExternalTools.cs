@@ -24,6 +24,8 @@ public sealed class ExternalTools
     [JsonPropertyName("redline")] public string? Redline { get; set; }
     [JsonPropertyName("artCmd")] public string? ArtCmd { get; set; }
     [JsonPropertyName("brawDecoder")] public string? BrawDecoder { get; set; }
+    /// Keys a newer version added inside "tools": kept and written back unchanged (R24).
+    [JsonExtensionData] public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
 
     /// Tests only: use the explicit paths and nothing else.
     [JsonIgnore] internal bool NoSearch { get; set; }

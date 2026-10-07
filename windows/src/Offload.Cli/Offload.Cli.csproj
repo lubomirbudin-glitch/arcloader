@@ -4,7 +4,12 @@
     <AssemblyName>offload</AssemblyName>
     <RootNamespace>Offload.Cli</RootNamespace>
     <ApplicationIcon>..\..\..\shared\icon\Offload.ico</ApplicationIcon>
+    <!-- Czech parser errors from System.CommandLine (its "cs" satellite); Directory.Build.props keeps only "en". -->
+    <SatelliteResourceLanguages>en;cs</SatelliteResourceLanguages>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Offload.Core.Tests" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.CommandLine" Version="2.0.12" />
     <ProjectReference Include="..\Offload.Core\Offload.Core.csproj" />

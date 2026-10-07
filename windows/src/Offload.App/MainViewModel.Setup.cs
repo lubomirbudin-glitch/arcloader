@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows.Threading;
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.Space;
 
 namespace Offload.App;
 
@@ -11,6 +12,9 @@ public sealed partial class MainViewModel
 {
     readonly HashSet<string> selected = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> cardNames = new(StringComparer.OrdinalIgnoreCase);
+    // Cards whose "Doplnit jen nové klipy" is ticked (spec 2.2); it applies only while the card still has new files.
+    // A tick belongs to the history entry the user saw and is pruned as soon as its offer goes away (never returns by itself).
+    readonly AppendTicks appendTicks = new();
     readonly List<string> manualSources = [];
     // Volume labels of manual sources that are a drive root the scan does not list (an internal disk, a network
     // letter), read off the UI thread when the source is added.
@@ -73,9 +77,10 @@ public sealed partial class MainViewModel
     {
         ejectedRoots.Clear();
         RefreshVolumes();
-        foreach (var d in Destinations) d.Probe();
+        _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // every destination and the proxy folder: free space, volume
         RefreshLut();
         RefreshProxyFolder();
+        ReloadHistory();   // and every card is looked at again
     }
 
     void HealthCheck()
@@ -84,6 +89,7 @@ public sealed partial class MainViewModel
         // Missing rows (a NAS that may come back) and present network/removable ones (a NAS that may drop out);
         // a row whose probe is still running is skipped by Probe itself.
         foreach (var d in Destinations.Where(d => d.ShouldReprobe)) d.Probe();
+        ReprobeStaleSpaceProblem();   // a red "není dost místa" on a fixed disk must clear once space is freed
         RefreshLut();
         RefreshProxyFolder();
     }
@@ -155,7 +161,12 @@ public sealed partial class MainViewModel
         volumes = found;
         selected.Clear();
         selected.UnionWith(next);
-        foreach (var p in drop) cardNames.Remove(p);
+        foreach (var p in drop)
+        {
+            cardNames.Remove(p);
+            appendTicks.Drop(p);
+            inspections.Drop(p);   // its history line belonged to the card that left
+        }
         var sig = string.Join("\n", found.Where(v => !v.IsDestination).Select(v => $"{v.Path}|{v.Identity}|{v.Name}|{v.Total - v.Free}|{v.Format}|{v.LooksLikeCard}|{selected.Contains(v.Path)}"))
             + "\n" + string.Join("\n", manualSources.Select(p => $"{p}|{selected.Contains(p)}"));
         if (sig != sourcesSig)
@@ -171,7 +182,8 @@ public sealed partial class MainViewModel
             destSig = dsig;
             RebuildDestinations();
         }
-        foreach (var j in Jobs) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
+        InspectMissing();   // new or swapped cards
+        foreach (var j in Jobs.OfType<JobItemViewModel>()) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
         RefreshLut();   // the LUT may sit on a disk that just came or went
         RefreshProxyFolder();   // and so may the proxy folder
     }
@@ -185,9 +197,9 @@ public sealed partial class MainViewModel
         foreach (var v in volumes.Where(v => !v.IsDestination))
             Sources.Add(new SourceItemViewModel(this, v.Path, v.Name,
                 $"{Format.Bytes(v.Total - v.Free)} · {v.Format}{(v.LooksLikeCard ? "" : " · nevypadá jako karta")}",
-                v.LooksLikeCard ? SourceKind.Card : SourceKind.Drive, DefaultCardName(v.Path)));
+                v.LooksLikeCard ? SourceKind.Card : SourceKind.Drive));
         foreach (var p in manualSources)
-            Sources.Add(new SourceItemViewModel(this, p, Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p, p, SourceKind.Folder, DefaultCardName(p)));
+            Sources.Add(new SourceItemViewModel(this, p, Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p, p, SourceKind.Folder));
         Raise(nameof(HasSources));
         SetupChanged?.Invoke();
     }
@@ -203,6 +215,7 @@ public sealed partial class MainViewModel
         selected.Add(path);
         RebuildSources();
         ReadManualLabel(path);
+        Inspect(path);
     }
 
     /// A drive root picked as a folder: its label is the card name the job will use — read it off the UI thread.
@@ -235,10 +248,33 @@ public sealed partial class MainViewModel
 
     internal bool IsSelected(string path) => selected.Contains(path);
 
+    /// The ticked sources in the order of the list (volumes, then manual folders).
+    List<string> SelectedSources() => volumes.Select(v => v.Path).Concat(manualSources).Where(selected.Contains).ToList();
+
+    /// The card folder name a start would use now: the typed name, otherwise the placeholder.
+    internal string PlannedName(string path) =>
+        cardNames.GetValueOrDefault(path) is { } typed && typed.Trim().Length > 0 ? typed.Trim() : Placeholder(path).Name;
+
+    /// Spec 2.3: the suggestion from the clips or the next in line, else the volume label / folder name. Memory only.
+    /// Cards are numbered in list order together with the other ticked cards, so the rows and Start agree.
+    internal (string Name, string? Hint) Placeholder(string path)
+    {
+        var paths = SelectedSources();
+        if (!paths.Contains(path, StringComparer.OrdinalIgnoreCase)) paths.Add(path);
+        var cards = paths.Select(p => new CardNameInput(p, cardNames.GetValueOrDefault(p), Insight(p), DefaultCardName(p))).ToList();
+        return CardNaming.Resolve(Settings.Naming.SuggestFromClips, cards, history, DateString, Layout.Today())[path];
+    }
+
+    void NamingChanged()
+    {
+        foreach (var s in Sources) s.NamingChanged();
+    }
+
     internal void SetSelected(string path, bool on)
     {
         if (on) selected.Add(path);
         else selected.Remove(path);
+        NamingChanged();   // the numbering of "next in line" follows the ticked cards
         SetupChanged?.Invoke();
     }
 
@@ -260,7 +296,32 @@ public sealed partial class MainViewModel
         }
     }
 
-    internal void SetCardName(string path, string name) => cardNames[path] = name;
+    internal void SetCardName(string path, string name)
+    {
+        cardNames[path] = name;
+        NamingChanged();   // a typed name is taken for the other cards' suggestions
+    }
+
+    /// The append checkbox's text, or null when the card has no new files to append (spec 2.2). Memory only.
+    internal string? AppendOffer(string path) =>
+        Insight(path) is { } i && AppendRules.Offer(i) ? AppendRules.CheckboxText(i.History!) : null;
+
+    internal bool AppendChosen(string path) => appendTicks.Chosen(path, Insight(path));
+
+    /// Ticked, or ticked until the offer went away: such a card is never started as a full copy (Start tells the user).
+    bool AppendWanted(string path) => appendTicks.Wants(path);
+
+    /// Removes the ticks whose offer is gone (the card changed, was swapped, the inspection failed). UI thread, memory only.
+    void PruneAppend() => appendTicks.Prune(Insight);
+
+    internal string? AppendFolder(string path) => AppendChosen(path) ? AppendRules.FolderText(Insight(path)!.History!.Entry) : null;
+
+    internal void SetAppend(string path, bool on)
+    {
+        if (on) appendTicks.Tick(path, Insight(path));
+        else appendTicks.Untick(path);
+        SetupChanged?.Invoke();
+    }
 
     // ── Cíle ───────────────────────────────────────────────────────────────
 
@@ -300,13 +361,35 @@ public sealed partial class MainViewModel
     public bool UseCustomDate
     {
         get => useCustomDate;
-        set { if (Set(ref useCustomDate, value)) Raise(nameof(PathPreview)); }
+        set
+        {
+            if (!Set(ref useCustomDate, value)) return;
+            Raise(nameof(PathPreview));
+            NamingChanged();   // "next in line" counts within the date folder
+        }
     }
 
     public DateTime? CustomDate
     {
         get => customDate;
-        set { if (Set(ref customDate, value)) Raise(nameof(PathPreview)); }
+        set
+        {
+            if (!Set(ref customDate, value)) return;
+            Raise(nameof(PathPreview));
+            NamingChanged();
+        }
+    }
+
+    public bool SuggestCardNames
+    {
+        get => Settings.Naming.SuggestFromClips;
+        set
+        {
+            Settings.Naming.SuggestFromClips = value;
+            SettingsChanged();
+            Raise();
+            NamingChanged();
+        }
     }
 
     public string DateString => UseCustomDate && CustomDate is DateTime d
@@ -401,14 +484,16 @@ public sealed partial class MainViewModel
         }
         if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is not string folder)
         {
+            folderTarget = null;
+            folderFree = null;
             SetProxyFolderState(null, null);
             return;
         }
         folderChecking = true;
-        Task.Run(() => Directory.Exists(folder)).ContinueWith(t =>
+        Task.Run(() => ProbeFolder(folder)).ContinueWith(t =>
         {
             folderChecking = false;
-            if (t.IsCompletedSuccessfully) SetProxyFolderState(folder, t.Result);
+            if (t.IsCompletedSuccessfully) ApplyFolderProbe(folder, t.Result);
             else AppLog.Write($"proxy folder check: {t.Exception?.GetBaseException().Message}");
             if (folderRecheck)
             {
@@ -416,6 +501,19 @@ public sealed partial class MainViewModel
                 RefreshProxyFolder();
             }
         }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// The proxy folder with its volume and free space (spec 2.5: the proxies count there too). Off the UI thread.
+    static (bool Exists, string? Volume, long? Free) ProbeFolder(string folder) =>
+        Directory.Exists(folder) ? (true, SpacePlanner.VolumeKey(folder), NativeIO.AvailableBytes(folder)) : (false, null, null);
+
+    /// UI thread: keeps the answer for the space check and the red text - unless the folder was changed meanwhile.
+    void ApplyFolderProbe(string folder, (bool Exists, string? Volume, long? Free) r)
+    {
+        if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is not string now || !string.Equals(now, folder, StringComparison.OrdinalIgnoreCase)) return;
+        folderTarget = r.Exists && r.Volume != null ? new SpaceTarget(folder, r.Volume, folder) : null;
+        folderFree = r.Free;
+        SetProxyFolderState(folder, r.Exists);
     }
 
     /// A new answer about the proxy folder: the red text and the start button follow it.

@@ -55,7 +55,7 @@ public class ScannerTests
         };
         var problems = Scanner.WindowsProblems(scan);
         Assert.Equal(2, problems.Count);
-        Assert.Contains(problems, p => p.StartsWith("CLIP/a001.mov") && p.Contains("upper/lower case"));
+        Assert.Contains(problems, p => p.StartsWith("CLIP/a001.mov") && p.Contains("liší se jen velikostí písmen"));
         Assert.Contains(problems, p => p.StartsWith("CLIP/bad:name.mov"));
     }
 }

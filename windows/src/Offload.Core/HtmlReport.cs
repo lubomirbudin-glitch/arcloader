@@ -60,7 +60,10 @@ public static class HtmlReport
         return o.ToString();
     }
 
-    static string DateTimeText(DateTime d) => d.ToLocalTime().ToString("d. M. yyyy HH:mm:ss", Cs);
+    /// The report's CSS (screen with dark mode, or print) — shared with the verification report.
+    internal static string Styles(bool forPrint) => RootCss + "\n" + (forPrint ? PrintCss : DarkCss) + "\n" + BaseCss;
+
+    internal static string DateTimeText(DateTime d) => d.ToLocalTime().ToString("d. M. yyyy HH:mm:ss", Cs);
     static string TimeText(DateTime d) => d.ToLocalTime().ToString("HH:mm:ss", Inv);
 
     internal static string Duration(double seconds)
@@ -97,9 +100,10 @@ public static class HtmlReport
         var h = new StringBuilder();
         h.Append("<!doctype html>\n<html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
         h.Append($"<title>Offload {Esc(r.CardName)} – {Esc(r.Date)}</title>\n<style>\n");
-        h.Append(RootCss).Append('\n').Append(forPrint ? PrintCss : DarkCss).Append('\n').Append(BaseCss);
+        h.Append(Styles(forPrint));
         h.Append("</style></head><body><main>\n");
-        h.Append($"<header><h1>{Esc(r.CardName)}</h1><span class=\"badge {statusClass}\">{status}</span>\n");
+        var append = r.Generation > 1 ? $" <span class=\"sub\">· doplnění (generace {r.Generation})</span>" : "";
+        h.Append($"<header><h1>{Esc(r.CardName)}{append}</h1><span class=\"badge {statusClass}\">{status}</span>\n");
         h.Append($"<span class=\"sub\">{DateTimeText(r.Started)} – {TimeText(r.Finished)}</span></header>\n");
         h.Append("<div class=\"stats\">\n");
         Stat(h, r.TotalFiles.ToString(Inv), "souborů");

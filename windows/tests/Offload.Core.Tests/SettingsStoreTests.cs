@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Offload.Core.Desktop;
 
 namespace Offload.Core.Tests;
@@ -50,6 +51,84 @@ public class SettingsStoreTests
         Assert.Equal(1080, s.Proxy.Height);
         Assert.True(s.Proxy.BurnTimecode);
         Assert.Equal(@"C:\x\ffmpeg.exe", s.Tools.Ffmpeg);
+    }
+
+    // R24: keys of a newer version survive load + save by this one — top level and inside "proxy".
+    [Fact]
+    public void UnknownKeys_SurviveLoadAndSave()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        File.WriteAllText(path, """
+            {"verify":false,"projects":[{"name":"Film X","destRoots":["D:\\X"]}],"activeProject":"Film X","hash":"both",
+             "proxy":{"enabled":true,"lutRules":[{"match":"camera","value":"FX6","lut":"sony-slog3-sgamut3cine"}],"brawGen4ToGen5":true}}
+            """);
+        var s = SettingsStore.Load(path);
+        s.Verify = true;
+        SettingsStore.Save(s, path);
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+        Assert.True(root.GetProperty("verify").GetBoolean());
+        Assert.Equal("Film X", root.GetProperty("projects")[0].GetProperty("name").GetString());
+        Assert.Equal(@"D:\X", root.GetProperty("projects")[0].GetProperty("destRoots")[0].GetString());
+        Assert.Equal("Film X", root.GetProperty("activeProject").GetString());
+        Assert.Equal("both", root.GetProperty("hash").GetString());
+        var proxy = root.GetProperty("proxy");
+        Assert.True(proxy.GetProperty("enabled").GetBoolean());
+        Assert.Equal("FX6", proxy.GetProperty("lutRules")[0].GetProperty("value").GetString());
+        Assert.True(proxy.GetProperty("brawGen4ToGen5").GetBoolean());
+        // every key once: a known key never also lands among the unknown ones
+        var names = root.EnumerateObject().Select(p => p.Name).ToList();
+        Assert.Equal(names.Count, names.Distinct().Count());
+        Assert.DoesNotContain("Extra", names);
+    }
+
+    // A "proxy" section with a value this version cannot parse is kept raw: the next save does not drop it.
+    [Fact]
+    public void UnparsableProxySection_SurvivesRoundTrip_KnownFieldsStillWork()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        File.WriteAllText(path, """{"verify":false,"proxy":{"codec":"av1","lutRules":[{"match":"x"}]},"tools":{"ffmpeg":"C:\f.exe","future":1}}""");
+        var s = SettingsStore.Load(path);
+        s.Verify = true;
+        SettingsStore.Save(s, path);
+        var again = SettingsStore.Load(path);
+        Assert.True(again.Verify);
+        Assert.Equal("C:\f.exe", again.Tools.Ffmpeg);
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var proxy = doc.RootElement.GetProperty("proxy");
+        Assert.Equal("av1", proxy.GetProperty("codec").GetString());
+        Assert.Equal("x", proxy.GetProperty("lutRules")[0].GetProperty("match").GetString());
+        Assert.Equal(1, doc.RootElement.GetProperty("tools").GetProperty("future").GetInt32());
+        Assert.Equal(1, doc.RootElement.EnumerateObject().Count(p => p.Name == "proxy"));
+    }
+
+    [Fact]
+    public void NamingSettings_UnknownKeys_RoundTrip()
+    {
+        using var dir = new TempDir();
+        var s = LoadJson(dir, """{"naming":{"suggestFromClips":false,"future":7}}""");
+        var path = Path.Combine(dir.Path, "out.json");
+        SettingsStore.Save(s, path);
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var naming = doc.RootElement.GetProperty("naming");
+        Assert.False(naming.GetProperty("suggestFromClips").GetBoolean());
+        Assert.Equal(7, naming.GetProperty("future").GetInt32());
+    }
+
+    [Fact]
+    public void UnknownKeys_KeptByClone_NoneForFreshSettings()
+    {
+        using var dir = new TempDir();
+        var s = LoadJson(dir, """{"proxy":{"lutRules":[]},"updates":{"manifest":null}}""");
+        Assert.True(SettingsStore.Clone(s.Proxy).Extra!.ContainsKey("lutRules"));
+        Assert.True(SettingsStore.Clone(s).Extra!.ContainsKey("updates"));
+        var fresh = Path.Combine(dir.Path, "fresh.json");
+        SettingsStore.Save(new AppSettings(), fresh);
+        Assert.DoesNotContain("Extra", File.ReadAllText(fresh));
+        Assert.DoesNotContain("lutRules", File.ReadAllText(fresh));
     }
 
     // Review focus 2: one bad section never costs the others.

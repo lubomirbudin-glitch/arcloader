@@ -3,6 +3,16 @@ using System.Text.Json.Serialization;
 
 namespace Offload.Core.Desktop;
 
+/// "naming" in settings.json (spec 5.1).
+public sealed class NamingSettings
+{
+    /// Propose the card folder name from the clip names ("A001C003…" → "A001") or the next in line (spec 2.3).
+    [JsonPropertyName("suggestFromClips")] public bool SuggestFromClips { get; set; } = true;
+
+    /// Keys of this section a newer version wrote: kept and written back (R24).
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
 /// The app's settings — the Mac `AppSettings` keys (destRoots, verify, analyzeClips, proxy, tools);
 /// `portNames` is Windows only: the user's names for USB sockets (`UsbConnector.Id` → name).
 public sealed class AppSettings
@@ -12,6 +22,7 @@ public sealed class AppSettings
     [JsonPropertyName("analyzeClips")] public bool AnalyzeClips { get; set; } = true;
     [JsonPropertyName("proxy")] public ProxySettings Proxy { get; set; } = new();
     [JsonPropertyName("tools")] public ExternalTools Tools { get; set; } = new();
+    [JsonPropertyName("naming")] public NamingSettings Naming { get; set; } = new();
     [JsonPropertyName("portNames")]
     public Dictionary<string, string> PortNames
     {
@@ -25,6 +36,14 @@ public sealed class AppSettings
         }
     }
     private Dictionary<string, string> _portNames = new(StringComparer.OrdinalIgnoreCase);
+
+    /// Top-level keys this version does not know (a newer version wrote them): kept as they are and written back,
+    /// so going back to an older version never loses projects or rules (R24).
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+
+    /// "proxy" / "tools" sections that did not parse (a value from a newer version): the original JSON, written back by
+    /// Save unchanged so the next save never drops them. While one is kept, in-app changes to that section do not persist.
+    [JsonIgnore] internal Dictionary<string, JsonElement>? RawSections { get; set; }
 }
 
 public static class SettingsStore
@@ -32,6 +51,9 @@ public static class SettingsStore
     public static readonly int[] ProxyHeights = [540, 720, 1080, 2160];
 
     public static string DefaultPath => Path.Combine(AppData.Folder, "settings.json");
+
+    /// The top-level keys Load reads into properties; every other key goes to AppSettings.Extra.
+    static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal) { "destRoots", "verify", "analyzeClips", "proxy", "tools", "naming", "portNames" };
 
     static readonly JsonSerializerOptions Json = new()
     {
@@ -74,8 +96,20 @@ public static class SettingsStore
                 .Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList());
             Section("verify", e => s.Verify = e.GetBoolean());
             Section("analyzeClips", e => s.AnalyzeClips = e.GetBoolean());
-            Section("proxy", e => s.Proxy = e.Deserialize<ProxySettings>(Json) ?? new ProxySettings());
-            Section("tools", e => s.Tools = e.Deserialize<ExternalTools>(Json) ?? new ExternalTools());
+            void Kept<T>(string key, Func<T, T> set, Func<T> fresh) where T : class
+            {
+                if (!root.TryGetValue(key, out var e) || e.ValueKind == JsonValueKind.Null) return;
+                try { set(e.Deserialize<T>(Json) ?? fresh()); }
+                catch (Exception)
+                {
+                    // Not understood by this version: keep the raw section and write it back as it was.
+                    (s.RawSections ??= [])[key] = e.Clone();
+                    System.Diagnostics.Trace.WriteLine($"settings: section \"{key}\" kept as-is (could not be read)");
+                }
+            }
+            Kept("proxy", (ProxySettings v) => s.Proxy = v, () => new ProxySettings());
+            Kept("tools", (ExternalTools v) => s.Tools = v, () => new ExternalTools());
+            Kept("naming", (NamingSettings v) => s.Naming = v, () => new NamingSettings());
             Section("portNames", e =>
             {
                 var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -83,6 +117,8 @@ public static class SettingsStore
                     if (p.Value.ValueKind == JsonValueKind.String) names[p.Name] = p.Value.GetString()!;
                 s.PortNames = names;
             });
+            foreach (var (key, value) in root)
+                if (!KnownKeys.Contains(key)) (s.Extra ??= [])[key] = value.Clone();   // the document is disposed below
             return Normalize(s);
         }
         catch (Exception)
@@ -100,6 +136,7 @@ public static class SettingsStore
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         s.Proxy ??= new ProxySettings();
         s.Tools ??= new ExternalTools();
+        s.Naming ??= new NamingSettings();
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (id, name) in s.PortNames ?? [])
             if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name)) names[id] = name.Trim();
@@ -126,7 +163,13 @@ public static class SettingsStore
     {
         NativeIO.Mkdirs(Path.GetDirectoryName(path)!);
         var tmp = path + ".tmp";
-        NativeIO.WriteFileDurably(tmp, JsonSerializer.SerializeToUtf8Bytes(settings, Json));
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(settings, Json);
+        if (settings.RawSections is { Count: > 0 } raw && System.Text.Json.Nodes.JsonNode.Parse(bytes) is System.Text.Json.Nodes.JsonObject obj)
+        {
+            foreach (var (key, value) in raw) obj[key] = System.Text.Json.Nodes.JsonNode.Parse(value.GetRawText());
+            bytes = JsonSerializer.SerializeToUtf8Bytes(obj, Json);
+        }
+        NativeIO.WriteFileDurably(tmp, bytes);
         NativeIO.Move(tmp, path, replace: true);
     }
 

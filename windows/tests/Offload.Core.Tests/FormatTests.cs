@@ -21,5 +21,14 @@ public class FormatTests
     }
 
     [Fact]
-    public void Version_IsWindowsBuild() => Assert.Equal("0.1.0-win", OffloadVersion.String);
+    public void Version_IsWindowsBuild() => Assert.Equal("0.2.0-win", OffloadVersion.String);
+
+    // Spec 2.1/2.5: sizes inside Czech sentences.
+    [Theory]
+    [InlineData(12L, "12 B")]
+    [InlineData(3_200_000_000L, "3,2 GB")]
+    [InlineData(2_000_000_000L, "2 GB")]
+    [InlineData(412_400_000_000L, "412 GB")]
+    [InlineData(850_000_000L, "850 MB")]
+    public void BytesCs_CzechDecimalComma(long bytes, string expected) => Assert.Equal(expected, Format.BytesCs(bytes));
 }
