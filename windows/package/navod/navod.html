@@ -770,7 +770,8 @@ brát jako vzorec.</p>
 <p>Se zapnutou volbou <b class="ui">Seznam klipů pro Avid (ALE)</b> vznikne i <code>&lt;karta&gt;_clips.ale</code>
 (<i>File → Input → Import</i> v Media Composeru). ALE má jednu snímkovou frekvenci, takže karta se smíšenými fps dostane
 soubor na každou: <code>A001_clips_25.ale</code>, <code>A001_clips_23.976.ale</code>. Bez analýzy klipů mají řádky jen
-název, cestu, cívku, velikost a součty.</p>
+název, cestu, cívku, velikost a součty. ALE je UTF-8 <b>bez</b> BOM; starší verze Avidu mohou češtinu (diakritiku)
+přečíst špatně.</p>
 <p>Po doplnění seznamy pokrývají všechny generace karty. Jsou to odvozené soubory: přepisují se celé; seznam otevřený
 v Excelu se nepřepíše (zapíše se jen do logu) a úloha tím neselže.</p>
 

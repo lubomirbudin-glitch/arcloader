@@ -28,6 +28,14 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   menu); **kontrolu místa** (odhad a plán po svazcích, tabulka toků, přepočet před proxy); **české hlášky** (`Msg`
   a kódy kontrol v `Engine.swift` a `main.swift`).
 
+- **Výstupy pro produkci a střih (Windows plán 7, 2026-10-07):** návrh
+  [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
+  §3 a §8. Mac převezme: **denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf` a seznam klipů dne, tvorba po
+  úloze v `Job.swift`, stejné sloupce a texty — FORMATY.md „Denní report“); **seznamy klipů** CSV/ALE stejných sloupců
+  (FORMATY.md „Seznam klipů“); **proxy pro přelinkování** (`Proxy.swift`: `reel_name` ve stopě TC, všechny zvukové
+  stopy, cívka tag → název → složka, klíč `clips[].info.reel`); **MD5** (`Hash.swift` + CommonCrypto MD5, volba
+  xxh64/both, `hashAlgorithms`, `files[].md5`, `<karta>.md5`, MHL `<md5>`, `verify` z MHL)); **jména karet** `_REPORT`, `_PROXY`, `ascmhl` s `_` na konci a prázdná `<karta>\_REPORT` hned při začátku kopie (D1); seznam ALE bez BOM a volba doplnění: `<karta>.md5` je třetí soubor, který doplnění přepíše (jako `.xxh64`).
+
 - **Mimo plán — zbývá i po něm:**
   - Blackmagic RAW Film Gen 4: zatím bez LUTu (provizorně, jako Windows) — rozhodne uživatel; platí pro obě verze.
   - Nastavení nástrojů: řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny Blackmagic RAW (stav BRAW je vidět z poznámky

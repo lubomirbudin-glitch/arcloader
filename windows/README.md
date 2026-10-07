@@ -18,6 +18,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | GUI `Offload.exe` | hotovo (čeká ruční test s kartou) |
 | Vestavěné LUTy (plán 5) | hotovo (čeká ruční test s klipy z kamer) |
 | Karty a bezpečnost dat (plán 6, 0.2.0): historie, doplnění, název z klipů, ověření zálohy, místo, české hlášky | hotovo (čeká ruční test s kartou) |
+| Výstupy pro produkci a střih (plán 7, 0.3.0): denní report, seznam klipů CSV/ALE, proxy pro přelinkování, MD5 | hotovo (čeká ruční test v Resolve, Premiere, Avid, Excelu) |
 
 ## Build a testy
 
@@ -184,6 +185,36 @@ Plán 6 (karty a bezpečnost dat, 0.2.0):
       disk připojený?“; neznámá volba (`offload E:\ -d D:\ --xyz`) → chyba parseru česky (satelit `cs` v `bin\cs\`);
       v GUI chyba před kopií na kartě úlohy česky
 
+Plán 7 (výstupy pro produkci a střih, 0.3.0):
+
+- [ ] 21. **MD5:** Struktura a kontrola → Kontrolní součet „xxHash64 + MD5“ → pod volbou oranžové „MD5 je pomalejší …“,
+      zaškrtávátko „Ověřit kopie zpětným čtením (xxHash64 + MD5)“; offload karty → `_REPORT\<karta>.md5`, v HTML dlaždice
+      „XXH64 + MD5“ a sloupec md5; Nástroje → Ověřit zálohu… → „… (ASC MHL, 1 generace, xxHash64 + MD5).“; **rychlá karta
+      (CFexpress)**: změřit dobu kopie s xxHash64 a s MD5 (a `offload bench --hash md5`) a zapsat do „Naměřeno“
+- [ ] 22. **Proxy v Resolve:** naimportovat originály, proxy z `_PROXY` připojit (Link Proxy Media) — sedí jméno, TC; sloupec
+      Reel ukazuje cívku (u ARRI/RED/Blackmagic `A001`, jinak tag kamery nebo složku karty)
+- [ ] 23. **Proxy v Premiere:** Sony MXF se 4–8 mono stopami → proxy se stejným počtem stop; „Attach Proxies“ projde;
+      Tape Name = cívka. Dva klipy stejného jména → `_2` a u klipu poznámka „Proxy přejmenována na … — přelinkujte ji ručně.“
+- [ ] 24. **CSV:** `_REPORT\<karta>_clips.csv` v Resolve (Import Metadata → Media Pool) doplní metadata; v Excelu přes
+      Data → Z textu/CSV (oddělovač čárka) čeština a sloupce sedí
+- [ ] 25. **ALE:** volba „Seznam klipů pro Avid (ALE)“ → `<karta>_clips.ale` jde importovat do Avid Media Composeru (Start,
+      End, Tape, Tracks); karta se smíšenými fps (25 a 23.976) → dva soubory `_clips_25.ale`, `_clips_23.976.ale`
+- [ ] 26. **Denní report:** dvě karty týž den na dva cíle → na obou `<datum>\_REPORT\<datum>_day_report.html/.pdf` s oběma
+      kartami, dlaždice „ověřené karty 2 / 2“; během kopie třetí karty ji denní report ukáže „bez reportu (probíhá …)“;
+      Nástroje → Denní report… na složku dne (i na složku karty) report vytvoří a otevře; na kořen cíle → česká chyba
+      „… není žádná karta s reportem …“, nic se nezapíše; GUI a `offload day-report` téhož dne zároveň → oba projdou
+- [ ] 27. **Otevřené v Excelu:** denní CSV a `<karta>_clips.csv` otevřít v Excelu, pak doplnit kartu → úloha „Hotovo“,
+      v `app.log` řádky „clip list …“ / „day report …“; po zavření Excelu Nástroje → Denní report… soubory obnoví;
+      volba „Denní report po každé kartě“ vypnutá → po úloze se denní report nezmění
+- [ ] 28. **Doplnění s MD5:** záloha s „xxHash64 + MD5“, pak doplnit kartu → `<karta>.md5` je delší o nové řádky (dřívější
+      řádky beze změny; je to třetí soubor, který doplnění přepíše, vedle `.xxh64` a řetězu ascmhl), Ověřit zálohu projde
+      s „xxHash64 + MD5“; ostatní dřívější soubory zálohy beze změny
+- [ ] 29. **Karta v průběhu:** během kopie je ve složce dne `<karta>\_REPORT` (zatím prázdná) a denní report karta ukáže jako
+      „bez reportu (probíhá, nebo byl přerušen)“; přerušená kopie zůstane tak označená; karta pojmenovaná `_REPORT`,
+      `_PROXY` nebo `ascmhl` dostane na konec `_`
+- [ ] 30. **ALE v Avidu:** diakritika v názvech klipů se v Avidu zobrazí správně (ALE je UTF-8 bez BOM; starší Avid ji
+      může číst špatně — poznamenat verzi)
+
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
 ## Použití
@@ -202,7 +233,16 @@ offload E:\ -d D:\Zaloha -d F:\Zaloha --name auto            # název složky z 
 offload append E:\                                          # doplnit jen nové klipy do dřívější zálohy (cíle z historie)
 offload append E:\ --into D:\Zaloha\2026-10-06\A001 --into F:\Zaloha\2026-10-06\A001
 offload verify D:\Zaloha\2026-10-06 --report                # ověřit všechny karty dne proti ASC MHL + report ověření
+offload E:\ -d D:\Zaloha -d F:\Zaloha --hash both --ale     # xxHash64 + MD5, seznam klipů i pro Avid
+offload day-report D:\Zaloha\2026-10-06                     # denní report znovu (HTML, PDF, seznam klipů dne)
+offload bench --hash md5                                    # rychlost MD5 proti xxh64 (CPU)
 ```
+
+Výstupy (plán 7): po každé kopii nebo doplnění vznikne `_REPORT\<karta>_clips.csv` (`--no-clip-list` vypne, `--ale`
+přidá `<karta>_clips.ale` pro Avid) a na každém cíli znovu denní report `<datum>\_REPORT\<datum>_day_report.html/.pdf`
+se seznamem klipů dne (`--no-day-report` vypne); CLI vypíše „Denní report: …“. `--hash both` počítá navíc MD5
+(`<karta>.md5`, MD5 v reportu a ASC MHL); `append` volbu nemá — doplnění počítá součty dřívější zálohy. `day-report
+<složka>` vytvoří denní report znovu (složka dne, nebo karty v ní), kód 0/1.
 
 Historie (`%APPDATA%\Offload\history.json`): `copy` před plánem vypíše „Zálohováno … — ověřeno“, když kartu zná (bez
 dotazu), a po dokončené kopii ji zapíše; `--no-history` čtení i zápis vypne. `append` bez `--into` najde složky zálohy

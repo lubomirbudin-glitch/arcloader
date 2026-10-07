@@ -4,7 +4,7 @@ namespace Offload.Core;
 
 public static class OffloadVersion
 {
-    public const string String = "0.2.0-win";
+    public const string String = "0.3.0-win";
 }
 
 public static class Format
