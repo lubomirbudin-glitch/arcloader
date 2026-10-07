@@ -83,9 +83,11 @@ public sealed partial class JobItemViewModel
 
     void InitCard()
     {
-        PauseCommand = new RelayCommand(() => { Job.Pause(); Refresh(); }, () => CanPause);
-        ResumeCommand = new RelayCommand(() => { Job.Resume(); Refresh(); }, () => IsPaused);
-        RepairCommand = new RelayCommand(() => owner.Repair(this), () => CanRepair);
+        PauseCommand = new RelayCommand(() => { if (owner.AllowedFor(DemoCommand.Pause, Job.IsPreview)) { Job.Pause(); Refresh(); } },
+            () => CanPause && owner.AllowedFor(DemoCommand.Pause, Job.IsPreview));
+        ResumeCommand = new RelayCommand(() => { if (owner.AllowedFor(DemoCommand.Resume, Job.IsPreview)) { Job.Resume(); Refresh(); } },
+            () => IsPaused && owner.AllowedFor(DemoCommand.Resume, Job.IsPreview));
+        RepairCommand = new RelayCommand(() => owner.Repair(this), () => CanRepair && owner.Allowed(DemoCommand.Repair));
         OpenProxyCommand = new RelayCommand(OpenProxies);
     }
 

@@ -155,6 +155,14 @@ public sealed class OffloadJob
         Engine = new OffloadEngine(options);
     }
 
+    // A preview job (DemoScenario): its status comes from here; it never runs.
+    Func<JobStatus>? preview;
+
+    /// `Offload.exe --demo` only (DemoScenario): a job that never runs — Status() returns `status()`, Plan and Report are
+    /// the given ones. RunCopy and RunPost do nothing.
+    public static OffloadJob ForPreview(JobConfig config, OffloadPlan? plan, Func<JobStatus> status, OffloadReport? report = null) =>
+        new(config) { preview = status, Plan = plan, Report = report };
+
     /// The project of the earlier backup: the first destination whose report can be read decides; `fallback` only when
     /// none can (M4).
     public static string? EarlierProject(IReadOnlyList<string> cardPaths, string? fallback)
@@ -193,6 +201,8 @@ public sealed class OffloadJob
     public void Cancel() => Engine.Cancel();
 
     public bool IsCancelled => Engine.IsCancelled;
+    /// A DemoScenario preview: it never runs (`Offload.exe --demo`).
+    public bool IsPreview => preview != null;
 
     /// "Pozastavit" (UI návrh 9): stage 1 stops before its next block of the card or of the read-back, stage 2 before
     /// its next clip and before the PDF and the day report — never in the middle of a block, a clip, a report or a lock
@@ -206,6 +216,14 @@ public sealed class OffloadJob
 
     public JobStatus Status()
     {
+        if (preview != null)
+        {
+            var p = preview();
+            if (IsCancelled && !p.Phase.IsFinished()) return p with { Phase = JobPhase.Cancelled };   // closing the demo cancels it
+            // Pozastavit in the demo: nothing runs, so the pause holds at once.
+            bool live = p.Phase != JobPhase.Waiting && !p.Phase.IsFinished();
+            return live && Engine.Pauses.IsPaused ? p with { Paused = true, PauseHeld = true, PausedTotal = Engine.Pauses.PausedTotal } : p;
+        }
         JobStatus s;
         bool wasStarted;
         lock (gate) { s = state; wasStarted = started; }
@@ -257,6 +275,7 @@ public sealed class OffloadJob
     /// After this the card is no longer needed, so the app can start the next card while stage 2 runs.
     public bool RunCopy(Action<string>? log = null)
     {
+        if (preview != null) return false;
         IdentifyCard(log);
         // Ruling I1: a repair copies only from the card the backup was made from (asked again like after a pause — a
         // reader may answer late once); the answer is checked below, where a refusal fails the job.
@@ -623,6 +642,7 @@ public sealed class OffloadJob
     /// A failure here never changes the copy's result (SafeToEject stays as stage 1 left it).
     public void RunPost(Action<string>? log = null)
     {
+        if (preview != null) return;
         if (dayReportOnly)
         {
             try

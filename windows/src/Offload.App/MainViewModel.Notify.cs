@@ -18,10 +18,11 @@ public sealed partial class MainViewModel
 
     public RelayCommand NotifySettingsCommand { get; private set; } = null!;
 
-    void InitNotify() => NotifySettingsCommand = new RelayCommand(EditNotify, () => !closing);
+    void InitNotify() => NotifySettingsCommand = new RelayCommand(EditNotify, () => !closing && Allowed(DemoCommand.Notify));
 
     void EditNotify()
     {
+        if (!Allowed(DemoCommand.Notify)) return;
         if (EditNotifyDialog?.Invoke(SettingsStore.Clone(Settings.Notify)) is not { } edited) return;
         Settings.Notify = edited;
         SettingsChanged();
@@ -31,14 +32,14 @@ public sealed partial class MainViewModel
     /// End of stage 1, stage 2 still running and the card safe to eject: "kartu lze vysunout" (Windows only).
     void NotifyCopyDone(JobItemViewModel item)
     {
-        if (closing || !item.Job.Config.Notify.Windows) return;
+        if (closing || !Allowed(DemoCommand.Notify) || !item.Job.Config.Notify.Windows) return;
         if (JobOutcomes.CopyDone(item.CardName, item.Job.Status(), item.Job.Config.Proxy.Enabled) is { } outcome) Windows(outcome);
     }
 
     /// The job has ended: Windows (when not in front) and the phone (fire and forget — the job never waits for it).
     void NotifyJobEnd(JobItemViewModel item)
     {
-        if (closing) return;
+        if (closing || !Allowed(DemoCommand.Notify)) return;
         var config = item.Job.Config;
         if (JobOutcomes.Final(item.CardName, item.Job.Status(), item.Job.Report) is not { } outcome) return;
         if (config.Notify.Windows) Windows(outcome);

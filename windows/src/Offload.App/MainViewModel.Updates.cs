@@ -1,5 +1,6 @@
 using System.Windows.Threading;
 using Offload.Core;
+using Offload.Core.Desktop;
 using Offload.Core.Updates;
 
 namespace Offload.App;
@@ -19,13 +20,13 @@ public sealed partial class MainViewModel
 
     void InitUpdates()
     {
-        UpdatesCommand = new RelayCommand(() => ShowUpdatesDialog?.Invoke(this), () => !closing);
+        UpdatesCommand = new RelayCommand(() => ShowUpdatesDialog?.Invoke(this), () => !closing && Allowed(DemoCommand.UpdateCheck));
         updateTimer.Tick += (_, _) =>
         {
             updateTimer.Stop();
             _ = CheckUpdatesAsync(force: false);
         };
-        updateTimer.Start();
+        if (Allowed(DemoCommand.UpdateCheck)) updateTimer.Start();
     }
 
     /// "Nová verze 0.5.0" — null while there is none.
@@ -52,7 +53,7 @@ public sealed partial class MainViewModel
     /// Reads the manifest off the UI thread (the file read and HTTP have their own limits). The Czech result line, or null.
     internal async Task<string?> CheckUpdatesAsync(bool force)
     {
-        if (checkingUpdates || closing) return null;
+        if (checkingUpdates || closing || !Allowed(DemoCommand.UpdateCheck)) return null;
         checkingUpdates = true;
         try
         {

@@ -43,8 +43,9 @@ public sealed partial class JobItemViewModel : QueueItem
         Job = job;
         CanEject = canEject;
         Runner = new JobQueue.Runner(job, m => AppLog.Write($"{sourceName}: {m}"));
-        CancelCommand = new RelayCommand(() => { Job.Cancel(); Refresh(); });
-        EjectCommand = new RelayCommand(() => owner.Eject(this), () => !Ejecting);
+        CancelCommand = new RelayCommand(() => { if (owner.AllowedFor(DemoCommand.Cancel, Job.IsPreview)) { Job.Cancel(); Refresh(); } },
+            () => owner.AllowedFor(DemoCommand.Cancel, Job.IsPreview));
+        EjectCommand = new RelayCommand(() => owner.Eject(this), () => !Ejecting && owner.Allowed(DemoCommand.Eject));
         OpenReportCommand = new RelayCommand(OpenReport);
         RevealCommand = new RelayCommand(Reveal);
         InitCard();

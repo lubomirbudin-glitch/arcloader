@@ -18,10 +18,11 @@ public sealed partial class MainViewModel
         set => Set(ref saveVerifyReport, value);
     }
 
-    void InitVerify() => VerifyBackupCommand = new RelayCommand(PickAndVerify, () => !closing);
+    void InitVerify() => VerifyBackupCommand = new RelayCommand(PickAndVerify, () => !closing && Allowed(DemoCommand.VerifyBackup));
 
     async void PickAndVerify()
     {
+        if (!Allowed(DemoCommand.VerifyBackup)) return;
         if (Dialogs.PickFolder("Vyberte složku karty na cíli (nebo celý den)") is not string folder) return;
         try
         {

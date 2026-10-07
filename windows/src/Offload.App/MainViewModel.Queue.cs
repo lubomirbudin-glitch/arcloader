@@ -41,7 +41,7 @@ public sealed partial class MainViewModel
 
     void InitQueue()
     {
-        StartCommand = new RelayCommand(Start, () => CanStart);
+        StartCommand = new RelayCommand(Start, () => CanStart && Allowed(DemoCommand.Start));
         ClearFinishedCommand = new RelayCommand(ClearFinished);
         queue.CopyFinished += j => Dispatch(() => OnCopyFinished(j));
         queue.JobFinished += j => Dispatch(() => OnJobFinished(j));
@@ -167,7 +167,7 @@ public sealed partial class MainViewModel
     /// thread never waits on a card or a disk (spec 2.5, ruling I4).
     async void Start()
     {
-        if (!CanStart) return;
+        if (!CanStart || !Allowed(DemoCommand.Start)) return;
         starting = true;
         ProjectMenuOpen = false;
         RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
@@ -410,7 +410,7 @@ public sealed partial class MainViewModel
     /// job's own settings; it waits in the copy queue like any card (it reads the card).
     internal void Repair(JobItemViewModel item)
     {
-        if (closing || item.Job.Plan is not { } plan || !item.CanRepair) return;
+        if (closing || !Allowed(DemoCommand.Repair) || item.Job.Plan is not { } plan || !item.CanRepair) return;
         // The finished job's own settings and the identity of the card it copied (ruling I1): another card is refused.
         var repair = new JobItemViewModel(this, new OffloadJob(JobConfigs.Repair(item.Job)), plan.CardName, item.CanEject);
         Jobs.Insert(0, repair);
@@ -534,7 +534,7 @@ public sealed partial class MainViewModel
     /// with the one recorded when the copy started; never while another job still needs the card.
     internal async void Eject(JobItemViewModel item)
     {
-        if (item.Ejecting || item.Ejected) return;   // a double click must not start a second eject
+        if (!Allowed(DemoCommand.Eject) || item.Ejecting || item.Ejected) return;   // a double click must not start a second eject
         var source = item.Job.Config.Source;
         var copied = item.Runner.SourceIdentity;
         bool inUse = QueueRules.CardInUse(source, Jobs.OfType<JobItemViewModel>().Where(j => !ReferenceEquals(j, item)).Select(j => (j.Job.Config.Source, j.Phase)));

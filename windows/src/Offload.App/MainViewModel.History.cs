@@ -23,6 +23,7 @@ public sealed partial class MainViewModel
     /// Reads history.json off the UI thread, then looks at every card again; a request during a read runs once more.
     void ReloadHistory()
     {
+        if (IsDemo) return;   // the scenario's history
         if (historyLoading)
         {
             historyReload = true;
@@ -64,7 +65,7 @@ public sealed partial class MainViewModel
 
     void Inspect(string path)
     {
-        if (history is not { } entries || closing) return;   // InspectAll runs once history is loaded
+        if (IsDemo || history is not { } entries || closing) return;   // InspectAll runs once history is loaded
         if (inspections.Start(path, IdentityOf(path)) is not CancellationToken ct) return;
         var store = historyStore;
         Task.Run(() => CardInspector.Inspect(path, entries, store, ct), ct).ContinueWith(t =>

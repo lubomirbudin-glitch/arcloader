@@ -123,6 +123,7 @@ public sealed partial class MainViewModel
     /// Rescans volumes on a background thread; a request during a scan runs once more afterwards.
     public void RefreshVolumes()
     {
+        if (IsDemo) return;   // the demo's cards stay as the scenario put them
         if (scanning)
         {
             rescan = true;
@@ -227,6 +228,7 @@ public sealed partial class MainViewModel
     /// the UI thread (DriveLinks asks the device; it never throws).
     void ResolveSourceLinks()
     {
+        if (IsDemo) return;
         foreach (var s in Sources)
         {
             var path = s.Path;
@@ -352,6 +354,7 @@ public sealed partial class MainViewModel
 
     internal void SetAppend(string path, bool on)
     {
+        if (!Allowed(DemoCommand.Append)) { SetupChanged?.Invoke(); return; }   // the toggle snaps back
         if (on) appendTicks.Tick(path, Insight(path));
         else appendTicks.Untick(path);
         SetupChanged?.Invoke();

@@ -12,8 +12,10 @@ public sealed partial class MainViewModel : ObservableObject
     public MainViewModel(StartupOptions options, string? settingsPath = null)
     {
         Options = options;
+        demo = options.Demo;   // before the scans start: the demo replaces them (MainViewModel.Demo.cs)
         this.settingsPath = settingsPath ?? SettingsStore.DefaultPath;
         AllSettings = SettingsStore.Load(this.settingsPath);
+        SeedDemo();
         saveTimer.Tick += (_, _) =>
         {
             saveTimer.Stop();
@@ -29,6 +31,7 @@ public sealed partial class MainViewModel : ObservableObject
         InitNotify();
         InitUpdates();
         InitSettingsPage();
+        InitDemo();
     }
 
     public StartupOptions Options { get; }
@@ -43,6 +46,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// Settings changed: written 400 ms after the last change, and on exit.
     public void SettingsChanged()
     {
+        if (!Allowed(DemoCommand.SettingsSave)) { RaiseMany(nameof(AfterCopyRows), nameof(AfterCopyLine), nameof(EstimateText), nameof(FlowSteps), nameof(QueueEmptyText)); return; }
         saveTimer.Stop();
         saveTimer.Start();
         RaiseMany(nameof(AfterCopyRows), nameof(AfterCopyLine), nameof(EstimateText), nameof(FlowSteps), nameof(QueueEmptyText));   // they show the profile
@@ -51,6 +55,7 @@ public sealed partial class MainViewModel : ObservableObject
     public void SaveNow()
     {
         saveTimer.Stop();
+        if (!Allowed(DemoCommand.SettingsSave)) return;
         try
         {
             SettingsStore.Save(AllSettings, settingsPath);
