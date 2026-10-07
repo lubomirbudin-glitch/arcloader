@@ -7,6 +7,7 @@ internal sealed class DestWriter : IDisposable
 {
     readonly SerialWorker worker;
     readonly OffloadOptions options;
+    readonly int index;
     SafeFileHandle? handle;
     string partPath = "";
     string? currentError;
@@ -24,6 +25,7 @@ internal sealed class DestWriter : IDisposable
     public DestWriter(int index, string cardPath, int fileCount, OffloadOptions options)
     {
         CardPath = cardPath;
+        this.index = index;
         this.options = options;
         Unbuffered = !options.ForceBuffered;
         Results = new DestFileResult[fileCount];
@@ -81,6 +83,7 @@ internal sealed class DestWriter : IDisposable
         try
         {
             if (handle == null) return;
+            options.BeforeDestWrite?.Invoke(index);
             // Unbuffered writes must be whole sectors: the last block is written padded, Finish trims the file.
             int len = Unbuffered ? (c.Length + align - 1) / align * align : c.Length;
             try
@@ -170,19 +173,22 @@ internal sealed class DestWriter : IDisposable
     public void Wait() => worker.Wait();
 
     /// Re-reads every written file from the disk — once, through every hash in `kinds` — and compares it with the
-    /// source hashes. The error texts stay English: they go into the report JSON shared with the Mac.
-    public void Verify(IReadOnlyList<SourceFile> files, IReadOnlyList<FileHashes> sourceHashes, HashKind kinds, CancellationToken ct)
+    /// source hashes. The error texts stay English: they go into the report JSON shared with the Mac. `pause`: the
+    /// read-back waits there before every file and every block (Pozastavit).
+    public void Verify(IReadOnlyList<SourceFile> files, IReadOnlyList<FileHashes> sourceHashes, HashKind kinds, CancellationToken ct,
+        PauseGate? pause = null)
     {
         using var buf = new AlignedBuffer(options.ChunkSize);
         bool md5 = HashKinds.Normalize(kinds).HasFlag(HashKind.Md5);
         for (int i = 0; i < files.Count; i++)
         {
             if (Results[i].State != FileState.Written) continue;
-            if (ct.IsCancellationRequested) return;
+            if (ct.IsCancellationRequested || (pause != null && !pause.WaitWhilePaused(ct))) return;
             var f = files[i];
             try
             {
-                var (got, size) = Hashing.HashFile(Layout.Join(CardPath, f.RelPath), buf, kinds, n => Interlocked.Add(ref verified, n), ct);
+                var (got, size) = Hashing.HashFile(Layout.Join(CardPath, f.RelPath), buf, kinds, n => Interlocked.Add(ref verified, n), ct,
+                    pause == null ? null : () => pause.WaitWhilePaused(ct));
                 var want = sourceHashes[i];
                 if (size != f.Size)
                     Results[i] = new DestFileResult(FileState.Failed, $"size mismatch: {size} != {f.Size}");

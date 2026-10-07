@@ -22,6 +22,9 @@ public sealed class OffloadOptions
     internal Action<int>? BeforeFileCopy { get; set; }
     /// Tests only: called on the copy thread after every file is copied and flushed, just before verification.
     internal Action? BeforeVerify { get; set; }
+    /// Tests only: called on destination `index`'s thread before every block it writes; an exception it throws is a write
+    /// error there (a disk pulled out).
+    internal Action<int>? BeforeDestWrite { get; set; }
     /// Tests only: creates the source hash of an algorithm ("xxh64", "md5") instead of HashAlgo.Create.
     internal Func<string, Verification.IFileHash>? HashFactory { get; set; }
     /// Tests only: the free bytes of the volume of a path, instead of NativeIO.AvailableBytes.
@@ -77,9 +80,11 @@ public sealed class OffloadPlan
 
 public enum CopyPhase { Copy, Flush, Verify, Report, Done }
 
+/// `Paused`: Pozastavit was pressed (PauseGate); `PauseHeld`: the copy or the read-back really waits now.
 public sealed record ProgressSnapshot(
     CopyPhase Phase, long TotalBytes, int TotalFiles, int FileIndex, string CurrentFile,
-    long ReadBytes, long[] WrittenBytes, long[] VerifiedBytes, int Errors);
+    long ReadBytes, long[] WrittenBytes, long[] VerifiedBytes, int Errors,
+    bool Paused = false, bool PauseHeld = false);
 
 public sealed class OffloadError : Exception
 {

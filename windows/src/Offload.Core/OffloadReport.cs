@@ -60,12 +60,17 @@ public sealed partial class OffloadReport
     [JsonPropertyName("generation")] public int? Generation { get; set; }
     /// The project the card was copied in (spec 4.1); absent for "Bez projektu" and in older reports. The Mac ignores it.
     [JsonPropertyName("project")] public string? Project { get; set; }
+    /// Seconds the copy / the read-back stood paused (Pozastavit, Windows from 0.5.0); absent when never paused. The speeds
+    /// leave the pause out; the Mac ignores the keys (its speeds then include it).
+    [JsonPropertyName("copyPausedSeconds")] public double? CopyPausedSeconds { get; set; }
+    [JsonPropertyName("verifyPausedSeconds")] public double? VerifyPausedSeconds { get; set; }
 
     /// The hashes of this copy: `hashAlgorithms`, else the one `hashAlgorithm` (reports without the key, the Mac).
     [JsonIgnore] public IReadOnlyList<string> Algorithms => HashAlgorithms is { Count: > 0 } all ? all : [HashAlgorithm];
 
-    [JsonIgnore] public double CopySeconds => (CopyFinished - Started).TotalSeconds;
-    [JsonIgnore] public double VerifySeconds => (Finished - CopyFinished).TotalSeconds;
+    [JsonIgnore] public double CopySeconds => Math.Max(0, (CopyFinished - Started).TotalSeconds - (CopyPausedSeconds ?? 0));
+    [JsonIgnore] public double VerifySeconds => Math.Max(0, (Finished - CopyFinished).TotalSeconds - (VerifyPausedSeconds ?? 0));
+    [JsonIgnore] public double PausedSeconds => (CopyPausedSeconds ?? 0) + (VerifyPausedSeconds ?? 0);
 
     [JsonIgnore]
     public IReadOnlyList<ReportFile> FailedFiles => Files.Where(IsFailed).ToList();
@@ -81,8 +86,9 @@ public sealed partial class OffloadReport
 
     public static OffloadReport Build(OffloadPlan plan, IReadOnlyList<FileHashes> hashes, IReadOnlyList<string?> sourceErrors,
         IReadOnlyList<DestFileResult[]> destResults, IReadOnlyList<bool> unbuffered, bool verified,
-        DateTime started, DateTime copyFinished, DateTime finished)
+        DateTime started, DateTime copyFinished, DateTime finished, TimeSpan copyPaused = default, TimeSpan verifyPaused = default)
     {
+        static double? Seconds(TimeSpan t) => t > TimeSpan.Zero ? Math.Round(t.TotalSeconds, 1) : null;
         bool IsOk(FileState s) => s == FileState.Verified || (!verified && s == FileState.Written);
         var files = plan.Scan.Files.Select((f, i) => new ReportFile
         {
@@ -122,6 +128,8 @@ public sealed partial class OffloadReport
             Skipped = plan.Scan.Skipped,
             Generation = plan.Generation > 1 ? plan.Generation : null,
             Project = plan.Project,
+            CopyPausedSeconds = Seconds(copyPaused),
+            VerifyPausedSeconds = Seconds(verifyPaused),
             HashAlgorithms = HashKinds.Normalize(plan.Hashes).HasFlag(HashKind.Md5) ? HashKinds.Names(plan.Hashes) : null,
         };
     }
@@ -159,6 +167,7 @@ public sealed partial class OffloadReport
             s.Append($"Files:       {TotalFiles}  ({Format.Bytes(TotalBytes)})\n");
             s.Append($"Copy:        {CopySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, CopySeconds)}\n");
             s.Append("Verify:      " + (Verified ? $"{VerifySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, VerifySeconds)}" : "NOT VERIFIED") + "\n");
+            if (PausedSeconds > 0) s.Append($"Paused:      {PausedSeconds.ToString("0.0", inv)} s (not in the speeds)\n");
             s.Append($"Hash:        {string.Join("+", Algorithms)}\n");
             foreach (var d in Destinations)
                 s.Append($"Destination: {d.CardPath} [{d.Filesystem}]  ok {d.FilesOK}  failed {d.FilesFailed}{(d.Unbuffered == false ? "  (buffered I/O)" : "")}\n");

@@ -209,6 +209,9 @@ public sealed class OffloadJob
     public bool RunCopy(Action<string>? log = null)
     {
         IdentifyCard(log);
+        // Ruling I1: after a pause the copy asks again which card is in the drive; a folder source (no identity) is not asked.
+        if (sourceIdentity is string copied)
+            Engine.SameCard = () => string.Equals(Identify(Config.Source), copied, StringComparison.OrdinalIgnoreCase);
         lock (gate)
         {
             started = true;
@@ -248,6 +251,16 @@ public sealed class OffloadJob
                 return cancelled;
             }
             RecordHistory(plan, report, log);
+            if (Engine.CardChanged)
+            {
+                // Ruling I1: another card (or none) after Pokračovat — the files copied before the pause are in the
+                // report and in history; the rest was never read. The job fails; no stage 2 (lists and PDF as without it).
+                WriteClipLists(plan, log);
+                WritePdfReports(report, plan, log);
+                var next = DayReportNext();
+                Update(s => s with { Phase = JobPhase.Failed, Error = Msg.CardChangedWhilePaused });
+                return next;
+            }
             if (!Config.AnalyzeClips && !Config.Proxy.Enabled)
             {
                 WriteClipLists(plan, log);   // the clips found in the files, without metadata (spec 3.3)

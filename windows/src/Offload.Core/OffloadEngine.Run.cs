@@ -6,6 +6,8 @@ public sealed partial class OffloadEngine
     {
         var files = plan.Scan.Files;
         var started = DateTime.UtcNow;
+        var pausedBefore = Pauses.PausedTotal;
+        long holdsChecked = Pauses.Holds;
         var cardPaths = plan.CardPaths;
         foreach (var path in cardPaths)
         {
@@ -40,7 +42,28 @@ public sealed partial class OffloadEngine
                     sourceErrors[i] = "cancelled";
                     continue;
                 }
-                Options.BeforeFileCopy?.Invoke(i);
+                if (!cardChanged)
+                {
+                    Options.BeforeFileCopy?.Invoke(i);
+                    if (!Pauses.WaitWhilePaused(cts.Token))
+                    {
+                        sourceErrors[i] = "cancelled";
+                        continue;
+                    }
+                    // Ruling I1: a pause held the copy since the last file — the card is identified again before
+                    // anything more is read from it; another card (or none) means nothing more of it is copied.
+                    if (Pauses.Holds != holdsChecked)
+                    {
+                        holdsChecked = Pauses.Holds;
+                        cardChanged = !StillSameCard();
+                    }
+                }
+                if (cardChanged)
+                {
+                    sourceErrors[i] = CardChangedWhilePaused;
+                    lock (gate) errorCount++;
+                    continue;
+                }
                 lock (gate)
                 {
                     fileIndex = i;
@@ -74,18 +97,20 @@ public sealed partial class OffloadEngine
             SetPhase(CopyPhase.Flush);
             OnEachDestination(ws, w => w.FlushDevice());
             var copyFinished = DateTime.UtcNow;
+            var copyPaused = Pauses.PausedTotal - pausedBefore;
 
             Options.BeforeVerify?.Invoke();
             if (Options.Verify && !IsCancelled)
             {
                 SetPhase(CopyPhase.Verify);
-                OnEachDestination(ws, w => w.Verify(files, hashes, plan.Hashes, cts.Token));
+                OnEachDestination(ws, w => w.Verify(files, hashes, plan.Hashes, cts.Token, Pauses));
             }
             var finished = DateTime.UtcNow;
+            var verifyPaused = Pauses.PausedTotal - pausedBefore - copyPaused;
 
             SetPhase(CopyPhase.Report);
             var report = OffloadReport.Build(plan, hashes, sourceErrors, ws.Select(w => w.Results).ToList(),
-                ws.Select(w => w.Unbuffered).ToList(), Options.Verify && !IsCancelled, started, copyFinished, finished);
+                ws.Select(w => w.Unbuffered).ToList(), Options.Verify && !IsCancelled, started, copyFinished, finished, copyPaused, verifyPaused);
             var reportErrors = new List<string>();
             foreach (var path in cardPaths)
             {
@@ -104,6 +129,13 @@ public sealed partial class OffloadEngine
         }
     }
 
+    /// Ruling I1: the card in the drive is the copied one (no check without SameCard); an exception says it is not.
+    bool StillSameCard()
+    {
+        try { return SameCard?.Invoke() ?? true; }
+        catch (Exception) { return false; }
+    }
+
     /// Reads one file block by block and hands every block to the hashers and all writers. Returns the failure, or null.
     string? CopyFile(string sourceRoot, SourceFile f, DestWriter[] ws, IReadOnlyList<SourceHasher> hashers, BufferPool pool)
     {
@@ -117,7 +149,8 @@ public sealed partial class OffloadEngine
         long offset = 0;
         using (reader)
         {
-            while (!IsCancelled)
+            // A pause waits here, between blocks and before taking a buffer: the writers drain what they hold and idle.
+            while (!IsCancelled && Pauses.WaitWhilePaused(cts.Token))
             {
                 var buf = pool.Take();
                 int n;

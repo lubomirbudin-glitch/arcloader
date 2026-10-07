@@ -26,6 +26,22 @@ public sealed partial class OffloadEngine
 
     public bool IsCancelled => cts.IsCancellationRequested;
 
+    /// "Pozastavit": the copy and the read-back stop before their next block; the job's stage 2 waits at the same gate.
+    public PauseGate Pauses { get; } = new();
+
+    /// The file error (report JSON, English like every file error) of the files left out because the card in the drive
+    /// was not the copied one after a pause (ruling I1); the HTML says it in Czech.
+    public const string CardChangedWhilePaused = "card changed while paused";
+
+    /// Ruling I1: is the card in the drive still the one being copied? Asked on the copy thread before the next file
+    /// after a pause held the copy (the card may have been swapped or pulled meanwhile — same names, sizes and times are
+    /// no proof); false or an exception = it is not. Null = never asked (a folder source has no card identity).
+    internal Func<bool>? SameCard { get; set; }
+
+    /// The card was not the copied one after a pause: the remaining files were left out (CardChangedWhilePaused).
+    public bool CardChanged => cardChanged;
+    volatile bool cardChanged;
+
     /// Scans the card and checks the destinations before a single byte is written. `extra`: what proxies and the report
     /// will need besides the card (spec 2.5), worked out from the scan; null = the card alone.
     public OffloadPlan Prepare(string source, IReadOnlyList<string> destRoots, string? cardName, string? date,
@@ -196,7 +212,8 @@ public sealed partial class OffloadEngine
         lock (gate)
         {
             return new ProgressSnapshot(phase, plan?.Scan.TotalBytes ?? 0, plan?.Scan.Files.Count ?? 0, fileIndex, currentFile,
-                Interlocked.Read(ref readBytes), writers.Select(w => w.Written).ToArray(), writers.Select(w => w.Verified).ToArray(), errorCount);
+                Interlocked.Read(ref readBytes), writers.Select(w => w.Written).ToArray(), writers.Select(w => w.Verified).ToArray(), errorCount,
+                Pauses.IsPaused, Pauses.IsHolding);
         }
     }
 

@@ -145,6 +145,9 @@ public static class Msg
     public static string AppendBusy(string cardPath) =>
         $"Do této zálohy právě doplňuje jiná úloha ({cardPath}) — počkejte, až skončí.";
     public const string NothingNew = "Nic nového — záloha je úplná.";
+    /// Ruling I1 (plan 9): the card in the drive after Pokračovat is not the one being copied.
+    public const string CardChangedWhilePaused =
+        "Během pozastavení se karta ve čtečce vyměnila nebo vytáhla — zbylé soubory se nezkopírovaly. Vložte původní kartu a zálohu doplňte.";
     public static string UnverifiedEarlier(int n) =>
         $"{n} {Desktop.Texts.Plural(n, "soubor", "soubory", "souborů")} z dřívější zálohy {Desktop.Texts.Plural(n, "nebyl ověřen", "nebyly ověřeny", "nebylo ověřeno")} — doporučeno Ověřit zálohu.";
     public const string CardNotInHistory = "Karta není v historii — zadejte složky zálohy volbou --into.";

@@ -97,6 +97,7 @@ public static partial class HtmlReport
             return "soubor na kartě se během kopie změnil " + error["source size changed during copy ".Length..];
         if (error == "write failed") return "zápis selhal";
         if (error == "cancelled") return "zrušeno";
+        if (error == OffloadEngine.CardChangedWhilePaused) return "karta se během pozastavení vyměnila nebo vytáhla";
         return Retries().Replace(error, " (po ${n} opakováních)");
     }
 
@@ -139,6 +140,7 @@ public static partial class HtmlReport
         Stat(h, videoClips.Count.ToString(Inv), "klipů" + (totalDuration > 0 ? " · " + Duration(totalDuration) : ""));
         Stat(h, Duration(r.CopySeconds), "kopírování · " + Format.Rate(r.TotalBytes, r.CopySeconds));
         Stat(h, r.Verified ? Duration(r.VerifySeconds) : "—", "ověření · " + (r.Verified ? Format.Rate(r.TotalBytes, r.VerifySeconds) : "neprovedeno"));
+        if (r.PausedSeconds > 0) Stat(h, Duration(r.PausedSeconds), "pozastaveno · mimo rychlosti");
         Stat(h, Esc(string.Join(" + ", r.Algorithms.Select(a => a.ToUpperInvariant()))), "kontrolní součet");
         h.Append("</div>\n\n");
 
