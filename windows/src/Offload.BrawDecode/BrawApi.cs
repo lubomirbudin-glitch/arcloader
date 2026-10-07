@@ -84,7 +84,7 @@ internal static class FourCC
     public const uint PipelineCuda = 0x63756461;       // 'cuda'
     public const uint PipelineOpenCL = 0x6F70636C;     // 'opcl'
     public const uint ResourceFormatRgbU16 = 0x3136696C; // '16il' — interleaved RGB 16-bit = ffmpeg rgb48le
-    public const uint ClipAttributeColorScienceGen = 0x6373676E; // 'csgn' u16
+    public const uint ClipAttributeColorScienceGen = 0x6373676E; // 'csgn' u16 (--gen5 sets it as VT_UI2)
     public const uint ClipAttributeGamma = 0x67616D61;           // 'gama' string
     public const uint ClipAttributeGamut = 0x67616D74;           // 'gamt' string
 
@@ -216,7 +216,8 @@ internal readonly unsafe struct BrawClip(nint ptr)
     /// Slot 11.
     public string? CameraType => Com.GetBstr(ptr, 11);
 
-    /// Slot 12.
+    /// Slot 12 CloneClipProcessingAttributes(IBlackmagicRawClipProcessingAttributes**): "creates object with current
+    /// clip processing attributes". The caller owns the clone and releases it.
     public int CloneClipProcessingAttributes(out BrawClipProcessingAttributes attributes)
     {
         nint p = 0;
@@ -235,7 +236,8 @@ internal readonly unsafe struct BrawClip(nint ptr)
     }
 }
 
-/// IBlackmagicRawClipProcessingAttributes: 3 GetClipAttribute, 4 SetClipAttribute, 5 GetClipAttributeRange,
+/// IBlackmagicRawClipProcessingAttributes (IID 1F53C8AE-2295-4C8E-B17F-5931F4F146AC — never QueryInterface'd, only
+/// obtained from IBlackmagicRawClip slot 12): 3 GetClipAttribute, 4 SetClipAttribute, 5 GetClipAttributeRange,
 /// 6 GetClipAttributeList, 7 GetISOList, 8 GetPost3DLUT.
 internal readonly unsafe struct BrawClipProcessingAttributes(nint ptr)
 {
@@ -258,6 +260,21 @@ internal readonly unsafe struct BrawClipProcessingAttributes(nint ptr)
         if (value is null or int) return (int?)value;
         error = $"clip attribute '{FourCC.Text(attribute)}' is a string, expected a number";
         return null;
+    }
+
+    /// Slot 4 SetClipAttribute(attribute, Variant* value) with a VT_UI2 value (colour science generation is a u16).
+    /// The HRESULT. The VARIANT is an in-parameter, ours: cleared here after the call.
+    public int SetNumber(uint attribute, ushort value)
+    {
+        ComVariant v = ComVariant.Create(value);
+        try
+        {
+            return ((delegate* unmanaged[Stdcall]<nint, uint, ComVariant*, int>)Com.Slot(ptr, 4))(ptr, attribute, &v);
+        }
+        finally
+        {
+            v.Dispose();
+        }
     }
 
     /// The one VARIANT read: slot 3 GetClipAttribute. A failed call (attribute not available) is null without an
@@ -331,12 +348,14 @@ internal readonly unsafe struct BrawFrame(nint ptr)
     /// Slot 11.
     public int SetResourceFormat(uint format) => ((delegate* unmanaged[Stdcall]<nint, uint, int>)Com.Slot(ptr, 11))(ptr, format);
 
-    /// Slot 14, with the clip's own processing attributes (null overrides) — frames come out in the gamma they were
-    /// shot in.
-    public int CreateJobDecodeAndProcessFrame(out BrawJob job)
+    /// Slot 14 CreateJobDecodeAndProcessFrame(IBlackmagicRawClipProcessingAttributes* /* optional override */,
+    /// IBlackmagicRawFrameProcessingAttributes* /* optional override, always 0 here */, IBlackmagicRawJob**).
+    /// `clipAttributes` 0 = the clip's own processing attributes — frames come out in the gamma they were shot in;
+    /// with --gen5 the clone set to colour science Gen 5 (still owned by the caller).
+    public int CreateJobDecodeAndProcessFrame(nint clipAttributes, out BrawJob job)
     {
         nint p = 0;
-        int hr = ((delegate* unmanaged[Stdcall]<nint, nint, nint, nint*, int>)Com.Slot(ptr, 14))(ptr, 0, 0, &p);
+        int hr = ((delegate* unmanaged[Stdcall]<nint, nint, nint, nint*, int>)Com.Slot(ptr, 14))(ptr, clipAttributes, 0, &p);
         job = new BrawJob(p);
         return hr;
     }

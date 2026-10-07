@@ -334,6 +334,9 @@
                         </ItemsControl>
                         <TextBlock Text="Canon Cinema RAW Light a Sony X-OCN se zkopírují a ověří, proxy pro ně nejde vyrobit." Style="{StaticResource Caption}"
                                    TextWrapping="Wrap" TextTrimming="None" Margin="0,4,0,0" />
+                        <CheckBox Content="Blackmagic RAW Film Gen 4 převést na Gen 5 (použije se LUT Gen 5)" IsChecked="{Binding Proxy.BrawGen4ToGen5}"
+                                  Margin="0,8,0,0" AutomationProperties.AutomationId="BrawGen4ToGen5" />
+                        <TextBlock Text="ověří až vzorek .braw Gen 4" Style="{StaticResource Caption}" Margin="24,0,0,0" />
                     </StackPanel>
                 </Expander>
 

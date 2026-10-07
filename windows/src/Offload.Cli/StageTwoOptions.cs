@@ -22,11 +22,12 @@ sealed class StageTwoOptions
     readonly Option<string?> proxyFolder = new("--proxy-folder") { Description = "Also copy every proxy to <folder>\\<date>\\<card name>\\ (with --proxy; never overwrites)." };
     readonly Option<bool> noClipList = new("--no-clip-list") { Description = "No clip list CSV (_REPORT\\<card>_clips.csv)." };
     readonly Option<bool> ale = new("--ale") { Description = "Also write the clip list for Avid (_REPORT\\<card>_clips.ale)." };
+    readonly Option<bool> brawGen5 = new("--braw-gen5") { Description = "Decode Blackmagic RAW Film Gen 4 as Gen 5 (the Gen 5 LUT then fits). Not yet verified with a Gen 4 sample." };
     readonly Option<bool> noDayReport = new("--no-day-report") { Description = "Do not make the day report (<date>\\_REPORT\\<date>_day_report.html) again after the copy." };
 
     public void AddTo(Command cmd)
     {
-        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder, noClipList, ale, noDayReport })
+        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder, noClipList, ale, noDayReport, brawGen5 })
             cmd.Options.Add(o);
     }
 
@@ -79,6 +80,7 @@ sealed class StageTwoOptions
         if (Given(frameAspect)) p.FrameAspect = r.GetValue(frameAspect);
         if (Given(frameScale)) p.FrameScale = r.GetValue(frameScale) / 100;
         if (Given(noBurnIn)) p.BurnFilename = p.BurnTimecode = !r.GetValue(noBurnIn);
+        if (Given(brawGen5)) p.BrawGen4ToGen5 = r.GetValue(brawGen5);
         if (Given(proxyFolder)) p.ExtraFolder = r.GetValue(proxyFolder) is string pf ? CliPath.Full(pf) : null;
         config.Proxy = p;
 

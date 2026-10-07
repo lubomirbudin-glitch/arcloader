@@ -39,6 +39,29 @@ public class BrawSampleTests
         Assert.Equal((i.SourceWidth, i.SourceHeight), (full.Width, full.Height));
     }
 
+    // Spec 4.2 (R26): --gen5 with a real clip. A Gen 4 sample must come out as Gen 5 with "colorScienceGenOriginal": 4 and
+    // its frames must decode — that is what confirms the SDK conversion. A Gen 5 sample is left as it is.
+    // Ověří až vzorek .braw Gen 4.
+    [BrawSampleFact]
+    public void Gen5_ConvertsAGen4Clip_LeavesGen5()
+    {
+        var plain = Info("eighth");
+        var r = Run("--info", "--gen5", "--scale", "eighth", Sample);
+        Assert.True(r.Code == 0, r.Stderr);
+        var gen5 = BrawBackend.ParseInfo(System.Text.Encoding.UTF8.GetString(r.Stdout));
+        if (plain.ColorScienceGen < 5)
+        {
+            Assert.Equal((5, plain.ColorScienceGen), (gen5.ColorScienceGen, gen5.ColorScienceGenOriginal));
+            var frame = Run("--gen5", "--scale", "eighth", "--count", "1", Sample);
+            Assert.True(frame.Code == 0, frame.Stderr);
+            Assert.Equal((long)gen5.Width * gen5.Height * 6, frame.Stdout.LongLength);
+        }
+        else
+        {
+            Assert.Equal((plain.ColorScienceGen, (int?)null), (gen5.ColorScienceGen, gen5.ColorScienceGenOriginal));
+        }
+    }
+
     [BrawSampleFact]
     public void Frames_ExactRgb48Bytes_InOrder()
     {

@@ -16,7 +16,8 @@ public sealed class ProxyRenderer : IDisposable
     readonly Dictionary<ClipFormat, IRawBackend> backends = RawBackends.All.ToDictionary(b => b.Format);
 
     /// Tests only: other RAW backends (e.g. BRAW with a fake library search or a short --info timeout); they
-    /// replace the default one of the same format.
+    /// replace the default one of the same format — also the --gen5 BRAW backend the constructor makes for
+    /// proxy.brawGen4ToGen5 (init runs after the constructor; M11 c): a test that injects BRAW passes its own `gen5`.
     internal IEnumerable<IRawBackend> Backends
     {
         get => backends.Values;
@@ -68,6 +69,9 @@ public sealed class ProxyRenderer : IDisposable
     {
         Settings = settings;
         Tools = tools;
+        // Spec 4.2: Film Gen 4 BRAW decoded as Gen 5 (braw-decode --gen5) when switched on; its warnings go to the job's
+        // log (Log is read when one is written, after init).
+        if (settings.BrawGen4ToGen5) backends[ClipFormat.Braw] = new BrawBackend(gen5: true) { Log = m => Log?.Invoke(m) };
         workDir = Path.Combine(Path.GetTempPath(), "offload-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(workDir);
         try
