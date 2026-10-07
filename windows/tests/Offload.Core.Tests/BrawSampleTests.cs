@@ -55,6 +55,11 @@ public class BrawSampleTests
             var frame = Run("--gen5", "--scale", "eighth", "--count", "1", Sample);
             Assert.True(frame.Code == 0, frame.Stderr);
             Assert.Equal((long)gen5.Width * gen5.Height * 6, frame.Stdout.LongLength);
+            // The decode job really gets the override: frame 0 as Gen 5 is not the same image as frame 0 as recorded.
+            var recorded = Run("--scale", "eighth", "--count", "1", Sample);
+            Assert.True(recorded.Code == 0, recorded.Stderr);
+            Assert.Equal(frame.Stdout.LongLength, recorded.Stdout.LongLength);
+            Assert.NotEqual(recorded.Stdout, frame.Stdout);
         }
         else
         {

@@ -18,6 +18,9 @@ internal static class Decoder
     /// Internal outcome of Info/Frames: the reader closed stdout. Run turns it into Ok, whatever else happened.
     const int ReaderGone = -1;
 
+    /// The one gamma --gen5 converts (the SDK's string; Offload's LUT rule compares the same one).
+    const string FilmGamma = "Blackmagic Design Film";
+
     /// Frames decoded in parallel by the SDK and then written in order.
     const int Batch = 8;
 
@@ -103,10 +106,10 @@ internal static class Decoder
     }
 
     /// --gen5: a clone of the clip's processing attributes set to colour science Gen 5 — or default (Ptr 0) when the clip
-    /// is Gen 5 already or the SDK refuses (a warning on stderr; then it is decoded as recorded, without a LUT as before).
+    /// is Gen 5 already, not in Film gamma, or the SDK refuses (a warning on stderr; then it is decoded as recorded, without a LUT as before).
     /// `original`: the generation the clip was recorded in, when the SDK says. A clone that is not used is released here
     /// (in a finally, whatever happens); the used one by Run's finally.
-    static BrawClipProcessingAttributes Gen5Attributes(BrawClip clip, TextWriter stderr, out int? original)
+    internal static BrawClipProcessingAttributes Gen5Attributes(BrawClip clip, TextWriter stderr, out int? original)
     {
         original = null;
         if (clip.CloneClipProcessingAttributes(out var attrs) != Com.S_OK || attrs.Ptr == 0)
@@ -128,8 +131,10 @@ internal static class Decoder
     }
 
     /// Sets colour science Gen 5 on `attrs` and reads it back (spec 4.2: SetClipAttribute(ColorScienceGen, u16 5)).
-    /// False — nothing to use — when the generation is unknown, already 5 or more, or the SDK does not take 5; unknown
-    /// and refused are warnings on stderr (ruling T6-attr: attribute trouble never fails the decoder).
+    /// Only Blackmagic Design Film is converted (spec 4.2: Film Gen 4 → Gen 5); Video / Extended Video are display-ready
+    /// and stay as recorded, silently. False — nothing to use — when the generation is unknown, already 5 or more, the
+    /// gamma is not Film, or the SDK does not take 5; an unknown generation or gamma and a refusal are warnings on stderr
+    /// (ruling T6-attr: attribute trouble never fails the decoder).
     internal static bool ToGen5(BrawClipProcessingAttributes attrs, TextWriter stderr, out int? original)
     {
         original = attrs.Number(FourCC.ClipAttributeColorScienceGen, out var error);
@@ -139,6 +144,13 @@ internal static class Decoder
             return false;
         }
         if (gen >= 5) return false;
+        var gamma = attrs.Text(FourCC.ClipAttributeGamma, out error);
+        if (gamma == null)
+        {
+            Say(stderr, $"braw-decode: --gen5: gamma unknown{(error != null ? $" ({error})" : "")} — decoding as recorded");
+            return false;
+        }
+        if (!gamma.Equals(FilmGamma, StringComparison.OrdinalIgnoreCase)) return false;
         int hr = attrs.SetNumber(FourCC.ClipAttributeColorScienceGen, 5);
         var now = attrs.Number(FourCC.ClipAttributeColorScienceGen, out _);
         if (hr == Com.S_OK && now == 5) return true;

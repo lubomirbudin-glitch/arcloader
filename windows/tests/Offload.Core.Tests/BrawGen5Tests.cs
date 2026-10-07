@@ -30,19 +30,41 @@ public class BrawGen5Tests
         Assert.Equal((5, 4), (info.ColorScienceGen, info.ColorScienceGenOriginal));
     }
 
-    /// A stand-in IBlackmagicRawClipProcessingAttributes: slot 3 reads the colour science generation, slot 4 sets it.
+    const string Film = "Blackmagic Design Film";
+
+    /// A stand-in IBlackmagicRawClipProcessingAttributes: slots 1/2 count references, slot 3 reads the colour science
+    /// generation and the gamma, slot 4 sets the generation. And a stand-in IBlackmagicRawClip whose slot 12
+    /// (CloneClipProcessingAttributes) hands that object out with one reference, as the SDK's clone does.
     static unsafe class FakeGen
     {
         public static int Gen;
+        public static string? Gamma;
         public static int SetResult;      // what SetClipAttribute returns
         public static bool Ignore;        // the SDK says OK but keeps the old value
+        public static int RefCount;
+        public static int CloneResult;    // what CloneClipProcessingAttributes returns
+        static nint attributes;           // what the fake clip's clone hands out
+
+        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+        static uint AddRef(nint self) => (uint)Interlocked.Increment(ref RefCount);
+
+        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+        static uint Release(nint self) => (uint)Interlocked.Decrement(ref RefCount);
 
         [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
         static int Get(nint self, uint attribute, ComVariant* value)
         {
-            if (attribute != FourCC.ClipAttributeColorScienceGen || Gen < 0) return Com.E_FAIL;
-            *value = ComVariant.Create((ushort)Gen);
-            return Com.S_OK;
+            if (attribute == FourCC.ClipAttributeColorScienceGen && Gen >= 0)
+            {
+                *value = ComVariant.Create((ushort)Gen);
+                return Com.S_OK;
+            }
+            if (attribute == FourCC.ClipAttributeGamma && Gamma != null)
+            {
+                *value = ComVariant.Create(Gamma);
+                return Com.S_OK;
+            }
+            return Com.E_FAIL;
         }
 
         [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
@@ -53,15 +75,38 @@ public class BrawGen5Tests
             return Com.S_OK;
         }
 
-        public static nint Create(int gen, int setResult = Com.S_OK, bool ignore = false)
+        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+        static int Clone(nint self, nint* result)
         {
-            (Gen, SetResult, Ignore) = (gen, setResult, ignore);
-            var vtbl = (nint*)NativeMemory.AllocZeroed(5, (nuint)sizeof(nint));
-            vtbl[3] = (nint)(delegate* unmanaged[Stdcall]<nint, uint, ComVariant*, int>)&Get;
-            vtbl[4] = (nint)(delegate* unmanaged[Stdcall]<nint, uint, ComVariant*, int>)&Set;
+            RefCount = 1;
+            *result = attributes;
+            return CloneResult;
+        }
+
+        static nint Object(int slots, params (int Slot, nint Fn)[] fns)
+        {
+            var vtbl = (nint*)NativeMemory.AllocZeroed((nuint)slots, (nuint)sizeof(nint));
+            foreach (var (slot, fn) in fns) vtbl[slot] = fn;
             var obj = (nint*)NativeMemory.Alloc((nuint)sizeof(nint));
             *obj = (nint)vtbl;
             return (nint)obj;
+        }
+
+        public static nint Create(int gen, int setResult = Com.S_OK, bool ignore = false, string? gamma = Film)
+        {
+            (Gen, SetResult, Ignore, Gamma, RefCount) = (gen, setResult, ignore, gamma, 1);
+            return Object(5,
+                (1, (nint)(delegate* unmanaged[Stdcall]<nint, uint>)&AddRef),
+                (2, (nint)(delegate* unmanaged[Stdcall]<nint, uint>)&Release),
+                (3, (nint)(delegate* unmanaged[Stdcall]<nint, uint, ComVariant*, int>)&Get),
+                (4, (nint)(delegate* unmanaged[Stdcall]<nint, uint, ComVariant*, int>)&Set));
+        }
+
+        /// A clip whose clone is `attrs` (RefCount 0 until cloned).
+        public static nint CreateClip(nint attrs, int cloneResult)
+        {
+            (attributes, CloneResult, RefCount) = (attrs, cloneResult, 0);
+            return Object(13, (12, (nint)(delegate* unmanaged[Stdcall]<nint, nint*, int>)&Clone));
         }
 
         public static void Free(nint obj)
@@ -71,9 +116,9 @@ public class BrawGen5Tests
         }
     }
 
-    static (bool Ok, int? Original, int Now, string Stderr) ToGen5(int gen, int setResult = Com.S_OK, bool ignore = false)
+    static (bool Ok, int? Original, int Now, string Stderr) ToGen5(int gen, int setResult = Com.S_OK, bool ignore = false, string? gamma = Film)
     {
-        nint obj = FakeGen.Create(gen, setResult, ignore);
+        nint obj = FakeGen.Create(gen, setResult, ignore, gamma);
         try
         {
             using var stderr = new StringWriter();
@@ -112,6 +157,61 @@ public class BrawGen5Tests
         var unknown = ToGen5(-1);
         Assert.False(unknown.Ok);
         Assert.Equal("braw-decode: --gen5: colour science generation unknown — decoding as recorded" + Environment.NewLine, unknown.Stderr);
+    }
+
+    // Fix round 1: only Blackmagic Design Film is converted (what the spec and the checkbox promise). Video / Extended
+    // Video Gen 4 are display-ready: left alone, set never called, no warning. A gamma that cannot be read is a warning.
+    [Fact]
+    public void ToGen5_OnlyFilmGamma()
+    {
+        Assert.Equal((false, (int?)4, 4, ""), ToGen5(4, gamma: "Blackmagic Design Video"));
+        Assert.Equal((false, (int?)4, 4, ""), ToGen5(4, gamma: "Blackmagic Design Extended Video"));
+        Assert.Equal((true, (int?)4, 5, ""), ToGen5(4, gamma: "blackmagic design film"));
+        Assert.Equal((false, (int?)4, 4, "braw-decode: --gen5: gamma unknown — decoding as recorded" + Environment.NewLine), ToGen5(4, gamma: null));
+    }
+
+    /// Decoder.Gen5Attributes on the fake clip: whether the clone is handed back for the jobs, the recorded generation,
+    /// the clone's reference count after the caller (Run's finally) released a used one, and stderr.
+    static (bool Used, int? Original, int RefCount, string Stderr) Gen5Attributes(int gen, int setResult = Com.S_OK, int cloneResult = Com.S_OK, string? gamma = Film)
+    {
+        nint attrs = FakeGen.Create(gen, setResult, gamma: gamma);
+        nint clip = FakeGen.CreateClip(attrs, cloneResult);
+        try
+        {
+            using var stderr = new StringWriter();
+            var a = Decoder.Gen5Attributes(new BrawClip(clip), stderr, out var original);
+            bool used = a.Ptr != 0;
+            if (used)
+            {
+                Assert.Equal(attrs, a.Ptr);
+                Assert.Equal(1, FakeGen.RefCount);   // still alive for the decode jobs
+                Com.Release(a.Ptr);                  // what Run's finally does
+            }
+            return (used, original, FakeGen.RefCount, stderr.ToString());
+        }
+        finally
+        {
+            FakeGen.Free(clip);
+            FakeGen.Free(attrs);
+        }
+    }
+
+    // Fix round 1: every path gives the clone's reference back — the used one through the caller, every other one at once.
+    [Fact]
+    public void Gen5Attributes_EveryPath_ReleasesTheClone()
+    {
+        Assert.Equal((true, (int?)4, 0, ""), Gen5Attributes(4));
+        var refused = Gen5Attributes(4, setResult: Com.E_FAIL);
+        Assert.Equal((false, (int?)4, 0), (refused.Used, refused.Original, refused.RefCount));
+        Assert.Contains("not accepted", refused.Stderr);
+        Assert.Equal((false, (int?)5, 0, ""), Gen5Attributes(5));
+        var unknown = Gen5Attributes(-1);
+        Assert.Equal((false, (int?)null, 0), (unknown.Used, unknown.Original, unknown.RefCount));
+        Assert.Contains("generation unknown", unknown.Stderr);
+        Assert.Equal((false, (int?)4, 0, ""), Gen5Attributes(4, gamma: "Blackmagic Design Video"));
+        // A clone call that fails but still hands out an object: released, a warning, decoded as recorded.
+        Assert.Equal((false, (int?)null, 0, "braw-decode: --gen5: the clip's processing attributes cannot be read — decoding as recorded" + Environment.NewLine),
+            Gen5Attributes(4, cloneResult: Com.E_FAIL));
     }
 
     // The LUT rule: an effective Gen 5 that was Gen 4 gets the BMD Gen 5 LUT, with the reason; without the conversion
@@ -217,6 +317,35 @@ public class BrawGen5Tests
         Assert.StartsWith("--info --gen5 --scale eighth ", lines[0]);
         Assert.All(lines[1..], l => Assert.DoesNotContain("--gen5", l));
         Assert.Equal(["Blackmagic RAW: braw-decode nezná --gen5 (starší verze) — Film Gen 4 se dekóduje bez převodu na Gen 5"], logs);
+    }
+
+    // Fix round 1: only a usage error (exit 2) means "older decoder". A real failure under --gen5 (exit 4: the clip
+    // cannot be opened) is not retried and not blamed on the decoder version — the clip gets its Czech note.
+    [Fact]
+    public void Backend_RealFailureWithGen5_IsNotRetried()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "braw-decode.cmd");
+        File.WriteAllText(path, """
+            @echo off
+            >>"%~dp0args.txt" echo %*
+            echo %* | findstr /c:"--gen5" >nul && (echo braw-decode: cannot open the clip 1>&2& exit /b 4)
+            echo {"width":320,"height":180,"sourceWidth":320,"sourceHeight":180,"fps":25,"frames":1,"timecode":"","camera":""}
+            exit /b 0
+
+            """.ReplaceLineEndings("\r\n"));
+        File.WriteAllText(Path.Combine(dir.Path, "BlackmagicRawAPI.dll"), "x");
+        var tools = new ExternalTools { BrawDecoder = path, NoSearch = true };
+        var logs = new List<string>();
+        var b = new BrawBackend(_ => "x", gen5: true) { Log = logs.Add };
+
+        var e = Assert.Throws<RawDecoderException>(() => b.Probe(Path.Combine(dir.Sub("card"), "A001.braw"), tools, dir.Path));
+        Assert.StartsWith("Blackmagic RAW: klip nelze otevřít — ", e.Message);
+        Assert.Equal(4, e.DecoderError.Status);
+        var lines = File.ReadAllLines(Path.Combine(dir.Path, "args.txt"));
+        Assert.Single(lines);
+        Assert.StartsWith("--info --gen5 ", lines[0]);
+        Assert.DoesNotContain(logs, l => l.Contains("nezná --gen5", StringComparison.Ordinal));
     }
 
     // The renderer hands its log to the Gen 5 backend it makes (the warning above reaches the job's log).
