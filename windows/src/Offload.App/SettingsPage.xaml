@@ -1,0 +1,437 @@
+<UserControl x:Class="Offload.App.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:core="clr-namespace:Offload.Core.Desktop;assembly=Offload.Core">
+    <!-- Nastavení projektu (UI návrh obr. 4): every option that is not in step 3's summary. Edits the profile shown, like
+         the left panel did; "Hotovo" and "‹ Zpět" only close the page (changes are saved as they are made). -->
+    <UserControl.Resources>
+        <Style x:Key="PageTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="RowLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,18,0" />
+        </Style>
+        <Style x:Key="Section" TargetType="StackPanel">
+            <Setter Property="MaxWidth" Value="760" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+    </UserControl.Resources>
+    <DockPanel Background="{DynamicResource Bg}">
+        <!-- ‹ Zpět · Projekt <name> · … · Uložit jako nový projekt · Hotovo -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource BgHeader}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="20,10">
+            <DockPanel>
+                <Button DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Command="{Binding CloseSettingsCommand}" Padding="10,0"
+                        AutomationProperties.AutomationId="SettingsBackButton">
+                    <StackPanel Orientation="Horizontal">
+                        <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconBack}" Tag="2" Margin="0,0,6,0"
+                                        Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        <TextBlock Text="Zpět" />
+                    </StackPanel>
+                </Button>
+                <Border DockPanel.Dock="Left" Width="1" Height="22" Background="{DynamicResource Line}" Margin="14,0" />
+                <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <TextBlock Text="Projekt" FontSize="12" Foreground="{DynamicResource Text3}" />
+                    <TextBlock Text="{Binding ProjectLabel}" FontWeight="SemiBold" AutomationProperties.AutomationId="SettingsProjectName" />
+                </StackPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Height="34" FontSize="13" Padding="16,0" Content="Hotovo"
+                        Command="{Binding CloseSettingsCommand}" AutomationProperties.AutomationId="SettingsDoneButton" />
+                <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Uložit jako nový projekt…" Margin="0,0,8,0"
+                        Command="{Binding SaveAsProjectCommand}" AutomationProperties.AutomationId="SettingsSaveAsProjectButton" />
+                <Border />
+            </DockPanel>
+        </Border>
+        <!-- Sections -->
+        <Border DockPanel.Dock="Left" Width="240" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" Padding="14,20">
+            <StackPanel>
+                <RadioButton Style="{StaticResource NavButton}" Content="Struktura složek" AutomationProperties.AutomationId="NavFolders"
+                             IsChecked="{Binding SettingsSection, Converter={StaticResource Equals}, ConverterParameter=folders}" />
+                <RadioButton Style="{StaticResource NavButton}" Content="Ověření" AutomationProperties.AutomationId="NavVerify"
+                             IsChecked="{Binding SettingsSection, Converter={StaticResource Equals}, ConverterParameter=verify}" />
+                <RadioButton Style="{StaticResource NavButton}" Content="Analýza a náhledy" AutomationProperties.AutomationId="NavAnalysis"
+                             IsChecked="{Binding SettingsSection, Converter={StaticResource Equals}, ConverterParameter=analysis}" />
+                <RadioButton Style="{StaticResource NavButton}" Content="Proxy" AutomationProperties.AutomationId="NavProxy"
+                             IsChecked="{Binding SettingsSection, Converter={StaticResource Equals}, ConverterParameter=proxy}" />
+                <RadioButton Style="{StaticResource NavButton}" Content="Report" AutomationProperties.AutomationId="NavReport"
+                             IsChecked="{Binding SettingsSection, Converter={StaticResource Equals}, ConverterParameter=report}" />
+                <RadioButton Style="{StaticResource NavButton}" Content="Oznámení" AutomationProperties.AutomationId="NavNotify"
+                             IsChecked="{Binding SettingsSection, Converter={StaticResource Equals}, ConverterParameter=notify}" />
+                <RadioButton Style="{StaticResource NavButton}" Content="Dekodéry RAW" AutomationProperties.AutomationId="NavDecoders"
+                             IsChecked="{Binding SettingsSection, Converter={StaticResource Equals}, ConverterParameter=decoders}" />
+                <Border Height="1" Background="{DynamicResource LineSoft}" Margin="12,10" />
+                <RadioButton Style="{StaticResource NavButton}" Content="Aplikace" AutomationProperties.AutomationId="NavApp"
+                             IsChecked="{Binding SettingsSection, Converter={StaticResource Equals}, ConverterParameter=app}" />
+            </StackPanel>
+        </Border>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <Grid Margin="32,26,32,32">
+
+                <!-- ── Struktura složek ── -->
+                <StackPanel Style="{StaticResource Section}" Visibility="{Binding SettingsSection, Converter={StaticResource EqualsToVisible}, ConverterParameter=folders}">
+                    <TextBlock Text="Struktura složek" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="Kam se karta na cíli zapíše: &lt;cíl&gt;\&lt;datum&gt;\&lt;název karty&gt;\." Style="{StaticResource TextMuted}" FontSize="14" Margin="0,4,0,26" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Cesta" Style="{StaticResource RowLabel}" />
+                        <TextBlock Grid.Column="1" Text="{Binding PathPreview}" Style="{StaticResource TextMono}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="1" Text="Datum" Style="{StaticResource RowLabel}" Margin="0,16,18,0" />
+                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,16,0,0">
+                            <CheckBox Style="{StaticResource Check}" Content="Vlastní datum" IsChecked="{Binding UseCustomDate}" AutomationProperties.AutomationId="UseCustomDate" />
+                            <DatePicker SelectedDate="{Binding CustomDate}" Margin="14,0,0,0" Width="150"
+                                        Visibility="{Binding UseCustomDate, Converter={StaticResource BoolToVisible}}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="2" Text="Název karty" Style="{StaticResource RowLabel}" Margin="0,16,18,0" />
+                        <CheckBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Check}" Margin="0,16,0,0" Content="Navrhovat název karty podle klipů"
+                                  IsChecked="{Binding SuggestCardNames}" AutomationProperties.AutomationId="SuggestCardNames" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- ── Ověření ── -->
+                <StackPanel Style="{StaticResource Section}" Visibility="{Binding SettingsSection, Converter={StaticResource EqualsToVisible}, ConverterParameter=verify}">
+                    <DockPanel>
+                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" Content="Zapnuto" IsChecked="{Binding Verify}" VerticalAlignment="Top"
+                                  AutomationProperties.AutomationId="VerifySwitch" />
+                        <StackPanel>
+                            <TextBlock Text="Ověření" Style="{StaticResource PageTitle}" />
+                            <TextBlock Text="Každý soubor se po zápisu přečte z disku a porovná s kartou." Style="{StaticResource TextMuted}" FontSize="14" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </DockPanel>
+                    <TextBlock Text="{x:Static core:SetupTexts.VerifyOffWarning}" Style="{StaticResource TextWarn}" Margin="0,12,0,0"
+                               Visibility="{Binding Verify, Converter={StaticResource BoolToCollapsed}}" />
+                    <Grid Margin="0,26,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Kontrolní součet" Style="{StaticResource RowLabel}" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding HashChoices}" SelectedItem="{Binding Hash}" DisplayMemberPath="Label" HorizontalAlignment="Left"
+                                  MinWidth="200" AutomationProperties.AutomationId="HashChoice" />
+                    </Grid>
+                    <TextBlock Text="{Binding Md5Note}" Style="{StaticResource TextWarn}" Margin="138,8,0,0" Visibility="{Binding Md5Note, Converter={StaticResource NullToCollapsed}}" />
+                    <TextBlock Text="OVĚŘIT ZÁLOHU" Style="{StaticResource StepTitle}" Margin="0,30,0,10" />
+                    <TextBlock Text="Zkontroluje dřívější zálohu na cíli proti ASC MHL, bez karty (Ctrl+Shift+O)." Style="{StaticResource TextMuted}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button Style="{StaticResource SecondaryButton}" Content="Ověřit zálohu…" Command="{Binding VerifyBackupCommand}" />
+                        <CheckBox Style="{StaticResource Check}" Content="Ukládat report ověření" IsChecked="{Binding SaveVerifyReport}" Margin="18,0,0,0"
+                                  AutomationProperties.AutomationId="SaveVerifyReport" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ── Analýza a náhledy ── -->
+                <StackPanel Style="{StaticResource Section}" Visibility="{Binding SettingsSection, Converter={StaticResource EqualsToVisible}, ConverterParameter=analysis}">
+                    <DockPanel>
+                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" Content="Zapnuto" IsChecked="{Binding AnalyzeClips}" VerticalAlignment="Top"
+                                  AutomationProperties.AutomationId="AnalyzeSwitch" />
+                        <StackPanel>
+                            <TextBlock Text="Analýza a náhledy" Style="{StaticResource PageTitle}" />
+                            <TextBlock Text="Po ověření se klipy prozkoumají a do reportu přijdou 3 snímky z každého klipu (začátek, střed, konec)." Style="{StaticResource TextMuted}"
+                                       FontSize="14" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </DockPanel>
+                    <TextBlock Text="{Binding ToolsWarning}" Style="{StaticResource TextWarn}" Margin="0,16,0,0"
+                               Visibility="{Binding ToolsWarning, Converter={StaticResource NullToCollapsed}}" />
+                </StackPanel>
+
+                <!-- ── Proxy (obr. 4) ── -->
+                <WrapPanel Visibility="{Binding SettingsSection, Converter={StaticResource EqualsToVisible}, ConverterParameter=proxy}" Orientation="Horizontal">
+                    <StackPanel Width="560" Margin="0,0,32,0" DataContext="{Binding Proxy}">
+                        <DockPanel>
+                            <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" Content="Zapnuto" IsChecked="{Binding Enabled}" VerticalAlignment="Top"
+                                      AutomationProperties.AutomationId="ProxySwitch" />
+                            <StackPanel>
+                                <TextBlock Text="Proxy" Style="{StaticResource PageTitle}" />
+                                <TextBlock Text="Renderují se až po ověření — originály mají vždy přednost." Style="{StaticResource TextMuted}" FontSize="14" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </DockPanel>
+                        <Grid Margin="0,26,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Kodek" Style="{StaticResource RowLabel}" />
+                            <Border Grid.Column="1" Style="{StaticResource SegmentHost}">
+                                <ItemsControl ItemsSource="{Binding CodecChoices}" AutomationProperties.AutomationId="CodecChoice">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <RadioButton Style="{StaticResource SegmentButton}" Content="{Binding Label}" IsChecked="{Binding IsSelected}" GroupName="Codec" Margin="0,0,4,0" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
+                            <TextBlock Grid.Row="1" Text="Výška" Style="{StaticResource RowLabel}" Margin="0,16,18,0" />
+                            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource SegmentHost}" Margin="0,16,0,0">
+                                <ItemsControl ItemsSource="{Binding HeightChoices}" AutomationProperties.AutomationId="HeightChoice">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <RadioButton Style="{StaticResource SegmentButton}" Content="{Binding Label}" IsChecked="{Binding IsSelected}" GroupName="Height" Margin="0,0,4,0" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
+                            <TextBlock Grid.Row="2" Text="Datový tok" Style="{StaticResource RowLabel}" Margin="0,16,18,0"
+                                       Visibility="{Binding ShowBitrate, Converter={StaticResource BoolToVisible}}" />
+                            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,16,0,0" Visibility="{Binding ShowBitrate, Converter={StaticResource BoolToVisible}}">
+                                <Border CornerRadius="8" BorderBrush="{DynamicResource LineInput}" BorderThickness="1" Background="{DynamicResource Input}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Style="{StaticResource IconButton}" Content="−" FontSize="16" Command="{Binding BitrateDownCommand}"
+                                                AutomationProperties.Name="Snížit datový tok" />
+                                        <TextBlock Text="{Binding BitrateText}" Style="{StaticResource TextMono}" Foreground="{DynamicResource Text}" Margin="10,0" VerticalAlignment="Center" />
+                                        <Button Style="{StaticResource IconButton}" Content="+" FontSize="16" Command="{Binding BitrateUpCommand}"
+                                                AutomationProperties.Name="Zvýšit datový tok" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="{Binding BitrateHint}" Style="{StaticResource TextFaint}" FontSize="13" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Grid.Row="3" Text="Výřez" Style="{StaticResource RowLabel}" Margin="0,16,18,0" />
+                            <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,16,0,0">
+                                <ComboBox ItemsSource="{Binding Aspects}" SelectedItem="{Binding Aspect}" DisplayMemberPath="Label" Width="130"
+                                          ToolTip="Ořez na frame lines (poměr stran)" AutomationProperties.AutomationId="AspectChoice" />
+                                <StackPanel Orientation="Horizontal" Margin="10,0,0,0" Visibility="{Binding ShowFrameScale, Converter={StaticResource BoolToVisible}}"
+                                            ToolTip="Velikost frame lines vůči obrazu – 90 % = 10 % overscan">
+                                    <Button Style="{StaticResource IconButton}" Content="−" FontSize="16" Command="{Binding ScaleDownCommand}" />
+                                    <TextBlock Text="{Binding ScaleText}" Width="90" TextAlignment="Center" VerticalAlignment="Center" />
+                                    <Button Style="{StaticResource IconButton}" Content="+" FontSize="16" Command="{Binding ScaleUpCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- LUT podle kamery -->
+                        <DockPanel Margin="0,26,0,10">
+                            <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Vlastní .cube…" Command="{Binding PickLutCommand}"
+                                    AutomationProperties.AutomationId="PickLutButton" />
+                            <TextBlock Text="LUT PODLE KAMERY" Style="{StaticResource StepTitle}" />
+                        </DockPanel>
+                        <DockPanel>
+                            <TextBlock Text="LUT" Style="{StaticResource RowLabel}" Width="120" Margin="0" />
+                            <ComboBox ItemsSource="{Binding LutChoices}" SelectedItem="{Binding LutChoice}" DisplayMemberPath="Label" HorizontalAlignment="Left" MinWidth="260"
+                                      AutomationProperties.AutomationId="LutChoice" />
+                        </DockPanel>
+                        <Border Style="{StaticResource ListBorder}" Margin="0,12,0,0" Visibility="{Binding LutRows.Count, Converter={StaticResource CountToVisible}}">
+                            <ItemsControl ItemsSource="{Binding LutRows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{DynamicResource LineSoft}" BorderThickness="0,0,0,1" Padding="14,10">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Marker, Converter={StaticResource IsNull}}" Value="False">
+                                                            <Setter Property="Background" Value="{DynamicResource AccentSoft2}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="1.3*" />
+                                                    <ColumnDefinition Width="1.6*" />
+                                                    <ColumnDefinition Width="70" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Title}" FontSize="13" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Detail}" FontSize="13" Foreground="{DynamicResource Text2}" TextTrimming="CharacterEllipsis" Margin="12,0" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Marker}" FontSize="13" Foreground="{DynamicResource AccentText}" TextAlignment="Right" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                        <DockPanel Margin="0,12,0,0" Visibility="{Binding ShowFallback, Converter={StaticResource BoolToVisible}}">
+                            <TextBlock Text="Když kameru nepoznám:" Style="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <ComboBox ItemsSource="{Binding FallbackChoices}" SelectedItem="{Binding Fallback}" DisplayMemberPath="Label" HorizontalAlignment="Left" MinWidth="200"
+                                      AutomationProperties.AutomationId="LutFallbackChoice" />
+                        </DockPanel>
+                        <DockPanel Margin="0,10,0,0" Visibility="{Binding ShowCustom, Converter={StaticResource BoolToVisible}}">
+                            <TextBlock Text="Vlastní LUT:" Style="{StaticResource TextMuted}" Margin="0,0,10,0" />
+                            <TextBlock Text="{Binding LutName}" Style="{StaticResource TextMono}" ToolTip="{Binding LutPath}" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                        <Button Style="{StaticResource SecondaryButton}" Content="{Binding RulesButtonText}" Command="{Binding EditRulesCommand}" HorizontalAlignment="Left"
+                                Margin="0,12,0,0" ToolTip="Vlastní pořadí: kamera / sériové číslo / cívka / složka → LUT"
+                                Visibility="{Binding ShowRules, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="LutRulesButton" />
+
+                        <!-- Další -->
+                        <TextBlock Text="DALŠÍ" Style="{StaticResource StepTitle}" Margin="0,26,0,10" />
+                        <CheckBox Style="{StaticResource Check}" Content="Zvuk v proxy" IsChecked="{Binding Audio}" Margin="0,0,0,10" />
+                        <CheckBox Style="{StaticResource Check}" Content="Přeskočit proxy nahrané kamerou (SUB / PROXY)" IsChecked="{Binding SkipCameraProxies}" Margin="0,0,0,10" />
+                        <CheckBox Style="{StaticResource Check}" Content="Kopírovat proxy na všechny cíle" IsChecked="{Binding CopyToAllDestinations}" Margin="0,0,0,10" />
+                        <DockPanel Margin="0,4,0,0">
+                            <TextBlock Text="Kopírovat proxy i do složky" Style="{StaticResource TextMuted}" VerticalAlignment="Center" Width="200" />
+                            <Button DockPanel.Dock="Right" Style="{StaticResource SmallIconButton}" Command="{Binding ClearFolderCommand}" ToolTip="Nekopírovat do složky"
+                                    Visibility="{Binding HasExtraFolder, Converter={StaticResource BoolToVisible}}"
+                                    AutomationProperties.AutomationId="ProxyFolderClearButton" AutomationProperties.Name="Nekopírovat do složky">
+                                <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconClose}" Width="14" Height="14" Tag="2"
+                                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Vybrat…" Command="{Binding PickFolderCommand}" Margin="8,0"
+                                    AutomationProperties.AutomationId="ProxyFolderButton" />
+                            <TextBlock Text="{Binding ExtraFolderName}" ToolTip="{Binding ExtraFolderPath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                        <!-- Why a start is blocked or what is skipped (the window's checks, not the proxy settings themselves). -->
+                        <TextBlock Text="{Binding DataContext.LutProblem, RelativeSource={RelativeSource AncestorType=UserControl}}" Style="{StaticResource TextDanger}" Margin="0,16,0,0"
+                                   Visibility="{Binding DataContext.LutProblem, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource NullToCollapsed}}" />
+                        <TextBlock Text="{Binding DataContext.ProxyFolderProblem, RelativeSource={RelativeSource AncestorType=UserControl}}" Style="{StaticResource TextDanger}" Margin="0,8,0,0"
+                                   Visibility="{Binding DataContext.ProxyFolderProblem, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource NullToCollapsed}}" />
+                        <TextBlock Text="{Binding DataContext.ToolsWarning, RelativeSource={RelativeSource AncestorType=UserControl}}" Style="{StaticResource TextWarn}" Margin="0,8,0,0"
+                                   Visibility="{Binding DataContext.ToolsWarning, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource NullToCollapsed}}" />
+                    </StackPanel>
+
+                    <!-- Náhled burn-inu: a grey 16:9 frame (rozhodnutí: no real frame yet) -->
+                    <StackPanel Width="380" DataContext="{Binding Proxy}">
+                        <TextBlock Text="NÁHLED BURN-INU" Style="{StaticResource StepTitle}" Margin="0,4,0,14" />
+                        <Border CornerRadius="10" Background="{DynamicResource PreviewBg}" BorderBrush="{DynamicResource LineInput}" BorderThickness="1" ClipToBounds="True">
+                            <Viewbox Stretch="Uniform">
+                                <Grid Width="384" Height="216">
+                                    <TextBlock Text="[náhled snímku z klipu]" Foreground="{DynamicResource PreviewText}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <Grid Visibility="{Binding HasFrame, Converter={StaticResource BoolToVisible}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="{Binding FrameLeft}" />
+                                            <ColumnDefinition Width="{Binding FrameWidth}" />
+                                            <ColumnDefinition Width="{Binding FrameRight}" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="{Binding FrameTop}" />
+                                            <RowDefinition Height="{Binding FrameHeight}" />
+                                            <RowDefinition Height="{Binding FrameBottom}" />
+                                        </Grid.RowDefinitions>
+                                        <Border Grid.Row="1" Grid.Column="1" BorderBrush="{DynamicResource FrameLine}" BorderThickness="1" />
+                                    </Grid>
+                                    <Border Background="{DynamicResource Shade}" Padding="6,2" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="25,0,0,17"
+                                            Visibility="{Binding BurnFilename, Converter={StaticResource BoolToVisible}}">
+                                        <TextBlock Text="A035C010_261007_R2KQ" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="White" />
+                                    </Border>
+                                    <Border Background="{DynamicResource Shade}" Padding="6,2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,25,17"
+                                            Visibility="{Binding BurnTimecode, Converter={StaticResource BoolToVisible}}">
+                                        <TextBlock Text="14:22:07:13" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="White" />
+                                    </Border>
+                                </Grid>
+                            </Viewbox>
+                        </Border>
+                        <Border CornerRadius="12" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="14,6" Margin="0,14,0,0">
+                            <StackPanel>
+                                <DockPanel Margin="0,9">
+                                    <TextBlock DockPanel.Dock="Right" Text="vlevo dole" Style="{StaticResource TextFaint}" VerticalAlignment="Center" />
+                                    <CheckBox Style="{StaticResource Check}" Content="Název klipu" IsChecked="{Binding BurnFilename}" AutomationProperties.AutomationId="BurnFilename" />
+                                </DockPanel>
+                                <Border Height="1" Background="{DynamicResource LineSoft}" />
+                                <DockPanel Margin="0,9">
+                                    <TextBlock DockPanel.Dock="Right" Text="vpravo dole" Style="{StaticResource TextFaint}" VerticalAlignment="Center" />
+                                    <CheckBox Style="{StaticResource Check}" Content="Timecode" IsChecked="{Binding BurnTimecode}" AutomationProperties.AutomationId="BurnTimecode" />
+                                </DockPanel>
+                                <Border Height="1" Background="{DynamicResource LineSoft}" />
+                                <DockPanel Margin="0,9">
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding FrameText}" Style="{StaticResource TextMono}" FontSize="12" VerticalAlignment="Center" />
+                                    <TextBlock Text="Výřez (frame lines)" Margin="28,0,0,0" />
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="Canon Cinema RAW Light a Sony X-OCN se zkopírují a ověří, proxy pro ně zatím nejde vyrobit." Style="{StaticResource TextFaint}"
+                                   FontSize="13" Margin="0,14,0,0" LineHeight="20" />
+                    </StackPanel>
+                </WrapPanel>
+
+                <!-- ── Report ── -->
+                <StackPanel Style="{StaticResource Section}" Visibility="{Binding SettingsSection, Converter={StaticResource EqualsToVisible}, ConverterParameter=report}">
+                    <TextBlock Text="Report" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="Vždy: HTML a PDF v _REPORT, ASC MHL a seznam kontrolních součtů na každém cíli." Style="{StaticResource TextMuted}" FontSize="14" Margin="0,4,0,26" />
+                    <CheckBox Style="{StaticResource Check}" Content="Seznam klipů CSV" IsChecked="{Binding ClipListCsv}" Margin="0,0,0,10" AutomationProperties.AutomationId="ClipListCsv" />
+                    <CheckBox Style="{StaticResource Check}" Content="Seznam klipů pro Avid (ALE)" IsChecked="{Binding ClipListAle}" Margin="0,0,0,10" AutomationProperties.AutomationId="ClipListAle" />
+                    <CheckBox Style="{StaticResource Check}" Content="Denní report po každé kartě" IsChecked="{Binding DayReportAfterEachCard}" AutomationProperties.AutomationId="DayReportAfterEachCard" />
+                    <TextBlock Text="DENNÍ REPORT" Style="{StaticResource StepTitle}" Margin="0,30,0,10" />
+                    <TextBlock Text="Vytvoří znovu denní report vybrané složky dne na cíli a otevře ho." Style="{StaticResource TextMuted}" />
+                    <Button Style="{StaticResource SecondaryButton}" Content="Denní report…" Command="{Binding DayReportCommand}" HorizontalAlignment="Left" Margin="0,12,0,0"
+                            AutomationProperties.AutomationId="DayReportButton" />
+                </StackPanel>
+
+                <!-- ── Oznámení ── -->
+                <StackPanel Style="{StaticResource Section}" Visibility="{Binding SettingsSection, Converter={StaticResource EqualsToVisible}, ConverterParameter=notify}">
+                    <TextBlock Text="Oznámení" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="Po konci úlohy oznámení ve Windows (když okno není vpředu) a na telefon přes ntfy." Style="{StaticResource TextMuted}" FontSize="14" Margin="0,4,0,26" />
+                    <TextBlock Text="{Binding NotifySummary}" AutomationProperties.AutomationId="NotifySummary" />
+                    <Button Style="{StaticResource SecondaryButton}" Content="Upravit oznámení…" Command="{Binding NotifySettingsCommand}" HorizontalAlignment="Left" Margin="0,14,0,0"
+                            AutomationProperties.AutomationId="NotifyButton" />
+                </StackPanel>
+
+                <!-- ── Dekodéry RAW ── -->
+                <StackPanel Style="{StaticResource Section}" Visibility="{Binding SettingsSection, Converter={StaticResource EqualsToVisible}, ConverterParameter=decoders}">
+                    <TextBlock Text="Dekodéry RAW" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="Nástroje pro proxy a náhledy. Platí pro všechny projekty." Style="{StaticResource TextMuted}" FontSize="14" Margin="0,4,0,26" />
+                    <ItemsControl ItemsSource="{Binding Tools}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource TileBorder}" Margin="0,0,0,10">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Vybrat…" Command="{Binding PickCommand}"
+                                                ToolTip="Vybrat cestu k nástroji" VerticalAlignment="Center" />
+                                        <ContentControl Width="16" Height="16" Margin="0,0,12,0">
+                                            <ContentControl.Style>
+                                                <Style TargetType="ContentControl" BasedOn="{StaticResource IconLine}">
+                                                    <Setter Property="Content" Value="{StaticResource IconClose}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource Text3}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Found}" Value="True">
+                                                            <Setter Property="Content" Value="{StaticResource IconCheck}" />
+                                                            <Setter Property="Foreground" Value="{DynamicResource Success}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ContentControl.Style>
+                                        </ContentControl>
+                                        <StackPanel>
+                                            <TextBlock>
+                                                <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" />
+                                                <Run Text="{Binding Purpose, Mode=OneWay}" FontSize="12" Foreground="{DynamicResource Text2}" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding PathText}" Style="{StaticResource TextMonoFaint}" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="Canon Cinema RAW Light a Sony X-OCN se zkopírují a ověří, proxy pro ně zatím nejde vyrobit." Style="{StaticResource TextFaint}" FontSize="13" Margin="0,4,0,0" />
+                    <CheckBox Style="{StaticResource Check}" Content="Blackmagic RAW Film Gen 4 převést na Gen 5 (použije se LUT Gen 5)" IsChecked="{Binding Proxy.BrawGen4ToGen5}"
+                              Margin="0,18,0,0" AutomationProperties.AutomationId="BrawGen4ToGen5" />
+                    <TextBlock Text="ověří až vzorek .braw Gen 4" Style="{StaticResource TextFaint}" Margin="28,2,0,0" />
+                    <TextBlock Text="{Binding ToolsWarning}" Style="{StaticResource TextWarn}" Margin="0,16,0,0" Visibility="{Binding ToolsWarning, Converter={StaticResource NullToCollapsed}}" />
+                </StackPanel>
+
+                <!-- ── Aplikace (global) ── -->
+                <StackPanel Style="{StaticResource Section}" Visibility="{Binding SettingsSection, Converter={StaticResource EqualsToVisible}, ConverterParameter=app}">
+                    <TextBlock Text="Aplikace" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="Platí pro všechny projekty." Style="{StaticResource TextMuted}" FontSize="14" Margin="0,4,0,26" />
+                    <TextBlock Text="{Binding VersionText}" FontWeight="SemiBold" />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button Style="{StaticResource SecondaryButton}" Content="Aktualizace…" Command="{Binding UpdatesCommand}" AutomationProperties.AutomationId="UpdatesButton" />
+                        <Button Style="{StaticResource SecondaryButton}" Content="Prověřit USB porty… (Ctrl+U)" Command="{Binding OpenHardwareCommand}" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding HardwareSummary}" Style="{StaticResource TextMuted}" Margin="0,10,0,0" />
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

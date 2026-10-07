@@ -8,7 +8,7 @@ public sealed record ProjectItem(string Name, bool IsActive, RelayCommand Select
 /// The top bar (UI návrh): the project switcher in the place of the preset switcher, the queue pill, the Hardware dot.
 public sealed partial class MainViewModel
 {
-    bool projectMenuOpen, moreMenuOpen;
+    bool projectMenuOpen;
     string? queuePill;
     int queueBadge;
     IReadOnlyList<ProjectItem> projectItems = [];
@@ -34,13 +34,6 @@ public sealed partial class MainViewModel
             ActiveProjectChoice = name;
         }, () => CanSwitchProject))).ToList();
         RaiseMany(nameof(ProjectItems), nameof(ProjectLabel));
-    }
-
-    /// The menu behind the last top-bar button.
-    public bool MoreMenuOpen
-    {
-        get => moreMenuOpen;
-        set => Set(ref moreMenuOpen, value);
     }
 
     /// "Běží 1 offload · 1 ve frontě" — null hides the pill.

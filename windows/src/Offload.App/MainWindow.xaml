@@ -10,10 +10,13 @@
         <KeyBinding Gesture="Ctrl+Enter" Command="{Binding StartCommand}" />
         <KeyBinding Gesture="Ctrl+U" Command="{Binding OpenHardwareCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+O" Command="{Binding VerifyBackupCommand}" />
+        <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
+        <KeyBinding Key="Escape" Command="{Binding CloseSettingsCommand}" />
     </Window.InputBindings>
     <DockPanel>
         <!-- Top bar (UI návrh): logo · project switcher (in the place of the preset switcher) · … · Ověřit zálohu · Hardware · more -->
-        <Border DockPanel.Dock="Top" Background="{DynamicResource BgHeader}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="20,10">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource BgHeader}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="20,10"
+                Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToCollapsed}}">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Width="28" Height="28" CornerRadius="7" Background="{DynamicResource Accent}">
@@ -113,43 +116,28 @@
                             </Ellipse>
                         </StackPanel>
                     </Button>
-                    <!-- More: the former Nástroje items until the settings page has them (next task). -->
-                    <Grid>
-                        <ToggleButton x:Name="MoreButton" Style="{StaticResource IconButton}" IsChecked="{Binding MoreMenuOpen}" ToolTip="Další"
-                                      IsHitTestVisible="{Binding IsOpen, ElementName=MorePopup, Converter={StaticResource Not}}"
-                                      AutomationProperties.AutomationId="SettingsButton" AutomationProperties.Name="Nastavení">
-                            <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconSliders}" Width="17" Height="17"
-                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
-                        </ToggleButton>
-                        <Popup x:Name="MorePopup" IsOpen="{Binding MoreMenuOpen}" PlacementTarget="{Binding ElementName=MoreButton}" Placement="Bottom"
-                               HorizontalOffset="-220" StaysOpen="False" AllowsTransparency="True" VerticalOffset="6">
-                            <Border Background="{DynamicResource Raised}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" CornerRadius="10" Padding="6" MinWidth="250">
-                                <StackPanel>
-                                    <Button Style="{StaticResource GhostButton}" Content="Denní report…" Command="{Binding DayReportCommand}" HorizontalContentAlignment="Left"
-                                            AutomationProperties.AutomationId="DayReportMenuItem" />
-                                    <Button Style="{StaticResource GhostButton}" Content="Oznámení…" Command="{Binding NotifySettingsCommand}" HorizontalContentAlignment="Left"
-                                            AutomationProperties.AutomationId="NotifyMenuItem" />
-                                    <Button Style="{StaticResource GhostButton}" Content="Aktualizace…" Command="{Binding UpdatesCommand}" HorizontalContentAlignment="Left"
-                                            AutomationProperties.AutomationId="UpdatesMenuItem" />
-                                    <CheckBox Style="{StaticResource Check}" Content="Ukládat report ověření" IsChecked="{Binding SaveVerifyReport}" Margin="12,8"
-                                              FontSize="13" AutomationProperties.AutomationId="SaveVerifyReportMenuItem" />
-                                </StackPanel>
-                            </Border>
-                        </Popup>
-                    </Grid>
+                    <!-- Nastavení (Ctrl+,): the settings page in place of the two columns. -->
+                    <Button Style="{StaticResource IconButton}" Command="{Binding OpenSettingsCommand}" ToolTip="Nastavení (Ctrl+,)"
+                            AutomationProperties.AutomationId="SettingsButton" AutomationProperties.Name="Nastavení">
+                        <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconSliders}" Width="17" Height="17"
+                                        Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                    </Button>
                 </StackPanel>
                 <Border />
             </DockPanel>
         </Border>
         <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="400" MinWidth="360" MaxWidth="480" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" MinWidth="520" />
-            </Grid.ColumnDefinitions>
-            <local:SetupPanel Grid.Column="0" />
-            <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Stretch" Background="{DynamicResource Line}" />
-            <local:QueuePanel Grid.Column="2" />
+            <local:SettingsPage Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVisible}}" />
+            <Grid Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToCollapsed}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="400" MinWidth="360" MaxWidth="480" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" MinWidth="520" />
+                </Grid.ColumnDefinitions>
+                <local:SetupPanel Grid.Column="0" />
+                <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Bg}" />
+                <local:QueuePanel Grid.Column="2" />
+            </Grid>
         </Grid>
     </DockPanel>
 </Window>

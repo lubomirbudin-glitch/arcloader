@@ -28,6 +28,7 @@ public sealed partial class MainViewModel : ObservableObject
         InitProjects();
         InitNotify();
         InitUpdates();
+        InitSettingsPage();
     }
 
     public StartupOptions Options { get; }

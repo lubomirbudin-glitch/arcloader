@@ -25,6 +25,7 @@ public sealed partial class MainViewModel
         if (EditNotifyDialog?.Invoke(SettingsStore.Clone(Settings.Notify)) is not { } edited) return;
         Settings.Notify = edited;
         SettingsChanged();
+        Raise(nameof(NotifySummary));
     }
 
     /// End of stage 1, stage 2 still running and the card safe to eject: "kartu lze vysunout" (Windows only).
