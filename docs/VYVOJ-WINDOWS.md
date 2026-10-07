@@ -19,6 +19,11 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 6 | karty a bezpečnost dat: historie karet, doplnění nových klipů, název z klipů, ověření zálohy proti ASC MHL, kontrola místa, české hlášky (0.2.0) | hotovo (čeká ruční test s kartou) |
 | 7 | výstupy pro produkci a střih: denní report, seznam klipů CSV/ALE, proxy pro přelinkování (reel name, všechny zvukové stopy), MD5 navíc k xxh64 (0.3.0) | hotovo (čeká ruční test: Resolve, Premiere, Avid, Excel) |
 | 8 | nastavení, oznámení, distribuce: projekty, vlastní pravidla LUTů, BRAW Film Gen 4 → Gen 5, oznámení Windows a ntfy, kontrola aktualizací, verze z `Directory.Build.props`, `build.ps1 -Sign` (0.4.0) | hotovo (čeká ruční test: oznámení, podpis; Gen 4 čeká vzorek) |
+| 9 | nový vzhled podle `docs/ui-navrh/`: tmavé a světlé téma, horní lišta, kroky 1–3, karty úloh s průběhem po cílech, pozastavení, oprava nesouhlasných souborů, dnešní historie, okno Nastavení (0.5.0) | rozpracováno |
+
+## 2026-10-07 — nový vzhled (UI podle docs/ui-navrh)
+
+- Úkol 1 — návrh nového vzhledu `docs/ui-navrh/` je v repu beze změny jako závazný podklad (README = zadání, `mockup/*.html` = přesné barvy, rozměry a texty, `screeny/*.png` = náhledy); README návrhu se neupravuje — rozhodnutí z 2026-10-07 jsou v hlavičce plánu 9 (od uživatele: tmavé i světlé téma podle Windows, systémové písmo, nové věci 1–4 a 10 a ze zbylých 6, 7 a 9, „Zkopírovat znovu“ jen nesouhlasné soubory na postižený disk; přepínač projektů místo presetů je návrh vývoje, uživatel o něm ví; náhled burn-inu zůstává šedý rám ze základního návrhu)
 
 ## 2026-10-07 — plán 8: nastavení, oznámení, distribuce
 

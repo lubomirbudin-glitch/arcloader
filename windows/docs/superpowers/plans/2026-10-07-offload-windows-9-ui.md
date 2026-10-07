@@ -8,7 +8,7 @@
 
 **Tech Stack:** C# / .NET 10, WPF (Fluent `ThemeMode="System"` pro standardní prvky + vlastní tokeny), xUnit, BCL (`System.Text.Json`, `Microsoft.Win32.Registry`, `SystemEvents`), ffprobe (jen čtení jednoho klipu při prověření karty), Windows PowerShell 5.1 (`windows\scripts\app-drive.ps1` pro snímky).
 
-**Spec:** `docs/ui-navrh/README.md` — zadání (sekce „Zadání pro vývojového Clauda“, „Hlavní principy“, „Design tokeny“, „Rozvržení a komponenty“, „Mapování na současný kód“, „Nové věci, které v kódu zatím nejsou“, „Postup implementace“), přesné barvy, rozměry a texty v `docs/ui-navrh/mockup/*.html`, náhledy `docs/ui-navrh/screeny/*.png`. Úkol 1 doplní README o sekci **„Rozhodnutí (2026-10-07, závazné)“** s rozhodnutími uživatele — od té chvíle je součástí zadání. Plán má dva soubory: tento (úkoly 1–9: návrh v repu a jádro) a `windows/docs/superpowers/plans/2026-10-07-offload-windows-9-ui-2.md` (úkoly 10–19: téma, GUI, ukázkový režim, dokumentace a verze, vizuální kontrola).
+**Spec:** `docs/ui-navrh/README.md` — zadání (sekce „Zadání pro vývojového Clauda“, „Hlavní principy“, „Design tokeny“, „Rozvržení a komponenty“, „Mapování na současný kód“, „Nové věci, které v kódu zatím nejsou“, „Postup implementace“), přesné barvy, rozměry a texty v `docs/ui-navrh/mockup/*.html`, náhledy `docs/ui-navrh/screeny/*.png`. README návrhu se **neupravuje** (ruling M14 pre-flightu; úkol 1 přidá `docs/ui-navrh/` do repa beze změny) — rozhodnutí z 2026-10-07 jsou tady a jsou součástí zadání (**„Rozhodnutí (2026-10-07, závazné)“**): **od uživatele** — tmavé i světlé téma podle Windows (Přizpůsobení → Barvy → Režim aplikací; světlá sada odvozená, kontrast textů min. 4,5 : 1 hlídá test), systémové písmo (Segoe UI / Segoe UI Variable Text, Cascadia Mono / Consolas; IBM Plex se nepřibaluje), nové věci 1–4 a 10 ano, ze zbylých schválené 6 (štítek kamery a typ připojení), 7 (dnešní historie) a 9 (Pozastavit), „Zkopírovat znovu“ jen soubory, které nesouhlasí, a jen na disk, kde nesouhlasí (nová úloha oprava); **neschválené** — 5 Presety: na jejich místě přepínač **projektů** z plánu 8 (návrh vývoje, uživatel o něm ví; v UI „Projekt“, nikdy „Preset“), 8 náhled burn-inu se skutečným snímkem: zůstává šedý rám s frame lines, názvem klipu a TC ze základního návrhu; Mac beze změny, dokud uživatel neschválí Windows verzi. Plán má dva soubory: tento (úkoly 1–9: návrh v repu a jádro) a `windows/docs/superpowers/plans/2026-10-07-offload-windows-9-ui-2.md` (úkoly 10–19: téma, GUI, ukázkový režim, dokumentace a verze, vizuální kontrola).
 
 ## Global Constraints
 
@@ -154,6 +154,11 @@ Pět vstupů, které zadání implikuje, ale žádný úkol by je bez výslovné
 Složka `docs/ui-navrh/` je v pracovní kopii, ale není v gitu (`?? docs/ui-navrh/`). Úkol ji přidá beze změny mockupů
 a snímků, doplní README o rozhodnutí uživatele (od té chvíle součást zadání) a založí sekci plánu 9 v
 `docs/VYVOJ-WINDOWS.md`. Kód se nemění.
+
+> **Ruling M14 (pre-flight, přednost před kroky níže):** README návrhu se **neupravuje** — celá složka jde do repa beze
+> změny (10 souborů). Rozhodnutí z 2026-10-07 jsou v hlavičce plánu (odstavec **Spec**), přepínač projektů je tam
+> uvedený jako návrh vývoje a šedý rám burn-inu jako základní návrh, ne jako rozhodnutí uživatele. Krok 2 odpadá a
+> řádek VYVOJ úkolu 1 to říká.
 
 **Files:**
 - Create (přidat do gitu tak, jak jsou): `docs/ui-navrh/mockup/01-pripraveno.html`, `docs/ui-navrh/mockup/02-probiha-offload.html`, `docs/ui-navrh/mockup/03-hotovo-a-chyba.html`, `docs/ui-navrh/mockup/04-nastaveni-proxy.html`, `docs/ui-navrh/screeny/01-pripraveno.png`, `docs/ui-navrh/screeny/01-pripraveno-uzke.png`, `docs/ui-navrh/screeny/02-probiha-offload.png`, `docs/ui-navrh/screeny/03-hotovo-a-chyba.png`, `docs/ui-navrh/screeny/04-nastaveni-proxy.png`

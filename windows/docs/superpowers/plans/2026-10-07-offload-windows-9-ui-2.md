@@ -8,7 +8,7 @@
 
 **Tech Stack:** C# / .NET 10, WPF (Fluent + vlastní tokeny), xUnit, Windows PowerShell 5.1 (`windows\scripts\app-drive.ps1`), Microsoft Edge bez okna (tisk návodu).
 
-**Spec:** `docs/ui-navrh/README.md` (včetně sekce „Rozhodnutí (2026-10-07, závazné)“ z úkolu 1), `docs/ui-navrh/mockup/*.html`, `docs/ui-navrh/screeny/*.png`. **Global Constraints, Review Focus, Rozhodnutí a mapa funkcí jsou v první části** `windows/docs/superpowers/plans/2026-10-07-offload-windows-9-ui.md` a platí pro každý úkol tady; před prvním úkolem této části je přečtěte.
+**Spec:** `docs/ui-navrh/README.md` (beze změny; „Rozhodnutí (2026-10-07, závazné)“ jsou v hlavičce první části — ruling M14), `docs/ui-navrh/mockup/*.html`, `docs/ui-navrh/screeny/*.png`. **Global Constraints, Review Focus, Rozhodnutí a mapa funkcí jsou v první části** `windows/docs/superpowers/plans/2026-10-07-offload-windows-9-ui.md` a platí pro každý úkol tady; před prvním úkolem této části je přečtěte.
 
 ## Global Constraints
 
@@ -7856,8 +7856,8 @@ Nahradit:
   limity velikosti, síťové cesty se neotevírají; vlastní soubor pro Mac rozhodne Mac). Podpis má Mac vlastní
   (`codesign` + notarizace).
 
-- **Nový vzhled (Windows plán 9, 2026-10-07, 0.5.0):** návrh [`docs/ui-navrh/`](ui-navrh/) (README = zadání, sekce
-  „Rozhodnutí (2026-10-07, závazné)“). Mac převezme **až po schválení Windows verze**: rozvržení (horní lišta, kroky
+- **Nový vzhled (Windows plán 9, 2026-10-07, 0.5.0):** návrh [`docs/ui-navrh/`](ui-navrh/) (README = zadání;
+  „Rozhodnutí (2026-10-07, závazné)“ v hlavičce plánu 9). Mac převezme **až po schválení Windows verze**: rozvržení (horní lišta, kroky
   1–3, karty úloh po stavech, stránka Nastavení, dnes a historie karet), přepínač **projektů** místo presetů, tmavé
   i světlé téma podle systému; **Pozastavit** (brána mezi 16MB bloky kopie a zpětného čtení a mezi klipy 2. fáze, žádný
   proces se neuspává, zámek dne se během pauzy nedrží, report `copyPausedSeconds` / `verifyPausedSeconds`);

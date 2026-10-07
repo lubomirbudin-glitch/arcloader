@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Offload — hotovo</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0E1012}
+a{color:#7DB6FF}a:hover{color:#A9CEFF}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height: 900px; width: 100%; box-sizing: border-box; background: #0E1012; color: #ECEFF2; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid #262B31; background: #121518">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="width: 28px; height: 28px; border-radius: 7px; background: #2366D1; display: flex; align-items: center; justify-content: center; color: #FFFFFF">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"></path><path d="M7.5 9.5L12 14l4.5-4.5"></path><path d="M4 15v4h16v-4"></path></svg>
+</div>
+<span style="font-weight: 600; font-size: 15px">Offload</span>
+</div>
+<div style="width: 1px; height: 22px; background: #262B31"></div>
+<button style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2E343B; background: #1B1F23; color: #ECEFF2; font-size: 13px">
+<span style="color: #808994">Preset</span><span style="font-weight: 500">ALEXA 35 · Proxy 1080p H.264</span>
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A7AFB8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<div style="flex: 1 1 20px"></div>
+<button style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px; border: none; background: transparent; color: #C9D0D7; font-size: 13px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"></path><path d="M9 12l2 2 4-4"></path></svg>Ověřit zálohu
+</button>
+<button style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px; border: none; background: transparent; color: #C9D0D7; font-size: 13px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"></rect><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"></path></svg>Hardware
+</button>
+</header>
+
+<div style="flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: stretch">
+
+<section style="flex: 1 1 380px; max-width: 460px; box-sizing: border-box; background: #14171A; border-right: 1px solid #262B31; padding: 22px; display: flex; flex-direction: column; gap: 26px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #A7AFB8">1 · Karty</h2>
+<div style="border-radius: 12px; border: 1px dashed #343B43; padding: 26px 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; color: #A7AFB8">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#808994" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path d="M10.5 3v3.5M13.5 3v3.5"></path></svg>
+<span style="color: #ECEFF2; font-weight: 500">Vložte kartu do čtečky</span>
+<span style="font-size: 13px; line-height: 1.5">Objeví se tady automaticky.</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #A7AFB8">2 · Cíle</h2>
+<div style="border-radius: 12px; border: 1px solid #262B31; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #22272C"><span style="width: 22px; height: 22px; border-radius: 50%; background: #2A3038; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">1</span><span style="flex: 1 1 auto; font-weight: 500">RAID_A</span><span style="font-size: 13px; color: #A7AFB8">7,20 TB volno</span></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px"><span style="width: 22px; height: 22px; border-radius: 50%; background: #2A3038; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">2</span><span style="flex: 1 1 auto; font-weight: 500">SHUTTLE_B</span><span style="font-size: 13px; color: #F2B04A">1,90 TB volno</span></div>
+</div>
+</div>
+<div style="flex: 1 1 auto"></div>
+<button disabled style="height: 48px; border-radius: 10px; border: 1px solid #2E343B; background: #1B1F23; color: #808994; font-size: 15px; font-weight: 600">Spustit offload</button>
+</section>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 22px 28px 28px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: center; gap: 4px">
+<button style="height: 32px; padding: 0 14px; border-radius: 8px; border: none; background: #1F2429; color: #ECEFF2; font-size: 13px; font-weight: 600">Fronta</button>
+<button style="height: 32px; padding: 0 14px; border-radius: 8px; border: none; background: transparent; color: #A7AFB8; font-size: 13px">Historie karet</button>
+</div>
+
+<article style="border-radius: 16px; border: 1px solid #1F4A36; background: #111A16; overflow: hidden">
+<div style="padding: 22px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 18px; border-bottom: 1px solid #1C3328">
+<div style="width: 52px; height: 52px; border-radius: 14px; background: #42D392; color: #0B1F15; display: flex; align-items: center; justify-content: center; flex: none"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"></path><path d="M9 12l2 2 4-4"></path></svg></div>
+<div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 20px; font-weight: 600">A035_ARRI — kartu lze vysunout</span>
+<span style="color: #9FD9BC">Všech 24 souborů je na 2 discích a ověřených (xxHash64).</span>
+</div>
+<button style="height: 44px; padding: 0 18px; border-radius: 10px; border: none; background: #42D392; color: #0B1F15; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l7 8H5z"></path><path d="M5 18h14"></path></svg>Vysunout kartu</button>
+</div>
+
+<div style="padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; border-bottom: 1px solid #1C3328">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #8FA89B">Kopie</span><span style="font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums">602 MB/s</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #8FA89B">Ověření</span><span style="font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums">799 MB/s</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #8FA89B">Proxy</span><span style="font-size: 18px; font-weight: 600">24 / 24</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #8FA89B">Celkem</span><span style="font-size: 18px; font-weight: 600">6 min 12 s</span></div>
+</div>
+
+<div style="padding: 18px 24px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px">
+<div style="aspect-ratio: 16 / 9; border-radius: 6px; background: #26302B; display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #B9C6BF">C001</div>
+<div style="aspect-ratio: 16 / 9; border-radius: 6px; background: #2B2A26; display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #C6C2B9">C002</div>
+<div style="aspect-ratio: 16 / 9; border-radius: 6px; background: #232A33; display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #B9C1CC">C003</div>
+<div style="aspect-ratio: 16 / 9; border-radius: 6px; background: #2E2828; display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #CCBDBD">C004</div>
+<div style="aspect-ratio: 16 / 9; border-radius: 6px; background: #262B2E; display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #BCC4C9">C005</div>
+<div style="aspect-ratio: 16 / 9; border-radius: 6px; background: #1A211D; border: 1px solid #2A3A31; display: flex; align-items: center; justify-content: center; box-sizing: border-box; font-size: 12px; color: #9FD9BC">+18</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button style="height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #2B3A33; background: #16201B; color: #ECEFF2; font-size: 13px; display: flex; align-items: center; gap: 8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path d="M14 3v5h5M9 13h6M9 17h6"></path></svg>Report PDF</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #2B3A33; background: #16201B; color: #ECEFF2; font-size: 13px; display: flex; align-items: center; gap: 8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"></path></svg>Otevřít složku</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #2B3A33; background: #16201B; color: #ECEFF2; font-size: 13px; display: flex; align-items: center; gap: 8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M10 9.5v5l4-2.5z"></path></svg>Proxy</button>
+<span style="flex: 1 1 auto"></span>
+<span style="align-self: center; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #8FA89B">…/2026-10-07/A035_ARRI/</span>
+</div>
+</div>
+</article>
+
+<article style="border-radius: 16px; border: 1px solid #5A3A1E; background: #1A1510; padding: 18px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px">
+<div style="width: 40px; height: 40px; border-radius: 11px; background: #F2B04A; color: #2A1A05; display: flex; align-items: center; justify-content: center; flex: none"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"></path><path d="M12 10v4M12 17h.01"></path></svg></div>
+<div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 16px; font-weight: 600">B012_FX6 — kartu zatím nevysunujte</span>
+<span style="color: #E8C891">1 soubor na disku SHUTTLE_B nesouhlasí s kartou. Na RAID_A je vše v pořádku.</span>
+</div>
+<button style="height: 40px; padding: 0 16px; border-radius: 10px; border: none; background: #F2B04A; color: #2A1A05; font-size: 14px; font-weight: 600">Zkopírovat znovu</button>
+</div>
+<div style="border-radius: 10px; background: #120F0B; border: 1px solid #3A2A18; padding: 10px 14px; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">
+<span style="color: #ECEFF2; overflow-wrap: anywhere">XDROOT/Clip/B012C015_261007_9QW1.MXF</span>
+<span style="color: #9FD9BC">RAID_A ✓</span>
+<span style="color: #FFB4A6">SHUTTLE_B ✕ hash</span>
+</div>
+</article>
+</main>
+</div>
+</div>
+</x-dc>
+</body>
+</html>
+

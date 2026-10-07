@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Offload — probíhá kopírování</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0E1012}
+a{color:#7DB6FF}a:hover{color:#A9CEFF}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height: 900px; width: 100%; box-sizing: border-box; background: #0E1012; color: #ECEFF2; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid #262B31; background: #121518">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="width: 28px; height: 28px; border-radius: 7px; background: #2366D1; display: flex; align-items: center; justify-content: center; color: #FFFFFF">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"></path><path d="M7.5 9.5L12 14l4.5-4.5"></path><path d="M4 15v4h16v-4"></path></svg>
+</div>
+<span style="font-weight: 600; font-size: 15px">Offload</span>
+</div>
+<div style="width: 1px; height: 22px; background: #262B31"></div>
+<button style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2E343B; background: #1B1F23; color: #ECEFF2; font-size: 13px">
+<span style="color: #808994">Preset</span><span style="font-weight: 500">ALEXA 35 · Proxy 1080p H.264</span>
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A7AFB8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<div style="flex: 1 1 20px"></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px; background: #172235; color: #A9CEFF; font-size: 13px; font-weight: 500">
+<span style="width: 7px; height: 7px; border-radius: 50%; background: #5AA2FF"></span>Běží 1 offload · 1 ve frontě
+</div>
+<button style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px; border: none; background: transparent; color: #C9D0D7; font-size: 13px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"></rect><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"></path></svg>Hardware
+</button>
+</header>
+
+<div style="flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: stretch">
+
+<section style="flex: 1 1 380px; max-width: 460px; box-sizing: border-box; background: #14171A; border-right: 1px solid #262B31; padding: 22px; display: flex; flex-direction: column; gap: 26px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #A7AFB8">1 · Karty</h2>
+<div style="border-radius: 12px; border: 1px dashed #343B43; padding: 26px 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; color: #A7AFB8">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#808994" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path d="M10.5 3v3.5M13.5 3v3.5"></path></svg>
+<span style="color: #ECEFF2; font-weight: 500">Vložte další kartu</span>
+<span style="font-size: 13px; line-height: 1.5">Objeví se tady sama a zařadí se za běžící offload.</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #A7AFB8">2 · Cíle</h2>
+<div style="border-radius: 12px; border: 1px solid #262B31; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #22272C"><span style="width: 22px; height: 22px; border-radius: 50%; background: #2A3038; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">1</span><span style="flex: 1 1 auto; font-weight: 500">RAID_A</span><span style="font-size: 13px; color: #A7AFB8">7,20 TB volno</span></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px"><span style="width: 22px; height: 22px; border-radius: 50%; background: #2A3038; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">2</span><span style="flex: 1 1 auto; font-weight: 500">SHUTTLE_B</span><span style="font-size: 13px; color: #A7AFB8">1,92 TB volno</span></div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #A7AFB8">3 · Po zkopírování</h2>
+<p style="margin: 0; color: #A7AFB8; line-height: 1.6">Ověření xxHash64 · analýza a náhledy · proxy 1080p H.264 · report PDF, HTML, MHL</p>
+</div>
+<div style="flex: 1 1 auto"></div>
+<button disabled style="height: 48px; border-radius: 10px; border: 1px solid #2E343B; background: #1B1F23; color: #808994; font-size: 15px; font-weight: 600">Zařadit do fronty</button>
+</section>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 22px 28px 28px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: center; gap: 4px">
+<button style="height: 32px; padding: 0 14px; border-radius: 8px; border: none; background: #1F2429; color: #ECEFF2; font-size: 13px; font-weight: 600">Fronta <span style="color: #7DB6FF">2</span></button>
+<button style="height: 32px; padding: 0 14px; border-radius: 8px; border: none; background: transparent; color: #A7AFB8; font-size: 13px">Historie karet</button>
+</div>
+
+<article style="border-radius: 16px; border: 1px solid #2B3B55; background: #13171C; padding: 22px 24px; display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px">
+<div style="width: 42px; height: 42px; border-radius: 10px; background: #1E3354; color: #7DB6FF; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path d="M10.5 3v3.5M13.5 3v3.5"></path></svg></div>
+<div style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 18px; font-weight: 600">A035_ARRI</span>
+<span style="color: #A7AFB8; font-size: 13px">24 klipů · 1,70 GB · ALEXA 35</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
+<span style="font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1">38 %</span>
+<span style="color: #A7AFB8; font-size: 13px">zbývá ~0:02 kopie · ~0:06 celkem</span>
+</div>
+</div>
+
+<ol style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<li style="display: flex; flex-direction: column; gap: 8px"><div style="height: 4px; border-radius: 99px; background: #2A3038; overflow: hidden"><div style="width: 38%; height: 100%; background: #5AA2FF"></div></div><span style="font-size: 13px; font-weight: 600; color: #ECEFF2">1 · Kopírování</span></li>
+<li style="display: flex; flex-direction: column; gap: 8px"><div style="height: 4px; border-radius: 99px; background: #2A3038"></div><span style="font-size: 13px; color: #808994">2 · Ověření</span></li>
+<li style="display: flex; flex-direction: column; gap: 8px"><div style="height: 4px; border-radius: 99px; background: #2A3038"></div><span style="font-size: 13px; color: #808994">3 · Proxy</span></li>
+<li style="display: flex; flex-direction: column; gap: 8px"><div style="height: 4px; border-radius: 99px; background: #2A3038"></div><span style="font-size: 13px; color: #808994">4 · Report</span></li>
+</ol>
+
+<div style="border-radius: 12px; background: #0F1215; border: 1px solid #22272C; overflow: hidden">
+<div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 3fr) minmax(0, 0.9fr); gap: 16px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #1D2125">
+<span style="display: flex; align-items: center; gap: 8px; color: #C9D0D7"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path></svg>Čtení karty</span>
+<div style="height: 6px; border-radius: 99px; background: #2A3038; overflow: hidden"><div style="width: 38%; height: 100%; background: #5AA2FF"></div></div>
+<span style="text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 13px">661 MB/s</span>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 3fr) minmax(0, 0.9fr); gap: 16px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #1D2125">
+<span style="display: flex; align-items: center; gap: 8px; color: #C9D0D7"><span style="width: 18px; height: 18px; border-radius: 50%; background: #2A3038; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center">1</span>RAID_A</span>
+<div style="height: 6px; border-radius: 99px; background: #2A3038; overflow: hidden"><div style="width: 38%; height: 100%; background: #5AA2FF"></div></div>
+<span style="text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 13px">661 MB/s</span>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 3fr) minmax(0, 0.9fr); gap: 16px; align-items: center; padding: 12px 16px">
+<span style="display: flex; align-items: center; gap: 8px; color: #C9D0D7"><span style="width: 18px; height: 18px; border-radius: 50%; background: #2A3038; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center">2</span>SHUTTLE_B</span>
+<div style="height: 6px; border-radius: 99px; background: #2A3038; overflow: hidden"><div style="width: 37%; height: 100%; background: #5AA2FF"></div></div>
+<span style="text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 13px">655 MB/s</span>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between">
+<div style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-size: 12px; color: #808994">Soubor 10 / 24</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C9D0D7; overflow-wrap: anywhere">A035C010_261007_R2KQ.mxf</span>
+</div>
+<div style="display: flex; gap: 8px">
+<button style="height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #2E343B; background: #1B1F23; color: #ECEFF2; font-size: 13px">Pozastavit</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #3F2A27; background: transparent; color: #FF9A8A; font-size: 13px">Zrušit</button>
+</div>
+</div>
+</article>
+
+<article style="border-radius: 14px; border: 1px solid #22272C; background: #121518; padding: 14px 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px">
+<div style="width: 34px; height: 34px; border-radius: 9px; background: #23292F; color: #A7AFB8; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path d="M10.5 3v3.5M13.5 3v3.5"></path></svg></div>
+<div style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">B012_FX6 <span style="font-weight: 400; color: #A7AFB8">— doplnění</span></span><span style="font-size: 13px; color: #A7AFB8">2 nové klipy · 14,2 GB · stejné cíle</span></div>
+<span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 99px; background: #23292F; color: #C9D0D7">Čeká ve frontě</span>
+</article>
+
+<div style="display: flex; gap: 10px; align-items: center; padding: 4px 4px 0; color: #808994; font-size: 13px">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4M12 16h.01"></path></svg>
+Nejpomalejší článek: čtečka karty (USB 3.2 Gen 1). Disky by zvládly víc.
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+</body>
+</html>
+
