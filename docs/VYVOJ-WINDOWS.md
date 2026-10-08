@@ -24,6 +24,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-08 — plán 10: Verify-in-Proxy
 
+- Úkol 3: `_REPORT/offload-manifest.jsonl` — jen připisovaný manifest (záznam souboru s bloky, kontrolní body rozepsaného souboru), řádek přerušený pádem se přeskočí.
 - Úkol 2: `BlockVerifier` — ověření po blocích v libovolném pořadí, kusy bloků, opakované čtení (nesoulad = chyba I/O), chybějící rozsahy, délka souboru na disku.
 - Úkol 1: XXH3-128 ke každému souboru (report `files[].xxh128`, ASC MHL `<xxh128>` vedle `<xxh64>`, R2) a XXH3-64 každého bloku při čtení karty; `.xxh64` a `hashAlgorithms` beze změny.
 
