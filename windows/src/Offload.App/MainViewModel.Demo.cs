@@ -81,6 +81,13 @@ public sealed partial class MainViewModel
                 Jobs.Insert(0, new JobItemViewModel(this, DemoScenario.Mismatch(Source("B012_FX6"), roots), "B012_FX6", canEject: false));
                 Jobs.Insert(0, new JobItemViewModel(this, DemoScenario.Done(Source("A035_ARRI"), roots, GreyThumbnail), "A035_ARRI", canEject: false));
                 break;
+            case DemoState.Verifying:
+                // Plan 10 (R5): both verdicts for the screenshots — "Lze vyjmout" while verifying, the content defect, "Lze formátovat".
+                Jobs.Insert(0, new JobItemViewModel(this, DemoScenario.Done(Source("A035_ARRI"), roots, GreyThumbnail), "A035_ARRI", canEject: false));
+                Jobs.Insert(0, new JobItemViewModel(this, DemoScenario.ContentDefect(Source("A037_ARRI"), roots, GreyThumbnail), "A037_ARRI", canEject: false));
+                Jobs.Insert(0, new JobItemViewModel(this, DemoScenario.Verifying(Source("A036_ARRI"), roots), "A036_ARRI", canEject: false,
+                    facts: new JobCardFacts(24, 24, 96_000_000_000, "ALEXA 35", false)));
+                break;
             case DemoState.Settings:
                 SettingsSection = SettingsSections.Proxy;
                 IsSettingsOpen = true;

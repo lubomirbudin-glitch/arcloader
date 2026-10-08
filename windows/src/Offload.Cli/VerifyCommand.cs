@@ -30,7 +30,7 @@ static class VerifyCommand
         return cmd;
     }
 
-    /// Exit 0 when every card verified; 1 when any had a problem (or there was nothing to verify). The problem lines stay
+    /// Exit 0 when every card verified; 1 when any had a problem, an unfinished generation (plan 10) or nothing to verify. The problem lines stay
     /// machine-readable (MISMATCH, MISSING, ERROR, EXTRA, FAILED-AT-COPY, FAILED-SUPERSEDED, CHAIN) for scripts; the summary is Czech.
     static int Run(string folder, bool writeReport)
     {
@@ -104,6 +104,6 @@ static class VerifyCommand
                 Console.Error.WriteLine(Msg.CliError + Msg.ReportNotWritten(e.Message));
             }
         }
-        return r.Success;
+        return r.Success && !r.Unfinished;   // M-c: an unfinished generation is not a verified backup
     }
 }

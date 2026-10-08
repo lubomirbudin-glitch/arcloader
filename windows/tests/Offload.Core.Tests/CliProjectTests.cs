@@ -251,7 +251,10 @@ public class CliProjectTests
 
             var r = Run(folder, seen, AppendCommand.Create(), card, "--project", "Reklama Y");
 
-            Assert.True(r.Exit == 0, r.Out + r.Err);
+            // The append ran; the earlier copy was made without verification (Film X), so the backup is not "Lze
+            // formátovat" — R5 / ruling I1 (plan 10): exit 1 then, with the warning.
+            Assert.True(r.Exit == 1, r.Out + r.Err);
+            Assert.Contains("Varování: " + Msg.UnverifiedEarlier(1), r.Out);
             Assert.Equal("Film X", seen[1].Project);
             Assert.Equal([Path.Combine(d1, "2026-10-07", "A001")], seen[1].AppendInto);
         }

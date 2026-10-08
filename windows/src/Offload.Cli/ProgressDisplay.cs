@@ -110,7 +110,13 @@ sealed class ProgressDisplay : IDisposable
             else if (st.Phase is JobPhase.Analyzing or JobPhase.Proxies)
             {
                 line = $"{st.Phase.ToString().ToLowerInvariant()} {st.ClipIndex + 1}/{st.ClipCount}  {st.ClipFraction * 100,3:0}%  {st.ClipName}";
-                if (st.SafeToEject) line += "  (card safe to eject)";
+                // R5 (plan 10): "can be removed" once copied; formatting only after the verification.
+                if (st.SafeToFormat) line += "  (card safe to format)";
+                else if (st.SafeToEject) line += "  (card can be removed — verifying, do not format)";
+            }
+            else if (st.Phase == JobPhase.Finishing)
+            {
+                line = $"finishing verify  {Format.Bytes(st.VerifiedBytes)} / {Format.Bytes(st.VerifyTotal)}";
             }
             else
             {

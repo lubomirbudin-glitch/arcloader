@@ -45,6 +45,7 @@ public sealed partial class JobItemViewModel : QueueItem
         OpenReportCommand = new RelayCommand(OpenReport);
         RevealCommand = new RelayCommand(Reveal);
         InitCard();
+        InitVerify();
     }
 
     public OffloadJob Job { get; }
@@ -73,7 +74,7 @@ public sealed partial class JobItemViewModel : QueueItem
             ResolveChain(plan);
         }
         // The whole backup's state comes from the job (read on its thread); a waiting card says when a paused job holds it.
-        headline = JobCard.Headline(CardName, progress.Status, Job.Report, DestNames, Job.Backup, owner.BlockedByPaused(this));
+        headline = JobCard.Headline(CardName, progress.Status, Job.Report, DestNames, Job.Backup, owner.BlockedByPaused(this), contentConfirmed);
         RefreshCard();
         Raise(string.Empty);   // every binding of the card may have changed
     }
@@ -81,7 +82,7 @@ public sealed partial class JobItemViewModel : QueueItem
     // ── The new card (UI návrh obr. 2, 3) ──────────────────────────────────────────────────────────────────────
     /// Waiting, Running, Done (green), Problem (yellow), Failed (red), Cancelled (grey) — which look the card has.
     public JobCardKind Kind => headline.Kind;
-    /// "A035_ARRI — kartu lze vysunout" / "B012_FX6 — kartu zatím nevysunujte" …
+    /// "A035_ARRI — kartu lze formátovat" / "A036_ARRI — lze vyjmout, formátovat zatím ne" / "B012_FX6 — kartu zatím nevysunujte" …
     public string HeadTitle => headline.Title;
     /// "Všech 24 souborů je na 2 discích a ověřených (xxHash64)." / "1 soubor na disku SHUTTLE_B nesouhlasí s kartou. …"
     public string HeadSub => headline.Sub;
@@ -158,6 +159,10 @@ public sealed partial class JobItemViewModel : QueueItem
     public TimeSpan? Stage2Elapsed => progress.Stage2Elapsed;
     public override bool IsFinished => Phase.IsFinished();
     public bool SafeToEject => progress.Status.SafeToEject;
+    /// R5 (plan 10): every copy verified everywhere — the one green verdict (ruling I2).
+    public bool SafeToFormat => progress.Status.SafeToFormat;
+    /// Ruling I2: the success sound plays once, when the job first reaches it (JobOutcomes.Chime).
+    internal bool Chimed { get; set; }
     public bool? CopySucceeded => progress.Status.CopySucceeded;
     /// Failed or copied with errors; a cancelled job is not an error.
     public override bool IsError => progress.IsError;
@@ -205,7 +210,8 @@ public sealed partial class JobItemViewModel : QueueItem
     internal void VolumesChanged() => RaiseMany(nameof(ShowEjectButton), nameof(CanRepair));
     /// A repair of this backup was queued or finished: the "Zkopírovat znovu" button may have to go (a finished card is not refreshed).
     internal void RepairChanged() => Raise(nameof(CanRepair));
-    public string SafeText => Texts.SafeToEject(Job.Plan?.CardPaths.Count ?? 0);
+    /// R5: "lze vyjmout" while the verification still runs, "lze vyjmout i formátovat" once it is done.
+    public string SafeText => SafeToFormat ? Texts.SafeToFormat(Job.Plan?.CardPaths.Count ?? 0) : Texts.SafeToEject(Job.Plan?.CardPaths.Count ?? 0);
     // Cancelled (unlike the Mac): no red "N souborů selhalo" and no rate of a copy that was cut short — one orange line.
     bool IsCancelled => Phase == JobPhase.Cancelled;
     public string? ErrorText => progress.Status.Error;

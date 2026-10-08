@@ -2,6 +2,59 @@ namespace Offload.Core.Tests;
 
 public class NativeIOTests
 {
+    // Fix round 1, M-b: what the handle really does — the flags the I/O manager kept, not the ones asked for.
+    [Fact]
+    public void WritesPastTheCache_OnlyForAnUnbufferedWriteThroughHandle()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "f.bin");
+        using (var h = NativeIO.OpenWrite(path, unbuffered: true)) Assert.True(NativeIO.WritesPastTheCache(h));
+        using (var h = NativeIO.OpenWrite(path, unbuffered: false)) Assert.False(NativeIO.WritesPastTheCache(h));
+        NativeIO.TestVolumes[dir.Path] = new NativeIO.TestVolume { IgnoreUnbuffered = true };
+        try
+        {
+            using var h = NativeIO.OpenWrite(path, unbuffered: true);
+            Assert.False(NativeIO.WritesPastTheCache(h));
+        }
+        finally
+        {
+            NativeIO.TestVolumes.TryRemove(dir.Path, out _);
+        }
+    }
+
+    // Fix round 1, M-c: the final path behind junctions — a junction resolves to its target (local here: no network in
+    // tests), also for a path below it that does not exist yet, and a file handle to its own full path.
+    [Fact]
+    public void FinalPath_ResolvesAJunction_AndAFileHandle()
+    {
+        using var dir = new TempDir();
+        var target = dir.Sub("target");
+        var junction = Path.Combine(dir.Path, "junction");
+        var start = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{junction}\" \"{target}\"")
+        {
+            CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true,
+        };
+        using (var mklink = System.Diagnostics.Process.Start(start)!)
+        {
+            mklink.StandardOutput.ReadToEnd();
+            mklink.WaitForExit();
+            Assert.Equal(0, mklink.ExitCode);
+        }
+        try
+        {
+            Assert.Equal(Path.GetFullPath(target), NativeIO.FinalPath(junction), StringComparer.OrdinalIgnoreCase);
+            Assert.Equal(Path.Combine(Path.GetFullPath(target), "not-yet"), NativeIO.FinalPath(Path.Combine(junction, "not-yet")), StringComparer.OrdinalIgnoreCase);
+            Assert.False(NativeIO.IsRemote(junction));
+            var file = Path.Combine(junction, "f.bin");
+            using var h = NativeIO.OpenWrite(file, unbuffered: false);
+            Assert.Equal(Path.Combine(Path.GetFullPath(target), "f.bin"), NativeIO.FinalPath(h), StringComparer.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(junction);
+        }
+    }
+
     [Fact]
     public void UnbufferedWrite_PaddedThenTruncated_HasExactContent()
     {

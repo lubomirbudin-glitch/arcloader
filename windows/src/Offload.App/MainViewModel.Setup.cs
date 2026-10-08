@@ -442,6 +442,20 @@ public sealed partial class MainViewModel
         set { Settings.Verify = value; SettingsChanged(); Raise(); }
     }
 
+    /// Plan 10 (R11): "Ověřit primární disk během proxy" — `verifyInProxy` in settings.json.
+    public bool VerifyInProxy
+    {
+        get => Settings.VerifyInProxy;
+        set { Settings.VerifyInProxy = value; SettingsChanged(); Raise(); }
+    }
+
+    /// Plan 10 (spec 6): the first destination is the primary one instead of the fastest — `verifyPrimary`.
+    public bool VerifyPrimaryFirst
+    {
+        get => Settings.VerifyPrimary == SettingsProfile.PrimaryFirst;
+        set { Settings.VerifyPrimary = value ? SettingsProfile.PrimaryFirst : SettingsProfile.PrimaryFastest; SettingsChanged(); Raise(); }
+    }
+
     /// "Kontrolní součet" (spec 3.5): xxHash64 or xxHash64 + MD5 — `hash` in settings.json.
     public IReadOnlyList<HashChoice> HashChoices => HashChoice.All;
 

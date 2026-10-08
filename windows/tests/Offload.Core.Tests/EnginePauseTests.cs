@@ -58,7 +58,7 @@ public class EnginePauseTests
         engine.Pauses.Resume();
         var report = await run.WaitAsync(TimeSpan.FromSeconds(60));
 
-        Assert.True(report.SafeToEject);
+        Assert.True(report.SafeToFormat);
         Assert.False(engine.Snapshot().Paused);
         Assert.True(report.CopyPausedSeconds >= 0.6, $"{report.CopyPausedSeconds}");
         Assert.Null(report.VerifyPausedSeconds);
@@ -84,7 +84,7 @@ public class EnginePauseTests
         Assert.InRange(held.ReadBytes, 2L * Chunk, (2L + options.BufferCount + 1) * Chunk);   // mid-file, one pool ahead at most
         engine.Pauses.Resume();
 
-        Assert.True((await run.WaitAsync(TimeSpan.FromSeconds(60))).SafeToEject);
+        Assert.True((await run.WaitAsync(TimeSpan.FromSeconds(60))).SafeToFormat);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class EnginePauseTests
         engine.Pauses.Resume();
         var report = await run.WaitAsync(TimeSpan.FromSeconds(60));
 
-        Assert.True(report.SafeToEject);
+        Assert.True(report.SafeToFormat);
         Assert.True(report.VerifyPausedSeconds >= 0.3, $"{report.VerifyPausedSeconds}");
         Assert.Null(report.CopyPausedSeconds);
     }
@@ -247,7 +247,7 @@ public class EnginePauseTests
         await copy.WaitAsync(TimeSpan.FromSeconds(60));
 
         Assert.Equal(JobPhase.Done, job.Status().Phase);
-        Assert.True(job.Report!.SafeToEject);
+        Assert.True(job.Report!.SafeToFormat);
         Assert.Equal(3, Volatile.Read(ref reads));   // at the start, the failed read after the pause, the retry
     }
 
@@ -278,7 +278,7 @@ public class EnginePauseTests
         Assert.Equal([held.ReadBytes, held.ReadBytes], held.WrittenBytes);
         engine.Pauses.Resume();
 
-        Assert.True((await run.WaitAsync(TimeSpan.FromSeconds(60))).SafeToEject);
+        Assert.True((await run.WaitAsync(TimeSpan.FromSeconds(60))).SafeToFormat);
     }
 
     // A folder source has no card identity (null when the copy started): nothing to compare, the copy goes on.
@@ -298,7 +298,7 @@ public class EnginePauseTests
         await copy.WaitAsync(TimeSpan.FromSeconds(60));
 
         Assert.Equal(JobPhase.Done, job.Status().Phase);
-        Assert.True(job.Report!.SafeToEject);
+        Assert.True(job.Report!.SafeToFormat);
         Assert.Equal(1, Volatile.Read(ref reads));
     }
 

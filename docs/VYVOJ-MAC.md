@@ -73,6 +73,11 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   světlé barvy i z tmavého režimu, `tr{break-inside:avoid}`; (3) tabulka klipů se vejde do okna: `table-layout:fixed` +
   `<colgroup>` v %, `overflow-wrap:anywhere`, náhledy `flex:1 1 0;max-width:128px`, v úzkém okně skrýt Formát/TC/Audio.
   Podrobnosti ve [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md), sekce „2026-10-08 — report: uložení do PDF“.
+- **Převzít z Windows 0.6.0 — Verify-in-Proxy (2026-10-08, R10: Mac jen záznam):** primární cíl ověřený čtením pro proxy
+  (na Macu AVFoundation/`AVAssetReader` s vlastním `AVAssetResourceLoaderDelegate` místo HTTP tapu, nebo jako na Windows
+  lokální HTTP server pro ffmpeg), ostatní cíle na pozadí, zápis `F_NOCACHE` a `F_FULLFSYNC`, `offload-manifest.jsonl`,
+  dva stavy karty „Lze vyjmout“ / „Lze formátovat“, `xxh128` v ASC MHL vedle `xxh64`, `clips[].content`; zelená (a zvuk) jen při „Lze formátovat“, „Lze vyjmout“ neutrální; `verifyPending` / `verifyIncomplete` v reportu = záloha nedokončená, nikdy „ověřeno“ (Ověřit zálohu ji ohlásí jako nedokončenou); „Dokončit přerušenou zálohu“ přes doplnění. Formát ve
+  [FORMATY.md](FORMATY.md) („Blokový manifest“, `offload_report.json`), rozdíly v [ROZDILY.md](ROZDILY.md).
 - **Převzít z Windows 0.5.1 — proxy (2026-10-08):** (1) `_PROXY/<složka klipu>/<klip>.mov` (složky jako na kartě, i ve
   složce pro proxy navíc), `_2` jen ve stejné složce, doplnění do ploché zálohy zůstane ploché (detekce z `proxyPath`
   v reportech); (2) `proxy.skipLighterSources` (výchozí `true`, jen u proxy H.264/HEVC — s proxy ProRes vždy proxy — a jen když se nepoužije LUT ani ořez): H.264/HEVC originál ne větší než proxy s tokem ≤ tok proxy

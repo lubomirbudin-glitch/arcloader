@@ -99,7 +99,7 @@ public class JobProgressTests
     public void StatusText_AndTone(JobPhase phase, bool? copySucceeded, string text, CardTone tone)
     {
         var p = new JobProgress(T0);
-        p.Update(new JobStatus { Phase = phase, CopySucceeded = copySucceeded }, T0);
+        p.Update(new JobStatus { Phase = phase, CopySucceeded = copySucceeded, SafeToFormat = copySucceeded == true }, T0);   // ruling I2: Ok only verified
         Assert.Equal(text, p.StatusText);
         Assert.Equal(tone, p.Tone);
     }
@@ -167,8 +167,9 @@ public class JobProgressTests
         Assert.Equal("2 cíle", Texts.Destinations(2));
         Assert.Equal("1 soubor · 1.00 KB", Texts.Files(1, 1000));
         Assert.Equal("12 souborů · 2.50 GB", Texts.Files(12, 2_500_000_000));
-        Assert.Equal("Všechny soubory jsou na 1 disku a ověřené — kartu lze vysunout.", Texts.SafeToEject(1));
-        Assert.Equal("Všechny soubory jsou na 2 discích a ověřené — kartu lze vysunout.", Texts.SafeToEject(2));
+        // R5 (plan 10): copied — "lze vyjmout"; verified — "lze vyjmout i formátovat".
+        Assert.Equal("Všechny soubory jsou na 1 disku — kartu lze vyjmout. Formátovat až po ověření.", Texts.SafeToEject(1));
+        Assert.Equal("Všechny soubory jsou na 2 discích a ověřené — kartu lze vyjmout i formátovat.", Texts.SafeToFormat(2));
         Assert.Equal("bez varování", Texts.Warnings(0));
         Assert.Equal("2 varování", Texts.Warnings(2));
     }

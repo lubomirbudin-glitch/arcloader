@@ -27,6 +27,80 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Plan 10 (R5, spec 9): the two verdicts of the card, never merged — "Lze vyjmout" and "Lze formátovat". -->
+        <Style x:Key="VerdictChip" TargetType="Border">
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Background" Value="{DynamicResource Track}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tone}" Value="Ok">
+                    <Setter Property="Background" Value="{DynamicResource SuccessFill}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tone}" Value="Warning">
+                    <Setter Property="Background" Value="{DynamicResource WarnFill}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tone}" Value="Error">
+                    <Setter Property="Background" Value="{DynamicResource Danger}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="VerdictChipText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tone}" Value="Ok">
+                    <Setter Property="Foreground" Value="{DynamicResource OnSuccess}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tone}" Value="Warning">
+                    <Setter Property="Foreground" Value="{DynamicResource OnWarn}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tone}" Value="Error">
+                    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <DataTemplate x:Key="VerdictChips">
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Visibility="{Binding ShowChips, Converter={StaticResource BoolToVisible}}"
+                        AutomationProperties.AutomationId="VerdictChips">
+                <Border Style="{StaticResource VerdictChip}" DataContext="{Binding EjectChip}">
+                    <TextBlock Text="{Binding Text}" Style="{StaticResource VerdictChipText}" AutomationProperties.AutomationId="EjectChip" />
+                </Border>
+                <Border Style="{StaticResource VerdictChip}" DataContext="{Binding FormatChip}">
+                    <TextBlock Text="{Binding Text}" Style="{StaticResource VerdictChipText}" AutomationProperties.AutomationId="FormatChip" />
+                </Border>
+            </StackPanel>
+        </DataTemplate>
+        <!-- Spec 7, 9: a content defect of a clip (the copy matches the card) — its place, a picture, and the confirmation. -->
+        <DataTemplate x:Key="ContentWarnings">
+            <Border CornerRadius="10" Background="{DynamicResource WarnListBg}" BorderBrush="{DynamicResource WarnListBorder}" BorderThickness="1" Padding="14,10" Margin="0,12,0,0"
+                    Visibility="{Binding ContentRows.Count, Converter={StaticResource CountToVisible}}">
+                <StackPanel>
+                    <TextBlock Text="Vady obsahu (kopie souhlasí s kartou — vada je už na kartě)" FontWeight="SemiBold" Foreground="{DynamicResource WarnText2}" Margin="0,0,0,6" />
+                    <ItemsControl ItemsSource="{Binding ContentRows}" AutomationProperties.AutomationId="ContentWarnings">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="0,2">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Náhled" Command="{Binding PreviewCommand}"
+                                            Visibility="{Binding HasPicture, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="DefectPreview" />
+                                    <!-- the clip and a yellow label with the place: "01:00:02:13 · poškozená data" -->
+                                    <WrapPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Clip}" FontWeight="SemiBold" FontFamily="{StaticResource MonoFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        <Border CornerRadius="10" Padding="10,3" Background="{DynamicResource WarnFill}" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Text}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource OnWarn}" AutomationProperties.AutomationId="DefectLabel" />
+                                        </Border>
+                                    </WrapPanel>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Style="{StaticResource WarnButton}" Content="{Binding ContentConfirmText}" Command="{Binding ConfirmContentCommand}" HorizontalAlignment="Left"
+                            Margin="0,10,0,0" Visibility="{Binding NeedsContentConfirm, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="ConfirmContent" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
         <!-- ── Waiting: one compact row ── -->
         <DataTemplate x:Key="WaitingCard">
             <Border CornerRadius="14" BorderBrush="{DynamicResource LineSoft}" BorderThickness="1" Background="{DynamicResource BgHeader}" Padding="18,14" Margin="0,0,0,18">
@@ -141,11 +215,24 @@
                                AutomationProperties.AutomationId="JobWarningText" />
                     <TextBlock Text="{Binding ProfileNote}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding ProfileNote, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobProfileNote" />
-                    <!-- safe to eject while stage 2 still runs -->
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VerdictChips}" Focusable="False" />
+                    <!-- safe to eject while stage 2 still runs; ruling I2: a neutral button — green only on the Done card (SafeToFormat) -->
                     <DockPanel Margin="0,12,0,0" Visibility="{Binding ShowSafe, Converter={StaticResource BoolToVisible}}">
-                        <Button DockPanel.Dock="Right" Style="{StaticResource SuccessSecondaryButton}" Content="Vysunout kartu" Command="{Binding EjectCommand}"
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Vysunout kartu" Command="{Binding EjectCommand}"
                                 Visibility="{Binding ShowEjectButton, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="EjectButton" />
-                        <TextBlock Text="{Binding SafeText}" Foreground="{DynamicResource Success}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding SafeText}" TextWrapping="Wrap" VerticalAlignment="Center">
+                            <!-- ruling I2 (plan 10): green only once everything is verified (Lze formátovat); "Lze vyjmout" neutral -->
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SafeToFormat}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource Success}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </DockPanel>
                     <TextBlock Text="{Binding PauseText}" Style="{StaticResource TextWarn}" Margin="0,12,0,0" Visibility="{Binding PauseText, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobPauseText" />
@@ -193,6 +280,7 @@
                             <TextBlock Text="{Binding HeadTitle}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" AutomationProperties.AutomationId="JobHeadTitle" />
                             <TextBlock Text="{Binding HeadSub}" Foreground="{DynamicResource SuccessText2}" TextWrapping="Wrap" Margin="0,4,0,0" AutomationProperties.AutomationId="JobHeadSub" />
                             <TextBlock Text="Karta vysunuta" Foreground="{DynamicResource SuccessLabel}" Margin="0,4,0,0" Visibility="{Binding Ejected, Converter={StaticResource BoolToVisible}}" />
+                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VerdictChips}" Focusable="False" />
                         </StackPanel>
                     </DockPanel>
                     <!-- Kopie · Ověření · Proxy · Celkem (nová věc 3) -->
@@ -242,6 +330,9 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <StackPanel Margin="24,14,24,18">
+                        <!-- spec 7: the content defects stay listed once confirmed (the card is green then) -->
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ContentWarnings}" Focusable="False" Margin="0,-12,0,10"
+                                        Visibility="{Binding ContentRows.Count, Converter={StaticResource CountToVisible}}" />
                         <TextBlock Text="{Binding NoteText}" Foreground="{DynamicResource SuccessText2}" TextWrapping="Wrap" Margin="0,0,0,10"
                                    Visibility="{Binding NoteText, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="JobNoteText" />
                         <TextBlock Text="{Binding WarningText}" Style="{StaticResource TextWarn}" Margin="0,0,0,10" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
@@ -297,8 +388,10 @@
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="{Binding HeadTitle}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" AutomationProperties.AutomationId="JobHeadTitle" />
                             <TextBlock Text="{Binding HeadSub}" Foreground="{DynamicResource WarnText2}" TextWrapping="Wrap" Margin="0,3,0,0" AutomationProperties.AutomationId="JobHeadSub" />
+                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VerdictChips}" Focusable="False" />
                         </StackPanel>
                     </DockPanel>
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ContentWarnings}" Focusable="False" />
                     <!-- path · state on each destination ("RAID_A ✓", "SHUTTLE_B ✕ hash") -->
                     <Border CornerRadius="10" Background="{DynamicResource WarnListBg}" BorderBrush="{DynamicResource WarnListBorder}" BorderThickness="1" Padding="14,10" Margin="0,14,0,0"
                             Visibility="{Binding FailedRows.Count, Converter={StaticResource CountToVisible}}">
@@ -389,17 +482,30 @@
                 <StackPanel>
                     <TextBlock Text="{Binding HeadTitle}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" AutomationProperties.AutomationId="JobHeadTitle" />
                     <TextBlock Text="{Binding HeadSub}" Style="{StaticResource TextMuted}" FontSize="14" Margin="0,3,0,0" AutomationProperties.AutomationId="JobHeadSub" />
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VerdictChips}" Focusable="False" />
                     <TextBlock Text="{Binding NoteText}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="{Binding NoteText, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobNoteText" />
                     <TextBlock Text="{Binding WarningText}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobWarningText" />
                     <TextBlock Text="{Binding ProfileNote}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding ProfileNote, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobProfileNote" />
-                    <!-- cancelled in stage 2 with a verified copy: the card may still be ejected -->
+                    <!-- cancelled in stage 2 with a whole copy: the card may still be ejected (a neutral button, ruling I2) -->
                     <DockPanel Margin="0,12,0,0" Visibility="{Binding ShowSafe, Converter={StaticResource BoolToVisible}}">
-                        <Button DockPanel.Dock="Right" Style="{StaticResource SuccessSecondaryButton}" Content="Vysunout kartu" Command="{Binding EjectCommand}"
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Vysunout kartu" Command="{Binding EjectCommand}"
                                 Visibility="{Binding ShowEjectButton, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="EjectButton" />
-                        <TextBlock Text="{Binding SafeText}" Foreground="{DynamicResource Success}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding SafeText}" TextWrapping="Wrap" VerticalAlignment="Center">
+                            <!-- ruling I2 (plan 10): green only once everything is verified (Lze formátovat); "Lze vyjmout" neutral -->
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SafeToFormat}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource Success}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </DockPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Visibility="{Binding HasReport, Converter={StaticResource BoolToVisible}}">
                         <Button Style="{StaticResource SecondaryButton}" Content="Report PDF" Command="{Binding OpenReportCommand}" Margin="0,0,8,0" AutomationProperties.AutomationId="ReportButton" />

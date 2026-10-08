@@ -23,6 +23,7 @@ Změna čehokoli tady = změna v obou verzích + záznam v obou `VYVOJ-*.md` + v
         <karta>.md5                   jen s xxh64 + MD5 (Windows od 0.3.0)
         <karta>_clips.csv             seznam klipů (Windows od 0.3.0)
         <karta>_clips.ale             seznam klipů pro Avid (Windows od 0.3.0, když je zapnutý)
+        offload-manifest.jsonl        blokový manifest (Windows od 0.6.0) — viz „Blokový manifest“
         offload_report_0002.json      jen po doplnění (generace 2, 3 …): report jen nových souborů
         offload_report_0002.txt
         <karta>_report_0002.html
@@ -94,7 +95,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | Klíč | Typ | Význam |
 |---|---|---|
 | `tool` | string | `offload` |
-| `version` | string | `0.1.0` (Mac), `0.5.1-win` (Windows) |
+| `version` | string | `0.1.0` (Mac), `0.6.0-win` (Windows) |
 | `generation` | číslo? | jen Windows od 0.2.0 a jen v reportu doplnění nebo opravy (`offload_report_NNNN.json`): číslo generace ASC MHL; chybí = 1 (celá kopie) |
 | `kind` | string? | jen Windows od 0.5.0: `repair` u opravy („Zkopírovat znovu“); chybí u celé kopie a doplnění. Mac ignoruje |
 | `copyPausedSeconds`, `verifyPausedSeconds` | číslo? | jen Windows od 0.5.0: sekundy, které kopie / zpětné čtení stály pozastavené (od Pozastavit do Pokračovat); chybí, když se nepozastavovalo. Rychlosti a doby v TXT, HTML a PDF je odečítají; Mac ignoruje |
@@ -104,12 +105,16 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `hashAlgorithms` | string[]? | jen Windows od 0.3.0 a jen když nejsou jen xxh64: `["xxh64", "md5"]` |
 | `cardName`, `date`, `source`, `sourceFilesystem` | string | |
 | `started`, `copyFinished`, `finished` | datum | |
-| `verified` | bool | proběhlo ověření zpětným čtením |
+| `verified` | bool | proběhlo ověření (Windows od 0.6.0 i během proxy — metoda v `destinations[].verifyMethod`) |
+| `verifyPending` | bool? | jen Windows od 0.6.0: kopie je hotová a ověřuje se s proxy (`verified` je zatím `false`, stavy `written`); report s tímto klíčem ještě **nemá generaci ASC MHL** — zapíše se až po ověření. Po pádu aplikace ho dokončí doplnění (viz „Blokový manifest“). Mac ignoruje |
+| `verifyIncomplete` | bool? | jen Windows od 0.6.0: výsledek ověření se nepodařilo zapsat do všech složek karty; složky, kam se zapsal, nesou tento klíč a nejsou nikdy „ověřené“, dokud doplnění („Dokončit přerušenou zálohu“) klíč nepřepíše (viz „Blokový manifest“). Mac ignoruje |
+| `safeToFormatSeconds` | číslo? | jen Windows od 0.6.0: sekundy od startu do chvíle, kdy byl každý soubor ověřený na každém cíli (bez pauz); chybí, když to nenastalo |
+| `verifyNotes[]` | string? | jen Windows od 0.6.0: česky — nestabilní čtení (blok se při opakovaném čtení lišil), stejný blok špatně na více cílech a co dává karta při novém čtení |
 | `totalFiles`, `totalBytes` | číslo | |
-| `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows) |
-| `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
+| `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows); Windows od 0.6.0 `verifyMethod` (`verify-in-proxy` = čtením pro proxy a dorovnáním, `read-back` = zpětným čtením; chybí bez ověření), `verifyNote` (česky, proč zpětným čtením, i když běželo ověření během proxy) a `volumeSerial` (`1A2B-3C4D`, sériové číslo svazku cíle — podle něj se cíl pozná i pod jiným písmenem, R12) |
+| `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `xxh128`? (XXH3-128, 32 malých hex, Windows od 0.6.0), `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
 | `skipped[]` | string | vynechané systémové položky |
-| `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`? (relativní k složce karty, např. `_PROXY/idle/1.mov` — viz „Proxy ve složkách jako na kartě“), `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje) |
+| `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`? (relativní k složce karty, např. `_PROXY/idle/1.mov` — viz „Proxy ve složkách jako na kartě“), `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje), `content`? {`state` (`ok` / `warn`), `kind` (`decode`, `audio`, `timestamps`, `frames`, `end`), `frame`, `timecode`, `message`, `framesDecoded`, `framesExpected`} (Windows od 0.6.0: co dekodér hlásil při tvorbě proxy — `warn` je vada souboru z kamery, kopie přitom souhlasí s kartou; Mac ignoruje) |
 | `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `skipLighterSources` (jen Windows od 0.5.1), `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5` — viz níže) |
 | `proxyEncoder` | string? | jen Windows: enkodér ffmpeg, kterým se renderovaly proxy (`h264_nvenc`, `libx264`, `prores_ks` …); chybí, když se žádná proxy nevyrenderovala |
 
@@ -174,6 +179,35 @@ Mac klíč nezná a ignoruje ho (renderuje vše).
 - Ignorované vzory: `.DS_Store`, `ascmhl`, `ascmhl/`, `_REPORT`, `_PROXY` + vynechané systémové soubory.
 - `ascmhl_chain.xml` s C4 ID souboru MHL (`c4` + base58(SHA-512), doplněno `1` na 88 znaků).
 - Ověřitelné nástrojem `ascmhl verify <složka karty>`.
+- Windows od 0.6.0: každý `<hash>` má i `<xxh128 action=… hashdate=…>` (XXH3-128, R2) — `<xxh64>` zůstává, takže zálohu
+  ověří i Mac a starší Offload. Do generace jde jen soubor ověřený na daném cíli (`original`) nebo selhaný (`failed`);
+  zapsaný a neověřený jen v generaci bez ověření nebo zrušené před ním. Metoda ověření toho cíle je na konci
+  `<creatorinfo><comment>` (`· ověření: verify-in-proxy` / `· ověření: read-back`) — `<process>` zůstává `transfer`,
+  schéma ASC MHL v2 jiné hodnoty nepovoluje. S ověřením během proxy se generace zapíše až po ověření (`verifyPending`).
+
+## Blokový manifest — `_REPORT/offload-manifest.jsonl` (Windows od 0.6.0, Mac ignoruje)
+
+Na každém cíli, **jen připisovaný** (řádek se zapíše přes `WRITE_THROUGH` a flush, nic v souboru se nepřepisuje; řádek
+přerušený pádem se při čtení přeskočí a další zápis začne na novém řádku). Jeden JSON objekt na řádek:
+
+| Klíč | Význam |
+|---|---|
+| `v` | verze formátu, `1` |
+| `kind` | `file` = soubor je na svém místě na tomto cíli; `part` = kontrolní bod souboru, který se zapisuje pod `.<jméno>.offload-part` |
+| `gen` | generace ASC MHL, kterou kopie psala |
+| `path`, `size`, `modified` | cesta na kartě (`/`), velikost a čas souboru na kartě (UTC na sekundy) |
+| `xxh64`, `xxh128`, `md5`? | jen `file`: součty karty (`md5` jen s MD5) |
+| `blockSize` | velikost bloku (16 MiB = blok kopie) |
+| `blocks[]` | XXH3-64 bloků (16 malých hex): u `file` všech, u `part` bloků od `first` |
+| `first` | jen `part`: index prvního bloku v `blocks` (záznam s `first` 0 začíná nový pokus) |
+
+Kontrolní bod se zapíše po každých 64 blocích (1 GiB) souboru zapisovaného mimo cache — ty bloky jsou už na disku.
+Navázání (R6): doplnění (`offload append`, v GUI „Dokončit přerušenou zálohu“) do složky, jejíž generace N není
+v řetězu ASC MHL (nemá report vůbec, nebo jen s `verifyPending`) a manifest ji zná, dokončí **tutéž** generaci N:
+soubor na místě se záznamem `file` na všech cílech se znovu nečte, soubor na místě bez záznamu se z karty jen
+přepočítá, rozepsaný `.offload-part` pokračuje od společného kontrolního bodu (bloky se z disku přečtou a znovu porovnají),
+zbytek se zkopíruje; pak ověření a zápis generace jako u každé kopie. Reporty generace N z přerušeného běhu se přitom
+nahradí (ještě nebyly potvrzené). Oprava („Zkopírovat znovu“) takovou zálohu odmítne, dokud ji doplnění nedokončí.
 
 ### Doplnění (Windows od 0.2.0, Mac naplánováno)
 
@@ -197,7 +231,10 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
   soubor mimo řetěz); kartu, na které není ani jeden soubor dřívější zálohy; soubor na kartě, který má v záloze jinou
   velikost nebo čas (tolerance 2 s, na FAT celé hodiny); soubor na cíli, který žádný report nezná;
 - dvě doplnění do téže složky karty najednou nejdou: pojmenovaný mutex `Local\Offload-append-<sha256(svazek|cesta)>`
-  na každou složku karty, bez čekání (druhé skončí „Do této zálohy právě doplňuje jiná úloha …“); celá kopie zámek nebere.
+  na každou složku karty, bez čekání (druhé skončí „S touto zálohou právě pracuje jiná úloha …“); celá kopie bere zámek
+  jen s ověřením během proxy (od zápisu reportů s `verifyPending` do zápisu výsledku ověření; report složky, kam se
+  výsledek zapsal, když jinam ne, nese `verifyIncomplete: true` — nikdy „ověřeno“, dokud ho navázání nepřepíše; doplnění ho tehdy drží i
+  přes 2. fázi — plán 10, I4).
 
 ### Oprava — „Zkopírovat znovu“ (Windows od 0.5.0, Mac naplánováno)
 
@@ -241,7 +278,7 @@ a proto se uloží do `_REPORT` vedle složky karty (`<cíl>\<datum>\_REPORT\<ka
 | `tool`, `version` | string | `offload`, `0.2.0-win` a novější |
 | `cardPath` | string | ověřená složka karty |
 | `started`, `finished` | datum | |
-| `basis` | string | `ascmhl` (všechny generace) nebo `hashList` (jen `<karta>.xxh64` / `.md5`) |
+| `basis` | string | `ascmhl` (všechny generace), `hashList` (jen `<karta>.xxh64` / `.md5`) nebo `pending` (Windows 0.6.0: generace 1 se ještě ověřuje, záznam není zapsaný — nic k porovnání) |
 | `generations` | číslo | počet přečtených generací MHL (u `hashList` 0) |
 | `hashAlgorithms` | string[] | např. `["xxh64"]`; čtou se `xxh64`, `md5`, `sha1`, `xxh3`, `xxh128`, `c4` |
 | `totalFiles`, `totalBytes`, `ok` | číslo | soubory v záznamu, jejich velikost, kolik sedí |
@@ -251,6 +288,7 @@ a proto se uloží do `_REPORT` vedle složky karty (`<cíl>\<datum>\_REPORT\<ka
 | `unreadable[]` | objekt[] | `{path, error}` |
 | `chainProblems[]` | string[] | česky: změněná nebo chybějící generace, chybějící řetěz |
 | `success` | bool | nic nesedí špatně, nechybí, není nečitelné a nic nezůstalo `failedAtCopy` (soubory navíc výsledek neovlivní) |
+| `unfinished` | bool | Windows 0.6.0: nejnovější generace není dokončená (`verifyPending` nebo `verifyIncomplete` v jejím reportu, nebo `verifyPending` v reportu téže generace na jiném cíli) — i se `success` není záloha ověřená („Dokončit přerušenou zálohu“); CLI `verify` končí kódem 1 |
 
 ## Seznam klipů — `_clips.csv`, `_clips.ale` (Windows od 0.3.0, Mac naplánováno)
 
@@ -329,7 +367,10 @@ Pravidla (Windows od 0.3.0):
 `%APPDATA%\Offload\history.json` + `%APPDATA%\Offload\history\<id>.files.gz` (Mac: `~/Library/Application Support/Offload/`)
 — historie offloadů, nikam se neposílá (složku lze přesměrovat proměnnou `OFFLOAD_SETTINGS_DIR`). UTF-8 bez BOM,
 odsazené, data ISO 8601 UTC na sekundy; zapisuje GUI i CLI (`--no-history` vypne) pod pojmenovaným mutexem
-`Local\Offload-history`, přes dočasné jméno. Zapisuje se konec dokončené kopie nebo doplnění; zrušená kopie ne. Kořen
+`Local\Offload-history-<sha256 plné cesty složky velkými písmeny>` (jeden na složku historie, GUI i CLI nad stejnou
+složkou ho sdílejí; od plánu 10), přes dočasné jméno. Záznam úlohy čeká na zámek až 60 s, pak se zapíše na pozadí
+(úloha hlásí varování, nikdy se tiše neztratí). Zapisuje se start celé kopie (`unfinished`), konec dokončené kopie nebo
+doplnění a výsledek ověření s proxy; zrušená kopie ne. Kořen
 `{ "version": 1, "entries": [...] }`; vyšší neznámá verze = jen číst, nezapisovat. Nejvýš 5 000 záznamů (nejstarší
 podle `finished` se smažou i se seznamem souborů). Poškozený soubor se přejmenuje na
 `history.json.corrupt-<yyyyMMdd-HHmmss>` a začne se prázdný.

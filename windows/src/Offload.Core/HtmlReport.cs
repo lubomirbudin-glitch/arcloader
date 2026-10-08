@@ -92,6 +92,10 @@ public static partial class HtmlReport
     [GeneratedRegex(@"^(?:HASH|MD5) MISMATCH: dest (?<dest>\S+) != source (?<source>\S+)$")]
     private static partial Regex Mismatch();
 
+    /// Plan 10: a block that does not match (BlockReads.Result).
+    [GeneratedRegex(@"^HASH MISMATCH: block (?<block>\d+) dest (?<dest>\S+) != source (?<source>\S+)$")]
+    private static partial Regex BlockMismatch();
+
     [GeneratedRegex(@" \(after (?<n>\d+) retries\)$")]
     private static partial Regex Retries();
 
@@ -110,6 +114,8 @@ public static partial class HtmlReport
         if (error.StartsWith("verify: ", StringComparison.Ordinal)) return "chyba při ověření: " + ErrorText(error["verify: ".Length..]);
         if (error.StartsWith("set aside: ", StringComparison.Ordinal))
             return "nesouhlasnou kopii nejde odložit, zůstala na místě: " + error["set aside: ".Length..];
+        if (BlockMismatch().Match(error) is { Success: true } bm)
+            return $"nesouhlasí blok {bm.Groups["block"].Value} (cíl {bm.Groups["dest"].Value}, karta {bm.Groups["source"].Value})";
         if (Mismatch().Match(error) is { Success: true } m)
             return $"{(error.StartsWith("MD5", StringComparison.Ordinal) ? "nesouhlasí MD5" : "nesouhlasí kontrolní součet")} (cíl {m.Groups["dest"].Value}, karta {m.Groups["source"].Value})";
         if (HashFailed().Match(error) is { Success: true } h)
@@ -151,8 +157,11 @@ public static partial class HtmlReport
     public static string Render(OffloadReport r, bool forPrint = false)
     {
         bool ok = r.Success;
-        string status = !ok ? "CHYBA" : (r.Verified ? "OVĚŘENO" : "ZKOPÍROVÁNO — NEOVĚŘENO");
-        string statusClass = !ok ? "bad" : (r.Verified ? "ok" : "warn");
+        // Final review, item 3: verifyIncomplete — the results are not in every folder yet, never a green "OVĚŘENO".
+        bool incomplete = r.VerifyIncomplete == true;
+        string status = !ok ? "CHYBA" : r.VerifyPending == true ? "ZKOPÍROVÁNO — OVĚŘUJE SE" : incomplete ? "NEDOKONČENO" : (r.Verified ? "OVĚŘENO" : "ZKOPÍROVÁNO — NEOVĚŘENO");
+        string statusClass = !ok ? "bad" : (r.Verified && !incomplete ? "ok" : "warn");
+        bool inProxy = r.Destinations.Any(d => d.VerifyMethod == ReportDestination.InProxy);
         var failed = r.FailedFiles;
         var videoClips = r.Clips.Where(c => !c.Clip.IsCameraProxy).ToList();
         double totalDuration = videoClips.Sum(c => c.Info?.Duration ?? 0);
@@ -171,16 +180,21 @@ public static partial class HtmlReport
         Stat(h, Format.Bytes(r.TotalBytes), "data");
         Stat(h, videoClips.Count.ToString(Inv), "klipů" + (totalDuration > 0 ? " · " + Duration(totalDuration) : ""));
         Stat(h, Duration(r.CopySeconds), "kopírování · " + Format.Rate(r.TotalBytes, r.CopySeconds));
-        Stat(h, r.Verified ? Duration(r.VerifySeconds) : "—", "ověření · " + (r.Verified ? Format.Rate(r.TotalBytes, r.VerifySeconds) : "neprovedeno"));
+        Stat(h, r.Verified ? Duration(r.VerifySeconds) : "—", "ověření · " + (!r.Verified ? (r.VerifyPending == true ? "probíhá" : "neprovedeno")
+            : inProxy ? "během proxy" : Format.Rate(r.TotalBytes, r.VerifySeconds)));
+        if (r.SafeToFormatSeconds is double toFormat) Stat(h, Duration(toFormat), "do „lze formátovat“");
         if (r.PausedSeconds > 0) Stat(h, Duration(r.PausedSeconds), "pozastaveno · mimo rychlosti");
-        Stat(h, Esc(string.Join(" + ", r.Algorithms.Select(a => a.ToUpperInvariant()))), "kontrolní součet");
+        var algorithms = r.Algorithms.ToList();
+        if (r.Files.Any(f => f.Xxh128 != null) && !algorithms.Contains("xxh128")) algorithms.Add("xxh128");   // plan 10, R2
+        Stat(h, Esc(string.Join(" + ", algorithms.Select(a => a.ToUpperInvariant()))), "kontrolní součet");
         h.Append("</div>\n\n");
 
         h.Append("<h2>Cíle</h2><div class=\"panel\"><table>\n");
-        h.Append("<tr><th>Disk</th><th>Složka</th><th>FS</th><th class=\"num\">OK</th><th class=\"num\">Chyby</th></tr>\n");
+        h.Append("<tr><th>Disk</th><th>Složka</th><th>FS</th><th>Svazek</th><th>Ověření</th><th class=\"num\">OK</th><th class=\"num\">Chyby</th></tr>\n");
         foreach (var d in r.Destinations)
         {
             h.Append($"<tr><td>{Esc(DiskName(d.Root))}</td><td class=\"mono wrap\">{Esc(d.CardPath)}</td><td>{Esc(d.Filesystem)}</td>");
+            h.Append($"<td class=\"mono\">{Esc(d.VolumeSerial ?? "—")}</td><td>{Esc(MethodText(d.VerifyMethod))}</td>");
             h.Append($"<td class=\"num ok\">{d.FilesOK}</td><td class=\"num {(d.FilesFailed > 0 ? "bad" : "muted")}\">{d.FilesFailed}</td></tr>\n");
         }
         h.Append("</table></div>\n");
@@ -188,6 +202,8 @@ public static partial class HtmlReport
         {
             if (r.Destinations[i].Unbuffered == false)
                 h.Append($"<p class=\"warn\">Cíl {i + 1}: svazek nepodporuje přímý zápis, použita systémová cache.</p>\n");
+            if (r.Destinations[i].VerifyNote is string note && r.Destinations[i].VerifyMethod != null)
+                h.Append($"<p class=\"sub\">Cíl {i + 1}: {Esc(note)}</p>\n");
         }
         h.Append($"<p class=\"sub\">Zdroj: <span class=\"mono\">{Esc(r.Source)}</span> ({Esc(r.SourceFilesystem)})</p>\n");
 
@@ -202,6 +218,27 @@ public static partial class HtmlReport
                     if (f.Errors[i] is string e) msgs.Add($"cíl {i + 1}: {ErrorText(e)}");
                 h.Append($"<tr><td class=\"mono\">{Esc(f.Path)}</td><td class=\"err\">{Esc(string.Join(" · ", msgs))}</td></tr>\n");
             }
+            h.Append("</table></div>\n");
+        }
+
+        var warnings = r.ContentWarnings;
+        if (warnings.Count > 0)
+        {
+            // Spec 7, 9: the decoder found a defect — the copy matches the card, the file itself may be damaged.
+            h.Append($"<h2 class=\"warn\">Vady obsahu ({warnings.Count})</h2><p class=\"sub\">Kopie souhlasí s kartou bit po bitu — vada je už v souboru z kamery. Před formátováním karty ji zkontrolujte (možná ji zachrání nástroj výrobce přímo z karty).</p>\n");
+            h.Append("<div class=\"panel\"><table><tr><th>Klip</th><th>Místo</th><th>Vada</th><th>Dekodér</th><th></th></tr>\n");
+            foreach (var c in warnings)
+            {
+                var img = c.Content!.Jpeg is { } jpeg ? $"<img class=\"thumb\" style=\"max-width:160px\" src=\"data:image/jpeg;base64,{Convert.ToBase64String(jpeg)}\" alt=\"\">" : "";
+                h.Append($"<tr><td>{Esc(c.Clip.Name)}</td><td class=\"mono\">{Esc(c.Content.Timecode ?? "")}</td><td class=\"warn\">{Esc(VerifyInProxy.ContentResult.KindText(c.Content.Kind))}</td>");
+                h.Append($"<td class=\"mono wrap\">{Esc(c.Content.Message ?? "")}</td><td>{img}</td></tr>\n");
+            }
+            h.Append("</table></div>\n");
+        }
+        if (r.VerifyNotes is { Count: > 0 } notes)
+        {
+            h.Append($"<h2 class=\"warn\">Ověření — poznámky ({notes.Count})</h2><div class=\"panel\"><table>\n");
+            foreach (var n in notes) h.Append($"<tr><td class=\"warn wrap\">{Esc(n)}</td></tr>\n");
             h.Append("</table></div>\n");
         }
 
@@ -229,6 +266,14 @@ public static partial class HtmlReport
         h.Append($"<footer>{Esc(r.Tool)} {Esc(r.Version)} · ASC MHL v ascmhl/ · {DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
         return h.ToString();
     }
+
+    /// "během proxy" / "zpětné čtení" / "—" (plan 10, spec 9: the method per destination).
+    internal static string MethodText(string? method) => method switch
+    {
+        ReportDestination.InProxy => "během proxy",
+        ReportDestination.ReadBack => "zpětné čtení",
+        _ => "—",
+    };
 
     static void Stat(StringBuilder h, string value, string label) =>
         h.Append($"<div class=\"stat\"><b>{value}</b><span>{label}</span></div>\n");

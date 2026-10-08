@@ -8,13 +8,19 @@ public static class AppendRules
     /// Offered only for a card volume whose history match found new files (and nothing changed) and whose earlier card
     /// folders can be reached. Never for Changed, another card or no history, and never for a manual folder: that is
     /// matched by its shape alone, which is too weak a proof that it is the same card (plan author's ruling).
+    /// Ruling I5 (plan 10): a backup the app never finished ("nedokončeno") is offered also with nothing new on the card —
+    /// "Dokončit přerušenou zálohu" completes its copy or its verification (R6).
     public static bool Offer(CardInsight? insight) =>
-        insight is { Error: null, Volume: not null, AppendReachable: true, History: { Kind: HistoryMatchKind.NewFiles } m }
-        && m.Entry.Destinations.Count > 0;
+        insight is { Error: null, Volume: not null, AppendReachable: true, History: { } m }
+        && m.Entry.Destinations.Count > 0
+        && (m.Kind == HistoryMatchKind.NewFiles || m is { Kind: HistoryMatchKind.Identical, Entry.Unfinished: true });
 
-    /// "Doplnit jen nové klipy do dřívější zálohy (12 souborů · 3,2 GB)"
-    public static string CheckboxText(HistoryMatch m) =>
-        $"Doplnit jen nové klipy do dřívější zálohy ({m.New.Count} {Texts.Plural(m.New.Count, "soubor", "soubory", "souborů")} · {Format.BytesCs(m.NewBytes)})";
+    /// "Doplnit jen nové klipy do dřívější zálohy (12 souborů · 3,2 GB)"; R6: "Dokončit přerušenou zálohu (…)" for a copy
+    /// the app never finished (what is on the disks already is not copied again).
+    public static string CheckboxText(HistoryMatch m) => m.Entry.Unfinished
+        ? m.New.Count == 0 ? "Dokončit přerušenou zálohu (dokončí ověření)"
+            : $"Dokončit přerušenou zálohu ({m.New.Count} {Texts.Plural(m.New.Count, "soubor", "soubory", "souborů")} · {Format.BytesCs(m.NewBytes)})"
+        : $"Doplnit jen nové klipy do dřívější zálohy ({m.New.Count} {Texts.Plural(m.New.Count, "soubor", "soubory", "souborů")} · {Format.BytesCs(m.NewBytes)})";
 
     /// "Složka: 2026-10-06\A001 na 2 cílech" — taken from the backup's own card folders (the name may be "A001_2").
     public static string FolderText(HistoryEntry e)

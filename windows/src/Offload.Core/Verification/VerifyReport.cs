@@ -21,16 +21,23 @@ public static class VerifyTexts
     public static string Basis(VerifyResult r)
     {
         var algos = string.Join(" + ", r.HashAlgorithms.Select(HashAlgo.Label));
+        if (r.Basis == BackupVerifier.PendingBasis) return "záznam nedokončené generace ještě není zapsaný";
         return r.Basis == "ascmhl"
             ? $"ASC MHL, {r.Generations} {Texts.Plural(r.Generations, "generace", "generace", "generací")}, {algos}"
             : $"seznam součtů, {algos}";
     }
 
-    /// The main line, green / red / orange (cancelled).
+    /// Plan 10 (M-c): what an unfinished newest generation (VerifyResult.Unfinished) means and what to do.
+    public const string UnfinishedText =
+        "Záloha není dokončená: nejnovější generace se ověřovala s proxy a ověření neskončilo (nebo jeho výsledek není zapsaný na všech cílech). Kartu zatím neformátujte — vložte ji znovu a zvolte „Dokončit přerušenou zálohu“.";
+
+    /// The main line, green / red / orange (cancelled, or a generation not finished — M-c: never "all good" then).
     public static (string Text, VerifyTone Tone) Summary(VerifyResult r)
     {
         if (r.Cancelled)
             return ($"Ověření zrušeno po {N(r.Checked)} / {N(r.TotalFiles)} {(r.TotalFiles == 1 ? "souboru" : "souborech")}", VerifyTone.Warning);
+        if (r.Success && r.Unfinished)
+            return (r.Ok > 0 ? $"{UnfinishedText} Soubory se zapsaným záznamem sedí ({N(r.Ok)}, {Basis(r)})." : UnfinishedText, VerifyTone.Warning);
         if (r.Success)
         {
             var all = r.Ok switch
@@ -45,6 +52,7 @@ public static class VerifyTexts
             ? $"Nelze ověřit: {Files(r.FailedAtCopy.Count)} {Texts.Plural(r.FailedAtCopy.Count, "selhal", "selhaly", "selhalo")} už při kopii a v záznamu není žádný platný součet — podrobnosti v reportu ověření."
             : $"Nesedí {Files(r.Changed.Count)}, chybí {N(r.Missing.Count)}, nečitelný {N(r.Unreadable.Count)} — podrobnosti v reportu ověření.";
         if (r.FolderGone) text += " Složka zálohy zmizela — disk se možná odpojil.";
+        if (r.Unfinished) text += " " + UnfinishedText;
         return (text, VerifyTone.Error);
     }
 
@@ -68,6 +76,7 @@ public static class VerifyTexts
         double secs = (r.Finished - r.Started).TotalSeconds;
         var head = $"Ověřeno {Files(r.Ok + r.Changed.Count)} ({Format.BytesCs(r.BytesRead)}) za {JobProgress.EtaText(secs)} ({Format.Rate(r.BytesRead, secs)})";
         if (r.Cancelled) return Summary(r).Text;
+        if (r.Success && r.Unfinished) return $"{head} — ZÁLOHA NEDOKONČENÁ: {UnfinishedText}";
         return r.Success
             ? $"{head} — vše v pořádku."
             : $"{head} — NALEZENY PROBLÉMY: nesedí {N(r.Changed.Count)}, chybí {N(r.Missing.Count)}, nečitelné {N(r.Unreadable.Count)}, selhalo při kopii {N(r.FailedAtCopy.Count)}, navíc {N(r.Extra.Count)}.";
@@ -116,6 +125,7 @@ public static class VerifyReport
             ["tool"] = "offload",
             ["totalBytes"] = r.TotalBytes,
             ["totalFiles"] = r.TotalFiles,
+            ["unfinished"] = r.Unfinished,
             ["unreadable"] = new JsonArray(r.Unreadable.Select(u => (JsonNode?)new JsonObject { ["error"] = u.Error, ["path"] = u.Path }).ToArray()),
             ["version"] = OffloadVersion.String,
         };
@@ -129,7 +139,8 @@ public static class VerifyReport
         {
             VerifyTone.Ok => ("ok", "OVĚŘENO"),
             VerifyTone.Error => ("bad", "NALEZENY PROBLÉMY"),
-            _ => ("warn", "ZRUŠENO"),
+            _ when r.Cancelled => ("warn", "ZRUŠENO"),
+            _ => ("warn", "NEDOKONČENO"),
         };
         var card = HtmlReport.Esc(CardName(r));
         var h = new StringBuilder();

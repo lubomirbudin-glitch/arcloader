@@ -38,13 +38,21 @@ public static class RepairFixtures
             f => Path.GetRelativePath(dir, f).Replace('\\', '/'), f => (File.ReadAllBytes(f), File.GetLastWriteTimeUtc(f)), StringComparer.OrdinalIgnoreCase);
 
     /// Every file of `before` is still there byte for byte with its time, except the paths in `mayChange` (the record
-    /// files a generation may rewrite); returns the files that are new.
+    /// files a generation may rewrite) and the block manifest (plan 10), which may only grow at its end; returns the files
+    /// that are new.
     public static List<string> AssertUntouchedExcept(Dictionary<string, (byte[] Bytes, DateTime Time)> before, string dir, params string[] mayChange)
     {
         var after = Snapshot(dir);
         foreach (var (path, (bytes, time)) in before)
         {
             if (mayChange.Contains(path, StringComparer.OrdinalIgnoreCase)) continue;
+            if (path.EndsWith("_REPORT/offload-manifest.jsonl", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.True(after.ContainsKey(path), $"{path} is gone from {dir}");
+                Assert.True(bytes.AsSpan().SequenceEqual(after[path].Bytes.AsSpan(0, Math.Min(bytes.Length, after[path].Bytes.Length))) && after[path].Bytes.Length >= bytes.Length,
+                    $"{path} was changed, not appended to, in {dir}");
+                continue;
+            }
             Assert.True(after.ContainsKey(path), $"{path} is gone from {dir}");
             Assert.True(bytes.AsSpan().SequenceEqual(after[path].Bytes), $"{path} changed in {dir}");
             Assert.True(time == after[path].Time, $"{path} got a new time in {dir}");

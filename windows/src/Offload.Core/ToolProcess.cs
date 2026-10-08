@@ -15,6 +15,8 @@ internal sealed class ToolProcess : IDisposable
     readonly Lock gate = new();
 
     public string Name { get; }
+    /// Every stderr line as it comes (plan 10: the proxy's content check), besides the tail kept for errors.
+    public Action<string>? StderrLine { get; set; }
 
     public ToolProcess(string exe, IEnumerable<string> args, string? workingDirectory, bool pipeStdin)
     {
@@ -41,6 +43,7 @@ internal sealed class ToolProcess : IDisposable
                 stderr.Append(e.Data).Append('\n');
                 if (stderr.Length > 4000) stderr.Remove(0, stderr.Length - 4000);
             }
+            StderrLine?.Invoke(e.Data);
         };
     }
 

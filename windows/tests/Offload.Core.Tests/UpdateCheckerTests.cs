@@ -55,7 +55,7 @@ public class UpdateCheckerTests
         using var dir = new TempDir();
         var state = Path.Combine(dir.Path, "update-check.json");
         var source = Manifest(dir, """{"version":"0.5.0"}""");
-        Assert.Equal(UpdateStatus.NewVersion, (await UpdateChecker.CheckAsync(source, "0.4.0", Now, state)).Status);
+        Assert.Equal(UpdateStatus.NewVersion, (await UpdateChecker.CheckAsync(source, "0.4.0", Now, state, fileTimeout: Patient, httpTimeout: Patient)).Status);
         File.WriteAllText(source, """{"version":"0.6.0"}""");
 
         var cached = await UpdateChecker.CheckAsync(source, "0.4.0", Now.AddHours(23), state);
@@ -84,27 +84,31 @@ public class UpdateCheckerTests
         Assert.Equal("0.9.0", (await UpdateChecker.CheckAsync(b, "0.4.0", Now.AddHours(2), state)).Info!.Version);   // same address: remembered
     }
 
+    /// Final review, item 8: on a loaded machine (the full suite) the file read waits for a pool thread, maybe past the
+    /// 5 s default — these tests are about the verdicts, not the limit (the pipe test is), so they wait long.
+    static readonly TimeSpan Patient = TimeSpan.FromMinutes(2);
+
     [Fact]
     public async Task UpToDate_Off_Damaged()
     {
         using var dir = new TempDir();
         var state = Path.Combine(dir.Path, "update-check.json");
-        var same = await UpdateChecker.CheckAsync(Manifest(dir, """{"version":"0.4.0"}"""), "0.4.0-win", Now, state, force: true);
+        var same = await UpdateChecker.CheckAsync(Manifest(dir, """{"version":"0.4.0"}"""), "0.4.0-win", Now, state, force: true, fileTimeout: Patient, httpTimeout: Patient);
         Assert.Equal((UpdateStatus.UpToDate, "Máte nejnovější verzi 0.4.0."), (same.Status, same.Text("0.4.0-win")));
 
-        Assert.Equal(UpdateStatus.Off, (await UpdateChecker.CheckAsync(null, "0.4.0", Now, state)).Status);
-        Assert.Equal(UpdateStatus.Off, (await UpdateChecker.CheckAsync("  ", "0.4.0", Now, state)).Status);
+        Assert.Equal(UpdateStatus.Off, (await UpdateChecker.CheckAsync(null, "0.4.0", Now, state, fileTimeout: Patient, httpTimeout: Patient)).Status);
+        Assert.Equal(UpdateStatus.Off, (await UpdateChecker.CheckAsync("  ", "0.4.0", Now, state, fileTimeout: Patient, httpTimeout: Patient)).Status);
 
-        var broken = await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":"), "0.4.0", Now, state, force: true);
+        var broken = await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":"), "0.4.0", Now, state, force: true, fileTimeout: Patient, httpTimeout: Patient);
         Assert.Equal(UpdateStatus.Failed, broken.Status);
         Assert.StartsWith("Manifest nejde načíst: poškozený JSON", broken.Text("0.4.0"));
-        var noVersion = await UpdateChecker.CheckAsync(Manifest(dir, """{"version":"latest"}"""), "0.4.0", Now, state, force: true);
+        var noVersion = await UpdateChecker.CheckAsync(Manifest(dir, """{"version":"latest"}"""), "0.4.0", Now, state, force: true, fileTimeout: Patient, httpTimeout: Patient);
         Assert.Equal("Manifest nejde načíst: v manifestu chybí platná verze (MAJOR.MINOR.PATCH)", noVersion.Text("0.4.0"));
-        var missing = await UpdateChecker.CheckAsync(Path.Combine(dir.Path, "none.json"), "0.4.0", Now, state, force: true);
+        var missing = await UpdateChecker.CheckAsync(Path.Combine(dir.Path, "none.json"), "0.4.0", Now, state, force: true, fileTimeout: Patient, httpTimeout: Patient);
         Assert.Equal(UpdateStatus.Failed, missing.Status);
 
         File.WriteAllText(state, "{oops");   // a damaged state file: simply checked again
-        Assert.Equal(UpdateStatus.UpToDate, (await UpdateChecker.CheckAsync(Manifest(dir, "\uFEFF{\"version\":\"0.4.0\"}"), "0.4.0", Now, state)).Status);
+        Assert.Equal(UpdateStatus.UpToDate, (await UpdateChecker.CheckAsync(Manifest(dir, "\uFEFF{\"version\":\"0.4.0\"}"), "0.4.0", Now, state, fileTimeout: Patient, httpTimeout: Patient)).Status);
     }
 
     // M5: a huge manifest is refused (file and HTTP), long notes are cut.
@@ -113,15 +117,15 @@ public class UpdateCheckerTests
     {
         using var dir = new TempDir();
         var big = Manifest(dir, """{"version":"0.5.0"}""" + new string(' ', UpdateChecker.MaxManifestBytes));
-        var r = await UpdateChecker.CheckAsync(big, "0.4.0", Now, Path.Combine(dir.Path, "a.json"));
+        var r = await UpdateChecker.CheckAsync(big, "0.4.0", Now, Path.Combine(dir.Path, "a.json"), fileTimeout: Patient, httpTimeout: Patient);
         Assert.Equal((UpdateStatus.Failed, "Manifest nejde načíst: soubor je větší než 64 KB"), (r.Status, r.Text("0.4.0")));
 
         using var server = new LocalHttp(c => LocalHttp.Reply(c, 200, """{"version":"0.5.0"}""" + new string(' ', UpdateChecker.MaxManifestBytes)));
-        var h = await UpdateChecker.CheckAsync(server.Url, "0.4.0", Now, Path.Combine(dir.Path, "b.json"));
+        var h = await UpdateChecker.CheckAsync(server.Url, "0.4.0", Now, Path.Combine(dir.Path, "b.json"), fileTimeout: Patient, httpTimeout: Patient);
         Assert.Equal((UpdateStatus.Failed, "odpověď je větší než 64 KB"), (h.Status, h.Error));
 
         var notes = new string('n', 5000);
-        var cut = await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":\"0.5.0\",\"notes\":\"" + notes + "\"}"), "0.4.0", Now, Path.Combine(dir.Path, "c.json"), force: true);
+        var cut = await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":\"0.5.0\",\"notes\":\"" + notes + "\"}"), "0.4.0", Now, Path.Combine(dir.Path, "c.json"), force: true, fileTimeout: Patient, httpTimeout: Patient);
         Assert.Equal(UpdateChecker.MaxNotesLength, cut.Info!.Notes!.Length);
     }
 
@@ -250,11 +254,11 @@ public class UpdateCheckerTests
         Assert.Equal(UpdateStatus.Failed, (await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":\"" + huge + "\"}"), "0.4.0", Now, state, force: true)).Status);
 
         using var server = new LocalHttp(async c => { c.Response.StatusDescription = new string('x', 3000); await LocalHttp.Reply(c, 404, "no"); });
-        var h = await UpdateChecker.CheckAsync(server.Url, "0.4.0", Now, state, force: true);
+        var h = await UpdateChecker.CheckAsync(server.Url, "0.4.0", Now, state, force: true, fileTimeout: Patient, httpTimeout: Patient);
         Assert.Equal(UpdateStatus.Failed, h.Status);
         Assert.True(h.Error!.Length <= UpdateChecker.MaxErrorLength, h.Error.Length.ToString());
 
-        var ok = await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":\"0.5.0-win\"}"), "0.4.0", Now, state, force: true);
+        var ok = await UpdateChecker.CheckAsync(Manifest(dir, "{\"version\":\"0.5.0-win\"}"), "0.4.0", Now, state, force: true, fileTimeout: Patient, httpTimeout: Patient);
         Assert.Equal("Je k dispozici verze 0.5.0 (máte 0.4.0).", ok.Text("0.4.0"));
     }
 
@@ -302,7 +306,7 @@ public class UpdateCheckerTests
         using var dir = new TempDir();
         var state = Path.Combine(dir.Path, "update-check.json");
         var a = Manifest(dir, "{\"version\":\"0.5.0\"}");
-        Assert.Equal(UpdateStatus.NewVersion, (await UpdateChecker.CheckAsync(a, "0.4.0", Now, state)).Status);
+        Assert.Equal(UpdateStatus.NewVersion, (await UpdateChecker.CheckAsync(a, "0.4.0", Now, state, fileTimeout: Patient, httpTimeout: Patient)).Status);
         var b = Path.Combine(dir.Path, "missing.json");
         Assert.Equal(UpdateStatus.Failed, (await UpdateChecker.CheckAsync(b, "0.4.0", Now.AddMinutes(5), state)).Status);
         var again = await UpdateChecker.CheckAsync(b, "0.4.0", Now.AddHours(1), state);

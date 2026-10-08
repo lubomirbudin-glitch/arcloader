@@ -41,8 +41,18 @@ public sealed partial class CardRecord
     /// not verified. Per file, not per report (plan 9 fix round 1, item 2): a cancelled generation whose files a later
     /// one read back no longer leaves the card unverified for ever. A folder whose reports list no file: every report
     /// was read back.
-    public bool Verified => Generations.Count > 0 && Problems.Count == 0
-        && (Files.Count == 0 ? Generations.All(g => g.Report.Verified) : Files.Values.All(f => ReadBack(f, CardPath)));
+    public bool Verified => Generations.Count > 0 && Problems.Count == 0 && !Incomplete
+        && (Files.Count == 0 ? Generations.All(g => g.Report.Verified) : Files.Values.All(f => ReadBack(f, CardPath, VolumeSerial)));
+    /// Plan 10 fix round 1 (M-a): the newest generation is not written everywhere — its report here says verifyIncomplete
+    /// (a commit failed on another destination), or another destination's folder is there and its report of that
+    /// generation still says verifyPending (the app ended between the commits). A destination that is simply not
+    /// connected changes nothing: every failed commit leaves the flag in the folders that were written.
+    public bool Incomplete { get; init; }
+    /// R12 (plan 10): the serial of the volume the folder is on now (Load reads it), null when unknown — a report that
+    /// names its destinations' serials is matched by it, so a disk under another letter never takes another's column.
+    public string? VolumeSerial { get; init; }
+    /// Plan 10: a generation's verification with the proxies has not ended (its report says verifyPending).
+    public bool VerifyPending => Generations.Any(g => g.Report.VerifyPending == true);
     /// Paths whose newest record failed (the card or a destination), sorted.
     public IReadOnlyList<string> FailedFiles =>
         Files.Values.Where(f => f.Report.IsFailed(f.File)).Select(f => f.File.Path).Order(StringComparer.Ordinal).ToList();
@@ -62,7 +72,9 @@ public sealed partial class CardRecord
     [GeneratedRegex(@"_report_(\d{4})\.(json|txt|html|pdf)$", RegexOptions.IgnoreCase)]
     private static partial Regex NumberedReportFile();
 
-    public static CardRecord Load(string cardPath)
+    /// `maxGeneration` (R6): generations above it are left out — the unfinished one a resume completes (its reports, if
+    /// any, and its numbered files are not the backup's record yet).
+    public static CardRecord Load(string cardPath, int? maxGeneration = null)
     {
         var dir = Path.Combine(cardPath, Layout.ReportDirName);
         var main = Path.Combine(dir, MainReport);
@@ -93,9 +105,11 @@ public sealed partial class CardRecord
         foreach (var file in reportFiles)
         {
             var name = Path.GetFileName(file);
-            if (NumberedReportFile().Match(name) is { Success: true } n)
-                highest = Math.Max(highest, int.Parse(n.Groups[1].Value, CultureInfo.InvariantCulture));
+            if (NumberedReportFile().Match(name) is { Success: true } n && int.Parse(n.Groups[1].Value, CultureInfo.InvariantCulture) is var number
+                && number <= (maxGeneration ?? int.MaxValue))
+                highest = Math.Max(highest, number);
             if (AppendReport().Match(name) is not { Success: true } m) continue;
+            if (int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) > (maxGeneration ?? int.MaxValue)) continue;
             try
             {
                 var r = Read(file);
@@ -134,7 +148,30 @@ public sealed partial class CardRecord
         return new CardRecord
         {
             CardPath = cardPath, Generations = generations, Files = files, Clips = clips, Problems = problems, HighestReportNumber = highest,
+            VolumeSerial = NativeIO.VolumeSerialText(cardPath),
+            Incomplete = IncompleteElsewhere(cardPath, generations),
         };
+    }
+
+    /// See Incomplete. Reads the newest generation's report on the other destinations it names (only reads).
+    static bool IncompleteElsewhere(string cardPath, IReadOnlyList<CardRecordGeneration> generations)
+    {
+        if (generations.Count == 0) return false;
+        var newest = generations.MaxBy(g => g.Generation)!.Report;
+        if (newest.VerifyIncomplete == true) return true;
+        var me = Normal(cardPath);
+        foreach (var d in newest.Destinations)
+        {
+            if (string.Equals(Normal(d.CardPath), me, StringComparison.OrdinalIgnoreCase) || !Path.IsPathFullyQualified(d.CardPath)) continue;
+            var json = Path.Combine(d.CardPath, Layout.ReportDirName, OffloadReport.JsonName(newest.Generation ?? 1));
+            try
+            {
+                if (File.Exists(json) && OffloadReport.FromJson(File.ReadAllText(json)) is { VerifyPending: true } other && other.Started == newest.Started)
+                    return true;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { }
+        }
+        return false;
     }
 
     /// A report whose lists are there: a hand-edited null would otherwise surface later as a crash, not as "nejde přečíst".
@@ -166,24 +203,43 @@ public sealed partial class CardRecord
     /// was not read back (cancelled, made without verification), is not. The column is the report destination whose card
     /// path is this folder (ColumnOf); when none is (a Mac report, the disk under another letter) every column must say
     /// so — never falsely green.
-    public static bool ReadBack(RecordedFile rec, string cardPath)
+    /// `serial` (R12): the folder's volume serial now — with it, a report that recorded serials is matched by the disk.
+    public static bool ReadBack(RecordedFile rec, string cardPath, string? serial = null)
     {
-        int column = ColumnOf(rec.Report, cardPath);
+        int column = ColumnOf(rec.Report, cardPath, serial);
         var states = column >= 0
             ? [column < rec.File.Destinations.Count ? rec.File.Destinations[column] : "pending"]
             : rec.File.Destinations.Count > 0 ? rec.File.Destinations : ["pending"];
-        return states.All(state => state == "verified" || (rec.Report.Verified && state != "written"));
+        // Plan 10: a report whose verification has not ended (verifyPending), or whose results are not written on every
+        // destination (verifyIncomplete, fix round 1), is never read as verified, whatever it says.
+        return rec.Report.VerifyPending != true && rec.Report.VerifyIncomplete != true && states.All(state => state == "verified" || (rec.Report.Verified && state != "written"));
     }
 
     /// The column of `report` whose destination card path is `cardPath` (full path, any case, trailing separator), or
     /// -1 when none is. A path that is not a full Windows path (a Mac `/Volumes/…`) is compared as written.
-    public static int ColumnOf(OffloadReport report, string cardPath)
+    /// R12 (plan 10): with `serial` and a report that recorded its destinations' serials, the column is the one of that
+    /// disk with the same folder under it — whatever letter either has; -1 when none or several are (then every column
+    /// must say so, as for a report from the Mac).
+    public static int ColumnOf(OffloadReport report, string cardPath, string? serial = null)
     {
         var me = Normal(cardPath);
+        // Fix round 1 (M-d): the report knows its disks by serial but this folder's cannot be read now — no column (every
+        // column must say so), never a guess by the path.
+        if (serial == null && report.Destinations.Any(d => d.VolumeSerial != null)) return -1;
+        if (serial != null && report.Destinations.Any(d => d.VolumeSerial != null))
+        {
+            var hits = Enumerable.Range(0, report.Destinations.Count).Where(i => report.Destinations[i].VolumeSerial == serial
+                && string.Equals(UnderRoot(Normal(report.Destinations[i].CardPath)), UnderRoot(me), StringComparison.OrdinalIgnoreCase)).ToList();
+            return hits.Count == 1 ? hits[0] : -1;
+        }
         for (int i = 0; i < report.Destinations.Count; i++)
             if (string.Equals(Normal(report.Destinations[i].CardPath), me, StringComparison.OrdinalIgnoreCase)) return i;
         return -1;
     }
+
+    /// The path without its drive or share root ("\Zaloha\2026-10-08\A001"); a path that is not a full one as it is.
+    static string UnderRoot(string path) =>
+        Path.IsPathFullyQualified(path) && Path.GetPathRoot(path) is { Length: > 0 } root ? path[root.TrimEnd('\\', '/').Length..] : path;
 
     static string Normal(string path)
     {

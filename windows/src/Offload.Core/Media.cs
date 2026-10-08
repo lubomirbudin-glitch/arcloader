@@ -139,6 +139,9 @@ public sealed class ClipEntry
         ProxyStatus == ProxyStatus.Skipped && ProxyNote?.StartsWith(Msg.ProxyLighterPrefix, StringComparison.Ordinal) == true;
     /// First, middle and last frame (JPEG + caption); embedded in the HTML/PDF report only.
     [JsonIgnore] public List<Thumbnail> Thumbnails { get; set; } = [];
+    /// What the decoder said while making the proxy (plan 10, spec 7): content_ok / content_warn. Absent without a proxy
+    /// and in older reports; the Mac ignores it.
+    [JsonPropertyName("content"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public VerifyInProxy.ContentResult? Content { get; set; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<ProxyCodec>))]

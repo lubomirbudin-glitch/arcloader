@@ -38,12 +38,14 @@ public static class HistoryText
     {
         var e = m.Entry;
         var disks = string.Join(", ", e.Destinations.Select(d => fullPaths ? d.Root : DiskName(d.Root)));
+        // R6: a copy the app never finished — it can be resumed (Dokončit přerušenou zálohu).
+        if (e.Unfinished) return ($"Nedokončená záloha {When(e.Finished)} na {disks} — kopie se přerušila, lze ji dokončit", HistoryTone.Warning);
         var head = $"Zálohováno {When(e.Finished)} na {disks}";
         if (m.Kind == HistoryMatchKind.Changed)
             return ($"{head}, ale karta se od té doby změnila ({Files(m.Changed.Count)} jinak) — doplnit nejde, jen celá kopie", HistoryTone.Warning);
         var (state, tone) = !e.Success ? ($" — s chybami ({Files(e.FailedFiles ?? 0)})", HistoryTone.Error)
-            : !e.Verified ? (" — NEOVĚŘENO", HistoryTone.Warning)
-            : (" — ověřeno", HistoryTone.Ok);
+            : !e.Verified ? (" — NEOVĚŘENO (lze vyjmout, neformátovat)", HistoryTone.Warning)
+            : (" — ověřeno, lze formátovat", HistoryTone.Ok);
         var text = head + state;
         if (m.Kind == HistoryMatchKind.NewFiles)
         {

@@ -29,7 +29,7 @@ public sealed partial class MainViewModel
         Raise(nameof(NotifySummary));
     }
 
-    /// End of stage 1, stage 2 still running and the card safe to eject: "kartu lze vysunout" (Windows only).
+    /// End of stage 1, stage 2 still running and the card copied everywhere: "kartu lze vyjmout" (Windows only).
     void NotifyCopyDone(JobItemViewModel item)
     {
         if (closing || !Allowed(DemoCommand.Notify) || !item.Job.Config.Notify.Windows) return;

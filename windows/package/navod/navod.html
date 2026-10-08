@@ -194,7 +194,7 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
     náhledy klipů, proxy s LUTy a kontrola USB zapojení. Pro kameramanské asistenty, DITy, data wranglery a střihače.
   </div>
   <div class="meta">
-    Verze aplikace 0.5.2-win · Windows 10 a 11 (64bitové) · přenosná verze bez instalace<br>
+    Verze aplikace 0.6.0-win · Windows 10 a 11 (64bitové) · přenosná verze bez instalace<br>
     Návod popisuje aplikaci <b>Offload.exe</b> a příkazovou řádku <b>bin\offload.exe</b> z balíčku <b>Offload-win-x64-&lt;verze&gt;.zip</b>.
   </div>
 </div>
@@ -224,15 +224,19 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
 <h2 class="ch"><span class="n">1</span>Co Offload dělá</h2>
 
 <p>Offload zálohuje kamerové karty. Kartu přečte <b>jen jednou</b> a každý blok dat zapíše zároveň na všechny
-zvolené cílové disky. Potom kopie na každém disku přečte zpátky a porovná kontrolní součty. Teprve když všechno
-sedí, řekne, že kartu lze vysunout.</p>
+zvolené cílové disky. Potom kopie na každém disku přečte a porovná kontrolní součty — s proxy (od 0.6.0) primární
+disk při tvorbě proxy, bez druhého čtení navíc. Karta má dva stavy: <b>Lze vyjmout</b>, jakmile je všechno zapsané,
+a <b>Lze formátovat</b>, až když je všechno ověřené na všech discích.</p>
 
 <h3>Co proběhne s každou kartou</h3>
 <ol class="steps">
   <li><b>Kopie</b> na všechny cíle najednou do složky <code>&lt;cíl&gt;\&lt;datum&gt;\&lt;karta&gt;\</code>. Struktura složek
     karty zůstane stejná, datum a čas změny souborů jsou jako na kartě.</li>
-  <li><b>Ověření zpětným čtením</b>: každý soubor se z každého cílového disku přečte znovu a jeho kontrolní součet
-    xxHash64 se porovná se součtem spočítaným při čtení karty. Data se čtou z disku, ne z paměti počítače.</li>
+  <li><b>Ověření</b>: každý soubor se z každého cílového disku přečte a jeho bloky se porovnají se součty spočítanými při
+    čtení karty. Data se čtou z disku, ne z paměti počítače (zápis i čtení obcházejí cache Windows). S proxy se primární
+    disk ověří během proxy — ffmpeg čte klipy přes Offload a každý přečtený blok se ověří; ostatní disky se čtou souběžně
+    na pozadí. Klip RAW (BRAW, R3D, ARRIRAW) Offload před dekodérem výrobce přečte a ověří sám a dekodér si ho pak přečte
+    z disku znovu (ne z paměti) — RAW se tak z primárního disku čte dvakrát. Bez proxy, nebo když to cíl neumožní (síťový disk), se každý disk přečte znovu hned po kopii.</li>
   <li><b>Report</b> do složky <code>_REPORT</code> na každém cíli: HTML, PDF, JSON, TXT a seznam kontrolních součtů,
     k tomu ASC MHL ve složce <code>ascmhl</code>.</li>
   <li><b>Analýza klipů</b> (volitelně): technické údaje každého klipu a tři snímky (první, prostřední, poslední) do reportu.</li>
@@ -240,10 +244,15 @@ sedí, řekne, že kartu lze vysunout.</p>
     do složky <code>_PROXY</code>.</li>
 </ol>
 
-<div class="box tip"><span class="t">Kartu lze vysunout dřív, než doběhnou proxy</span>
-Jakmile jsou všechny soubory na všech discích a ověřené, karta úlohy zezelená s textem
-<span class="q">„Všechny soubory jsou na 2 discích a ověřené — kartu lze vysunout.“</span> Analýza klipů a proxy už čtou
-jen z cílových disků, takže mezitím můžete vložit další kartu.</div>
+<div class="box tip"><span class="t">Lze vyjmout × Lze formátovat</span>
+Jakmile jsou všechny soubory zapsané na všech discích, karta úlohy ukáže čip <b>Lze vyjmout</b> (neutrální, ne zelený) a text
+<span class="q">„Všechny soubory jsou na 2 discích — kartu lze vyjmout. Formátovat až po ověření.“</span> Analýza klipů
+a proxy už čtou jen z cílových disků, takže mezitím můžete vložit další kartu. Kartu ale <b>neformátujte</b>, dokud
+druhý čip neřekne <b>Lze formátovat</b> — teprve pak je všechno ověřené. Zelená je jen <b>Lze formátovat</b>; zvuk a
+oznámení <span class="q">„Offload: A001 hotovo“</span> s větou „… kartu lze formátovat“ přijdou taky až tehdy. Do té doby čip ukazuje <b>Ověřuje se…</b>,
+na konci krátce <b>Dokončení ověření</b>. Když dekodér při proxy najde vadu v souboru
+z kamery (kopie přitom souhlasí s kartou), ukáže žlutý štítek s timecodem a <b class="ui">Náhled</b>; formátovat jde až po
+<b class="ui">Zkontrolováno — kartu lze formátovat</b>.</div>
 
 <div class="box danger"><span class="t">Na kartu se nikdy nezapisuje</span>
 Offload kartu jen čte. Nic na ní nevytváří, nemaže ani nepřejmenovává. Totéž platí pro měření rychlosti v okně Hardware.</div>
@@ -401,7 +410,7 @@ aplikací) a přepne se hned, když ho ve Windows změníte.</p>
         <div style="text-align:right;margin-top:1mm"><span class="callout">7</span><span class="btn">Pozastavit</span> <span class="btn">Zrušit</span></div>
       </div>
       <div class="job ok">
-        <div><b>A033_ARRI — kartu lze vysunout</b> <span class="btn" style="float:right">Vysunout kartu</span></div>
+        <div><b>A033_ARRI — kartu lze formátovat</b> <span class="btn" style="float:right">Vysunout kartu</span></div>
         <div class="cap">Kopie 602 MB/s · Ověření 799 MB/s · Proxy 24 / 24 · Celkem 6 min 12 s</div>
         <div style="margin-top:1mm"><span class="btn">Report PDF</span> <span class="btn">Otevřít složku</span> <span class="btn">Proxy</span></div>
       </div>
@@ -574,8 +583,9 @@ v liště stránky; tlačítko <b class="ui">Uložit jako nový projekt…</b> z
   <thead><tr><th class="w25">Sekce</th><th>Co v ní je</th></tr></thead>
   <tr><td><b class="ui">Struktura složek</b></td><td>cesta <code>&lt;cíl&gt;\&lt;datum&gt;\&lt;název karty&gt;\</code>, <b class="ui">Vlastní datum</b>,
       <b class="ui">Navrhovat název karty podle klipů</b> (kapitola 5)</td></tr>
-  <tr><td><b class="ui">Ověření</b></td><td>ověření zpětným čtením, kontrolní součet (MD5), <b class="ui">Ověřit zálohu…</b> a
-      <b class="ui">Ukládat report ověření</b> (kapitoly 5 a 8)</td></tr>
+  <tr><td><b class="ui">Ověření</b></td><td>ověření zpětným čtením, <b class="ui">Ověřit primární disk během proxy</b> a
+      <b class="ui">Primární je první cíl</b>, kontrolní součet (MD5), <b class="ui">Ověřit zálohu…</b> a
+      <b class="ui">Ukládat report ověření</b> (kapitoly 1, 5 a 8)</td></tr>
   <tr><td><b class="ui">Analýza a náhledy</b></td><td>analýza klipů a tři snímky v reportu (kapitola 5)</td></tr>
   <tr><td><b class="ui">Proxy</b></td><td>vše o proxy, LUTech a náhled burn-inu (kapitola 6)</td></tr>
   <tr><td><b class="ui">Report</b></td><td>seznamy klipů CSV a ALE, denní report po každé kartě, <b class="ui">Denní report…</b> (kapitoly 5 a 7)</td></tr>
@@ -610,9 +620,10 @@ ně zatím nejde vyrobit.“</span></p>
     aktuální fáze, odhad zbývajícího času, tabulku rychlostí (<code>Čtení karty 661 MB/s · 1 RAID_A 661 MB/s · 2 SHUTTLE_B
     661 MB/s</code>) a právě kopírovaný soubor (<span class="q">„Soubor 10 / 24“</span>). Pod kartou je
     <b>Nejpomalejší článek</b> (kapitola 9). Úlohu můžete <b class="ui">Pozastavit</b> (kapitola 8).</li>
-  <li><b>Počkejte na zelenou kartu</b> <span class="txt-ok">„A001 — kartu lze vysunout“</span> s větou
-    <span class="q">„Všech 24 souborů je na 2 discích a ověřených (xxHash64).“</span> Současně zazní zvuk. Teprve teď je karta
-    bezpečně zálohovaná.</li>
+  <li><b>Počkejte na čip Lze vyjmout</b> — všechno je zapsané a kartu můžete vyjmout (čip je neutrální, ne zelený). Zelená karta
+    <span class="txt-ok">„A001 — kartu lze formátovat“</span> s větou <span class="q">„Všech 24 souborů je na 2 discích
+    a ověřených (xxHash64).“</span> přijde až po ověření všech disků a teprve s ní zazní zvuk a přijde oznámení. Teprve teď je karta bezpečně zálohovaná a lze ji
+    formátovat.</li>
   <li><b>Vysuňte kartu</b> tlačítkem <b class="ui">Vysunout kartu</b>. Karta zmizí z kroku 1, čtečka zůstane připojená.
     Vložte další kartu a pokračujte od kroku 2 — proxy předchozí karty se mezitím dál renderují.</li>
   <li><b>Po dokončení</b> ukáže zelená karta souhrn <span class="q">„Kopie 602 MB/s · Ověření 799 MB/s · Proxy 24 / 24 ·
@@ -622,8 +633,10 @@ ně zatím nejde vyrobit.“</span></p>
 </ol>
 
 <div class="box warn"><span class="t">Nevytahujte kartu dřív</span>
-Dokud karta úlohy není zelená s textem „kartu lze vysunout“, kartu ani cílové disky neodpojujte. Pokud se úloha zruší nebo některý
-soubor selže, karta <b>není</b> zálohovaná (kapitola 8).</div>
+Dokud karta úlohy neukáže čip „Lze vyjmout“, kartu neodpojujte; cílové disky neodpojujte, dokud neukáže „Lze formátovat“.
+Kartu neformátujte před zelenou kartou „kartu lze formátovat“. Pokud se úloha zruší nebo některý soubor selže, karta <b>není</b>
+zálohovaná (kapitola 8). Když aplikace spadne nebo se PC vypne uprostřed kopie, po vložení karty nabídne
+<b class="ui">Dokončit přerušenou zálohu</b> — co už je na discích, se znovu nekopíruje.</div>
 
 <div class="box tip"><span class="t">Stejná karta podruhé</span>
 Když stejnou kartu (stejný název) zkopírujete týž den znovu, nová kopie dostane složku <code>A001_2</code>,
@@ -653,7 +666,12 @@ je shrnuje.</p>
       <td>Po kopii se každý soubor z každého cíle přečte znovu a porovnají se kontrolní součty. Bez ověření je řádek
       v kroku 3 žlutý s varováním <span class="txt-warn">„Bez ověření není jisté, že data na disku jsou v pořádku.“</span>,
       report má štítek <b>ZKOPÍROVÁNO — NEOVĚŘENO</b> a karta úlohy je žlutá („zkopírováno bez ověření“), nikdy zelená
-      „kartu lze vysunout“.</td></tr>
+      „kartu lze formátovat“.</td></tr>
+  <tr><td><b class="ui">Ověřit primární disk během proxy</b></td><td>zapnuto</td>
+      <td>S proxy se primární disk ověří čtením pro proxy a ostatní disky souběžně na pozadí — bez dalšího čtení po
+      kopii. Primární je nejrychlejší disk změřený při kopii, nebo s volbou <b class="ui">Primární je první cíl</b> první
+      cíl. Vypnuto (nebo CLI <code>--classic-verify</code>) = zpětné čtení hned po kopii. Síťový cíl a cíl, který neprojde
+      kontrolou čtení mimo cache, se ověří zpětným čtením vždy (důvod je v reportu).</td></tr>
   <tr><td><b class="ui">Navrhovat název karty podle klipů</b></td><td>zapnuto</td>
       <td>Šedý návrh v poli <b class="ui">Název složky</b> z názvů klipů (ARRI, Sony Venice, Canon Cinema EOS, RED,
       Blackmagic) nebo „další v řadě“ (kapitola 3). Vypnuto = jmenovka svazku jako dřív.</td></tr>
@@ -983,8 +1001,9 @@ s kopií další karty. Každá úloha si při spuštění uloží nastavení, s
       bublina řádku ukáže zařízení a připojení), <span class="q">„Soubor 10 / 24“</span> s názvem souboru (ve 2. fázi
       <span class="q">„Klip 3 / 24“</span>, <span class="q">„Proxy 3 / 24 · 45 %“</span>), tlačítka <b class="ui">Pozastavit</b>
       a <b class="ui">Zrušit</b>; pod kartou <b>Nejpomalejší článek</b> (kapitola 9)</td></tr>
-  <tr><td><span class="pill ok">zelená</span></td><td><span class="txt-ok">„A001 — kartu lze vysunout“</span> a <span class="q">„Všech 24 souborů je na
-      2 discích a ověřených (xxHash64).“</span>; zazní zvuk. Řádek <b>Kopie · Ověření · Proxy · Celkem</b> (Celkem bez pauz),
+  <tr><td><span class="pill ok">zelená</span></td><td><span class="txt-ok">„A001 — kartu lze formátovat“</span> a <span class="q">„Všech 24 souborů je na
+      2 discích a ověřených (xxHash64).“</span>; zazní zvuk (jen když nic nevyžaduje pozornost). Před ověřením je karta neutrální
+      s čipem <b>Lze vyjmout</b>. Řádek <b>Kopie · Ověření · Proxy · Celkem</b> (Celkem bez pauz),
       náhledy prvních pěti klipů (prostřední snímek, šestá dlaždice <span class="q">„+19“</span>), <b class="ui">Vysunout
       kartu</b>, <b class="ui">Report PDF</b>, <b class="ui">Otevřít složku</b>, <b class="ui">Proxy</b> a cesta ke kartě na
       prvním cíli. Když po ověřené kopii selže zpracování (proxy, PDF), zůstane karta zelená a chyba je oranžový řádek —
@@ -1059,8 +1078,8 @@ Hotová karta se objeví v přehledu <b>DNES</b> pod frontou a v záložce <b cl
 oblasti vpravo dole a zůstane tam do zavření aplikace; kliknutím na oznámení nebo ikonu se okno vrátí):
 <span class="q">„Offload: A001 hotovo“</span> (<span class="q">„Ověřeno na 2 discích. Proxy: 24 hotovo.“</span>),
 <span class="q">„Offload: A001 — vyžaduje pozornost“</span> (neověřeno, selhané proxy, proxy přeskočené kvůli místu…),
-<span class="q">„Offload: A001 — CHYBA“</span> a při renderu proxy už po kopii <span class="q">„Offload: A001 — kartu lze
-vysunout“</span>. Úloha, která selže při kopii, ohlásí chybu hned, jak kopie skončí. Zrušená úloha oznámení nemá. Zvuk
+<span class="q">„Offload: A001 — CHYBA“</span> a po kopii, zatímco se ještě dělají proxy a ověřuje, <span class="q">„Offload: A001 — kartu lze
+vyjmout“</span> (bez zvuku; formátovat zatím ne). Úloha, která selže při kopii, ohlásí chybu hned, jak kopie skončí. Zrušená úloha oznámení nemá. Zvuk
 a blikání tlačítka zůstávají.</p>
 <p><b class="ui">Nastavení → Oznámení → Upravit oznámení…</b>: <b class="ui">Oznámení Windows</b> (zapnuto) a <b class="ui">Posílat na telefon přes
 ntfy</b> — do aplikace ntfy v telefonu (server <code>https://ntfy.sh</code> nebo vlastní, <b>téma</b> jen písmena bez
@@ -1068,7 +1087,7 @@ diakritiky, číslice, <code>-</code> a <code>_</code>). Tlačítko <b class="ui
 <span class="q">„Odesláno.“</span> nebo <span class="q">„Nepodařilo se: …“</span> (nejvýš po 10 s). Téma volte nehádatelné —
 kdo ho zná, oznámení čte. Telefon dostane pevný text: název karty, výsledek a počty (např. <span class="q">„Ověřeno na 2
 discích.“</span>), u varování a chyb jen obecnou větu; nikdy cesty, názvy souborů ani jméno počítače, a „kartu lze
-vysunout“ se na telefon neposílá. Úloha na odeslání nikdy nečeká. Nastavení oznámení patří k projektu.</p>
+vyjmout“ se na telefon neposílá. Úloha na odeslání nikdy nečeká. Nastavení oznámení patří k projektu.</p>
 
 <h3>Karty už jsou zálohované</h3>
 <p>Když spouštíte celou kopii karty, kterou historie zná, Offload se zeptá v okně <b>Karty už jsou zálohované</b>
@@ -1089,6 +1108,39 @@ doplňuje vždy jen jednou, i z druhého okna Offloadu). Pak udělejte celou kop
 změnila, Start řekne <span class="q">„Karta A001 se změnila — doplnit už nejde. Zkontrolujte ji a spusťte znovu.“</span>
 a tu kartu nespustí (ostatní ano).</p>
 
+<h3>Dva stavy karty a vady obsahu</h3>
+<p>Karta úlohy ukazuje dva samostatné čipy. <b>Lze vyjmout</b> (neutrální): všechno je zapsané na všech discích, kartu můžete
+vyjmout a vložit další. <b>Lze formátovat</b> (jediný zelený): všechno je ověřené na všech discích a výsledek je zapsaný ve
+všech složkách. <b>Kartu neformátujte, dokud nemá čip Lze formátovat.</b> Dokud se ověřuje, čip ukazuje
+<b>Ověřuje se…</b>; selhal-li soubor nebo disk, ukáže <b>Neformátovat</b>.</p>
+<p><b>Vady obsahu.</b> Dekodér při tvorbě proxy někdy najde vadu přímo v souboru z kamery (poškozený snímek, chybné časové
+značky, snímky navíc, klip končí předčasně, poškozený zvuk). Kopie přitom souhlasí s kartou, takže kopie je v pořádku — vada
+je v originálu. Klip dostane žlutý štítek s <b>timecodem místa</b> (např. <span class="q">„01:00:02:13 · poškozená data“</span>)
+a tlačítko <b class="ui">Náhled</b> otevře obrázek toho místa. Čip se změní na <b>Lze formátovat po kontrole vad</b>.
+Když vady zkontrolujete, potvrďte je tlačítkem <b class="ui">Zkontrolováno — kartu lze formátovat</b>: teprve tím zezelenají
+čip i karta. Offload kartu sám nikdy neformátuje.</p>
+<p><b>Poznámka o cache.</b> Offload čte kopie z disku mimo cache Windows. Když to svazek nebo soubor nedovolí (například
+soubor komprimovaný NTFS nebo šifrovaný EFS), ověří se čtením přes cache a karta ukáže oranžovou poznámku
+<span class="q">„Ověřeno čtením přes cache Windows: … data mohla přijít z paměti místo z disku“</span>. Kopie se počítá za
+ověřenou a kartu lze formátovat, ale bez zvuku a s oznámením <i>vyžaduje pozornost</i>; nejspolehlivější je zálohovat na
+nekomprimované a nešifrované složky.</p>
+
+<h3>Dokončit přerušenou zálohu</h3>
+<p>Když aplikace spadne nebo se počítač vypne uprostřed kopie nebo během ověření s proxy, záloha zůstane
+<b>nedokončená</b>: historie ji nese jako <span class="q">„Nedokončená záloha … lze ji dokončit“</span>, denní report ji
+označí <b>OVĚŘUJE SE</b> nebo <b>NEDOKONČENO</b> a <b class="ui">Ověřit zálohu</b> neřekne „vše v pořádku“ (v příkazové
+řádce skončí kódem <code>1</code>). Kartu neformátujte. Vložte kartu znovu: u ní je zaškrtávátko
+<b class="ui">Dokončit přerušenou zálohu</b> (v příkazové řádce <code>offload append</code>); nabízí se i tehdy, když není nic nového
+ke kopírování a chybí jen ověření. Dokončení pokračuje tam, kde záloha skončila: soubory, které už na discích jsou, se znovu
+nečtou z karty, rozepsaný velký soubor pokračuje od posledního kontrolního bodu (po 1 GiB) a doběhne ověření; výsledek je
+zapsaný ve <b>stejné</b> generaci. Dokud záloha není dokončená, <b class="ui">Zkopírovat znovu</b> (oprava) a další doplnění se
+odmítnou, stejně jako souběžná úloha nad stejnou zálohou. Hotové proxy se znovu nerenderují.</p>
+<p><b>Odpojený disk během ověření.</b> Když se cílový disk odpojí během ověření s proxy, jeho soubory skončí
+<span class="q">„✕ čtení“</span>, karta ukáže <b>Neformátovat</b> a výsledek ověření se do jeho složky nezapíše — záloha zůstane
+nedokončená. Disk připojte, vložte kartu a <b>nejdřív</b> zvolte <b class="ui">Dokončit přerušenou zálohu</b>: z karty se nic
+nečte, disk se přečte a ověří. Teprve když pak některé soubory nesouhlasí, použijte <b class="ui">Zkopírovat znovu</b>
+(předtím se oprava odmítne s odkazem na dokončení).</p>
+
 <h3>Ověření zálohy</h3>
 <p><b class="ui">Ověřit zálohu</b> v horní liště (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>; také v Nastavení → Ověření) vybere složku karty na cíli,
 nebo celou složku dne (ověří se každá karta zvlášť). Každé ověření je položka fronty <span class="q">„Ověření A001“</span>
@@ -1108,7 +1160,7 @@ do <code>ascmhl</code> se při ověření nikdy nic nezapisuje.</p>
 <p>Tlačítko <b class="ui">Zrušit</b> je na kartě úlohy, dokud úloha čeká, běží nebo je pozastavená. Rozpracované soubory
 (<code>.offload-part</code>) se smažou, hotové zůstanou. Zrušená úloha, která ještě nezačala, se rovnou označí
 <span class="pill warn">Zrušeno</span>. Zrušíte-li úlohu až během analýzy klipů nebo proxy, karta už je zálohovaná
-a „kartu lze vysunout“ platí dál.</p>
+a „kartu lze vyjmout“ platí dál (formátovat až po ověření).</p>
 
 <h3>Zavření aplikace během offloadu</h3>
 <p>Při zavření okna s běžící úlohou se aplikace zeptá <span class="q">„Probíhá offload. Opravdu ukončit? Rozpracované soubory
@@ -1346,6 +1398,8 @@ offload luts                                          # seznam vestavěných LUT
   <tr><td class="k"><code>--no-history</code></td><td>historii offloadů nečíst ani nezapsat</td></tr>
   <tr><td class="k"><code>--date</code></td><td>složka s datem (výchozí dnes, <code>RRRR-MM-DD</code>)</td></tr>
   <tr><td class="k"><code>--no-verify</code></td><td>bez ověření zpětným čtením (nedoporučeno)</td></tr>
+  <tr><td class="k"><code>--classic-verify</code></td><td>každý cíl přečíst zpátky hned po kopii (jako před verzí 0.6.0) místo ověření primárního disku při tvorbě proxy; přebije nastavení projektu</td></tr>
+  <tr><td class="k"><code>--primary</code></td><td>číslo cíle (1, 2 … v pořadí <code>--dest</code>), který čtou a ověřují proxy; výchozí je nejrychlejší disk změřený při kopii. Číslo 0 nebo větší než počet cílů se odmítne českou chybou a kódem <code>1</code></td></tr>
   <tr><td class="k"><code>--no-analyze</code></td><td>bez analýzy klipů (metadata a snímky v reportu)</td></tr>
   <tr><td class="k"><code>--dry-run</code></td><td>jen projde kartu a provede kontroly, nekopíruje</td></tr>
   <tr><td class="k"><code>--allow-same-device</code></td><td>povolí dva cíle na stejném svazku</td></tr>
@@ -1382,7 +1436,9 @@ upřesní) a <code>--no-history</code> (potom je <code>--into</code> povinné). 
   <li>Před kopií se vypíše plán, seznam <code>Připojení:</code> (<code>D1 = Cíl 1: …</code>) a varování k zapojení.
     Stavový řádek ukazuje, který článek brzdí: <code>brzdí: D1</code>, <code>brzdí: card</code>, případně <code>(linka plná)</code>.</li>
   <li><kbd>Ctrl</kbd>+<kbd>C</kbd> kopii zruší: dokončí aktuální blok a smaže rozpracované soubory.</li>
-  <li>Návratový kód: <code>0</code> = vše v pořádku, <code>1</code> = chyba (vhodné pro skripty).</li>
+  <li>Návratový kód: <code>0</code> = vše v pořádku a karta <b>lze formátovat</b>, <code>1</code> = chyba nebo karta formátovat
+    nelze (výsledek ověření se nepodařilo zapsat do všech složek, dřívější neověřené soubory; s <code>--no-verify</code> zůstává
+    <code>0</code> jako dřív). Vhodné pro skripty. <code>append</code> přijímá i <code>--classic-verify</code> a <code>--primary</code>.</li>
   <li><code>copy</code> u karty, kterou historie zná, vypíše před plánem <code>Zálohováno 6. 10. 2026 8:15 na D:\Zaloha,
     F:\Zaloha — ověřeno</code> (bez dotazu).</li>
   <li>Na konci <code>copy</code> a <code>append</code> vypíšou <code>Denní report: D:\Zaloha\2026-10-06\_REPORT\2026-10-06_day_report.html</code>

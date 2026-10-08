@@ -16,7 +16,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.1.0 | 0.5.1-win (ve vývoji) |
+| Verze | 0.1.0 | 0.6.0-win (ve vývoji) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
@@ -65,6 +65,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Dnes a historie karet** (z `history.json`), štítek kamery a připojení, odhad času | ⏳ naplánováno | ✅ GUI |
 | **Proxy ve složkách jako na kartě** (`_PROXY/<složka klipu>/<klip>.mov`, plochá starší záloha zůstane plochá) | ⏳ naplánováno (proxy přímo v `_PROXY`) | ✅ 0.5.1 |
 | **Bez proxy, když je originál lehčí** (`proxy.skipLighterSources`, `--proxy-always`) | ⏳ naplánováno (renderuje vše) | ✅ CLI + GUI 0.5.1 |
+| **Verify-in-Proxy** (primární disk ověřený čtením pro proxy, ostatní na pozadí; `--classic-verify`, `--primary`) | ⏳ naplánováno (zpětné čtení) | ✅ CLI + GUI 0.6.0 |
+| **Lze vyjmout × Lze formátovat** (dva stavy karty, oznámení „hotovo“ až po ověření všech disků) | ⏳ naplánováno („kartu lze vysunout“ po ověření) | ✅ GUI + CLI 0.6.0 |
+| **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
+| **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ⏳ naplánováno | ✅ 0.6.0 |
+| **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ⏳ naplánováno | ✅ 0.6.0 |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
 
@@ -193,6 +198,14 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   „bez proxy — originál je lehčí (X Mb/s ≤ Y Mb/s)“); originál větší než proxy ji dostane vždy (rozhodnutí: 4K long-GOP
   se ve střižně dekóduje těžce i s nízkým tokem). Mac klíč ignoruje a renderuje proxy pro všechny klipy.
 - **Odkaz na proxy v HTML reportu** (Windows od 0.5.1): stav „hotovo“ odkazuje na soubor proxy (`../_PROXY/…`).
+- **Verify-in-Proxy** (Windows od 0.6.0): s proxy a ověřením se primární disk ověří z čtení pro proxy, ostatní disky na
+  pozadí; report ze stage 1 má `verifyPending` a generace ASC MHL se zapíše až po ověření. Mac klíče `verifyPending`,
+  `verifyIncomplete`, `unfinished`, `verifyMethod`, `volumeSerial`, `safeToFormatSeconds`, `verifyNotes`, `xxh128`, `content` ignoruje; záloha z Windows se
+  na Macu ověří z `<karta>.xxh64` nebo xxh64 v ASC MHL jako dřív. Report s `verifyPending` (aplikace spadla během ověření)
+  Mac považuje za neověřený.
+- **CLI `--classic-verify` a `--primary N`** (Windows od 0.6.0, `copy` i `append`): `--primary` mimo 1…počet cílů (`--dest`) skončí českou chybou a kódem 1, nikdy tichým návratem k nejrychlejšímu disku. Kód 1 má i kopie, po které kartu nelze formátovat (výsledek ověření nezapsán, neověřené dřívější soubory; `--no-verify` zůstává 0).
+- **Lze vyjmout × Lze formátovat** (Windows od 0.6.0): „kartu lze vysunout“ se rozdělilo — vyjmout po zapsání, formátovat
+  až po ověření všech disků; Mac zatím hlásí jen „kartu lze vysunout“ po zpětném čtení.
 - **Chyby souborů v HTML česky** (Windows): JSON je sdílený, takže chyby v něm zůstávají anglicky (`size mismatch`,
   `HASH MISMATCH` …); HTML/PDF report je zobrazí česky.
 - **Historie karet** (zatím jen Windows, pro Mac naplánováno): `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,
@@ -214,6 +227,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Hlášky česky:** kontroly před kopií, CLI („Chyba: …“, souhrn `verify`) a chyby parseru (kde je System.CommandLine
   přeložené) jsou na Windows česky; logy, TXT report a `--help` zůstávají anglicky. Mac je zatím anglicky.
 - **Doplnění do zálohy — zámek složky karty** (Windows): dvě doplnění do stejné zálohy najednou se nepustí (druhé hned
-  skončí „Do této zálohy právě doplňuje jiná úloha …“). Zámek platí jen v jedné přihlášené relaci Windows na jednom
+  skončí „S touto zálohou právě pracuje jiná úloha …“; s ověřením během proxy drží zámek úloha až do zápisu výsledku ověření). Zámek platí jen v jedné přihlášené relaci Windows na jednom
   počítači — nechrání před doplněním z jiného účtu ani z jiného počítače do sdílené složky — a stejnou složku pod jiným
   jménem (`subst`, `\\localhost\D$`, krátké jméno 8.3) bere jako jinou.

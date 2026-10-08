@@ -7,7 +7,9 @@ namespace Offload.Core.Append;
 /// the CLI) would number the same generation and rewrite the same hash list and chain. Held from before planning until
 /// stage 1 ends, never waited for — a busy folder refuses the job at once. Named mutexes in the session namespace, like
 /// the history lock; one per card folder, taken in a stable order so two jobs can never deadlock. A full copy goes into
-/// a new folder and needs none.
+/// a new folder and needs none — unless it verifies with its proxies (plan 10, ruling I4): a job whose reports say
+/// verifyPending holds its folders from before it writes them until the verification results are written (AcquireHeld),
+/// so no append, repair or resume touches a generation that is still being verified.
 ///
 /// Gaps (fix round 2, item 10; also in docs/ROZDILY.md):
 /// - `Local\` is one Windows session. An append from another session (another user logged in, a service) or from
@@ -68,6 +70,49 @@ public sealed class AppendLock : IDisposable
         {
             Release(held);
             throw;
+        }
+    }
+
+    /// Ruling I4 (plan 10): the folders' locks held by a thread of their own, so they outlive the thread that took them —
+    /// a job takes them in stage 1 (before its reports say verifyPending) and lets go on its stage-2 thread once the
+    /// verification results are written (a mutex can only be released by the thread that owns it). Refuses as Acquire
+    /// does, at once (nothing held then). Dispose from any thread, any number of times.
+    public static IDisposable AcquireHeld(IReadOnlyList<string> cardPaths)
+    {
+        using var ready = new ManualResetEventSlim();
+        var release = new ManualResetEventSlim();
+        Exception? refused = null;
+        var holder = new Thread(() =>
+        {
+            AppendLock? held = null;
+            try { held = Acquire(cardPaths); }
+            catch (Exception e) { refused = e; }
+            ready.Set();
+            if (held == null) return;
+            release.Wait();
+            held.Dispose();
+        }) { IsBackground = true, Name = "offload.folder-lock" };
+        holder.Start();
+        ready.Wait();
+        if (refused != null)
+        {
+            holder.Join();
+            release.Dispose();
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(refused);
+        }
+        return new HeldElsewhere(holder, release);
+    }
+
+    sealed class HeldElsewhere(Thread holder, ManualResetEventSlim release) : IDisposable
+    {
+        int disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+            release.Set();
+            holder.Join();
+            release.Dispose();
         }
     }
 
