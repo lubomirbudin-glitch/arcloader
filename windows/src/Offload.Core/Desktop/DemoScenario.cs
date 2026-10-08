@@ -144,7 +144,7 @@ public static class DemoScenario
         var config = new JobConfig(source, roots) { Proxy = new ProxySettings { Enabled = true } };
         return OffloadJob.ForPreview(config, Plan(source, "A035_ARRI", roots, files), () => new JobStatus
         {
-            Phase = JobPhase.Done, SafeToEject = true, CopySucceeded = true, ProxiesDone = 24,
+            Phase = JobPhase.Done, SafeToEject = true, SafeToFormat = true, CopySucceeded = true, ProxiesDone = 24,
         }, report);
     }
 

@@ -135,6 +135,7 @@ public static class JobCard
             JobPhase.Copying when c != null => ($"Soubor {Math.Min(c.FileIndex + 1, c.TotalFiles)} / {c.TotalFiles}", Path.GetFileName(c.CurrentFile)),
             JobPhase.Flushing => ("Zápis cache disků", ""),
             JobPhase.Verifying when c != null => ("Ověřování", $"{Format.BytesCs3(c.VerifiedBytes.Sum())} / {Format.BytesCs3(c.ToVerifyTotal)}"),
+            JobPhase.Finishing => ("Dokončení ověření", $"{Format.BytesCs3(s.VerifiedBytes)} / {Format.BytesCs3(s.VerifyTotal)}"),
             JobPhase.Analyzing => ($"Klip {s.ClipIndex + 1} / {s.ClipCount}", s.ClipName),
             JobPhase.Proxies => ($"Proxy {s.ClipIndex + 1} / {s.ClipCount}", $"{s.ClipName} · {(s.ClipFraction * 100).ToString("0", CultureInfo.InvariantCulture)} %"),
             JobPhase.Reporting => ("Report", ""),
@@ -146,7 +147,7 @@ public static class JobCard
     public static string? Remaining(JobPhase phase, double? phaseSeconds, double? totalSeconds)
     {
         if (phaseSeconds is not double t) return totalSeconds is double only ? $"zbývá ~{JobProgress.EtaText(only)} celkem" : null;
-        var what = phase switch { JobPhase.Copying => "kopie", JobPhase.Verifying => "ověření", _ => phase.Label().ToLower(Cs) };
+        var what = phase switch { JobPhase.Copying => "kopie", JobPhase.Verifying or JobPhase.Finishing => "ověření", _ => phase.Label().ToLower(Cs) };
         var text = $"zbývá ~{JobProgress.EtaText(t)} {what}";
         return totalSeconds is double total && total > t ? $"{text} · ~{JobProgress.EtaText(total)} celkem" : text;
     }
@@ -204,7 +205,8 @@ public static class JobCard
         total > shown ? $"… a {Texts.Plural(total - shown, "další", "další", "dalších")} {total - shown} {Texts.Plural(total - shown, "soubor", "soubory", "souborů")} v reportu" : null;
 
     /// The headline of a finished job (and of a waiting / running one: just its kind). The green "kartu lze vysunout" is
-    /// the job's own verdict (`JobStatus.SafeToEject`, shared with the eject notification and history), never recomputed
+    /// the job's own verdict — R5 (plan 10): `JobStatus.SafeToFormat`, everything verified everywhere, shared with the
+    /// notification and history; "Lze vyjmout" (SafeToEject, copied) alone is never green — never recomputed
     /// from this job's report: a repair's report lists only the repaired files. `backup`: the whole backup as
     /// BackupState read it (repair, append) for the words under a card that must not be ejected yet; `blockedByPaused`:
     /// a waiting job stands behind a paused one.
@@ -215,22 +217,24 @@ public static class JobCard
             return new(JobCardKind.Waiting, card, blockedByPaused ? WaitingForPaused : "Čeká ve frontě");
         if (!s.Phase.IsFinished()) return new(JobCardKind.Running, card, "");
         if (s.Phase == JobPhase.Cancelled)
-            return new(JobCardKind.Cancelled, $"{card} — zrušeno", s.SafeToEject
+            return new(JobCardKind.Cancelled, $"{card} — zrušeno", s.SafeToFormat
                 ? "Kopie je hotová a ověřená, zrušilo se jen zpracování po kopii."
+                : s.SafeToEject
+                ? "Kopie je hotová, ale neověřená — kartu lze vyjmout, neformátujte ji (Zkopírovat znovu ji ověří)."
                 : "Karta není kompletně zálohovaná — zkopírujte ji znovu celou.");
         if (r == null)
         {
             // Nothing new / nothing to repair: green only when the backup is really complete and verified.
-            if (s.Phase == JobPhase.Done && !s.SafeToEject)
+            if (s.Phase == JobPhase.Done && !s.SafeToFormat)
                 return new(JobCardKind.Problem, $"{card} — kartu zatím nevysunujte", NotSafeWhy(s, backup));
             return s.Phase == JobPhase.Done
                 ? new(JobCardKind.Done, $"{card} — záloha je úplná", s.Note ?? Msg.NothingNew)
                 : new(JobCardKind.Failed, $"{card} — offload selhal", s.Error ?? "Kopie se nepodařila.");
         }
-        string notYet = $"{card} — kartu zatím nevysunujte";
+        string notYet = s.SafeToEject ? $"{card} — lze vyjmout, formátovat zatím ne" : $"{card} — kartu zatím nevysunujte";
         if (!r.Success) return new(JobCardKind.Problem, notYet, backup is { Failed: > 0 } b ? $"V záloze {Files(b.Failed)} stále nesouhlasí." : ProblemText(r, destNames));
         if (!r.Verified) return new(JobCardKind.Problem, $"{card} — zkopírováno bez ověření", SetupTexts.VerifyOffWarning);
-        if (!s.SafeToEject)
+        if (!s.SafeToFormat)
         {
             // This job's files are good, but the backup as a whole is not (earlier files never read back, files of the
             // card that are in no report, files that still fail): the card stays in.

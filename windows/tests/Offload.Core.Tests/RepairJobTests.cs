@@ -95,7 +95,7 @@ public class RepairJobTests
         }
 
         Assert.Equal(JobPhase.Failed, repair.Status().Phase);
-        Assert.Contains("právě doplňuje jiná úloha", repair.Status().Error);
+        Assert.Contains("právě pracuje jiná úloha", repair.Status().Error);
         for (int d = 0; d < trees.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
     }
 
@@ -184,7 +184,7 @@ public class RepairJobTests
     // Ruling I2 on its own: a repair of a backup whose copy the repair could not read back (its read-back cancelled)
     // is not safe to eject; the warning says why.
     [Fact]
-    public void RepairCancelledDuringVerify_NotSafeToEject_Warning()
+    public void RepairCancelledDuringVerify_EjectYes_FormatNo_Warning()
     {
         using var dir = new TempDir();
         var failed = UnverifiedJobWithAWriteError(dir, dir.Sub("history"));
@@ -196,9 +196,11 @@ public class RepairJobTests
 
         var s = repair.Status();
         Assert.Equal(JobPhase.Cancelled, s.Phase);
-        Assert.False(s.SafeToEject);
+        // R5 (plan 10): the repaired copies are written — the card may be taken out — but not read back: never "Lze
+        // formátovat".
+        Assert.True(s.SafeToEject);
+        Assert.False(s.SafeToFormat);
         Assert.Equal(Msg.UnverifiedEarlier(2), s.Warning);
-        Assert.Null(JobOutcomes.CopyDone("A001", s with { Phase = JobPhase.Analyzing }, proxies: false));
     }
 
     // Fix round 1, item 1: a clip shot onto the card after the backup is in no report — the repair fixes what failed,
@@ -407,7 +409,8 @@ public class RepairJobTests
         append.Run();
 
         Assert.True(append.Report!.SafeToFormat);
-        Assert.False(append.Status().SafeToEject);
+        Assert.True(append.Status().SafeToEject);     // R5: every file is on the disks
+        Assert.False(append.Status().SafeToFormat);   // but the cancelled append's file was never read back
         Assert.False(Assert.Single(new HistoryStore(history).Load()).Verified);
         Assert.All(paths, p => Assert.False(CardRecord.Load(p).Verified));
         Assert.All(append.DayReports, p => Assert.Contains("NEOVĚŘENO", File.ReadAllText(p)));

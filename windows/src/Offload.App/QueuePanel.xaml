@@ -145,7 +145,19 @@
                     <DockPanel Margin="0,12,0,0" Visibility="{Binding ShowSafe, Converter={StaticResource BoolToVisible}}">
                         <Button DockPanel.Dock="Right" Style="{StaticResource SuccessSecondaryButton}" Content="Vysunout kartu" Command="{Binding EjectCommand}"
                                 Visibility="{Binding ShowEjectButton, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="EjectButton" />
-                        <TextBlock Text="{Binding SafeText}" Foreground="{DynamicResource Success}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding SafeText}" TextWrapping="Wrap" VerticalAlignment="Center">
+                            <!-- ruling I2 (plan 10): green only once everything is verified (Lze formátovat); "Lze vyjmout" neutral -->
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SafeToFormat}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource Success}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </DockPanel>
                     <TextBlock Text="{Binding PauseText}" Style="{StaticResource TextWarn}" Margin="0,12,0,0" Visibility="{Binding PauseText, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobPauseText" />
@@ -399,7 +411,19 @@
                     <DockPanel Margin="0,12,0,0" Visibility="{Binding ShowSafe, Converter={StaticResource BoolToVisible}}">
                         <Button DockPanel.Dock="Right" Style="{StaticResource SuccessSecondaryButton}" Content="Vysunout kartu" Command="{Binding EjectCommand}"
                                 Visibility="{Binding ShowEjectButton, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="EjectButton" />
-                        <TextBlock Text="{Binding SafeText}" Foreground="{DynamicResource Success}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding SafeText}" TextWrapping="Wrap" VerticalAlignment="Center">
+                            <!-- ruling I2 (plan 10): green only once everything is verified (Lze formátovat); "Lze vyjmout" neutral -->
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SafeToFormat}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource Success}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </DockPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Visibility="{Binding HasReport, Converter={StaticResource BoolToVisible}}">
                         <Button Style="{StaticResource SecondaryButton}" Content="Report PDF" Command="{Binding OpenReportCommand}" Margin="0,0,8,0" AutomationProperties.AutomationId="ReportButton" />

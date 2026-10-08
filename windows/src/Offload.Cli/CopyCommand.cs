@@ -183,8 +183,18 @@ static class CopyCommand
         if (status.Warning != null) Console.WriteLine("Varování: " + status.Warning);
         if (status.Error != null) Console.WriteLine(Msg.CliError + status.Error);
         Ntfy(config, plan, status, report);
-        // "Nic nového" ends Done without a report: that is success (exit 0).
-        return status.Phase == JobPhase.Done && (report?.Success == true || (report == null && status.Note != null)) ? 0 : 1;
+        return ExitCode(config, status, report);
+    }
+
+    /// 0 = the card is backed up: R5 / ruling I1 (plan 10) — every copy verified everywhere and the results written into
+    /// every card folder (JobStatus.SafeToFormat), the whole backup so for an append. "Nic nového" ends Done without a
+    /// report: success when the backup is complete. With verification switched off (--no-verify) nothing can be
+    /// verified: every file copied is success, as before plan 10.
+    internal static int ExitCode(JobConfig config, JobStatus status, OffloadReport? report)
+    {
+        if (status.Phase != JobPhase.Done) return 1;
+        if (report == null) return status.Note != null && status.SafeToFormat ? 0 : 1;
+        return report.Success && (status.SafeToFormat || !config.Verify) ? 0 : 1;
     }
 
     /// Spec 4.3: --ntfy (or the project's ntfy) once the job has ended — at most 11 s (10 s send + 1 s grace); a failure is only a line on stderr.

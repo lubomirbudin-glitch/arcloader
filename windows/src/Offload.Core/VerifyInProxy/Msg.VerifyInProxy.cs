@@ -23,6 +23,18 @@ public static partial class Msg
     public const string CardGivesRecorded = "karta teď dává zaznamenaná data: vada vznikla při zápisu na disky.";
     public const string CardGivesWhatDisksHave = "karta teď dává stejná data jako disky: podezření na chybné čtení karty při kopii.";
     public const string CardGivesOther = "karta teď dává jiná data než při kopii i než disky: podezření na vadnou kartu nebo čtečku.";
+
+    /// The job's warning when the verified generation could not be written into a card folder (it stays uncommitted:
+    /// "Dokončit přerušenou zálohu", an append, finishes it — R6, ruling I5; a repair refuses an unfinished backup).
+    public static string VerifyNotCommitted(string detail) =>
+        $"Výsledek ověření se nepodařilo zapsat ({detail}) — kartu zatím neformátujte; zálohu dokončí „Dokončit přerušenou zálohu“ (Doplnit, offload append).";
+
+    /// A card folder gone before the verification results were written into it (an unplugged disk) — never made anew.
+    public const string CardFolderGone = "složka karty na cíli zmizela (odpojený disk?)";
+
+    /// Spec 7: "2 klipy mají vadu obsahu — před formátováním je zkontrolujte (kopie souhlasí s kartou)."
+    public static string ContentWarnings(int n) =>
+        $"{n} {Desktop.Texts.Plural(n, "klip má", "klipy mají", "klipů má")} vadu obsahu — před formátováním {Desktop.Texts.Plural(n, "ho", "je", "je")} zkontrolujte (kopie souhlasí s kartou).";
     /// Ruling I3: a destination where reads past the file cache are impossible was read back through it (as 0.5.x did).
     public static string VerifiedThroughCache(string disk, int files) =>
         $"Ověřeno čtením přes cache Windows: {disk}, {files} {Desktop.Texts.Plural(files, "soubor", "soubory", "souborů")} — svazek nebo soubor nedovolí čtení mimo cache, data mohla přijít z paměti místo z disku.";

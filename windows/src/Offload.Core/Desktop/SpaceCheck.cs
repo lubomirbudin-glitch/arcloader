@@ -55,6 +55,7 @@ public static class SpaceCheck
         JobPhase.Waiting => need,
         JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying or JobPhase.Reporting => need with { Card = Math.Max(0, need.Card - written) },
         JobPhase.Analyzing or JobPhase.Proxies => need with { Card = 0 },
+        JobPhase.Finishing => need with { Card = 0, Proxy = 0 },   // plan 10: the proxies are done, the report is left
         _ => SpaceNeed.None,
     };
 }

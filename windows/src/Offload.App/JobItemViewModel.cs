@@ -158,6 +158,10 @@ public sealed partial class JobItemViewModel : QueueItem
     public TimeSpan? Stage2Elapsed => progress.Stage2Elapsed;
     public override bool IsFinished => Phase.IsFinished();
     public bool SafeToEject => progress.Status.SafeToEject;
+    /// R5 (plan 10): every copy verified everywhere — the one green verdict (ruling I2).
+    public bool SafeToFormat => progress.Status.SafeToFormat;
+    /// Ruling I2: the success sound plays once, when the job first reaches it (JobOutcomes.Chime).
+    internal bool Chimed { get; set; }
     public bool? CopySucceeded => progress.Status.CopySucceeded;
     /// Failed or copied with errors; a cancelled job is not an error.
     public override bool IsError => progress.IsError;
@@ -205,7 +209,8 @@ public sealed partial class JobItemViewModel : QueueItem
     internal void VolumesChanged() => RaiseMany(nameof(ShowEjectButton), nameof(CanRepair));
     /// A repair of this backup was queued or finished: the "Zkopírovat znovu" button may have to go (a finished card is not refreshed).
     internal void RepairChanged() => Raise(nameof(CanRepair));
-    public string SafeText => Texts.SafeToEject(Job.Plan?.CardPaths.Count ?? 0);
+    /// R5: "lze vyjmout" while the verification still runs, "lze vyjmout i formátovat" once it is done.
+    public string SafeText => SafeToFormat ? Texts.SafeToFormat(Job.Plan?.CardPaths.Count ?? 0) : Texts.SafeToEject(Job.Plan?.CardPaths.Count ?? 0);
     // Cancelled (unlike the Mac): no red "N souborů selhalo" and no rate of a copy that was cut short — one orange line.
     bool IsCancelled => Phase == JobPhase.Cancelled;
     public string? ErrorText => progress.Status.Error;

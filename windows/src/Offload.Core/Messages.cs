@@ -150,8 +150,10 @@ public static partial class Msg
         $"{path} (dočasné jméno kopie {part} je jiný soubor zálohy nebo karty)";
     public static string HashListNotHealed(string cardPath, string error) =>
         $"Seznam kontrolních součtů (.xxh64) v {cardPath} nejde doplnit o chybějící řádky: {error}";
+    /// Ruling I4 (plan 10): also while a job still verifies this backup with its proxies (it holds the folders until the
+    /// verification results are written).
     public static string AppendBusy(string cardPath) =>
-        $"Do této zálohy právě doplňuje jiná úloha ({cardPath}) — počkejte, až skončí.";
+        $"S touto zálohou právě pracuje jiná úloha — doplnění, oprava nebo ověření s proxy ({cardPath}) — počkejte, až skončí.";
     public const string NothingNew = "Nic nového — záloha je úplná.";
 
     // Repair — "Zkopírovat znovu" (UI návrh, nová věc 4)

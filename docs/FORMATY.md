@@ -197,7 +197,9 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
   soubor mimo řetěz); kartu, na které není ani jeden soubor dřívější zálohy; soubor na kartě, který má v záloze jinou
   velikost nebo čas (tolerance 2 s, na FAT celé hodiny); soubor na cíli, který žádný report nezná;
 - dvě doplnění do téže složky karty najednou nejdou: pojmenovaný mutex `Local\Offload-append-<sha256(svazek|cesta)>`
-  na každou složku karty, bez čekání (druhé skončí „Do této zálohy právě doplňuje jiná úloha …“); celá kopie zámek nebere.
+  na každou složku karty, bez čekání (druhé skončí „S touto zálohou právě pracuje jiná úloha …“); celá kopie bere zámek
+  jen s ověřením během proxy (od zápisu reportů s `verifyPending` do zápisu výsledku ověření; doplnění ho tehdy drží i
+  přes 2. fázi — plán 10, I4).
 
 ### Oprava — „Zkopírovat znovu“ (Windows od 0.5.0, Mac naplánováno)
 

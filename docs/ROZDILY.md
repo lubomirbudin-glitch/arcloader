@@ -214,6 +214,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Hlášky česky:** kontroly před kopií, CLI („Chyba: …“, souhrn `verify`) a chyby parseru (kde je System.CommandLine
   přeložené) jsou na Windows česky; logy, TXT report a `--help` zůstávají anglicky. Mac je zatím anglicky.
 - **Doplnění do zálohy — zámek složky karty** (Windows): dvě doplnění do stejné zálohy najednou se nepustí (druhé hned
-  skončí „Do této zálohy právě doplňuje jiná úloha …“). Zámek platí jen v jedné přihlášené relaci Windows na jednom
+  skončí „S touto zálohou právě pracuje jiná úloha …“; s ověřením během proxy drží zámek úloha až do zápisu výsledku ověření). Zámek platí jen v jedné přihlášené relaci Windows na jednom
   počítači — nechrání před doplněním z jiného účtu ani z jiného počítače do sdílené složky — a stejnou složku pod jiným
   jménem (`subst`, `\\localhost\D$`, krátké jméno 8.3) bere jako jinou.

@@ -17,7 +17,7 @@ public class JobOutcomeTests
 
     static JobStatus Status(JobPhase phase, int proxiesDone = 0, int proxiesFailed = 0, string? warning = null, string? error = null, string? note = null,
         bool safe = true) =>
-        new() { Phase = phase, ProxiesDone = proxiesDone, ProxiesFailed = proxiesFailed, Warning = warning, Error = error, Note = note, SafeToEject = safe, CopySucceeded = true };
+        new() { Phase = phase, ProxiesDone = proxiesDone, ProxiesFailed = proxiesFailed, Warning = warning, Error = error, Note = note, SafeToEject = safe, SafeToFormat = safe, CopySucceeded = true };
 
     [Fact]
     public void Done_VerifiedOnDisks_WithProxies()

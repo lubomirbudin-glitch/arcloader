@@ -187,7 +187,7 @@ public class JobCardTests
     {
         var ok = Report();
         ok = WithFiles(ok, File("a", "verified", "verified"), File("b", "verified", "verified"));
-        var h = JobCard.Headline("A035_ARRI", new JobStatus { Phase = JobPhase.Done, SafeToEject = true, CopySucceeded = true }, ok, Disks);
+        var h = JobCard.Headline("A035_ARRI", new JobStatus { Phase = JobPhase.Done, SafeToEject = true, SafeToFormat = true, CopySucceeded = true }, ok, Disks);
         Assert.Equal((JobCardKind.Done, "A035_ARRI — kartu lze vysunout", "Všechny 2 soubory jsou na 2 discích a ověřené (xxHash64)."), (h.Kind, h.Title, h.Sub));
 
         var bad = WithFiles(Report(), File("a", "verified", "verified"), File("XDROOT/Clip/B012C015.MXF", "verified", "failed", "HASH MISMATCH: 1 != 2"));
@@ -201,12 +201,12 @@ public class JobCardTests
             JobCard.Headline("A", new JobStatus { Phase = JobPhase.Failed, Error = "Cíl nenalezen: D:\\" }, null, Disks) is var f ? (f.Title, f.Sub) : default);
         Assert.Equal(JobCardKind.Failed, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Failed, Error = "x" }, null, Disks).Kind);
         Assert.Equal((JobCardKind.Done, "A — záloha je úplná", Msg.NothingNew),
-            JobCard.Headline("A", new JobStatus { Phase = JobPhase.Done, Note = Msg.NothingNew, SafeToEject = true }, null, Disks) is var n ? (n.Kind, n.Title, n.Sub) : default);
+            JobCard.Headline("A", new JobStatus { Phase = JobPhase.Done, Note = Msg.NothingNew, SafeToEject = true, SafeToFormat = true }, null, Disks) is var n ? (n.Kind, n.Title, n.Sub) : default);
         Assert.Equal(JobCardKind.Cancelled, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Cancelled }, null, Disks).Kind);
         Assert.Equal(JobCardKind.Waiting, JobCard.Headline("A", new JobStatus(), null, Disks).Kind);
         Assert.Equal(JobCardKind.Running, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Proxies }, null, Disks).Kind);
         // Stage 2 failed after a good copy: still safe to eject (the error shows as an orange line).
-        Assert.Equal(JobCardKind.Done, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Failed, SafeToEject = true, Error = "x" }, ok, Disks).Kind);
+        Assert.Equal(JobCardKind.Done, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Failed, SafeToEject = true, SafeToFormat = true, Error = "x" }, ok, Disks).Kind);
     }
 
     static OffloadReport WithFiles(OffloadReport r, params ReportFile[] files) => new()

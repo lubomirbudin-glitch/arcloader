@@ -436,13 +436,22 @@ public sealed partial class MainViewModel
             item.Job.Config.AnalyzeClips && plan.Mode != PlanMode.Repair, plan.Mode == PlanMode.Repair ? new ProxySettings() : item.Job.Config.Proxy)
         : null;
 
+    /// Ruling I2 (plan 10): the success sound only when every copy is verified everywhere and nothing needs a look
+    /// (JobOutcomes.Chime) — never for "Lze vyjmout" alone; once per job.
+    void Chime(JobItemViewModel item)
+    {
+        if (closing || item.Chimed || !Offload.Core.Notify.JobOutcomes.Chime(item.Job.Status())) return;
+        item.Chimed = true;
+        SystemSounds.Asterisk.Play();
+    }
+
     QueueItem? Find(IQueuedJob job) => Jobs.FirstOrDefault(j => ReferenceEquals(j.Queued, job));
 
     void OnCopyFinished(IQueuedJob job)
     {
         if (Find(job) is not JobItemViewModel item) return;   // a verification has no stage 2: OnJobFinished follows
         item.Refresh();
-        if (!closing && item.SafeToEject) SystemSounds.Asterisk.Play();
+        Chime(item);   // ruling I2: only once everything is verified — with verify-in-proxy at the end of stage 2
         NotifyCopyDone(item);   // spec 4.3: "kartu lze vysunout" while stage 2 still runs
         if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Zálohováno"
         if (!closing) _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // the disks changed: free space again (ruling I4)
@@ -465,6 +474,7 @@ public sealed partial class MainViewModel
                 if (j.Job.Report is { } r) rates.Learn(r, j.Job.Config.AnalyzeClips, j.Job.Config.Proxy, j.Stage2Elapsed, endedAs: j.Phase);   // the next estimate (M2)
             }
             item.Refresh();
+            if (item is JobItemViewModel finished) Chime(finished);
             if (!item.Alerted) Alert(item);
             if (QueueRules.NotifyAtJobEnd(item.Notified) && item is JobItemViewModel ended)
             {

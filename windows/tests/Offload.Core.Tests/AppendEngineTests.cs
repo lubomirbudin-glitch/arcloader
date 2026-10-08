@@ -314,10 +314,11 @@ public class AppendEngineTests
 
         Assert.Equal(JobPhase.Done, append.Status().Phase);
         Assert.Equal("2 soubory z dřívější zálohy nebyly ověřeny — doporučeno Ověřit zálohu.", append.Status().Warning);
-        // Plan 9 fix round 1, item 1 (as ruling I2 for a repair): the new files are verified, the card is not —
-        // no "kartu lze vysunout".
+        // Plan 9 fix round 1, item 1 (as ruling I2 for a repair): the new files are verified, the card is not — R5 (plan
+        // 10): every file is on the disk, so "Lze vyjmout", but never "Lze formátovat".
         Assert.True(append.Report!.SafeToFormat);
-        Assert.False(append.Status().SafeToEject);
+        Assert.True(append.Status().SafeToEject);
+        Assert.False(append.Status().SafeToFormat);
     }
 
     // Fix round 1, item 1: two appends into the same card folders at once (GUI + CLI). The second refuses before it

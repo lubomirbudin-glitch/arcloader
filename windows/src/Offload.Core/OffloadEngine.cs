@@ -35,11 +35,17 @@ public sealed partial class OffloadEngine
     /// Waits while paused; false when the job was cancelled meanwhile (stage 2 uses it before every clip).
     public bool WaitWhilePaused() => Pauses.WaitWhilePaused(cts.Token);
 
+    /// Cancelled with Cancel(): the verification of stage 2 stops on it too (plan 10).
+    internal CancellationToken Cancellation => cts.Token;
+
     /// After Run (plan 10): per file, the XXH3-64 of its blocks as the card gave them (null when it was not read to the
     /// end); per destination, its write speed and whether it was written past the file cache.
     public ulong[]?[] Blocks { get; private set; } = [];
     public IReadOnlyList<double?> WriteRates { get; private set; } = [];
     public IReadOnlyList<bool> WrittenUnbuffered { get; private set; } = [];
+
+    /// Ruling I1, asked again in stage 2 (plan 10, spec 10): is the copied card still in the drive? Null = never asked.
+    internal bool? CardStillThere() => SameCard is null ? null : StillSameCard();
 
     /// The file error (report JSON, English like every file error) of the files left out because the card in the drive
     /// was not the copied one after a pause (ruling I1); the HTML says it in Czech.

@@ -4,6 +4,7 @@ using Offload.Core.Desktop;
 using Offload.Core.History;
 using Offload.Core.Outputs;
 using Offload.Core.Space;
+using Offload.Core.VerifyInProxy;
 
 namespace Offload.Core;
 
@@ -43,9 +44,17 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     public string? RepairCardIdentity { get; set; }
     /// Where the end of the job is announced (spec 4.3): the copy taken when the job was started.
     public Notify.NotifySettings Notify { get; set; } = new();
+    /// Plan 10 (R11): verify the primary destination from the proxies' reads and the others in the background, while
+    /// the proxies render — on when proxies and verification are; settings "Ověřit primární disk během proxy", CLI
+    /// --classic-verify turns it off (the read-back of every destination right after the copy, as before 0.6.0).
+    public bool VerifyInProxy { get; set; } = true;
+    /// Plan 10 (spec 6): the destination the proxies read and verify (0-based, CLI --primary N); null = the fastest one
+    /// measured during the copy.
+    public int? PrimaryDestination { get; set; }
 }
 
-public enum JobPhase { Waiting, Copying, Flushing, Verifying, Reporting, Analyzing, Proxies, Done, Failed, Cancelled }
+/// `Finishing` (plan 10): after the proxies, the verification reads what they did not and waits for the other disks.
+public enum JobPhase { Waiting, Copying, Flushing, Verifying, Reporting, Analyzing, Proxies, Finishing, Done, Failed, Cancelled }
 
 public static class JobPhaseExtensions
 {
@@ -58,6 +67,7 @@ public static class JobPhaseExtensions
         JobPhase.Reporting => "Report",
         JobPhase.Analyzing => "Analýza klipů",
         JobPhase.Proxies => "Render proxy",
+        JobPhase.Finishing => "Dokončení ověření",
         JobPhase.Done => "Hotovo",
         JobPhase.Failed => "Chyba",
         _ => "Zrušeno",
@@ -76,8 +86,17 @@ public sealed record JobStatus
     public double ClipFraction { get; init; }
     public int ProxiesDone { get; init; }
     public int ProxiesFailed { get; init; }
-    /// All files are on all destinations and verified — the card may be ejected even while proxies render.
+    /// R5 "Lze vyjmout": every file is copied onto every destination (written and flushed) — the card may be taken out,
+    /// also while the verification still runs. Not "Lze formátovat", never green (ruling I2).
     public bool SafeToEject { get; init; }
+    /// R5 "Lze formátovat": every file verified on every destination, none failed (and the whole backup so, for an append
+    /// or a repair) — the one green verdict of a card (spec 2). With verify-in-proxy only at the end of stage 2.
+    public bool SafeToFormat { get; init; }
+    /// Spec 7: clips whose decoder reported a defect (content_warn) — formatting needs the user's confirmation.
+    public int ContentWarnings { get; init; }
+    /// Plan 10 "Dokončení ověření": bytes verified so far and to verify (all destinations).
+    public long VerifiedBytes { get; init; }
+    public long VerifyTotal { get; init; }
     public bool? CopySucceeded { get; init; }
     public string? Error { get; init; }
     /// Information for the job card, e.g. "Nic nového — záloha je úplná."
@@ -113,6 +132,12 @@ public sealed class OffloadJob
     CardVolume? cardVolume;
     /// Append: what the planner found (also when there is nothing new); read on the copy thread only.
     AppendPlan? appendPlan;
+    /// Plan 10: the verification running with the proxies (stage 2), null otherwise; the paused time when the copy ended.
+    volatile VerifySession? session;
+    TimeSpan pausedAtCopyEnd;
+    /// Ruling I4: the card folders' lock a job whose reports say verifyPending holds until FinishVerification has written
+    /// the verification results (taken in stage 1, let go in stage 2 — AppendLock.AcquireHeld).
+    IDisposable? verifyLock;
 
     /// Set on a worker thread, read by the app's UI thread.
     public OffloadPlan? Plan { get => planValue; private set => planValue = value; }
@@ -136,6 +161,10 @@ public sealed class OffloadJob
     internal Func<IDisposable> KeepAwake { get; init; } = NativeIO.KeepAwake;
     /// The whole backup's state after "Nic k opravě" (tests replace it to make it unreadable).
     internal Func<IReadOnlyList<string>, BackupState> ReadBackupState { get; init; } = BackupState.Of;
+    /// Tests: UnbufferedCheck.Problem — whether a destination may be verified from the proxies' reads (spec 8, R8).
+    internal Func<string, bool, string?> CacheCheck { get; init; } = UnbufferedCheck.Problem;
+    /// Tests: called before the verified generation is committed into each card folder (a throw = that commit failed).
+    internal Action<string>? BeforeCommit { get; init; }
 
     public OffloadJob(JobConfig config)
         : this(config, new OffloadOptions
@@ -228,6 +257,8 @@ public sealed class OffloadJob
         bool wasStarted;
         lock (gate) { s = state; wasStarted = started; }
         bool stage1 = s.Phase is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying or JobPhase.Reporting;
+        if (s.Phase == JobPhase.Finishing && session is { } verifying)
+            s = s with { VerifiedBytes = verifying.VerifiedBytes.Sum(), VerifyTotal = verifying.ToVerify.Sum() };
         if (stage1)
         {
             var snap = Engine.Snapshot();
@@ -247,8 +278,9 @@ public sealed class OffloadJob
         if (s.Phase == JobPhase.Waiting && !wasStarted && IsCancelled) s = s with { Phase = JobPhase.Cancelled };
         var pauses = Engine.Pauses;
         bool running = s.Phase != JobPhase.Waiting && !s.Phase.IsFinished();
-        // Stage 1 stands only when the destinations are idle too (the engine's snapshot says so — fix round 1).
-        bool held = stage1 ? s.Copy!.PauseHeld : pauses.IsHolding;
+        // Stage 1 stands only when the destinations are idle too (the engine's snapshot says so — fix round 1); stage 2 only
+        // when no verification thread is mid-block (plan 10).
+        bool held = stage1 ? s.Copy!.PauseHeld : pauses.IsHolding && session?.Reading != true;
         return s with { Paused = running && pauses.IsPaused, PauseHeld = running && held, PausedTotal = pauses.PausedTotal };
     }
 
@@ -295,7 +327,7 @@ public sealed class OffloadJob
             }
         }
         using var awake = KeepAwake();
-        AppendLock? folders = null;
+        IDisposable? folders = null;
         bool copying = false;   // the engine may have written to the destinations: a day report is due even on failure
         try
         {
@@ -303,8 +335,9 @@ public sealed class OffloadJob
             // plan made before (the CLI prints one first) is made again, another append may have finished meanwhile.
             // Released in `finally`, so the NothingNew path below still holds them while it heals the hash list.
             // A repair takes the same lock: an append and a repair never number the same generation.
+            // Ruling I4 (plan 10): held by a thread of its own — with verify-in-proxy it passes to stage 2 (another thread).
             if (otherCard) throw OffloadError.Preflight(PreflightCode.RepairConflict, Msg.RepairOtherCard);
-            folders = (Config.RepairInto ?? Config.AppendInto) is { Count: > 0 } into ? AppendLock.Acquire(into) : null;
+            folders = (Config.RepairInto ?? Config.AppendInto) is { Count: > 0 } into ? AppendLock.AcquireHeld(into) : null;
             if (folders != null)
             {
                 Plan = null;
@@ -314,9 +347,20 @@ public sealed class OffloadJob
             if (plan.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(plan.UnverifiedEarlier)));
             Update(s => s with { Phase = JobPhase.Copying });
             copying = true;
+            // Plan 10 (R11): the read-back waits for stage 2, where the proxies read the copies.
+            Engine.Options.DeferVerify = VerifiesInProxy(plan);
+            // Ruling I4: a full copy that will write reports saying verifyPending takes its new card folders' lock first —
+            // no append, repair or resume may touch the generation until its verification results are written.
+            if (Engine.Options.DeferVerify && folders == null) folders = AppendLock.AcquireHeld(plan.CardPaths);
             var report = Engine.Run(plan);
             Report = report;
+            pausedAtCopyEnd = Engine.Pauses.PausedTotal;
+            // Ruling I4: the folders stay held until FinishVerification has written the verification results (stage 2,
+            // or below when the copy was cancelled right after it wrote its reports).
+            if (report.VerifyPending == true) (verifyLock, folders) = (folders, null);
+            // R5: "Lze formátovat" only verified everywhere; "Lze vyjmout" once everything is on every disk.
             bool safe = report.SafeToFormat;
+            bool allCopied = report.Success;
             BackupState? whole = null;
             if (plan.Mode == PlanMode.Repair)
             {
@@ -324,18 +368,23 @@ public sealed class OffloadJob
                 // from the whole backup after it (every card folder's reports, still under the folder lock).
                 var w = whole = Backup = BackupState.Of(plan.CardPaths);
                 safe &= w.Failed == 0 && w.Unverified == 0;
+                allCopied &= w.Failed == 0;
                 if (w.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(w.Unverified)));
                 // Fix round 1, item 1: files shot after the backup are in no report — a repair does not copy them, and
                 // the card formatted now would lose them.
                 safe &= plan.NotInBackup == 0;
+                allCopied &= plan.NotInBackup == 0;
                 if (plan.NotInBackup > 0) Update(s => s.WithWarning(Msg.CardFilesNotInBackup(plan.NotInBackup)));
             }
             // The same for an append (fix round 1, item 1, plan 6's verdict checked): its new files are verified, but
             // files of the earlier backup that were never read back keep the card from "kartu lze vysunout".
             if (plan.Mode == PlanMode.Append) safe &= plan.UnverifiedEarlier == 0;
-            Update(s => s with { SafeToEject = safe, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
+            Update(s => s with { SafeToEject = allCopied, SafeToFormat = safe, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
             if (IsCancelled)
             {
+                // Cancelled after the copy wrote its verifyPending reports: nothing was verified — the generation is
+                // committed with its copies "written" (unverified), as a cancel in stage 2 does (ruling I1: never green).
+                if (report.VerifyPending == true) Report = FinishVerification(null, plan, report, log);
                 // Marked before the phase changes: whoever sees it finished also sees the day report pending (fix round 1, item 3).
                 var cancelled = DayReportNext();   // the card shows as not complete (spec 3.2); not recorded in history
                 Update(s => s with { Phase = JobPhase.Cancelled });
@@ -387,7 +436,7 @@ public sealed class OffloadJob
                 log?.Invoke($"backup state: {x.Message}");
                 Update(s => s.WithWarning(Msg.BackupStateUnreadable(x.Message)));
             }
-            Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null });
+            Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null, SafeToFormat = s.Warning == null });
             return false;
         }
         catch (OffloadError e) when (e.Code == PreflightCode.NothingNew)
@@ -412,17 +461,20 @@ public sealed class OffloadJob
                 // Nothing to copy does not make the earlier backup verified (fix round 1, item 3).
                 if (a.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(a.UnverifiedEarlier)));
             }
-            Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null });
+            // Conservative (no false green): any warning keeps both verdicts off, as before plan 10.
+            Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null, SafeToFormat = s.Warning == null });
             return false;
         }
         catch (OperationCanceledException)
         {
+            EndPendingUnverified(log);
             var next = copying && DayReportNext();
             Update(s => s with { Phase = JobPhase.Cancelled });
             return next;
         }
         catch (Exception e)
         {
+            EndPendingUnverified(log);
             var next = copying && DayReportNext();   // ruling M9: best effort after a failed copy too
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
             return next;
@@ -431,6 +483,14 @@ public sealed class OffloadJob
         {
             folders?.Dispose();
         }
+    }
+
+    /// Stage 1 ended with an exception after its reports said verifyPending (no stage 2 follows): the generation is
+    /// committed unverified and the folders are let go — never left locked, never green.
+    void EndPendingUnverified(Action<string>? log)
+    {
+        if (Volatile.Read(ref verifyLock) == null || Plan is not { } plan || Report is not { VerifyPending: true } pending) return;
+        Report = FinishVerification(null, plan, pending, log);
     }
 
     /// Ruling I2: stage 1 has ended and only the day report is left — RunPost makes it on the post thread, after the
@@ -638,8 +698,14 @@ public sealed class OffloadJob
         store.Load().FirstOrDefault(e => e.Destinations.Any(d => cardPaths.Any(p =>
             string.Equals(d.CardPath.TrimEnd('\\'), p.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))));
 
+    /// Plan 10 (R11): whether this job verifies with the proxies — proxies and verification on, verify-in-proxy not switched
+    /// off, ffmpeg found, and not a repair (a repair has no stage 2 and always reads back, ruling M16).
+    bool VerifiesInProxy(OffloadPlan plan) =>
+        Config.Verify && Config.VerifyInProxy && Config.Proxy.Enabled && plan.Mode != PlanMode.Repair && Config.Tools.Resolved().Ffmpeg != null;
+
     /// Stage 2 — clip analysis, thumbnails, optional proxies, PDF. Reads only from the destinations.
-    /// A failure here never changes the copy's result (SafeToEject stays as stage 1 left it).
+    /// A failure here never changes the copy's result (SafeToEject stays as stage 1 left it). With verify-in-proxy the
+    /// verification ends here too (FinishVerification) — also when the analysis or the proxies failed or were cancelled.
     public void RunPost(Action<string>? log = null)
     {
         if (preview != null) return;
@@ -658,23 +724,170 @@ public sealed class OffloadJob
         }
         if (Plan is not { } plan || Report is not { } report) return;
         using var awake = KeepAwake();
+        VerifySession? verifying = null;
+        OffloadReport final = report;
+        Exception? failed = null;
         try
         {
-            var final = AnalyzeAndRender(plan, report, log);
-            Report = final;
+            // Inside the try (ruling M2): a session that cannot start fails stage 2, the generation is still committed
+            // below (unverified) and the folders let go.
+            verifying = session = StartVerification(plan, report);
+            final = AnalyzeAndRender(plan, report, log);
+        }
+        catch (Exception e)
+        {
+            failed = e;
+            log?.Invoke($"stage 2 failed: {e.Message}");
+        }
+        try
+        {
+            if (report.VerifyPending == true) final = FinishVerification(verifying, plan, final, log);
+        }
+        finally
+        {
+            session = null;
+            verifying?.Dispose();
+        }
+        Report = final;
+        if (failed == null)
+        {
             Engine.WaitWhilePaused();   // before the PDF and the day report (a cancel meanwhile still writes them)
             Update(s => s with { Phase = JobPhase.Reporting });
             WritePdfReports(final, plan, log);
             RegenerateDayReports(plan, log);
             Update(s => s with { Phase = IsCancelled ? JobPhase.Cancelled : JobPhase.Done });
         }
+        else
+        {
+            WriteClipLists(plan, log);   // the generation must not be missing from the lists
+            WritePdfReports(final, plan, log);
+            RegenerateDayReports(plan, log);
+            Update(s => s with { Phase = JobPhase.Failed, Error = failed.Message });
+        }
+    }
+
+    /// Plan 10: the session of a copy whose reports say verifyPending — every destination's cache check first (spec 8),
+    /// then the background reads start; null when this job verified in stage 1.
+    VerifySession? StartVerification(OffloadPlan plan, OffloadReport report)
+    {
+        if (report.VerifyPending != true) return null;
+        var paths = plan.CardPaths;
+        var why = paths.Select((p, d) => Config.VerifyInProxy ? CacheCheck(p, d < Engine.WrittenUnbuffered.Count && Engine.WrittenUnbuffered[d]) : Msg.ClassicSetting).ToList();
+        var s = new VerifySession(plan, report, Engine.Blocks, Engine.Options.ChunkSize, Engine.WriteRates, Config.PrimaryDestination, why,
+            Engine.Pauses, Engine.Cancellation, (file, block) => Engine.CardStillThere() != false   // a folder source has no card to lose
+                ? VerifySession.ReadCardBlock(Layout.Join(plan.Source, plan.Scan.Files[file].RelPath), block, Engine.Options.ChunkSize)
+                : null);
+        s.StartBackground();
+        return s;
+    }
+
+    /// Plan 10, the end of the verification (spec 6): the fill-in and the background reads end, the report gets the
+    /// verdicts and is committed — ASC MHL generation, reports, hash lists (OffloadReport.Commit) — into every card folder
+    /// while the job still holds their lock (ruling I4, taken in stage 1), history learns it, the lock goes, and the
+    /// card's verdict "Lze formátovat" is decided. `s` null: nothing was verified (cancelled right after the copy, or the
+    /// session never started) — the copies stay "written", unverified. Never throws.
+    /// Ruling I1: "Lze formátovat" only when the results were written into EVERY folder and the folders say so — read
+    /// back with BackupState (the one definition history and the day report use), never from this report alone. A
+    /// folder whose commit failed keeps its reports saying verifyPending (unverified); "Dokončit přerušenou zálohu"
+    /// (an append, R6) finishes it.
+    OffloadReport FinishVerification(VerifySession? s, OffloadPlan plan, OffloadReport report, Action<string>? log)
+    {
+        var held = Interlocked.Exchange(ref verifyLock, null);
+        try
+        {
+            if (s != null) Update(st => st with { Phase = JobPhase.Finishing });
+            try { s?.Finish(); }
+            catch (Exception e) { log?.Invoke($"verification: {e.Message}"); }
+            IReadOnlyList<string> notes = s?.Notes ?? [];
+            var paused = Engine.Pauses.PausedTotal - pausedAtCopyEnd;
+            var final = s != null
+                ? report.WithVerification(s.Results, !IsCancelled, s.Primary, s.ClassicWhy, notes, DateTime.UtcNow, paused)
+                : report.WithVerification(Unread(report), verified: false, -1, [.. plan.CardPaths.Select(_ => (string?)null)], notes, DateTime.UtcNow, paused);
+            foreach (var note in notes) log?.Invoke(note);
+            if (held == null)
+            {
+                // Never without the folders' lock (another job may be at them): taken now or not committed at all.
+                try { held = AppendLock.AcquireHeld(plan.CardPaths); }
+                catch (OffloadError e) { Update(st => st.WithWarning(Msg.VerifyNotCommitted(e.Message))); }
+            }
+            bool committed = held != null;
+            if (held != null)
+            {
+                foreach (var path in plan.CardPaths)
+                {
+                    try
+                    {
+                        BeforeCommit?.Invoke(path);
+                        // An unplugged disk: never a folder made anew for the record alone.
+                        if (!Directory.Exists(path)) throw new DirectoryNotFoundException(Msg.CardFolderGone);
+                        final.Commit(path);
+                    }
+                    catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException or OffloadError or InvalidOperationException)
+                    {
+                        committed = false;
+                        log?.Invoke($"commit {path}: {e.Message}");
+                        Update(st => st.WithWarning(Msg.VerifyNotCommitted($"{path}: {e.Message}")));
+                    }
+                }
+            }
+            BackupState? whole = null;
+            try { whole = ReadBackupState(plan.CardPaths); }
+            catch (Exception e)
+            {
+                log?.Invoke($"backup state: {e.Message}");
+                Update(st => st.WithWarning(Msg.BackupStateUnreadable(e.Message)));
+            }
+            if (whole is { } w) RecordVerified(plan, final, w, log);
+            bool safe = committed && final.SafeToFormat && whole is { Failed: 0, Unverified: 0 };
+            int warnings = final.ContentWarnings.Count;
+            if (warnings > 0) Update(st => st.WithWarning(Msg.ContentWarnings(warnings)));
+            if (notes.Count > 0) Update(st => st.WithWarning(notes[0]));
+            Update(st => st with { SafeToFormat = safe, ContentWarnings = warnings, CopySucceeded = st.CopySucceeded != false && final.Success });
+            return final;
+        }
         catch (Exception e)
         {
-            log?.Invoke($"stage 2 failed: {e.Message}");
-            WriteClipLists(plan, log);   // the generation must not be missing from the lists
-            WritePdfReports(report, plan, log);
-            RegenerateDayReports(plan, log);
-            Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
+            // Never thrown out of stage 2, never green.
+            log?.Invoke($"verification: {e.Message}");
+            Update(st => st.WithWarning(Msg.VerifyNotCommitted(e.Message)) with { SafeToFormat = false });
+            return report;
+        }
+        finally
+        {
+            held?.Dispose();
+        }
+    }
+
+    /// Every copy as the copy left it (nothing read): "written" stays unverified, "failed" stays failed.
+    static List<DestFileResult[]> Unread(OffloadReport report) =>
+        [.. Enumerable.Range(0, report.Destinations.Count).Select(d => report.Files.Select(f => (d < f.Destinations.Count ? f.Destinations[d] : "pending") switch
+        {
+            "written" when f.SourceError == null => new DestFileResult(FileState.Written, null),
+            "verified" => new DestFileResult(FileState.Verified, null),
+            "failed" => new DestFileResult(FileState.Failed, d < f.Errors.Count ? f.Errors[d] : null),
+            _ => new DestFileResult(FileState.Pending, null),
+        }).ToArray())];
+
+    /// History learns the verification (fix round 2, item C: as the card folders' reports say it now — `whole`).
+    void RecordVerified(OffloadPlan plan, OffloadReport report, BackupState whole, Action<string>? log)
+    {
+        if (!Config.RecordHistory) return;
+        try
+        {
+            var store = Store(log);
+            if (EntryOf(store, plan.CardPaths) is not { } found) return;
+            store.Update(found.Id, existing =>
+            {
+                if (existing == null) return null;
+                Apply(existing, whole);
+                existing.Finished = report.Finished;
+                foreach (var g in existing.Generations.Where(g => g.Seq == plan.Generation)) g.Verified = report.Verified;
+                return existing;
+            });
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
         }
     }
 
@@ -710,9 +923,13 @@ public sealed class OffloadJob
         var cardPaths = plan.CardPaths;
         var fileIndex = report.Files.Select((f, i) => (f.Path, i)).ToDictionary(x => x.Path, x => x.i);
         bool Good(string state) => state == "verified" || (!report.Verified && state == "written");
-        /// First destination that holds a good copy of every segment — clips are read from disk, never from the card.
+        var verifying = session;
+        /// First destination that holds a good copy of every segment — clips are read from disk, never from the card. With
+        /// verify-in-proxy the primary destination first (its copy is verified by this read, spec 5).
         int? GoodDest(Clip clip)
         {
+            if (verifying is { Primary: >= 0 and var p } && clip.Segments.All(seg => fileIndex.TryGetValue(seg, out var fi) && Good(report.Files[fi].Destinations[p])))
+                return p;
             for (int d = 0; d < cardPaths.Count; d++)
                 if (clip.Segments.All(seg => fileIndex.TryGetValue(seg, out var fi) && Good(report.Files[fi].Destinations[d]))) return d;
             return null;
@@ -832,8 +1049,14 @@ public sealed class OffloadJob
             var sw = Stopwatch.StartNew();
             try
             {
-                renderer.Render(clip, cardPaths[d], info, entries[i].Lut, Layout.Join(cardPaths[d], rel),
-                    f => Update(s => s with { ClipFraction = f }), () => IsCancelled);
+                // Plan 10: the primary's copy is verified by this read (mode A: ffmpeg reads through the tap; mode B: read
+                // and verified before the SDK); spec 7: the decoder's words are the clip's content verdict.
+                var content = new ContentWatch();
+                using (var lease = verifying?.Prepare(clip, d))
+                    renderer.Render(clip, cardPaths[d], info, entries[i].Lut, Layout.Join(cardPaths[d], rel),
+                        f => Update(s => s with { ClipFraction = f }), () => IsCancelled, lease?.Url, content);
+                entries[i].Content = content.Verdict(info);
+                if (entries[i].Content!.IsWarn) entries[i].Content!.Jpeg = renderer.Snapshot(clip, cardPaths[d], info, entries[i].Content!.Frame ?? 0);
                 entries[i].ProxyStatus = ProxyStatus.Done;
                 entries[i].ProxyPath = rel;
                 // Spec 3.4: relinking goes by name - a proxy that had to be renamed must be attached by hand.
