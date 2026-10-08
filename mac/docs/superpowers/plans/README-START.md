@@ -34,9 +34,10 @@ Ověření: `swift --version` (≥ 5.9), `xcrun --find xctest` (cesta existuje),
 
 ## 2. Repo, build a testy
 
-`origin/main` obsahuje `mac/`, `windows/`, `docs/` a `shared/` (od 2026-10-05). Tyto podklady (plán úkolů 27–31) musí být na
-GitHubu taky — ověřte, že plán `mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md` má „Task 31“; jinak požádejte
-uživatele o push nebo o název větve.
+`origin/main` obsahuje `mac/`, `windows/`, `docs/` a `shared/` (od 2026-10-05). Tyto podklady musí být na GitHubu taky —
+ověřte, že plán `mac/docs/superpowers/plans/2026-10-05-offload-mac-parity.md` má „Task 31“ a že existují
+`2026-10-08-offload-mac-parity-2.md` (Task 32–55) a `2026-10-08-offload-mac-parity-3.md` (Task 56–70); jinak požádejte uživatele
+o push nebo o název větve.
 
 ```sh
 git clone https://github.com/lubomirbudin-glitch/offload.git
@@ -61,14 +62,19 @@ Mac patří **statický** ffmpeg/ffprobe pro správnou architekturu v `Tools/bin
 2. Návrh [`../specs/2026-10-05-offload-mac-parity-design.md`](../specs/2026-10-05-offload-mac-parity-design.md): oddíly 1–10
    (dorovnání, macOS technika, nejistoty API v oddílu 9), „Doplněk 2026-10-05“ D.1–D.12 (LUTy, složka pro proxy, barvy, hlídač
    ffmpeg, ikona) a „Doplněk 2“ D.13–D.20 (Blackmagic RAW po Windows plánu 3; přehled převzatých bodů v D.13).
-3. Plán [`2026-10-05-offload-mac-parity.md`](2026-10-05-offload-mac-parity.md) — 31 úkolů s kódem a testy.
+   „Doplněk 3“ D.21–D.28 (Windows plány 6–10 a 0.5.x: pravidla formátu a bezpečnosti dat v D.22, macOS technika v D.23 —
+   hlavně D.23.1 o `F_NOCACHE`, co Mac nezrcadlí v D.24, brána nového vzhledu v D.25, nejistoty v D.27).
+3. Plán [`2026-10-05-offload-mac-parity.md`](2026-10-05-offload-mac-parity.md) — 31 úkolů s kódem a testy; pokračování
+   [`2026-10-08-offload-mac-parity-2.md`](2026-10-08-offload-mac-parity-2.md) (úkoly 32–55, plány 6–7) a
+   [`2026-10-08-offload-mac-parity-3.md`](2026-10-08-offload-mac-parity-3.md) (úkoly 56–70, plány 8–10).
 4. Podle potřeby [`docs/FORMATY.md`](../../../../docs/FORMATY.md) (formát na disku — kopii z Macu musí ověřit Windows a naopak)
    a [`docs/VYVOJ-MAC.md`](../../../../docs/VYVOJ-MAC.md) (sem řádek za každý úkol).
 
 ## 4. Pořadí úkolů a milníky
 
-**Pořadí: 1 → 25, pak 27 → 31, nakonec 26** (26 uzavírá dokumentaci a verzi 0.2.0 a má vidět i BRAW). Po každém úkolu se
-všechno sestaví a `swift test` projde — aplikace je kdykoli spustitelná; milníky říkají, kdy má smysl ji zkoušet s kartou.
+**Pořadí: 1 → 25, pak 27 → 31, pak 26 (verze 0.2.0), pak 32 → 70** (soubory `-2` a `-3`; úkoly 63–64 jen po schválení
+Windows vzhledu — spec D.25, jinak se přeskočí a úkol 64 udělá jen verzi a dokumentaci). Po každém úkolu se všechno sestaví
+a `swift test` projde — aplikace je kdykoli spustitelná; milníky říkají, kdy má smysl ji zkoušet s kartou.
 
 | Milník | Po úkolu | Co už funguje |
 |---|---|---|
@@ -79,10 +85,21 @@ všechno sestaví a `swift test` projde — aplikace je kdykoli spustitelná; mi
 | M4 | 25 | barvy BT.709, hlídač ffmpeg, složka pro proxy, vestavěné LUTy v CLI i GUI, ikona (oddíl 5, body 9–12) |
 | M5 | 31 | BRAW jako Windows: LUT podle gamy, BRAW jen s knihovnou, limit `--info`, české poznámky, náhledy pod hlídačem (oddíl 6) |
 | M6 | 26 | verze 0.2.0, README, ROZDILY, FORMATY; závěrečné `swift build -c release && swift test && scripts/build-app.sh` |
+| M7a | 41 | základ bezpečnosti dat: hashe (XXH3-128, MD5), report se všemi klíči Windows 0.6.0, české hlášky, identita svazku, zámky, jedna definice „ověřeno“, „Lze vyjmout × Lze formátovat“, ASC MHL generace N a pořadí zápisu |
+| M7 | 50 | **0.3.0** (plán 6): historie karet, doplnění, název z klipů, Ověřit zálohu, kontrola místa — ruční test oddíl 7 body 14–18 a **křížově s Windows 0.6.0** (úkol 50 krok 5) |
+| M8 | 55 | **0.4.0** (plán 7): MD5, seznamy klipů, denní report, proxy pro přelinkování a ve složkách, lehčí originál, HTML lišta PDF (body 19–20) |
+| M9 | 60 | **0.5.0** (plán 8): projekty, pravidla LUTů, `--gen5`, oznámení a ntfy, aktualizace, podpis a notarizace (bod 21) |
+| M10 | 64 | **0.6.0** (plán 9): Pozastavit, Zkopírovat znovu, nový vzhled (je-li schválený) (body 22–23) |
+| M11 | 70 | **0.7.0** (plán 10): Verify-in-Proxy s kontrolou cache přes `mincore`, manifest, navázání po pádu, obsahová kontrola (bod 24) |
 
 Obsah: 1–17 dorovnání (snímky, B1–B4, fronta, texty, vysunutí, HW diagnostika přes IOKit/DiskArbitration); 18 barvy, 19 hlídač
 ffmpeg, 20 složka pro proxy, 21–22 vestavěné LUTy, 23 CLI, 24 GUI, 25 balíček; 27 `braw-decode` (C++), 28 LUT podle gamy,
 29 knihovna / limit / poznámky, 30 náhledy BRAW a pumpa, 31 BRAW se vzorkem a dokumentace; 26 verze 0.2.0.
+Dorovnání 2: 32 hashe, 33 report, 34 hlášky, 35 nastavení, 36 svazek a časy, 37 zámky, 38 „ověřeno“, 39 dva stavy karty, 40 ASC MHL,
+41 pořadí zápisu, 42–44 historie, 45 Ověřit zálohu, 46–47 doplnění, 48 místo, 49 GUI, 50 verze 0.3.0; 51 MD5/XXH128, 52 seznamy
+klipů, 53 denní report, 54 proxy, 55 HTML a 0.4.0; 56 projekty, 57 pravidla LUTů, 58 `--gen5`, 59 oznámení, 60 aktualizace, podpis
+a 0.5.0; 61 Pozastavit, 62 Zkopírovat znovu, 63–64 nový vzhled a 0.6.0; 65 kontrola cache a manifest, 66 ověřovač bloků, 67 odložené
+ověření, 68 tap a sezení ověření, 69 navázání po pádu, 70 obsahová kontrola a 0.7.0.
 
 ## 5. Jak plán vykonávat
 
@@ -92,7 +109,11 @@ ffmpeg, 20 složka pro proxy, 21–22 vestavěné LUTy, 23 CLI, 24 GUI, 25 balí
 - Nesoulad s plánem (jiná vlastnost IOKit, jiné chování API) **neobcházet úpravou testu** — opravit kód, zjištění do zprávy
   commitu a, mění-li chování, do návrhu. Kroky „Ověřit na Macu“ (spec oddíl 9, D.10, D.19) mají výsledek zapsaný do commitu.
 - Úkoly 18–22 a 28–30 mění kód starších úkolů (`Proxy.swift`, `RawBackends.swift`, `Job.swift`, `Tools.swift`) — proto přísně
-  v pořadí; kde plán říká „celý soubor / celá funkce“, nahrazuje se celé.
+  v pořadí; kde plán říká „celý soubor / celá funkce“, nahrazuje se celé. Totéž platí pro 32–70: `Engine.swift`, `Job.swift`
+  a `Report.swift` mění úkoly 33, 39, 41, 47, 48, 51, 61, 62, 65, 67, 68 — kód v nich navazuje na stav po předchozím úkolu.
+- **Bezpečnost dat má přednost před vším** (Global Constraints souboru `-2`): žádný test týkající se přepisu na cíli, „ověřeno“,
+  `verifyPending`/`verifyIncomplete` nebo „Lze formátovat“ se neupravuje, aby prošel — chybu opravit v kódu. Kroky „Ověřit na Macu“
+  doplňku 3 (D.27) mají výsledek v commitu i v tabulce D.27.
 - Claude Code: plán je psaný pro `superpowers:executing-plans` / `subagent-driven-development`. Commity: krátká anglická zpráva
   jako v plánu; trailer `Co-Authored-By` podle vlastních pravidel.
 
@@ -146,6 +167,27 @@ Mac se čtečkou karet, karta ze záznamu (ideálně FAT32 i exFAT), dva cílov�
     Resolve, nebo dočasně přejmenovaný `BlackmagicRawAPI.framework` — po testu vrátit) klip jen zkopírovaný a ověřený
     s poznámkou „Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW …“.
 
+Dorovnání 2 (úkoly 32–70):
+
+14. **Historie:** karta podruhé → zelený řádek „Zálohováno … — ověřeno, lze formátovat“ a dotaz „Karty už jsou zálohované“
+    (Kopírovat znovu celé / Vynechat zálohované / Zrušit); FAT32 karta po změně časového pásma → pořád „beze změny“;
+    `ls -l /dev/rdisk*` u karty (spec D.27 ř. 1).
+15. **Doplnění:** přidaný klip → „Doplnit jen nové klipy“ → `offload_report_0002.*`, `ascmhl/0002_…`, `.xxh64` prodloužený, dřívější
+    reporty beze změny (`shasum` před a po); `ascmhl verify`; Windows `verify` téže složky.
+16. **Ověřit zálohu** (⇧⌘O) na složce dne → položka za každou kartu; poškozený bajt (`dd conv=notrunc`) → „Nesedí …“; záloha ze
+    Silverstacku/ShotPutu → report vedle složky karty.
+17. **Název z klipů** a „další v řadě“ (karty A001, A002 v jednom dni).
+18. **Místo:** dva cíle na jednom disku s malým volnem → červená hláška; `offload copy --dry-run`.
+19. **Seznamy klipů a denní report:** `<datum>/_REPORT/<datum>_day_report.html`; CSV do Resolve, ALE do Avidu (je-li po ruce).
+20. **Proxy pro přelinkování:** Resolve „Link Proxy Media“, Premiere „Attach Proxies“; stejná jména klipů v různých složkách.
+21. **Projekty, oznámení, aktualizace:** přepnutí projektu s úlohou ve frontě; oznámení macOS s oknem v pozadí; ntfy na telefon;
+    notarizovaná aplikace (`spctl -a -vv`) s BRAW proxy (D.27 ř. 7).
+22. **Pozastavit:** během kopie → disk nečte; výměna karty během pauzy → zbylé soubory „karta se během pozastavení vyměnila“.
+23. **Zkopírovat znovu:** vada na jednom disku → oprava, `_REPORT/neshoda_0002/…`, Ověřit zálohu → v pořádku.
+24. **Verify-in-Proxy:** karta s proxy na 2 disky → „Lze vyjmout“ po kopii, „Lze formátovat“ až po ověření; vada na primárním disku
+    po kopii → nalezena; BRAW; síťový cíl → `read-back`; `kill -9` během ověřování → „Dokončit přerušenou zálohu“; uříznutý MP4 →
+    vada obsahu s TC a potvrzením; `CacheProbeTests` na všech discích (`OFFLOAD_TEST_DEST`, D.27 ř. 3–4).
+
 Výsledky (model Macu, macOS, čtečka, disky, rychlosti, co nesedělo) zapsat do `docs/VYVOJ-MAC.md`.
 
 ## 8. Otevřené otázky
@@ -159,3 +201,8 @@ Výsledky (model Macu, macOS, čtečka, disky, rychlosti, co nesedělo) zapsat d
   na exFAT, pumpa dekodéru, `iconutil`, CLI přes symlink).
 - **Stejně otevřené jako Windows:** v nastavení nástrojů ukazuje řádek „braw-decode“ „nalezeno“ i bez knihovny (stav BRAW je
   vidět z poznámky u klipu); ostrý test na skutečné kartě a se skutečnými REDline / art-cmd.
+- **Dorovnání 2 — nejrizikovější neznámé (spec D.27):** jestli jde boot sektor karty číst bez sudo (jinak historie páruje karty
+  jen přes `uuid:` na tomtéž Macu); jestli `mincore` vidí stránky cache souboru a zápis s `F_NOCACHE` v ní nezůstává na APFS, exFAT
+  a Thunderbolt discích (jinak Mac verify-in-proxy nepoužije — bezpečně, ale bez úspory času); notarizace s přibaleným ffmpeg
+  a načtení `BlackmagicRawAPI.framework` s hardened runtime; oznámení u ad-hoc podepsané aplikace.
+- **Nový vzhled** (úkoly 63–64) jen po schválení Windows verze — zeptat se uživatele (spec D.25).

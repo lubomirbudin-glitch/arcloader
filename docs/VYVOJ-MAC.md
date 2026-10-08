@@ -17,73 +17,34 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   proxy, vestavěné LUTy s výběrem podle kamery, ikonu a Blackmagic RAW jako Windows (gama → LUT, BRAW jen s knihovnou, limit
   `--info`, české poznámky, náhledy pod hlídačem). Průběh zapisují úkoly plánu níže; úkol 26 tuto odrážku smaže.
 
-- **Karty a bezpečnost dat (Windows plán 6, 2026-10-06):** návrh
-  [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
-  §2 a §8. Mac převezme: **historii** (`history.json` v Application Support ve stejném formátu — FORMATY.md „Místní
-  soubory“; klíč karty = sériové číslo souborového systému + kapacita, ověřit, že u FAT/exFAT vyjde na Macu totéž
-  `fsSerial` jako na Windows; řádek u karty a dialog „Karty už jsou zálohované“ ve `Views.swift`); **doplnění** (plánovač
-  doplnění v OffloadKit, `MHL.swift` generace N + nahrazení řetězu, `Report.swift` klíč `generation` a jména `_NNNN`,
-  zámek složky karty, `offload append`); **název z klipů** (vzory `ReelNames`, další v řadě, zástupný text); **ověření
-  zálohy** (čtení MHL všech generací a hashů, report `_verify_<stamp>Z` s výjimkou pro MHL bez ignorování `_REPORT`,
-  menu); **kontrolu místa** (odhad a plán po svazcích, tabulka toků, přepočet před proxy); **české hlášky** (`Msg`
-  a kódy kontrol v `Engine.swift` a `main.swift`).
+- **Dorovnání 2 s Windows 0.6.0 — plány 6–10 a dodatky 0.5.x (2026-10-08):** návrh — oddíl „Doplněk 3“ (D.21–D.28)
+  v [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
+  plán po úkolech s kódem a testy [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md)
+  (úkoly 32–55: karty a bezpečnost dat, výstupy pro produkci a střih) a
+  [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-3.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-3.md)
+  (úkoly 56–70: nastavení, oznámení, distribuce; Pozastavit, Zkopírovat znovu, nový vzhled; Verify-in-Proxy), pořadí a milníky
+  v [`README-START`](../mac/docs/superpowers/plans/README-START.md) (oddíl 4). Začíná po úkolu 26 (0.2.0). Pokrývá všechno, co tu
+  dřív stálo jako „Karty a bezpečnost dat“, „Výstupy pro produkci a střih“, „Nastavení, oznámení, distribuce“, „Nový vzhled“
+  a „Převzít z Windows“ (HTML reporty 2026-10-08, proxy 0.5.1, Verify-in-Proxy 0.6.0) — mapa v D.28. Rozhodnutí oproti dřívějším
+  odrážkám: ověření během proxy přes **HTTP tap pro ffmpeg** jako Windows, ne AVFoundation (D.23.7); „ověřeno“ z čtení jen
+  s důkazem `mincore`, že soubor není v cache (D.23.1); sériové číslo karty z boot sektoru (D.23.2); zámky `flock` (D.23.4);
+  oznámení `UNUserNotificationCenter` (D.23.5); vlastní manifest aktualizací `offload-update-mac.json` a notarizace s podpisem
+  všech binárek (D.24); nový vzhled až po schválení Windows verze (D.25). Úkol 70 tuto odrážku smaže.
 
-- **Výstupy pro produkci a střih (Windows plán 7, 2026-10-07):** návrh
-  [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
-  §3 a §8. Mac převezme: **denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf` a seznam klipů dne, tvorba po
-  úloze v `Job.swift`, stejné sloupce a texty — FORMATY.md „Denní report“); **seznamy klipů** CSV/ALE stejných sloupců
-  (FORMATY.md „Seznam klipů“); **proxy pro přelinkování** (`Proxy.swift`: `reel_name` ve stopě TC, všechny zvukové
-  stopy, cívka tag → název → složka, klíč `clips[].info.reel`); **MD5** (`Hash.swift` + CommonCrypto MD5, volba
-  xxh64/both, `hashAlgorithms`, `files[].md5`, `<karta>.md5`, MHL `<md5>`, `verify` z MHL)); **jména karet** `_REPORT`, `_PROXY`, `ascmhl` s `_` na konci a prázdná `<karta>\_REPORT` hned při začátku kopie (D1); seznam ALE bez BOM a volba doplnění: `<karta>.md5` je třetí soubor, který doplnění přepíše (jako `.xxh64`).
-
-- **Nastavení, oznámení, distribuce (Windows plán 8, 2026-10-07):** návrh
-  [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
-  §4 a §8. Mac převezme: **projekty** (`projects` / `activeProject` v `UserDefaults`, stejné chování přepínače — během
-  startu zamčený, úloha ve frontě má vlastní kopii nastavení; `project` v reportu a historii, doplnění podle projektu
-  dřívější zálohy a „Bez projektu“, když už neexistuje, další v řadě po projektech, projekt v hlavičce denního
-  reportu); **vlastní pravidla LUTů** (`lutRules` v `LutResolver` před automatikou, `lut.source = rule`, cíl „Bez LUT“
-  dává `none`, pravidla neznámého typu zachovat a přeskočit, `cameraSerial` ze Sony XML a QuickTime tagů);
-  **`braw-decode --gen5`** v C++ (jen Film Gen 4; klon atributů klipu, `ColorScienceGen` = 5, `colorScienceGenOriginal`
-  v `--info`; neověřeno bez vzorku Gen 4); **oznámení** (texty `JobOutcome`, ntfy JSON POST s pevným textem bez cest;
-  úloha, která skončí v 1. fázi chybou, oznámí hned při konci kopie); **kontrolu aktualizací** (formát manifestu,
-  limity velikosti, síťové cesty se neotevírají; vlastní soubor pro Mac rozhodne Mac). Podpis má Mac vlastní
-  (`codesign` + notarizace).
-
-- **Nový vzhled (Windows plán 9, 2026-10-07, 0.5.0):** návrh [`docs/ui-navrh/`](ui-navrh/) (README = zadání;
-  „Rozhodnutí (2026-10-07, závazné)“ v hlavičce plánu 9). Mac převezme **až po schválení Windows verze**: rozvržení (horní lišta, kroky
-  1–3, karty úloh po stavech, stránka Nastavení, dnes a historie karet), přepínač **projektů** místo presetů, tmavé
-  i světlé téma podle systému; **Pozastavit** (brána mezi 16MB bloky kopie a zpětného čtení a mezi klipy 2. fáze, žádný
-  proces se neuspává, zámek dne se během pauzy nedrží, report `copyPausedSeconds` / `verifyPausedSeconds`);
-  **Zkopírovat znovu** (oprava jako generace ASC MHL N: jen selhané soubory, jen na cíle, kde selhaly, dobrá kopie
-  `verified`, nesouhlasná do `_REPORT/neshoda_NNNN/`, `kind: "repair"`, `rewritten`, `setAside`, historie
-  `generations[].kind = repair` — FORMATY.md „Oprava“); štítek kamery z prvního klipu a typ připojení (Mac pozná
-  i Thunderbolt); odhad času jen z rychlostí naměřených v relaci.
-
-- **Mimo plán — zbývá i po něm:**
-  - Blackmagic RAW Film Gen 4: Windows od 0.4.0 umí převod na Gen 5 (`--gen5`, výchozí vypnuto, neověřeno — čeká vzorek
-    Gen 4); Mac zatím bez LUTu (provizorně) — rozhodne uživatel.
-  - Nastavení nástrojů: řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny Blackmagic RAW (stav BRAW je vidět z poznámky
-    u klipu) — otevřené i na Windows.
-  - Ověření se vzorkem `.braw` a ostrý test s kartou, REDline a art-cmd — ruční, postup v README-START (oddíly 6–7).
-  - Náhledy R3D/ARRI bez proxy, zrušení `ffprobe`, selhání kopie proxy v souhrnu CLI — otevřené i na Windows (návrh, oddíl 4).
-
-- **Převzít z Windows verze — HTML reporty (2026-10-08):** (1) lišta jen pro obrazovku nahoře v HTML reportu karty, denním
-  i ověření: tlačítko „Uložit jako PDF“ (`window.print()`), nápověda „v tisku zvolte „Uložit jako PDF““ a odkaz „Otevřít PDF
-  report“ na PDF vedle HTML; v `@media print` skrytá; (2) tisk z prohlížeče: `@page{size:A4 landscape;margin:10mm}`,
-  světlé barvy i z tmavého režimu, `tr{break-inside:avoid}`; (3) tabulka klipů se vejde do okna: `table-layout:fixed` +
-  `<colgroup>` v %, `overflow-wrap:anywhere`, náhledy `flex:1 1 0;max-width:128px`, v úzkém okně skrýt Formát/TC/Audio.
-  Podrobnosti ve [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md), sekce „2026-10-08 — report: uložení do PDF“.
-- **Převzít z Windows 0.6.0 — Verify-in-Proxy (2026-10-08, R10: Mac jen záznam):** primární cíl ověřený čtením pro proxy
-  (na Macu AVFoundation/`AVAssetReader` s vlastním `AVAssetResourceLoaderDelegate` místo HTTP tapu, nebo jako na Windows
-  lokální HTTP server pro ffmpeg), ostatní cíle na pozadí, zápis `F_NOCACHE` a `F_FULLFSYNC`, `offload-manifest.jsonl`,
-  dva stavy karty „Lze vyjmout“ / „Lze formátovat“, `xxh128` v ASC MHL vedle `xxh64`, `clips[].content`; zelená (a zvuk) jen při „Lze formátovat“, „Lze vyjmout“ neutrální; `verifyPending` / `verifyIncomplete` v reportu = záloha nedokončená, nikdy „ověřeno“ (Ověřit zálohu ji ohlásí jako nedokončenou); „Dokončit přerušenou zálohu“ přes doplnění. Formát ve
-  [FORMATY.md](FORMATY.md) („Blokový manifest“, `offload_report.json`), rozdíly v [ROZDILY.md](ROZDILY.md).
-- **Převzít z Windows 0.5.1 — proxy (2026-10-08):** (1) `_PROXY/<složka klipu>/<klip>.mov` (složky jako na kartě, i ve
-  složce pro proxy navíc), `_2` jen ve stejné složce, doplnění do ploché zálohy zůstane ploché (detekce z `proxyPath`
-  v reportech); (2) `proxy.skipLighterSources` (výchozí `true`, jen u proxy H.264/HEVC — s proxy ProRes vždy proxy — a jen když se nepoužije LUT ani ořez): H.264/HEVC originál ne větší než proxy s tokem ≤ tok proxy
-  bez proxy, `skipped` + poznámka „bez proxy — originál je lehčí (X Mb/s ≤ Y Mb/s)“, náhledy ano, místo bez proxy;
-  originál větší než proxy ji dostane vždy; (3) HTML: odkaz „hotovo“ na proxy, sloupec Proxy bez dělení slov.
-  Podrobnosti a pravidla ve [FORMATY.md](FORMATY.md) a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md), sekce „2026-10-08 — proxy“.
+- **Mimo plán — zbývá i po obou plánech** (žádný úkol to neřeší):
+  - Blackmagic RAW Film Gen 4: zda klip ve Film Gen 4 **bez** převodu dostane LUT — rozhodne uživatel (převod `--gen5` přinese
+    úkol 58, výchozí vypnuto, neověřeno bez vzorku Gen 4; stejně jako Windows).
+  - Nastavení nástrojů: řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny Blackmagic RAW — otevřené i na Windows.
+  - Ověření se vzorkem `.braw`, ostrý test s kartou, REDline a art-cmd — ruční, postup v README-START (oddíly 6–7); úkoly
+    jen říkají, co zkusit.
+  - Náhledy R3D/ARRI bez proxy, zrušení `ffprobe`, selhání kopie proxy v souhrnu CLI — otevřené i na Windows.
+  - Zámky Macu a Windows se navzájem nevidí: Mac a PC, které zároveň doplňují do téže sdílené zálohy, se nevylučují (jako dva PC;
+    spec D.23.4) — bez sdíleného zámku na cíli to vyřešit nejde a ten FORMATY nemá.
+  - Ukázkový režim `--demo` (Windows plán 9, pomůcka pro snímky) — pro Mac se neplánuje.
+  - Chyby parseru CLI (`swift-argument-parser`) zůstanou anglicky — knihovna nemá lokalizaci.
+  - Apple Developer ID (placený účet) pro notarizaci — rozhodne uživatel; bez něj build-app.sh podepisuje ad hoc jako dosud.
+  - Mimo rozsah i na Windows: import historie z existujících `_REPORT` na cílech, token ntfy, Telegram, ověření během proxy na
+    síťových cílech, hashování na GPU.
 
 ## 2026-10-04 — přesun do `mac/`
 
