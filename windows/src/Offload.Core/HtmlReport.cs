@@ -36,8 +36,8 @@ public static partial class HtmlReport
         ".stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stat span{color:var(--muted);font-size:12px}\n" +
         ".panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow-x:auto}\n" +
         "table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere}\n" +
-        "table.clips{table-layout:fixed}table.clips td,table.clips th{padding:8px 6px;overflow-wrap:normal}table.clips td.clip,table.clips td.st{overflow-wrap:anywhere}table.clips td.num,table.clips th.num,table.clips td.nw{white-space:nowrap}\n" +
-        ".c-thumb{width:22%}.c-clip{width:19%}.c-codec{width:8%}.c-res{width:9%}.c-fps{width:5%}.c-dur{width:6%}.c-tc{width:9%}.c-audio{width:5%}.c-size{width:8%}.c-proxy{width:9%}\n" +
+        "table.clips{table-layout:fixed}table.clips td,table.clips th{padding:8px 6px;overflow-wrap:normal}table.clips td.clip{overflow-wrap:anywhere}table.clips td.st{overflow-wrap:normal;word-break:normal;hyphens:none}table.clips td.st a{color:inherit}table.clips td.num,table.clips th.num,table.clips td.nw{white-space:nowrap}\n" +
+        ".c-thumb{width:20%}.c-clip{width:19%}.c-codec{width:8%}.c-res{width:9%}.c-fps{width:5%}.c-dur{width:6%}.c-tc{width:9%}.c-audio{width:5%}.c-size{width:8%}.c-proxy{width:11%}\n" +
         "th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}tr{break-inside:avoid}\n" +
         "td.num{text-align:right;font-variant-numeric:tabular-nums}code,.mono{font:12px ui-monospace,Consolas,Menlo,monospace}\n" +
         "td.clip{min-width:0}.wrap{white-space:normal}\n" +
@@ -48,7 +48,7 @@ public static partial class HtmlReport
         "details summary{cursor:pointer;padding:10px 0;font-weight:600}\n" +
         ".err{color:var(--bad)}\n" +
         "footer{margin-top:40px;color:var(--muted);font-size:12px}\n" +
-        "@media (max-width:760px){main{padding:16px 10px 40px}.hide-sm{display:none}.thumbs figcaption{display:none}.c-thumb{width:26%}.c-clip{width:30%}.c-fps{width:8%}.c-dur{width:12%}.c-size{width:12%}.c-proxy{width:12%}}\n" +
+        "@media (max-width:760px){main{padding:16px 10px 40px}.hide-sm{display:none}.thumbs figcaption{display:none}.c-thumb{width:22%}.c-clip{width:26%}.c-fps{width:8%}.c-dur{width:12%}.c-size{width:12%}.c-proxy{width:20%}table.clips td.st{font-size:12px}}\n" +
         // Printing from any browser, even from a dark screen: white page, dark text.
         "@media print{" + RootCss + "body{background:#fff;color:#000}.toolbar{display:none}.panel{overflow:visible;border-color:#ccc}.stat{border-color:#ccc}details{display:block}.hide-sm{display:table-cell}.thumbs figcaption{display:block}}\n";
 

@@ -120,6 +120,21 @@ public class HtmlReportTests
         Assert.DoesNotContain("src=\"http", css);
     }
 
+    // 0.5.1: the proxy status never breaks inside a word („nepodporo|váno“): normal word breaks in that column, which is
+    // a little wider (the thumbnails give it the room — the table still fits 1400 px and A4).
+    [Fact]
+    public void Css_ProxyStatusBreaksOnlyBetweenWords()
+    {
+        var css = HtmlReport.Styles(false);
+        Assert.Contains("table.clips td.st{overflow-wrap:normal;word-break:normal;hyphens:none}", css);
+        Assert.DoesNotContain("td.st{overflow-wrap:anywhere", css);
+        Assert.DoesNotContain("table.clips td.clip,table.clips td.st{", css);
+        Assert.Contains(".c-thumb{width:20%}", css);
+        Assert.Contains(".c-proxy{width:11%}", css);
+        Assert.Contains(".c-proxy{width:20%}table.clips td.st{font-size:12px}}", css);   // the narrow window
+        Assert.Contains("table.clips td.st a{color:inherit}", css);   // the link to a finished proxy keeps the green
+    }
+
     [Fact]
     public void Clips_TableHasColumnWidthsAndStaysSelfContained()
     {
