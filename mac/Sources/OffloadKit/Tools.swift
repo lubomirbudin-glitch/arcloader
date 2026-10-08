@@ -139,6 +139,9 @@ final class ToolProcess {
     init(_ executable: String, _ args: [String]) {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = args
+        // Never "background": macOS throttles the disk reads of low-priority processes as soon as anything else uses
+        // the same disk — an ARRIRAW 4.6K decode (≈570 MB/s of reads) then crawled at ~1 fps.
+        process.qualityOfService = .userInitiated
     }
 
     var stderrText: String { stderr?.text ?? "" }

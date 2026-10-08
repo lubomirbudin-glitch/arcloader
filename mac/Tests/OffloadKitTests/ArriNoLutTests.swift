@@ -82,7 +82,7 @@ final class ArriNoLutTests: XCTestCase {
         let a = ARRIRAWBackend.args(input: "in", output: "out", info: arriInfo(), settings: ProxySettings(),
                                     look: RawLook(log: false, arriColorSpace: nil), parametersFile: "p.json")
         XCTAssertEqual(a.args, ["process", "--input", "in", "--video-codec", "prores422lt", "--deflip", "--output", "out",
-                                "--desqueeze", "--output-height", "1080", "--embedded-look"])
+                                "--output-height", "1080", "--embedded-look"])
         XCTAssertFalse(a.args.contains("--target-colorspace"))
         // With a LUT: log in the LUT's colour space, no look.
         let log = ARRIRAWBackend.args(input: "in", output: "out", info: arriInfo(), settings: ProxySettings(),

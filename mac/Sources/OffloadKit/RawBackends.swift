@@ -150,6 +150,7 @@ struct BRAWBackend: RawBackend {
             args += ["--start", String(BRAWBackend.startFrame(seconds: t, fps: dims.fps, frames: dims.frames)), "--count", "1"]
         }
         let feeder = Process()
+        feeder.qualityOfService = .userInitiated
         feeder.executableURL = URL(fileURLWithPath: tools.brawDecoder!)
         feeder.arguments = args + [path]
         // braw-decode hands over full-range RGB (RGBU16) in the clip's own gamma: a built-in LUT needs the pre-map first.
@@ -318,7 +319,9 @@ struct ARRIRAWBackend: RawBackend {
         if parameters != nil {
             args += ["--parameters", parametersFile]
         } else {
-            args += ["--desqueeze", "--output-height", String(settings.height)]
+            // --desqueeze only for anamorphic lenses: it halves art-cmd's speed and changes nothing for spherical ones.
+            if (c.squeeze ?? 1) > 1.01 { args.append("--desqueeze") }
+            args += ["--output-height", String(settings.height)]
         }
         if look.log {
             args += ["--target-colorspace", look.arriColorSpace ?? colorSpace(lut: nil, info: c)]

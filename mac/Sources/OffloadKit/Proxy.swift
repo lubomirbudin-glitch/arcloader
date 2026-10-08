@@ -464,8 +464,19 @@ public final class ProxyRenderer {
     private func renderOnce(_ ffmpeg: String, _ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse?, lutFile: String?,
                             look: RawLook, hwaccel: Bool, output: String,
                             progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
-        let src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: nil, hwaccel: hwaccel)
+        // ARRIRAW: art-cmd first writes a ProRes LT intermediate and reports no progress itself — estimate it from the
+        // intermediate's size (0–80 %); ffmpeg's own progress covers the rest.
+        let arriMonitor = clip.format == .arriraw ? intermediateProgress(info: info, progress: progress) : nil
+        let src: FrameSource
+        do {
+            src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: nil, hwaccel: hwaccel)
+        } catch {
+            arriMonitor?.cancel()
+            throw error
+        }
+        arriMonitor?.cancel()
         defer { src.removeIntermediates() }
+        let progress: (Double) -> Void = clip.format == .arriraw ? { progress(0.8 + 0.2 * $0) } : progress
         let outHeight = min(settings.height, info.height ?? settings.height) & ~1
         let vf = FilterGraph.proxy(settings, outHeight: outHeight, alreadyCropped: src.alreadyCropped, lutFile: lutFile,
                                    premap: ProxyRenderer.needsPreMap(lut, source: src, info: info),
@@ -490,6 +501,31 @@ public final class ProxyRenderer {
             unlink(part)
             throw error
         }
+    }
+
+    /// Polls the size of the ARRI intermediate (`<tempDir>/ari-*/intermediate.mxf`) once a second and reports it as
+    /// 0–0.8 of the clip's progress. ProRes 422 LT is ≈ 0.21 bytes per pixel and frame — an estimate, capped at 95 %.
+    func intermediateProgress(info: ClipInfo, progress: @escaping (Double) -> Void) -> DispatchSourceTimer? {
+        guard let frames = info.frames, frames > 0, let w = info.width, let h = info.height, h > 0 else { return nil }
+        let outH = Double(settings.height)
+        let aspect = settings.frameAspect ?? (Double(w) * (info.squeeze ?? 1) / Double(h))
+        let expected = Double(frames) * outH * aspect * outH * 0.21
+        let root = tempDir
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: .now() + 1, repeating: 1)
+        timer.setEventHandler {
+            let fm = FileManager.default
+            let dirs = ((try? fm.contentsOfDirectory(atPath: root)) ?? []).filter { $0.hasPrefix("ari-") }
+            var size: Double = 0
+            for d in dirs {
+                if let n = (try? fm.attributesOfItem(atPath: root + "/" + d + "/intermediate.mxf"))?[.size] as? NSNumber {
+                    size = max(size, n.doubleValue)
+                }
+            }
+            progress(min(0.95, size / expected) * 0.8)
+        }
+        timer.resume()
+        return timer
     }
 
     /// Bottom bar: clip name left, source timecode right.

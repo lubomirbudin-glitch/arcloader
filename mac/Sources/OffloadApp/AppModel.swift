@@ -142,7 +142,7 @@ final class AppModel: ObservableObject {
     private var probeAgain = false
 
     private let copyQueue = DispatchQueue(label: "app.copy", qos: .userInitiated)
-    private let postQueue = DispatchQueue(label: "app.post", qos: .utility)
+    private let postQueue = DispatchQueue(label: "app.post", qos: .userInitiated)  // proxies: the user waits for dailies
     /// Volume scans (cards). Separate from destination checks, so a hung network destination never blocks them.
     private let probeQueue = DispatchQueue(label: "app.probe", qos: .userInitiated)
     /// Destination and LUT checks; a hung network disk stalls only this queue, never the window or the card scan.

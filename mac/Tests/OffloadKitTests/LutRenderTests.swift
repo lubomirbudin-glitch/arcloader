@@ -78,8 +78,13 @@ final class LutRenderTests: XCTestCase {
                                     look: ProxyRenderer.lookFor(TestMedia.customLut("look.cube"), info: info), parametersFile: "p.json")
         XCTAssertFalse(a.cropped)
         XCTAssertNil(a.parameters)
+        // spherical lens: no --desqueeze (it halves art-cmd's speed for nothing)
         XCTAssertEqual(a.args, ["process", "--input", "in", "--video-codec", "prores422lt", "--deflip", "--output", "out",
-                                "--desqueeze", "--output-height", "720", "--target-colorspace", "AWG4/D65/LogC4"])
+                                "--output-height", "720", "--target-colorspace", "AWG4/D65/LogC4"])
+        var anamorphic = info
+        anamorphic.squeeze = 2
+        XCTAssertTrue(ARRIRAWBackend.args(input: "in", output: "out", info: anamorphic, settings: s,
+                                          look: RawLook(log: true, arriColorSpace: "AWG4/D65/LogC4"), parametersFile: "p").args.contains("--desqueeze"))
         XCTAssertTrue(ARRIRAWBackend.args(input: "in", output: "out", info: ClipInfo(), settings: ProxySettings(),
                                           look: RawLook(log: true, arriColorSpace: "AWG4/D65/LogC4"), parametersFile: "p").args.contains("AWG4/D65/LogC4"))
     }
