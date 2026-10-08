@@ -44,7 +44,7 @@ public class PendingReportReadersTests
         Assert.Equal(new BackupState(0, 2), BackupState.Of([p]));
         var day = DayReport.Load(Day(p));
         Assert.Equal(0, day.VerifiedCards);
-        Assert.Contains("NEOVĚŘENO", DayReport.Html(day));
+        Assert.Contains("OVĚŘUJE SE", DayReport.Html(day));   // task 14: a verification with the proxies not ended, never green
         // No ASC MHL generation yet: an append never builds on it as verified — since task 13 (R6) it completes the
         // generation (every file verified again before the commit); a repair refuses it.
         Assert.Equal(PreflightCode.AppendNoMhl, Refusal(() => AppendPlanner.CheckBackup([p])));

@@ -175,7 +175,9 @@ public static class DayReport
             }
             int failed = r.FailedFiles.Count;
             // Read back, but a file failed: not green (fix round 1, item 6).
-            var (vClass, vText) = !r.Verified ? ("warn", "NEOVĚŘENO") : failed > 0 ? ("warn", "ověřeno, s chybami") : ("ok", "ověřeno");
+            // Plan 10: a verification with the proxies that has not ended says so (never green, never "unverified" yet).
+            var (vClass, vText) = r.VerifyPending ? ("warn", "OVĚŘUJE SE") : !r.Verified ? ("warn", "NEOVĚŘENO")
+                : failed > 0 ? ("warn", "ověřeno, s chybami") : ("ok", "ověřeno");
             var proxies = c.ProxiesDone + c.ProxiesFailed == 0 ? "—" : $"{c.ProxiesDone} / {c.ProxiesFailed}";
             if (c.ProxiesLighter > 0) proxies += $" · {c.ProxiesLighter} bez proxy";
             var lutNames = c.Luts.Count == 0 ? "—" : string.Join(", ", c.Luts.Keys);
@@ -229,7 +231,9 @@ public static class DayReport
             if (failed.Count > 0)
                 list.Add((c.Name, $"{Files(failed.Count)} {Texts.Plural(failed.Count, "selhal", "selhaly", "selhalo")}: "
                     + string.Join(", ", failed.Take(5)) + (failed.Count > 5 ? ", …" : ""), true));
-            if (!c.Record.Verified && unreadable.Count == 0) list.Add((c.Name, "neověřeno — kopie nebyla přečtena zpět", false));
+            if (c.Record.VerifyPending && unreadable.Count == 0)
+                list.Add((c.Name, "ověření s proxy ještě běží, nebo se přerušilo — kartu zatím neformátujte", false));
+            else if (!c.Record.Verified && unreadable.Count == 0) list.Add((c.Name, "neověřeno — kopie nebyla přečtena zpět", false));
         }
         return list;
     }

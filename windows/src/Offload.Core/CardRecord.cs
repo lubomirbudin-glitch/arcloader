@@ -42,7 +42,12 @@ public sealed partial class CardRecord
     /// one read back no longer leaves the card unverified for ever. A folder whose reports list no file: every report
     /// was read back.
     public bool Verified => Generations.Count > 0 && Problems.Count == 0
-        && (Files.Count == 0 ? Generations.All(g => g.Report.Verified) : Files.Values.All(f => ReadBack(f, CardPath)));
+        && (Files.Count == 0 ? Generations.All(g => g.Report.Verified) : Files.Values.All(f => ReadBack(f, CardPath, VolumeSerial)));
+    /// R12 (plan 10): the serial of the volume the folder is on now (Load reads it), null when unknown — a report that
+    /// names its destinations' serials is matched by it, so a disk under another letter never takes another's column.
+    public string? VolumeSerial { get; init; }
+    /// Plan 10: a generation's verification with the proxies has not ended (its report says verifyPending).
+    public bool VerifyPending => Generations.Any(g => g.Report.VerifyPending == true);
     /// Paths whose newest record failed (the card or a destination), sorted.
     public IReadOnlyList<string> FailedFiles =>
         Files.Values.Where(f => f.Report.IsFailed(f.File)).Select(f => f.File.Path).Order(StringComparer.Ordinal).ToList();
@@ -138,6 +143,7 @@ public sealed partial class CardRecord
         return new CardRecord
         {
             CardPath = cardPath, Generations = generations, Files = files, Clips = clips, Problems = problems, HighestReportNumber = highest,
+            VolumeSerial = NativeIO.VolumeSerialText(cardPath),
         };
     }
 
@@ -170,9 +176,10 @@ public sealed partial class CardRecord
     /// was not read back (cancelled, made without verification), is not. The column is the report destination whose card
     /// path is this folder (ColumnOf); when none is (a Mac report, the disk under another letter) every column must say
     /// so — never falsely green.
-    public static bool ReadBack(RecordedFile rec, string cardPath)
+    /// `serial` (R12): the folder's volume serial now — with it, a report that recorded serials is matched by the disk.
+    public static bool ReadBack(RecordedFile rec, string cardPath, string? serial = null)
     {
-        int column = ColumnOf(rec.Report, cardPath);
+        int column = ColumnOf(rec.Report, cardPath, serial);
         var states = column >= 0
             ? [column < rec.File.Destinations.Count ? rec.File.Destinations[column] : "pending"]
             : rec.File.Destinations.Count > 0 ? rec.File.Destinations : ["pending"];
@@ -182,13 +189,26 @@ public sealed partial class CardRecord
 
     /// The column of `report` whose destination card path is `cardPath` (full path, any case, trailing separator), or
     /// -1 when none is. A path that is not a full Windows path (a Mac `/Volumes/…`) is compared as written.
-    public static int ColumnOf(OffloadReport report, string cardPath)
+    /// R12 (plan 10): with `serial` and a report that recorded its destinations' serials, the column is the one of that
+    /// disk with the same folder under it — whatever letter either has; -1 when none or several are (then every column
+    /// must say so, as for a report from the Mac).
+    public static int ColumnOf(OffloadReport report, string cardPath, string? serial = null)
     {
         var me = Normal(cardPath);
+        if (serial != null && report.Destinations.Any(d => d.VolumeSerial != null))
+        {
+            var hits = Enumerable.Range(0, report.Destinations.Count).Where(i => report.Destinations[i].VolumeSerial == serial
+                && string.Equals(UnderRoot(Normal(report.Destinations[i].CardPath)), UnderRoot(me), StringComparison.OrdinalIgnoreCase)).ToList();
+            return hits.Count == 1 ? hits[0] : -1;
+        }
         for (int i = 0; i < report.Destinations.Count; i++)
             if (string.Equals(Normal(report.Destinations[i].CardPath), me, StringComparison.OrdinalIgnoreCase)) return i;
         return -1;
     }
+
+    /// The path without its drive or share root ("\Zaloha\2026-10-08\A001"); a path that is not a full one as it is.
+    static string UnderRoot(string path) =>
+        Path.IsPathFullyQualified(path) && Path.GetPathRoot(path) is { Length: > 0 } root ? path[root.TrimEnd('\\', '/').Length..] : path;
 
     static string Normal(string path)
     {
