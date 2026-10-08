@@ -244,7 +244,7 @@ a proto se uloží do `_REPORT` vedle složky karty (`<cíl>\<datum>\_REPORT\<ka
 | `tool`, `version` | string | `offload`, `0.2.0-win` a novější |
 | `cardPath` | string | ověřená složka karty |
 | `started`, `finished` | datum | |
-| `basis` | string | `ascmhl` (všechny generace) nebo `hashList` (jen `<karta>.xxh64` / `.md5`) |
+| `basis` | string | `ascmhl` (všechny generace), `hashList` (jen `<karta>.xxh64` / `.md5`) nebo `pending` (Windows 0.6.0: generace 1 se ještě ověřuje, záznam není zapsaný — nic k porovnání) |
 | `generations` | číslo | počet přečtených generací MHL (u `hashList` 0) |
 | `hashAlgorithms` | string[] | např. `["xxh64"]`; čtou se `xxh64`, `md5`, `sha1`, `xxh3`, `xxh128`, `c4` |
 | `totalFiles`, `totalBytes`, `ok` | číslo | soubory v záznamu, jejich velikost, kolik sedí |
@@ -254,6 +254,7 @@ a proto se uloží do `_REPORT` vedle složky karty (`<cíl>\<datum>\_REPORT\<ka
 | `unreadable[]` | objekt[] | `{path, error}` |
 | `chainProblems[]` | string[] | česky: změněná nebo chybějící generace, chybějící řetěz |
 | `success` | bool | nic nesedí špatně, nechybí, není nečitelné a nic nezůstalo `failedAtCopy` (soubory navíc výsledek neovlivní) |
+| `unfinished` | bool | Windows 0.6.0: nejnovější generace není dokončená (`verifyPending` nebo `verifyIncomplete` v jejím reportu, nebo `verifyPending` v reportu téže generace na jiném cíli) — i se `success` není záloha ověřená („Dokončit přerušenou zálohu“); CLI `verify` končí kódem 1 |
 
 ## Seznam klipů — `_clips.csv`, `_clips.ale` (Windows od 0.3.0, Mac naplánováno)
 

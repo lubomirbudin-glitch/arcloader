@@ -20,7 +20,7 @@ public sealed record JobOutcome(OutcomeKind Kind, string Title, string Message, 
         _ => ["white_check_mark"],
     };
 
-    /// "Kartu lze vysunout" is a Windows notification only (spec 4.3), not sent to the phone.
+    /// "Kartu lze vyjmout" is a Windows notification only (spec 4.3), not sent to the phone.
     public bool ForPhone => Kind != OutcomeKind.Ejectable;
 }
 
@@ -60,7 +60,7 @@ public static class JobOutcomes
         if (!status.SafeToFormat)
             return Attention(card, "Kopie je hotová, ale kartu zatím neformátujte — není celá ověřená.", "Kopie je hotová, ale není celá ověřená.");
         int disks = report.Destinations.Count;
-        var done = $"Ověřeno na {disks} {Texts.Plural(disks, "disku", "discích", "discích")}." + (status.ProxiesDone > 0 ? $" Proxy: {status.ProxiesDone} hotovo." : "");
+        var done = $"Ověřeno na {disks} {Texts.Plural(disks, "disku", "discích", "discích")} — kartu lze formátovat." + (status.ProxiesDone > 0 ? $" Proxy: {status.ProxiesDone} hotovo." : "");
         return new JobOutcome(OutcomeKind.Done, $"Offload: {card} hotovo", done, done);
     }
 
@@ -68,7 +68,7 @@ public static class JobOutcomes
     /// null. With verify-in-proxy (plan 10) the copies are verified only with the proxies: formatting waits.
     public static JobOutcome? CopyDone(string card, JobStatus status, bool proxies) =>
         status.SafeToEject && !status.Phase.IsFinished()
-            ? new JobOutcome(OutcomeKind.Ejectable, $"Offload: {card} — kartu lze vysunout",
+            ? new JobOutcome(OutcomeKind.Ejectable, $"Offload: {card} — kartu lze vyjmout",
                 status.SafeToFormat ? (proxies ? "Proxy se ještě renderují." : "Klipy se ještě zpracovávají.")
                     : "Ověřuje se s proxy — formátovat až po dokončení.", "")
             : null;

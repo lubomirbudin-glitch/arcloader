@@ -34,6 +34,8 @@ public static partial class Msg
     public const string HistoryNotWritten = "Záznam této zálohy se do historie karet nepodařilo zapsat (historie byla dlouho zaneprázdněná) — záloha na discích je v pořádku, jen ji karta při dalším vložení nepozná.";
 
     // R6 (resume).
+    /// A resume keeps the proxy the interrupted run finished (carried from tasks 12–14).
+    public const string ProxyKeptOnResume = "proxy z přerušeného běhu — nerenderovala se znovu (obsah klipu dekodér tentokrát nekontroloval)";
     public static string ResumeDiverged(string cardPath, int generation) =>
         $"{cardPath}: nedokončená záloha (generace {generation}) nesouhlasí s ostatními cíli — zkontrolujte ji ručně.";
     /// Ruling I5: the repair points to the tick the card gets on insert ("Dokončit přerušenou zálohu", even with no new

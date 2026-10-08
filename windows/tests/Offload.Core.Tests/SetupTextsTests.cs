@@ -89,8 +89,8 @@ public class SetupTextsTests
         var today = HistoryView.Today(entries, now)!;
 
         Assert.Equal("3 karty · 412 GB · vše ověřeno", today.Summary);
-        Assert.Equal([("A034_ARRI", "256 GB", "18:12", "✓ 2 kopie ověřeny"), ("B011_FX6", "118 GB", "16:47", "✓ 2 kopie ověřeny"),
-                      ("SND_DAY03", "38,0 GB", "14:05", "✓ 2 kopie ověřeny")],
+        Assert.Equal([("A034_ARRI", "256 GB", "18:12", "✓ 2 kopie ověřeny · lze formátovat"), ("B011_FX6", "118 GB", "16:47", "✓ 2 kopie ověřeny · lze formátovat"),
+                      ("SND_DAY03", "38,0 GB", "14:05", "✓ 2 kopie ověřeny · lze formátovat")],
             today.Rows.Select(r => (r.CardName, r.Size, r.Time, r.Status)));
         Assert.Equal(["Dnes", "Včera"], HistoryView.Days(entries, now).Select(d => d.Title));
         Assert.Null(HistoryView.Today([entries[3]], now));
@@ -109,7 +109,7 @@ public class SetupTextsTests
         var days = HistoryView.Days(entries, now);
         Assert.Equal(["Dnes", "4. 10. 2026"], days.Select(d => d.Title));
         Assert.Equal("2 karty · 18,0 GB · 1 karta s chybami · 1 neověřená", days[0].Summary);
-        Assert.Equal([("✕ s chybami (3 soubory)", HistoryTone.Error), ("! neověřeno", HistoryTone.Warning)],
+        Assert.Equal([("✕ s chybami (3 soubory)", HistoryTone.Error), ("! neověřeno · neformátovat", HistoryTone.Warning)],
             days[0].Rows.Select(r => (r.Status, r.Tone)));
     }
     // The history entry already holds the backup's state as the reports say it (BackupState / CardRecord, ruling R2): the row
@@ -120,9 +120,9 @@ public class SetupTextsTests
         var e = Entry("R", new DateTime(2026, 10, 7, 12, 0, 0, DateTimeKind.Local), 5_000_000_000);
         e.Generations = [new HistoryGeneration { Seq = 1, Kind = HistoryGeneration.Full, Verified = false, Finished = e.Finished },
                          new HistoryGeneration { Seq = 2, Kind = HistoryGeneration.Repair, Verified = true, Finished = e.Finished }];
-        Assert.Equal(("✓ 2 kopie ověřeny", HistoryTone.Ok), (HistoryView.Row(e).Status, HistoryView.Row(e).Tone));
+        Assert.Equal(("✓ 2 kopie ověřeny · lze formátovat", HistoryTone.Ok), (HistoryView.Row(e).Status, HistoryView.Row(e).Tone));
         e.Verified = false;
-        Assert.Equal(("! neověřeno", HistoryTone.Warning), (HistoryView.Row(e).Status, HistoryView.Row(e).Tone));
+        Assert.Equal(("! neověřeno · neformátovat", HistoryTone.Warning), (HistoryView.Row(e).Status, HistoryView.Row(e).Tone));
         Assert.Equal(("5,00 GB", "R"), (HistoryView.Row(e).Size, HistoryView.Row(e).CardName));
     }
 }

@@ -23,10 +23,10 @@ public class JobOutcomeTests
     public void Done_VerifiedOnDisks_WithProxies()
     {
         var o = JobOutcomes.Final("A001", Status(JobPhase.Done, proxiesDone: 24), Report())!;
-        Assert.Equal((OutcomeKind.Done, "Offload: A001 hotovo", "Ověřeno na 1 disku. Proxy: 24 hotovo."), (o.Kind, o.Title, o.Message));
+        Assert.Equal((OutcomeKind.Done, "Offload: A001 hotovo", "Ověřeno na 1 disku — kartu lze formátovat. Proxy: 24 hotovo."), (o.Kind, o.Title, o.Message));
         Assert.Equal(o.Message, o.PhoneMessage);
         Assert.Equal((3, "white_check_mark"), (o.Priority, o.Tags.Single()));
-        Assert.Equal("Ověřeno na 1 disku.", JobOutcomes.Final("A001", Status(JobPhase.Done), Report())!.Message);
+        Assert.Equal("Ověřeno na 1 disku — kartu lze formátovat.", JobOutcomes.Final("A001", Status(JobPhase.Done), Report())!.Message);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class JobOutcomeTests
     public void Ejectable_OnlyWhileStageTwoRuns_WindowsOnly()
     {
         var e = JobOutcomes.CopyDone("A001", Status(JobPhase.Proxies), proxies: true)!;
-        Assert.Equal((OutcomeKind.Ejectable, "Offload: A001 — kartu lze vysunout", "Proxy se ještě renderují."), (e.Kind, e.Title, e.Message));
+        Assert.Equal((OutcomeKind.Ejectable, "Offload: A001 — kartu lze vyjmout", "Proxy se ještě renderují."), (e.Kind, e.Title, e.Message));
         Assert.False(e.ForPhone);
         Assert.Null(JobOutcomes.CopyDone("A001", Status(JobPhase.Done), proxies: true));
         Assert.Null(JobOutcomes.CopyDone("A001", Status(JobPhase.Analyzing, safe: false), proxies: false));

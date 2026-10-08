@@ -23,8 +23,8 @@ public static class HistoryView
         var (status, tone) = e.Unfinished ? ("! nedokončeno", HistoryTone.Warning)
             : !e.Success
             ? ($"✕ s chybami ({e.FailedFiles ?? 0} {Texts.Plural(e.FailedFiles ?? 0, "soubor", "soubory", "souborů")})", HistoryTone.Error)
-            : !e.Verified ? ("! neověřeno", HistoryTone.Warning)
-            : ($"✓ {copies} {Texts.Plural(copies, "kopie ověřena", "kopie ověřeny", "kopií ověřeno")}", HistoryTone.Ok);
+            : !e.Verified ? ("! neověřeno · neformátovat", HistoryTone.Warning)
+            : ($"✓ {copies} {Texts.Plural(copies, "kopie ověřena", "kopie ověřeny", "kopií ověřeno")} · lze formátovat", HistoryTone.Ok);
         return new HistoryRow(e.Id, e.CardName, Format.BytesCs3(e.Bytes), e.Finished.ToLocalTime().ToString("H:mm", Cs), status, tone, e.Project);
     }
 

@@ -44,8 +44,8 @@ public static class HistoryText
         if (m.Kind == HistoryMatchKind.Changed)
             return ($"{head}, ale karta se od té doby změnila ({Files(m.Changed.Count)} jinak) — doplnit nejde, jen celá kopie", HistoryTone.Warning);
         var (state, tone) = !e.Success ? ($" — s chybami ({Files(e.FailedFiles ?? 0)})", HistoryTone.Error)
-            : !e.Verified ? (" — NEOVĚŘENO", HistoryTone.Warning)
-            : (" — ověřeno", HistoryTone.Ok);
+            : !e.Verified ? (" — NEOVĚŘENO (lze vyjmout, neformátovat)", HistoryTone.Warning)
+            : (" — ověřeno, lze formátovat", HistoryTone.Ok);
         var text = head + state;
         if (m.Kind == HistoryMatchKind.NewFiles)
         {

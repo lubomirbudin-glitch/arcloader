@@ -52,7 +52,7 @@ public class CliNtfyTests
         var body = Body(server);
         Assert.Equal("kanal-1", body.GetProperty("topic").GetString());
         Assert.Equal("Offload: A001 hotovo", body.GetProperty("title").GetString());
-        Assert.Equal("Ověřeno na 1 disku.", body.GetProperty("message").GetString());
+        Assert.Equal("Ověřeno na 1 disku — kartu lze formátovat.", body.GetProperty("message").GetString());
         Assert.Contains("ntfy: sent", r.Err);
     }
 

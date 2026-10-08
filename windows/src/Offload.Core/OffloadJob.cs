@@ -1172,7 +1172,10 @@ public sealed class OffloadJob
         // one stays flat — its proxies are never moved) and never takes a name a proxy there already has.
         var tree = plan.Mode == PlanMode.Full ? ProxyTree.Mirror : ProxyPaths.Of(cardPaths);
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (plan.Mode != PlanMode.Full) usedNames.UnionWith(ProxyPaths.Existing(cardPaths));
+        // R6 (plan 10): a resume of generation G takes only the names its earlier generations recorded — a proxy under the
+        // name a clip of G gets is that clip's own, finished by the run that ended (kept below, never rendered as "_2").
+        if (plan.Resuming) usedNames.UnionWith(ProxyPaths.Recorded(cardPaths, plan.Generation));
+        else if (plan.Mode != PlanMode.Full) usedNames.UnionWith(ProxyPaths.Existing(cardPaths));
         for (int i = 0; i < entries.Count; i++)
         {
             if (IsCancelled || !Engine.WaitWhilePaused()) break;
@@ -1207,23 +1210,35 @@ public sealed class OffloadJob
                 continue;
             }
             var (rel, name) = ProxyPaths.Pick(clip, tree, usedNames);
+            // R6 (plan 10): resuming, the proxy the run that ended finished (a complete file under its final name, not a
+            // part) is kept as it is — not rendered again, not copied over; the fill-in read verifies its clip's copy.
+            int? kept = plan.Resuming ? ProxyPaths.Finished(cardPaths, rel, prefer: d) : null;
+            int from = kept ?? d;
             var sw = Stopwatch.StartNew();
             try
             {
-                // Plan 10: the primary's copy is verified by this read (mode A: ffmpeg reads through the tap; mode B: read
-                // and verified before the SDK); spec 7: the decoder's words are the clip's content verdict.
-                var content = new ContentWatch();
-                using (var lease = verifying?.Prepare(clip, d))
-                    renderer.Render(clip, cardPaths[d], info, entries[i].Lut, Layout.Join(cardPaths[d], rel),
-                        f => Update(s => s with { ClipFraction = f }), () => IsCancelled, lease?.Url, content);
-                entries[i].Content = content.Verdict(info);
-                if (entries[i].Content!.IsWarn) entries[i].Content!.Jpeg = renderer.Snapshot(clip, cardPaths[d], info, entries[i].Content!.Frame ?? 0);
+                if (kept != null)
+                {
+                    entries[i].ProxyNote = entries[i].ProxyNote is string earlier ? $"{earlier}; {Msg.ProxyKeptOnResume}" : Msg.ProxyKeptOnResume;
+                    log?.Invoke($"proxy {clip.Name}: kept from the interrupted run ({rel})");
+                }
+                else
+                {
+                    // Plan 10: the primary's copy is verified by this read (mode A: ffmpeg reads through the tap; mode B: read
+                    // and verified before the SDK); spec 7: the decoder's words are the clip's content verdict.
+                    var content = new ContentWatch();
+                    using (var lease = verifying?.Prepare(clip, d))
+                        renderer.Render(clip, cardPaths[d], info, entries[i].Lut, Layout.Join(cardPaths[d], rel),
+                            f => Update(s => s with { ClipFraction = f }), () => IsCancelled, lease?.Url, content);
+                    entries[i].Content = content.Verdict(info);
+                    if (entries[i].Content!.IsWarn) entries[i].Content!.Jpeg = renderer.Snapshot(clip, cardPaths[d], info, entries[i].Content!.Frame ?? 0);
+                }
                 entries[i].ProxyStatus = ProxyStatus.Done;
                 entries[i].ProxyPath = rel;
                 // Spec 3.4: relinking goes by name - a proxy that had to be renamed must be attached by hand.
                 if (name != clip.Name) entries[i].ProxyNote = entries[i].ProxyNote is string earlier ? $"{earlier}; {Msg.ProxyRenamed(name)}" : Msg.ProxyRenamed(name);
                 // A custom LUT gone since the start: the proxy exists, but without the look — never silently.
-                if (renderer.LutNote(entries[i].Lut) is string lutNote)
+                if (kept == null && renderer.LutNote(entries[i].Lut) is string lutNote)
                 {
                     entries[i].ProxyNote = entries[i].ProxyNote is string before ? $"{before}; {lutNote}" : lutNote;
                     log?.Invoke($"proxy {clip.Name}: {lutNote}");
@@ -1233,8 +1248,10 @@ public sealed class OffloadJob
                     // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.
                     for (int o = 0; o < cardPaths.Count; o++)
                     {
-                        if (o == d) continue;
-                        try { ProxyCopy.CopyFile(Layout.Join(cardPaths[d], rel), Layout.Join(cardPaths[o], rel), replace: plan.Mode == PlanMode.Full); }
+                        if (o == from) continue;
+                        // A kept proxy already copied there by the run that ended: never copied over.
+                        if (kept != null && ProxyPaths.Finished([cardPaths[o]], rel, prefer: 0) != null) continue;
+                        try { ProxyCopy.CopyFile(Layout.Join(cardPaths[from], rel), Layout.Join(cardPaths[o], rel), replace: plan.Mode == PlanMode.Full); }
                         catch (Exception e)
                         {
                             var note = $"kopie na {cardPaths[o]} selhala: {e.Message}";
@@ -1243,10 +1260,12 @@ public sealed class OffloadJob
                         }
                     }
                 }
-                if (Config.Proxy.ExtraFolder is string extra)
+                // A kept proxy the run that ended already copied into the user's folder is not copied there again ("_2").
+                if (Config.Proxy.ExtraFolder is string extra
+                    && !(kept != null && File.Exists(Layout.Join(Layout.CardPath(extra, plan.Date, plan.CardName), rel[(Layout.ProxyDirName.Length + 1)..]))))
                 {
                     // The user's proxy folder: also never fails the proxy (the disk may have been disconnected).
-                    var (_, error) = ProxyCopy.ToExtraFolder(Layout.Join(cardPaths[d], rel), extra, plan.Date, plan.CardName,
+                    var (_, error) = ProxyCopy.ToExtraFolder(Layout.Join(cardPaths[from], rel), extra, plan.Date, plan.CardName,
                         rel[(Layout.ProxyDirName.Length + 1)..]);   // the same folders as in _PROXY
                     if (error != null)
                     {
@@ -1259,7 +1278,7 @@ public sealed class OffloadJob
                 {
                     // RAW formats rendered via an intermediate: take the thumbnails from the finished proxy (it already has the LUT).
                     var proxyClip = new Clip { Name = name, Path = rel, Format = ClipFormat.Video, Segments = [rel], Bytes = 0 };
-                    entries[i].Thumbnails = TryThumbnails(renderer, proxyClip, cardPaths[d], info, lut: null, () => IsCancelled, log);
+                    entries[i].Thumbnails = TryThumbnails(renderer, proxyClip, cardPaths[from], info, lut: null, () => IsCancelled, log);
                 }
                 entries[i].ProxySeconds = sw.Elapsed.TotalSeconds;
                 Update(s => s with { ProxiesDone = s.ProxiesDone + 1 });

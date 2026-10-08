@@ -56,6 +56,49 @@ public static class ProxyPaths
     public static ProxyTree Of(IReadOnlyList<string> cardPaths) =>
         Detect(cardPaths.SelectMany(p => CardRecord.Load(p).Clips.Select(c => c.Entry)));
 
+    /// R6 (plan 10): the proxies the backup's generations before `generation` recorded in their reports, as Pick's keys —
+    /// what a resume of `generation` must not take. Every other proxy in `_PROXY` under the name Pick gives a clip of
+    /// `generation` is that clip's own: the run that ended made it (Finished). Reports that cannot be read add nothing.
+    public static IEnumerable<string> Recorded(IReadOnlyList<string> cardPaths, int generation)
+    {
+        if (generation <= 1) return [];
+        var keys = new List<string>();
+        foreach (var p in cardPaths)
+        {
+            try
+            {
+                foreach (var c in CardRecord.Load(p, maxGeneration: generation - 1).Clips)
+                    if (c.Generation < generation && c.Entry.ProxyPath is string rel && Key(rel) is string key) keys.Add(key);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+        return keys.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// "_PROXY/idle/1.mov" → "idle/1"; null for a path outside `_PROXY` or not a `.mov`.
+    static string? Key(string rel)
+    {
+        var prefix = Layout.ProxyDirName + "/";
+        if (!rel.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !rel.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)) return null;
+        return rel[prefix.Length..^".mov".Length];
+    }
+
+    /// R6 (plan 10): the destination (index into `cardPaths`, `prefer` first) where the proxy `rel` is finished — the
+    /// file under its final name, not empty (a render writes `.part` and renames it only when done); null when none is.
+    /// Only reads.
+    public static int? Finished(IReadOnlyList<string> cardPaths, string rel, int prefer)
+    {
+        foreach (var d in Enumerable.Range(0, cardPaths.Count).OrderBy(d => d == prefer ? 0 : 1))
+        {
+            try
+            {
+                if (new FileInfo(Layout.Join(cardPaths[d], rel)) is { Exists: true, Length: > 0 }) return d;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { }
+        }
+        return null;
+    }
+
     /// Every proxy already in `_PROXY` of these card folders, as Pick's keys ("idle/1", "C0001"); temporary `.part`
     /// files and folders that cannot be read are left out.
     public static IEnumerable<string> Existing(IReadOnlyList<string> cardPaths)

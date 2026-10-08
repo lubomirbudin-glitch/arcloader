@@ -139,7 +139,8 @@ klikněte na „Další informace“ → „Přesto spustit“.
   Fronta / Historie karet a „DNES“; volby jsou na stránce Nastavení (ikona s posuvníky, Ctrl+,; Esc zavře). Tmavé
   i světlé téma podle Windows (`Themes/Dark.xaml`, `Light.xaml`); `OFFLOAD_THEME=dark|light` téma vynutí (pro snímky).
   Ukázkový režim pro vizuální kontrolu: `Offload.exe --demo pripraveno|probiha|hotovo|nastaveni` (stavy obrazovek
-  z `docs/ui-navrh/screeny`; výchozí vypnutý). Demo je zapečetěné: vlastní složka dat v %TEMP% (nastavení, historie i log;
+  z `docs/ui-navrh/screeny`; výchozí vypnutý) a `--demo overuje` (plán 10: karta zkopírovaná a ověřovaná s proxy „Lze
+  vyjmout“, karta s vadou obsahu a zelená „Lze formátovat“). Demo je zapečetěné: vlastní složka dat v %TEMP% (nastavení, historie i log;
   `OFFLOAD_SETTINGS_DIR` se ignoruje), nic nekopíruje ani nezapisuje, Spustit, Doplnit, Zkopírovat znovu, měření portů,
   úpravy projektů, oznámení, aktualizace, Ověřit zálohu, Denní report i Vysunout jsou vypnuté; jen Pozastavit / Pokračovat /
   Zrušit na ukázkové úloze mění, co karta ukazuje. Snímky přes `scripts\app-drive.ps1` (`Start-Offload -Arguments '--demo probiha'`,

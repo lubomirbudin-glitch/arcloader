@@ -45,6 +45,7 @@ public sealed partial class JobItemViewModel : QueueItem
         OpenReportCommand = new RelayCommand(OpenReport);
         RevealCommand = new RelayCommand(Reveal);
         InitCard();
+        InitVerify();
     }
 
     public OffloadJob Job { get; }
@@ -73,7 +74,7 @@ public sealed partial class JobItemViewModel : QueueItem
             ResolveChain(plan);
         }
         // The whole backup's state comes from the job (read on its thread); a waiting card says when a paused job holds it.
-        headline = JobCard.Headline(CardName, progress.Status, Job.Report, DestNames, Job.Backup, owner.BlockedByPaused(this));
+        headline = JobCard.Headline(CardName, progress.Status, Job.Report, DestNames, Job.Backup, owner.BlockedByPaused(this), contentConfirmed);
         RefreshCard();
         Raise(string.Empty);   // every binding of the card may have changed
     }
@@ -81,7 +82,7 @@ public sealed partial class JobItemViewModel : QueueItem
     // ── The new card (UI návrh obr. 2, 3) ──────────────────────────────────────────────────────────────────────
     /// Waiting, Running, Done (green), Problem (yellow), Failed (red), Cancelled (grey) — which look the card has.
     public JobCardKind Kind => headline.Kind;
-    /// "A035_ARRI — kartu lze vysunout" / "B012_FX6 — kartu zatím nevysunujte" …
+    /// "A035_ARRI — kartu lze formátovat" / "A036_ARRI — lze vyjmout, formátovat zatím ne" / "B012_FX6 — kartu zatím nevysunujte" …
     public string HeadTitle => headline.Title;
     /// "Všech 24 souborů je na 2 discích a ověřených (xxHash64)." / "1 soubor na disku SHUTTLE_B nesouhlasí s kartou. …"
     public string HeadSub => headline.Sub;

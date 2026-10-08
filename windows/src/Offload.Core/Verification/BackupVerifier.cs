@@ -41,6 +41,12 @@ public sealed class VerifyResult
     /// so VerifyReport.Write puts it into the day-level _REPORT beside the card folder.
     public bool ReportInsideCard { get; init; } = true;
 
+    /// Plan 10 (M-c): the backup's newest generation is not finished — its report says verifyPending (the app ended while
+    /// verifying with the proxies) or verifyIncomplete, or another destination's report of it still says verifyPending.
+    /// The files compared may all match; the backup is still not one to format the card after: „Dokončit přerušenou
+    /// zálohu“ finishes it. Its record (ASC MHL generation, hash lists) is written only then.
+    public bool Unfinished { get; init; }
+
     public bool Success => !Cancelled && Changed.Count == 0 && Missing.Count == 0 && Unreadable.Count == 0 && FailedAtCopy.Count == 0;
 }
 
@@ -48,6 +54,21 @@ public sealed class VerifyResult
 /// R9) — or, without ascmhl/, with the hash lists in _REPORT. Writes nothing (R8): the report is a separate step.
 public static class BackupVerifier
 {
+    /// The basis of a result with nothing to compare: generation 1 is still verifying (M-c).
+    public const string PendingBasis = "pending";
+
+    /// See VerifyResult.Unfinished — from the card folder's reports (and the other destinations' report of the newest
+    /// generation, CardRecord.Incomplete). Only reads; reports that cannot be read say nothing here.
+    static bool UnfinishedGeneration(string cardPath)
+    {
+        try
+        {
+            var record = CardRecord.Load(cardPath);
+            return record.VerifyPending || record.Incomplete;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return false; }
+    }
+
     sealed record Expected(string Path, long? Size, IReadOnlyList<MhlHash> Hashes, bool Failed, bool FailedNewer = false);
 
     static readonly string[] Ours = [Layout.ReportDirName + "/", Layout.ProxyDirName + "/", Mhl.DirName + "/"];
@@ -59,6 +80,7 @@ public static class BackupVerifier
     {
         var started = DateTime.UtcNow;
         var mhl = MhlReader.Read(cardPath);
+        bool unfinished = UnfinishedGeneration(cardPath);
         List<Expected> expected;
         IReadOnlyList<string> ignore;
         string basis;
@@ -78,7 +100,12 @@ public static class BackupVerifier
         }
         else
         {
-            expected = ReadHashLists(cardPath) ?? throw OffloadError.Preflight(PreflightCode.NoHashRecord,
+            var lists = ReadHashLists(cardPath);
+            // Generation 1 still verifying (M-c): its record is written with the results — nothing to compare yet, but
+            // the answer is "not finished", never "no record".
+            if (lists == null && unfinished)
+                return new VerifyResult { CardPath = cardPath, Started = started, Finished = DateTime.UtcNow, Basis = PendingBasis, Unfinished = true };
+            expected = lists ?? throw OffloadError.Preflight(PreflightCode.NoHashRecord,
                 string.Join(" ", new[] { Msg.NoHashRecord(cardPath) }.Concat(mhl?.ChainProblems ?? [])));
             ignore = [];
             basis = "hashList";
@@ -96,6 +123,7 @@ public static class BackupVerifier
             TotalBytes = total,
             // Only an ascmhl history can be broken by a report: _REPORT must be ignored by every generation.
             ReportInsideCard = basis != "ascmhl" || mhl!.Generations.All(g => Ignored(Layout.ReportDirName + "/x", g.Ignore)),
+            Unfinished = unfinished,
         };
         result.ChainProblems.AddRange(mhl?.ChainProblems ?? []);
 

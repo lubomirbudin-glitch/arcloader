@@ -452,7 +452,7 @@ public sealed partial class MainViewModel
         if (Find(job) is not JobItemViewModel item) return;   // a verification has no stage 2: OnJobFinished follows
         item.Refresh();
         Chime(item);   // ruling I2: only once everything is verified — with verify-in-proxy at the end of stage 2
-        NotifyCopyDone(item);   // spec 4.3: "kartu lze vysunout" while stage 2 still runs
+        NotifyCopyDone(item);   // spec 4.3: "kartu lze vyjmout" while stage 2 still runs
         if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Zálohováno"
         if (!closing) _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // the disks changed: free space again (ruling I4)
         // Ended in stage 1: only the day report is left and it may queue behind other cards' stage 2 — alert now.

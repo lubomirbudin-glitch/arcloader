@@ -85,7 +85,7 @@ public static class VerifyJobView
     {
         VerifyJobState.Waiting => "Čeká",
         VerifyJobState.Running => "Ověřování",
-        VerifyJobState.Done => s.Result is { Success: true } ? "Ověřeno" : "Problémy",
+        VerifyJobState.Done => s.Result is { Success: true } r ? (r.Unfinished ? "Nedokončeno" : "Ověřeno") : "Problémy",
         VerifyJobState.Cancelled => "Zrušeno",
         _ => "Chyba",
     };
@@ -94,7 +94,8 @@ public static class VerifyJobView
     {
         VerifyJobState.Waiting => CardTone.Waiting,
         VerifyJobState.Running => CardTone.Active,
-        VerifyJobState.Done => s.Result is { Success: true } ? CardTone.Ok : CardTone.Error,
+        // Plan 10 (M-c): a backup whose newest generation is not finished is never green.
+        VerifyJobState.Done => s.Result is { Success: true } r ? (r.Unfinished ? CardTone.Warning : CardTone.Ok) : CardTone.Error,
         VerifyJobState.Cancelled => CardTone.Warning,
         _ => CardTone.Error,
     };
