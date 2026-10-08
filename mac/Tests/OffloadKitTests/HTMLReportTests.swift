@@ -34,7 +34,7 @@ final class HTMLReportTests: XCTestCase {
         let html = HTMLReport.render(report(thumbnails: []), forPrint: true)
         XCTAssertTrue(html.contains(".thumbs figure img{width:64px;height:36px}"))
         // print rules come after the base rules, so they win (otherwise the PDF table is cut off on the right)
-        XCTAssertGreaterThan(html.range(of: ".thumbs figure img{width:64px")!.lowerBound, html.range(of: ".thumb{width:128px")!.lowerBound)
+        XCTAssertGreaterThan(html.range(of: ".thumbs figure img{width:64px")!.lowerBound, html.range(of: ".thumb{width:104px")!.lowerBound)
     }
 
     func testThumbnailsNeverInJSON() throws {

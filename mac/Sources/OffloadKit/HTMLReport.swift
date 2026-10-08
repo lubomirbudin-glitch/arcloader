@@ -78,7 +78,7 @@ public enum HTMLReport {
         :root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e3e3e0;--ok:#1f8a4c;--okbg:#e5f4ea;--bad:#c62828;--badbg:#fdeaea;--warn:#a86400;--warnbg:#fdf2dc;--accent:#3a5bd9}
         \(forPrint ? "" : darkCSS)
         *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
-        main{max-width:1200px;margin:0 auto;padding:28px 20px 60px}
+        main{max-width:1600px;margin:0 auto;padding:28px 20px 60px}
         header{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:22px}
         h1{font-size:26px;margin:0;letter-spacing:-.01em}h2{font-size:16px;margin:30px 0 10px}
         .sub{color:var(--muted)}.badge{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:600;font-size:13px}
@@ -88,12 +88,13 @@ public enum HTMLReport {
         .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
         .stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stat span{color:var(--muted);font-size:12px}
         .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
-        table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+        table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
         th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}
         td.num{text-align:right;font-variant-numeric:tabular-nums}code,.mono{font:12px ui-monospace,Menlo,monospace}
-        td.clip{white-space:normal;min-width:180px;max-width:300px}.wrap{white-space:normal}
-        .thumb{width:128px;height:72px;object-fit:contain;background:#000;border-radius:4px;display:block}
-        .nothumb{width:128px;height:72px;border-radius:4px;background:var(--line)}
+        td.clip{white-space:normal;min-width:160px;max-width:280px}.wrap{white-space:normal}td.fmt{max-width:150px}
+        td.clip .clipname,td.clip .path,td.clip .note{overflow-wrap:anywhere}
+        .thumb{width:104px;height:58px;object-fit:contain;background:#000;border-radius:4px;display:block}
+        .nothumb{width:104px;height:58px;border-radius:4px;background:var(--line)}
         .thumbs{display:flex;gap:4px}.thumbs figure{margin:0}.thumbs figcaption{font:10px ui-monospace,Menlo,monospace;color:var(--muted);text-align:center}
         .clipname{font-weight:600}.path,.note{color:var(--muted);font-size:12px}
         details summary{cursor:pointer;padding:10px 0;font-weight:600}
@@ -161,7 +162,7 @@ public enum HTMLReport {
                 }
                 h += "<tr><td>\(img)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))\(c.clip.isCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "")</div>"
                 h += "<div class=\"path\">\(esc(c.clip.path))</div>\(noteHTML)</td>"
-                h += "<td class=\"wrap\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num\">\(esc(i?.fpsLabel ?? ""))</td>"
+                h += "<td class=\"wrap fmt\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num\">\(esc(i?.fpsLabel ?? ""))</td>"
                 h += "<td class=\"num\">\(esc(i?.durationLabel ?? ""))</td><td class=\"mono tc\">\(esc(i?.timecode ?? ""))</td>"
                 h += "<td class=\"num\">\(i.map { $0.audioChannels > 0 ? "\($0.audioChannels) ch" : "—" } ?? "")</td>"
                 h += "<td class=\"num\">\(formatBytes(c.clip.bytes))</td><td class=\"\(pc)\">\(pl)</td></tr>\n"

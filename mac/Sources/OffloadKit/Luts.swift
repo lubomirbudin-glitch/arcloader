@@ -42,7 +42,23 @@ public struct LutCatalog {
     }
 
     /// Loaded once, on first use (a few small local files in the app bundle). Never fails: no folder → empty catalog.
-    public static let shared = LutCatalog.load(defaultFolder)
+    public static let shared = LutCatalog.load(defaultFolder).withUserOverrides()
+
+    /// The user's own file for a camera log wins over the built-in approximation — e.g. the official ARRI LUT saved as
+    /// `~/Library/Application Support/Offload/luts/arri-logc4-awg4.cube` (vendor LUTs may not be bundled with the app,
+    /// but anyone may use them on their own Mac). Applied to the app's/CLI's catalog only, never in `load`.
+    public func withUserOverrides(_ folder: String = LutCatalog.userLutFolder) -> LutCatalog {
+        let luts = self.luts.map { l -> BuiltinLut in
+            var l = l
+            let own = folder + "/" + l.id + ".cube"
+            if FileManager.default.fileExists(atPath: own), LutCatalog.isValidCube(own) {
+                l.path = own
+                l.name += " (vlastní soubor)"
+            }
+            return l
+        }
+        return LutCatalog(folder: self.folder, luts: luts)
+    }
 
     public static var defaultFolder: String? {
         findFolder(executable: Bundle.main.executableURL?.resolvingSymlinksInPath(), resourcePath: Bundle.main.resourcePath)
@@ -86,6 +102,11 @@ public struct LutCatalog {
             }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
         return LutCatalog(folder: ok.isEmpty ? nil : folder, luts: ok)
+    }
+
+    /// `~/Library/Application Support/Offload/luts` — `<id>.cube` there replaces the built-in LUT with that id.
+    public static var userLutFolder: String {
+        (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/Offload/luts")
     }
 
     /// A 3D .cube whose data rows match its LUT_3D_SIZE.
