@@ -100,6 +100,7 @@ sealed class StageTwoOptions
         {
             if (n < 1) throw new ArgumentException(Msg.PrimaryNotPositive(n));
             config.PrimaryDestination = n - 1;
+            if (config.DestRoots.Count > 0) CheckPrimary(config, config.DestRoots.Count);   // a copy knows its destinations here
         }
         else config.PrimaryDestination = project != null ? JobConfigs.Primary(project) : null;
 
@@ -109,5 +110,12 @@ sealed class StageTwoOptions
             throw new ArgumentException(Msg.ProxyFolderNotFound(folder));
         // A project's own LUT (or, from task 5, a rule's) that is gone stops the job before it starts, as in the app.
         if (ProxyPreflight.Blocking(p, config.AnalyzeClips) is string missing) throw new ArgumentException(missing);
+    }
+
+    /// --primary N above the number of destinations is refused (it used to fall back to the fastest disk silently).
+    /// An append calls it again once the earlier backup's folders are known.
+    public static void CheckPrimary(JobConfig config, int destinations)
+    {
+        if (config.PrimaryDestination is int i && i >= destinations) throw new ArgumentException(Msg.PrimaryTooHigh(i + 1, destinations));
     }
 }

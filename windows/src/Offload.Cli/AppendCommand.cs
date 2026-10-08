@@ -58,6 +58,7 @@ static class AppendCommand
                     folders = known.Entry.Destinations.Select(d => d.CardPath).ToList();
                     config.Project = known.Entry.Project;   // the fallback is the history entry's project (M4)
                 }
+                StageTwoOptions.CheckPrimary(config, folders.Count);
                 config.AppendInto = folders;
                 // Final fix 1: notifications follow the card's earlier project, not --project (its topic may be another client's).
                 var earlier = OffloadJob.EarlierProject(folders, config.Project);

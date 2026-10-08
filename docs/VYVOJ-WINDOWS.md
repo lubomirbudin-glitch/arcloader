@@ -20,10 +20,22 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 7 | výstupy pro produkci a střih: denní report, seznam klipů CSV/ALE, proxy pro přelinkování (reel name, všechny zvukové stopy), MD5 navíc k xxh64 (0.3.0) | hotovo (čeká ruční test: Resolve, Premiere, Avid, Excel) |
 | 8 | nastavení, oznámení, distribuce: projekty, vlastní pravidla LUTů, BRAW Film Gen 4 → Gen 5, oznámení Windows a ntfy, kontrola aktualizací, verze z `Directory.Build.props`, `build.ps1 -Sign` (0.4.0) | hotovo (čeká ruční test: oznámení, podpis; Gen 4 čeká vzorek) |
 | 9 | nový vzhled podle `docs/ui-navrh/`: tmavé a světlé téma, horní lišta, kroky 1–3, karty úloh s průběhem po cílech, pozastavení, oprava nesouhlasných souborů, dnešní historie, okno Nastavení (0.5.0) | hotovo (čeká ruční test 40–49 s kartou a vizuální kontrolu proti `docs/ui-navrh/screeny`) |
+| 10 | Verify-in-Proxy: primární disk ověřený čtením pro proxy (HTTP tap pro ffmpeg, čtení přes cache pro RAW SDK), ostatní disky na pozadí, „Lze vyjmout“ × „Lze formátovat“, blokový manifest a navázání po pádu, XXH128 v ASC MHL, obsahová kontrola dekodérem (0.6.0) | hotovo (čeká ruční test 50–58: karta, RAW, přímý zápis na zařízení) |
 
 
 ## 2026-10-08 — plán 10: Verify-in-Proxy
 
+Verze **0.6.0**. Návrh: [`windows/docs/superpowers/specs/2026-10-08-offload-verify-in-proxy-design.md`](../windows/docs/superpowers/specs/2026-10-08-offload-verify-in-proxy-design.md)
+(specifikace uživatele + rozhodnutí R1–R12). S proxy a ověřením se primární disk (nejrychlejší při kopii, nebo
+zvolený) už nečte zvlášť: ffmpeg čte klip přes HTTP server Offloadu na 127.0.0.1 (`-short_seek_size 65536`, jinak ffmpeg
+8.1 četl MOV s `moov` na konci i MXF dvakrát), RAW SDK z paměti (soubor se přitom z disku čte ještě jednou, nepřetržitým čtením mimo cache — ruling B1: nikdy „ověřeno“ z cache); každý přečtený blok
+16 MiB se porovná s XXH3-64 z karty, chybějící bloky dočte dorovnání, ostatní disky se čtou souběžně na pozadí.
+Naměřeno (ffmpeg 8.1, NVMe, 735 MB ProRes s `moov` na konci): tap přečetl 101,8 % souboru, dekódování přes tap
+1,63 s proti 1,55 s z disku. Karta má dva stavy: **Lze vyjmout** (vše zapsané) a **Lze formátovat** (vše ověřené). Zápis
+`NO_BUFFERING | WRITE_THROUGH`, `_REPORT/offload-manifest.jsonl`, XXH128 v ASC MHL vedle xxh64. Klasické zpětné čtení
+dál: bez proxy, `--classic-verify`, vypnutá volba, síťový cíl, cíl, který neprošel kontrolou čtení mimo cache.
+
+- Úkol 18: verze 0.6.0, dokumentace (FORMATY: manifest, `verifyPending`, `verifyIncomplete`, klíče reportu, xxh128 a metoda v MHL; ROZDILY; VYVOJ-MAC), README (ruční testy 50–58), návod (dva stavy karty, vady obsahu, nastavení a CLI, dokončení přerušené zálohy, poznámka o cache) a `--primary N` nad počtem cílů se odmítne (česká chyba, exit 1).
 - Úkol 17: HTML/PDF a TXT report — metoda ověření a sériové číslo u každého cíle, čas do „lze formátovat“, tabulka vad obsahu, poznámky, česky „blok N nesouhlasí“.
 - Úkol 16: Nastavení → Ověření „Ověřit primární disk během proxy“ a „Primární disk“ (nejrychlejší / první), CLI `--classic-verify` a `--primary N` (R11). Navíc: „Uložit jako projekt…“ volbu přenese do projektu (`Projects.CopyProfile`).
 - Úkol 15: karta úlohy, oznámení, historie a CLI se dvěma stavy (R5): štítky „Lze vyjmout“ / „Lze formátovat“, zelená jen po ověření, vady obsahu se seznamem, náhledem a potvrzením; kroky Kopírování · Proxy · Ověření · Report. Navíc (přeneseno z úkolů 12–14): „Lze vyjmout“ a tlačítko „Vysunout kartu“ běžící i zrušené karty neutrálně, zeleně jen „Lze formátovat“ (I2); vada obsahu jako žlutý štítek s timecodem, potvrzení jen na kartě, kterou jinak lze formátovat; „Ověřit zálohu“ na záloze s nedokončenou nejnovější generací (`verifyPending`/`verifyIncomplete`) hlásí oranžově „Záloha není dokončená … Dokončit přerušenou zálohu“, nikdy „vše v pořádku“ (CLI `verify` kód 1, JSON `unfinished`); „Dokončit“ po pádu ve stage 2 nechá hotové proxy přerušeného běhu (zrcadlený i plochý `_PROXY`, ne `.part`) a renderuje jen chybějící — nikdy `_2`, nic nepřepíše; ukázka `--demo overuje` s oběma stavy pro snímky.

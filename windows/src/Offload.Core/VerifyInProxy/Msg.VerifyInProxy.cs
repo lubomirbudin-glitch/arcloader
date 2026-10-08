@@ -36,6 +36,10 @@ public static partial class Msg
     /// CLI --primary 0 or less.
     public static string PrimaryNotPositive(int n) => $"--primary {n}: cíle se číslují od 1 (pořadí --dest).";
 
+    /// CLI --primary above the number of destinations.
+    public static string PrimaryTooHigh(int n, int count) =>
+        $"--primary {n}: cílů je jen {count} (číslují se od 1 v pořadí --dest).";
+
     // R6 (resume).
     /// A resume keeps the proxy the interrupted run finished (carried from tasks 12–14).
     public const string ProxyKeptOnResume = "proxy z přerušeného běhu — nerenderovala se znovu (obsah klipu dekodér tentokrát nekontroloval)";

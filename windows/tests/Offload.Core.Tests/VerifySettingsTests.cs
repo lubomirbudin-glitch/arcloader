@@ -45,7 +45,7 @@ public class VerifySettingsTests
         stage.AddTo(cmd);
         JobConfig Apply(params string[] args)
         {
-            var config = new JobConfig(@"E:\", [@"D:\"]);
+            var config = new JobConfig(@"E:\", [@"D:\", @"F:\"]);
             stage.Apply(cmd.Parse(args), config, new AppSettings());
             return config;
         }
@@ -56,5 +56,9 @@ public class VerifySettingsTests
         Assert.Equal(1, Apply("--primary", "2").PrimaryDestination);
         var e = Assert.Throws<ArgumentException>(() => Apply("--primary", "0"));
         Assert.Equal(Msg.PrimaryNotPositive(0), e.Message);
+        // Above the number of destinations: refused (the CLI prints it and exits 1), no silent fallback to the fastest.
+        var high = Assert.Throws<ArgumentException>(() => Apply("--primary", "3"));
+        Assert.Equal(Msg.PrimaryTooHigh(3, 2), high.Message);
+        Assert.Contains("jen 2", high.Message);
     }
 }
