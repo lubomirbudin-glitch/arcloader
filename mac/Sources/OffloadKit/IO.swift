@@ -97,6 +97,37 @@ enum IO {
         guard rename(tmp, path) == 0 else { throw IOError("rename", path) }
     }
 
+    /// Like `writeFileDurably`, but never replaces: a file already at `path` throws (EEXIST) and is left as it was.
+    /// An append's `_NNNN` reports and its MHL generation are created this way (spec 2.2).
+    static func writeFileNew(_ path: String, _ data: Data) throws {
+        if FileManager.default.fileExists(atPath: path) { throw IOError("create", path, EEXIST) }
+        let tmp = (path as NSString).deletingLastPathComponent + "/." + (path as NSString).lastPathComponent + ".tmp"
+        let fd = try openWrite(tmp)
+        do {
+            if !data.isEmpty {
+                try data.withUnsafeBytes { try pwrite(fd, $0.baseAddress!, data.count, 0, path: tmp) }
+            }
+            try fullSync(fd, path: tmp)
+            close(fd)
+            try renameNoReplace(tmp, path)
+        } catch {
+            close(fd)
+            unlink(tmp)
+            throw error
+        }
+    }
+
+    /// rename(2) that never replaces (EEXIST when `to` exists): `renamex_np(RENAME_EXCL)` where the filesystem has it
+    /// (APFS, HFS+); where not (ENOTSUP/EINVAL — exFAT and FAT through fskit on macOS 26, SMB), a check right before
+    /// a plain rename.
+    static func renameNoReplace(_ from: String, _ to: String) throws {
+        if renamex_np(from, to, UInt32(RENAME_EXCL)) == 0 { return }
+        let e = errno
+        guard e == ENOTSUP || e == EINVAL else { throw IOError("rename", to, e) }
+        if FileManager.default.fileExists(atPath: to) { throw IOError("rename", to, EEXIST) }
+        guard rename(from, to) == 0 else { throw IOError("rename", to) }
+    }
+
     static func setModificationTime(_ fd: Int32, _ mtime: timespec) {
         var times = [timespec(tv_sec: 0, tv_nsec: Int(UTIME_OMIT)), mtime]
         _ = futimens(fd, &times)

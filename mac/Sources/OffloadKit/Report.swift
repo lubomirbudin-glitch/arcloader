@@ -15,6 +15,8 @@ public struct OffloadReport: Codable {
         public let size: Int64
         public let modified: Date
         public let xxh64: String?
+        /// Only when the copy computed MD5 too (spec 3.5): 32 lower-case hex digits.
+        public var md5: String? = nil
         public let sourceError: String?
         public let destinations: [String]
         public let errors: [String?]
@@ -38,6 +40,8 @@ public struct OffloadReport: Codable {
     public let skipped: [String]
     public var clips: [ClipEntry] = []
     public var proxy: ProxySettings?
+    /// The ASC MHL generation this report belongs to: absent (= 1) for the full copy, 2, 3 … for appends (spec 2.2).
+    public var generation: Int? = nil
 
     public var copySeconds: Double { copyFinished.timeIntervalSince(started) }
     public var verifySeconds: Double { finished.timeIntervalSince(copyFinished) }
