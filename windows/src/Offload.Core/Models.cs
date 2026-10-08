@@ -99,7 +99,19 @@ public sealed class OffloadPlan
     /// the repair ends (cancelled) before reading it again (fix round 1, item 2).
     public IReadOnlyList<bool[]>? ReadBackBefore { get; init; }
     /// Repair: card files that no report of the backup records (fix round 1, item 1) — the card is not safe to eject.
+    /// A resume of a generation already in an ASC MHL chain: card files it cannot take (the next append copies them).
     public int NotInBackup { get; init; }
+    /// R6 resume: this copy completes generation `Generation`, which an earlier run started and never committed to the ASC
+    /// MHL chain (it crashed, or its verification never ended) — its reports, if any, are replaced, never created anew.
+    public bool Resuming { get; init; }
+    /// R6 resume: per file, the manifest record of an earlier run that copied it completely onto every destination — not
+    /// read from the card again (its hashes and blocks are the record's); null = copied now.
+    public IReadOnlyList<VerifyInProxy.ManifestRecord?>? Known { get; init; }
+    /// R6 resume: per file, the checkpoint its `.offload-part` on every destination it goes to resumes from; null = from 0.
+    public IReadOnlyList<VerifyInProxy.PartCheckpoint?>? Resume { get; init; }
+    /// R6 resume: per file, nothing is written (it is in its place on every destination with no record) but the card is
+    /// read for its hashes — the verification then checks the copies against them.
+    public IReadOnlyList<bool>? HashOnly { get; init; }
 
     /// File `file` gets written to destination `dest`.
     public bool Writes(int file, int dest) => Write?[file][dest] ?? true;

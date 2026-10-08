@@ -78,6 +78,32 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
     public bool Update(string id, Func<HistoryEntry?, HistoryEntry?> modify, IReadOnlyList<SourceFile>? files = null) =>
         UpdateWithFiles(id, e => modify(e) is { } changed ? (changed, files) : null);
 
+    /// Removes entry `id` and its file list (plan 10: the start entry of a full copy that was cancelled). False when it was
+    /// not there or nothing could be written — logged.
+    public bool Remove(string id)
+    {
+        if (!SafeId().IsMatch(id)) return false;
+        try
+        {
+            using var held = Lock();
+            if (held == null)
+            {
+                log?.Invoke($"history: busy for {LockTimeout.TotalSeconds:0} s — the entry {id} is not removed");
+                return false;
+            }
+            var (entries, version) = ReadFile(repair: true);
+            if (version > CurrentVersion || entries.RemoveAll(e => e.Id == id) == 0) return false;
+            if (FileListPath(id) is string list) NativeIO.Delete(list);
+            NativeIO.WriteFileReplacing(FilePath, JsonSerializer.SerializeToUtf8Bytes(new HistoryFile { Entries = entries }, Json));
+            return true;
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
+            return false;
+        }
+    }
+
     /// Update whose `modify` also returns the file list (null = keep the stored one) — e.g. the union with the stored
     /// list (ReadFileList), read under the same hold of the lock (an append, spec 5.2). A null result changes nothing.
     public bool UpdateWithFiles(string id, Func<HistoryEntry?, (HistoryEntry Entry, IReadOnlyList<SourceFile>? Files)?> modify)

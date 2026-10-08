@@ -138,6 +138,8 @@ public sealed class OffloadJob
     /// Ruling I4: the card folders' lock a job whose reports say verifyPending holds until FinishVerification has written
     /// the verification results (taken in stage 1, let go in stage 2 — AppendLock.AcquireHeld).
     IDisposable? verifyLock;
+    /// R6: the history entry a full copy wrote when it started ("unfinished"), finished by RecordHistory.
+    string? startEntry;
 
     /// Set on a worker thread, read by the app's UI thread.
     public OffloadPlan? Plan { get => planValue; private set => planValue = value; }
@@ -196,7 +198,7 @@ public sealed class OffloadJob
     /// none can (M4).
     public static string? EarlierProject(IReadOnlyList<string> cardPaths, string? fallback)
     {
-        var earlier = cardPaths.Select(CardRecord.Load).FirstOrDefault(r => r.Generations.Count > 0);
+        var earlier = cardPaths.Select(p => CardRecord.Load(p)).FirstOrDefault(r => r.Generations.Count > 0);
         return earlier != null ? earlier.Project : fallback;
     }
 
@@ -228,6 +230,10 @@ public sealed class OffloadJob
     SpaceExtra EstimateExtra(SourceScan scan) => SpaceEstimator.Extra(ClipDetector.Detect(scan.Files), Config.Proxy, Config.Tools.Resolved());
 
     public void Cancel() => Engine.Cancel();
+
+    /// Tests: the app ends right after stage 1 (a crash, the PC switched off) — the folders' lock goes with the process,
+    /// nothing more is written (no stage 2, no commit): what a resume (R6) later finds.
+    internal void Abandon() => Interlocked.Exchange(ref verifyLock, null)?.Dispose();
 
     public bool IsCancelled => Engine.IsCancelled;
     /// A DemoScenario preview: it never runs (`Offload.exe --demo`).
@@ -347,6 +353,8 @@ public sealed class OffloadJob
             if (plan.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(plan.UnverifiedEarlier)));
             Update(s => s with { Phase = JobPhase.Copying });
             copying = true;
+            // R6: history knows the copy from its start — one the app never finishes can be resumed from its card.
+            if (plan.Mode == PlanMode.Full) RecordStart(plan, log);
             // Plan 10 (R11): the read-back waits for stage 2, where the proxies read the copies.
             Engine.Options.DeferVerify = VerifiesInProxy(plan);
             // Ruling I4: a full copy that will write reports saying verifyPending takes its new card folders' lock first —
@@ -370,18 +378,19 @@ public sealed class OffloadJob
                 safe &= w.Failed == 0 && w.Unverified == 0;
                 allCopied &= w.Failed == 0;
                 if (w.Unverified > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(w.Unverified)));
-                // Fix round 1, item 1: files shot after the backup are in no report — a repair does not copy them, and
-                // the card formatted now would lose them.
-                safe &= plan.NotInBackup == 0;
-                allCopied &= plan.NotInBackup == 0;
-                if (plan.NotInBackup > 0) Update(s => s.WithWarning(Msg.CardFilesNotInBackup(plan.NotInBackup)));
             }
+            // Fix round 1, item 1: files shot after the backup are in no report — a repair does not copy them (nor a
+            // resume of a generation already in an ASC MHL chain, R6), and the card formatted now would lose them.
+            safe &= plan.NotInBackup == 0;
+            allCopied &= plan.NotInBackup == 0;
+            if (plan.NotInBackup > 0) Update(s => s.WithWarning(Msg.CardFilesNotInBackup(plan.NotInBackup)));
             // The same for an append (fix round 1, item 1, plan 6's verdict checked): its new files are verified, but
             // files of the earlier backup that were never read back keep the card from "kartu lze vysunout".
             if (plan.Mode == PlanMode.Append) safe &= plan.UnverifiedEarlier == 0;
             Update(s => s with { SafeToEject = allCopied, SafeToFormat = safe, CopySucceeded = report.Success, Copy = Engine.Snapshot() });
             if (IsCancelled)
             {
+                ForgetStart(log);   // a cancelled copy is not recorded in history (as before plan 10)
                 // Cancelled after the copy wrote its verifyPending reports: nothing was verified — the generation is
                 // committed with its copies "written" (unverified), as a cancel in stage 2 does (ruling I1: never green).
                 if (report.VerifyPending == true) Report = FinishVerification(null, plan, report, log);
@@ -467,6 +476,7 @@ public sealed class OffloadJob
         }
         catch (OperationCanceledException)
         {
+            ForgetStart(log);
             EndPendingUnverified(log);
             var next = copying && DayReportNext();
             Update(s => s with { Phase = JobPhase.Cancelled });
@@ -534,6 +544,38 @@ public sealed class OffloadJob
 
     HistoryStore Store(Action<string>? log) => Config.HistoryFolder is string folder ? new HistoryStore(folder, log) : HistoryStore.Default(log);
 
+    /// R6: the entry of a full copy as it starts — "unfinished", no files yet; RecordHistory replaces it at the end.
+    void RecordStart(OffloadPlan plan, Action<string>? log)
+    {
+        if (!Config.RecordHistory) return;
+        try
+        {
+            var store = Store(log);
+            var id = HistoryStore.NewId(DateTime.UtcNow);
+            var cardPaths = plan.CardPaths;
+            var entry = new HistoryEntry
+            {
+                Id = id, Source = plan.Source, CardName = plan.CardName, Date = plan.Date, Project = plan.Project, Unfinished = true,
+                Finished = DateTime.UtcNow, HashAlgorithms = [.. HashKinds.Names(plan.Hashes)], Card = cardVolume?.ToHistoryCard(),
+                Destinations = plan.DestRoots.Select((root, i) => new HistoryDestination { Root = root, CardPath = cardPaths[i] }).ToList(),
+            };
+            if (store.UpdateWithFiles(id, _ => (entry, []))) startEntry = id;
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
+        }
+    }
+
+    /// The start entry of a copy that was cancelled goes again.
+    void ForgetStart(Action<string>? log)
+    {
+        if (startEntry is not string id) return;
+        try { Store(log).Remove(id); }
+        catch (Exception e) { log?.Invoke($"history: {e.Message}"); }
+        startEntry = null;
+    }
+
     /// The finished stage 1 (with failed files too) goes into history.json; this never fails the job. An append adds
     /// its generation to the entry of the card folder it went into (spec 5.2) — or starts one when history does not
     /// know the backup — under one hold of the history lock (ruling I2).
@@ -547,12 +589,20 @@ public sealed class OffloadJob
             var (fingerprint, shape) = CardFingerprint.Compute(card);
             var cardPaths = plan.CardPaths;
             // The id only finds the entry; everything about it is read and changed under the lock below.
-            var id = (plan.Mode == PlanMode.Append ? EntryOf(store, cardPaths)?.Id : null) ?? HistoryStore.NewId(report.Finished);
+            var id = (plan.Mode == PlanMode.Append ? EntryOf(store, cardPaths)?.Id : startEntry) ?? HistoryStore.NewId(report.Finished);
             // Fix round 2, item C (ruling R2): verified as the card folders' reports say it now — the one definition the
             // day report uses too (a generation cancelled during its read-back is not in history, but is on the disks).
             var whole = BackupState.Of(cardPaths);
             store.UpdateWithFiles(id, existing =>
             {
+                if (existing is { Unfinished: true, Generations.Count: 0 })
+                {
+                    // R6: the start entry (RecordStart, no generation yet) becomes the copy's entry.
+                    existing.Unfinished = false;
+                    existing.Success = true;
+                    existing.Verified = true;
+                    existing.FailedFiles = null;
+                }
                 var entry = existing ?? new HistoryEntry
                 {
                     Id = id,
@@ -573,13 +623,18 @@ public sealed class OffloadJob
                 entry.Generations.Add(new HistoryGeneration
                 {
                     Seq = plan.Generation,
-                    Kind = plan.Mode == PlanMode.Append ? HistoryGeneration.Append : HistoryGeneration.Full,
+                    Kind = plan.Generation == 1 ? HistoryGeneration.Full : HistoryGeneration.Append,   // a resumed full copy is "full"
                     Finished = report.Finished,
                     Files = plan.Scan.Files.Count,
                     Bytes = plan.Scan.TotalBytes,
                     Verified = report.Verified,
                 });
                 entry.Reels = ReelSuggestion.FromClips(ClipDetector.Detect(card.Files)).Reels.ToList();
+                // R6: a resumed generation — the entry as the folders say it now (its first run may have counted failures).
+                if (plan.Resuming) Apply(entry, whole);
+                // Ruling I5: "nedokončeno" until the verification results are written (RecordVerified) — a backup whose
+                // app ended in stage 2 offers "Dokončit přerušenou zálohu" on its card, also with nothing new on it.
+                entry.Unfinished = report.VerifyPending == true;
                 return WithCard(store, entry, existing, card, fingerprint, shape);
             });
         }
@@ -837,8 +892,8 @@ public sealed class OffloadJob
                 log?.Invoke($"backup state: {e.Message}");
                 Update(st => st.WithWarning(Msg.BackupStateUnreadable(e.Message)));
             }
-            if (whole is { } w) RecordVerified(plan, final, w, log);
-            bool safe = committed && final.SafeToFormat && whole is { Failed: 0, Unverified: 0 };
+            if (whole is { } w) RecordVerified(plan, final, w, committed, log);
+            bool safe = committed && final.SafeToFormat && whole is { Failed: 0, Unverified: 0 } && plan.NotInBackup == 0;
             int warnings = final.ContentWarnings.Count;
             if (warnings > 0) Update(st => st.WithWarning(Msg.ContentWarnings(warnings)));
             if (notes.Count > 0) Update(st => st.WithWarning(notes[0]));
@@ -869,7 +924,8 @@ public sealed class OffloadJob
         }).ToArray())];
 
     /// History learns the verification (fix round 2, item C: as the card folders' reports say it now — `whole`).
-    void RecordVerified(OffloadPlan plan, OffloadReport report, BackupState whole, Action<string>? log)
+    /// `committed`: the results were written into every folder — only then the entry is no longer "nedokončeno" (I5).
+    void RecordVerified(OffloadPlan plan, OffloadReport report, BackupState whole, bool committed, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
         try
@@ -881,6 +937,7 @@ public sealed class OffloadJob
                 if (existing == null) return null;
                 Apply(existing, whole);
                 existing.Finished = report.Finished;
+                existing.Unfinished = !committed;
                 foreach (var g in existing.Generations.Where(g => g.Seq == plan.Generation)) g.Verified = report.Verified;
                 return existing;
             });

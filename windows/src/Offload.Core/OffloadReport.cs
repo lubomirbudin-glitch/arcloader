@@ -144,7 +144,7 @@ public sealed partial class OffloadReport
             SourceError = sourceErrors[i],
             Destinations = destResults.Select(r => r[i].State.Wire()).ToList(),
             Errors = destResults.Select(r => r[i].Error).ToList(),
-            Rewritten = plan.Write?[i].ToList(),
+            Rewritten = plan.Mode == PlanMode.Repair ? plan.Write?[i].ToList() : null,   // a resume's masks are no repair
         }).ToList();
         var cardPaths = plan.CardPaths;
         var dests = plan.DestRoots.Select((root, d) => new ReportDestination

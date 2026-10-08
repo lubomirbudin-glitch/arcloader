@@ -79,7 +79,9 @@ internal sealed class DestWriter : IDisposable
         return slash < 0 ? name : rel[..slash] + "/" + name;
     }
 
-    public void Begin(SourceFile file) => worker.Post(() =>
+    /// `resume` (R6): the first blocks of the file already in its `.offload-part` from an earlier run (checked against the
+    /// manifest's checkpoint by the planner) — the part is opened as it is and written on from there.
+    public void Begin(SourceFile file, PartCheckpoint? resume = null) => worker.Post(() =>
     {
         currentError = null;
         current = file;
@@ -88,7 +90,31 @@ internal sealed class DestWriter : IDisposable
         partPath = Layout.Join(CardPath, PartName(file.RelPath));
         try
         {
-            handle = OpenPart(file.Size);
+            if (resume != null)
+            {
+                // Ruling M1: a part is resumed only past the file cache. The engine asked before this writer may have
+                // switched to buffered writes (finishing the previous file) — then the file fails at once: its part is
+                // never truncated nor written through the cache (the next resume finds it as it was).
+                if (!Unbuffered)
+                {
+                    partPath = "";
+                    currentError = "resume: the destination writes through the file cache now";
+                    return;
+                }
+                var h = NativeIO.OpenResume(partPath);
+                if (!NativeIO.WritesPastTheCache(h) || options.ChunkSize % NativeIO.SectorSize(h) != 0)
+                {
+                    h.Dispose();
+                    partPath = "";
+                    currentError = "resume: the part cannot be written past the file cache";
+                    return;
+                }
+                handle = h;
+                align = NativeIO.SectorSize(h);
+                blockHashes.AddRange(resume.Blocks);
+                checkpointed = resume.Blocks.Length;
+            }
+            else handle = OpenPart(file.Size);
             File.SetAttributes(partPath, FileAttributes.Hidden);
         }
         catch (Exception e)

@@ -89,8 +89,9 @@ public class CommitRetryTests
         AssertCommitted(p, [1, 2], 3);
     }
 
-    // An append ran between the failed commit and its retry (generation 2 on top of the committed-but-pending 1): the
-    // retry finishes generation 1 and the chain still has both, the hash list every file once.
+    // Appends ran between the failed commit and its retry: since plan 10 task 13 (R6) the first one finishes generation 1
+    // (in the chain already: its files only — the clip shot since waits, the card is not safe until it is copied), the
+    // next adds the clip as generation 2; the retry changes nothing; the chain has both, the hash list every file once.
     [Fact]
     public void AppendBetweenTheFailureAndTheRetry_ChainKeepsEveryGeneration()
     {
@@ -101,8 +102,14 @@ public class CommitRetryTests
         var p = report.Destinations[0].CardPath;
         CommitFailingAtTheReports(report, p, 1);
         TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C002.mov"), Block, 3);
+        var resume = new OffloadEngine(Options(defer: false));
+        var finishing = resume.PrepareAppend(card, [p]);
+        Assert.Equal((true, 1, 1, 2), (finishing.Resuming, finishing.Generation, finishing.NotInBackup, finishing.Scan.Files.Count));
+        Assert.True(resume.Run(finishing).SafeToFormat);
         var append = new OffloadEngine(Options(defer: false));
-        Assert.True(append.Run(append.PrepareAppend(card, [p])).SafeToFormat);
+        var next = append.PrepareAppend(card, [p]);
+        Assert.Equal((false, 2), (next.Resuming, next.Generation));
+        Assert.True(append.Run(next).SafeToFormat);
 
         report.Commit(p);
 

@@ -62,7 +62,9 @@ public sealed partial class CardRecord
     [GeneratedRegex(@"_report_(\d{4})\.(json|txt|html|pdf)$", RegexOptions.IgnoreCase)]
     private static partial Regex NumberedReportFile();
 
-    public static CardRecord Load(string cardPath)
+    /// `maxGeneration` (R6): generations above it are left out — the unfinished one a resume completes (its reports, if
+    /// any, and its numbered files are not the backup's record yet).
+    public static CardRecord Load(string cardPath, int? maxGeneration = null)
     {
         var dir = Path.Combine(cardPath, Layout.ReportDirName);
         var main = Path.Combine(dir, MainReport);
@@ -93,9 +95,11 @@ public sealed partial class CardRecord
         foreach (var file in reportFiles)
         {
             var name = Path.GetFileName(file);
-            if (NumberedReportFile().Match(name) is { Success: true } n)
-                highest = Math.Max(highest, int.Parse(n.Groups[1].Value, CultureInfo.InvariantCulture));
+            if (NumberedReportFile().Match(name) is { Success: true } n && int.Parse(n.Groups[1].Value, CultureInfo.InvariantCulture) is var number
+                && number <= (maxGeneration ?? int.MaxValue))
+                highest = Math.Max(highest, number);
             if (AppendReport().Match(name) is not { Success: true } m) continue;
+            if (int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) > (maxGeneration ?? int.MaxValue)) continue;
             try
             {
                 var r = Read(file);

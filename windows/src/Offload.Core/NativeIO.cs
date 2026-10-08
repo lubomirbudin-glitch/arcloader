@@ -55,6 +55,15 @@ public static unsafe class NativeIO
         return true;
     }
 
+    /// An existing file for unbuffered, written-through writes — a copy resumed in its own `.offload-part` (R6), kept as
+    /// it is (never created, never truncated). Fails on a volume that refuses NO_BUFFERING: a resume never writes through
+    /// the cache (its checkpoints would not be proof).
+    public static SafeFileHandle OpenResume(string path)
+    {
+        if (!ObserveUnbuffered(path, write: true)) throw new IOError("open", path, ErrorInvalidParameter);
+        return Wrap("open", path, () => File.OpenHandle(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None, NoBuffering | FileOptions.WriteThrough));
+    }
+
     public static SafeFileHandle OpenExisting(string path) =>
         Wrap("open", path, () => File.OpenHandle(path, FileMode.Open, FileAccess.Write, FileShare.None));
 

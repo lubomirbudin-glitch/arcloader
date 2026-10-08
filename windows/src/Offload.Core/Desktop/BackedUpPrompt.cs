@@ -16,7 +16,8 @@ public static class BackedUpPrompt
     /// A selected card that history knows is asked about before a full copy — except one that changed since: its own
     /// line already says that only a full copy is possible — and
     /// not for a card emptied in the camera (nothing on it to copy).
-    public static bool ShouldAsk(CardInsight? insight) => insight is { IsEmptied: false, History: { Kind: not HistoryMatchKind.Changed } };
+    public static bool ShouldAsk(CardInsight? insight) =>
+        insight is { IsEmptied: false, History: { Kind: not HistoryMatchKind.Changed, Entry.Unfinished: false } };   // R6: an unfinished copy is no backup
 
     /// The selected cards the prompt asks about: backed up, and not ticked for the append (spec 2.2 — those add only the
     /// new files, there is no full copy to warn about).

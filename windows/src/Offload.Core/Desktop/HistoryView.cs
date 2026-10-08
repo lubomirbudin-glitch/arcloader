@@ -20,7 +20,8 @@ public static class HistoryView
     public static HistoryRow Row(HistoryEntry e)
     {
         int copies = e.Destinations.Count;
-        var (status, tone) = !e.Success
+        var (status, tone) = e.Unfinished ? ("! nedokončeno", HistoryTone.Warning)
+            : !e.Success
             ? ($"✕ s chybami ({e.FailedFiles ?? 0} {Texts.Plural(e.FailedFiles ?? 0, "soubor", "soubory", "souborů")})", HistoryTone.Error)
             : !e.Verified ? ("! neověřeno", HistoryTone.Warning)
             : ($"✓ {copies} {Texts.Plural(copies, "kopie ověřena", "kopie ověřeny", "kopií ověřeno")}", HistoryTone.Ok);
@@ -32,8 +33,11 @@ public static class HistoryView
     {
         int n = entries.Count;
         var parts = new List<string> { $"{n} {Texts.Plural(n, "karta", "karty", "karet")}", Format.BytesCs3(entries.Sum(e => e.Bytes)) };
-        int failed = entries.Count(e => !e.Success), unverified = entries.Count(e => e.Success && !e.Verified);
-        if (failed == 0 && unverified == 0) parts.Add("vše ověřeno");
+        // R6, ruling I5: an unfinished backup is neither verified nor failed — its own count.
+        int unfinished = entries.Count(e => e.Unfinished);
+        int failed = entries.Count(e => !e.Unfinished && !e.Success), unverified = entries.Count(e => !e.Unfinished && e.Success && !e.Verified);
+        if (failed == 0 && unverified == 0 && unfinished == 0) parts.Add("vše ověřeno");
+        if (unfinished > 0) parts.Add($"{unfinished} {Texts.Plural(unfinished, "nedokončená", "nedokončené", "nedokončených")}");
         if (failed > 0) parts.Add($"{failed} {Texts.Plural(failed, "karta", "karty", "karet")} s chybami");
         if (unverified > 0) parts.Add($"{unverified} {Texts.Plural(unverified, "neověřená", "neověřené", "neověřených")}");
         return string.Join(" · ", parts);

@@ -45,9 +45,12 @@ public class PendingReportReadersTests
         var day = DayReport.Load(Day(p));
         Assert.Equal(0, day.VerifiedCards);
         Assert.Contains("NEOVĚŘENO", DayReport.Html(day));
-        // No ASC MHL generation yet: an append or a repair refuses it (plan 6) — neither ever builds on it as verified.
-        Assert.Equal(PreflightCode.AppendNoMhl, Refusal(() => AppendPlanner.Plan(card, [p])));
-        Assert.Equal(PreflightCode.AppendNoMhl, Refusal(() => RepairPlanner.Plan(card, [p])));
+        // No ASC MHL generation yet: an append never builds on it as verified — since task 13 (R6) it completes the
+        // generation (every file verified again before the commit); a repair refuses it.
+        Assert.Equal(PreflightCode.AppendNoMhl, Refusal(() => AppendPlanner.CheckBackup([p])));
+        var resume = AppendPlanner.Plan(card, [p], CancellationToken.None, sourceFilesystem: "NTFS");
+        Assert.Equal((true, 1), (resume.Resuming, resume.Generation));
+        Assert.Equal(PreflightCode.RepairConflict, Refusal(() => RepairPlanner.Plan(card, [p])));
     }
 
     [Fact]
@@ -67,9 +70,12 @@ public class PendingReportReadersTests
         Assert.False(CardRecord.Load(p).Verified);
         Assert.Equal(new BackupState(0, 1), BackupState.Of([p]));   // the new file only; the earlier two stay verified
         Assert.Equal(0, DayReport.Load(Day(p)).VerifiedCards);
-        // Report 0002 without its MHL generation: refused (plan 6 ruling I1), never planned on as verified.
-        Assert.Equal(PreflightCode.AppendDiverged, Refusal(() => AppendPlanner.Plan(card, [p])));
-        Assert.Equal(PreflightCode.AppendDiverged, Refusal(() => RepairPlanner.Plan(card, [p])));
+        // Report 0002 without its MHL generation: never planned on as verified — refused as before by the checks of an
+        // ordinary append (plan 6 ruling I1); since task 13 (R6) an append completes generation 2, a repair refuses.
+        Assert.Equal(PreflightCode.AppendDiverged, Refusal(() => AppendPlanner.CheckBackup([p])));
+        var resume = AppendPlanner.Plan(card, [p], CancellationToken.None, sourceFilesystem: "NTFS");
+        Assert.Equal((true, 2), (resume.Resuming, resume.Generation));
+        Assert.Equal(PreflightCode.RepairConflict, Refusal(() => RepairPlanner.Plan(card, [p])));
     }
 
     // Belt: even a pending report whose states say "verified" (no stage writes that, but a reader must not depend on it)

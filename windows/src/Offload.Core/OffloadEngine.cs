@@ -115,13 +115,34 @@ public sealed partial class OffloadEngine
         var problems = Scanner.WindowsProblems(scan);
         if (problems.Count > 0) throw OffloadError.Preflight(PreflightCode.BadNames, Msg.BadNames(problems));
         var (space, warnings) = CheckFilesFit(a.DestRoots, scan, extra?.Invoke(scan));
+        // Ruling M2: a resume works in the block size of the run it completes — its manifest's, not the setting's (ChunkMB
+        // may have changed since): the recorded blocks, the checkpoints and the verification must agree. A record of
+        // another size has its hash read from the card again (HashOnly); a part of another size is copied from its start.
+        if (a.Resuming && ManifestBlockSize(a) is int recorded) Options.ChunkSize = recorded;
+        int size = Options.ChunkSize;
         return new OffloadPlan
         {
             Source = a.Source, Scan = scan, Date = a.Date, CardName = a.CardName, DestRoots = a.DestRoots,
             Mode = PlanMode.Append, Generation = a.Generation, FullScan = a.FullScan, UnverifiedEarlier = a.UnverifiedEarlier,
             Space = space, SpaceWarnings = warnings,
             Hashes = HashKinds.FromNames(a.HashAlgorithms),   // the earlier backup's, not the current setting (spec 3.5)
+            // R6: completing an unfinished generation — what is on the disks already is not written again.
+            Resuming = a.Resuming, Write = a.Write, NotInBackup = a.Later,
+            Known = a.Known?.Select(k => k?.BlockSize == size ? k : null).ToList(),
+            HashOnly = a.HashOnly?.Select((h, i) => h || a.Known?[i] is { } k && k.BlockSize != size).ToList(),
+            Resume = a.Resume?.Select(r => r?.BlockSize == size ? r : null).ToList(),
         };
+    }
+
+    /// Ruling M2: the block size the unfinished run recorded (its records and checkpoints — one run writes one size; the
+    /// most common one otherwise), when it is one this engine can read and write (whole sectors, at most 256 MiB).
+    static int? ManifestBlockSize(AppendPlan a)
+    {
+        var sizes = (a.Known ?? []).OfType<VerifyInProxy.ManifestRecord>().Select(k => k.BlockSize)
+            .Concat((a.Resume ?? []).OfType<VerifyInProxy.PartCheckpoint>().Select(r => r.BlockSize)).ToList();
+        if (sizes.Count == 0) return null;
+        int size = sizes.GroupBy(s => s).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key;
+        return size > 0 && size % 4096 == 0 && size <= 256 << 20 ? size : null;
     }
 
     /// A repair ("Zkopírovat znovu", UI návrh 4): the checks of an append (options, source, the earlier backup and its

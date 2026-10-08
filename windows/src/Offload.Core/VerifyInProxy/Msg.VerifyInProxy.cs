@@ -29,6 +29,13 @@ public static partial class Msg
     public static string VerifyNotCommitted(string detail) =>
         $"Výsledek ověření se nepodařilo zapsat ({detail}) — kartu zatím neformátujte; zálohu dokončí „Dokončit přerušenou zálohu“ (Doplnit, offload append).";
 
+    // R6 (resume).
+    public static string ResumeDiverged(string cardPath, int generation) =>
+        $"{cardPath}: nedokončená záloha (generace {generation}) nesouhlasí s ostatními cíli — zkontrolujte ji ručně.";
+    /// Ruling I5: the repair points to the tick the card gets on insert ("Dokončit přerušenou zálohu", even with no new
+    /// file) and to its CLI form.
+    public const string RepairUnfinished = "Záloha nebyla dokončena (aplikace skončila během kopie nebo ověření) — dokončete ji nejdřív volbou „Dokončit přerušenou zálohu“ u karty (offload append).";
+
     /// A card folder gone before the verification results were written into it (an unplugged disk) — never made anew.
     public const string CardFolderGone = "složka karty na cíli zmizela (odpojený disk?)";
 

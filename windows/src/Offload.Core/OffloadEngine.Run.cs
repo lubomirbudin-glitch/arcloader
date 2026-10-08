@@ -1,3 +1,4 @@
+using System.IO.Hashing;
 using Offload.Core.VerifyInProxy;
 
 namespace Offload.Core;
@@ -53,7 +54,10 @@ public sealed partial class OffloadEngine
                 // also when the repair is cancelled before this file: its good copy must never look unwritten.
                 var targets = ws.Where(w => plan.Writes(i, w.Index)).ToArray();
                 foreach (var w in ws.Except(targets)) w.Keep(i);
-                if (targets.Length == 0) continue;   // nothing to copy: the card is not read for it
+                // Nothing to copy: the card is not read for it — unless only its hash is wanted (R6: a file a crashed copy
+                // finished on the disks but never recorded).
+                bool hashOnly = plan.HashOnly?[i] == true;
+                if (targets.Length == 0 && !hashOnly) continue;
                 if (IsCancelled)
                 {
                     sourceErrors[i] = "cancelled";
@@ -86,7 +90,9 @@ public sealed partial class OffloadEngine
                     fileIndex = i;
                     currentFile = f.RelPath;
                 }
-                var failure = CopyFile(plan.Source, f, targets, hashers, pool);
+                // R6: resumed only when every destination it goes to can (written past the cache — a buffered one starts at 0).
+                var resume = plan.Resume?[i] is { } r && targets.Length > 0 && targets.All(w => w.Unbuffered) ? r : null;
+                var failure = CopyFile(plan.Source, f, targets, hashers, pool, resume);
                 if (failure != null)
                 {
                     sourceErrors[i] = failure;
@@ -111,6 +117,13 @@ public sealed partial class OffloadEngine
             recorder?.Wait();
             var hashes = SourceHasher.Combine(hashers, files.Count);
             var blocks = (ulong[]?[])hashers[0].Blocks.Clone();
+            // R6: a file the earlier run copied completely is not read again — its hashes are the manifest's.
+            for (int i = 0; plan.Known != null && i < files.Count; i++)
+            {
+                if (plan.Known[i] is not { } known) continue;
+                hashes[i] = known.Hashes() ?? hashes[i];
+                blocks[i] = known.BlockValues() ?? blocks[i];
+            }
             // A hash that threw leaves the file without it: the file failed, also when verification is off.
             for (int i = 0; i < files.Count; i++)
             {
@@ -167,7 +180,15 @@ public sealed partial class OffloadEngine
             foreach (var path in cardPaths)
             {
                 // Deferred (plan 10): the reports now, the ASC MHL and the hash lists once verified (Commit, stage 2).
-                try { report.Write(path, includeHashRecords: !defer, createNew: defer ? plan.Generation > 1 : null); }
+                // A resume (R6) completes a generation whose reports an earlier run may have written: they are replaced.
+                // A resume read back now (not deferred) may find generation G committed in some folders already (ruling I1:
+                // the results of the first run were written into some folders only): its record is written idempotently
+                // (Commit) — never a second generation G.
+                try
+                {
+                    if (plan.Resuming && !defer) report.Commit(path);
+                    else report.Write(path, includeHashRecords: !defer, createNew: plan.Resuming ? false : defer ? plan.Generation > 1 : null);
+                }
                 catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException) { reportErrors.Add(e.Message); }
             }
             SetPhase(CopyPhase.Done);
@@ -315,16 +336,30 @@ public sealed partial class OffloadEngine
     }
 
     /// Reads one file block by block and hands every block to the hashers and all writers. Returns the failure, or null.
-    string? CopyFile(string sourceRoot, SourceFile f, DestWriter[] ws, IReadOnlyList<SourceHasher> hashers, BufferPool pool)
+    /// `resume` (R6): its first blocks are already in every destination's `.offload-part` — the hashers get them from
+    /// the first destination's part (each block checked against the checkpoint again), the card is read from there on.
+    string? CopyFile(string sourceRoot, SourceFile f, DestWriter[] ws, IReadOnlyList<SourceHasher> hashers, BufferPool pool, PartCheckpoint? resume = null)
     {
         var src = Layout.Join(sourceRoot, f.RelPath);
-        foreach (var w in ws) w.Begin(f);
         foreach (var h in hashers) h.Begin();
+        long offset = 0;
+        if (resume != null)
+        {
+            // Read (and closed) before the writers open the part for writing: a part open for writing is not shared.
+            try { offset = FeedFromPart(Layout.Join(ws[0].CardPath, DestWriter.PartName(f.RelPath)), resume, hashers, pool); }
+            catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException)
+            {
+                // The part is not what its checkpoint says: the writers start the file afresh and the caller's Abort removes
+                // it — the next resume starts at 0.
+                foreach (var w in ws) w.Begin(f);
+                return "resume: " + e.Message;
+            }
+        }
+        foreach (var w in ws) w.Begin(f, resume);
         FileReader reader;
         try { reader = new FileReader(src); }
         catch (Exception e) { return e.Message; }
 
-        long offset = 0;
         using (reader)
         {
             // A pause waits here, between blocks and before taking a buffer: the writers drain what they hold and idle.
@@ -356,6 +391,35 @@ public sealed partial class OffloadEngine
         if (IsCancelled) return "cancelled";
         if (offset != f.Size) return $"source size changed during copy ({offset} != {f.Size})";
         return null;
+    }
+
+    /// R6: the checkpointed blocks of a part, read straight from the disk, into the hashers only; returns where the card
+    /// read goes on. A block that is not what the checkpoint says (changed since the planner looked) fails the file.
+    long FeedFromPart(string part, PartCheckpoint resume, IReadOnlyList<SourceHasher> hashers, BufferPool pool)
+    {
+        using var disk = new DiskBlocks(part);
+        long offset = 0;
+        for (int b = 0; b < resume.Blocks.Length; b++)
+        {
+            var buf = pool.Take();
+            int n;
+            try { n = disk.Read(offset, buf, Options.ChunkSize); }
+            catch
+            {
+                pool.Give(buf);
+                throw;
+            }
+            if (n != Options.ChunkSize || XxHash3.HashToUInt64(buf.Span[..n]) != resume.Blocks[b])
+            {
+                pool.Give(buf);
+                throw new IOException($"block {b} of {part} is not the checkpoint's");
+            }
+            var chunk = new Chunk(buf, n, offset, hashers.Count, pool);
+            foreach (var h in hashers) h.Update(chunk);
+            offset += n;
+            Interlocked.Add(ref readBytes, n);
+        }
+        return offset;
     }
 
     /// Card readers have bad moments; a failed read gets a few more tries before the file is given up.

@@ -61,6 +61,8 @@ public static class RepairPlanner
         AppendPlanner.Backup backup;
         try
         {
+            // R6: a backup an earlier run never finished is completed by an append first, never repaired.
+            if (ResumePlanner.Find(cardPaths) != null) throw OffloadError.Preflight(PreflightCode.RepairConflict, Msg.RepairUnfinished);
             backup = AppendPlanner.CheckBackup(cardPaths);
         }
         catch (OffloadError e) when (e.Code is PreflightCode code)
