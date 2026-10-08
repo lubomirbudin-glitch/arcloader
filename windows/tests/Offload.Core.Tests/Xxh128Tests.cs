@@ -19,6 +19,35 @@ public class Xxh128Tests
         return Convert.ToHexStringLower(h.GetCurrentHash());
     }
 
+    // Final review, item 7: known vectors (xxhsum's canonical hex), the non-empty ones checked with an independent
+    // implementation (Python xxhash 4.0.1 over the xxHash C library) — the empty one is xxHash's published vector.
+    [Theory]
+    [InlineData("", "99aa06d3014798d86001c324468d497f")]
+    [InlineData("a", "a96faf705af16834e6c632b61e964e1f")]
+    [InlineData("Offload", "9f175842e01699cea2ad0326b53cad02")]
+    public void Xxh128_KnownVectors(string text, string hex) =>
+        Assert.Equal(hex, Hex128(System.Text.Encoding.ASCII.GetBytes(text)));
+
+    // The copy (read in chunks, hashed as it streams) records the same values as the independent implementation:
+    // bytes i % 251, 3 chunks + 5 — XXH3-128 c405ef…, xxh64 a557f16d0fec2418 (Python xxhash).
+    [Fact]
+    public void Copy_Xxh128AndXxh64_MatchTheIndependentImplementation()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        var data = Enumerable.Range(0, 3 * Chunk + 5).Select(i => (byte)(i % 251)).ToArray();
+        Directory.CreateDirectory(card);
+        File.WriteAllBytes(Path.Combine(card, "a.mov"), data);
+        var engine = new OffloadEngine(Options());
+        var plan = engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-08");
+
+        var f = engine.Run(plan).Files.Single();
+
+        Assert.Equal("c405ef4590a75948e133e651678e778f", f.Xxh128);
+        Assert.Equal("a557f16d0fec2418", f.Xxh64);
+        Assert.Equal("c405ef4590a75948e133e651678e778f", MhlReader.Read(plan.CardPaths[0])!.Files["a.mov"].Hashes.Single(h => h.Algorithm == "xxh128").Value);
+    }
+
     [Fact]
     public void Copy_RecordsXxh128_InReportAndMhl_NextToXxh64()
     {

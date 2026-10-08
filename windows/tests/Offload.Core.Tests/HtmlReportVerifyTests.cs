@@ -32,6 +32,21 @@ public class HtmlReportVerifyTests
             HtmlReport.ErrorText("HASH MISMATCH: block 3 dest 0000000000000001 != source 0000000000000002"));
     }
 
+    // Final review, item 3: the results were written into this folder but not into every one (verifyIncomplete) — never a
+    // green "OVĚŘENO" on its own.
+    [Fact]
+    public void Html_VerifyIncomplete_NedokoncenoWarn()
+    {
+        var r = Reports.Sample(Card);
+        Assert.Contains("<span class=\"badge ok\">OVĚŘENO</span>", HtmlReport.Render(r));
+        r.VerifyIncomplete = true;
+
+        var html = HtmlReport.Render(r);
+
+        Assert.Contains("<span class=\"badge warn\">NEDOKONČENO</span>", html);
+        Assert.DoesNotContain(">OVĚŘENO<", html);
+    }
+
     // Spec 9: the method and the serial per destination, the time to "Lze formátovat", in the HTML and the text report.
     [Fact]
     public void Classic_Html_MethodSerialAndTimeToFormat()

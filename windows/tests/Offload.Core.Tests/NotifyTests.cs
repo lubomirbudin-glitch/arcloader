@@ -45,6 +45,29 @@ public class JobOutcomeTests
         Assert.Equal("Kopie je ověřená, ale vyžaduje pozornost — podrobnosti v aplikaci.", skipped.PhoneMessage);
     }
 
+    // Final review, item 5: a report verified as read, but the card not SafeToFormat (e.g. the results not written into
+    // every folder) — never "ověřená" in the notification, only "hotová".
+    [Fact]
+    public void Attention_NotSafeToFormat_NeverSaysVerified()
+    {
+        var space = Msg.ProxiesSkippedForSpace("Zaloha (D:)", 30_000_000_000, 12_000_000_000);
+        var outcomes = new[]
+        {
+            JobOutcomes.Final("A001", Status(JobPhase.Done, proxiesFailed: 2, safe: false), Report())!,
+            JobOutcomes.Final("A001", Status(JobPhase.Failed, error: "x", safe: false), Report())!,
+            JobOutcomes.Final("A001", Status(JobPhase.Done, warning: space, safe: false), Report())!,
+        };
+        Assert.Equal("Kopie je hotová, ale 2 proxy selhaly.", outcomes[0].Message);
+        Assert.Equal("Kopie je hotová, ale zpracování po kopii selhalo.", outcomes[1].Message);
+        Assert.Equal("Kopie je hotová, ale: " + space, outcomes[2].Message);
+        Assert.Equal("Kopie je hotová, ale vyžaduje pozornost — podrobnosti v aplikaci.", outcomes[2].PhoneMessage);
+        Assert.All(outcomes, o =>
+        {
+            Assert.Equal(OutcomeKind.Attention, o.Kind);
+            Assert.DoesNotContain("ověřen", o.Message + o.PhoneMessage, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
     [Fact]
     public void Error_FailedFiles_OrBeforeTheCopy()
     {

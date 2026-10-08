@@ -235,7 +235,8 @@ a <b>Lze formátovat</b>, až když je všechno ověřené na všech discích.</
   <li><b>Ověření</b>: každý soubor se z každého cílového disku přečte a jeho bloky se porovnají se součty spočítanými při
     čtení karty. Data se čtou z disku, ne z paměti počítače (zápis i čtení obcházejí cache Windows). S proxy se primární
     disk ověří během proxy — ffmpeg čte klipy přes Offload a každý přečtený blok se ověří; ostatní disky se čtou souběžně
-    na pozadí. Bez proxy, nebo když to cíl neumožní (síťový disk), se každý disk přečte znovu hned po kopii.</li>
+    na pozadí. Klip RAW (BRAW, R3D, ARRIRAW) Offload před dekodérem výrobce přečte a ověří sám a dekodér si ho pak přečte
+    z disku znovu (ne z paměti) — RAW se tak z primárního disku čte dvakrát. Bez proxy, nebo když to cíl neumožní (síťový disk), se každý disk přečte znovu hned po kopii.</li>
   <li><b>Report</b> do složky <code>_REPORT</code> na každém cíli: HTML, PDF, JSON, TXT a seznam kontrolních součtů,
     k tomu ASC MHL ve složce <code>ascmhl</code>.</li>
   <li><b>Analýza klipů</b> (volitelně): technické údaje každého klipu a tři snímky (první, prostřední, poslední) do reportu.</li>
@@ -1134,6 +1135,11 @@ ke kopírování a chybí jen ověření. Dokončení pokračuje tam, kde záloh
 nečtou z karty, rozepsaný velký soubor pokračuje od posledního kontrolního bodu (po 1 GiB) a doběhne ověření; výsledek je
 zapsaný ve <b>stejné</b> generaci. Dokud záloha není dokončená, <b class="ui">Zkopírovat znovu</b> (oprava) a další doplnění se
 odmítnou, stejně jako souběžná úloha nad stejnou zálohou. Hotové proxy se znovu nerenderují.</p>
+<p><b>Odpojený disk během ověření.</b> Když se cílový disk odpojí během ověření s proxy, jeho soubory skončí
+<span class="q">„✕ čtení“</span>, karta ukáže <b>Neformátovat</b> a výsledek ověření se do jeho složky nezapíše — záloha zůstane
+nedokončená. Disk připojte, vložte kartu a <b>nejdřív</b> zvolte <b class="ui">Dokončit přerušenou zálohu</b>: z karty se nic
+nečte, disk se přečte a ověří. Teprve když pak některé soubory nesouhlasí, použijte <b class="ui">Zkopírovat znovu</b>
+(předtím se oprava odmítne s odkazem na dokončení).</p>
 
 <h3>Ověření zálohy</h3>
 <p><b class="ui">Ověřit zálohu</b> v horní liště (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>; také v Nastavení → Ověření) vybere složku karty na cíli,

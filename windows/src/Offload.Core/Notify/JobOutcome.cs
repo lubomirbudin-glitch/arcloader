@@ -47,15 +47,18 @@ public static class JobOutcomes
             return Error(card, failed, failed);
         }
         if (!report.Verified) return Attention(card, "Kopie je hotová, ale NEOVĚŘENÁ.", "Kopie je hotová, ale NEOVĚŘENÁ.");
+        // Final review, item 5: "ověřená" only when the card may be formatted (every copy verified and the results in
+        // every folder) — else the copy is only "hotová".
+        var copy = status.SafeToFormat ? "Kopie je ověřená" : "Kopie je hotová";
         if (status.ProxiesFailed > 0)
         {
-            var proxies = $"Kopie je ověřená, ale {status.ProxiesFailed} {Texts.Plural(status.ProxiesFailed, "proxy selhala", "proxy selhaly", "proxy selhalo")}.";
+            var proxies = $"{copy}, ale {status.ProxiesFailed} {Texts.Plural(status.ProxiesFailed, "proxy selhala", "proxy selhaly", "proxy selhalo")}.";
             return Attention(card, proxies, proxies);
         }
         if (status.Phase == JobPhase.Failed)
-            return Attention(card, "Kopie je ověřená, ale zpracování po kopii selhalo.", "Kopie je ověřená, ale zpracování po kopii selhalo.");
+            return Attention(card, $"{copy}, ale zpracování po kopii selhalo.", $"{copy}, ale zpracování po kopii selhalo.");
         if (status.Warning != null)
-            return Attention(card, $"Kopie je ověřená, ale: {FirstLine(status.Warning)}", "Kopie je ověřená, ale vyžaduje pozornost — podrobnosti v aplikaci.");
+            return Attention(card, $"{copy}, ale: {FirstLine(status.Warning)}", $"{copy}, ale vyžaduje pozornost — podrobnosti v aplikaci.");
         // R5, ruling I2 (plan 10): "hotovo" only when every copy is verified (the whole backup for an append or a repair).
         if (!status.SafeToFormat)
             return Attention(card, "Kopie je hotová, ale kartu zatím neformátujte — není celá ověřená.", "Kopie je hotová, ale není celá ověřená.");

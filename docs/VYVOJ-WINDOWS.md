@@ -28,13 +28,14 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 Verze **0.6.0**. Návrh: [`windows/docs/superpowers/specs/2026-10-08-offload-verify-in-proxy-design.md`](../windows/docs/superpowers/specs/2026-10-08-offload-verify-in-proxy-design.md)
 (specifikace uživatele + rozhodnutí R1–R12). S proxy a ověřením se primární disk (nejrychlejší při kopii, nebo
 zvolený) už nečte zvlášť: ffmpeg čte klip přes HTTP server Offloadu na 127.0.0.1 (`-short_seek_size 65536`, jinak ffmpeg
-8.1 četl MOV s `moov` na konci i MXF dvakrát), RAW SDK z paměti (soubor se přitom z disku čte ještě jednou, nepřetržitým čtením mimo cache — ruling B1: nikdy „ověřeno“ z cache); každý přečtený blok
+8.1 četl MOV s `moov` na konci i MXF dvakrát), klip RAW Offload před SDK přečte a ověří nepřetržitým čtením mimo cache a SDK si ho pak přečte z disku znovu, ne z paměti (ruling B1: nikdy „ověřeno“ z cache); každý přečtený blok
 16 MiB se porovná s XXH3-64 z karty, chybějící bloky dočte dorovnání, ostatní disky se čtou souběžně na pozadí.
 Naměřeno (ffmpeg 8.1, NVMe, 735 MB ProRes s `moov` na konci): tap přečetl 101,8 % souboru, dekódování přes tap
 1,63 s proti 1,55 s z disku. Karta má dva stavy: **Lze vyjmout** (vše zapsané) a **Lze formátovat** (vše ověřené). Zápis
 `NO_BUFFERING | WRITE_THROUGH`, `_REPORT/offload-manifest.jsonl`, XXH128 v ASC MHL vedle xxh64. Klasické zpětné čtení
 dál: bez proxy, `--classic-verify`, vypnutá volba, síťový cíl, cíl, který neprošel kontrolou čtení mimo cache.
 
+- Závěrečná oprava (finální review): vady obsahu i při klasickém ověření (`--classic-verify`, vypnutá volba, ověření vypnuté s proxy) — žlutý štítek, potvrzení před formátováním, žádné „hotovo“ ani zvuk, CLI varování vypíše; „Dokončit“ dokončí i generaci, jejíž výsledek se zapsal jen do části složek (`verifyIncomplete`, např. selhal seznam součtů), místo „Nic nového“; HTML report `verifyIncomplete` = žlutě NEDOKONČENO, ne zeleně OVĚŘENO; tap (režim A) při ukončení nečeká na čtení visící na disku a režim B má hlídač zaseknutí (limit jako proxy), takže zaseknutý primární disk nepodrží úlohu; oznámení bez „Lze formátovat“ říká „Kopie je hotová“, nikdy „ověřená“; README test 52 (RAW: SDK čte z disku znovu) a 57 (nejdřív Dokončit, pak případně Zkopírovat znovu), návod; vektory XXH3-128 ověřené nezávislou implementací; odolnější testy při zátěži.
 - Úkol 18: verze 0.6.0, dokumentace (FORMATY: manifest, `verifyPending`, `verifyIncomplete`, klíče reportu, xxh128 a metoda v MHL; ROZDILY; VYVOJ-MAC), README (ruční testy 50–58), návod (dva stavy karty, vady obsahu, nastavení a CLI, dokončení přerušené zálohy, poznámka o cache) a `--primary N` nad počtem cílů se odmítne (česká chyba, exit 1).
 - Úkol 17: HTML/PDF a TXT report — metoda ověření a sériové číslo u každého cíle, čas do „lze formátovat“, tabulka vad obsahu, poznámky, česky „blok N nesouhlasí“.
 - Úkol 16: Nastavení → Ověření „Ověřit primární disk během proxy“ a „Primární disk“ (nejrychlejší / první), CLI `--classic-verify` a `--primary N` (R11). Navíc: „Uložit jako projekt…“ volbu přenese do projektu (`Projects.CopyProfile`).

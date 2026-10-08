@@ -111,9 +111,9 @@ public class TapRenderTests
 /// progress — a destination that is slow but alive never gets ffmpeg killed; one that hangs still does.
 public class TapWatchdogTests
 {
-    /// Serves `data`; the first read in the middle of the file takes 6 s — with activity every 200 ms (`alive`: a slow
-    /// disk, each piece of the block arriving) or none (a hung disk).
-    sealed class SlowMiddle(byte[] data, bool alive) : ITapSource
+    /// Serves `data`; the first read in the middle of the file takes `steps` × 200 ms — with activity every 200 ms
+    /// (`alive`: a slow disk, each piece of the block arriving) or none (a hung disk).
+    sealed class SlowMiddle(byte[] data, bool alive, int steps = 30) : ITapSource
     {
         long activity;
         int slowed;
@@ -124,7 +124,7 @@ public class TapWatchdogTests
         {
             if (offset >= data.Length * 2L / 5 && offset < data.Length * 3L / 5 && Interlocked.Exchange(ref slowed, 1) == 0)
             {
-                for (int i = 0; i < 30; i++)
+                for (int i = 0; i < steps; i++)
                 {
                     Thread.Sleep(200);
                     if (alive) Interlocked.Add(ref activity, 1 << 20);
@@ -147,27 +147,31 @@ public class TapWatchdogTests
         return (card, new Clip { Name = "A001C009", Path = "A001C009.mov", Format = ClipFormat.Video, Segments = ["A001C009.mov"], Bytes = bytes.Length }, bytes);
     }
 
-    static ProxyRenderer Renderer() => new(new ProxySettings { Enabled = true, Height = 240, BurnFilename = false, BurnTimecode = false }, new ExternalTools().Resolved())
+    static ProxyRenderer Renderer(double stallSeconds = 1.5) => new(new ProxySettings { Enabled = true, Height = 240, BurnFilename = false, BurnTimecode = false }, new ExternalTools().Resolved())
     {
         ForcedEncoder = "libx264",
-        StallTimeout = TimeSpan.FromSeconds(1.5),
+        StallTimeout = TimeSpan.FromSeconds(stallSeconds),
     };
 
+    // Final review, item 8 (flaky under the full suite's load): the limit has room for ffmpeg's own gaps on a busy
+    // machine (5 s), the slow read still lasts well past it (15 s, a sign of life every 200 ms).
     [FfmpegFact]
     public void SlowButAliveDestination_NotKilled()
     {
         using var dir = new TempDir();
         var (card, clip, bytes) = Mpeg2Mov(dir);
-        using var renderer = Renderer();
+        using var renderer = Renderer(stallSeconds: 5);
         var info = renderer.Probe(clip, card);
         Assert.False(ProxyRenderer.UseHardwareDecoding(info.Codec));
         using var server = new RangeServer();
-        var url = server.Register(new SlowMiddle(bytes, alive: true), "A001C009.mov");
+        var slow = new SlowMiddle(bytes, alive: true, steps: 75);
+        var url = server.Register(slow, "A001C009.mov");
         var proxy = Path.Combine(card, "_PROXY", "A001C009.mov");
 
         renderer.Render(clip, card, info, null, proxy, _ => { }, () => false, url);
 
         Assert.True(File.Exists(proxy));
+        Assert.Equal(75L << 20, slow.Activity);   // the slow read really happened (and outlasted the limit)
     }
 
     [FfmpegFact]

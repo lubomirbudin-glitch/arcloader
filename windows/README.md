@@ -407,8 +407,8 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
       bez → čas do „Lze formátovat“ (`safeToFormatSeconds`) s jedním cílem nejvýš o 5 % delší než render proxy samotný;
       se dvěma cíli proxy nezpomalí o víc než 5 %
 - [ ] 52. **RAW (režim B):** karta BRAW (a R3D/ARRIRAW, když je nástroj) → Monitor prostředků: soubor klipu se z disku
-      přečte asi 2× (ruling B1: Offload ho ověří čtením mimo cache a SDK ho dostane z paměti — zrychlení 1,05× se u RAW
-      nesplňuje), report „během proxy“; klip větší než polovina volné RAM → ověří ho dorovnání zpětným čtením (report pořád správně)
+      přečte asi 2× (ruling B1: Offload ho ověří čtením mimo cache a SDK si ho pak přečte z disku znovu, ne z paměti —
+      zrychlení 1,05× se u RAW nesplňuje), report „během proxy“; klip větší než polovina volné RAM → ověří ho dorovnání zpětným čtením (report pořád správně)
 - [ ] 53. **Test cache s přímým zápisem na zařízení (vyžaduje správce, spec 11):** VHDX 4 GB (Správa disků → Vytvořit
       VHD), NTFS, jako druhý cíl; po kopii (čip „Lze vyjmout“) zapsat jeden bajt doprostřed klipu **přímo na zařízení**
       (`\\.\PhysicalDriveN`, HxD → Otevřít disk, bez souborového systému, takže cache Windows o změně neví) → cíl na VHDX
@@ -422,7 +422,9 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
 - [ ] 56. **Pád během ověření:** s proxy zavřít Offload ve Správci úloh během „Ověřuje se…“ → report `verifyPending`,
       denní report „OVĚŘUJE SE“; Doplnit/Dokončit → karta se nečte, disky se ověří a generace se zapíše
 - [ ] 57. **Odpojený disk během ověření:** během proxy odpojit druhý disk → jeho soubory „✕ čtení“, „Neformátovat“,
-      primární cíl ověřený; po připojení Zkopírovat znovu → přečte a ověří, „Lze formátovat“
+      primární cíl ověřený, záloha „nedokončená“ (výsledek se do odpojeného disku nezapsal; Zkopírovat znovu se zatím odmítne
+      s odkazem na Dokončit); po připojení vložit kartu → nejdřív „Dokončit přerušenou zálohu“ → karta se nečte, druhý disk
+      se přečte a ověří, „Lze formátovat“; jen když tam pak některé soubory nesouhlasí, Zkopírovat znovu
 - [ ] 58. **Nastavení a CLI:** Nastavení → Ověření → vypnout „Ověřit primární disk během proxy“ → ověření zase hned po
       kopii; `offload copy … --primary 2` → report „během proxy“ u cíle 2; `--primary 3` se dvěma cíli → česká chyba „cílů je jen 2“ a kód 1, nic se nekopíruje; síťový cíl (NAS) → „síťový cíl — ověřeno
       zpětným čtením“

@@ -157,8 +157,10 @@ public static partial class HtmlReport
     public static string Render(OffloadReport r, bool forPrint = false)
     {
         bool ok = r.Success;
-        string status = !ok ? "CHYBA" : r.VerifyPending == true ? "ZKOPÍROVÁNO — OVĚŘUJE SE" : (r.Verified ? "OVĚŘENO" : "ZKOPÍROVÁNO — NEOVĚŘENO");
-        string statusClass = !ok ? "bad" : (r.Verified ? "ok" : "warn");
+        // Final review, item 3: verifyIncomplete — the results are not in every folder yet, never a green "OVĚŘENO".
+        bool incomplete = r.VerifyIncomplete == true;
+        string status = !ok ? "CHYBA" : r.VerifyPending == true ? "ZKOPÍROVÁNO — OVĚŘUJE SE" : incomplete ? "NEDOKONČENO" : (r.Verified ? "OVĚŘENO" : "ZKOPÍROVÁNO — NEOVĚŘENO");
+        string statusClass = !ok ? "bad" : (r.Verified && !incomplete ? "ok" : "warn");
         bool inProxy = r.Destinations.Any(d => d.VerifyMethod == ReportDestination.InProxy);
         var failed = r.FailedFiles;
         var videoClips = r.Clips.Where(c => !c.Clip.IsCameraProxy).ToList();

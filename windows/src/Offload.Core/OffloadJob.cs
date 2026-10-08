@@ -889,6 +889,10 @@ public sealed class OffloadJob
             failed = e;
             log?.Invoke($"stage 2 failed: {e.Message}");
         }
+        // Spec 7 (final review, item 1): the decoder's content warnings, however the copy was verified (in the proxies,
+        // the classic read-back, or not at all) — the card then asks for a confirmation before formatting, no chime.
+        int warnings = final.ContentWarnings.Count;
+        if (warnings > 0) Update(st => st.WithWarning(Msg.ContentWarnings(warnings)) with { ContentWarnings = warnings });
         try
         {
             if (report.VerifyPending == true) final = FinishVerification(verifying, plan, final, log);
@@ -926,7 +930,10 @@ public sealed class OffloadJob
         var s = new VerifySession(plan, report, Engine.Blocks, Engine.Options.ChunkSize, Engine.WriteRates, Config.PrimaryDestination, why,
             Engine.Pauses, Engine.Cancellation, (file, block) => Engine.CardStillThere() != false   // a folder source has no card to lose
                 ? VerifySession.ReadCardBlock(Layout.Join(plan.Source, plan.Scan.Files[file].RelPath), block, Engine.Options.ChunkSize)
-                : null);
+                : null)
+        {
+            StallTimeout = Engine.Options.ProxyStallTimeout ?? ProxyRenderer.DefaultStallTimeout,
+        };
         s.StartBackground();
         return s;
     }
@@ -1005,10 +1012,8 @@ public sealed class OffloadJob
             }
             if (whole is { } w) RecordVerified(plan, final, w, committed, log);
             bool safe = committed && final.SafeToFormat && whole is { Failed: 0, Unverified: 0 } && plan.NotInBackup == 0;
-            int warnings = final.ContentWarnings.Count;
-            if (warnings > 0) Update(st => st.WithWarning(Msg.ContentWarnings(warnings)));
             if (notes.Count > 0) Update(st => st.WithWarning(notes[0]));
-            Update(st => st with { SafeToFormat = safe, ContentWarnings = warnings, CopySucceeded = st.CopySucceeded != false && final.Success });
+            Update(st => st with { SafeToFormat = safe, CopySucceeded = st.CopySucceeded != false && final.Success });
             return final;
         }
         catch (Exception e)

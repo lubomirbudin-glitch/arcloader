@@ -42,7 +42,8 @@ public static class ResumePlanner
     /// append plans as before). Refuses (AppendDiverged) folders that disagree.
     /// A folder is open at generation g when g's report says verifyPending — g after its committed generation (the run
     /// ended before its commit), or g its committed one (the commit wrote the ASC MHL generation but not the reports, plan
-    /// 10 fix round 1) — or when there is no report of g after its committed one and its manifest has records of g (the
+    /// 10 fix round 1), or g its committed one whose report says verifyIncomplete (the commit failed in another folder,
+    /// final review item 2) — or when there is no report of g after its committed one and its manifest has records of g (the
     /// run ended during the copy). Every other folder must stand right before g with no report of it, or (ruling I1: the
     /// results were written into some folders only) have g committed by the same run.
     public static Unfinished? Find(IReadOnlyList<string> cardPaths)
@@ -50,13 +51,13 @@ public static class ResumePlanner
         var states = cardPaths.Select(p => (Path: p, Committed: Committed(p), Records: ManifestFile.Read(p))).ToList();
         static int? OpenAt((string Path, int Committed, IReadOnlyList<ManifestRecord> Records) s)
         {
-            if (s.Committed > 0 && Pending(s.Path, s.Committed)) return s.Committed;
+            if (s.Committed > 0 && Unsettled(s.Path, s.Committed)) return s.Committed;
             int next = s.Committed + 1;
             return Pending(s.Path, next) || (!ReportExists(s.Path, next) && s.Records.Any(r => r.Generation == next)) ? next : null;
         }
         var open = states.Select(OpenAt).ToList();
         if (open.FirstOrDefault(o => o != null) is not int g) return null;
-        var pendingReport = states.Where((s, d) => open[d] == g && Pending(s.Path, g)).Select(s => Read(s.Path, g)).FirstOrDefault(r => r != null);
+        var pendingReport = states.Where((s, d) => open[d] == g && Unsettled(s.Path, g)).Select(s => Read(s.Path, g)).FirstOrDefault(r => r != null);
         // Some chain has g already: the generation's files are fixed (its MHL lists them), as its reports say.
         IReadOnlySet<string>? fixedFiles = states.Any(s => s.Committed == g) && pendingReport != null
             ? pendingReport.Files.Select(f => f.Path).ToHashSet(StringComparer.Ordinal) : null;
@@ -98,17 +99,12 @@ public static class ResumePlanner
     static bool ReportExists(string cardPath, int generation) => File.Exists(ReportPath(cardPath, generation));
 
     /// The report of `generation` says its verification never ended (plan 10: verifyPending).
-    static bool Pending(string cardPath, int generation)
-    {
-        try
-        {
-            return ReportExists(cardPath, generation) && OffloadReport.FromJson(File.ReadAllText(ReportPath(cardPath, generation))).VerifyPending == true;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        {
-            return false;
-        }
-    }
+    static bool Pending(string cardPath, int generation) => Read(cardPath, generation)?.VerifyPending == true;
+
+    /// Pending, or its results were written here but not into every folder (verifyIncomplete, fix round 1 M-a): the
+    /// generation is still open at this folder's committed one — "Dokončit" finishes it (final review, item 2).
+    static bool Unsettled(string cardPath, int generation) =>
+        Read(cardPath, generation) is { } r && (r.VerifyPending == true || r.VerifyIncomplete == true);
 
     /// What a resume does with each card file of the unfinished generation (`files`, in copy order; `present[i][d]`: on
     /// the disk at its place): written where it is missing; not read at all when every folder has it with a record

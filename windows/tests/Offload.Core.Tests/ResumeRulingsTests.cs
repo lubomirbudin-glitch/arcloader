@@ -327,6 +327,57 @@ public class ResumeRulingsTests
         Assert.True(entry.Verified);
     }
 
+    // Final review, item 2: the commit failed in the second folder at its last step (the hash lists) — its MHL generation
+    // and its reports are written, the first folder says verifyIncomplete. "Dokončit" finds the generation open (not
+    // "Nic nového", which would only clear "nedokončeno") and ends verified in every folder.
+    [FfmpegFact]
+    public void CommitFailedAtTheHashListsInOneFolder_FinishedByTheResume()
+    {
+        using var dir = new TempDir();
+        var card = VerifyInProxyRulingsTests.Card(dir);
+        var job = new OffloadJob(VerifyInProxyRulingsTests.Config(card, [dir.Sub("d1"), dir.Sub("d2")], dir), VerifyInProxyRulingsTests.Options());
+        Assert.True(job.RunCopy());
+        var paths = job.Plan!.CardPaths;
+        var blocker = Path.Combine(paths[1], "_REPORT", "A001.xxh64");
+        Directory.CreateDirectory(blocker);   // the hash list cannot be written there
+        job.RunPost();
+        Directory.Delete(blocker);
+
+        Assert.False(job.Status().SafeToFormat);
+        var history = Path.Combine(dir.Path, "history");
+        Assert.True(Assert.Single(new HistoryStore(history).Load()).Unfinished);
+        Assert.All(paths, p => Assert.Equal([1], Chain(p)));
+        Assert.All(paths, p => Assert.False(Pending(p)));
+        Assert.True(OffloadReport.FromJson(File.ReadAllText(Path.Combine(paths[0], "_REPORT", "offload_report.json"))).VerifyIncomplete);
+        Assert.False(File.Exists(blocker));
+        Assert.Equal(1, Assert.IsType<Unfinished>(ResumePlanner.Find(paths)).Generation);
+
+        var read = new List<int>();
+        var options = Options();
+        options.BeforeFileCopy = read.Add;
+        var resume = new OffloadJob(Append(card, paths, history), options);
+        resume.Run();
+
+        Assert.Empty(read);
+        Assert.True(resume.Plan!.Resuming);
+        Assert.True(resume.Status().SafeToFormat);
+        Assert.Null(resume.Status().Note);   // not "Nic nového"
+        Assert.All(paths, p =>
+        {
+            Assert.False(Pending(p));
+            Assert.Null(OffloadReport.FromJson(File.ReadAllText(Path.Combine(p, "_REPORT", "offload_report.json"))).VerifyIncomplete);
+            Assert.Equal([1], Chain(p));
+            Assert.Equal(3, File.ReadAllLines(Path.Combine(p, "_REPORT", "A001.xxh64")).Length);
+            Assert.True(BackupVerifier.Verify(p, chunkSize: 4096).Success);
+            Assert.True(CardRecord.Load(p).Verified);
+        });
+        Assert.Equal(new BackupState(0, 0), BackupState.Of(paths));
+        Assert.Null(ResumePlanner.Find(paths));
+        var entry = Assert.Single(new HistoryStore(history).Load());
+        Assert.False(entry.Unfinished);
+        Assert.True(entry.Verified);
+    }
+
     // A folder holding a complete backup of its own (another run) never counts as this run's: diverged, as before.
     [Fact]
     public void Find_CompleteBackupOfAnotherRun_StillDiverged()

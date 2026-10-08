@@ -215,6 +215,44 @@ public class TapFileTests
         Assert.Equal(Block, tap.ReadFromDisk);
     }
 
+    // Final review, item 4: the lease ends (the proxy's watchdog killed ffmpeg) while the tap's read hangs on the disk —
+    // Dispose returns at once, never waiting for that read; the read ends refused once the disk answers.
+    [Fact]
+    public async Task Dispose_WhileAReadHangsOnTheDisk_ReturnsAtOnce_TheReadEndsRefused()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "a.mov");
+        var (_, m) = Write(path, 3 * Block);
+        var tap = new TapFile(path, new BlockVerifier(m));
+        ReadVia(tap, 0, 10);   // block 0 in the cache
+        using var inRead = new ManualResetEventSlim();
+        using var disk = new ManualResetEventSlim();
+        Assert.True(DiskBlocks.ReadHooks.TryAdd(Path.GetFullPath(path), () =>
+        {
+            inRead.Set();
+            disk.Wait(TimeSpan.FromSeconds(30));
+        }));
+        try
+        {
+            var reading = Task.Run(() => tap.Read(Block, new byte[10]));
+            Assert.True(inRead.Wait(TimeSpan.FromSeconds(10)));
+
+            var disposing = Task.Run(tap.Dispose);
+            Assert.Same(disposing, await Task.WhenAny(disposing, Task.Delay(TimeSpan.FromSeconds(5))));   // never waits for the read
+            Assert.False(reading.IsCompleted);
+
+            disk.Set();
+            var e = await Assert.ThrowsAnyAsync<Exception>(() => reading);
+            Assert.True(e is ObjectDisposedException or IOError, e.ToString());
+            Assert.Throws<ObjectDisposedException>(() => tap.Read(0, new byte[10]));
+        }
+        finally
+        {
+            DiskBlocks.ReadHooks.TryRemove(Path.GetFullPath(path), out _);
+            disk.Set();
+        }
+    }
+
     // For the stall watchdog: a block is read in pieces and each piece is activity.
     [Fact]
     public void BlockReadInPieces_EachPieceReported()

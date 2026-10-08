@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Win32.SafeHandles;
 
 namespace Offload.Core.VerifyInProxy;
@@ -12,6 +13,9 @@ internal sealed class DiskBlocks : IDisposable
     /// What one disk read asks for when the caller wants to hear about progress (the tap: the stall watchdog sees a slow
     /// but working disk as alive, piece by piece, not only after a whole 16 MiB block).
     public const int PieceBytes = 1 << 20;
+
+    /// Tests: called before every disk read of the file at the key (its full path) — a disk that is slow or hangs.
+    internal static readonly ConcurrentDictionary<string, Action> ReadHooks = new(StringComparer.OrdinalIgnoreCase);
 
     readonly SafeFileHandle handle;
 
@@ -47,11 +51,16 @@ internal sealed class DiskBlocks : IDisposable
     /// or with `piece` in reads of PieceBytes, each reported once it is in.
     public int Read(long offset, AlignedBuffer buffer, int blockSize, Action<int>? piece = null)
     {
-        if (piece == null) return NativeIO.Read(handle, buffer.Span[..blockSize], offset, Path);
+        if (piece == null)
+        {
+            Hook();
+            return NativeIO.Read(handle, buffer.Span[..blockSize], offset, Path);
+        }
         int done = 0;
         while (done < blockSize)
         {
             int want = Math.Min(PieceBytes, blockSize - done);
+            Hook();
             int n = NativeIO.Read(handle, buffer.Span.Slice(done, want), offset + done, Path);
             if (n <= 0) break;
             done += n;
@@ -61,6 +70,12 @@ internal sealed class DiskBlocks : IDisposable
         return done;
     }
 
+    void Hook()
+    {
+        if (!ReadHooks.IsEmpty && ReadHooks.TryGetValue(System.IO.Path.GetFullPath(Path), out var hook)) hook();
+    }
+
+    /// A read under way keeps the handle (SafeHandle) until it returns; the next one is refused.
     public void Dispose() => handle.Dispose();
 }
 
@@ -69,7 +84,8 @@ internal sealed class DiskBlocks : IDisposable
 /// read — moov at the end, an MXF footer — costs no second read). A block that fell out of the cache and is read again
 /// goes to the verifier again (a different answer is a mismatch, never hidden). Thread-safe (ffmpeg may open a second
 /// connection before it closes the first). Activity (for the proxy's stall watchdog) rises with every piece read from
-/// the disk. After Dispose (the lease ended) nothing is read any more.
+/// the disk. After Dispose (the lease ended) nothing is read any more; Dispose never waits for a read under way (final
+/// review, item 4: a hung disk would hold the job thread) — the reader frees the cached blocks once its read returns.
 public sealed class TapFile : ITapSource, IDisposable
 {
     public const int CacheBlocks = 4;
@@ -100,20 +116,27 @@ public sealed class TapFile : ITapSource, IDisposable
         if (offset >= disk.Length || buffer.IsEmpty) return 0;
         int size = verifier.Manifest.BlockSize;
         int done = 0;
-        lock (gate)
+        try
         {
-            while (done < buffer.Length && offset + done < disk.Length)
+            lock (gate)
             {
-                ObjectDisposedException.ThrowIf(disposed, this);
-                long at = offset + done;
-                int b = (int)(at / size);
-                var (block, length) = Block(b, size);
-                int from = (int)(at - (long)b * size);
-                if (from >= length) break;   // the disk gave less than the file's length (it shrank meanwhile)
-                int n = Math.Min(length - from, buffer.Length - done);
-                block.Span.Slice(from, n).CopyTo(buffer[done..]);
-                done += n;
+                while (done < buffer.Length && offset + done < disk.Length)
+                {
+                    ObjectDisposedException.ThrowIf(disposed, this);
+                    long at = offset + done;
+                    int b = (int)(at / size);
+                    var (block, length) = Block(b, size);
+                    int from = (int)(at - (long)b * size);
+                    if (from >= length) break;   // the disk gave less than the file's length (it shrank meanwhile)
+                    int n = Math.Min(length - from, buffer.Length - done);
+                    block.Span.Slice(from, n).CopyTo(buffer[done..]);
+                    done += n;
+                }
             }
+        }
+        finally
+        {
+            FreeIfDisposed();   // Dispose came while this read held the blocks
         }
         return done;
     }
@@ -155,14 +178,28 @@ public sealed class TapFile : ITapSource, IDisposable
         return (buffer, n);
     }
 
+    /// Never waits for a read under way (it may hang on the disk): the blocks are freed now when no read holds them,
+    /// else by the last read when it returns (FreeIfDisposed after it lets go). The handle closes once no read uses it.
     public void Dispose()
     {
         disposed = true;
-        lock (gate)   // a read under way ends after its current piece
+        FreeIfDisposed();
+        disk.Dispose();
+    }
+
+    /// After `disposed`: whoever finds the lock free frees the cached blocks — every holder checks once it lets go, so
+    /// the last one always does.
+    void FreeIfDisposed()
+    {
+        if (!disposed || !gate.TryEnter()) return;
+        try
         {
             foreach (var c in cache) c.Buffer.Dispose();
             cache.Clear();
         }
-        disk.Dispose();
+        finally
+        {
+            gate.Exit();
+        }
     }
 }

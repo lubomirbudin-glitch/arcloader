@@ -150,6 +150,51 @@ public class VerifySessionTests
         Assert.False(s.Reading);
     }
 
+    // Final review, item 4: mode B's read hangs on the primary disk (not unplugged) — Prepare gives up after the stall
+    // limit instead of holding the job thread; the copy is not verified by it, the fill-in verifies it.
+    [Fact]
+    public async Task ModeB_HungPrimaryDisk_PrepareGivesUp_FillInDecides()
+    {
+        using var dir = new TempDir();
+        var (e, plan, report, _) = Copy(dir, ("A001_0001.braw", 2 * Block + 9));
+        var s = new VerifySession(plan, report, e.Blocks, Block, plan.CardPaths.Select(_ => (double?)1).ToArray(), 0,
+            new string?[plan.CardPaths.Count], new PauseGate(), default, (_, _) => null)
+        {
+            StallTimeout = TimeSpan.FromSeconds(3),   // room for the reader thread to start under the full suite's load
+        };
+        using var _s = s;
+        var clip = new Clip { Name = "A001_0001", Path = "A001_0001.braw", Format = ClipFormat.Braw, Segments = ["A001_0001.braw"] };
+        var file = Path.GetFullPath(Layout.Join(plan.CardPaths[0], "A001_0001.braw"));
+        using var disk = new ManualResetEventSlim();
+        int hung = 0;
+        Assert.True(DiskBlocks.ReadHooks.TryAdd(file, () =>
+        {
+            if (Interlocked.Exchange(ref hung, 1) == 0) disk.Wait(TimeSpan.FromSeconds(60));   // the first read hangs
+        }));
+        try
+        {
+            s.StartBackground();
+            var sw = Stopwatch.StartNew();
+            var preparing = Task.Run(() => s.Prepare(clip, 0));
+            Assert.Same(preparing, await Task.WhenAny(preparing, Task.Delay(TimeSpan.FromSeconds(20))));   // not held by the disk
+            Assert.True(sw.Elapsed >= TimeSpan.FromSeconds(2.5));
+            using (var lease = await preparing) Assert.Null(lease!.Url);
+            Assert.Equal(1, Volatile.Read(ref hung));
+            Assert.Equal(FileState.Written, s.Results[0][0].State);   // nothing verified by the hung read
+
+            s.Finish();   // the read still hangs: the fill-in reads the copy itself, the background the other disk
+
+            Assert.False(s.Reading);   // the hung read no longer counts as reading (a pause can stand)
+            Assert.Equal(FileState.Verified, s.Results[0][0].State);
+            Assert.Equal(FileState.Verified, s.Results[1][0].State);
+        }
+        finally
+        {
+            DiskBlocks.ReadHooks.TryRemove(file, out _);
+            disk.Set();
+        }
+    }
+
     [Fact]
     public void FlippedByteOnTheSecondary_Failed_WithTheBlock()
     {

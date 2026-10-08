@@ -316,30 +316,77 @@ public sealed class VerifySession : IDisposable
             if (segments.Count == 0 || !CacheWarm.Fits(segments.Sum(s => files[s].Size))) return null;
             TapBusy();
             Interlocked.Increment(ref active);
-            try
+            // Final review, item 4: the reads run on their own thread, watched like the proxy (StallTimeout without a
+            // block read, not counting a pause) — a hung (not unplugged) primary disk never holds the job thread. Given
+            // up on, the thread stops at its next block (or stays in the read it hangs in); the fill-in decides.
+            int ended = 0, abandoned = 0;
+            long progress = 0;
+            void End()
             {
-                foreach (var s in segments)
+                if (Interlocked.Exchange(ref ended, 1) == 0)
                 {
-                    BlockVerifier v;
-                    lock (gate) v = verifiers[Primary][s] ??= new BlockVerifier(manifests[s]!);
-                    try
-                    {
-                        CacheWarm.VerifyAndWarm(Layout.Join(cardPaths[Primary], files[s].RelPath), v, () => Before(gated: false),
-                            n => Interlocked.Add(ref verifiedBytes[Primary], n), token);
-                    }
-                    catch (OperationCanceledException) { break; }
-                    catch (Exception) { }   // the fill-in decides (and fails the copy if it cannot read it either)
+                    Interlocked.Decrement(ref active);
+                    TapDone();
                 }
             }
-            finally
+            var done = new ManualResetEventSlim();
+            var reader = new Thread(() =>
             {
-                Interlocked.Decrement(ref active);
-                TapDone();
+                try
+                {
+                    foreach (var s in segments)
+                    {
+                        BlockVerifier v;
+                        lock (gate) v = verifiers[Primary][s] ??= new BlockVerifier(manifests[s]!);
+                        try
+                        {
+                            CacheWarm.VerifyAndWarm(Layout.Join(cardPaths[Primary], files[s].RelPath), v,
+                                () => Volatile.Read(ref abandoned) == 0 && Before(gated: false),
+                                n =>
+                                {
+                                    Interlocked.Add(ref verifiedBytes[Primary], n);
+                                    Interlocked.Add(ref progress, n);
+                                }, token);
+                        }
+                        catch (OperationCanceledException) { break; }
+                        catch (Exception) { }   // the fill-in decides (and fails the copy if it cannot read it either)
+                    }
+                }
+                finally
+                {
+                    End();
+                    done.Set();
+                }
+            }) { IsBackground = true, Name = "Offload verify (mode B)" };
+            reader.Start();
+            long seen = -1;
+            var still = System.Diagnostics.Stopwatch.StartNew();
+            while (!done.Wait(PollInterval))
+            {
+                long now = Interlocked.Read(ref progress);
+                if (now != seen || pauses.IsPaused)
+                {
+                    seen = now;
+                    still.Restart();
+                }
+                else if (still.Elapsed >= StallTimeout || token.IsCancellationRequested)
+                {
+                    Volatile.Write(ref abandoned, 1);
+                    End();
+                    return new TapLease(null, () => { });
+                }
             }
+            done.Dispose();
             return new TapLease(null, () => { });
         }
         return null;
     }
+
+    static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
+
+    /// Mode B: how long Prepare's read of a clip may go without reading a block before it is given up on (a hung primary
+    /// disk) — the proxy's stall watchdog's limit (OffloadJob gives it).
+    internal TimeSpan StallTimeout { get; init; } = ProxyRenderer.DefaultStallTimeout;
 
     int? FileIndex(string rel)
     {
