@@ -170,7 +170,7 @@ public sealed partial class MainViewModel
         if (!CanStart || !Allowed(DemoCommand.Start)) return;
         starting = true;
         ProjectMenuOpen = false;
-        RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
+        RaiseMany(nameof(CanStart), nameof(CanSwitchProject), nameof(AfterCopyEnabled));
         // Ruling I1: every check below is made for the profile shown now. The project switcher and the Projekt menu are
         // off until Start ends; should another profile be shown anyway, Start stops — its checks were not for that one.
         var stamp = ProfileStamp.Of(AllSettings);
@@ -241,7 +241,7 @@ public sealed partial class MainViewModel
         {
             starting = false;
             SetStartStatus(null);
-            RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
+            RaiseMany(nameof(CanStart), nameof(CanSwitchProject), nameof(AfterCopyEnabled));
         }
     }
 
@@ -527,7 +527,7 @@ public sealed partial class MainViewModel
             inspections.CancelAll();
             foreach (var j in Jobs) j.Cancel();
             foreach (var j in Jobs) j.Refresh();
-            RaiseMany(nameof(CanStart), nameof(CanSwitchProject));
+            RaiseMany(nameof(CanStart), nameof(CanSwitchProject), nameof(AfterCopyEnabled));
             // A queued job reports Zrušeno at once; if nothing is left running, close right away.
             if (Jobs.Any(Busy)) return false;
         }

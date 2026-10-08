@@ -194,7 +194,7 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
     náhledy klipů, proxy s LUTy a kontrola USB zapojení. Pro kameramanské asistenty, DITy, data wranglery a střihače.
   </div>
   <div class="meta">
-    Verze aplikace 0.5.1-win · Windows 10 a 11 (64bitové) · přenosná verze bez instalace<br>
+    Verze aplikace 0.5.2-win · Windows 10 a 11 (64bitové) · přenosná verze bez instalace<br>
     Návod popisuje aplikaci <b>Offload.exe</b> a příkazovou řádku <b>bin\offload.exe</b> z balíčku <b>Offload-win-x64-&lt;verze&gt;.zip</b>.
   </div>
 </div>
@@ -422,7 +422,7 @@ aplikací) a přepne se hned, když ho ve Windows změníte.</p>
   <div><span class="callout">1</span><b>Horní lišta</b> — projekt, stav fronty, <b class="ui">Ověřit zálohu</b>, <b class="ui">Hardware</b>, Nastavení.</div>
   <div><span class="callout">2</span><b>1 · Karty</b> — zdroje ke kopírování.</div>
   <div><span class="callout">3</span><b>2 · Cíle</b> — disky a složky, kam se kopíruje.</div>
-  <div><span class="callout">4</span><b>3 · Po zkopírování</b> — co projekt udělá po kopii; <b class="ui">Upravit projekt</b> otevře Nastavení.</div>
+  <div><span class="callout">4</span><b>3 · Po zkopírování</b> — co projekt udělá po kopii; <b class="ui">Upravit projekt</b> otevře Nastavení, značky vlevo jsou přepínače, řádky otevřou jejich část Nastavení.</div>
   <div><span class="callout">5</span><b>Lišta se spuštěním</b> — souhrn, odhad času a <b class="ui">Spustit offload</b>.</div>
   <div><span class="callout">6</span><b>Fronta</b> a <b>Historie karet</b> — karty úloh, kapitola 8.</div>
   <div><span class="callout">7</span><b class="ui">Pozastavit</b> / <b class="ui">Zrušit</b> běžící úlohu, kapitola 8.</div>
@@ -521,7 +521,17 @@ to napíše. Start kontroluje jen ty LUTy a složky pro proxy, které se v úloh
 s MD5 <span class="q">„xxHash64 + MD5“</span>; vypnuté žlutě s varováním), <b>Analýza klipů a náhledy</b> (<span class="q">„3 snímky
 / klip“</span>), <b>Proxy</b> (např. <span class="q">„1080p · H.264 · LogC4 → 709“</span> — křivka podle LUTu nebo kamery
 vybrané karty) a <b>Report</b> (<span class="q">„PDF · HTML · ASC MHL · CSV“</span> + ALE, když je zapnutý). Odkaz
-<b class="ui">Upravit projekt</b> otevře stránku Nastavení vybraného projektu. Pod řádky se objevují červené a oranžové
+<b class="ui">Upravit projekt</b> otevře stránku Nastavení vybraného projektu. Řádky jsou klikací (od 0.5.2):</p>
+<ul>
+  <li><b>Zelená značka vlevo</b> je přepínač. Kliknutím zapnete nebo vypnete <b>Ověření</b>, <b>Analýzu</b> nebo <b>Proxy</b>
+    aktivního projektu; změna se uloží sama a text vpravo se hned změní (např. <span class="q">„vypnuto“</span>). Značka u
+    <b>Reportu</b> je pevná (najetím myši: <span class="q">„Report se vytváří vždy“</span>). Přepínače jsou neaktivní, dokud
+    běží kontrola před startem (stejně jako výběr projektu), a v ukázkovém režimu.</li>
+  <li><b>Název řádku nebo text vpravo</b>: kliknutím (nebo <kbd>Enter</kbd> / <kbd>Mezerník</kbd> na řádku vybraném klávesou
+    <kbd>Tab</kbd>) otevřete Nastavení rovnou v odpovídající části — Ověření, Analýza a náhledy, Proxy (kodek, výška, LUT a
+    pravidla LUTů) nebo Report (seznam klipů CSV/ALE, denní report). Myš na řádku změní kurzor na ruku a řádek se jemně zvýrazní.</li>
+</ul>
+<p>Pod řádky se objevují červené a oranžové
 hlášky, které vysvětlují, proč nejde spustit offload nebo co se přeskočí (chybějící LUT, nedostupná složka pro proxy,
 chybějící ffmpeg — kapitola 12).</p>
 <p>Když je fronta plná a žádná karta není vybraná, kroky 2 a 3 se zmenší na kompaktní řádky (disky s volným místem a

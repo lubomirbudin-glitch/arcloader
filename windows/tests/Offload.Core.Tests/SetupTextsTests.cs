@@ -126,3 +126,59 @@ public class SetupTextsTests
         Assert.Equal(("5,00 GB", "R"), (HistoryView.Row(e).Size, HistoryView.Row(e).CardName));
     }
 }
+
+/// 0.5.2: the rows of "3 · Po zkopírování" are clickable — which section each opens, which has a switch, when it is locked.
+public class AfterCopyRulesTests
+{
+    static readonly LutCatalog Cat = LutCatalog.Load(LutCatalog.DefaultFolder);
+
+    [Fact]
+    public void Rows_CarryTheirKindAndSection()
+    {
+        var rows = SetupTexts.AfterCopy(new SettingsProfile(), Cat, null);
+        Assert.Equal([AfterCopyKind.Verify, AfterCopyKind.Analysis, AfterCopyKind.Proxy, AfterCopyKind.Report], rows.Select(r => r.Kind));
+        Assert.Equal(["verify", "analysis", "proxy", "report"], rows.Select(r => r.Section));
+        Assert.Equal([SettingsSections.Verify, SettingsSections.Analysis, SettingsSections.Proxy, SettingsSections.Report], rows.Select(r => r.Section));
+        Assert.Equal("folders", SettingsSections.Folders);
+    }
+
+    [Fact]
+    public void OnlyReportHasNoSwitch()
+    {
+        var rows = SetupTexts.AfterCopy(new SettingsProfile(), Cat, null);
+        Assert.Equal([true, true, true, false], rows.Select(r => r.HasSwitch));
+        Assert.Equal("Report se vytváří vždy", rows[3].SwitchTip);
+        Assert.Null(rows[0].SwitchTip);
+    }
+
+    [Theory]
+    [InlineData(AfterCopyKind.Verify, true, true, true)]
+    [InlineData(AfterCopyKind.Analysis, true, true, true)]
+    [InlineData(AfterCopyKind.Proxy, true, true, true)]
+    [InlineData(AfterCopyKind.Report, true, true, false)]      // the report is always written
+    [InlineData(AfterCopyKind.Verify, false, true, false)]     // Start is running
+    [InlineData(AfterCopyKind.Proxy, true, false, false)]      // demo: nothing is written
+    public void CanToggle_Rules(AfterCopyKind kind, bool canSwitchProject, bool settingsSaveAllowed, bool expected) =>
+        Assert.Equal(expected, AfterCopyRules.CanToggle(kind, canSwitchProject, settingsSaveAllowed));
+
+    [Fact]
+    public void Toggle_FlipsTheProfilesSetting()
+    {
+        var p = new SettingsProfile();
+        Assert.True(AfterCopyRules.Toggle(p, AfterCopyKind.Verify)); Assert.False(p.Verify);
+        Assert.True(AfterCopyRules.Toggle(p, AfterCopyKind.Analysis)); Assert.False(p.AnalyzeClips);
+        Assert.True(AfterCopyRules.Toggle(p, AfterCopyKind.Proxy)); Assert.True(p.Proxy.Enabled);
+        Assert.True(AfterCopyRules.Toggle(p, AfterCopyKind.Verify)); Assert.True(p.Verify);
+        Assert.False(AfterCopyRules.Toggle(p, AfterCopyKind.Report));
+    }
+
+    [Fact]
+    public void Details_FollowTheProfile()
+    {
+        var p = new SettingsProfile { Hash = "both" };
+        Assert.Equal("xxHash64 + MD5", SetupTexts.AfterCopy(p, Cat, null)[0].Value);
+        AfterCopyRules.Toggle(p, AfterCopyKind.Verify);
+        var r = SetupTexts.AfterCopy(p, Cat, null)[0];
+        Assert.Equal(("vypnuto", false, true), (r.Value, r.On, r.Warn));
+    }
+}

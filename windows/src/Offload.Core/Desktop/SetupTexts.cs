@@ -1,8 +1,63 @@
 namespace Offload.Core.Desktop;
 
+/// Which of the four rows of "3 · Po zkopírování" it is.
+public enum AfterCopyKind { Verify, Analysis, Proxy, Report }
+
 /// One row of "3 · Po zkopírování": the green tick (or grey ring) and the value on the right; `Warn`: the yellow row of
-/// switched-off verification.
-public sealed record AfterCopyRow(string Label, string Value, bool On, bool Warn = false);
+/// switched-off verification. `Kind` says what a click opens (`Section`) and whether the tick is a switch (`HasSwitch`).
+public sealed record AfterCopyRow(string Label, string Value, bool On, bool Warn = false, AfterCopyKind Kind = AfterCopyKind.Report)
+{
+    /// The settings-page section a click on the row opens.
+    public string Section => AfterCopyRules.Section(Kind);
+    public bool HasSwitch => AfterCopyRules.HasSwitch(Kind);
+    /// The tooltip of the tick that is not a switch.
+    public string? SwitchTip => HasSwitch ? null : "Report se vytváří vždy";
+}
+
+/// The rules of the clickable rows (0.5.2), without a window.
+public static class AfterCopyRules
+{
+    public static string Section(AfterCopyKind kind) => kind switch
+    {
+        AfterCopyKind.Verify => SettingsSections.Verify,
+        AfterCopyKind.Analysis => SettingsSections.Analysis,
+        AfterCopyKind.Proxy => SettingsSections.Proxy,
+        _ => SettingsSections.Report,
+    };
+
+    /// The report is always written: its tick is fixed.
+    public static bool HasSwitch(AfterCopyKind kind) => kind != AfterCopyKind.Report;
+
+    /// A switch works unless Start is running (as the project switcher) or the demo forbids saving.
+    public static bool CanToggle(AfterCopyKind kind, bool canSwitchProject, bool settingsSaveAllowed) =>
+        HasSwitch(kind) && canSwitchProject && settingsSaveAllowed;
+
+    /// Flips the setting of the profile; false for the report (nothing to flip). Proxy and analysis do not depend on each
+    /// other (stage 2 runs when either is on), so there is no rule between them.
+    public static bool Toggle(SettingsProfile p, AfterCopyKind kind)
+    {
+        switch (kind)
+        {
+            case AfterCopyKind.Verify: p.Verify = !p.Verify; return true;
+            case AfterCopyKind.Analysis: p.AnalyzeClips = !p.AnalyzeClips; return true;
+            case AfterCopyKind.Proxy: p.Proxy.Enabled = !p.Proxy.Enabled; return true;
+            default: return false;
+        }
+    }
+}
+
+/// The sections of the settings page (the keys the navigation and the panels compare with).
+public static class SettingsSections
+{
+    public const string Folders = "folders";
+    public const string Verify = "verify";
+    public const string Analysis = "analysis";
+    public const string Proxy = "proxy";
+    public const string Report = "report";
+    public const string Notify = "notify";
+    public const string Decoders = "decoders";
+    public const string App = "app";
+}
 
 /// The left column's texts (UI návrh obr. 1–3), without a window.
 public static class SetupTexts
@@ -33,10 +88,10 @@ public static class SetupTexts
         var report = "PDF · HTML · ASC MHL" + (p.Outputs.ClipListCsv ? " · CSV" : "") + (p.Outputs.ClipListAle ? " · ALE" : "");
         return
         [
-            new("Ověření zpětným čtením", p.Verify ? HashKinds.Label(HashKinds.FromSetting(p.Hash)) : "vypnuto", p.Verify, Warn: !p.Verify),
-            new("Analýza klipů a náhledy", p.AnalyzeClips ? "3 snímky / klip" : "vypnuto", p.AnalyzeClips),
-            new("Proxy", p.Proxy.Enabled ? $"{p.Proxy.Height}p · {CodecShort(p.Proxy.Codec)} · {LutShort(p.Proxy, catalog, camera)}" : "vypnuto", p.Proxy.Enabled),
-            new("Report", report, true),
+            new("Ověření zpětným čtením", p.Verify ? HashKinds.Label(HashKinds.FromSetting(p.Hash)) : "vypnuto", p.Verify, Warn: !p.Verify, Kind: AfterCopyKind.Verify),
+            new("Analýza klipů a náhledy", p.AnalyzeClips ? "3 snímky / klip" : "vypnuto", p.AnalyzeClips, Kind: AfterCopyKind.Analysis),
+            new("Proxy", p.Proxy.Enabled ? $"{p.Proxy.Height}p · {CodecShort(p.Proxy.Codec)} · {LutShort(p.Proxy, catalog, camera)}" : "vypnuto", p.Proxy.Enabled, Kind: AfterCopyKind.Proxy),
+            new("Report", report, true, Kind: AfterCopyKind.Report),
         ];
     }
 
