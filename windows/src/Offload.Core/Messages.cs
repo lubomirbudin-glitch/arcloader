@@ -44,7 +44,7 @@ public enum PreflightCode
 
 /// Every message a user sees from checks and validation (GUI job card, CLI) — Czech, one method per message, no resx.
 /// Tool logs (app.log, ffmpeg/braw-decode stderr), the TXT report (shared with the Mac) and --help stay English.
-public static class Msg
+public static partial class Msg
 {
     public static string ChunkSize(int n) => $"Velikost bloku musí být násobek 4096 B a nejvýš 1 GiB (zadáno {n}).";
     public static string BufferCount(int n) => $"Počet bufferů musí být aspoň 2 (zadáno {n}).";

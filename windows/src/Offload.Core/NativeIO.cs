@@ -12,7 +12,7 @@ public static unsafe class NativeIO
 
     public static SafeFileHandle OpenRead(string path, bool unbuffered)
     {
-        if (unbuffered) ObserveUnbuffered(path, write: false);
+        if (unbuffered) unbuffered = ObserveUnbuffered(path, write: false);
         return Wrap("open", path, () => File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             unbuffered ? NoBuffering | FileOptions.SequentialScan : FileOptions.SequentialScan));
     }
@@ -22,32 +22,37 @@ public static unsafe class NativeIO
     /// and never in the file cache — what is read later comes from the disk (measured: no slower than without it).
     public static SafeFileHandle OpenWrite(string path, bool unbuffered, long preallocate = 0)
     {
-        if (unbuffered) ObserveUnbuffered(path, write: true);
+        if (unbuffered) unbuffered = ObserveUnbuffered(path, write: true);
         return Wrap("open", path, () => File.OpenHandle(path, FileMode.Create, FileAccess.Write, FileShare.None,
             unbuffered ? NoBuffering | FileOptions.WriteThrough : FileOptions.None, preallocate));
     }
 
     /// Tests only (plan 10 data safety, ruling I3): how the "volume" of a test's own folder treats unbuffered opens — every
-    /// unbuffered write open is recorded, and `RefuseUnbuffered` refuses them with ERROR_INVALID_PARAMETER as a volume
-    /// that ignores FILE_FLAG_NO_BUFFERING does. Keyed by full folder path, so tests running in parallel never meet.
+    /// unbuffered write open is recorded; `RefuseUnbuffered` refuses them with ERROR_INVALID_PARAMETER (some network
+    /// shares), `IgnoreUnbuffered` opens them without the flag (a volume that silently ignores it). Keyed by full folder
+    /// path, so tests running in parallel never meet.
     internal sealed class TestVolume
     {
         public bool RefuseUnbuffered { get; init; }
+        public bool IgnoreUnbuffered { get; init; }
         public System.Collections.Concurrent.ConcurrentQueue<string> Writes { get; } = new();
     }
 
     internal static readonly System.Collections.Concurrent.ConcurrentDictionary<string, TestVolume> TestVolumes = new(StringComparer.OrdinalIgnoreCase);
 
-    static void ObserveUnbuffered(string path, bool write)
+    /// False: open it without FILE_FLAG_NO_BUFFERING after all (a test volume that ignores the flag).
+    static bool ObserveUnbuffered(string path, bool write)
     {
-        if (TestVolumes.IsEmpty) return;
+        if (TestVolumes.IsEmpty) return true;
         var full = Path.GetFullPath(path);
         foreach (var (folder, volume) in TestVolumes)
         {
             if (!full.StartsWith(folder.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) continue;
             if (write) volume.Writes.Enqueue(full);
             if (volume.RefuseUnbuffered) throw new IOError("open", path, ErrorInvalidParameter);
+            if (volume.IgnoreUnbuffered) return false;
         }
+        return true;
     }
 
     public static SafeFileHandle OpenExisting(string path) =>
@@ -197,6 +202,18 @@ public static unsafe class NativeIO
         char* name = stackalloc char[261];
         return Win32.GetVolumeInformation(root, name, 261, out _, out _, out _, null, 0) ? new string(name) : null;
     }
+
+    /// A network volume — a UNC path or a mapped drive (R8: never verified from the proxy's reads).
+    public static bool IsRemote(string path)
+    {
+        var full = Path.GetFullPath(path);
+        if (full.StartsWith(@"\\", StringComparison.Ordinal)) return true;
+        return VolumeRoot(full) is string root && Hardware.UsbNative.GetDriveType(root) == Hardware.UsbNative.DriveRemote;
+    }
+
+    /// The volume serial as the report keeps it (R12): "1A2B-3C4D", the way `vol` prints it; null when unknown.
+    public static string? VolumeSerialText(string path) =>
+        VolumeSerial(path) is uint s ? $"{s >> 16:X4}-{s & 0xFFFF:X4}" : null;
 
     public static long? AvailableBytes(string path) =>
         Win32.GetDiskFreeSpaceEx(Path.GetFullPath(path), out var free, out _, out _) ? (long)free : null;

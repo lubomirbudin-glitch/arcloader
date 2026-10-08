@@ -24,6 +24,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-08 — plán 10: Verify-in-Proxy
 
+- Úkol 5: kontrola čtení mimo cache pro každý cíl (nezarovnané čtení s `NO_BUFFERING` musí svazek odmítnout, sonda v `_REPORT`); síťové cíle a cíle zapsané přes cache se ověřují zpětným čtením (R8); sériové číslo svazku (R12).
 - Úkol 4: zápis na cíle `NO_BUFFERING | WRITE_THROUGH` (R8), rychlost zápisu každého cíle, kontrolní body a záznamy `file` v manifestu během kopie (spec 4.5, R6); manifest se jen připisuje.
 - Úkol 3: `_REPORT/offload-manifest.jsonl` — jen připisovaný manifest (záznam souboru s bloky, kontrolní body rozepsaného souboru), řádek přerušený pádem se přeskočí.
 - Úkol 2: `BlockVerifier` — ověření po blocích v libovolném pořadí, kusy bloků, opakované čtení (nesoulad = chyba I/O), chybějící rozsahy, délka souboru na disku.
