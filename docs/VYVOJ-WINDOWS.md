@@ -24,6 +24,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-08 — plán 10: Verify-in-Proxy
 
+- Úkol 10: obsahová kontrola dekodérem při proxy (`ContentWatch`: hlášky dekódování a časových značek, méně snímků, než soubor slibuje) → `clips[].content` ok/warn se snímkem a TC, náhled místa vady (JPEG). Navíc: dekóduje se i zvuk proxy — vada zvukového dekodéru je druh `audio` („poškozený zvuk“); hlášky vlastního AAC enkodéru proxy se nepočítají; varování dekodéru nejsou pro hlídání zaseknutí průběh.
 - Úkol 9: režim B — vyhození souboru z cache a jedno ověřující čtení před SDK; registr formátů (A = MOV/MP4/MXF, B = BRAW/R3D/ARRIRAW). Odchylka od plánu: ověřující čtení jde mimo cache (`DiskBlocks`), ne přes cache — vyhození z cache nejde prokázat, a „ověřeno“ nesmí vzniknout z cache; SDK pak čte z disku znovu (disk ≈ 2× soubor místo ≤ 1,05×).
 - Úkol 8: `TapFile` (celé bloky bez cache, 4 bloky v paměti, vše do ověřovače), `BlockReads` (dočtení chybějících bloků, druhé čtení nesouhlasného bloku); ffmpeg čte klip z tapu s `-short_seek_size 65536`; změřeno na MOV/MP4/MXF. Navíc: ověřuje jen handle, který opravdu čte mimo cache (ne komprimovaný/šifrovaný soubor); blok se čte po 1 MiB a každý kus je pro hlídání zaseknutí ffmpeg známkou života — pomalý cíl proxy nezabije, zaseknutý ano.
 - Úkol 7: `RangeServer` — HTTP s rozsahy jen na 127.0.0.1, token a id místo cesty, kontrola `Host`, limity spojení a hlaviček; navíc: protistrana mimo loopback se zahodí nepřečtená, hlavička musí dorazit celá do 30 s (M7, proti slowloris).
