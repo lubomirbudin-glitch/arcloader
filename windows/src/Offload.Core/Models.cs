@@ -28,6 +28,8 @@ public sealed class OffloadOptions
     internal Action<int>? BeforeFileCopy { get; set; }
     /// Tests only: called on the copy thread after every file is copied and flushed, just before verification.
     internal Action? BeforeVerify { get; set; }
+    /// Tests only: called on the copy thread after the copy and the manifest records, just before FlushDevice.
+    internal Action? BeforeDeviceFlush { get; set; }
     /// Tests only: called on destination `index`'s thread before every block it writes; an exception it throws is a write
     /// error there (a disk pulled out).
     internal Action<int>? BeforeDestWrite { get; set; }

@@ -70,6 +70,34 @@ public class UnbufferedCheckTests
         Assert.Null(UnbufferedCheck.Problem(card, writtenUnbuffered: true, File.GetAttributes));
     }
 
+    // Fix round 1, M-c: what counts is where the probe really landed — a folder that is a junction or a symlink to a
+    // network share (final path \\server\share\...) is verified the classic way, the probe removed.
+    [Fact]
+    public void ProbeLandsOnAShare_Classic()
+    {
+        using var dir = new TempDir();
+        var card = CardWithReport(dir);
+
+        Assert.Equal(Msg.ClassicNetwork, UnbufferedCheck.Problem(card, writtenUnbuffered: true, File.GetAttributes,
+            _ => @"\\server\share\2026-10-08\A001\_REPORT\.offload-cachecheck-1"));
+        Assert.Empty(Directory.GetFiles(Path.Combine(card, "_REPORT")));
+    }
+
+    // Fix round 1, M-c: the attributes of the written probe count, not only the folders' (a compressed volume, a parent
+    // folder whose compression the file inherited).
+    [Theory]
+    [InlineData(FileAttributes.Compressed)]
+    [InlineData(FileAttributes.Encrypted)]
+    public void ProbeFileCompressedOrEncrypted_Classic(FileAttributes attribute)
+    {
+        using var dir = new TempDir();
+        var card = CardWithReport(dir);
+        FileAttributes Attributes(string p) => File.GetAttributes(p) | (Path.GetFileName(p).StartsWith(".offload-cachecheck", StringComparison.Ordinal) ? attribute : 0);
+
+        Assert.Equal(Msg.ClassicCompressedOrEncrypted, UnbufferedCheck.Problem(card, writtenUnbuffered: true, Attributes));
+        Assert.Empty(Directory.GetFiles(Path.Combine(card, "_REPORT")));
+    }
+
     // Ruling I3: a volume that refuses FILE_FLAG_NO_BUFFERING is a reason to verify the classic way — never an exception.
     [Fact]
     public void VolumeRefusingNoBuffering_Classic_WithTheReason_ProbeRemoved()

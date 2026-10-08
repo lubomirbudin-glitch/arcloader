@@ -30,6 +30,9 @@ public static class Mhl
         NativeIO.Mkdirs(dir);
 
         int generation = report.Generation ?? 1;
+        // Fix round 1: generation 1 starts a chain — never over one that is there (a commit retried, another copy).
+        if (generation == 1 && File.Exists(Path.Combine(dir, ChainName)))
+            throw new IOException($"ASC MHL v {cardPath} už má řetěz — generace 1 se nezapsala.");
         // An append keeps the chain and the ignore list of the earlier generations (spec 2.2) — and goes right after them.
         var earlier = generation > 1 ? MhlReader.Read(cardPath) : null;
         if (generation > 1)
@@ -72,24 +75,8 @@ public static class Mhl
         Line("    </ignore>");
         Line("  </processinfo>");
         Line("  <hashes>");
-        foreach (var f in report.Files)
+        foreach (var (f, action) in Entries(report, d))
         {
-            if (f.Xxh64 == null) continue;
-            var state = f.Destinations[d];
-            string action;
-            if (f.Rewritten is { } rewritten && d < rewritten.Count)
-            {
-                // A repair (ruling C1: the hash is always the one the backup recorded): a good copy that was only read
-                // back is "verified"; one not read back in this generation (the repair was cancelled before its read-back
-                // — its state carries on the earlier one) or not touched at all is not in it; a new copy is "original";
-                // a copy found or left bad "failed".
-                if (state == "pending" || (!rewritten[d] && (state == "written" || !report.Verified))) continue;
-                action = state == "failed" ? "failed" : rewritten[d] ? "original" : "verified";
-            }
-            // Spec 9: only a verified copy goes in — "written" only into a generation made without (or cancelled before)
-            // its verification, as before plan 10.
-            else if (state == "written" && report.Verified) continue;
-            else action = state is "verified" or "written" ? "original" : "failed";
             Line("    <hash>");
             Line($"      <path size=\"{f.Size}\" lastmodificationdate=\"{IsoDate(f.Modified)}\">{Esc(f.Path)}</path>");
             Line($"      <xxh64 action=\"{action}\" hashdate=\"{stamp}\">{f.Xxh64}</xxh64>");
@@ -120,6 +107,55 @@ public static class Mhl
         }
         chain.Append("</ascmhldirectory>\n");
         ReplaceChain(Path.Combine(dir, ChainName), Encoding.UTF8.GetBytes(chain.ToString()));
+    }
+
+    /// The files generation `report` records for destination `d`, with their action.
+    static IEnumerable<(ReportFile File, string Action)> Entries(OffloadReport report, int d)
+    {
+        foreach (var f in report.Files)
+        {
+            if (f.Xxh64 == null) continue;
+            var state = f.Destinations[d];
+            string action;
+            if (f.Rewritten is { } rewritten && d < rewritten.Count)
+            {
+                // A repair (ruling C1: the hash is always the one the backup recorded): a good copy that was only read
+                // back is "verified"; one not read back in this generation (the repair was cancelled before its read-back
+                // — its state carries on the earlier one) or not touched at all is not in it; a new copy is "original";
+                // a copy found or left bad "failed".
+                if (state == "pending" || (!rewritten[d] && (state == "written" || !report.Verified))) continue;
+                action = state == "failed" ? "failed" : rewritten[d] ? "original" : "verified";
+            }
+            // Spec 9: only a verified copy goes in — "written" only into a generation made without (or cancelled before)
+            // its verification, as before plan 10.
+            else if (state == "written" && report.Verified) continue;
+            else action = state is "verified" or "written" ? "original" : "failed";
+            yield return (f, action);
+        }
+    }
+
+    /// Plan 10 fix round 1 (a Commit retried): the chain of `cardPath` has `report`'s generation already — written by an
+    /// earlier attempt of this commit (its file intact and recording exactly these files and hashes, with the same
+    /// actions). False when the chain has not reached it yet (Write it then). Throws IOException when the chain has that
+    /// generation but another one, or a damaged one — nothing is overwritten.
+    public static bool HasGeneration(OffloadReport report, string cardPath)
+    {
+        int d = report.Destinations.Select(x => x.CardPath).ToList().IndexOf(cardPath);
+        if (d < 0) return true;   // Write leaves such a folder alone too
+        int generation = report.Generation ?? 1;
+        var dir = Path.Combine(cardPath, DirName);
+        var chain = MhlReader.ReadChain(dir) ?? [];
+        if (chain.FirstOrDefault(c => c.Seq == generation) is not { } entry) return false;
+        var file = Path.Combine(dir, entry.Path);
+        if (entry.Path.IndexOfAny(['/', '\\']) >= 0 || !File.Exists(file) || C4(File.ReadAllBytes(file)) != entry.C4)
+            throw new IOException($"ASC MHL v {cardPath} má generaci {generation}, ale její soubor chybí nebo byl změněn — generace se nezapsala znovu.");
+        var have = MhlReader.ParseGeneration(file, generation).Files
+            .Select(f => (f.Path, Hash: f.Hashes.FirstOrDefault(h => h.Algorithm == "xxh64")))
+            .Select(x => $"{x.Path}|{x.Hash?.Value}|{x.Hash?.Action}").Order(StringComparer.Ordinal);
+        var want = Entries(report, d).Select(e => $"{e.File.Path}|{e.File.Xxh64}|{e.Action}").Order(StringComparer.Ordinal);
+        if (!have.SequenceEqual(want, StringComparer.Ordinal))
+            throw new IOException($"ASC MHL v {cardPath} už má jinou generaci {generation} — generace se nezapsala znovu.");
+        return true;
     }
 
     /// Another program reading the chain without delete sharing (a sync client, an antivirus scan) usually lets go within

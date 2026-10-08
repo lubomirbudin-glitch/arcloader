@@ -14,9 +14,12 @@ public static class UnbufferedCheck
     /// says it per destination).
     public static string? Problem(string cardPath, bool writtenUnbuffered) => Problem(cardPath, writtenUnbuffered, File.GetAttributes);
 
-    /// `attributes`: File.GetAttributes (tests: a compressed or encrypted folder without making one).
-    internal static string? Problem(string cardPath, bool writtenUnbuffered, Func<string, FileAttributes> attributes)
+    /// `attributes`: File.GetAttributes (tests: a compressed or encrypted folder or file without making one); `finalPath`:
+    /// NativeIO.FinalPath of the probe's handle (tests: a probe that landed on a share).
+    internal static string? Problem(string cardPath, bool writtenUnbuffered, Func<string, FileAttributes> attributes,
+        Func<Microsoft.Win32.SafeHandles.SafeFileHandle, string?>? finalPath = null)
     {
+        finalPath ??= NativeIO.FinalPath;
         if (!writtenUnbuffered) return Msg.ClassicBufferedWrites;
         if (NativeIO.IsRemote(cardPath)) return Msg.ClassicNetwork;
         var report = Path.Combine(cardPath, Layout.ReportDirName);
@@ -30,7 +33,17 @@ public static class UnbufferedCheck
             using var buffer = new AlignedBuffer(ProbeBytes);
             new Random(ProbeBytes).NextBytes(buffer.Span);
             using (var w = NativeIO.OpenWrite(probe, unbuffered: true, ProbeBytes))
+            {
                 NativeIO.Write(w, buffer.Span, 0, probe);
+                // Fix round 1 (M-c): where the probe really landed — a junction or symlink on the way to a share is a
+                // network destination (R8); a path that cannot be told is not trusted either.
+                if (finalPath(w) is not string real) return Msg.ClassicCacheCheckFailed("skutečnou cestu sondy nejde zjistit");
+                if (NativeIO.IsRemote(real)) return Msg.ClassicNetwork;
+                // The handle kept NO_BUFFERING | WRITE_THROUGH (fix round 1, M-b).
+                if (!NativeIO.WritesPastTheCache(w)) return Msg.ClassicCacheCheck;
+            }
+            // M3 on the written file itself: it may be compressed or encrypted although its folders do not say so.
+            if ((attributes(probe) & cached) != 0) return Msg.ClassicCompressedOrEncrypted;
             using var r = NativeIO.OpenRead(probe, unbuffered: true);
             using var back = new AlignedBuffer(ProbeBytes);
             try

@@ -208,7 +208,55 @@ public static unsafe class NativeIO
     {
         var full = Path.GetFullPath(path);
         if (full.StartsWith(@"\\", StringComparison.Ordinal)) return true;
-        return VolumeRoot(full) is string root && Hardware.UsbNative.GetDriveType(root) == Hardware.UsbNative.DriveRemote;
+        // Fix round 1 (M-c): where the folder really is — a junction or a symlink on the way may lead to a share.
+        var real = FinalPath(full) ?? full;
+        if (real.StartsWith(@"\\", StringComparison.Ordinal)) return true;
+        return VolumeRoot(real) is string root && Hardware.UsbNative.GetDriveType(root) == Hardware.UsbNative.DriveRemote;
+    }
+
+    /// The path `path` really leads to, junctions and symlinks resolved (GetFinalPathNameByHandle on its nearest existing
+    /// folder, the rest appended): "C:\…" or "\\server\share\…"; null when it cannot be told (no drive letter, no access).
+    public static string? FinalPath(string path)
+    {
+        var existing = Path.GetFullPath(path);
+        var rest = new List<string>();
+        while (!Directory.Exists(existing) && !File.Exists(existing))
+        {
+            if (Path.GetDirectoryName(existing) is not string parent) return null;
+            rest.Insert(0, Path.GetFileName(existing));
+            existing = parent;
+        }
+        using var h = Win32.CreateFile(LongPath(existing), 0, Win32.FILE_SHARE_ALL, 0, Win32.OPEN_EXISTING, Win32.FILE_FLAG_BACKUP_SEMANTICS, 0);
+        if (h.IsInvalid) return null;
+        return FinalPath(h) is string real ? Path.Combine([real, .. rest]) : null;
+    }
+
+    /// The final path of an open file or folder: "C:\…" or "\\server\share\…"; null when it has no drive-letter path.
+    public static string? FinalPath(SafeFileHandle h)
+    {
+        for (uint size = 512; ; )
+        {
+            var buffer = new char[size];
+            uint n;
+            fixed (char* p = buffer) n = Win32.GetFinalPathNameByHandle(h, p, size, 0);
+            if (n == 0) return null;
+            if (n >= size)
+            {
+                size = n + 1;
+                continue;
+            }
+            var s = new string(buffer, 0, (int)n);
+            if (s.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + s[8..];
+            return s.StartsWith(@"\\?\", StringComparison.Ordinal) ? s[4..] : s;
+        }
+    }
+
+    /// Fix round 1 (M-b): the handle really writes past the file cache — the I/O manager kept both NO_BUFFERING and
+    /// WRITE_THROUGH on it (FileModeInformation), whatever was asked for. False when it cannot be told.
+    public static bool WritesPastTheCache(SafeFileHandle h)
+    {
+        const uint both = Win32.FILE_WRITE_THROUGH | Win32.FILE_NO_INTERMEDIATE_BUFFERING;
+        return Win32.NtQueryInformationFile(h, out _, out uint mode, sizeof(uint), Win32.FileModeInformation) == 0 && (mode & both) == both;
     }
 
     /// The volume serial as the report keeps it (R12): "1A2B-3C4D", the way `vol` prints it; null when unknown.

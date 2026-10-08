@@ -34,6 +34,8 @@ public sealed partial class OffloadEngine
         BufferPool? pool = null;
         var hashers = new List<SourceHasher>();
         var unrecorded = new System.Collections.Concurrent.ConcurrentQueue<(int File, DestWriter[] Targets)>();
+        // Fix round 1 (M-a): records of files not flushed on their own — written once FlushDevice emptied the drive's cache.
+        var afterFlush = new List<(DestWriter Writer, ManifestRecord Record)>();
         try
         {
             pool = new BufferPool(Options.BufferCount, Options.ChunkSize);
@@ -100,7 +102,7 @@ public sealed partial class OffloadEngine
                     if (recorder != null && targets.Length > 0)
                     {
                         unrecorded.Enqueue((i, targets));
-                        recorder.Post(() => Record(plan, unrecorded, hashers));
+                        recorder.Post(() => Record(plan, unrecorded, hashers, afterFlush));
                     }
                 }
             }
@@ -121,14 +123,16 @@ public sealed partial class OffloadEngine
             {
                 foreach (var i in Enumerable.Range(0, files.Count).Where(i => ws.Any(w => plan.Writes(i, w.Index))))
                     unrecorded.Enqueue((i, ws.Where(w => plan.Writes(i, w.Index)).ToArray()));
-                RecordNow(plan, unrecorded, recorded, blocks);
+                RecordNow(plan, unrecorded, recorded, blocks, afterFlush);
             }
             Blocks = blocks;
             WriteRates = ws.Select(w => w.WriteRate).ToList();
             WrittenUnbuffered = ws.Select(w => w.Unbuffered).ToList();
 
             SetPhase(CopyPhase.Flush);
+            Options.BeforeDeviceFlush?.Invoke();
             OnEachDestination(ws, w => w.FlushDevice());
+            AppendAfterFlush(afterFlush);
             var copyFinished = DateTime.UtcNow;
             var copyPaused = Pauses.PausedTotal - pausedBefore;
 
@@ -187,7 +191,8 @@ public sealed partial class OffloadEngine
 
     /// The recorder's step (spec 4.5): every file finished so far goes into the manifest of each destination where it is
     /// in its place — after the hashers and the writers are done with it; many small files in one write.
-    void Record(OffloadPlan plan, System.Collections.Concurrent.ConcurrentQueue<(int File, DestWriter[] Targets)> unrecorded, List<SourceHasher> hashers)
+    void Record(OffloadPlan plan, System.Collections.Concurrent.ConcurrentQueue<(int File, DestWriter[] Targets)> unrecorded, List<SourceHasher> hashers,
+        List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
     {
         if (unrecorded.IsEmpty) return;
         foreach (var h in hashers) h.Wait();
@@ -199,19 +204,22 @@ public sealed partial class OffloadEngine
         var hashes = batch.ToDictionary(b => b.File, b => new FileHashes(
             xx.Values[b.File] is string x ? Convert.ToUInt64(x, 16) : null,
             md5?.Values[b.File] is string m ? Convert.FromHexString(m) : null, xx.Xxh128[b.File]));
-        Append(plan, batch, hashes, i => xx.Blocks[i]);
+        Append(plan, batch, hashes, i => xx.Blocks[i], afterFlush);
     }
 
     /// A repair's files, recorded after they took their place, with the hashes the report records.
     void RecordNow(OffloadPlan plan, System.Collections.Concurrent.ConcurrentQueue<(int File, DestWriter[] Targets)> unrecorded,
-        FileHashes[] recorded, ulong[]?[] blocks)
+        FileHashes[] recorded, ulong[]?[] blocks, List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
     {
         var batch = new List<(int File, DestWriter[] Targets)>();
         while (unrecorded.TryDequeue(out var item)) batch.Add(item);
-        Append(plan, batch, batch.ToDictionary(b => b.File, b => recorded[b.File]), i => blocks[i]);
+        Append(plan, batch, batch.ToDictionary(b => b.File, b => recorded[b.File]), i => blocks[i], afterFlush);
     }
 
-    void Append(OffloadPlan plan, List<(int File, DestWriter[] Targets)> batch, Dictionary<int, FileHashes> hashes, Func<int, ulong[]?> blocksOf)
+    /// Fix round 1 (M-a): a record says the file is on the disk — only true for a file flushed on its own (FlushedAlone);
+    /// the others wait in `afterFlush` for FlushDevice.
+    void Append(OffloadPlan plan, List<(int File, DestWriter[] Targets)> batch, Dictionary<int, FileHashes> hashes, Func<int, ulong[]?> blocksOf,
+        List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
     {
         foreach (var w in batch.SelectMany(b => b.Targets).Distinct())
         {
@@ -221,14 +229,30 @@ public sealed partial class OffloadEngine
                 if (!targets.Contains(w) || w.Results[i].State != FileState.Written) continue;
                 if (hashes[i] is not { Xxh64: ulong x } h || blocksOf(i) is not { } blocks) continue;
                 var f = plan.Scan.Files[i];
-                records.Add(new ManifestRecord
+                var record = new ManifestRecord
                 {
                     Generation = plan.Generation, Path = f.RelPath, Size = f.Size, Modified = f.ModifiedUtc, Xxh64 = Format.Hex64(x),
                     Md5 = h.Md5Hex, Xxh128 = h.Xxh128, BlockSize = Options.ChunkSize, Blocks = ManifestRecord.Hex(blocks),
-                });
+                };
+                if (w.FlushedAlone[i]) records.Add(record);
+                else lock (afterFlush) afterFlush.Add((w, record));
             }
+            if (records.Count == 0) continue;
             // Best effort: without its record a file is only copied again by a resume, never trusted blindly.
             try { ManifestFile.Append(w.CardPath, records); }
+            catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    /// After FlushDevice: the records that waited for it, on every destination whose flush went through; none where it
+    /// failed — that data may never have reached the disk (a resume reads those files again).
+    static void AppendAfterFlush(List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
+    {
+        List<(DestWriter Writer, ManifestRecord Record)> all;
+        lock (afterFlush) all = [.. afterFlush];
+        foreach (var group in all.GroupBy(x => x.Writer).Where(g => g.Key.DeviceFlushed))
+        {
+            try { ManifestFile.Append(group.Key.CardPath, group.Select(x => x.Record).ToList()); }
             catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException) { }
         }
     }

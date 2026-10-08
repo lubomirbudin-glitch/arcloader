@@ -59,4 +59,30 @@ internal static unsafe partial class Win32
     /// Explorer's natural order ("C2" before "C10") — the Windows counterpart of localizedStandardCompare.
     [LibraryImport("shlwapi.dll", StringMarshalling = StringMarshalling.Utf16)]
     internal static partial int StrCmpLogicalW(string a, string b);
+
+    // Plan 10 fix round 1: the final path of a handle (junctions, symlinks) and the flags a handle really has.
+    internal const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
+    internal const uint OPEN_EXISTING = 3;
+    internal const uint FILE_SHARE_ALL = 0x7;
+    internal const int FileModeInformation = 16;
+    internal const uint FILE_WRITE_THROUGH = 0x2;
+    internal const uint FILE_NO_INTERMEDIATE_BUFFERING = 0x8;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct IO_STATUS_BLOCK
+    {
+        public nint Status;
+        public nuint Information;
+    }
+
+    [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    internal static partial SafeFileHandle CreateFile(string fileName, uint desiredAccess, uint shareMode, nint securityAttributes,
+        uint creationDisposition, uint flagsAndAttributes, nint templateFile);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", SetLastError = true)]
+    internal static partial uint GetFinalPathNameByHandle(SafeFileHandle file, char* path, uint length, uint flags);
+
+    [LibraryImport("ntdll.dll")]
+    internal static partial int NtQueryInformationFile(SafeFileHandle file, out IO_STATUS_BLOCK ioStatus, out uint info, uint length, int infoClass);
+
 }

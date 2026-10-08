@@ -288,12 +288,15 @@ public sealed partial class OffloadReport
     /// verifyPending, so the folder is never read as verified (CardRecord.ReadBack, BackupState) without its MHL
     /// generation; one that fails at the hash lists leaves reports and chain in agreement, the next append adds the lines
     /// (as in Write). The MHL generation file is new (no stage wrote it before).
+    /// Idempotent (fix round 1): a retry after a commit that failed past the chain finds its generation there
+    /// (Mhl.HasGeneration) and writes only the reports and the hash lists — the chain keeps every generation, also one an
+    /// append added meanwhile; the hash lists only get the lines they lack.
     public void Commit(string cardPath)
     {
         if (VerifyPending == true) throw new InvalidOperationException("a report still pending verification is never committed");
-        Mhl.Write(this, cardPath);
+        if (!Mhl.HasGeneration(this, cardPath)) Mhl.Write(this, cardPath);
         WriteReports(cardPath, create: false);
-        WriteHashLists(cardPath);
+        WriteHashLists(cardPath, merge: true);
     }
 
     /// The JSON, TXT and HTML of this generation: `create` = they must not exist yet (WriteFileNew).
@@ -318,14 +321,16 @@ public sealed partial class OffloadReport
 
     /// `<card>.xxh64` always, `<card>.md5` with MD5 (spec 3.5). An append: the earlier lines byte for byte, then the
     /// missed ones, then this generation's.
-    void WriteHashLists(string cardPath)
+    /// `merge` (Commit): generation 1 too keeps a list that is there and only adds what it lacks — a retry, or an append
+    /// that ran between a failed commit and its retry, may have written it.
+    void WriteHashLists(string cardPath, bool merge = false)
     {
         int generation = Generation ?? 1;
         foreach (var algorithm in Algorithms.Where(a => a is "xxh64" or "md5"))
         {
             var hashList = HashListPath(cardPath, CardName, algorithm);
             var lines = Encoding.UTF8.GetBytes(HashListOf(algorithm));
-            if (generation == 1)
+            if (generation == 1 && !(merge && File.Exists(hashList)))
             {
                 NativeIO.WriteFileReplacing(hashList, lines);
                 continue;

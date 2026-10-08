@@ -96,4 +96,50 @@ public class ManifestRecordingTests
         Assert.Single(ManifestFile.Files(records, 1));
         Assert.Equal([false], engine.WrittenUnbuffered);
     }
+
+    // Fix round 1, M-a: a file not flushed on its own (smaller than FullSyncThreshold on a written-through destination)
+    // may still sit in the drive's cache — its record is written only once FlushDevice emptied it. A file flushed on its
+    // own (a big one, or any on a destination written through the file cache) is recorded at once.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SmallFile_RecordedOnlyAfterTheDeviceFlush(bool buffered)
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("CARD");
+        TestFs.WriteRandom(Path.Combine(card, "big.mov"), 3 * Block + 5, 1);
+        TestFs.WriteRandom(Path.Combine(card, "small.wav"), 100, 2);
+        var options = Options();
+        options.FullSyncThreshold = 2 * Block;
+        options.ForceBuffered = buffered;
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-08");
+        List<string>? beforeFlush = null;
+        options.BeforeDeviceFlush = () => beforeFlush = ManifestFile.Files(ManifestFile.Read(plan.CardPaths[0]), 1).Keys.Order().ToList();
+
+        engine.Run(plan);
+
+        Assert.Equal(buffered ? ["big.mov", "small.wav"] : ["big.mov"], beforeFlush);
+        Assert.Equal(["big.mov", "small.wav"], ManifestFile.Files(ManifestFile.Read(plan.CardPaths[0]), 1).Keys.Order());
+    }
+
+    // The device flush failed: the small file's data may never have reached the disk — it gets no record (a resume reads
+    // it from the card again), the big one flushed on its own keeps its record.
+    [Fact]
+    public void DeviceFlushFailed_SmallFileNotRecorded()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("CARD");
+        TestFs.WriteRandom(Path.Combine(card, "big.mov"), 3 * Block + 5, 1);
+        TestFs.WriteRandom(Path.Combine(card, "small.wav"), 100, 2);
+        var options = Options();
+        options.FullSyncThreshold = 2 * Block;
+        var engine = new OffloadEngine(options);
+        var plan = engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-08");
+        Directory.CreateDirectory(Path.Combine(plan.CardPaths[0], ".offload-flush"));   // the flush file cannot be made
+
+        engine.Run(plan);
+
+        Assert.Equal(["big.mov"], ManifestFile.Files(ManifestFile.Read(plan.CardPaths[0]), 1).Keys);
+    }
 }

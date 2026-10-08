@@ -37,6 +37,11 @@ internal sealed class DestWriter : IDisposable
     public bool Unbuffered { get; private set; }
     public long Written => Interlocked.Read(ref written);
     public long Verified => Interlocked.Read(ref verified);
+    /// Fix round 1 (M-a): per file, its data was flushed to the disk on its own in Finish (a big file, or any file on a
+    /// destination written through the file cache); the others reach the disk only with FlushDevice. Read after Wait.
+    public bool[] FlushedAlone { get; }
+    /// FlushDevice emptied the drive's write cache (false before it ran, or when it failed).
+    public bool DeviceFlushed { get; private set; }
     /// Bytes per second while writing (the time inside the writes only); null before the first write. Plan 10: the
     /// fastest destination becomes the primary one (spec 6).
     public double? WriteRate
@@ -62,6 +67,7 @@ internal sealed class DestWriter : IDisposable
         this.generation = generation;
         Unbuffered = !options.ForceBuffered;
         Results = new DestFileResult[fileCount];
+        FlushedAlone = new bool[fileCount];
         worker = new SerialWorker($"offload.dest{index}");
     }
 
@@ -105,6 +111,13 @@ internal sealed class DestWriter : IDisposable
             {
                 Unbuffered = false;
                 return NativeIO.OpenWrite(partPath, unbuffered: false, size);
+            }
+            // Fix round 1 (M-b): the flags asked for are not proof — a handle that lost NO_BUFFERING | WRITE_THROUGH writes
+            // through the file cache: a buffered destination (no checkpoints, every file flushed, not a primary).
+            if (!NativeIO.WritesPastTheCache(h))
+            {
+                Unbuffered = false;
+                return h;
             }
             align = NativeIO.SectorSize(h);
             if (options.ChunkSize % align == 0) return h;
@@ -190,7 +203,9 @@ internal sealed class DestWriter : IDisposable
             NativeIO.SetLength(handle, file.Size, partPath);
             // Big files are flushed one by one, small ones together in FlushDevice. Without unbuffered
             // writes the data may still sit in the file cache, so then every file is flushed.
-            if (file.Size >= options.FullSyncThreshold || !Unbuffered) NativeIO.Flush(handle, partPath);
+            bool alone = file.Size >= options.FullSyncThreshold || !Unbuffered;
+            if (alone) NativeIO.Flush(handle, partPath);
+            FlushedAlone[index] = alone;
             NativeIO.SetModified(handle, file.ModifiedUtc, partPath);
             handle.Dispose();
             handle = null;
@@ -286,9 +301,11 @@ internal sealed class DestWriter : IDisposable
             using var h = NativeIO.OpenWrite(path, unbuffered: false);
             NativeIO.Write(h, "x"u8, 0, path);
             NativeIO.Flush(h, path);
+            DeviceFlushed = true;
         }
         catch (IOError)
         {
+            DeviceFlushed = false;
             // Best effort: big files were flushed individually, verification reads everything back anyway.
         }
         finally

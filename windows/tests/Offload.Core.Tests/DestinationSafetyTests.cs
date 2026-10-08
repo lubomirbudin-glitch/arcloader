@@ -25,10 +25,10 @@ public class DestinationSafetyTests
         readonly string folder;
         public NativeIO.TestVolume Behaviour { get; }
 
-        public Volume(string folder, bool refuse = false)
+        public Volume(string folder, bool refuse = false, bool ignore = false)
         {
             this.folder = Path.GetFullPath(folder);
-            Behaviour = new NativeIO.TestVolume { RefuseUnbuffered = refuse };
+            Behaviour = new NativeIO.TestVolume { RefuseUnbuffered = refuse, IgnoreUnbuffered = ignore };
             Assert.True(NativeIO.TestVolumes.TryAdd(this.folder, Behaviour));
         }
 
@@ -125,6 +125,28 @@ public class DestinationSafetyTests
         Assert.All(report.Files, f => Assert.Equal(["verified"], f.Destinations));
         Assert.Equal(false, report.Destinations[0].Unbuffered);
         Assert.Equal([false], engine.WrittenUnbuffered);
+        var records = VerifyInProxy.ManifestFile.Read(plan.CardPaths[0]);
+        Assert.Empty(VerifyInProxy.ManifestFile.Parts(records, 1));
+        Assert.Equal(2, VerifyInProxy.ManifestFile.Files(records, 1).Count);
+    }
+
+    // Fix round 1, M-b: a volume that opened the part without NO_BUFFERING | WRITE_THROUGH (the flags silently dropped)
+    // is a buffered destination: no checkpoints (the data may still be in RAM), not a primary candidate.
+    [Fact]
+    public void VolumeIgnoringNoBuffering_WrittenAsBuffered_NoCheckpoints()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        var dest = dir.Sub("d1");
+        using var ignoring = new Volume(dest, ignore: true);
+        var engine = new OffloadEngine(Options());
+        var plan = engine.Prepare(card, [dest], null, "2026-10-08");
+
+        var report = engine.Run(plan);
+
+        Assert.True(report.SafeToFormat);
+        Assert.Equal([false], engine.WrittenUnbuffered);
+        Assert.Equal(false, report.Destinations[0].Unbuffered);
         var records = VerifyInProxy.ManifestFile.Read(plan.CardPaths[0]);
         Assert.Empty(VerifyInProxy.ManifestFile.Parts(records, 1));
         Assert.Equal(2, VerifyInProxy.ManifestFile.Files(records, 1).Count);
