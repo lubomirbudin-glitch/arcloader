@@ -4,6 +4,9 @@ namespace Offload.Core;
 internal sealed class FrameSource
 {
     public required IReadOnlyList<string> InputArgs { get; init; }
+    /// Plan 10 mode A: the tap's activity for the clip ffmpeg reads from it (RangeServer.ActivityOf) — a rise is a sign
+    /// of life for the stall watchdog while a slow destination is being read; null otherwise.
+    public Func<long>? InputActivity { get; init; }
     /// Decoder whose stdout is piped into ffmpeg's stdin (input "-"), or null.
     public string? FeederExe { get; init; }
     public IReadOnlyList<string> FeederArgs { get; init; } = [];

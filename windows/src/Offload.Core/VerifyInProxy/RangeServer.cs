@@ -13,6 +13,9 @@ public interface ITapSource
     long Length { get; }
     /// The bytes at `offset` into `buffer`; how many were copied — fewer only at the end of the file. Throws on a disk error.
     int Read(long offset, Span<byte> buffer);
+    /// A count that rises while the source is working on a read (TapFile: bytes read from the disk, piece by piece) — the
+    /// proxy's stall watchdog takes it as a sign of life of a slow destination (batch 7–9).
+    long Activity => 0;
 }
 
 /// R3 (mode A): Offload's own HTTP server, so the ffmpeg process reads the clip through Offload and every byte it reads
@@ -35,12 +38,21 @@ public sealed class RangeServer : IDisposable
 
     readonly TcpListener listener;
     readonly byte[] token = RandomNumberGenerator.GetBytes(16);
-    readonly ConcurrentDictionary<string, ITapSource> files = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<string, Entry> files = new(StringComparer.Ordinal);
     readonly ConcurrentDictionary<TcpClient, byte> clients = new();
     readonly SemaphoreSlim slots = new(MaxConnections, MaxConnections);
     readonly CancellationTokenSource stop = new();
     readonly Task accepting;
     long bytesSent, requests, readErrors;
+
+    /// The servers listening now, by port: how the renderer finds a tap URL's activity (ActivityOf).
+    static readonly ConcurrentDictionary<int, RangeServer> live = new();
+
+    sealed class Entry(ITapSource source)
+    {
+        public readonly ITapSource Source = source;
+        public long Sent;
+    }
 
     public int Port { get; }
     public IPEndPoint EndPoint => (IPEndPoint)listener.LocalEndpoint;
@@ -58,6 +70,7 @@ public sealed class RangeServer : IDisposable
         listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         Port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        live[Port] = this;
         accepting = Task.Run(AcceptLoop);
     }
 
@@ -65,7 +78,7 @@ public sealed class RangeServer : IDisposable
     public string Register(ITapSource source, string name)
     {
         var id = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8));
-        files[id] = source;
+        files[id] = new Entry(source);
         var safe = new string(Path.GetFileName(name).Select(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-' ? c : '_').ToArray());
         return $"http://127.0.0.1:{Port}/{Token}/{id}/{(safe.Length > 0 ? safe : "clip")}";
     }
@@ -74,6 +87,16 @@ public sealed class RangeServer : IDisposable
     public void Unregister(string url)
     {
         if (IdOf(url) is string id) files.TryRemove(id, out _);
+    }
+
+    /// For the proxy's stall watchdog (batch 7–9): a counter for a URL a live server serves — the body bytes sent for it
+    /// plus its source's own activity (a slow disk read in progress); null for any other URL, after Unregister and after
+    /// the server's Dispose.
+    public static Func<long>? ActivityOf(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Host != "127.0.0.1" || !live.TryGetValue(uri.Port, out var server)) return null;
+        if (server.Find(uri.AbsolutePath) is not { } entry) return null;
+        return () => Interlocked.Read(ref entry.Sent) + entry.Source.Activity;
     }
 
     /// The file id of a URL this server made, else null.
@@ -195,7 +218,8 @@ public sealed class RangeServer : IDisposable
         if (method is not ("GET" or "HEAD")) return Status(stream, 405, "Method Not Allowed", close: true, "Allow: GET, HEAD\r\n");
         if (!headers.TryGetValue("Host", out var host) || !host.Equals($"127.0.0.1:{Port}", StringComparison.OrdinalIgnoreCase))
             return Status(stream, 403, "Forbidden", close: true);
-        if (Find(target) is not { } source) return Status(stream, 404, "Not Found", close);
+        if (Find(target) is not { } entry) return Status(stream, 404, "Not Found", close);
+        var source = entry.Source;
 
         long length = source.Length;
         long start = 0, end = length - 1;
@@ -228,13 +252,14 @@ public sealed class RangeServer : IDisposable
             if (n <= 0) return false;   // the file got shorter than it said: cut, ffmpeg sees a short read
             stream.Write(buffer, 0, n);
             Interlocked.Add(ref bytesSent, n);
+            Interlocked.Add(ref entry.Sent, n);
             at += n;
         }
         return !close;
     }
 
     /// The source a target names: "/<token>/<id>/<name>" with this server's token and a registered id; else null.
-    ITapSource? Find(string target)
+    Entry? Find(string target)
     {
         var parts = target.Split('/');
         if (parts.Length != 4 || parts[0].Length != 0 || parts[1].Length != token.Length * 2) return null;
@@ -274,6 +299,7 @@ public sealed class RangeServer : IDisposable
 
     public void Dispose()
     {
+        live.TryRemove(new KeyValuePair<int, RangeServer>(Port, this));
         stop.Cancel();
         try { listener.Stop(); } catch (Exception) { }
         foreach (var c in clients.Keys) c.Dispose();

@@ -201,11 +201,23 @@ public sealed class ProxyRenderer : IDisposable
     internal static bool UseHardwareDecoding(string? codec) =>
         codec != null && (codec.StartsWith("h264", StringComparison.OrdinalIgnoreCase) || codec.StartsWith("hevc", StringComparison.OrdinalIgnoreCase));
 
-    FrameSource SourceFor(Clip clip, string cardPath, ClipInfo info, RawLook look, double? singleFrameAt, bool hwaccel)
+    /// ffmpeg reads the tap (plan 10, mode A) with this input option: a forward jump over more than 64 KB is a new range
+    /// request, not a read-through. Without it ffmpeg 8.1 read a moov-at-end MOV and an MXF twice over HTTP (it skipped
+    /// the whole mdat by reading it: 200 % of the file); with it 100 % + the few header bytes (plan 10 measurements).
+    internal static readonly string[] TapInputArgs = ["-short_seek_size", "65536"];
+
+    FrameSource SourceFor(Clip clip, string cardPath, ClipInfo info, RawLook look, double? singleFrameAt, bool hwaccel, string? inputUrl = null)
     {
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
-            return new FrameSource { InputArgs = hwaccel ? ["-hwaccel", "auto", "-i", path] : ["-i", path] };
+        {
+            string[] input = inputUrl != null ? [.. TapInputArgs, "-i", inputUrl] : ["-i", path];
+            return new FrameSource
+            {
+                InputArgs = hwaccel ? ["-hwaccel", "auto", .. input] : input,
+                InputActivity = inputUrl != null ? VerifyInProxy.RangeServer.ActivityOf(inputUrl) : null,
+            };
+        }
         if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, Msg.NoDecoderShort);
         return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt));
     }
@@ -341,7 +353,9 @@ public sealed class ProxyRenderer : IDisposable
 
     /// Renders the proxy. A render that stalls (no progress for StallTimeout) is killed. With hardware decoding the
     /// clip is then retried once in software — as is one that failed with it; without, the stall fails the proxy.
-    public void Render(Clip clip, string cardPath, ClipInfo info, LutUse? lut, string output, Action<double> progress, Func<bool> isCancelled)
+    /// `inputUrl` (plan 10, mode A): a video clip is read from the tap (RangeServer) instead of from its file.
+    public void Render(Clip clip, string cardPath, ClipInfo info, LutUse? lut, string output, Action<double> progress, Func<bool> isCancelled,
+        string? inputUrl = null)
     {
         var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, Msg.FfmpegNotFound);
         var lutFile = PrepareLut(lut);
@@ -349,7 +363,7 @@ public sealed class ProxyRenderer : IDisposable
         Exception first;
         try
         {
-            RenderOnce(ffmpeg, clip, cardPath, info, lut, lutFile, output, progress, isCancelled, hwaccel);
+            RenderOnce(ffmpeg, clip, cardPath, info, lut, lutFile, output, progress, isCancelled, hwaccel, inputUrl);
             return;
         }
         catch (FfmpegStalledException e) when (!hwaccel && !isCancelled())
@@ -364,7 +378,7 @@ public sealed class ProxyRenderer : IDisposable
         Log?.Invoke($"proxy {clip.Name}: with hardware decoding: {first.Message} — retrying in software");
         try
         {
-            RenderOnce(ffmpeg, clip, cardPath, info, lut, lutFile, output, progress, isCancelled, hwaccel: false);
+            RenderOnce(ffmpeg, clip, cardPath, info, lut, lutFile, output, progress, isCancelled, hwaccel: false, inputUrl);
             Log?.Invoke($"proxy {clip.Name}: software decoding succeeded");
         }
         catch (Exception e) when (e is FfmpegStalledException or ToolError && !isCancelled())
@@ -384,9 +398,9 @@ public sealed class ProxyRenderer : IDisposable
         + (retriedInSoftware ? " i bez hardwarového dekódování; proxy nevznikla" : "");
 
     void RenderOnce(string ffmpeg, Clip clip, string cardPath, ClipInfo info, LutUse? lut, string? lutFile, string output,
-        Action<double> progress, Func<bool> isCancelled, bool hwaccel)
+        Action<double> progress, Func<bool> isCancelled, bool hwaccel, string? inputUrl)
     {
-        var src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel);
+        var src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl);
         string? label = null;
         try
         {
@@ -521,8 +535,16 @@ public sealed class ProxyRenderer : IDisposable
                 }) { IsBackground = true };
                 pump.Start();
             }
+            long inputSeen = src.InputActivity?.Invoke() ?? 0;
             while (!ff.WaitForExit(200))
             {
+                // Plan 10 mode A: the tap still reading the destination for ffmpeg (a slow disk, a piece of a block at a
+                // time) is a sign of life; it does not end the 3x grace before the first frame. A hung disk shows none.
+                if (src.InputActivity?.Invoke() is long tapActivity && tapActivity != inputSeen)
+                {
+                    inputSeen = tapActivity;
+                    Interlocked.Exchange(ref lastAdvance, Environment.TickCount64);
+                }
                 bool cancelled = isCancelled();
                 bool stalled = !cancelled && stallAfter is TimeSpan limit
                     && Environment.TickCount64 - Interlocked.Read(ref lastAdvance) > limit.TotalMilliseconds * (Volatile.Read(ref advanced) == 1 ? 1 : 3);

@@ -259,6 +259,13 @@ public static unsafe class NativeIO
         return Win32.NtQueryInformationFile(h, out _, out uint mode, sizeof(uint), Win32.FileModeInformation) == 0 && (mode & both) == both;
     }
 
+    /// Plan 10 (batch 7–9): the handle really reads past the file cache — the I/O manager kept NO_BUFFERING on it
+    /// (FileModeInformation). False when it cannot be told. What verifies a destination's block reads only through such a
+    /// handle.
+    public static bool ReadsPastTheCache(SafeFileHandle h) =>
+        Win32.NtQueryInformationFile(h, out _, out uint mode, sizeof(uint), Win32.FileModeInformation) == 0
+        && (mode & Win32.FILE_NO_INTERMEDIATE_BUFFERING) != 0;
+
     /// The volume serial as the report keeps it (R12): "1A2B-3C4D", the way `vol` prints it; null when unknown.
     public static string? VolumeSerialText(string path) =>
         VolumeSerial(path) is uint s ? $"{s >> 16:X4}-{s & 0xFFFF:X4}" : null;
