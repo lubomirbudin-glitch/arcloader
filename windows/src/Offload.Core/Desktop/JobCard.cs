@@ -181,10 +181,12 @@ public static class JobCard
         var proxy = r.Proxy is { Enabled: true }
             ? $"{r.Clips.Count(c => c.ProxyStatus == ProxyStatus.Done)} / {r.Clips.Count(c => !(c.ProxyStatus == ProxyStatus.Skipped && (c.ProxyNote == null || c.OriginalLighter)))}"
             : "vypnuto";
+        // Plan 10: verified with the proxies — its time is the proxies', no rate of its own.
+        bool inProxy = r.Destinations.Any(d => d.VerifyMethod == ReportDestination.InProxy);
         return
         [
             new("Kopie", Format.Rate(r.TotalBytes, r.CopySeconds)),
-            new("Ověření", r.Verified ? Format.Rate(r.TotalBytes, r.VerifySeconds) : "vypnuto"),
+            new("Ověření", !r.Verified ? "vypnuto" : inProxy ? "během proxy" : Format.Rate(r.TotalBytes, r.VerifySeconds)),
             new("Proxy", proxy),
             new("Celkem", Duration(elapsed ?? (r.Finished - r.Started - TimeSpan.FromSeconds(r.PausedSeconds)))),
         ];

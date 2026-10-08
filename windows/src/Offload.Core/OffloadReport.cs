@@ -220,11 +220,13 @@ public sealed partial class OffloadReport
             s.Append($"Finished:    {LocalIso(Finished)}\n");
             s.Append($"Files:       {TotalFiles}  ({Format.Bytes(TotalBytes)})\n");
             s.Append($"Copy:        {CopySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, CopySeconds)}\n");
-            s.Append("Verify:      " + (Verified ? $"{VerifySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, VerifySeconds)}" : "NOT VERIFIED") + "\n");
+            s.Append("Verify:      " + (Verified ? $"{VerifySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, VerifySeconds)}" : VerifyPending == true ? "PENDING (with the proxies)" : "NOT VERIFIED") + "\n");
+            if (SafeToFormatSeconds is double toFormat) s.Append($"Safe to format after: {toFormat.ToString("0.0", inv)} s\n");
+            if (ContentWarnings.Count > 0) s.Append($"Content warnings: {ContentWarnings.Count} ({string.Join(", ", ContentWarnings.Select(c => $"{c.Clip.Name} {c.Content!.Timecode}"))})\n");
             if (PausedSeconds > 0) s.Append($"Paused:      {PausedSeconds.ToString("0.0", inv)} s (not in the speeds)\n");
             s.Append($"Hash:        {string.Join("+", Algorithms)}\n");
             foreach (var d in Destinations)
-                s.Append($"Destination: {d.CardPath} [{d.Filesystem}]  ok {d.FilesOK}  failed {d.FilesFailed}{(d.Unbuffered == false ? "  (buffered I/O)" : "")}\n");
+                s.Append($"Destination: {d.CardPath} [{d.Filesystem}{(d.VolumeSerial != null ? " " + d.VolumeSerial : "")}]  ok {d.FilesOK}  failed {d.FilesFailed}{(d.Unbuffered == false ? "  (buffered I/O)" : "")}{(d.VerifyMethod != null ? "  verify: " + d.VerifyMethod : "")}\n");
             if (Skipped.Count > 0) s.Append($"\nSkipped (system files): {string.Join(", ", Skipped)}\n");
             var failed = FailedFiles;
             if (failed.Count > 0)
