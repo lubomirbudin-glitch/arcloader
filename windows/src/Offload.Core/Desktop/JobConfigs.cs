@@ -16,6 +16,8 @@ public static class JobConfigs
             Date = date,
             Hashes = HashKinds.FromSetting(p.Hash),   // an append (below) keeps the earlier backup's (spec 3.5)
             Verify = p.Verify,
+            VerifyInProxy = p.VerifyInProxy,
+            PrimaryDestination = Primary(p),
             AnalyzeClips = p.AnalyzeClips,
             Proxy = SettingsStore.Clone(p.Proxy),
             Tools = SettingsStore.Clone(s.Tools),
@@ -24,6 +26,9 @@ public static class JobConfigs
             Notify = SettingsStore.Clone(p.Notify),
         };
     }
+
+    /// Plan 10: the profile's primary destination — the first one, or null = the fastest measured during the copy.
+    public static int? Primary(SettingsProfile p) => p.VerifyPrimary == SettingsProfile.PrimaryFirst ? 0 : null;
 
     /// "Zkopírovat znovu" (UI návrh 4) after `finished` ended with failed files: see the overload — with the identity of
     /// the card it copied (ruling I1).
@@ -66,6 +71,8 @@ public static class JobConfigs
             AllowSameDevice = true,   // the destinations are fixed by the earlier backup (it may have been made with --allow-same-device)
             AppendInto = entry.Destinations.Select(d => d.CardPath).ToList(),
             Verify = p.Verify,
+            VerifyInProxy = p.VerifyInProxy,
+            PrimaryDestination = Primary(p),
             AnalyzeClips = p.AnalyzeClips,
             Proxy = SettingsStore.Clone(p.Proxy),
             Tools = SettingsStore.Clone(s.Tools),

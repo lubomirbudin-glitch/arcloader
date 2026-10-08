@@ -33,6 +33,9 @@ public static partial class Msg
     public const string HistoryDelayed = "Historie karet je právě zaneprázdněná — záznam této zálohy se zapíše, jakmile to půjde (aplikaci zatím nezavírejte).";
     public const string HistoryNotWritten = "Záznam této zálohy se do historie karet nepodařilo zapsat (historie byla dlouho zaneprázdněná) — záloha na discích je v pořádku, jen ji karta při dalším vložení nepozná.";
 
+    /// CLI --primary 0 or less.
+    public static string PrimaryNotPositive(int n) => $"--primary {n}: cíle se číslují od 1 (pořadí --dest).";
+
     // R6 (resume).
     /// A resume keeps the proxy the interrupted run finished (carried from tasks 12–14).
     public const string ProxyKeptOnResume = "proxy z přerušeného běhu — nerenderovala se znovu (obsah klipu dekodér tentokrát nekontroloval)";

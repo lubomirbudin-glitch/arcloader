@@ -118,6 +118,12 @@
                                   MinWidth="200" AutomationProperties.AutomationId="HashChoice" />
                     </Grid>
                     <TextBlock Text="{Binding Md5Note}" Style="{StaticResource TextWarn}" Margin="138,8,0,0" Visibility="{Binding Md5Note, Converter={StaticResource NullToCollapsed}}" />
+                    <!-- Plan 10 (R11): verify the primary disk while the proxies are made; the others in the background. -->
+                    <CheckBox Style="{StaticResource Check}" Content="{x:Static core:SettingsTexts.VerifyInProxyLabel}" IsChecked="{Binding VerifyInProxy}" Margin="0,22,0,0"
+                              IsEnabled="{Binding Verify}" AutomationProperties.AutomationId="VerifyInProxy" />
+                    <TextBlock Text="{x:Static core:SettingsTexts.VerifyInProxyNote}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="26,4,0,0" />
+                    <CheckBox Style="{StaticResource Check}" Content="{x:Static core:SettingsTexts.VerifyPrimaryFirstLabel}" IsChecked="{Binding VerifyPrimaryFirst}" Margin="26,10,0,0"
+                              IsEnabled="{Binding VerifyInProxy}" AutomationProperties.AutomationId="VerifyPrimaryFirst" />
                     <TextBlock Text="OVĚŘIT ZÁLOHU" Style="{StaticResource StepTitle}" Margin="0,30,0,10" />
                     <TextBlock Text="Zkontroluje dřívější zálohu na cíli proti ASC MHL, bez karty (Ctrl+Shift+O)." Style="{StaticResource TextMuted}" />
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">

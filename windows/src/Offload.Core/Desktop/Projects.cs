@@ -70,6 +70,8 @@ public static class Projects
     {
         to.DestRoots = [.. from.DestRoots];
         to.Verify = from.Verify;
+        to.VerifyInProxy = from.VerifyInProxy;   // plan 10 (R11)
+        to.VerifyPrimary = from.VerifyPrimary;
         to.AnalyzeClips = from.AnalyzeClips;
         to.Hash = from.Hash;
         to.Proxy = SettingsStore.Clone(from.Proxy);
