@@ -231,7 +231,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     public bool BurnTimecode { get => p.BurnTimecode; set { p.BurnTimecode = value; Changed(nameof(BurnTimecode)); } }
     public bool Audio { get => p.Audio; set { p.Audio = value; Changed(nameof(Audio)); } }
     public bool SkipCameraProxies { get => p.SkipCameraProxies; set { p.SkipCameraProxies = value; Changed(nameof(SkipCameraProxies)); } }
-    /// 0.5.1: no proxy for an H.264/HEVC original that is lighter than the proxy would be (LighterSource).
+    /// 0.5.1: no proxy for an H.264/HEVC original that is lighter than the proxy would be — H.264/HEVC proxies only (LighterSource).
     public bool SkipLighterSources { get => p.SkipLighterSources; set { p.SkipLighterSources = value; Changed(nameof(SkipLighterSources)); } }
     public bool CopyToAllDestinations { get => p.CopyToAllDestinations; set { p.CopyToAllDestinations = value; Changed(nameof(CopyToAllDestinations)); } }
     /// Spec 4.2, R26: off by default until a Gen 4 sample confirms the SDK conversion.

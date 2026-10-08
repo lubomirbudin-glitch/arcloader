@@ -730,13 +730,13 @@ stejného jména v různých složkách se tak nepřejmenují a střižna je př
   <tr><td><b class="ui">Přeskočit proxy nahrané kamerou (SUB/PROXY)</b></td><td>zapnuto</td><td>Malé soubory, které kamera nahrává sama
       (ve složkách <code>SUB</code> nebo <code>PROXY</code>), se zkopírují a ověří, ale proxy se z nich znovu nedělá. V reportu jsou
       označené <span class="q">„(proxy kamery)“</span> a mají stav <span class="q">„přeskočeno“</span>.</td></tr>
-  <tr><td><b class="ui">Bez proxy, když je originál lehčí (H.264 / HEVC do velikosti proxy)</b></td><td>zapnuto</td><td>Originál
-      H.264 nebo H.265, který není větší než proxy (výška ≤ výška proxy a šířka ≤ její šířka 16:9, např. 1920 × 1080) a nemá
-      vyšší datový tok, než jaký má proxy (u H.264/H.265 nastavený <b class="ui">Datový tok</b>, u ProResu jeho tok pro danou
-      výšku), proxy nedostane — byla by stejně velká nebo větší a střih by nezrychlila. V reportu má stav
+  <tr><td><b class="ui">Bez proxy, když je originál lehčí (H.264 / HEVC do velikosti proxy)</b></td><td>zapnuto</td><td><b>Jen u proxy
+      H.264/HEVC.</b> Originál H.264 nebo H.265, který není větší než proxy (výška ≤ výška proxy a šířka ≤ její šířka 16:9, např. 1920 × 1080) a nemá
+      vyšší datový tok, než jaký má proxy (nastavený <b class="ui">Datový tok</b>), proxy nedostane — byla by stejně velká nebo větší a střih by nezrychlila. V reportu má stav
       <span class="q">„bez proxy“</span> a šedou poznámku <span class="q">„bez proxy — originál je lehčí (5,2 Mb/s ≤ 10 Mb/s)“</span>;
-      není to chyba, náhledy v reportu má. Kontrola místa s takovou proxy nepočítá. ProRes, DNx, MJPEG, RAW a originály
-      větší než proxy (např. 4K, i s nízkým tokem) dostanou proxy vždy. Vypnuto = proxy pro každý klip (v příkazové řádce
+      není to chyba, náhledy v reportu má. Kontrola místa s takovou proxy nepočítá. S kodekem proxy ProRes se proxy renderuje
+      vždy — ProRes volíte kvůli plynulému střihu. Originály ProRes, DNx, MJPEG, RAW a originály větší než proxy (např. 4K,
+      i s nízkým tokem) dostanou proxy vždy. Vypnuto = proxy pro každý klip (v příkazové řádce
       <code>--proxy-always</code>).</td></tr>
   <tr><td><b class="ui">Kopírovat proxy na všechny cíle</b></td><td>zapnuto</td><td>Proxy se renderuje jednou na první cíl a pak se
       zkopíruje do <code>_PROXY</code> na ostatních cílech. Vypnuto = proxy jen na jednom cíli.</td></tr>

@@ -205,7 +205,8 @@ public sealed class ProxySettings
     /// Skip the low-res files cameras record themselves (Sony SUB, PROXY folders).
     [JsonPropertyName("skipCameraProxies")] public bool SkipCameraProxies { get; set; } = true;
     /// No proxy for an H.264/HEVC original no bigger than the proxy frame and no heavier than its data rate
-    /// (LighterSource; 0.5.1, Windows only). Absent in older files = on.
+    /// (LighterSource; 0.5.1, Windows only) — only when the proxy is H.264/HEVC; a ProRes proxy is always rendered.
+    /// Absent in older files = on.
     [JsonPropertyName("skipLighterSources")] public bool SkipLighterSources { get; set; } = true;
     /// Proxies are rendered once, onto the first destination, then copied to the others.
     [JsonPropertyName("copyToAllDestinations")] public bool CopyToAllDestinations { get; set; } = true;

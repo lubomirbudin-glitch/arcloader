@@ -4,17 +4,18 @@ namespace Offload.Core;
 
 /// `proxy.skipLighterSources` (0.5.1): no proxy when it would not be lighter than the original. A card of already
 /// compressed H.264 (1.3–21 Mb/s against a 10 Mb/s proxy) gave proxies only 24 % smaller in total, some 3.7× the
-/// original. Rule: the original is H.264 or HEVC, no bigger than the proxy frame in either axis (height ≤ proxy height,
-/// width ≤ its 16:9 width) and its video rate is at most the proxy's (SpaceEstimator.ProxyVideoMbps at the height
-/// rendered). Every other codec — ProRes, DNx, MJPEG, MPEG-2, RAW — is heavy to edit even at a low rate and always gets
-/// one. Ruling: an original bigger than the frame always gets a proxy too, however low its rate (4K long-GOP decoding is
-/// what makes the timeline stutter; the proxy is the edit size). A rate or size not known = a proxy.
+/// original. Only for a long-GOP proxy (H.264/HEVC): a ProRes proxy is chosen for smooth editing, so every clip gets it
+/// (controller ruling). Rule: the original is H.264 or HEVC, no bigger than the proxy frame in either axis (height ≤ proxy
+/// height, width ≤ its 16:9 width) and its video rate is at most the proxy's set bitrate. Every other original codec —
+/// ProRes, DNx, MJPEG, MPEG-2, RAW — is heavy to edit even at a low rate and always gets one. Ruling: an original bigger
+/// than the frame always gets a proxy too, however low its rate (4K long-GOP decoding is what makes the timeline stutter;
+/// the proxy is the edit size). A rate or size not known = a proxy.
 public static class LighterSource
 {
     /// The note for the clip (Msg.ProxyLighter) when it gets no proxy, otherwise null.
     public static string? Note(Clip clip, ClipInfo info, ProxySettings p)
     {
-        if (!p.SkipLighterSources || clip.Format != ClipFormat.Video) return null;
+        if (!p.SkipLighterSources || p.Codec is not (ProxyCodec.H264 or ProxyCodec.Hevc) || clip.Format != ClipFormat.Video) return null;
         if (!ProxyRenderer.UseHardwareDecoding(info.Codec)) return null;   // h264… / hevc…: the long-GOP codecs
         if (info.VideoBitrate is not long bits || bits <= 0 || info.Width is not int w || info.Height is not int h) return null;
         if (h > p.Height || w > FrameWidth(p.Height)) return null;

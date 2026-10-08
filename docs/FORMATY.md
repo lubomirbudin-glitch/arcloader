@@ -156,11 +156,11 @@ jako `<extraFolder>\<datum>\<karta>\<složka klipu>\<klip>.mov` — stejné pods
 zálohy bez nich; při shodě jména ve složce `_2`, `_3`…). Chybí, když není nastavená. Stejný klíč
 je v sekci `proxy` souboru `settings.json`. Mac ho zatím nezná a ignoruje (neznámé klíče se přeskakují).
 
-`proxy.skipLighterSources` (bool, chybí = `true`, Windows od 0.5.1; i v `settings.json`, CLI `--proxy-always` = `false`):
+`proxy.skipLighterSources` (bool, chybí = `true`, Windows od 0.5.1; i v `settings.json`, CLI `--proxy-always` = `false`;
+platí **jen u proxy H.264/HEVC** — s kodekem proxy ProRes se proxy renderuje vždy, ProRes se volí kvůli plynulému střihu):
 klip bez proxy, když je originál H.264 nebo HEVC (`info.codec` začíná `h264` / `hevc`), není větší než proxy v žádné ose
 (výška ≤ `height`, šířka ≤ `height` × 16/9) a jeho datový tok videa (ffprobe: `bit_rate` proudu, jinak kontejneru minus
-zvukové proudy) je nejvýš datový tok proxy (H.264/HEVC `bitrateMbps`; ProRes Proxy 45, LT 102, 422 147, HQ 220 Mb/s ×
-(výška/1080)²). Ostatní kodeky (ProRes, DNx, MJPEG, MPEG-2, RAW) a originály větší než proxy — i s nízkým tokem —
+zvukové proudy) je nejvýš datový tok proxy (`bitrateMbps`). Ostatní kodeky (ProRes, DNx, MJPEG, MPEG-2, RAW) a originály větší než proxy — i s nízkým tokem —
 proxy dostanou vždy; neznámý tok nebo rozměr = proxy. Náhledy klipu vznikají dál, kontrola místa s jeho proxy nepočítá.
 Mac klíč nezná a ignoruje ho (renderuje vše).
 

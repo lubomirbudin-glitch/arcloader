@@ -188,8 +188,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   `listening/1.mp4`), stejně ve složce pro proxy navíc; `_2` jen při shodě ve stejné složce. Mac dává proxy přímo do
   `_PROXY`. Doplnění na Windows do zálohy z Macu nebo z Windows 0.5.0 pozná plochou zálohu z reportů a zůstane ploché
   (nic se nepřesouvá). `proxyPath` v reportu je relativní cesta jako dřív, jen s podsložkou — Mac ji jen zobrazí.
-- **Bez proxy, když je originál lehčí** (Windows od 0.5.1, `proxy.skipLighterSources`, výchozí zapnuto): H.264/HEVC
-  originál ne větší než proxy a s datovým tokem nejvýš jako proxy nedostane proxy (`proxyStatus: skipped` + poznámka
+- **Bez proxy, když je originál lehčí** (Windows od 0.5.1, `proxy.skipLighterSources`, výchozí zapnuto, jen u proxy
+  H.264/HEVC — s proxy ProRes se renderuje vždy): H.264/HEVC originál ne větší než proxy a s datovým tokem nejvýš jako proxy nedostane proxy (`proxyStatus: skipped` + poznámka
   „bez proxy — originál je lehčí (X Mb/s ≤ Y Mb/s)“); originál větší než proxy ji dostane vždy (rozhodnutí: 4K long-GOP
   se ve střižně dekóduje těžce i s nízkým tokem). Mac klíč ignoruje a renderuje proxy pro všechny klipy.
 - **Odkaz na proxy v HTML reportu** (Windows od 0.5.1): stav „hotovo“ odkazuje na soubor proxy (`../_PROXY/…`).

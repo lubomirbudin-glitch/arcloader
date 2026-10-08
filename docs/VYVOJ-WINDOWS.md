@@ -40,14 +40,13 @@ o 24 % menší a některé 3,7× větší než originál.
   složky jako na kartě. Obsazená jména = všechny `.mov` pod `_PROXY` (i v podsložkách) na všech cílech; nic se
   nepřepíše (pravidla plánu 6). Oprava („Zkopírovat znovu“) proxy nerenderuje — beze změny.
 - **Bez proxy, když je originál lehčí** (`proxy.skipLighterSources`, výchozí zapnuto; Nastavení → Proxy „Bez proxy, když
-  je originál lehčí (H.264 / HEVC do velikosti proxy)“; CLI `--proxy-always` vypne): `LighterSource.Note` — originál H.264
-  nebo HEVC, výška ≤ výška proxy a šířka ≤ výška × 16/9, datový tok videa ≤ tok proxy (`SpaceEstimator.ProxyVideoMbps`:
-  H.264/HEVC `bitrateMbps`, ProRes tabulka Apple × (výška/1080)² při výšce renderu). Tok videa z ffprobe
+  je originál lehčí (H.264 / HEVC do velikosti proxy)“; CLI `--proxy-always` vypne): `LighterSource.Note` — **jen u proxy H.264/HEVC** (rozhodnutí
+  koordinátora: kodek proxy ProRes si uživatel volí kvůli plynulému střihu, takže s ním dostane proxy každý klip, i lehký
+  long-GOP originál); originál H.264 nebo HEVC, výška ≤ výška proxy a šířka ≤ výška × 16/9, datový tok videa ≤ nastavený
+  `bitrateMbps` proxy (`SpaceEstimator.ProxyVideoMbps`). Tok videa z ffprobe
   (`ClipInfo.VideoBitrate`: `bit_rate` proudu, jinak kontejneru minus zvukové proudy — MTS). ProRes, DNx, MJPEG, MPEG-2
   a RAW proxy dostanou vždy; neznámý tok nebo rozměr také. **Rozhodnutí:** originál větší než proxy (např. 4K s nízkým
   tokem) proxy dostane vždy — dekódování 4K long-GOP H.264/HEVC je to, co ve střižně brzdí, a proxy má velikost střihu.
-  Pozn.: s kodekem proxy ProRes (45–220 Mb/s) tak proxy nedostane skoro žádný H.264/HEVC originál do velikosti proxy;
-  kdo chce ProRes kvůli plynulému střihu vždy, pravidlo vypne.
 - Stav klipu `skipped` s neutrální poznámkou „bez proxy — originál je lehčí (5,2 Mb/s ≤ 10 Mb/s)“ (`ClipEntry.OriginalLighter`);
   HTML „bez proxy“ šedě a poznámka šedě (ne červeně), náhledy vznikají, kontrola místa po analýze s proxy takového klipu
   nepočítá (před kopií tok neznáme — počítá opatrně), karta úlohy „Proxy x / y“ ho nepočítá do y, souhrn „…, 1 bez proxy
@@ -56,8 +55,8 @@ o 24 % menší a některé 3,7× větší než originál.
   slova (`word-break:normal`, `hyphens:none`), je širší (11 %, náhledy 20 %; v úzkém okně 20 % a písmo 12 px); ověřeno
   headless Edge při 1400 a 520 px.
 - Testy: `ProxyPathsTests`, `LighterSourceTests` (pravidlo, ffprobe, místo, nastavení, HTML, souhrny, denní report, celá
-  úloha, CLI), stage 2 se strukturou složek, doplnění do zálohy se složkami i do ploché; `CancelDuringProxies` má
-  `SkipLighterSources = false` (H.264 1080p je lehčí než ProRes HQ). Návod (kapitoly 6 a 10) a PDF návodu znovu
+  úloha, CLI), stage 2 se strukturou složek, doplnění do zálohy se složkami i do ploché; proxy ProRes + lehký H.264
+  originál = proxy (`ProResProxy_AlwaysRendered`). Návod (kapitoly 6 a 10) a PDF návodu znovu
   vytištěné, FORMATY, ROZDILY, VYVOJ-MAC.
 
 ## 2026-10-08 — report: uložení do PDF

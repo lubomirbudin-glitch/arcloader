@@ -76,16 +76,21 @@ public class LighterSourceTests
         Assert.Null(LighterSource.Note(V(), H264(2), new ProxySettings { Enabled = true, SkipLighterSources = false }));
     }
 
-    // The target is the proxy's video rate as the encoder is told (Encoders.VideoArgs) — ProRes by Apple's table, scaled
-    // to the height rendered (SpaceEstimator).
-    [Fact]
-    public void Target_ProResByHeight()
+    // Controller ruling (0.5.1): only a long-GOP proxy (H.264/HEVC) is skipped. A ProRes proxy was picked for smooth
+    // editing — a lighter long-GOP original still gets it, at any rate.
+    [Theory]
+    [InlineData(ProxyCodec.ProresProxy)]
+    [InlineData(ProxyCodec.ProresLT)]
+    [InlineData(ProxyCodec.Prores422)]
+    [InlineData(ProxyCodec.Prores422HQ)]
+    public void ProResProxy_AlwaysRendered(ProxyCodec codec)
     {
-        Assert.Equal(10, SpaceEstimator.ProxyVideoMbps(P, 1080));
-        var prores = new ProxySettings { Enabled = true, Height = 720, Codec = ProxyCodec.ProresProxy };
-        Assert.Equal(20, SpaceEstimator.ProxyVideoMbps(prores, 720), 6);
-        Assert.Equal("bez proxy — originál je lehčí (19 Mb/s ≤ 20 Mb/s)", LighterSource.Note(V(), H264(19, 1280, 720), prores));
-        Assert.Null(LighterSource.Note(V(), H264(21, 1280, 720), prores));
+        var prores = new ProxySettings { Enabled = true, Height = 1080, Codec = codec, BitrateMbps = 10 };
+        Assert.Null(LighterSource.Note(V(), H264(1.3), prores));
+        Assert.Null(LighterSource.Note(V(), H264(1.3, codec: "hevc Main"), prores));
+        Assert.True(SpaceEstimator.ProxyBytes([V()], prores, _ => true, _ => H264(1.3)) > 0);
+        Assert.Equal("bez proxy — originál je lehčí (1,3 Mb/s ≤ 10 Mb/s)",
+            LighterSource.Note(V(), H264(1.3), new ProxySettings { Enabled = true, Codec = ProxyCodec.Hevc, BitrateMbps = 10 }));
     }
 
     // The space check counts no proxy for such a clip (after the analysis: before it, the rate is not known).
