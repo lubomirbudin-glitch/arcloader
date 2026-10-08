@@ -36,7 +36,8 @@ Změna čehokoli tady = změna v obou verzích + záznam v obou `VYVOJ-*.md` + v
         0002_<karta>_<YYYY-MM-DD_HHMMSS>Z.mhl     jen po doplnění nebo opravě
         ascmhl_chain.xml
     _PROXY/                           jen když se renderují proxy
-        <klip>.mov
+        <složka klipu>/<klip>.mov     Windows od 0.5.1: složky jako na kartě (idle/1.mov, PRIVATE/M4ROOT/CLIP/C0001.mov)
+        <klip>.mov                    Mac a Windows do 0.5.0: všechny proxy přímo v _PROXY
 ```
 
 - Stejná karta podruhé týž den → `<karta>_2`, `<karta>_3` … (nikdy se nepřepíše starší offload).
@@ -47,6 +48,15 @@ Změna čehokoli tady = změna v obou verzích + záznam v obou `VYVOJ-*.md` + v
 - Reporty se zapisují přes `.<jméno>.tmp` a přejmenování.
 - Datum a čas změny souborů na cíli = jako na kartě.
 - Na kartu se nikdy nezapisuje.
+- **Proxy ve složkách jako na kartě** (Windows od 0.5.1): proxy klipu `<složka>/<klip>.<ext>` je `_PROXY/<složka>/<klip>.mov`
+  (klip v kořeni karty `_PROXY/<klip>.mov`; sekvence `.ari` je složka — proxy leží vedle ní, pojmenovaná po ní; R3D ve
+  složce `.RDC`). Klipy stejného jména v různých složkách (`idle/1.mp4`, `listening/1.mp4`) tak dostanou stejně
+  pojmenované proxy a přelinkují se podle jména. `_2`, `_3` … (a poznámka „Proxy přejmenována…“) jen při shodě ve stejné
+  složce (`A.mov` + `A.mxf`) nebo s proxy, která tam už je. Složky kamery (`PRIVATE/M4ROOT/CLIP`, `XDROOT/Clip`,
+  `CONTENTS/CLIPS001/…`) se zachovají také. **Starší zálohy** (Mac, Windows do 0.5.0) mají proxy přímo v `_PROXY`; nic se
+  nepřesouvá. Doplnění pozná uspořádání zálohy z jejích reportů: plochá = některý klip z podsložky má `proxyPath`
+  přímo v `_PROXY/` a žádný ve složce; pak i nové proxy jdou přímo do `_PROXY` se starým pravidlem `_2` (jedna záloha =
+  jedno uspořádání). Bez proxy v záloze (nebo jen klipy v kořeni karty) = složky jako na kartě. Oprava proxy nerenderuje.
 
 ## `<karta>.xxh64`
 
@@ -84,7 +94,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | Klíč | Typ | Význam |
 |---|---|---|
 | `tool` | string | `offload` |
-| `version` | string | `0.1.0` (Mac), `0.5.0-win` (Windows) |
+| `version` | string | `0.1.0` (Mac), `0.5.1-win` (Windows) |
 | `generation` | číslo? | jen Windows od 0.2.0 a jen v reportu doplnění nebo opravy (`offload_report_NNNN.json`): číslo generace ASC MHL; chybí = 1 (celá kopie) |
 | `kind` | string? | jen Windows od 0.5.0: `repair` u opravy („Zkopírovat znovu“); chybí u celé kopie a doplnění. Mac ignoruje |
 | `copyPausedSeconds`, `verifyPausedSeconds` | číslo? | jen Windows od 0.5.0: sekundy, které kopie / zpětné čtení stály pozastavené (od Pozastavit do Pokračovat); chybí, když se nepozastavovalo. Rychlosti a doby v TXT, HTML a PDF je odečítají; Mac ignoruje |
@@ -99,15 +109,17 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows) |
 | `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
 | `skipped[]` | string | vynechané systémové položky |
-| `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`?, `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje) |
-| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5` — viz níže) |
+| `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`? (relativní k složce karty, např. `_PROXY/idle/1.mov` — viz „Proxy ve složkách jako na kartě“), `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje) |
+| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `skipLighterSources` (jen Windows od 0.5.1), `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5` — viz níže) |
 | `proxyEncoder` | string? | jen Windows: enkodér ffmpeg, kterým se renderovaly proxy (`h264_nvenc`, `libx264`, `prores_ks` …); chybí, když se žádná proxy nevyrenderovala |
 
 Hodnoty výčtů:
 
 - stav souboru na cíli: `pending`, `written`, `verified`, `failed`
 - `clip.format`: `video`, `braw`, `r3d`, `arriraw`, `canonRaw`, `unknown`
-- `proxyStatus`: `none`, `skipped`, `unsupported`, `done`, `failed`
+- `proxyStatus`: `none`, `skipped`, `unsupported`, `done`, `failed`. Windows od 0.5.1: `skipped` s `proxyNote`
+  „bez proxy — originál je lehčí (5,2 Mb/s ≤ 10 Mb/s)“ = proxy se nedělala, protože by nebyla lehčí než originál (viz
+  `proxy.skipLighterSources`); není to chyba (HTML „bez proxy“ šedě). Nová hodnota výčtu nepřibyla, takže to Mac přečte.
 - `proxy.codec`: `h264`, `hevc`, `proresProxy`, `proresLT`, `prores422`, `prores422HQ`
 - `proxy.lutMode`: `auto`, `builtin`, `custom`, `none`. Chybí-li (starší soubor): s neprázdným `lutPath` → `custom`
   (vlastní LUT jako dřív), bez `lutPath` → `auto` se záložním „bez LUT“. `lutFallback` je id vestavěného LUTu nebo `null`.
@@ -140,8 +152,17 @@ se přeskočí; pořadová čísla v hlášeních (`pravidlo 2`) se počítají 
 Design Film, Video a Extended Video zůstanou. **Neověřeno** — čeká na vzorek .braw Gen 4. Oba klíče jsou i v `settings.json`.
 
 `proxy.extraFolder` (string, volitelný, zatím jen Windows): složka, do které se každá hotová proxy kopíruje navíc,
-jako `<extraFolder>\<datum>\<karta>\<klip>.mov` (při shodě jména `_2`, `_3`…). Chybí, když není nastavená. Stejný klíč
+jako `<extraFolder>\<datum>\<karta>\<složka klipu>\<klip>.mov` — stejné podsložky jako v `_PROXY` (před 0.5.1 a u ploché
+zálohy bez nich; při shodě jména ve složce `_2`, `_3`…). Chybí, když není nastavená. Stejný klíč
 je v sekci `proxy` souboru `settings.json`. Mac ho zatím nezná a ignoruje (neznámé klíče se přeskakují).
+
+`proxy.skipLighterSources` (bool, chybí = `true`, Windows od 0.5.1; i v `settings.json`, CLI `--proxy-always` = `false`):
+klip bez proxy, když je originál H.264 nebo HEVC (`info.codec` začíná `h264` / `hevc`), není větší než proxy v žádné ose
+(výška ≤ `height`, šířka ≤ `height` × 16/9) a jeho datový tok videa (ffprobe: `bit_rate` proudu, jinak kontejneru minus
+zvukové proudy) je nejvýš datový tok proxy (H.264/HEVC `bitrateMbps`; ProRes Proxy 45, LT 102, 422 147, HQ 220 Mb/s ×
+(výška/1080)²). Ostatní kodeky (ProRes, DNx, MJPEG, MPEG-2, RAW) a originály větší než proxy — i s nízkým tokem —
+proxy dostanou vždy; neznámý tok nebo rozměr = proxy. Náhledy klipu vznikají dál, kontrola místa s jeho proxy nepočítá.
+Mac klíč nezná a ignoruje ho (renderuje vše).
 
 ## ASC MHL v2
 

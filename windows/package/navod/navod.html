@@ -194,7 +194,7 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
     náhledy klipů, proxy s LUTy a kontrola USB zapojení. Pro kameramanské asistenty, DITy, data wranglery a střihače.
   </div>
   <div class="meta">
-    Verze aplikace 0.5.0-win · Windows 10 a 11 (64bitové) · přenosná verze bez instalace<br>
+    Verze aplikace 0.5.1-win · Windows 10 a 11 (64bitové) · přenosná verze bez instalace<br>
     Návod popisuje aplikaci <b>Offload.exe</b> a příkazovou řádku <b>bin\offload.exe</b> z balíčku <b>Offload-win-x64-&lt;verze&gt;.zip</b>.
   </div>
 </div>
@@ -704,7 +704,11 @@ a českou hláškou na kartě úlohy (význam a řešení v kapitole 12):</p>
 Proxy</b> vypínačem <b class="ui">Zapnuto</b> (stránku otevře i odkaz <b class="ui">Upravit projekt</b> u kroku 3). Vpravo je
 <b>náhled burn-inu</b> — šedý rám 16:9 s názvem klipu a timecodem vlevo a vpravo dole a se zvoleným výřezem (frame lines);
 skutečný snímek z klipu v něm zatím není.
-Hotové proxy jsou ve složce <code>_PROXY</code> ve složce karty jako <code>&lt;klip&gt;.mov</code>.</p>
+Hotové proxy jsou ve složce <code>_PROXY</code> ve složce karty jako <code>&lt;klip&gt;.mov</code>, a to ve
+<b>stejných podsložkách jako na kartě</b> (od 0.5.1): klip <code>idle\1.mp4</code> má proxy
+<code>_PROXY\idle\1.mov</code>, klip <code>listening\1.mp4</code> proxy <code>_PROXY\listening\1.mov</code> — klipy
+stejného jména v různých složkách se tak nepřejmenují a střižna je přelinkuje podle jména. Složky kamery
+(<code>PRIVATE\M4ROOT\CLIP</code>, <code>XDROOT\Clip</code>, <code>CONTENTS\CLIPS001</code> …) zůstanou také.</p>
 
 <h3>Nastavení proxy</h3>
 <table>
@@ -726,6 +730,14 @@ Hotové proxy jsou ve složce <code>_PROXY</code> ve složce karty jako <code>&l
   <tr><td><b class="ui">Přeskočit proxy nahrané kamerou (SUB/PROXY)</b></td><td>zapnuto</td><td>Malé soubory, které kamera nahrává sama
       (ve složkách <code>SUB</code> nebo <code>PROXY</code>), se zkopírují a ověří, ale proxy se z nich znovu nedělá. V reportu jsou
       označené <span class="q">„(proxy kamery)“</span> a mají stav <span class="q">„přeskočeno“</span>.</td></tr>
+  <tr><td><b class="ui">Bez proxy, když je originál lehčí (H.264 / HEVC do velikosti proxy)</b></td><td>zapnuto</td><td>Originál
+      H.264 nebo H.265, který není větší než proxy (výška ≤ výška proxy a šířka ≤ její šířka 16:9, např. 1920 × 1080) a nemá
+      vyšší datový tok, než jaký má proxy (u H.264/H.265 nastavený <b class="ui">Datový tok</b>, u ProResu jeho tok pro danou
+      výšku), proxy nedostane — byla by stejně velká nebo větší a střih by nezrychlila. V reportu má stav
+      <span class="q">„bez proxy“</span> a šedou poznámku <span class="q">„bez proxy — originál je lehčí (5,2 Mb/s ≤ 10 Mb/s)“</span>;
+      není to chyba, náhledy v reportu má. Kontrola místa s takovou proxy nepočítá. ProRes, DNx, MJPEG, RAW a originály
+      větší než proxy (např. 4K, i s nízkým tokem) dostanou proxy vždy. Vypnuto = proxy pro každý klip (v příkazové řádce
+      <code>--proxy-always</code>).</td></tr>
   <tr><td><b class="ui">Kopírovat proxy na všechny cíle</b></td><td>zapnuto</td><td>Proxy se renderuje jednou na první cíl a pak se
       zkopíruje do <code>_PROXY</code> na ostatních cílech. Vypnuto = proxy jen na jednom cíli.</td></tr>
   <tr><td><b class="ui">Kopírovat proxy i do složky</b></td><td>nevybráno</td><td>Další kopie proxy do vlastní složky — viz níže.</td></tr>
@@ -734,8 +746,9 @@ Hotové proxy jsou ve složce <code>_PROXY</code> ve složce karty jako <code>&l
 <h3>Kopírovat proxy i do složky</h3>
 <p>Tlačítkem <b class="ui">Vybrat…</b> zvolíte složku (např. disk pro střižnu). Každá hotová proxy se kromě
 <code>_PROXY</code> na cílech zkopíruje navíc do</p>
-<pre class="tree">&lt;složka&gt;\&lt;datum&gt;\&lt;karta&gt;\&lt;klip&gt;.mov      např.  G:\Proxy\2026-10-06\A001\A001C001.mov</pre>
+<pre class="tree">&lt;složka&gt;\&lt;datum&gt;\&lt;karta&gt;\&lt;složka klipu&gt;\&lt;klip&gt;.mov   např.  G:\Proxy\2026-10-06\A001\idle\1.mov</pre>
 <ul>
+  <li>Podsložky jsou stejné jako v <code>_PROXY</code> (jako na kartě).</li>
   <li>Nic se nepřepíše: když už tam soubor stejného jména je, nový dostane <code>_2</code>, <code>_3</code>…</li>
   <li>Křížek vedle (<span class="q">„Nekopírovat do složky“</span>) volbu zruší.</li>
   <li>Když složka není dostupná (odpojený disk), offload nejde spustit a v Nastavení → Proxy i pod krokem 3 je červeně
@@ -751,8 +764,12 @@ ukazuje jako <i>Tape Name</i> a Resolve jako <i>Reel</i>. Cívka je v pořadí: 
 <code>tape_name</code>), jinak cívka z názvu klipu (<code>A001C003…</code> → <code>A001</code>), jinak název složky karty.
 Je i v reportu a v seznamech klipů. Klip bez timecodu dostane proxy bez timecodu i bez cívky (Resolve ho přelinkuje
 podle jména).</p>
-<p>Když už proxy stejného jména existuje (dva klipy stejného jména, nebo doplnění), nová dostane <code>_2</code> a u klipu je
-poznámka <span class="q">„Proxy přejmenována na A001C003_2 (shoda jmen) — přelinkujte ji ručně.“</span></p>
+<p>Když už proxy stejného jména ve stejné složce existuje (např. <code>A.mov</code> a <code>A.mxf</code> v jedné složce karty,
+nebo doplnění), nová dostane <code>_2</code> a u klipu je poznámka <span class="q">„Proxy přejmenována na A_2 (shoda jmen) —
+přelinkujte ji ručně.“</span> Klipy stejného jména v <b>různých</b> složkách se nepřejmenují (od 0.5.1).</p>
+<p><b>Starší zálohy:</b> zálohy z Offloadu 0.5.0 a starších (a z Macu) mají všechny proxy přímo v <code>_PROXY</code>. Offload
+je nikdy nepřesouvá. Doplnění do takové zálohy pozná podle jejího reportu, že je „plochá“, a nové proxy dá také přímo do
+<code>_PROXY</code> (se starým pravidlem <code>_2</code>), aby v jedné záloze bylo jedno uspořádání. Nové zálohy mají podsložky.</p>
 
 <h3>Kódování proxy</h3>
 <p>H.264 a H.265 kóduje Offload na grafické kartě, pokud ji najde (zkouší NVIDIA, Intel a AMD v tomto pořadí; ověřeno
@@ -1225,16 +1242,18 @@ Nejpomalejší článek: disk SHUTTLE_B (USB 2.0 (480 Mb/s) — linka je plná).
       │  ├─ 0001_A001_2026-10-06_081500Z.mhl
       │  ├─ 0002_A001_2026-10-06_143000Z.mhl <span class="c">← jen po doplnění (nové soubory) nebo opravě</span>
       │  └─ ascmhl_chain.xml
-      └─ _PROXY\                             <span class="c">← jen se zapnutými proxy</span>
-         ├─ A001C001.mov
-         └─ A001C002.mov</pre>
+      └─ _PROXY\                             <span class="c">← jen se zapnutými proxy, složky jako na kartě</span>
+         └─ PRIVATE\M4ROOT\CLIP\
+            ├─ A001C001.mov
+            └─ A001C002.mov</pre>
 
 <p>Se složkou pro proxy navíc (kapitola 6) vzniknou kopie proxy i tam:</p>
 <pre class="tree">G:\Proxy\
 └─ 2026-10-06\
    └─ A001\
-      ├─ A001C001.mov
-      └─ A001C002.mov</pre>
+      └─ PRIVATE\M4ROOT\CLIP\
+         ├─ A001C001.mov
+         └─ A001C002.mov</pre>
 
 <h3>Co je dobré vědět</h3>
 <ul>
