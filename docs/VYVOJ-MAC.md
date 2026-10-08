@@ -7,6 +7,11 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Automatické načtení disků (zadání uživatele 2026-10-08):** externí disky se po připojení samy přidají do **cílů**
+  a čtečky karet (resp. karty v nich) do **zdrojů** — dnes se cíle vybírají ručně a zdroje se označují jen podle
+  struktury karty. Rozlišit čtečku od disku (USB třída / IOKit, typ svazku, struktura kamerové karty), nikdy nepřidat
+  jako cíl svazek, který vypadá jako karta, ani interní disk; přidaný cíl jde odebrat a zapamatovat si odebrání.
+
 - **Karty a bezpečnost dat (Windows plán 6, 2026-10-06):** návrh
   [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
   §2 a §8. Mac převezme: **historii** (`history.json` v Application Support ve stejném formátu — FORMATY.md „Místní
