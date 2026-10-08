@@ -6,6 +6,9 @@ namespace Offload.Core.VerifyInProxy;
 /// FileReader, the same unless unbuffered reads are impossible there. Only whole blocks reach the verifier.
 public static class BlockReads
 {
+    /// Tests: called before every classic read of the file at the key (its full path) — a disk that is slow or hangs.
+    internal static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Action> ReadHooks = new(StringComparer.OrdinalIgnoreCase);
+
     /// Reads every block the verifier still lacks, then once more every block that did not match (spec 10: "blok znovu
     /// bez cache" — matching now is an unstable read, not a failure, and the verifier records it); returns the verdict.
     /// `beforeBlock`: false stops (a pause that ended in a cancel) — OperationCanceledException, as `ct`. `progress`:
@@ -32,7 +35,11 @@ public static class BlockReads
         if (verifier.LengthObserved && verifier.Finish().Kind == BlockOutcomeKind.Verified) return (verifier.Finish(), false);
         using var reader = new FileReader(path);
         verifier.ObserveLength(reader.Length);
-        var outcome = Fill(verifier, (off, buffer, size) => reader.Read(buffer.Span[..size], off), beforeBlock, progress, ct);
+        var outcome = Fill(verifier, (off, buffer, size) =>
+            {
+                if (!ReadHooks.IsEmpty && ReadHooks.TryGetValue(Path.GetFullPath(path), out var hook)) hook();
+                return reader.Read(buffer.Span[..size], off);
+            }, beforeBlock, progress, ct);
         return (outcome, !reader.FromDisk);
     }
 

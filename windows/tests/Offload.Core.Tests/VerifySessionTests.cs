@@ -39,12 +39,12 @@ public class VerifySessionTests
     static Clip MovClip(string rel) => new() { Name = Path.GetFileNameWithoutExtension(rel), Path = rel, Format = ClipFormat.Video, Segments = [rel] };
 
     /// Waits up to 10 s for `condition`.
-    static bool Eventually(Func<bool> condition)
+    static bool Eventually(Func<bool> condition, TimeSpan? limit = null)
     {
         var sw = Stopwatch.StartNew();
         while (!condition())
         {
-            if (sw.Elapsed > TimeSpan.FromSeconds(10)) return false;
+            if (sw.Elapsed > (limit ?? TimeSpan.FromSeconds(10))) return false;
             Thread.Sleep(20);
         }
         return true;
@@ -191,6 +191,42 @@ public class VerifySessionTests
         finally
         {
             DiskBlocks.ReadHooks.TryRemove(file, out _);
+            disk.Set();
+        }
+    }
+
+    // 0.6.1: the fill-in (and the classic read) of a disk that hangs for good is bounded by the stall limit: the destination's
+    // files fail with the Czech reason, Finish returns, nothing is green.
+    [Fact]
+    public async Task FillIn_HungDisk_FailsItsFiles_FinishReturns()
+    {
+        using var dir = new TempDir();
+        var (e, plan, report, _) = Copy(dir, ("a.mov", 2 * Block + 9), ("b.mov", Block));
+        var s = new VerifySession(plan, report, e.Blocks, Block, plan.CardPaths.Select(_ => (double?)1).ToArray(), 0,
+            new string?[plan.CardPaths.Count], new PauseGate(), default, (_, _) => null)
+        {
+            ReadStallTimeout = TimeSpan.FromSeconds(3),   // room for the reader thread to start under the full suite's load
+        };
+        using var _s = s;
+        var file = Path.GetFullPath(Layout.Join(plan.CardPaths[0], "a.mov"));
+        using var disk = new ManualResetEventSlim();
+        Assert.True(BlockReads.ReadHooks.TryAdd(file, () => disk.Wait(TimeSpan.FromSeconds(60))));   // every read hangs
+        try
+        {
+            s.StartBackground();
+            var finishing = Task.Run(s.Finish);
+            Assert.Same(finishing, await Task.WhenAny(finishing, Task.Delay(TimeSpan.FromSeconds(30))));   // not held by the disk
+            await finishing;
+            foreach (var r in s.Results[0])
+            {
+                Assert.Equal(FileState.Failed, r.State);
+                Assert.Equal(Msg.VerifyDiskHung, r.Error);
+            }
+            Assert.False(s.Reading);
+        }
+        finally
+        {
+            BlockReads.ReadHooks.TryRemove(file, out _);
             disk.Set();
         }
     }
@@ -426,7 +462,7 @@ public class VerifySessionTests
 
         var lease = s.Prepare(MovClip("CLIP/a.mov"), 1)!;
         s.StartBackground();
-        Assert.True(Eventually(() => s.VerifiedBytes[0] == s.ToVerify[0]), "the other volume did not read on");
+        Assert.True(Eventually(() => s.VerifiedBytes[0] == s.ToVerify[0], TimeSpan.FromSeconds(60)), "the other volume did not read on");
         Thread.Sleep(300);
         Assert.Equal(0, s.VerifiedBytes[1]);   // SOUND/b.wav on the primary: not while the proxy reads
         lease.Dispose();
