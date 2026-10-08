@@ -47,6 +47,16 @@ public class VerifyReportTests
     }
 
     [Fact]
+    public void Html_HasToolbarWithItsOwnPdf()
+    {
+        var r = Sample(@"D:\Zaloha6-10-06\A001");
+        var html = VerifyReport.Html(r);
+        Assert.Contains("onclick=\"window.print()\">Uložit jako PDF</button>", html);
+        Assert.Contains($"<a href=\"A001_verify_{VerifyReport.Stamp(r)}Z.pdf\"", html);
+        Assert.DoesNotContain("class=\"toolbar\"", VerifyReport.Html(r, forPrint: true));
+    }
+
+    [Fact]
     public void Html_CzechTexts()
     {
         var html = VerifyReport.Html(Sample(@"D:\Zaloha\2026-10-06\A001"));

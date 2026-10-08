@@ -17,11 +17,15 @@ public static partial class HtmlReport
 
     const string RootCss = ":root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e3e3e0;--ok:#1f8a4c;--okbg:#e5f4ea;--bad:#c62828;--badbg:#fdeaea;--warn:#a86400;--warnbg:#fdf2dc;--accent:#3a5bd9}";
     const string DarkCss = "@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2e33;--ok:#4cc27c;--okbg:#14301f;--bad:#ff6b6b;--badbg:#3a1717;--warn:#f0b04a;--warnbg:#382a10;--accent:#8aa2ff}}";
-    /// For the PDF: light colours only and the full file list expanded.
-    const string PrintCss = "@page{size:A4 landscape;margin:28pt}body{background:#fff;font-size:11px}main{padding:0;max-width:none}th,td{padding:5px 7px}tr{break-inside:avoid}h2{break-after:avoid}.stat b{font-size:17px}.thumb,.nothumb{width:112px;height:63px}.thumbs figure img{width:96px;height:54px}";
+    /// For the PDF: the full file list expanded and a denser type size (the page rule is in BaseCss).
+    const string PrintCss = "body{font-size:11px}main{padding:0;max-width:none}th,td{padding:5px 7px}h2{break-after:avoid}.stat b{font-size:17px}";
     const string BaseCss =
-        "*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 \"Segoe UI\",-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif}\n" +
+        "@page{size:A4 landscape;margin:10mm}\n" +
+        "*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 \"Segoe UI\",-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;overflow-wrap:anywhere}\n" +
         "main{max-width:1200px;margin:0 auto;padding:28px 20px 60px}\n" +
+        ".toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:18px}\n" +
+        ".toolbar button{font:inherit;font-weight:600;padding:7px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}\n" +
+        ".toolbar button:hover{filter:brightness(1.1)}.toolbar a{color:var(--accent);font-weight:600}.toolbar .hint{color:var(--muted);font-size:12px}\n" +
         "header{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:22px}\n" +
         "h1{font-size:26px;margin:0;letter-spacing:-.01em}h2{font-size:16px;margin:30px 0 10px}\n" +
         ".sub{color:var(--muted)}.badge{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:600;font-size:13px}\n" +
@@ -31,18 +35,22 @@ public static partial class HtmlReport
         ".stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}\n" +
         ".stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stat span{color:var(--muted);font-size:12px}\n" +
         ".panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow-x:auto}\n" +
-        "table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}\n" +
-        "th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}\n" +
+        "table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere}\n" +
+        "table.clips{table-layout:fixed}table.clips td,table.clips th{padding:8px 6px;overflow-wrap:normal}table.clips td.clip,table.clips td.st{overflow-wrap:anywhere}table.clips td.num,table.clips th.num,table.clips td.nw{white-space:nowrap}\n" +
+        ".c-thumb{width:22%}.c-clip{width:19%}.c-codec{width:8%}.c-res{width:9%}.c-fps{width:5%}.c-dur{width:6%}.c-tc{width:9%}.c-audio{width:5%}.c-size{width:8%}.c-proxy{width:9%}\n" +
+        "th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}tr{break-inside:avoid}\n" +
         "td.num{text-align:right;font-variant-numeric:tabular-nums}code,.mono{font:12px ui-monospace,Consolas,Menlo,monospace}\n" +
-        "td.clip{white-space:normal;min-width:180px;max-width:300px}.wrap{white-space:normal}\n" +
-        ".thumb{width:128px;height:72px;object-fit:contain;background:#000;border-radius:4px;display:block}\n" +
-        ".nothumb{width:128px;height:72px;border-radius:4px;background:var(--line)}\n" +
-        ".thumbs{display:flex;gap:4px}.thumbs figure{margin:0}.thumbs figcaption{font:10px ui-monospace,Consolas,monospace;color:var(--muted);text-align:center}\n" +
+        "td.clip{min-width:0}.wrap{white-space:normal}\n" +
+        ".thumb{display:block;width:100%;max-width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:4px}\n" +
+        ".nothumb{width:100%;max-width:128px;aspect-ratio:16/9;border-radius:4px;background:var(--line)}\n" +
+        ".thumbs{display:flex;flex-wrap:wrap;gap:4px}.thumbs figure{margin:0;flex:1 1 0;min-width:0;max-width:128px}.thumbs figcaption{font:10px ui-monospace,Consolas,monospace;color:var(--muted);text-align:center}\n" +
         ".clipname{font-weight:600}.path,.note{color:var(--muted);font-size:12px}\n" +
         "details summary{cursor:pointer;padding:10px 0;font-weight:600}\n" +
-        ".err{white-space:normal;color:var(--bad)}\n" +
+        ".err{color:var(--bad)}\n" +
         "footer{margin-top:40px;color:var(--muted);font-size:12px}\n" +
-        "@media print{body{background:#fff}.panel,.stat{border-color:#ccc}details{display:block}}\n";
+        "@media (max-width:760px){main{padding:16px 10px 40px}.hide-sm{display:none}.thumbs figcaption{display:none}.c-thumb{width:26%}.c-clip{width:30%}.c-fps{width:8%}.c-dur{width:12%}.c-size{width:12%}.c-proxy{width:12%}}\n" +
+        // Printing from any browser, even from a dark screen: white page, dark text.
+        "@media print{" + RootCss + "body{background:#fff;color:#000}.toolbar{display:none}.panel{overflow:visible;border-color:#ccc}.stat{border-color:#ccc}details{display:block}.hide-sm{display:table-cell}.thumbs figcaption{display:block}}\n";
 
     internal static string Esc(string s)
     {
@@ -63,6 +71,14 @@ public static partial class HtmlReport
 
     /// The report's CSS (screen with dark mode, or print) — shared with the verification report.
     internal static string Styles(bool forPrint) => RootCss + "\n" + (forPrint ? PrintCss : DarkCss) + "\n" + BaseCss;
+
+    /// Screen-only bar at the top of every HTML report: print to PDF from the browser, or open the PDF the app wrote next to the
+    /// HTML. The PDF is made after the HTML (and skipped when Edge is missing); there is no option to switch it off, so the link
+    /// is always there and the file may be missing without Edge. Not in the PDF itself.
+    internal static string Toolbar(string pdfFileName, bool forPrint) => forPrint ? "" :
+        "<div class=\"toolbar\"><button type=\"button\" onclick=\"window.print()\">Uložit jako PDF</button>" +
+        "<span class=\"hint\">v tisku zvolte „Uložit jako PDF“</span>" +
+        $"<a href=\"{Esc(Uri.EscapeDataString(pdfFileName))}\" title=\"PDF vzniká po dokončení přes Microsoft Edge; bez něj soubor nemusí existovat\">Otevřít PDF report</a></div>\n";
 
     internal static string DateTimeText(DateTime d) => d.ToLocalTime().ToString("d. M. yyyy HH:mm:ss", Cs);
     static string TimeText(DateTime d) => d.ToLocalTime().ToString("HH:mm:ss", Inv);
@@ -139,6 +155,7 @@ public static partial class HtmlReport
         h.Append($"<title>Offload {Esc(r.CardName)} – {Esc(r.Date)}</title>\n<style>\n");
         h.Append(Styles(forPrint));
         h.Append("</style></head><body><main>\n");
+        h.Append(Toolbar(OffloadReport.PdfName(r.CardName, r.Generation ?? 1), forPrint));
         var append = r.Generation > 1 ? $" <span class=\"sub\">· {(r.IsRepair ? "oprava" : "doplnění")} (generace {r.Generation})</span>" : "";
         h.Append($"<header><h1>{Esc(r.CardName)}{append}</h1><span class=\"badge {statusClass}\">{status}</span>\n");
         h.Append($"<span class=\"sub\">{DateTimeText(r.Started)} – {TimeText(r.Finished)}</span></header>\n");
@@ -211,8 +228,11 @@ public static partial class HtmlReport
 
     static void AppendClips(StringBuilder h, OffloadReport r)
     {
-        h.Append("<h2>Klipy</h2><div class=\"panel\"><table>\n");
-        h.Append("<tr><th></th><th>Klip</th><th>Formát</th><th>Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Délka</th><th>TC</th><th class=\"num\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n");
+        h.Append("<h2>Klipy</h2><div class=\"panel\"><table class=\"clips\"><colgroup>");
+        h.Append("<col class=\"c-thumb\"><col class=\"c-clip\"><col class=\"c-codec hide-sm\"><col class=\"c-res hide-sm\">");
+        h.Append("<col class=\"c-fps\"><col class=\"c-dur\"><col class=\"c-tc hide-sm\"><col class=\"c-audio hide-sm\">");
+        h.Append("<col class=\"c-size\"><col class=\"c-proxy\"></colgroup>\n");
+        h.Append("<tr><th></th><th>Klip</th><th class=\"hide-sm\">Formát</th><th class=\"hide-sm\">Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Délka</th><th class=\"hide-sm\">TC</th><th class=\"num hide-sm\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n");
         foreach (var c in r.Clips)
         {
             var img = c.Thumbnails.Count > 0
@@ -235,10 +255,10 @@ public static partial class HtmlReport
             var audio = i == null ? "" : (i.AudioChannels > 0 ? $"{i.AudioChannels} ch" : "—");
             h.Append($"<tr><td>{img}</td><td class=\"clip\"><div class=\"clipname\">{Esc(c.Clip.Name)}{cameraProxy}</div>");
             h.Append($"<div class=\"path\">{Esc(c.Clip.Path)}</div>{noteHtml}</td>");
-            h.Append($"<td class=\"wrap\">{Esc(string.Join(" · ", codecParts))}</td><td>{Esc(i?.ResolutionLabel ?? "")}</td><td class=\"num\">{Esc(i?.FpsLabel ?? "")}</td>");
-            h.Append($"<td class=\"num\">{Esc(i?.DurationLabel ?? "")}</td><td class=\"mono\">{Esc(i?.Timecode ?? "")}</td>");
-            h.Append($"<td class=\"num\">{audio}</td>");
-            h.Append($"<td class=\"num\">{Format.Bytes(c.Clip.Bytes)}</td><td class=\"{pc}\">{pl}</td></tr>\n");
+            h.Append($"<td class=\"wrap hide-sm\">{Esc(string.Join(" · ", codecParts))}</td><td class=\"nw hide-sm\">{Esc(i?.ResolutionLabel ?? "")}</td><td class=\"num\">{Esc(i?.FpsLabel ?? "")}</td>");
+            h.Append($"<td class=\"num\">{Esc(i?.DurationLabel ?? "")}</td><td class=\"mono hide-sm\">{Esc(i?.Timecode ?? "")}</td>");
+            h.Append($"<td class=\"num hide-sm\">{audio}</td>");
+            h.Append($"<td class=\"num\">{Format.Bytes(c.Clip.Bytes)}</td><td class=\"st {pc}\">{pl}</td></tr>\n");
         }
         h.Append("</table></div>\n");
         if (r.Proxy is { Enabled: true } p)

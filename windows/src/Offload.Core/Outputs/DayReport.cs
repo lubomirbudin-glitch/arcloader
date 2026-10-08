@@ -138,6 +138,7 @@ public static class DayReport
         var h = new StringBuilder();
         h.Append("<!doctype html>\n<html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
         h.Append($"<title>Denní report {E(day.Date)}</title>\n<style>\n{HtmlReport.Styles(forPrint)}</style></head><body><main>\n");
+        h.Append(HtmlReport.Toolbar(PdfName(day.Date), forPrint));
         int verified = day.VerifiedCards;
         var (badge, badgeClass) = verified == cards.Count && cards.Count > 0 ? ("VŠE OVĚŘENO", "ok") : ("VYŽADUJE POZORNOST", "warn");
         h.Append($"<header><h1>Denní report — {E(DateText(day.Date))}</h1><span class=\"badge {badgeClass}\">{badge}</span>\n");

@@ -69,7 +69,68 @@ public class HtmlReportTests
 
     [Fact]
     public void Print_HasA4LandscapePage() =>
-        Assert.Contains("@page{size:A4 landscape;margin:28pt}", HtmlReport.Render(Reports.Sample(Card), forPrint: true));
+        Assert.Contains("@page{size:A4 landscape;margin:10mm}", HtmlReport.Render(Reports.Sample(Card), forPrint: true));
+
+    [Fact]
+    public void Toolbar_HasPrintButtonHintAndPdfLink()
+    {
+        var html = HtmlReport.Render(Reports.Sample(Card));
+        Assert.Contains("<div class=\"toolbar\">", html);
+        Assert.Contains("<button type=\"button\" onclick=\"window.print()\">Uložit jako PDF</button>", html);
+        Assert.Contains("v tisku zvolte „Uložit jako PDF“", html);
+        Assert.Contains("<a href=\"A001_report.pdf\"", html);
+        Assert.Contains(">Otevřít PDF report</a>", html);
+        Assert.Matches(@"@media print\{.*\.toolbar\{display:none\}", html);
+    }
+
+    [Fact]
+    public void Toolbar_LinksTheGenerationsOwnPdf()
+    {
+        var r = Reports.Sample(Card);
+        r.Generation = 2;
+        Assert.Contains("<a href=\"A001_report_0002.pdf\"", HtmlReport.Render(r));
+    }
+
+    [Fact]
+    public void Toolbar_IsNotInThePdfItself() =>
+        Assert.DoesNotContain("<div class=\"toolbar\">", HtmlReport.Render(Reports.Sample(Card), forPrint: true));
+
+    [Fact]
+    public void Css_PrintIsA4LandscapeWhiteAndRowsStayWhole()
+    {
+        foreach (var forPrint in new[] { false, true })
+        {
+            var html = HtmlReport.Render(Reports.Sample(Card), forPrint);
+            Assert.Contains("@page{size:A4 landscape;margin:10mm}", html);
+            Assert.Contains("break-inside:avoid", html);
+            Assert.Contains("@media print{:root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f", html);   // light colours even when printed from a dark screen
+            Assert.Contains("body{background:#fff;color:#000}", html);
+        }
+    }
+
+    [Fact]
+    public void Css_TablesFitTheWidthAndWrap()
+    {
+        var css = HtmlReport.Styles(false);
+        Assert.Contains("overflow-wrap:anywhere", css);
+        Assert.Contains("table.clips{table-layout:fixed", css);
+        Assert.Contains(".thumbs figure{margin:0;flex:1 1 0;min-width:0;max-width:128px}", css);
+        Assert.Contains("max-width:100%", css);
+        Assert.DoesNotContain("vertical-align:middle;white-space:nowrap", css);
+        Assert.DoesNotContain("src=\"http", css);
+    }
+
+    [Fact]
+    public void Clips_TableHasColumnWidthsAndStaysSelfContained()
+    {
+        var r = Reports.Sample(Card);
+        r.Clips.Add(new ClipEntry { Clip = new Clip { Name = "A", Path = "A.mov", Format = ClipFormat.Video, Segments = ["A.mov"], Bytes = 1 }, ProxyStatus = ProxyStatus.Done });
+        var html = HtmlReport.Render(r);
+        Assert.Contains("<table class=\"clips\"><colgroup>", html);
+        Assert.Contains("<col class=\"c-proxy\">", html);
+        Assert.DoesNotContain("<script src", html);
+        Assert.DoesNotContain("<link ", html);
+    }
 
     [Fact]
     public void Clips_RenderRowWithThumbnailAndProxyStatus()
@@ -89,7 +150,7 @@ public class HtmlReportTests
         Assert.Contains("base64,BAUG\" alt=\"\"><figcaption>01:00:06:00</figcaption>", html);
         Assert.Contains("base64,BwgJ\" alt=\"\"><figcaption>01:00:11:24</figcaption></figure></div>", html);
         Assert.Contains("3840×2160", html);
-        Assert.Contains("<td class=\"ok\">hotovo</td>", html);
+        Assert.Contains("<td class=\"st ok\">hotovo</td>", html);
         Assert.Contains("2 ch", html);
         Assert.Contains("Proxy: H.264, 1080p, výřez 1.66, LUT: automaticky podle kamery", html);
         r.ProxyEncoder = "h264_nvenc";

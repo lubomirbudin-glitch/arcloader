@@ -133,6 +133,18 @@ public class DayReportTests
         Assert.Contains("@page{size:A4 landscape", DayReport.Html(DayReport.Load(Path.Combine(dir.Path, "D", "2026-10-06")), forPrint: true));
     }
 
+    [Fact]
+    public void Html_HasToolbarWithItsOwnPdf()
+    {
+        using var dir = new TempDir();
+        var day = DayReport.Load(DayFixtures.Day(dir));
+        var html = DayReport.Html(day);
+        Assert.Contains("onclick=\"window.print()\">Uložit jako PDF</button>", html);
+        Assert.Contains($"<a href=\"{DayReport.PdfName(day.Date)}\"", html);
+        Assert.Contains("@page{size:A4 landscape;margin:10mm}", html);
+        Assert.DoesNotContain("class=\"toolbar\"", DayReport.Html(day, forPrint: true));
+    }
+
     // Task 1–2 review: an unreadable report is shown in a Czech sentence, its English reason only in parentheses.
     [Fact]
     public void Problems_UnreadableReports_InACzechSentence()
