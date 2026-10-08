@@ -822,6 +822,13 @@ public sealed class OffloadJob
                 Update(s => s with { ProxiesFailed = s.ProxiesFailed + 1 });
                 continue;
             }
+            if (LighterSource.Note(clip, info, Config.Proxy) is string lighter)
+            {
+                // 0.5.1: the proxy would be no lighter than the original — none, and no failure (the thumbnails are made).
+                entries[i].ProxyStatus = ProxyStatus.Skipped;
+                entries[i].ProxyNote = lighter;
+                continue;
+            }
             var (rel, name) = ProxyPaths.Pick(clip, tree, usedNames);
             var sw = Stopwatch.StartNew();
             try

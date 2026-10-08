@@ -324,7 +324,8 @@ public class StageTwoTests
         TestMedia.MakeClip(Path.Combine(card, "long.mov"), seconds: 30, width: 1920, height: 1080);
         var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")])
         {
-            Proxy = new ProxySettings { Enabled = true, Height = 1080, Codec = ProxyCodec.Prores422HQ },
+            // H.264 1080p is lighter than a ProRes HQ proxy (0.5.1): rendered anyway, the test is about the cancel.
+            Proxy = new ProxySettings { Enabled = true, Height = 1080, Codec = ProxyCodec.Prores422HQ, SkipLighterSources = false },
         }, Options());
         var run = Task.Run(() => job.Run());
         // Wait for the render's own progress: from then on the cancel lands inside ffmpeg (no fixed 300 ms guess

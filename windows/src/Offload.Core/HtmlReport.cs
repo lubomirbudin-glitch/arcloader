@@ -130,6 +130,7 @@ public static partial class HtmlReport
         ProxyStatus.Done => ("ok", "hotovo"),
         ProxyStatus.Failed => ("bad", "chyba"),
         ProxyStatus.Unsupported => ("warn", "nepodporováno"),
+        ProxyStatus.Skipped when c.OriginalLighter => ("muted", "bez proxy"),
         ProxyStatus.Skipped => ("muted", "přeskočeno"),
         _ => ("muted", "—"),
     };
@@ -251,11 +252,13 @@ public static partial class HtmlReport
             if (i?.Codec is string codec && !codecParts.Contains(codec)) codecParts.Add(codec);
             var (pc, pl) = ProxyLabel(c);
             var notes = new List<string>();
-            foreach (var n in new[] { c.ProbeError, c.ProxyNote })
+            // The lighter original's reason is neutral (grey), not a problem (red).
+            foreach (var n in new[] { c.ProbeError, c.OriginalLighter ? null : c.ProxyNote })
                 if (n != null && !notes.Contains(n)) notes.Add(n);
             var note = string.Join(" · ", notes);
             var cameraProxy = c.Clip.IsCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "";
             var noteHtml = note.Length == 0 ? "" : $"<div class=\"path err\">{Esc(note)}</div>";
+            if (c.OriginalLighter) noteHtml += $"<div class=\"note\">{Esc(c.ProxyNote!)}</div>";
             if (c.Lut is { Source: not "none" } lu) noteHtml += $"<div class=\"note\">LUT: {Esc(lu.Name)} ({Esc(lu.Reason)})</div>";
             else if (c.Lut is { } ln && ln.Reason != "vypnuto v nastavení") noteHtml += $"<div class=\"note\">LUT: bez LUT ({Esc(ln.Reason)})</div>";
             var audio = i == null ? "" : (i.AudioChannels > 0 ? $"{i.AudioChannels} ch" : "—");

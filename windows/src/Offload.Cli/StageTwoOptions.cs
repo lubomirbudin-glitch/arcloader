@@ -18,6 +18,7 @@ sealed class StageTwoOptions
     readonly Option<double> frameScale = new("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
     readonly Option<string> proxyCodec = new("--proxy-codec") { Description = "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.", DefaultValueFactory = _ => "h264" };
     readonly Option<int> proxyBitrate = new("--proxy-bitrate") { Description = "Proxy bitrate (Mb/s) for H.264/HEVC.", DefaultValueFactory = _ => 10 };
+    readonly Option<bool> proxyAlways = new("--proxy-always") { Description = "Render a proxy also when the original is lighter (H.264/HEVC no bigger than the proxy and at most its bitrate; by default such a clip gets none)." };
     readonly Option<bool> noBurnIn = new("--no-burn-in") { Description = "No burn-in of clip name and timecode." };
     readonly Option<string?> proxyFolder = new("--proxy-folder") { Description = "Also copy every proxy to <folder>\\<date>\\<card name>\\ (with --proxy; never overwrites)." };
     readonly Option<bool> noClipList = new("--no-clip-list") { Description = "No clip list CSV (_REPORT\\<card>_clips.csv)." };
@@ -27,7 +28,7 @@ sealed class StageTwoOptions
 
     public void AddTo(Command cmd)
     {
-        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, noBurnIn, proxyFolder, noClipList, ale, noDayReport, brawGen5 })
+        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, proxyAlways, noBurnIn, proxyFolder, noClipList, ale, noDayReport, brawGen5 })
             cmd.Options.Add(o);
     }
 
@@ -79,6 +80,7 @@ sealed class StageTwoOptions
         if (Given(proxyBitrate)) p.BitrateMbps = r.GetValue(proxyBitrate);
         if (Given(frameAspect)) p.FrameAspect = r.GetValue(frameAspect);
         if (Given(frameScale)) p.FrameScale = r.GetValue(frameScale) / 100;
+        if (Given(proxyAlways)) p.SkipLighterSources = !r.GetValue(proxyAlways);
         if (Given(noBurnIn)) p.BurnFilename = p.BurnTimecode = !r.GetValue(noBurnIn);
         if (Given(brawGen5)) p.BrawGen4ToGen5 = r.GetValue(brawGen5);
         if (Given(proxyFolder)) p.ExtraFolder = r.GetValue(proxyFolder) is string pf ? CliPath.Full(pf) : null;

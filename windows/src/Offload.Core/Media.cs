@@ -50,6 +50,10 @@ public sealed class ClipInfo
     [JsonPropertyName("frames")] public int? Frames { get; set; }
     [JsonPropertyName("timecode")] public string? Timecode { get; set; }
     [JsonPropertyName("audioChannels")] public int AudioChannels { get; set; }
+    /// The video stream's data rate in bits per second (ffprobe: the stream's `bit_rate`, else the container's minus the
+    /// audio streams'); null when not known. Decides LighterSource (0.5.1); known only right after the probe (not in the
+    /// report — the note of a clip without a proxy says it).
+    [JsonIgnore] public long? VideoBitrate { get; set; }
     /// Channels of each audio stream, in stream order (ffprobe) - the proxy gets every one of them (R14). Known only right
     /// after the probe (not in the report); empty for RAW decoders and reports read back.
     [JsonIgnore] public List<int> AudioStreams { get; set; } = [];
@@ -129,6 +133,10 @@ public sealed class ClipEntry
     [JsonPropertyName("proxySeconds")] public double? ProxySeconds { get; set; }
     /// The LUT applied to this clip's proxy and thumbnails, and why.
     [JsonPropertyName("lut"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public LutUse? Lut { get; set; }
+    /// No proxy because the original is lighter than one would be (LighterSource, 0.5.1): `skipped` with its note — not a
+    /// failure, and not a proxy the job still owes.
+    [JsonIgnore] public bool OriginalLighter =>
+        ProxyStatus == ProxyStatus.Skipped && ProxyNote?.StartsWith(Msg.ProxyLighterPrefix, StringComparison.Ordinal) == true;
     /// First, middle and last frame (JPEG + caption); embedded in the HTML/PDF report only.
     [JsonIgnore] public List<Thumbnail> Thumbnails { get; set; } = [];
 }
@@ -196,6 +204,9 @@ public sealed class ProxySettings
     [JsonPropertyName("audio")] public bool Audio { get; set; } = true;
     /// Skip the low-res files cameras record themselves (Sony SUB, PROXY folders).
     [JsonPropertyName("skipCameraProxies")] public bool SkipCameraProxies { get; set; } = true;
+    /// No proxy for an H.264/HEVC original no bigger than the proxy frame and no heavier than its data rate
+    /// (LighterSource; 0.5.1, Windows only). Absent in older files = on.
+    [JsonPropertyName("skipLighterSources")] public bool SkipLighterSources { get; set; } = true;
     /// Proxies are rendered once, onto the first destination, then copied to the others.
     [JsonPropertyName("copyToAllDestinations")] public bool CopyToAllDestinations { get; set; } = true;
     /// Windows only, optional: every proxy is also copied to `<folder>\<date>\<card>\` (never overwriting). Absent = off.

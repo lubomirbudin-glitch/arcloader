@@ -234,6 +234,14 @@ public static class Msg
     // Clip notes (report, job card)
     public const string NoVerifiedCopy = "žádná ověřená kopie";
     public static string ProxyRenamed(string name) => $"Proxy přejmenována na {name} (shoda jmen) — přelinkujte ji ručně.";
+
+    /// LighterSource (0.5.1): the note of a clip without a proxy because its original is lighter — neutral, not a failure.
+    public const string ProxyLighterPrefix = "bez proxy — originál je lehčí";
+
+    public static string ProxyLighter(double sourceMbps, double targetMbps) =>
+        $"{ProxyLighterPrefix} ({Mbps(sourceMbps)} Mb/s ≤ {Mbps(targetMbps)} Mb/s)";
+
+    static string Mbps(double v) => v.ToString("0.#", System.Globalization.CultureInfo.GetCultureInfo("cs-CZ"));
     public const string FfmpegNotFound = "ffmpeg nenalezen";
     public const string FfprobeNotFound = "ffprobe nenalezen";
     public const string UnknownFormat = "neznámý formát";

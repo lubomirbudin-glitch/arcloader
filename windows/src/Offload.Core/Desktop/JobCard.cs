@@ -165,7 +165,7 @@ public static class JobCard
     public static IReadOnlyList<SummaryField> Summary(OffloadReport r, TimeSpan? elapsed)
     {
         var proxy = r.Proxy is { Enabled: true }
-            ? $"{r.Clips.Count(c => c.ProxyStatus == ProxyStatus.Done)} / {r.Clips.Count(c => !(c.ProxyStatus == ProxyStatus.Skipped && c.ProxyNote == null))}"
+            ? $"{r.Clips.Count(c => c.ProxyStatus == ProxyStatus.Done)} / {r.Clips.Count(c => !(c.ProxyStatus == ProxyStatus.Skipped && (c.ProxyNote == null || c.OriginalLighter)))}"
             : "vypnuto";
         return
         [
