@@ -126,10 +126,10 @@ public class ReportTests
     [Fact]
     public void SuccessAndEject()
     {
-        Assert.True(Reports.Sample(Card).SafeToEject);
+        Assert.True(Reports.Sample(Card).SafeToFormat);
         var notVerified = Reports.Sample(Card, verified: false);
         Assert.True(notVerified.Success);
-        Assert.False(notVerified.SafeToEject);
+        Assert.False(notVerified.SafeToFormat);
         var failed = Reports.Sample(Card, destError: "boom");
         Assert.False(failed.Success);
         Assert.Equal(["CLIP/c 02.mov"], failed.FailedFiles.Select(f => f.Path));
@@ -151,7 +151,7 @@ public class ReportTests
             Verified = false, Destinations = r.Destinations, Files = files, Skipped = [],
         };
         Assert.True(cancelled.Success);
-        Assert.False(cancelled.SafeToEject);
+        Assert.False(cancelled.SafeToFormat);
         Assert.Empty(cancelled.FailedFiles);
     }
 
@@ -174,7 +174,7 @@ public class ReportTests
         Assert.Equal(2, r.Destinations[0].FilesOK);
         Assert.Equal(0, r.Destinations[0].FilesFailed);
         Assert.True(r.Success);
-        Assert.False(r.SafeToEject);
+        Assert.False(r.SafeToFormat);
     }
 
     [Fact]

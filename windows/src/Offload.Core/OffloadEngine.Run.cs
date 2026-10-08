@@ -133,7 +133,10 @@ public sealed partial class OffloadEngine
             var copyPaused = Pauses.PausedTotal - pausedBefore;
 
             Options.BeforeVerify?.Invoke();
-            if (Options.Verify && !IsCancelled)
+            // Plan 10: the read-back is left to stage 2 (the proxies read the copies) — not when the copy was cancelled or
+            // the card changed (then the generation is written now, as without verify-in-proxy), never for a repair.
+            bool defer = Options.DeferVerify && Options.Verify && !IsCancelled && !cardChanged && plan.Mode != PlanMode.Repair;
+            if (Options.Verify && !IsCancelled && !defer)
             {
                 SetPhase(CopyPhase.Verify);
                 // A repair compares every copy — kept or new — with what the backup recorded (ruling C1).
@@ -149,7 +152,8 @@ public sealed partial class OffloadEngine
 
             SetPhase(CopyPhase.Report);
             var report = OffloadReport.Build(plan, recorded, sourceErrors, ws.Select(w => w.Results).ToList(),
-                ws.Select(w => w.Unbuffered).ToList(), Options.Verify && !IsCancelled, started, copyFinished, finished, copyPaused, verifyPaused);
+                ws.Select(w => w.Unbuffered).ToList(), Options.Verify && !IsCancelled && !defer, started, copyFinished, finished, copyPaused, verifyPaused);
+            if (defer) report.VerifyPending = true;
             if (plan.Mode == PlanMode.Repair)
             {
                 var moved = ws.SelectMany(w => w.MovedAside.Select(m => new SetAsideCopy(w.Index, files[m.File].RelPath, m.MovedTo))).ToList();
@@ -158,7 +162,8 @@ public sealed partial class OffloadEngine
             var reportErrors = new List<string>();
             foreach (var path in cardPaths)
             {
-                try { report.Write(path, includeHashRecords: true); }
+                // Deferred (plan 10): the reports now, the ASC MHL and the hash lists once verified (Commit, stage 2).
+                try { report.Write(path, includeHashRecords: !defer, createNew: defer ? plan.Generation > 1 : null); }
                 catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException) { reportErrors.Add(e.Message); }
             }
             SetPhase(CopyPhase.Done);

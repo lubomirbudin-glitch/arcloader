@@ -38,7 +38,7 @@ public class RepairEngineTests
 
         var report = engine.Run(plan);
 
-        Assert.True(report.SafeToEject);
+        Assert.True(report.SafeToFormat);
         Assert.Equal((PlanMode.Repair, 2, "repair"), (plan.Mode, report.Generation!.Value, report.Kind));
         var f = Assert.Single(report.Files);
         Assert.Equal(RepairFixtures.Bad, f.Path);
@@ -165,7 +165,7 @@ public class RepairEngineTests
         File.WriteAllBytes(cardFile, original);
         File.SetLastWriteTimeUtc(cardFile, time);
         var (last, lastPlan) = Prepare(card, paths);
-        Assert.True(last.Run(lastPlan).SafeToEject);
+        Assert.True(last.Run(lastPlan).SafeToFormat);
         Assert.Equal(before[0][RepairFixtures.Bad].Bytes, File.ReadAllBytes(Layout.Join(paths[0], RepairFixtures.Bad)));
         Assert.Equal(before[1][RepairFixtures.Bad].Bytes, File.ReadAllBytes(Layout.Join(paths[1], "_REPORT/neshoda_0005/CLIP/A001C002.mov")));
         foreach (var p in paths) Assert.True(BackupVerifier.Verify(p, chunkSize: 4096).Success);
@@ -213,7 +213,7 @@ public class RepairEngineTests
         Assert.Equal([false, true], next.Write[0]);
         Assert.Equal("_REPORT/neshoda_0003/CLIP/A001C002.mov", next.SetAside[0][1]);
         var (engine2, plan2) = Prepare(card, paths);
-        Assert.True(engine2.Run(plan2).SafeToEject);
+        Assert.True(engine2.Run(plan2).SafeToFormat);
         Assert.Equal(goodTime, File.GetLastWriteTimeUtc(good));
         foreach (var p in paths) Assert.True(BackupVerifier.Verify(p, chunkSize: 4096).Success);
     }

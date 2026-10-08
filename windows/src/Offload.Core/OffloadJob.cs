@@ -316,7 +316,7 @@ public sealed class OffloadJob
             copying = true;
             var report = Engine.Run(plan);
             Report = report;
-            bool safe = report.SafeToEject;
+            bool safe = report.SafeToFormat;
             BackupState? whole = null;
             if (plan.Mode == PlanMode.Repair)
             {

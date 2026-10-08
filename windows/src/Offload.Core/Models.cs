@@ -16,6 +16,9 @@ public sealed class OffloadOptions
     /// Plan 10, R6: every this many blocks of a file being written, its block hashes go into the manifest as a checkpoint
     /// (64 × 16 MiB = 1 GiB); 0 = none.
     internal int CheckpointBlocks { get; set; } = 64;
+    /// Plan 10 (verify-in-proxy): the job verifies in stage 2 — the copy leaves out the read-back, writes its reports with
+    /// "verifyPending" and no ASC MHL / hash list yet (OffloadReport.Commit writes them once verified).
+    internal bool DeferVerify { get; set; }
     public bool AllowSameDevice { get; set; }
     /// Tests only: source and destinations in temp folders share a volume.
     internal bool AllowSourceVolume { get; set; }

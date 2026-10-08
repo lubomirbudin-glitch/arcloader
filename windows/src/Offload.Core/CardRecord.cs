@@ -172,7 +172,8 @@ public sealed partial class CardRecord
         var states = column >= 0
             ? [column < rec.File.Destinations.Count ? rec.File.Destinations[column] : "pending"]
             : rec.File.Destinations.Count > 0 ? rec.File.Destinations : ["pending"];
-        return states.All(state => state == "verified" || (rec.Report.Verified && state != "written"));
+        // Plan 10: a report whose verification has not ended (verifyPending) is never read as verified, whatever it says.
+        return rec.Report.VerifyPending != true && states.All(state => state == "verified" || (rec.Report.Verified && state != "written"));
     }
 
     /// The column of `report` whose destination card path is `cardPath` (full path, any case, trailing separator), or

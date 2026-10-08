@@ -215,7 +215,7 @@ public class RepairJobTests
 
         var s = repair.Status();
         Assert.Equal(JobPhase.Done, s.Phase);
-        Assert.True(repair.Report!.SafeToEject);
+        Assert.True(repair.Report!.SafeToFormat);
         Assert.False(s.SafeToEject);
         Assert.Equal("Na kartě je 1 soubor, který záloha nemá — kartu nevysouvejte, zálohu doplňte.", s.Warning);
         Assert.Equal("Na kartě jsou 3 soubory, které záloha nemá — kartu nevysouvejte, zálohu doplňte.", Msg.CardFilesNotInBackup(3));
@@ -406,7 +406,7 @@ public class RepairJobTests
         var append = Job(card, [], history, paths);
         append.Run();
 
-        Assert.True(append.Report!.SafeToEject);
+        Assert.True(append.Report!.SafeToFormat);
         Assert.False(append.Status().SafeToEject);
         Assert.False(Assert.Single(new HistoryStore(history).Load()).Verified);
         Assert.All(paths, p => Assert.False(CardRecord.Load(p).Verified));

@@ -12,10 +12,20 @@ public sealed class ReportDestination
     [JsonPropertyName("root")] public required string Root { get; init; }
     [JsonPropertyName("cardPath")] public required string CardPath { get; init; }
     [JsonPropertyName("filesystem")] public required string Filesystem { get; init; }
-    [JsonPropertyName("filesOK")] public int FilesOK { get; init; }
-    [JsonPropertyName("filesFailed")] public int FilesFailed { get; init; }
+    [JsonPropertyName("filesOK")] public int FilesOK { get; set; }
+    [JsonPropertyName("filesFailed")] public int FilesFailed { get; set; }
     /// Present (false) only when the volume refused unbuffered writes and the file cache was used.
     [JsonPropertyName("unbuffered")] public bool? Unbuffered { get; init; }
+    /// Plan 10 (spec 9): how this destination was verified — "verify-in-proxy" (the proxy's reads and the fill-in) or
+    /// "read-back" (every file read again); absent while not verified (yet). The Mac ignores it.
+    [JsonPropertyName("verifyMethod")] public string? VerifyMethod { get; set; }
+    /// Why it was verified by read-back although verify-in-proxy ran (Czech, e.g. a network volume); absent otherwise.
+    [JsonPropertyName("verifyNote")] public string? VerifyNote { get; set; }
+    /// R12: the volume's serial number at the copy ("1A2B-3C4D") — which disk it really was, whatever its letter is now.
+    [JsonPropertyName("volumeSerial")] public string? VolumeSerial { get; init; }
+
+    public const string InProxy = "verify-in-proxy";
+    public const string ReadBack = "read-back";
 }
 
 public sealed class ReportFile
@@ -30,8 +40,8 @@ public sealed class ReportFile
     /// older reports and for a file the card could not give. The Mac ignores it.
     [JsonPropertyName("xxh128")] public string? Xxh128 { get; init; }
     [JsonPropertyName("sourceError")] public string? SourceError { get; init; }
-    [JsonPropertyName("destinations")] public required IReadOnlyList<string> Destinations { get; init; }
-    [JsonPropertyName("errors")] public required IReadOnlyList<string?> Errors { get; init; }
+    [JsonPropertyName("destinations")] public required IReadOnlyList<string> Destinations { get; set; }
+    [JsonPropertyName("errors")] public required IReadOnlyList<string?> Errors { get; set; }
     /// Repair only (Windows from 0.5.0): per destination, true = a new copy was written there, false = the good copy there
     /// was only read back (its state carries on the earlier one). The Mac ignores it.
     [JsonPropertyName("rewritten")] public IReadOnlyList<bool>? Rewritten { get; init; }
@@ -57,8 +67,8 @@ public sealed partial class OffloadReport
     [JsonPropertyName("sourceFilesystem")] public required string SourceFilesystem { get; init; }
     [JsonPropertyName("started")] public DateTime Started { get; init; }
     [JsonPropertyName("copyFinished")] public DateTime CopyFinished { get; init; }
-    [JsonPropertyName("finished")] public DateTime Finished { get; init; }
-    [JsonPropertyName("verified")] public bool Verified { get; init; }
+    [JsonPropertyName("finished")] public DateTime Finished { get; set; }
+    [JsonPropertyName("verified")] public bool Verified { get; set; }
     [JsonPropertyName("totalFiles")] public int TotalFiles { get; init; }
     [JsonPropertyName("totalBytes")] public long TotalBytes { get; init; }
     [JsonPropertyName("destinations")] public required IReadOnlyList<ReportDestination> Destinations { get; init; }
@@ -76,6 +86,14 @@ public sealed partial class OffloadReport
     /// leave the pause out; the Mac ignores the keys (its speeds then include it).
     [JsonPropertyName("copyPausedSeconds")] public double? CopyPausedSeconds { get; set; }
     [JsonPropertyName("verifyPausedSeconds")] public double? VerifyPausedSeconds { get; set; }
+    /// Plan 10: the copy is done and its verification runs with the proxies (stage 2) — written at the end of the copy,
+    /// gone once verified. A report saying so has no ASC MHL generation yet (OffloadReport.Commit). Absent otherwise.
+    [JsonPropertyName("verifyPending")] public bool? VerifyPending { get; set; }
+    /// Spec 9: seconds from the start until every file was verified on every destination (pauses left out); absent when
+    /// that was never reached. The Mac ignores it.
+    [JsonPropertyName("safeToFormatSeconds")] public double? SafeToFormatSeconds { get; set; }
+    /// Spec 10 (Czech): unstable reads, a block wrong on several destinations, what the card gave for it again.
+    [JsonPropertyName("verifyNotes")] public List<string>? VerifyNotes { get; set; }
     /// "repair" for "Zkopírovat znovu" (Windows from 0.5.0); absent for a full copy and an append. The Mac ignores it.
     [JsonPropertyName("kind")] public string? Kind { get; set; }
     /// Repair: the non-matching copies moved aside (`_REPORT/neshoda_NNNN/…`); absent when none was.
@@ -104,8 +122,8 @@ public sealed partial class OffloadReport
     public bool IsGood(string state) => state == "verified" || (!Verified && state == "written");
 
     [JsonIgnore] public bool Success => FailedFiles.Count == 0;
-    /// Every file is on every destination and was read back with a matching hash.
-    [JsonIgnore] public bool SafeToEject => Success && Verified;
+    /// Every file is on every destination and was verified there (spec 2 safe_to_format for this generation).
+    [JsonIgnore] public bool SafeToFormat => Success && Verified;
 
     public static OffloadReport Build(OffloadPlan plan, IReadOnlyList<FileHashes> hashes, IReadOnlyList<string?> sourceErrors,
         IReadOnlyList<DestFileResult[]> destResults, IReadOnlyList<bool> unbuffered, bool verified,
@@ -135,6 +153,8 @@ public sealed partial class OffloadReport
             FilesOK = destResults[d].Count(r => IsOk(r.State)),
             FilesFailed = destResults[d].Count(r => !IsOk(r.State)),
             Unbuffered = unbuffered[d] ? null : false,
+            VerifyMethod = verified ? ReportDestination.ReadBack : null,
+            VolumeSerial = NativeIO.VolumeSerialText(root),
         }).ToList();
         return new OffloadReport
         {
@@ -156,6 +176,8 @@ public sealed partial class OffloadReport
             Kind = plan.Mode == PlanMode.Repair ? RepairKind : null,
             CopyPausedSeconds = Seconds(copyPaused),
             VerifyPausedSeconds = Seconds(verifyPaused),
+            SafeToFormatSeconds = verified && files.All(f => f.SourceError == null && f.Destinations.All(s => s == "verified"))
+                ? Math.Round(Math.Max(0, (finished - started - copyPaused - verifyPaused).TotalSeconds), 1) : null,
             HashAlgorithms = HashKinds.Normalize(plan.Hashes).HasFlag(HashKind.Md5) ? HashKinds.Names(plan.Hashes) : null,
         };
     }
@@ -250,7 +272,32 @@ public sealed partial class OffloadReport
     ///      lines that were missed (any MHL-recorded path not in the list).
     /// The hash list and the chain are swapped with ReplaceFile (NativeIO.WriteFileReplacing), which works while a
     /// reader holds them with delete sharing.
-    public void Write(string cardPath, bool includeHashRecords)
+    /// `createNew` (plan 10): whether the reports must not exist yet — by default an append's first write (with the hash
+    /// records); the deferred first write of a verify-in-proxy append says so itself, its Commit replaces them.
+    public void Write(string cardPath, bool includeHashRecords, bool? createNew = null)
+    {
+        WriteReports(cardPath, createNew ?? ((Generation ?? 1) > 1 && includeHashRecords));
+        if (!includeHashRecords) return;
+        Mhl.Write(this, cardPath);
+        WriteHashLists(cardPath);
+    }
+
+    /// Plan 10: the generation's record once its verification ended in stage 2. The ASC MHL generation and the chain come
+    /// first — the commit point — then the reports written at the end of the copy (with verifyPending) are replaced, then
+    /// the hash lists. Ruling I1: a commit that fails at any step before the reports leaves the folder's reports saying
+    /// verifyPending, so the folder is never read as verified (CardRecord.ReadBack, BackupState) without its MHL
+    /// generation; one that fails at the hash lists leaves reports and chain in agreement, the next append adds the lines
+    /// (as in Write). The MHL generation file is new (no stage wrote it before).
+    public void Commit(string cardPath)
+    {
+        if (VerifyPending == true) throw new InvalidOperationException("a report still pending verification is never committed");
+        Mhl.Write(this, cardPath);
+        WriteReports(cardPath, create: false);
+        WriteHashLists(cardPath);
+    }
+
+    /// The JSON, TXT and HTML of this generation: `create` = they must not exist yet (WriteFileNew).
+    void WriteReports(string cardPath, bool create)
     {
         int generation = Generation ?? 1;
         var dir = System.IO.Path.Combine(cardPath, Layout.ReportDirName);
@@ -261,17 +308,19 @@ public sealed partial class OffloadReport
             (TextName(generation), Summary),
             (HtmlName(CardName, generation), HtmlReport.Render(this)),
         };
-        bool create = generation > 1 && includeHashRecords;
         foreach (var (name, text) in outputs)
         {
             var path = System.IO.Path.Combine(dir, name);
             if (create) NativeIO.WriteFileNew(path, Encoding.UTF8.GetBytes(text));
             else NativeIO.WriteFileDurably(path, Encoding.UTF8.GetBytes(text));
         }
-        if (!includeHashRecords) return;
-        Mhl.Write(this, cardPath);
-        // `<card>.xxh64` always, `<card>.md5` with MD5 (spec 3.5). An append: the earlier lines byte for byte, then the
-        // missed ones, then this generation's.
+    }
+
+    /// `<card>.xxh64` always, `<card>.md5` with MD5 (spec 3.5). An append: the earlier lines byte for byte, then the
+    /// missed ones, then this generation's.
+    void WriteHashLists(string cardPath)
+    {
+        int generation = Generation ?? 1;
         foreach (var algorithm in Algorithms.Where(a => a is "xxh64" or "md5"))
         {
             var hashList = HashListPath(cardPath, CardName, algorithm);

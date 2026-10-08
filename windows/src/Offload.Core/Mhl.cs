@@ -47,6 +47,9 @@ public static class Mhl
             : generation > 1
             ? $"Offload doplnění: {listed} {Texts.Plural(listed, "nový soubor", "nové soubory", "nových souborů")} z {report.Source}"
             : $"Offload of {report.CardName} from {report.Source}";
+        // Plan 10 (spec 9): how this destination was verified. `<process>` stays "transfer" — the ASC MHL v2 schema allows
+        // only in-place / transfer / flatten there — so the method goes into the generation's comment.
+        if (report.Destinations[d].VerifyMethod is string method) comment += $" · ověření: {method}";
         IEnumerable<string> ignore = earlier?.Generations.FirstOrDefault() is { } first
             ? first.Ignore
             : IgnorePatterns.Concat(report.Skipped.Select(s => s.Split('/')[^1]));
@@ -83,6 +86,9 @@ public static class Mhl
                 if (state == "pending" || (!rewritten[d] && (state == "written" || !report.Verified))) continue;
                 action = state == "failed" ? "failed" : rewritten[d] ? "original" : "verified";
             }
+            // Spec 9: only a verified copy goes in — "written" only into a generation made without (or cancelled before)
+            // its verification, as before plan 10.
+            else if (state == "written" && report.Verified) continue;
             else action = state is "verified" or "written" ? "original" : "failed";
             Line("    <hash>");
             Line($"      <path size=\"{f.Size}\" lastmodificationdate=\"{IsoDate(f.Modified)}\">{Esc(f.Path)}</path>");
