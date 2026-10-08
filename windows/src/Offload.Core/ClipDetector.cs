@@ -124,6 +124,11 @@ public static class FFProbe
         info.AudioStreams = streams.Where(x => Str(x, "codec_type") == "audio").Select(x => Int(x, "channels") ?? 0).ToList();
         info.AudioChannels = info.AudioStreams.Sum();
         if (Dbl(Str(format, "duration")) is double fd) info.Duration = fd;
+        // MPEG-TS (AVCHD .MTS) and some MXF have no rate per stream: the container's minus what the audio streams take.
+        info.VideoBitrate = v.ValueKind == JsonValueKind.Object && Long(Str(v, "bit_rate")) is long vb && vb > 0 ? vb
+            : Long(Str(format, "bit_rate")) is long fb && fb > 0
+                ? Math.Max(0, fb - streams.Where(x => Str(x, "codec_type") == "audio").Sum(x => Long(Str(x, "bit_rate")) ?? 0)) is long rest && rest > 0 ? rest : null
+                : null;
         var ftags = Tags(format);
         info.Timecode ??= Str(ftags, "timecode") ?? streams.Select(x => Str(Tags(x), "timecode")).FirstOrDefault(t => t != null);
         info.Camera = Camera(Str(ftags, "com.apple.quicktime.make"), Str(ftags, "com.apple.quicktime.model"))
@@ -179,6 +184,9 @@ public static class FFProbe
 
     static int? Int(JsonElement e, string name) =>
         e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var i) ? i : null;
+
+    static long? Long(string? s) =>
+        long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l) ? l : null;
 
     static double? Dbl(string? s) =>
         double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null;

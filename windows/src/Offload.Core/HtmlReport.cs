@@ -36,8 +36,8 @@ public static partial class HtmlReport
         ".stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stat span{color:var(--muted);font-size:12px}\n" +
         ".panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow-x:auto}\n" +
         "table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere}\n" +
-        "table.clips{table-layout:fixed}table.clips td,table.clips th{padding:8px 6px;overflow-wrap:normal}table.clips td.clip,table.clips td.st{overflow-wrap:anywhere}table.clips td.num,table.clips th.num,table.clips td.nw{white-space:nowrap}\n" +
-        ".c-thumb{width:22%}.c-clip{width:19%}.c-codec{width:8%}.c-res{width:9%}.c-fps{width:5%}.c-dur{width:6%}.c-tc{width:9%}.c-audio{width:5%}.c-size{width:8%}.c-proxy{width:9%}\n" +
+        "table.clips{table-layout:fixed}table.clips td,table.clips th{padding:8px 6px;overflow-wrap:normal}table.clips td.clip{overflow-wrap:anywhere}table.clips td.st{overflow-wrap:normal;word-break:normal;hyphens:none}table.clips td.st a{color:inherit}table.clips td.num,table.clips th.num,table.clips td.nw{white-space:nowrap}\n" +
+        ".c-thumb{width:20%}.c-clip{width:19%}.c-codec{width:8%}.c-res{width:9%}.c-fps{width:5%}.c-dur{width:6%}.c-tc{width:9%}.c-audio{width:5%}.c-size{width:8%}.c-proxy{width:11%}\n" +
         "th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}tr{break-inside:avoid}\n" +
         "td.num{text-align:right;font-variant-numeric:tabular-nums}code,.mono{font:12px ui-monospace,Consolas,Menlo,monospace}\n" +
         "td.clip{min-width:0}.wrap{white-space:normal}\n" +
@@ -48,7 +48,7 @@ public static partial class HtmlReport
         "details summary{cursor:pointer;padding:10px 0;font-weight:600}\n" +
         ".err{color:var(--bad)}\n" +
         "footer{margin-top:40px;color:var(--muted);font-size:12px}\n" +
-        "@media (max-width:760px){main{padding:16px 10px 40px}.hide-sm{display:none}.thumbs figcaption{display:none}.c-thumb{width:26%}.c-clip{width:30%}.c-fps{width:8%}.c-dur{width:12%}.c-size{width:12%}.c-proxy{width:12%}}\n" +
+        "@media (max-width:760px){main{padding:16px 10px 40px}.hide-sm{display:none}.thumbs figcaption{display:none}.c-thumb{width:22%}.c-clip{width:26%}.c-fps{width:8%}.c-dur{width:12%}.c-size{width:12%}.c-proxy{width:20%}table.clips td.st{font-size:12px}}\n" +
         // Printing from any browser, even from a dark screen: white page, dark text.
         "@media print{" + RootCss + "body{background:#fff;color:#000}.toolbar{display:none}.panel{overflow:visible;border-color:#ccc}.stat{border-color:#ccc}details{display:block}.hide-sm{display:table-cell}.thumbs figcaption{display:block}}\n";
 
@@ -130,9 +130,16 @@ public static partial class HtmlReport
         ProxyStatus.Done => ("ok", "hotovo"),
         ProxyStatus.Failed => ("bad", "chyba"),
         ProxyStatus.Unsupported => ("warn", "nepodporováno"),
+        ProxyStatus.Skipped when c.OriginalLighter => ("muted", "bez proxy"),
         ProxyStatus.Skipped => ("muted", "přeskočeno"),
         _ => ("muted", "—"),
     };
+
+    /// The proxy status; a finished proxy links to its file (the report is in `_REPORT`, the proxy in `_PROXY` beside it).
+    static string ProxyCell(ClipEntry c, string label) =>
+        c.ProxyStatus == ProxyStatus.Done && c.ProxyPath is string rel
+            ? $"<a href=\"../{Esc(string.Join("/", rel.Split('/').Select(Uri.EscapeDataString)))}\" title=\"{Esc(rel)}\">{label}</a>"
+            : label;
 
     /// Disk column: last folder of the root, or the drive itself ("E:\").
     static string DiskName(string root)
@@ -245,11 +252,13 @@ public static partial class HtmlReport
             if (i?.Codec is string codec && !codecParts.Contains(codec)) codecParts.Add(codec);
             var (pc, pl) = ProxyLabel(c);
             var notes = new List<string>();
-            foreach (var n in new[] { c.ProbeError, c.ProxyNote })
+            // The lighter original's reason is neutral (grey), not a problem (red).
+            foreach (var n in new[] { c.ProbeError, c.OriginalLighter ? null : c.ProxyNote })
                 if (n != null && !notes.Contains(n)) notes.Add(n);
             var note = string.Join(" · ", notes);
             var cameraProxy = c.Clip.IsCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "";
             var noteHtml = note.Length == 0 ? "" : $"<div class=\"path err\">{Esc(note)}</div>";
+            if (c.OriginalLighter) noteHtml += $"<div class=\"note\">{Esc(c.ProxyNote!)}</div>";
             if (c.Lut is { Source: not "none" } lu) noteHtml += $"<div class=\"note\">LUT: {Esc(lu.Name)} ({Esc(lu.Reason)})</div>";
             else if (c.Lut is { } ln && ln.Reason != "vypnuto v nastavení") noteHtml += $"<div class=\"note\">LUT: bez LUT ({Esc(ln.Reason)})</div>";
             var audio = i == null ? "" : (i.AudioChannels > 0 ? $"{i.AudioChannels} ch" : "—");
@@ -258,7 +267,7 @@ public static partial class HtmlReport
             h.Append($"<td class=\"wrap hide-sm\">{Esc(string.Join(" · ", codecParts))}</td><td class=\"nw hide-sm\">{Esc(i?.ResolutionLabel ?? "")}</td><td class=\"num\">{Esc(i?.FpsLabel ?? "")}</td>");
             h.Append($"<td class=\"num\">{Esc(i?.DurationLabel ?? "")}</td><td class=\"mono hide-sm\">{Esc(i?.Timecode ?? "")}</td>");
             h.Append($"<td class=\"num hide-sm\">{audio}</td>");
-            h.Append($"<td class=\"num\">{Format.Bytes(c.Clip.Bytes)}</td><td class=\"st {pc}\">{pl}</td></tr>\n");
+            h.Append($"<td class=\"num\">{Format.Bytes(c.Clip.Bytes)}</td><td class=\"st {pc}\">{ProxyCell(c, pl)}</td></tr>\n");
         }
         h.Append("</table></div>\n");
         if (r.Proxy is { Enabled: true } p)

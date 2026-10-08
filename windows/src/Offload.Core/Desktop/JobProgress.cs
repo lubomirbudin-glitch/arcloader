@@ -201,6 +201,7 @@ public sealed class JobProgress
             var proxy = $"proxy {Count(ProxyStatus.Done)}";
             if (Count(ProxyStatus.Failed) > 0) proxy += $", {Count(ProxyStatus.Failed)} chyba";
             if (Count(ProxyStatus.Unsupported) > 0) proxy += $", {Count(ProxyStatus.Unsupported)} nepodporováno";
+            if (r.Clips.Count(c => c.OriginalLighter) is int lighter and > 0) proxy += $", {lighter} bez proxy (lehčí originál)";
             parts.Add(proxy);
         }
         return string.Join(" · ", parts);

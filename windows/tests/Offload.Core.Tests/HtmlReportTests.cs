@@ -15,7 +15,7 @@ public class HtmlReportTests
         Assert.Contains("<td class=\"ok\">ověřeno</td>", html);
         Assert.Contains("<details><summary>Všechny soubory (2)</summary>", html);
         Assert.Contains("prefers-color-scheme:dark", html);
-        Assert.Contains("offload 0.5.0-win", html);
+        Assert.Contains("offload 0.5.1-win", html);
     }
 
     [Fact]
@@ -120,6 +120,21 @@ public class HtmlReportTests
         Assert.DoesNotContain("src=\"http", css);
     }
 
+    // 0.5.1: the proxy status never breaks inside a word („nepodporo|váno“): normal word breaks in that column, which is
+    // a little wider (the thumbnails give it the room — the table still fits 1400 px and A4).
+    [Fact]
+    public void Css_ProxyStatusBreaksOnlyBetweenWords()
+    {
+        var css = HtmlReport.Styles(false);
+        Assert.Contains("table.clips td.st{overflow-wrap:normal;word-break:normal;hyphens:none}", css);
+        Assert.DoesNotContain("td.st{overflow-wrap:anywhere", css);
+        Assert.DoesNotContain("table.clips td.clip,table.clips td.st{", css);
+        Assert.Contains(".c-thumb{width:20%}", css);
+        Assert.Contains(".c-proxy{width:11%}", css);
+        Assert.Contains(".c-proxy{width:20%}table.clips td.st{font-size:12px}}", css);   // the narrow window
+        Assert.Contains("table.clips td.st a{color:inherit}", css);   // the link to a finished proxy keeps the green
+    }
+
     [Fact]
     public void Clips_TableHasColumnWidthsAndStaysSelfContained()
     {
@@ -158,6 +173,21 @@ public class HtmlReportTests
         Assert.DoesNotContain("také ve složce", HtmlReport.Render(r));
         r.Proxy.ExtraFolder = @"E:\Proxy & co";
         Assert.Contains("<span class=\"mono\">_PROXY/</span> · také ve složce <span class=\"mono\">E:\\Proxy &amp; co</span></p>", HtmlReport.Render(r));
+    }
+
+    // 0.5.1: a finished proxy links to its file — relative to _REPORT, in the card's folders (_PROXY mirrors them).
+    [Fact]
+    public void Clips_DoneProxyLinksToItsFile()
+    {
+        var r = Reports.Sample(Card);
+        r.Clips.Add(new ClipEntry
+        {
+            Clip = new Clip { Name = "A&B", Path = "idle cam/A&B.mov", Format = ClipFormat.Video, Segments = ["idle cam/A&B.mov"], Bytes = 1 },
+            ProxyStatus = ProxyStatus.Done,
+            ProxyPath = "_PROXY/idle cam/A&B.mov",
+        });
+        var html = HtmlReport.Render(r);
+        Assert.Contains("<td class=\"st ok\"><a href=\"../_PROXY/idle%20cam/A%26B.mov\" title=\"_PROXY/idle cam/A&amp;B.mov\">hotovo</a></td>", html);
     }
 
     [Fact]

@@ -56,9 +56,27 @@ public sealed class ProxyRenderer : IDisposable
     /// Tests only: H.264/HEVC encoder to use instead of the probed one (OffloadOptions.ProxyEncoder).
     internal string? ForcedEncoder { get; init; }
 
-    /// False for an append (spec 2.2): a proxy of that name that appeared meanwhile is never overwritten — the render
-    /// fails instead.
-    public bool ReplaceExisting { get; init; } = true;
+    /// Paths up to this length go to ffmpeg (and a RAW decoder) as they are; longer ones never do (MAX_PATH, 260).
+    const int ShortPath = 240;
+
+    /// Where the render writes before its final name: `.<name>.part` beside the proxy while that path is short; for a deep
+    /// mirrored folder `.<8 hex>.mov.part` at the top of the `_PROXY` above it (same volume, so the move is a rename);
+    /// when even that is too long, the renderer's work folder (then copied onto the destination).
+    internal static string PartFor(string output, string workDir)
+    {
+        var dir = Path.GetDirectoryName(output)!;
+        var beside = Path.Combine(dir, "." + Path.GetFileName(output) + ".part");
+        if (beside.Length <= ShortPath) return beside;
+        var temp = "." + Guid.NewGuid().ToString("N")[..8] + ".mov.part";
+        for (var d = dir; d != null; d = Path.GetDirectoryName(d))
+        {
+            if (!string.Equals(Path.GetFileName(d), Layout.ProxyDirName, StringComparison.OrdinalIgnoreCase)) continue;
+            var top = Path.Combine(d, temp);
+            if (top.Length <= ShortPath) return top;
+            break;
+        }
+        return Path.Combine(workDir, temp[1..]);
+    }
 
     /// The video encoder proxies are rendered with (probed once, on first use); null without ffmpeg.
     public string? EncoderName => Tools.Ffmpeg is string ffmpeg
@@ -400,14 +418,21 @@ public sealed class ProxyRenderer : IDisposable
                 if (info.Reel is { Length: > 0 } reel) args.AddRange(["-metadata:s:v:0", $"reel_name={reel}"]);
             }
 
-            var dir = Path.GetDirectoryName(output)!;
-            NativeIO.Mkdirs(dir);
-            var part = Path.Combine(dir, "." + Path.GetFileName(output) + ".part");
+            NativeIO.Mkdirs(Path.GetDirectoryName(output)!);
+            // Short for ffmpeg at any depth of the card's folders (review: MAX_PATH); the final name is never taken from
+            // an existing proxy (spec 2.2) — the render fails instead.
+            var part = PartFor(output, workDir);
             args.AddRange(["-f", "mov", part]);
             try
             {
                 RunFfmpeg(ffmpeg, args, src, info.Duration, progress, isCancelled, StallTimeout);
-                NativeIO.Move(part, output, replace: ReplaceExisting);
+                if (part.StartsWith(workDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (Path.Exists(output)) throw new IOError("rename", output, 80 /* ERROR_FILE_EXISTS */);
+                    ProxyCopy.CopyFile(part, output, replace: false);   // another volume: via `.part` beside it, then renamed
+                    NativeIO.Delete(part);
+                }
+                else NativeIO.Move(part, output, replace: false);
             }
             catch
             {

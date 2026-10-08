@@ -28,6 +28,8 @@ public sealed class DayCard
         VideoClips.Where(c => c.Lut is { Source: not "none" }).GroupBy(c => c.Lut!.Name).ToDictionary(g => g.Key, g => g.Count());
     public int ProxiesDone => Clips.Count(c => c.ProxyStatus == ProxyStatus.Done);
     public int ProxiesFailed => Clips.Count(c => c.ProxyStatus == ProxyStatus.Failed);
+    /// Clips without a proxy because the original is lighter (LighterSource, 0.5.1).
+    public int ProxiesLighter => Clips.Count(c => c.OriginalLighter);
 }
 
 /// A day on one destination (spec 3.2): every folder in `<root>\<date>\`.
@@ -175,6 +177,7 @@ public static class DayReport
             // Read back, but a file failed: not green (fix round 1, item 6).
             var (vClass, vText) = !r.Verified ? ("warn", "NEOVĚŘENO") : failed > 0 ? ("warn", "ověřeno, s chybami") : ("ok", "ověřeno");
             var proxies = c.ProxiesDone + c.ProxiesFailed == 0 ? "—" : $"{c.ProxiesDone} / {c.ProxiesFailed}";
+            if (c.ProxiesLighter > 0) proxies += $" · {c.ProxiesLighter} bez proxy";
             var lutNames = c.Luts.Count == 0 ? "—" : string.Join(", ", c.Luts.Keys);
             var generations = r.Generations.Count > 1 ? r.Generations.Count.ToString(Inv) : "—";
             h.Append($"<tr><td>{E(c.Name)}</td><td>{Time(r.Started!.Value)}–{Time(r.Finished!.Value)}</td>");
@@ -184,7 +187,7 @@ public static class DayReport
             h.Append($"<td>{proxies}</td><td class=\"wrap\">{E(lutNames)}</td><td class=\"num\">{generations}</td></tr>\n");
         }
         h.Append("</table></div>\n");
-        h.Append("<p class=\"sub\">Proxy: hotovo / selhalo. Doplnění: počet generací ASC MHL, když karta byla doplněna.</p>\n");
+        h.Append("<p class=\"sub\">Proxy: hotovo / selhalo (· bez proxy = originál je lehčí než proxy). Doplnění: počet generací ASC MHL, když karta byla doplněna.</p>\n");
 
         var problems = Problems(day);
         if (problems.Count > 0)

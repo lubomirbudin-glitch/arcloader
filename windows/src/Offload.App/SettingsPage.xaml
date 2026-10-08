@@ -278,6 +278,9 @@
                         <TextBlock Text="DALŠÍ" Style="{StaticResource StepTitle}" Margin="0,26,0,10" />
                         <CheckBox Style="{StaticResource Check}" Content="Zvuk v proxy" IsChecked="{Binding Audio}" Margin="0,0,0,10" />
                         <CheckBox Style="{StaticResource Check}" Content="Přeskočit proxy nahrané kamerou (SUB / PROXY)" IsChecked="{Binding SkipCameraProxies}" Margin="0,0,0,10" />
+                        <CheckBox Style="{StaticResource Check}" Content="Bez proxy, když je originál lehčí (jen u proxy H.264/HEVC)" IsChecked="{Binding SkipLighterSources}" Margin="0,0,0,10"
+                                  ToolTip="Jen u proxy H.264/HEVC a jen když se nepoužije LUT ani ořez: originál H.264 nebo HEVC, který není větší než proxy a nemá vyšší datový tok, se nepřevádí — proxy by byla stejně velká nebo větší. S proxy ProRes a u originálů ProRes, DNx a RAW vzniká proxy vždy."
+                                  AutomationProperties.AutomationId="SkipLighterSources" />
                         <CheckBox Style="{StaticResource Check}" Content="Kopírovat proxy na všechny cíle" IsChecked="{Binding CopyToAllDestinations}" Margin="0,0,0,10" />
                         <DockPanel Margin="0,4,0,0">
                             <TextBlock Text="Kopírovat proxy i do složky" Style="{StaticResource TextMuted}" VerticalAlignment="Center" Width="200" />

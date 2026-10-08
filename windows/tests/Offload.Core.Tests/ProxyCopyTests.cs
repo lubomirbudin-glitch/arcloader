@@ -25,6 +25,26 @@ public class ProxyCopyTests
         Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.part"));
     }
 
+    // 0.5.1: the proxy folder mirrors the card's folders as _PROXY does; "_2" only inside the same folder.
+    [Fact]
+    public void Subfolder_MirroredUnderDateAndCard_SuffixOnlyInThatFolder()
+    {
+        using var dir = new TempDir();
+        var src = Proxy(dir);
+        var extra = dir.Sub("proxies");
+        var target = Path.Combine(extra, "2026-10-05", "A001");
+        TestFs.WriteRandom(Path.Combine(target, "listening", "1.mov"), 100, 9);
+
+        var (idle, e1) = ProxyCopy.ToExtraFolder(src, extra, "2026-10-05", "A001", "idle/1.mov");
+        var (listening, e2) = ProxyCopy.ToExtraFolder(src, extra, "2026-10-05", "A001", "listening/1.mov");
+
+        Assert.Null(e1);
+        Assert.Null(e2);
+        Assert.Equal(Path.Combine(target, "idle", "1.mov"), idle);
+        Assert.Equal(Path.Combine(target, "listening", "1_2.mov"), listening);
+        Assert.Equal(File.ReadAllBytes(src), File.ReadAllBytes(idle!));
+    }
+
     [Fact]
     public void ExistingName_GetsSuffix_NeverOverwrites()
     {

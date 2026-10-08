@@ -47,8 +47,8 @@ public class StageTwoTests
             Assert.Equal(ProxyStatus.Skipped, sub.ProxyStatus);
             foreach (var cardPath in job.Plan!.CardPaths)
             {
-                Assert.True(File.Exists(Path.Combine(cardPath, "_PROXY", "C0001.mov")));
-                Assert.True(File.Exists(Path.Combine(cardPath, "_PROXY", "C0002.mov")));
+                Assert.True(File.Exists(Path.Combine(cardPath, "_PROXY", "PRIVATE", "M4ROOT", "CLIP", "C0001.mov")));   // the card's folders (0.5.1)
+                Assert.True(File.Exists(Path.Combine(cardPath, "_PROXY", "PRIVATE", "M4ROOT", "CLIP", "C0002.mov")));
                 var html = File.ReadAllText(Path.Combine(cardPath, "_REPORT", "A001_report.html"));
                 Assert.Contains("<figcaption>01:00:10:00</figcaption>", html);
                 if (PdfReport.FindEdge() != null) Assert.True(File.Exists(Path.Combine(cardPath, "_REPORT", "A001_report.pdf")));
@@ -161,6 +161,46 @@ public class StageTwoTests
         Assert.Equal(File.ReadAllBytes(backup), File.ReadAllBytes(copy));
         Assert.Equal(100, new FileInfo(Path.Combine(extra, "2026-10-05", "A001", "C0001.mov")).Length);
         Assert.Equal(extra, report.Proxy!.ExtraFolder);
+    }
+
+    // 0.5.1: the card's folders are mirrored in _PROXY and in the proxy folder — idle\1.mp4 and listening\1.mp4 keep
+    // their names (relinking by name); only a clash inside one folder (A.mov + A.mp4) gets "_2" and the note.
+    [FfmpegFact]
+    public void ProxyTree_MirrorsTheCardsFolders()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestMedia.MakeClip(Path.Combine(card, "idle", "1.mp4"), seconds: 1);
+        TestMedia.MakeClip(Path.Combine(card, "listening", "1.mp4"), seconds: 1);
+        TestMedia.MakeClip(Path.Combine(card, "listening", "A.mov"), seconds: 1);
+        TestMedia.MakeClip(Path.Combine(card, "listening", "A.mp4"), seconds: 1);
+        TestMedia.MakeClip(Path.Combine(card, "root.mov"), seconds: 1);
+        var extra = dir.Sub("proxies");
+        var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1"), dir.Sub("d2")])
+        {
+            Date = "2026-10-08",
+            AnalyzeClips = false,
+            Proxy = new ProxySettings { Enabled = true, Height = 360, ExtraFolder = extra },
+        }, Options());
+
+        var report = job.Run();
+
+        Assert.Equal(JobPhase.Done, job.Status().Phase);
+        string? PathOf(string clipPath) => report!.Clips.Single(c => c.Clip.Path == clipPath).ProxyPath;
+        Assert.Equal("_PROXY/idle/1.mov", PathOf("idle/1.mp4"));
+        Assert.Equal("_PROXY/listening/1.mov", PathOf("listening/1.mp4"));
+        Assert.Equal("_PROXY/listening/A.mov", PathOf("listening/A.mov"));
+        Assert.Equal("_PROXY/listening/A_2.mov", PathOf("listening/A.mp4"));
+        Assert.Equal("_PROXY/root.mov", PathOf("root.mov"));
+        Assert.Equal(Msg.ProxyRenamed("A_2"), report!.Clips.Single(c => c.Clip.Path == "listening/A.mp4").ProxyNote);
+        Assert.All(report.Clips.Where(c => c.Clip.Path != "listening/A.mp4"), c => Assert.Null(c.ProxyNote));
+        foreach (var cardPath in job.Plan!.CardPaths)
+            foreach (var c in report.Clips)
+                Assert.True(File.Exists(Layout.Join(cardPath, c.ProxyPath!)), c.ProxyPath);
+        var day = Path.Combine(extra, "2026-10-08", "A001");
+        foreach (var rel in new[] { @"idle\1.mov", @"listening\1.mov", @"listening\A.mov", @"listening\A_2.mov", "root.mov" })
+            Assert.True(File.Exists(Path.Combine(day, rel)), rel);
+        Assert.Empty(Directory.GetFiles(day, "*.part", SearchOption.AllDirectories));
     }
 
     // The folder went away mid-job (disconnected disk): a note, never a failed proxy or job.

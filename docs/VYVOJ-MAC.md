@@ -73,6 +73,12 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   světlé barvy i z tmavého režimu, `tr{break-inside:avoid}`; (3) tabulka klipů se vejde do okna: `table-layout:fixed` +
   `<colgroup>` v %, `overflow-wrap:anywhere`, náhledy `flex:1 1 0;max-width:128px`, v úzkém okně skrýt Formát/TC/Audio.
   Podrobnosti ve [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md), sekce „2026-10-08 — report: uložení do PDF“.
+- **Převzít z Windows 0.5.1 — proxy (2026-10-08):** (1) `_PROXY/<složka klipu>/<klip>.mov` (složky jako na kartě, i ve
+  složce pro proxy navíc), `_2` jen ve stejné složce, doplnění do ploché zálohy zůstane ploché (detekce z `proxyPath`
+  v reportech); (2) `proxy.skipLighterSources` (výchozí `true`, jen u proxy H.264/HEVC — s proxy ProRes vždy proxy — a jen když se nepoužije LUT ani ořez): H.264/HEVC originál ne větší než proxy s tokem ≤ tok proxy
+  bez proxy, `skipped` + poznámka „bez proxy — originál je lehčí (X Mb/s ≤ Y Mb/s)“, náhledy ano, místo bez proxy;
+  originál větší než proxy ji dostane vždy; (3) HTML: odkaz „hotovo“ na proxy, sloupec Proxy bez dělení slov.
+  Podrobnosti a pravidla ve [FORMATY.md](FORMATY.md) a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md), sekce „2026-10-08 — proxy“.
 
 ## 2026-10-04 — přesun do `mac/`
 

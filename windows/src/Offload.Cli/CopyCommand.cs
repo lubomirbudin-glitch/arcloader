@@ -170,7 +170,9 @@ static class CopyCommand
             if (report.Clips.Count > 0)
             {
                 var done = report.Clips.Count(c => c.ProxyStatus == ProxyStatus.Done);
-                Console.WriteLine($"Clips: {report.Clips.Count}" + (config.Proxy.Enabled ? $"  proxies OK {done}, failed {status.ProxiesFailed}" : ""));
+                var lighter = report.Clips.Count(c => c.OriginalLighter);
+                Console.WriteLine($"Clips: {report.Clips.Count}" + (config.Proxy.Enabled ? $"  proxies OK {done}, failed {status.ProxiesFailed}"
+                    + (lighter > 0 ? $", none (original lighter) {lighter}" : "") : ""));
                 foreach (var c in report.Clips.Where(c => c.ProxyStatus is ProxyStatus.Failed or ProxyStatus.Unsupported))
                     Console.WriteLine($"  {c.Clip.Name}: {c.ProxyStatus.ToString().ToLowerInvariant()} — {c.ProxyNote}");
             }

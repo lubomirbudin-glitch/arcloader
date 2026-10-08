@@ -45,6 +45,15 @@ public static class SpaceEstimator
              * Math.Pow(height / 1080.0, 2) + 0.768 * audioStreams.Sum(),
     };
 
+    /// The proxy's video rate as the encoder is told: H.264/HEVC the set bitrate (Encoders.VideoArgs), ProRes Apple's
+    /// 1080p30 rate × (height/1080)² — what LighterSource compares the original with.
+    public static double ProxyVideoMbps(ProxySettings p, int height) => p.Codec switch
+    {
+        ProxyCodec.H264 or ProxyCodec.Hevc => p.BitrateMbps,
+        _ => (p.Codec switch { ProxyCodec.ProresProxy => 45, ProxyCodec.ProresLT => 102, ProxyCodec.Prores422 => 147, _ => 220 })
+             * Math.Pow(height / 1080.0, 2),
+    };
+
     /// `audioTracks` mono streams.
     public static double ProxyMbps(ProxySettings p, int audioTracks, int height) =>
         ProxyMbps(p, Enumerable.Repeat(1, audioTracks).ToList(), height);
@@ -61,7 +70,9 @@ public static class SpaceEstimator
 
     /// Σ over the clips of length × proxy rate; camera proxies (when skipped) and clips without a decoder count 0.
     /// `info`: after the analysis the real duration, height and audio (spec 2.5 "přepočet před renderem").
-    public static long ProxyBytes(IEnumerable<Clip> clips, ProxySettings p, Func<Clip, bool> renderable, Func<Clip, ClipInfo?>? info = null)
+    /// `lut`: the analysed clip's LUT (LighterSource renders a clip with a LUT).
+    public static long ProxyBytes(IEnumerable<Clip> clips, ProxySettings p, Func<Clip, bool> renderable, Func<Clip, ClipInfo?>? info = null,
+        Func<Clip, LutUse?>? lut = null)
     {
         if (!p.Enabled) return 0;
         double bytes = 0;
@@ -69,6 +80,7 @@ public static class SpaceEstimator
         {
             if ((c.IsCameraProxy && p.SkipCameraProxies) || !renderable(c)) continue;
             var i = info?.Invoke(c);
+            if (i != null && LighterSource.Note(c, i, p, lut?.Invoke(c)) != null) continue;   // the original is lighter: no proxy (0.5.1)
             double seconds = i?.Duration ?? c.Bytes * 8.0 / (SourceMbps(c) * 1e6);
             // Every audio stream becomes a track of the proxy (R14); before the analysis one stereo stream is assumed,
             // a probed clip without the stream list (a RAW intermediate) has one stream of its channels.
