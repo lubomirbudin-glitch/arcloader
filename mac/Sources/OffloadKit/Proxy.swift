@@ -467,10 +467,15 @@ public final class ProxyRenderer {
         var args = ["-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
         args += ["-map", "0:v:0"]
         if settings.audio && info.audioChannels > 0 && src.audioFromInput {
-            args += ["-map", "0:a:0?"] + settings.codec.audioArgs
+            args += ["-map", "0:a?"] + settings.codec.audioArgs   // every audio stream of the source (spec 3.4)
         }
         args += ["-vf", vf] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps) + FilterGraph.rec709Args
-        if let tc = info.timecode, Timecode.isValid(tc) { args += ["-timecode", tc] }
+        if let tc = info.timecode, Timecode.isValid(tc) {
+            args += ["-timecode", tc]
+            // The MOV muxer writes it into the timecode track (tmcd) as its source reference: Premiere reads it as Tape
+            // Name, Resolve as Reel (ffprobe 9 shows `reel_name` on the data stream). Without TC there is no tmcd.
+            if let reel = info.reel, !reel.isEmpty { args += ["-metadata:s:v:0", "reel_name=\(reel)"] }
+        }
 
         let dir = (output as NSString).deletingLastPathComponent
         try IO.mkdirs(dir)

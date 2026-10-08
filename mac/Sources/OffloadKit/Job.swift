@@ -256,11 +256,14 @@ public final class OffloadJob {
                         entries[i].clip = arri
                         info = arriInfo
                     } else {
+                        info.reel = ReelResolver.resolve(clip, info: info, cardName: plan.cardName)
                         entries[i].info = info
                         entries[i].probeError = "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy"
                         continue
                     }
                 }
+                // Spec 3.4: the camera's tag, else the clip name, else the card folder — into the report and the proxy.
+                info.reel = ReelResolver.resolve(entries[i].clip, info: info, cardName: plan.cardName)
                 entries[i].info = info
                 // The Sony XML is read from the destination: it sits next to the clip on the card, so it was copied too.
                 entries[i].lut = LutResolver.resolve(entries[i].clip, info: info,

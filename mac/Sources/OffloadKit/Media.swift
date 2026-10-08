@@ -52,6 +52,9 @@ public struct ClipInfo: Codable {
     public var gamma: String?
     public var gamut: String?
     public var colorScienceGen: Int?
+    /// The reel: ffprobe's `reel_name` / `tape_name` / `reel` tag after the probe, then ReelResolver's answer (tag, else
+    /// the clip name, else the card folder) once the job has the clip. Report key `clips[].info.reel`, absent when unknown.
+    public var reel: String?
 
     public var fpsLabel: String {
         guard let r = frameRate else { return "" }
@@ -160,6 +163,7 @@ enum FFProbe {
         }
         info.camera = camera(make: ftags["com.apple.quicktime.make"] as? String, model: ftags["com.apple.quicktime.model"] as? String)
             ?? (ftags["product_name"] as? String) ?? (ftags["company_name"] as? String)
+        info.reel = reel(format: format, streams: streams)
         return info
     }
 
