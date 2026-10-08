@@ -56,6 +56,44 @@ internal static unsafe partial class Win32
     [LibraryImport("kernel32.dll")]
     internal static partial uint SetThreadExecutionState(uint flags);
 
+    const int ThreadModeBackgroundBegin = 0x00010000;
+    const int ThreadModeBackgroundEnd = 0x00020000;
+    const int ThreadIoPriority = 22;
+
+    [LibraryImport("kernel32.dll")]
+    private static partial nint GetCurrentThread();
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetThreadPriority(nint thread, int priority);
+
+    [LibraryImport("ntdll.dll")]
+    private static partial int NtQueryInformationThread(nint thread, int infoClass, out int info, uint length, out uint returned);
+
+    /// Plan 10 (spec 6): the calling thread's disk reads at background priority (low I/O priority) until Dispose (on the
+    /// same thread) — the background verification never slows the proxy's reads. Best effort.
+    internal static IDisposable BackgroundIo()
+    {
+        bool on = SetThreadPriority(GetCurrentThread(), ThreadModeBackgroundBegin);
+        return new BackgroundMode(on);
+    }
+
+    sealed class BackgroundMode(bool on) : IDisposable
+    {
+        bool ended = !on;
+
+        public void Dispose()
+        {
+            if (ended) return;
+            ended = true;
+            SetThreadPriority(GetCurrentThread(), ThreadModeBackgroundEnd);
+        }
+    }
+
+    /// The calling thread's I/O priority hint (0 very low, 1 low, 2 normal …); -1 when it cannot be told.
+    internal static int IoPriority() =>
+        NtQueryInformationThread(GetCurrentThread(), ThreadIoPriority, out int priority, sizeof(int), out _) == 0 ? priority : -1;
+
     /// Explorer's natural order ("C2" before "C10") — the Windows counterpart of localizedStandardCompare.
     [LibraryImport("shlwapi.dll", StringMarshalling = StringMarshalling.Utf16)]
     internal static partial int StrCmpLogicalW(string a, string b);
