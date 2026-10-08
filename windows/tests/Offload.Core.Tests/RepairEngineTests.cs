@@ -64,7 +64,9 @@ public class RepairEngineTests
             Assert.Empty(mhl.ChainProblems);
             Assert.Equal([1, 2], mhl.Chain.Select(c => c.Seq));
             var gen2 = Assert.Single(mhl.Generations[1].Files);
-            Assert.Equal(d == 0 ? "verified" : "original", Assert.Single(gen2.Hashes).Action);
+            // Plan 10 (R2): xxh64 and xxh128, both with the same action.
+            Assert.Equal(["xxh64", "xxh128"], gen2.Hashes.Select(h => h.Algorithm));
+            Assert.All(gen2.Hashes, h => Assert.Equal(d == 0 ? "verified" : "original", h.Action));
             Assert.Equal(f.Xxh64, gen2.Hashes[0].Value);
             Assert.StartsWith("Offload oprava: 1 soubor znovu z ", File.ReadAllText(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_*.mhl").Single()).Split("<comment>")[1]);
             Assert.Empty(CardRecord.Load(paths[d]).FailedFiles);

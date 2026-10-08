@@ -26,6 +26,9 @@ public sealed class ReportFile
     [JsonPropertyName("xxh64")] public string? Xxh64 { get; init; }
     /// Only when the copy computed MD5 too (spec 3.5): 32 lower-case hex digits.
     [JsonPropertyName("md5")] public string? Md5 { get; init; }
+    /// XXH3-128 of the card's file (plan 10, R2: into the ASC MHL next to xxh64), 32 lower-case hex digits; absent in
+    /// older reports and for a file the card could not give. The Mac ignores it.
+    [JsonPropertyName("xxh128")] public string? Xxh128 { get; init; }
     [JsonPropertyName("sourceError")] public string? SourceError { get; init; }
     [JsonPropertyName("destinations")] public required IReadOnlyList<string> Destinations { get; init; }
     [JsonPropertyName("errors")] public required IReadOnlyList<string?> Errors { get; init; }
@@ -117,6 +120,7 @@ public sealed partial class OffloadReport
             Modified = f.ModifiedUtc,
             Xxh64 = hashes[i].Xxh64Hex,
             Md5 = hashes[i].Md5Hex,
+            Xxh128 = hashes[i].Xxh128,
             SourceError = sourceErrors[i],
             Destinations = destResults.Select(r => r[i].State.Wire()).ToList(),
             Errors = destResults.Select(r => r[i].Error).ToList(),

@@ -72,7 +72,8 @@ public class AppendEngineTests
             Assert.Equal([1, 2], mhl.Generations.Select(g => g.Seq));
             Assert.Equal([1, 2], mhl.Chain.Select(c => c.Seq));
             Assert.Equal(["CLIP/A001C003.mov"], mhl.Generations[1].Files.Select(f => f.Path));
-            Assert.Equal("original", Assert.Single(mhl.Generations[1].Files[0].Hashes).Action);
+            Assert.All(mhl.Generations[1].Files[0].Hashes, h => Assert.Equal("original", h.Action));
+            Assert.Equal(["xxh64", "xxh128"], mhl.Generations[1].Files[0].Hashes.Select(h => h.Algorithm));
             Assert.Equal(mhl.Generations[0].Ignore, mhl.Generations[1].Ignore);
             var gen2 = XDocument.Load(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_A001_*.mhl").Single());
             XNamespace ns = "urn:ASC:MHL:v2.0";
@@ -618,7 +619,7 @@ public class AppendEngineTests
         Assert.StartsWith(before, list);
         Assert.EndsWith($"{report.Files.Single().Md5}  CLIP/A001C003.mov\n", list);
         var gen2 = Verification.MhlReader.Read(paths[0])!.Generations[1];
-        Assert.Equal(["xxh64", "md5"], gen2.Files.Single().Hashes.Select(h => h.Algorithm));
+        Assert.Equal(["xxh64", "xxh128", "md5"], gen2.Files.Single().Hashes.Select(h => h.Algorithm));
         Assert.Equal(["xxh64", "md5"], new HistoryStore(history).Load().Single().HashAlgorithms);
     }
 
@@ -667,7 +668,7 @@ public class AppendEngineTests
             var verify = BackupVerifier.Verify(paths[d], chunkSize: 4096);
             Assert.True(verify.Success);
             Assert.Equal(3, verify.Ok);
-            Assert.Equal(["xxh64", "md5"], verify.HashAlgorithms);
+            Assert.Equal(["xxh64", "md5", "xxh128"], verify.HashAlgorithms);
         }
     }
 

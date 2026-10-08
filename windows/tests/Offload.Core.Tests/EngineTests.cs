@@ -195,7 +195,7 @@ public class EngineTests
         Assert.Contains("<th>xxh64</th><th>md5</th>", html);   // a column per algorithm (preflight M3)
         Assert.All(report.Files, f => Assert.Contains($"<td class=\"mono\">{f.Md5}</td>", html));
         var mhl = Verification.MhlReader.Read(plan.CardPaths[0])!;
-        Assert.All(mhl.Files.Values, r => Assert.Equal(["xxh64", "md5"], r.Hashes.Select(h => h.Algorithm)));
+        Assert.All(mhl.Files.Values, r => Assert.Equal(["xxh64", "xxh128", "md5"], r.Hashes.Select(h => h.Algorithm)));
         // <md5> carries the same action and hashdate as <xxh64> (spec 3.5, preflight M3).
         System.Xml.Linq.XNamespace ns = "urn:ASC:MHL:v2.0";
         var gen = System.Xml.Linq.XDocument.Load(Directory.GetFiles(Path.Combine(plan.CardPaths[0], "ascmhl"), "0001_*.mhl").Single());
@@ -211,7 +211,7 @@ public class EngineTests
         }
         var verify = Verification.BackupVerifier.Verify(plan.CardPaths[0], chunkSize: Chunk);
         Assert.True(verify.Success);
-        Assert.Equal(["xxh64", "md5"], verify.HashAlgorithms);
+        Assert.Equal(["xxh64", "md5", "xxh128"], verify.HashAlgorithms);
 
         // xxh64 alone (the default): no md5 key, no .md5 list, no <md5> in the MHL.
         var plain = new OffloadEngine(Options());
@@ -221,7 +221,7 @@ public class EngineTests
         Assert.All(plainReport.Files, f => Assert.Null(f.Md5));
         Assert.False(File.Exists(Path.Combine(plainPlan.CardPaths[0], "_REPORT", "A001.md5")));
         Assert.DoesNotContain("<th>md5</th>", File.ReadAllText(Path.Combine(plainPlan.CardPaths[0], "_REPORT", "A001_report.html")));
-        Assert.All(Verification.MhlReader.Read(plainPlan.CardPaths[0])!.Files.Values, r => Assert.Equal(["xxh64"], r.Hashes.Select(h => h.Algorithm)));
+        Assert.All(Verification.MhlReader.Read(plainPlan.CardPaths[0])!.Files.Values, r => Assert.Equal(["xxh64", "xxh128"], r.Hashes.Select(h => h.Algorithm)));
         Assert.DoesNotContain("md5", plainReport.ToJson());
     }
 

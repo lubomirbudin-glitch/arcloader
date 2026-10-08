@@ -22,6 +22,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 9 | nový vzhled podle `docs/ui-navrh/`: tmavé a světlé téma, horní lišta, kroky 1–3, karty úloh s průběhem po cílech, pozastavení, oprava nesouhlasných souborů, dnešní historie, okno Nastavení (0.5.0) | hotovo (čeká ruční test 40–49 s kartou a vizuální kontrolu proti `docs/ui-navrh/screeny`) |
 
 
+## 2026-10-08 — plán 10: Verify-in-Proxy
+
+- Úkol 1: XXH3-128 ke každému souboru (report `files[].xxh128`, ASC MHL `<xxh128>` vedle `<xxh64>`, R2) a XXH3-64 každého bloku při čtení karty; `.xxh64` a `hashAlgorithms` beze změny.
+
 ## 2026-10-08 — Po zkopírování: klikací volby
 
 Verze **0.5.2**. Podnět: v levém sloupci, v kroku „3 · Po zkopírování“, nešlo na nic kliknout ani nic nastavit — čtyři

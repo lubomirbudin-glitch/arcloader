@@ -190,7 +190,8 @@ public static class RepairPlanner
                 .SelectMany(g => g.Report.Files.Where(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase) && f.Xxh64 != null))
                 .FirstOrDefault();
         var f = Newest(repairs: false) ?? Newest(repairs: true);
-        return f == null ? new FileHashes(null, null) : new FileHashes(Convert.ToUInt64(f.Xxh64, 16), f.Md5 is string m ? Convert.FromHexString(m) : null);
+        return f == null ? new FileHashes(null, null)
+            : new FileHashes(Convert.ToUInt64(f.Xxh64, 16), f.Md5 is string m ? Convert.FromHexString(m) : null, f.Xxh128);
     }
 
     /// The newest record of a file holds a good copy on the destination of `cardPath` (its column in that report). A

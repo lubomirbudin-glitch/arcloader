@@ -34,7 +34,8 @@ public sealed partial class OffloadEngine
         try
         {
             pool = new BufferPool(Options.BufferCount, Options.ChunkSize);
-            hashers = SourceHasher.For(plan.Hashes, files.Count, Options.HashFactory);   // xxh64, and MD5 on its own thread (spec 3.5)
+            // xxh64 (with XXH3-128 and the block hashes, plan 10), and MD5 on its own thread (spec 3.5).
+            hashers = SourceHasher.For(plan.Hashes, files.Count, Options.HashFactory, Options.ChunkSize);
             var sourceErrors = new string?[files.Count];
 
             // Copy: the card is read exactly once; every block fans out to the hasher and all destinations.
@@ -174,8 +175,9 @@ public sealed partial class OffloadEngine
         {
             var expected = plan.Expected![i];
             // MD5 of a backup whose MD5 failed: the card's, when its xxh64 is the recorded one.
+            bool same = hashes[i].Xxh64 == expected.Xxh64;
             recorded[i] = expected.Xxh64 == null ? hashes[i]
-                : new FileHashes(expected.Xxh64, expected.Md5 ?? (hashes[i].Xxh64 == expected.Xxh64 ? hashes[i].Md5 : null));
+                : new FileHashes(expected.Xxh64, expected.Md5 ?? (same ? hashes[i].Md5 : null), expected.Xxh128 ?? (same ? hashes[i].Xxh128 : null));
             if (sourceErrors[i] == null && CardDiffers(expected, hashes[i]) is string differs)
             {
                 sourceErrors[i] = differs;
