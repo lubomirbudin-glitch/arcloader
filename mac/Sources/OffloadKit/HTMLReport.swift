@@ -51,8 +51,16 @@ public enum HTMLReport {
 
     /// `forPrint`: light colours only and the full file list expanded (for the PDF).
     static let darkCSS = "@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2e33;--ok:#4cc27c;--okbg:#14301f;--bad:#ff6b6b;--badbg:#3a1717;--warn:#f0b04a;--warnbg:#382a10;--accent:#8aa2ff}}"
-    static let printCSS = "body{background:#fff;font-size:11px}main{padding:0;max-width:none}th,td{padding:5px 7px}tr{break-inside:avoid}h2{break-after:avoid}"
-        + ".stat b{font-size:17px}.thumb,.nothumb{width:112px;height:63px}.thumbs figure img{width:96px;height:54px}"
+    /// Print (PDF) layout: everything must fit the A4 landscape width — cells wrap instead of the panel scrolling,
+    /// smaller thumbnails and type. PDFReport additionally zooms the page out if anything is still wider.
+    static let printCSS = "body{background:#fff;font-size:10px}main{padding:0 8px 0 2px;max-width:none}"
+        + ".panel{overflow:visible}table{width:100%;table-layout:auto}"
+        + "th,td{padding:3px 5px;white-space:normal;overflow-wrap:break-word;font-size:9.5px}"
+        + "td.clip{min-width:0;max-width:none}td.mono,.mono,code,.path{font-size:8.5px;overflow-wrap:anywhere}"
+        + "tr{break-inside:avoid}h2{break-after:avoid}.stat b{font-size:16px}"
+        + ".thumb,.nothumb{width:64px;height:36px}.thumbs{gap:2px}.thumbs figure img{width:64px;height:36px}"
+        + ".thumbs figcaption{font-size:7.5px}td.num,td.tc{white-space:nowrap;overflow-wrap:normal}"
+        + "td.clip div{font-size:8.5px}td.clip .clipname{font-size:10px}"
 
     public static func render(_ r: OffloadReport, forPrint: Bool = false) -> String {
         let ok = r.success
@@ -68,7 +76,7 @@ public enum HTMLReport {
         <title>Offload \(esc(r.cardName)) – \(esc(r.date))</title>
         <style>
         :root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e3e3e0;--ok:#1f8a4c;--okbg:#e5f4ea;--bad:#c62828;--badbg:#fdeaea;--warn:#a86400;--warnbg:#fdf2dc;--accent:#3a5bd9}
-        \(forPrint ? printCSS : darkCSS)
+        \(forPrint ? "" : darkCSS)
         *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
         main{max-width:1200px;margin:0 auto;padding:28px 20px 60px}
         header{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:22px}
@@ -92,6 +100,7 @@ public enum HTMLReport {
         .err{white-space:normal;color:var(--bad)}
         footer{margin-top:40px;color:var(--muted);font-size:12px}
         @media print{body{background:#fff}.panel,.stat{border-color:#ccc}details{display:block}}
+        \(forPrint ? printCSS : "")
         </style></head><body><main>
         <header><h1>\(esc(r.cardName))</h1><span class="badge \(statusClass)">\(status)</span>
         <span class="sub">\(dateTime(r.started)) – \(timeOnly(r.finished))</span></header>
@@ -153,7 +162,7 @@ public enum HTMLReport {
                 h += "<tr><td>\(img)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))\(c.clip.isCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "")</div>"
                 h += "<div class=\"path\">\(esc(c.clip.path))</div>\(noteHTML)</td>"
                 h += "<td class=\"wrap\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num\">\(esc(i?.fpsLabel ?? ""))</td>"
-                h += "<td class=\"num\">\(esc(i?.durationLabel ?? ""))</td><td class=\"mono\">\(esc(i?.timecode ?? ""))</td>"
+                h += "<td class=\"num\">\(esc(i?.durationLabel ?? ""))</td><td class=\"mono tc\">\(esc(i?.timecode ?? ""))</td>"
                 h += "<td class=\"num\">\(i.map { $0.audioChannels > 0 ? "\($0.audioChannels) ch" : "—" } ?? "")</td>"
                 h += "<td class=\"num\">\(formatBytes(c.clip.bytes))</td><td class=\"\(pc)\">\(pl)</td></tr>\n"
             }

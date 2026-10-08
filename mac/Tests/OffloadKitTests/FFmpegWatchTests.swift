@@ -2,6 +2,10 @@ import XCTest
 @testable import OffloadKit
 
 final class FFmpegWatchTests: XCTestCase {
+    // Hardware decoding is off in the app (green frames on Intel); these tests exercise the retry path with it on.
+    override func setUp() { super.setUp(); ProxyRenderer.hardwareDecodeEnabled = true }
+    override func tearDown() { ProxyRenderer.hardwareDecodeEnabled = false; super.tearDown() }
+
     func testHardwareDecodeOnlyForH264AndHEVC() {
         for (codec, expected) in [("h264", true), ("hevc", true), ("HEVC", true), ("h264 High", true), ("hevc Main 10", true),
                                   ("ffv1", false), ("prores HQ", false), ("mjpeg", false), ("dnxhd", false), ("", false)] {

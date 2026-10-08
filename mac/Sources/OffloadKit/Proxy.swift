@@ -284,7 +284,13 @@ public final class ProxyRenderer {
     /// Hardware decoding only where it helps and is safe: H.264 and HEVC (`ClipInfo.codec` starts with the ffprobe
     /// codec name). Everything else (FFV1, ProRes, MJPEG, DNx …) decodes in software — same rule as Windows, where
     /// ffmpeg 8.1 with -hwaccel hung forever on FFV1.
+    /// Hardware DEcoding (VideoToolbox) is off by default: on Intel Macs it returned green frames for some H.264/HEVC
+    /// clips instead of failing, so ffmpeg never noticed (reported 2026-10-08). Proxies still ENcode with VideoToolbox.
+    /// The switch stays for tests of the software-retry path.
+    public static var hardwareDecodeEnabled = false
+
     static func usesHardwareDecode(_ codec: String?) -> Bool {
+        guard hardwareDecodeEnabled else { return false }
         let c = (codec ?? "").lowercased()
         return c.hasPrefix("h264") || c.hasPrefix("hevc")
     }

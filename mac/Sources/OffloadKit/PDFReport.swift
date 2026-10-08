@@ -63,6 +63,17 @@ public enum PDFReport {
         if let e = waiter.error { throw e }
         guard waiter.done else { throw OffloadError.failed("PDF: report did not load in \(Int(timeout)) s") }
 
+        // Safety net: if anything is still wider than the page (long file names, many columns), zoom the whole page
+        // out so nothing is cut off at the right edge.
+        var zoomed = false
+        web.evaluateJavaScript("""
+            (function(){var d=document.documentElement;var w=d.clientWidth;var s=Math.max(d.scrollWidth,document.body.scrollWidth);
+            if(s>w+1){document.body.style.zoom=String(0.98*w/s);}return s;})()
+            """) { _, _ in zoomed = true }
+        while !zoomed && Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
+
         let tmp = url.deletingLastPathComponent().appendingPathComponent("." + url.lastPathComponent + ".tmp")
         try? FileManager.default.removeItem(at: tmp)
         let info = NSPrintInfo(dictionary: [.jobDisposition: NSPrintInfo.JobDisposition.save, .jobSavingURL: tmp])
