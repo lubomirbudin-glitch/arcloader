@@ -42,7 +42,9 @@ o 24 % menší a některé 3,7× větší než originál.
 - **Bez proxy, když je originál lehčí** (`proxy.skipLighterSources`, výchozí zapnuto; Nastavení → Proxy „Bez proxy, když
   je originál lehčí (H.264 / HEVC do velikosti proxy)“; CLI `--proxy-always` vypne): `LighterSource.Note` — **jen u proxy H.264/HEVC** (rozhodnutí
   koordinátora: kodek proxy ProRes si uživatel volí kvůli plynulému střihu, takže s ním dostane proxy každý klip, i lehký
-  long-GOP originál); originál H.264 nebo HEVC, výška ≤ výška proxy a šířka ≤ výška × 16/9, datový tok videa ≤ nastavený
+  long-GOP originál) a **jen když se nepoužije LUT ani ořez** (revize: klip s LUTem — `lut.source` jiný než `none` — nebo
+  s výřezem frame lines, `frameAspect` / `frameScale` < 1, proxy dostane vždy, proxy je i vzhled; samotný burn-in nevadí;
+  kontrola místa zná LUT analyzovaného klipu); originál H.264 nebo HEVC, výška ≤ výška proxy a šířka ≤ výška × 16/9, datový tok videa ≤ nastavený
   `bitrateMbps` proxy (`SpaceEstimator.ProxyVideoMbps`). Tok videa z ffprobe
   (`ClipInfo.VideoBitrate`: `bit_rate` proudu, jinak kontejneru minus zvukové proudy — MTS). ProRes, DNx, MJPEG, MPEG-2
   a RAW proxy dostanou vždy; neznámý tok nebo rozměr také. **Rozhodnutí:** originál větší než proxy (např. 4K s nízkým
@@ -51,6 +53,12 @@ o 24 % menší a některé 3,7× větší než originál.
   HTML „bez proxy“ šedě a poznámka šedě (ne červeně), náhledy vznikají, kontrola místa po analýze s proxy takového klipu
   nepočítá (před kopií tok neznáme — počítá opatrně), karta úlohy „Proxy x / y“ ho nepočítá do y, souhrn „…, 1 bez proxy
   (lehčí originál)“, denní report „5 / 0 · 3 bez proxy“, CLI „none (original lighter) N“. Doplnění se řídí stejně.
+- **Dlouhé cesty (MAX_PATH):** zrcadlená cesta proxy může přesáhnout 260 znaků. ffmpeg (i starší nebo vlastní v
+  `tools`) dostane vždy krátkou cestu `.part` (`ProxyRenderer.PartFor`): vedle proxy, dokud je krátká (≤ 240 znaků); jinak
+  `.<8 hex>.mov.part` nahoře v `_PROXY` (stejný svazek, přesun = přejmenování); když je dlouhá i ta, pracovní složka
+  rendereru a pak kopie na cíl přes `.part` (`ProxyCopy.CopyFile`). Hotová proxy se přesouvá vždy bez přepsání
+  (`NativeIO.Move` s `\\?\`) — `ProxyRenderer.ReplaceExisting` zmizel, existující proxy render nepřepíše nikdy. Test
+  s cestou přes 260 znaků (obě náhradní místa).
 - HTML report: stav „hotovo“ odkazuje na soubor proxy (`../_PROXY/idle/1.mov`). Sloupec Proxy se už nezalamuje uprostřed
   slova (`word-break:normal`, `hyphens:none`), je širší (11 %, náhledy 20 %; v úzkém okně 20 % a písmo 12 px); ověřeno
   headless Edge při 1400 a 520 px.

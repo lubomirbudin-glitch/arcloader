@@ -93,6 +93,24 @@ public class LighterSourceTests
             LighterSource.Note(V(), H264(1.3), new ProxySettings { Enabled = true, Codec = ProxyCodec.Hevc, BitrateMbps = 10 }));
     }
 
+    // Review: the proxy is also the look — with a LUT or a frame-lines crop the original is no stand-in for it, so it
+    // is rendered. Burn-in alone does not count (the editor can live without it).
+    [Fact]
+    public void LutOrCrop_AlwaysRendered_BurnInAloneNot()
+    {
+        var logc = new LutUse("auto", "arri-logc4-awg4", "ARRI LogC4 → Rec.709", "ARRI");
+        Assert.Null(LighterSource.Note(V(), H264(2), P, logc));
+        Assert.Null(LighterSource.Note(V(), H264(2), P, new LutUse("custom", null, "look.cube", "vlastní")));
+        Assert.NotNull(LighterSource.Note(V(), H264(2), P, new LutUse("none", null, "Bez LUT", "kamera nerozpoznána")));
+        Assert.NotNull(LighterSource.Note(V(), H264(2), P, null));
+        Assert.Null(LighterSource.Note(V(), H264(2), new ProxySettings { Enabled = true, FrameAspect = 1.85 }));
+        Assert.Null(LighterSource.Note(V(), H264(2), new ProxySettings { Enabled = true, FrameScale = 0.9 }));
+        Assert.NotNull(LighterSource.Note(V(), H264(2), new ProxySettings { Enabled = true, BurnFilename = true, BurnTimecode = true }));
+        // The space check knows the LUT of the analysed clip too.
+        Assert.True(SpaceEstimator.ProxyBytes([V()], P, _ => true, _ => H264(2), _ => logc) > 0);
+        Assert.Equal(0, SpaceEstimator.ProxyBytes([V()], P, _ => true, _ => H264(2), _ => null));
+    }
+
     // The space check counts no proxy for such a clip (after the analysis: before it, the rate is not known).
     [Fact]
     public void Space_NoProxyForALighterOriginal()

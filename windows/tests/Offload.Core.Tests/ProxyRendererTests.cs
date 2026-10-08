@@ -106,6 +106,50 @@ public class ProxyRendererTests
         Assert.Equal(new RawLook(true, "AWG3/D65/LogC3"), ProxyRenderer.LookFor(CustomLut(@"C:\l\look.cube"), info));
     }
 
+    /// A folder `depth` levels of 30-character names below `root` (a card's camera tree can be that deep).
+    internal static string Deep(string root, int depth) =>
+        Path.Combine([root, .. Enumerable.Range(1, depth).Select(n => $"folder_{n:00}_with_a_long_name_x")]);
+
+    // Review: a mirrored proxy path can exceed MAX_PATH (260). ffmpeg (or a decoder the user points to) gets a short
+    // `.part` path: beside the proxy while that is short, else at the top of `_PROXY` (same volume — the move is a
+    // rename), else the renderer's own work folder; the finished file is then moved, never over an existing one.
+    [Fact]
+    public void PartFor_StaysShort()
+    {
+        var work = @"C:\Temp\offload-1234abcd";
+        Assert.Equal(@"D:\Zaloha\2026-10-08\A001\_PROXY\idle\.1.mov.part", ProxyRenderer.PartFor(@"D:\Zaloha\2026-10-08\A001\_PROXY\idle\1.mov", work));
+        var deep = Deep(@"D:\Zaloha\2026-10-08\A001\_PROXY", 8) + @"\C0001.mov";
+        Assert.True(deep.Length > 260);
+        var part = ProxyRenderer.PartFor(deep, work);
+        Assert.StartsWith(@"D:\Zaloha\2026-10-08\A001\_PROXY\.", part);
+        Assert.EndsWith(".mov.part", part);
+        Assert.True(part.Length < 260, part);
+        var deepCard = Deep(@"D:\Zaloha", 8) + @"\_PROXY\idle\C0001.mov";   // even _PROXY is past the limit
+        Assert.StartsWith(work + @"", ProxyRenderer.PartFor(deepCard, work));
+    }
+
+    [FfmpegFact]
+    public void Render_DeepPathOverMaxPath()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeClip(Path.Combine(card, "C0001.mov"), seconds: 1);
+        using var r = new ProxyRenderer(new ProxySettings { Enabled = true, Height = 180 }, Tools) { ForcedEncoder = "libx264" };
+        var clip = new Clip { Name = "C0001", Path = "C0001.mov", Format = ClipFormat.Video, Segments = ["C0001.mov"], Bytes = 1 };
+        var info = r.Probe(clip, card);
+        foreach (var root in new[] { Path.Combine(dir.Path, "d1", "_PROXY"), Deep(Path.Combine(dir.Path, "d2"), 9) + @"\_PROXY" })
+        {
+            var output = Deep(root, 9) + @"\C0001.mov";
+            Assert.True(output.Length > 260);
+            r.Render(clip, card, info, null, output, _ => { }, () => false);
+            Assert.True(File.Exists(output));
+            Assert.Empty(Directory.GetFiles(Path.Combine(dir.Path), "*.part", SearchOption.AllDirectories));
+            // Never over an existing proxy.
+            Assert.ThrowsAny<Exception>(() => r.Render(clip, card, info, null, output, _ => { }, () => false));
+            Assert.Empty(Directory.GetFiles(Path.Combine(dir.Path), "*.part", SearchOption.AllDirectories));
+        }
+    }
+
     static void RunFfmpeg(params string[] args) =>
         ToolProcess.Run(TestMedia.Ffmpeg!, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", .. args]);
 

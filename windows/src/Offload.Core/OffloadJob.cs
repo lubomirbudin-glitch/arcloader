@@ -706,7 +706,6 @@ public sealed class OffloadJob
             ForcedEncoder = Engine.Options.ProxyEncoder,
             StallTimeout = Engine.Options.ProxyStallTimeout ?? ProxyRenderer.DefaultStallTimeout,
             Log = log,
-            ReplaceExisting = plan.Mode == PlanMode.Full,   // an append never overwrites a proxy (spec 2.2)
         };
         var cardPaths = plan.CardPaths;
         var fileIndex = report.Files.Select((f, i) => (f.Path, i)).ToDictionary(x => x.Path, x => x.i);
@@ -822,7 +821,7 @@ public sealed class OffloadJob
                 Update(s => s with { ProxiesFailed = s.ProxiesFailed + 1 });
                 continue;
             }
-            if (LighterSource.Note(clip, info, Config.Proxy) is string lighter)
+            if (LighterSource.Note(clip, info, Config.Proxy, entries[i].Lut) is string lighter)
             {
                 // 0.5.1: the proxy would be no lighter than the original — none, and no failure (the thumbnails are made).
                 entries[i].ProxyStatus = ProxyStatus.Skipped;
@@ -900,10 +899,14 @@ public sealed class OffloadJob
     string? ProxySpaceProblem(List<ClipEntry> entries, OffloadPlan plan, ProxyRenderer renderer)
     {
         var infos = new Dictionary<Clip, ClipInfo>(ReferenceEqualityComparer.Instance);
+        var luts = new Dictionary<Clip, LutUse?>(ReferenceEqualityComparer.Instance);
         foreach (var e in entries)
+        {
             if (e.Info != null) infos[e.Clip] = e.Info;
+            luts[e.Clip] = e.Lut;
+        }
         long proxy = SpaceEstimator.ProxyBytes(entries.Select(e => e.Clip), Config.Proxy,
-            c => infos.ContainsKey(c) && renderer.UnsupportedReason(c) == null, c => infos.GetValueOrDefault(c));
+            c => infos.ContainsKey(c) && renderer.UnsupportedReason(c) == null, c => infos.GetValueOrDefault(c), c => luts.GetValueOrDefault(c));
         if (proxy == 0) return null;
         var extra = new SpaceExtra(proxy, 0, Config.Proxy.CopyToAllDestinations, Config.Proxy.ExtraFolder);
         var places = SpacePlanner.Places(plan.DestRoots, extra, 0, HistoryText.DiskName);

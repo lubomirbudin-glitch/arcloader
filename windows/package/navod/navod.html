@@ -731,7 +731,8 @@ stejného jména v různých složkách se tak nepřejmenují a střižna je př
       (ve složkách <code>SUB</code> nebo <code>PROXY</code>), se zkopírují a ověří, ale proxy se z nich znovu nedělá. V reportu jsou
       označené <span class="q">„(proxy kamery)“</span> a mají stav <span class="q">„přeskočeno“</span>.</td></tr>
   <tr><td><b class="ui">Bez proxy, když je originál lehčí (H.264 / HEVC do velikosti proxy)</b></td><td>zapnuto</td><td><b>Jen u proxy
-      H.264/HEVC.</b> Originál H.264 nebo H.265, který není větší než proxy (výška ≤ výška proxy a šířka ≤ její šířka 16:9, např. 1920 × 1080) a nemá
+      H.264/HEVC a jen když se nepoužije LUT ani ořez</b> (klip s LUTem nebo s nastaveným <b class="ui">Výřezem</b> proxy
+      dostane vždy — proxy je i jeho vzhled; samotný vypálený název a timecode nevadí). Originál H.264 nebo H.265, který není větší než proxy (výška ≤ výška proxy a šířka ≤ její šířka 16:9, např. 1920 × 1080) a nemá
       vyšší datový tok, než jaký má proxy (nastavený <b class="ui">Datový tok</b>), proxy nedostane — byla by stejně velká nebo větší a střih by nezrychlila. V reportu má stav
       <span class="q">„bez proxy“</span> a šedou poznámku <span class="q">„bez proxy — originál je lehčí (5,2 Mb/s ≤ 10 Mb/s)“</span>;
       není to chyba, náhledy v reportu má. Kontrola místa s takovou proxy nepočítá. S kodekem proxy ProRes se proxy renderuje

@@ -466,7 +466,7 @@ Neexistující složka zastaví start chybou (exit 1); když složka zmizí běh
 a u klipu je v reportu poznámka „kopie do … selhala“.
 
 `--proxy-always` (od 0.5.1): proxy i pro klip, jehož originál je lehčí — ve výchozím stavu (`proxy.skipLighterSources`, jen u proxy
-H.264/HEVC — s `--proxy-codec prores…` se proxy renderuje vždy) originál H.264/HEVC, který není větší než proxy a nemá vyšší datový tok, proxy nedostane („bez proxy — originál je lehčí
+H.264/HEVC — s `--proxy-codec prores…` se proxy renderuje vždy — a jen když se nepoužije LUT ani ořez) originál H.264/HEVC, který není větší než proxy a nemá vyšší datový tok, proxy nedostane („bez proxy — originál je lehčí
 (X Mb/s ≤ Y Mb/s)“ v reportu, souhrn „none (original lighter) N“).
 
 `offload ports` pojmenuje každý USB konektor jedním popiskem, který platí všude (řádek disku, seznam portů,

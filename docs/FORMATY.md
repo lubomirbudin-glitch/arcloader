@@ -157,7 +157,9 @@ zálohy bez nich; při shodě jména ve složce `_2`, `_3`…). Chybí, když ne
 je v sekci `proxy` souboru `settings.json`. Mac ho zatím nezná a ignoruje (neznámé klíče se přeskakují).
 
 `proxy.skipLighterSources` (bool, chybí = `true`, Windows od 0.5.1; i v `settings.json`, CLI `--proxy-always` = `false`;
-platí **jen u proxy H.264/HEVC** — s kodekem proxy ProRes se proxy renderuje vždy, ProRes se volí kvůli plynulému střihu):
+platí **jen u proxy H.264/HEVC** — s kodekem proxy ProRes se proxy renderuje vždy, ProRes se volí kvůli plynulému střihu —
+a **jen když se nepoužije LUT ani ořez**: klip, jehož `lut.source` není `none`, nebo nastavený výřez (`frameAspect`, `frameScale`
+< 1) proxy dostane vždy, proxy je pak i vzhled; samotný burn-in nevadí):
 klip bez proxy, když je originál H.264 nebo HEVC (`info.codec` začíná `h264` / `hevc`), není větší než proxy v žádné ose
 (výška ≤ `height`, šířka ≤ `height` × 16/9) a jeho datový tok videa (ffprobe: `bit_rate` proudu, jinak kontejneru minus
 zvukové proudy) je nejvýš datový tok proxy (`bitrateMbps`). Ostatní kodeky (ProRes, DNx, MJPEG, MPEG-2, RAW) a originály větší než proxy — i s nízkým tokem —

@@ -18,7 +18,7 @@ sealed class StageTwoOptions
     readonly Option<double> frameScale = new("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
     readonly Option<string> proxyCodec = new("--proxy-codec") { Description = "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.", DefaultValueFactory = _ => "h264" };
     readonly Option<int> proxyBitrate = new("--proxy-bitrate") { Description = "Proxy bitrate (Mb/s) for H.264/HEVC.", DefaultValueFactory = _ => 10 };
-    readonly Option<bool> proxyAlways = new("--proxy-always") { Description = "Render a proxy also when the original is lighter (H.264/HEVC no bigger than the proxy and at most its bitrate; by default such a clip gets no H.264/HEVC proxy — a ProRes proxy is always rendered)." };
+    readonly Option<bool> proxyAlways = new("--proxy-always") { Description = "Render a proxy also when the original is lighter (H.264/HEVC no bigger than the proxy and at most its bitrate; by default such a clip gets no H.264/HEVC proxy — a ProRes proxy is always rendered; only when no LUT and no frame-lines crop is used)." };
     readonly Option<bool> noBurnIn = new("--no-burn-in") { Description = "No burn-in of clip name and timecode." };
     readonly Option<string?> proxyFolder = new("--proxy-folder") { Description = "Also copy every proxy to <folder>\\<date>\\<card name>\\ (with --proxy; never overwrites)." };
     readonly Option<bool> noClipList = new("--no-clip-list") { Description = "No clip list CSV (_REPORT\\<card>_clips.csv)." };

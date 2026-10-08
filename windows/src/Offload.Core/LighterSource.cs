@@ -9,12 +9,16 @@ namespace Offload.Core;
 /// height, width ≤ its 16:9 width) and its video rate is at most the proxy's set bitrate. Every other original codec —
 /// ProRes, DNx, MJPEG, MPEG-2, RAW — is heavy to edit even at a low rate and always gets one. Ruling: an original bigger
 /// than the frame always gets a proxy too, however low its rate (4K long-GOP decoding is what makes the timeline stutter;
-/// the proxy is the edit size). A rate or size not known = a proxy.
+/// the proxy is the edit size). A rate or size not known = a proxy. Review: only when no LUT and no frame-lines crop
+/// is used — then the proxy is also the look (or the framing) and the original is no stand-in for it; burn-in alone
+/// does not count.
 public static class LighterSource
 {
-    /// The note for the clip (Msg.ProxyLighter) when it gets no proxy, otherwise null.
-    public static string? Note(Clip clip, ClipInfo info, ProxySettings p)
+    /// The note for the clip (Msg.ProxyLighter) when it gets no proxy, otherwise null. `lut`: the LUT the clip's proxy
+    /// would get (ClipEntry.Lut; null or source "none" = none).
+    public static string? Note(Clip clip, ClipInfo info, ProxySettings p, LutUse? lut = null)
     {
+        if (lut is { Source: not "none" } || p.FrameAspect != null || p.FrameScale < 1) return null;
         if (!p.SkipLighterSources || p.Codec is not (ProxyCodec.H264 or ProxyCodec.Hevc) || clip.Format != ClipFormat.Video) return null;
         if (!ProxyRenderer.UseHardwareDecoding(info.Codec)) return null;   // h264… / hevc…: the long-GOP codecs
         if (info.VideoBitrate is not long bits || bits <= 0 || info.Width is not int w || info.Height is not int h) return null;
