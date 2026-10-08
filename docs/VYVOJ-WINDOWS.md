@@ -21,6 +21,20 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 8 | nastavení, oznámení, distribuce: projekty, vlastní pravidla LUTů, BRAW Film Gen 4 → Gen 5, oznámení Windows a ntfy, kontrola aktualizací, verze z `Directory.Build.props`, `build.ps1 -Sign` (0.4.0) | hotovo (čeká ruční test: oznámení, podpis; Gen 4 čeká vzorek) |
 | 9 | nový vzhled podle `docs/ui-navrh/`: tmavé a světlé téma, horní lišta, kroky 1–3, karty úloh s průběhem po cílech, pozastavení, oprava nesouhlasných souborů, dnešní historie, okno Nastavení (0.5.0) | hotovo (čeká ruční test 40–49 s kartou a vizuální kontrolu proti `docs/ui-navrh/screeny`) |
 
+
+## 2026-10-08 — report: uložení do PDF
+
+- HTML reporty (karta, denní, ověření) mají nahoře lištu jen pro obrazovku (`@media print` ji skryje, v PDF z Edge není):
+  tlačítko „Uložit jako PDF“ (`window.print()`) s nápovědou „v tisku zvolte „Uložit jako PDF““ a odkaz „Otevřít PDF report“
+  na PDF vedle HTML (`<karta>_report[_NNNN].pdf`, `<datum>_day_report.pdf`, `<karta>_verify_<čas>Z.pdf`). PDF vzniká až po
+  HTML a vypnout ho nejde (jen bez Edge se přeskočí), proto je odkaz vždy; bez Edge soubor nemusí existovat.
+- Tisk: `@page{size:A4 landscape;margin:10mm}` i při tisku z prohlížeče, bílá stránka s tmavým textem i z tmavého režimu,
+  řádky se nelámou (`break-inside:avoid`), panely se při tisku nerolují.
+- Tabulka klipů se vejde do šířky okna: `table-layout:fixed` s `<colgroup>` v procentech (sloupec Proxy je vždy vidět),
+  dlouhé názvy a cesty se zalamují (`overflow-wrap:anywhere`), náhledy se zmenšují (`flex:1 1 0`, `max-width:128px`),
+  v úzkém okně (do 760 px) se skryje Formát, TC a Audio. Ostatní tabulky už nemají `nowrap`.
+- Změna je jen ve Windows verzi, Mac reporty se nemění; co má Mac převzít, je v [VYVOJ-MAC.md](VYVOJ-MAC.md).
+
 ## 2026-10-07 — nový vzhled (UI podle docs/ui-navrh)
 
 - Poslední opravy po revizi plánu 9: „Zkopírovat znovu“ zmizí, když se karta vymění (`VolumesChanged` přenese i `CanRepair`) a po úspěšné pozdější opravě téže zálohy (`RepairRules.RepairedLater`; hotové karty se obnoví při zařazení i dokončení opravy); zrušená karta po ověřené kopii ve 2. fázi má „Vysunout kartu“; pilulka v horní liště počítá úlohu jako pozastavenou jen při `PauseHeld` (jinak běží); návod: „zežloutne“ místo „zčervená“ (PDF znovu vytištěno); smazány nepoužité `ChainLines`, `HasChain`, `DestinationLines`, `FailedText`, `CancelledText`, `ChainView.Lines/Describe`, `Texts.Failed`.

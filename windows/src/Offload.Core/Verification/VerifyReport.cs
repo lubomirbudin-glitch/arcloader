@@ -87,6 +87,8 @@ public static class VerifyReport
     static string Iso(DateTime utc) => utc.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
     /// "2026-10-06_081500" — the start of the run in UTC.
+    public static string PdfName(VerifyResult r) => $"{CardName(r)}_verify_{Stamp(r)}Z.pdf";
+
     public static string Stamp(VerifyResult r) => r.Started.ToUniversalTime().ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture);
 
     static string CardName(VerifyResult r) => Path.GetFileName(r.CardPath.TrimEnd('\\', '/'));
@@ -133,6 +135,7 @@ public static class VerifyReport
         var h = new StringBuilder();
         h.Append("<!doctype html>\n<html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
         h.Append($"<title>Ověření {card}</title>\n<style>\n{HtmlReport.Styles(forPrint)}</style></head><body><main>\n");
+        h.Append(HtmlReport.Toolbar(PdfName(r), forPrint));
         h.Append($"<header><h1>Ověření {card}</h1><span class=\"badge {badgeClass}\">{badge}</span>\n");
         h.Append($"<span class=\"sub\">{HtmlReport.DateTimeText(r.Started)} – {HtmlReport.DateTimeText(r.Finished)}</span></header>\n");
         h.Append($"<p class=\"{badgeClass}\">{HtmlReport.Esc(summary)}</p>\n");
@@ -189,7 +192,7 @@ public static class VerifyReport
         NativeIO.WriteFileDurably(html, new UTF8Encoding(false).GetBytes(Html(r)));
         try
         {
-            PdfReport.WriteHtml(Html(r, forPrint: true), Path.Combine(dir, $"{card}_verify_{stamp}Z.pdf"));
+            PdfReport.WriteHtml(Html(r, forPrint: true), Path.Combine(dir, PdfName(r)));
         }
         catch (Exception e)
         {
