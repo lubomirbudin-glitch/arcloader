@@ -1,3 +1,6 @@
 .DS_Store
 .superpowers/
 shared/icon/preview.png
+
+# Claude Code agent worktrees (local only)
+.claude/worktrees/
