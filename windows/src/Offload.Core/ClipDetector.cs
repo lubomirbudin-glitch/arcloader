@@ -91,6 +91,10 @@ public static class FFProbe
     public static ClipInfo Probe(string ffprobe, string path) =>
         Parse(ToolProcess.Run(ffprobe, ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", path]));
 
+    /// The same with a time limit (a card that was just put in must never hold its inspection): ToolError after it.
+    public static ClipInfo Probe(string ffprobe, string path, TimeSpan timeout) =>
+        Parse(ToolProcess.Run(ffprobe, ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", path], timeout: timeout));
+
     public static ClipInfo Parse(string json)
     {
         using var doc = JsonDocument.Parse(json);
@@ -117,13 +121,50 @@ public static class FFProbe
             info.ColorRange = Str(v, "color_range");
             info.Duration = Dbl(Str(v, "duration"));
         }
-        info.AudioChannels = streams.Where(x => Str(x, "codec_type") == "audio").Sum(x => Int(x, "channels") ?? 0);
+        info.AudioStreams = streams.Where(x => Str(x, "codec_type") == "audio").Select(x => Int(x, "channels") ?? 0).ToList();
+        info.AudioChannels = info.AudioStreams.Sum();
         if (Dbl(Str(format, "duration")) is double fd) info.Duration = fd;
+        // MPEG-TS (AVCHD .MTS) and some MXF have no rate per stream: the container's minus what the audio streams take.
+        info.VideoBitrate = v.ValueKind == JsonValueKind.Object && Long(Str(v, "bit_rate")) is long vb && vb > 0 ? vb
+            : Long(Str(format, "bit_rate")) is long fb && fb > 0
+                ? Math.Max(0, fb - streams.Where(x => Str(x, "codec_type") == "audio").Sum(x => Long(Str(x, "bit_rate")) ?? 0)) is long rest && rest > 0 ? rest : null
+                : null;
         var ftags = Tags(format);
         info.Timecode ??= Str(ftags, "timecode") ?? streams.Select(x => Str(Tags(x), "timecode")).FirstOrDefault(t => t != null);
         info.Camera = Camera(Str(ftags, "com.apple.quicktime.make"), Str(ftags, "com.apple.quicktime.model"))
             ?? Str(ftags, "product_name") ?? Str(ftags, "company_name");
+        info.Reel = new[] { format }.Concat(streams).Select(x => Reel(Tags(x))).FirstOrDefault(r => r != null);
+        info.CameraSerial = new[] { format }.Concat(streams).Select(x => Tag(Tags(x), SerialTags)).FirstOrDefault(t => t != null);
         return info;
+    }
+
+    /// Tags that carry the camera body's serial number (spec 4.2): QuickTime (Apple, Blackmagic, Canon), others.
+    static readonly string[] SerialTags = ["com.apple.quicktime.camera.identifier", "camera_serial_number"];
+
+    /// The first of `names` the tags have (regardless of case), trimmed and not empty; else null.
+    static string? Tag(JsonElement tags, IReadOnlyList<string> names)
+    {
+        if (tags.ValueKind != JsonValueKind.Object) return null;
+        foreach (var name in names)
+            foreach (var p in tags.EnumerateObject())
+                if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.String
+                    && p.Value.GetString()!.Trim() is { Length: > 0 } value)
+                    return value;
+        return null;
+    }
+
+    /// Tags that name the reel: MOV keeps it on the timecode track (tmcd "reel_name"), MXF on every stream.
+    static readonly string[] ReelTags = ["reel_name", "tape_name", "reel"];
+
+    static string? Reel(JsonElement tags)
+    {
+        if (tags.ValueKind != JsonValueKind.Object) return null;
+        foreach (var name in ReelTags)
+            foreach (var p in tags.EnumerateObject())
+                if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.String
+                    && p.Value.GetString()!.Trim() is { Length: > 0 } reel)
+                    return reel;
+        return null;
     }
 
     /// Make and model together ("ARRI" + "ALEXA 35" → "ARRI ALEXA 35"), unless the model already starts with the make.
@@ -143,6 +184,9 @@ public static class FFProbe
 
     static int? Int(JsonElement e, string name) =>
         e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var i) ? i : null;
+
+    static long? Long(string? s) =>
+        long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l) ? l : null;
 
     static double? Dbl(string? s) =>
         double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null;

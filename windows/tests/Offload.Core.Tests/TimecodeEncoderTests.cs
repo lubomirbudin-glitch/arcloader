@@ -28,7 +28,20 @@ public class TimecodeEncoderTests
     [InlineData("01:00:00:00", 99, 25, "01:00:03:24")]
     [InlineData("23:59:59:24", 1, 25, "00:00:00:00")]
     [InlineData("10:00:00;00", 30, 29.97, "10:00:01;00")]
+    // Review focus 1: drop-frame counts as the camera does — no ;00/;01 (;00–;03 at 59.94) at a minute but every tenth.
+    [InlineData("00:00:59;29", 1, 29.97, "00:01:00;02")]
+    [InlineData("00:09:59;29", 1, 29.97, "00:10:00;00")]
+    [InlineData("01:00:00;00", 17982, 29.97, "01:10:00;00")]
+    [InlineData("23:59:59;29", 1, 29.97, "00:00:00;00")]
+    [InlineData("00:00:59;59", 1, 59.94, "00:01:00;04")]
+    [InlineData("00:00:59;29", 1, 30, "00:01:00;00")]   // ";" at exactly 30 fps: no frames dropped
     public void Add(string tc, long frames, double fps, string expected) => Assert.Equal(expected, Timecode.Add(tc, frames, fps));
+
+    [Theory]
+    [InlineData(310, 25, "00:00:12:10")]
+    [InlineData(48, 23.976, "00:00:02:00")]
+    [InlineData(2, 29.97, "00:00:00:02")]
+    public void Length_NominalFrames(long frames, double fps, string expected) => Assert.Equal(expected, Timecode.Length(frames, fps));
 
     [Fact]
     public void VideoArgs_PerEncoder()
@@ -41,9 +54,19 @@ public class TimecodeEncoderTests
             Encoders.VideoArgs("libx264", ProxyCodec.H264, 10));
         Assert.Equal(["-c:v", "prores_ks", "-profile:v", "1", "-vendor", "apl0"],
             Encoders.VideoArgs("prores_ks", ProxyCodec.ProresLT, 10));
-        Assert.Equal(["-c:a", "pcm_s16le"], Encoders.AudioArgs(ProxyCodec.Prores422HQ));
         Assert.Equal("yuv422p10le", Encoders.PixelFormat(ProxyCodec.ProresProxy));
         Assert.Equal("yuv420p", Encoders.PixelFormat(ProxyCodec.Hevc));
+    }
+
+    // Spec 3.4, R14: every audio stream — AAC 64 kb/s per channel of each stream (128k-512k), ProRes 16-bit PCM.
+    [Fact]
+    public void AudioArgs_EveryStream()
+    {
+        Assert.Equal(["-c:a", "pcm_s16le"], Encoders.AudioArgs(ProxyCodec.Prores422HQ, [1, 1, 1, 1]));
+        Assert.Equal(["-c:a", "aac", "-b:a:0", "128k", "-b:a:1", "128k", "-b:a:2", "384k", "-b:a:3", "512k"],
+            Encoders.AudioArgs(ProxyCodec.H264, [1, 2, 6, 16]));
+        Assert.Equal(["-c:a", "aac", "-b:a:0", "128k"], Encoders.AudioArgs(ProxyCodec.Hevc, [0]));
+        Assert.Equal(["-c:a", "aac", "-b:a", "192k"], Encoders.AudioArgs(ProxyCodec.H264, []));
     }
 
     [Fact]

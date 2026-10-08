@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Offload.Core;
@@ -49,6 +50,13 @@ public sealed class ClipInfo
     [JsonPropertyName("frames")] public int? Frames { get; set; }
     [JsonPropertyName("timecode")] public string? Timecode { get; set; }
     [JsonPropertyName("audioChannels")] public int AudioChannels { get; set; }
+    /// The video stream's data rate in bits per second (ffprobe: the stream's `bit_rate`, else the container's minus the
+    /// audio streams'); null when not known. Decides LighterSource (0.5.1); known only right after the probe (not in the
+    /// report — the note of a clip without a proxy says it).
+    [JsonIgnore] public long? VideoBitrate { get; set; }
+    /// Channels of each audio stream, in stream order (ffprobe) - the proxy gets every one of them (R14). Known only right
+    /// after the probe (not in the report); empty for RAW decoders and reports read back.
+    [JsonIgnore] public List<int> AudioStreams { get; set; } = [];
     [JsonPropertyName("camera")] public string? Camera { get; set; }
     /// Log curve the camera recorded in (e.g. "LogC4"), when the format reports it.
     [JsonPropertyName("logEncoding")] public string? LogEncoding { get; set; }
@@ -60,6 +68,17 @@ public sealed class ClipInfo
     [JsonPropertyName("gamma")] public string? Gamma { get; set; }
     [JsonPropertyName("gamut")] public string? Gamut { get; set; }
     [JsonPropertyName("colorScienceGen")] public int? ColorScienceGen { get; set; }
+    /// With the Gen 4 → Gen 5 conversion (spec 4.2): the generation the clip was recorded in; ColorScienceGen is then
+    /// the effective one. Report key `clips[].info.colorScienceGenOriginal`, absent otherwise.
+    [JsonPropertyName("colorScienceGenOriginal"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? ColorScienceGenOriginal { get; set; }
+    /// The reel (tape name): ffprobe's `reel_name` / `tape_name` / `reel` tag after the probe, then ReelResolver's
+    /// answer (tag, else the clip name, else the card folder) once the job has the clip (spec 3.4). Report key
+    /// `clips[].info.reel`, absent when unknown.
+    [JsonPropertyName("reel"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Reel { get; set; }
+    /// The camera body's serial number (spec 4.2, LUT rules "serial"): Sony XML `Device serialNo`, ffprobe
+    /// `com.apple.quicktime.camera.identifier` / `camera_serial_number`. Report key `clips[].info.cameraSerial`, absent
+    /// when unknown — then a "serial" rule never matches.
+    [JsonPropertyName("cameraSerial"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CameraSerial { get; set; }
 
     [JsonIgnore]
     public string FpsLabel
@@ -114,6 +133,10 @@ public sealed class ClipEntry
     [JsonPropertyName("proxySeconds")] public double? ProxySeconds { get; set; }
     /// The LUT applied to this clip's proxy and thumbnails, and why.
     [JsonPropertyName("lut"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public LutUse? Lut { get; set; }
+    /// No proxy because the original is lighter than one would be (LighterSource, 0.5.1): `skipped` with its note — not a
+    /// failure, and not a proxy the job still owes.
+    [JsonIgnore] public bool OriginalLighter =>
+        ProxyStatus == ProxyStatus.Skipped && ProxyNote?.StartsWith(Msg.ProxyLighterPrefix, StringComparison.Ordinal) == true;
     /// First, middle and last frame (JPEG + caption); embedded in the HTML/PDF report only.
     [JsonIgnore] public List<Thumbnail> Thumbnails { get; set; } = [];
 }
@@ -181,6 +204,10 @@ public sealed class ProxySettings
     [JsonPropertyName("audio")] public bool Audio { get; set; } = true;
     /// Skip the low-res files cameras record themselves (Sony SUB, PROXY folders).
     [JsonPropertyName("skipCameraProxies")] public bool SkipCameraProxies { get; set; } = true;
+    /// No proxy for an H.264/HEVC original no bigger than the proxy frame and no heavier than its data rate
+    /// (LighterSource; 0.5.1, Windows only) — only when the proxy is H.264/HEVC; a ProRes proxy is always rendered.
+    /// Absent in older files = on.
+    [JsonPropertyName("skipLighterSources")] public bool SkipLighterSources { get; set; } = true;
     /// Proxies are rendered once, onto the first destination, then copied to the others.
     [JsonPropertyName("copyToAllDestinations")] public bool CopyToAllDestinations { get; set; } = true;
     /// Windows only, optional: every proxy is also copied to `<folder>\<date>\<card>\` (never overwriting). Absent = off.
@@ -190,6 +217,21 @@ public sealed class ProxySettings
     [JsonPropertyName("frameAspect")] public double? FrameAspect { get; set; }
     /// How much of the image the frame covers (0.9 = 90 %, i.e. 10 % overscan around it).
     [JsonPropertyName("frameScale")] public double FrameScale { get; set; } = 1.0;
+    /// Blackmagic RAW Film Gen 4 decoded as Gen 5, so the Gen 5 LUT fits (spec 4.2) — off by default until a Gen 4
+    /// sample confirms it (R26); absent while off.
+    [JsonPropertyName("brawGen4ToGen5"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool BrawGen4ToGen5 { get; set; }
+    /// Own LUT rules (spec 4.2), top one first — used only in Auto mode, before the camera is recognised. Rules of a newer
+    /// version stay in their place (ruling I3).
+    [JsonIgnore] public List<LutRule> LutRules { get; set; } = [];
+    /// `lutRules` as settings.json and the report hold it: absent while there is none (older files stay as they were).
+    [JsonPropertyName("lutRules"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull), JsonConverter(typeof(LutRuleListConverter))]
+    public List<LutRule>? LutRulesJson
+    {
+        get => LutRules.Count > 0 ? LutRules : null;
+        set => LutRules = value ?? [];
+    }
+    /// Keys a newer version added inside "proxy" (settings.json, report): kept and written back unchanged (R24).
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 
     /// Centered crop rectangle (x, y, w, h) inside a W×H image, even-sized, or null when no crop is set.
     public (int X, int Y, int W, int H)? FrameCrop(int width, int height)

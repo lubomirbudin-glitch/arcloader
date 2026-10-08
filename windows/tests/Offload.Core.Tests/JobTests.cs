@@ -24,6 +24,18 @@ public class JobTests
         Assert.Equal("Hotovo", s.Phase.Label());
     }
 
+    // Fix round 1: the production constructor (GUI, CLI) hands JobConfig.Hashes to the engine — the copy hashes what the
+    // setting / --hash chose.
+    [Theory]
+    [InlineData(HashKind.Xxh64)]
+    [InlineData(HashKind.Both)]
+    public void Config_Hashes_ReachTheEngine(HashKind kinds)
+    {
+        using var dir = new TempDir();
+        var job = new OffloadJob(new JobConfig(dir.Sub("A001"), [dir.Sub("d1")]) { Hashes = kinds });
+        Assert.Equal(kinds, job.Engine.Options.Hashes);
+    }
+
     [Fact]
     public void Run_PreflightFailure_EndsFailedWithMessage()
     {
@@ -32,7 +44,7 @@ public class JobTests
         Assert.Null(job.Run());
         var s = job.Status();
         Assert.Equal(JobPhase.Failed, s.Phase);
-        Assert.Contains("Source not found", s.Error);
+        Assert.Contains("Zdroj nenalezen", s.Error);
         Assert.True(s.Phase.IsFinished());
     }
 

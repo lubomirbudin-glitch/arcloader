@@ -35,7 +35,8 @@ public static class Scanner
         ReturnSpecialDirectories = false,
     };
 
-    public static SourceScan Scan(string root)
+    /// `ct` is checked before every folder: a card inspection is cancelled when the card is swapped or pulled out.
+    public static SourceScan Scan(string root, CancellationToken ct = default)
     {
         var files = new List<SourceFile>();
         var dirs = new List<string>();
@@ -43,6 +44,7 @@ public static class Scanner
 
         void Walk(string dir, string prefix)
         {
+            ct.ThrowIfCancellationRequested();
             List<FileSystemInfo> entries;
             try { entries = new DirectoryInfo(dir).EnumerateFileSystemInfos("*", OneLevel).ToList(); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { throw new IOError("scan", dir, e); }
@@ -81,7 +83,7 @@ public static class Scanner
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in scan.Dirs.Concat(scan.Files.Select(f => f.RelPath)))
         {
-            if (seen.TryGetValue(p, out var other)) problems.Add($"{p}: same name as {other} except for upper/lower case");
+            if (seen.TryGetValue(p, out var other)) problems.Add(Msg.SameNameCase(p, other));
             else seen[p] = p;
             var reason = p.Split('/').Select(Layout.InvalidNameReason).FirstOrDefault(r => r != null);
             if (reason != null) problems.Add($"{p}: {reason}");

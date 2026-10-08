@@ -12,8 +12,10 @@ public sealed partial class MainViewModel : ObservableObject
     public MainViewModel(StartupOptions options, string? settingsPath = null)
     {
         Options = options;
+        demo = options.Demo;   // before the scans start: the demo replaces them (MainViewModel.Demo.cs)
         this.settingsPath = settingsPath ?? SettingsStore.DefaultPath;
-        Settings = SettingsStore.Load(this.settingsPath);
+        AllSettings = SettingsStore.Load(this.settingsPath);
+        SeedDemo();
         saveTimer.Tick += (_, _) =>
         {
             saveTimer.Stop();
@@ -22,26 +24,41 @@ public sealed partial class MainViewModel : ObservableObject
         InitSetup();
         InitQueue();
         InitHardware();
+        InitHistory();
+        InitVerify();
+        InitDayReport();
+        InitProjects();
+        InitNotify();
+        InitUpdates();
+        InitSettingsPage();
+        InitDemo();
     }
 
     public StartupOptions Options { get; }
-    public AppSettings Settings { get; }
+    /// The whole settings.json: the global keys (tools, port names) and every project.
+    public AppSettings AllSettings { get; }
+    /// The profile the window shows and edits: the active project, else "Bez projektu" (spec 4.1). Every change goes
+    /// into it; a started job keeps its own copy.
+    public SettingsProfile Settings => AllSettings.Active;
 
     public event Action<string>? MessageRequested;
 
     /// Settings changed: written 400 ms after the last change, and on exit.
     public void SettingsChanged()
     {
+        if (!Allowed(DemoCommand.SettingsSave)) { RaiseMany(nameof(AfterCopyRows), nameof(AfterCopyLine), nameof(EstimateText), nameof(FlowSteps), nameof(QueueEmptyText)); return; }
         saveTimer.Stop();
         saveTimer.Start();
+        RaiseMany(nameof(AfterCopyRows), nameof(AfterCopyLine), nameof(EstimateText), nameof(FlowSteps), nameof(QueueEmptyText));   // they show the profile
     }
 
     public void SaveNow()
     {
         saveTimer.Stop();
+        if (!Allowed(DemoCommand.SettingsSave)) return;
         try
         {
-            SettingsStore.Save(Settings, settingsPath);
+            SettingsStore.Save(AllSettings, settingsPath);
         }
         catch (Exception e)
         {

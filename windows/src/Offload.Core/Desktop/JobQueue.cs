@@ -6,9 +6,9 @@ namespace Offload.Core.Desktop;
 public interface IQueuedJob
 {
     bool IsCancelled { get; }
-    /// Stage 1 (card → disks + verification). True when stage 2 should follow.
+    /// Stage 1 (card → disks + verification). True when stage 2 should follow (or only the day report, ruling I2).
     bool RunCopy();
-    /// Stage 2 (clips, proxies, PDF) — reads only the destinations.
+    /// Stage 2 (clips, proxies, PDF, day report) — reads only the destinations, writes only reports.
     void RunPost();
 }
 
@@ -101,29 +101,16 @@ public sealed class JobQueue : IDisposable
         posts.CompleteAdding();
     }
 
-    /// `identify` (default `CardIdentity.Of`) records which card is in the drive when its copy starts — on the copy
-    /// thread, so the UI never waits on the card; "Vysunout kartu" later ejects only that card.
-    public sealed class Runner(OffloadJob job, Action<string>? log, Func<string, string?>? identify = null) : IQueuedJob
+    /// The job records which card is in the drive when its copy starts (OffloadJob.SourceIdentity, on the copy
+    /// thread — the CLI needs it for history too); "Vysunout kartu" later ejects only that card.
+    public sealed class Runner(OffloadJob job, Action<string>? log) : IQueuedJob
     {
-        volatile string? sourceIdentity;
-
         public OffloadJob Job { get; } = job;
         public bool IsCancelled => Job.IsCancelled;
         /// The card that was copied (`CardIdentity`), once the copy has started; null before or when unknown.
-        public string? SourceIdentity => sourceIdentity;
+        public string? SourceIdentity => Job.SourceIdentity;
 
-        public bool RunCopy()
-        {
-            try
-            {
-                sourceIdentity = (identify ?? CardIdentity.Of)(Job.Config.Source);
-            }
-            catch (Exception e)
-            {
-                log?.Invoke($"card identity: {e.Message}");
-            }
-            return Job.RunCopy(log);
-        }
+        public bool RunCopy() => Job.RunCopy(log);
 
         public void RunPost() => Job.RunPost(log);
     }

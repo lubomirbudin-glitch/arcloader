@@ -18,6 +18,9 @@ internal static class Decoder
     /// Internal outcome of Info/Frames: the reader closed stdout. Run turns it into Ok, whatever else happened.
     const int ReaderGone = -1;
 
+    /// The one gamma --gen5 converts (the SDK's string; Offload's LUT rule compares the same one).
+    const string FilmGamma = "Blackmagic Design Film";
+
     /// Frames decoded in parallel by the SDK and then written in order.
     const int Batch = 8;
 
@@ -47,6 +50,7 @@ internal static class Decoder
         using var callback = new BrawCallback(sink, line => Say(stderr, line));
         BrawCodec codec = default;
         BrawClip clip = default;
+        BrawClipProcessingAttributes gen5 = default;
         try
         {
             int hr = factory.CreateCodec(out codec);
@@ -73,7 +77,15 @@ internal static class Decoder
                 Say(stderr, $"braw-decode: SetCallback failed ({Com.Hex(hr)}; library {dll})");
                 return NoLibrary;
             }
-            int code = o.Info ? Info(codec, clip, sink, stdout, stderr) : Frames(o, codec, clip, sink, stdout, stderr);
+            // --gen5 (spec 4.2): after OpenClip, before the first decode job — clone the clip's processing attributes,
+            // set colour science Gen 5, read it back; every decode job then gets the clone.
+            int? original = null;
+            if (o.Gen5)
+            {
+                gen5 = Gen5Attributes(clip, stderr, out original);
+                sink.ClipAttributes = gen5.Ptr;   // 0 = not converted: decoded as recorded
+            }
+            int code = o.Info ? Info(codec, clip, sink, stdout, stderr, gen5, original) : Frames(o, codec, clip, sink, stdout, stderr);
             if (code == ReaderGone) return Ok;   // like the Mac's _exit(0) on a failed write
             return code != Ok ? code : sink.Errors > 0 ? FrameFailed : Ok;
         }
@@ -82,6 +94,7 @@ internal static class Decoder
             // No job may still be running (and calling back) when the clip, the codec and the callback go away;
             // SetCallback(0) gives the SDK's reference to the callback back before `callback` is disposed.
             if (codec.Ptr != 0) codec.FlushJobs();
+            Com.Release(gen5.Ptr);   // the --gen5 clone: after the last job, before the clip
             Com.Release(clip.Ptr);
             if (codec.Ptr != 0)
             {
@@ -92,7 +105,60 @@ internal static class Decoder
         }
     }
 
-    static int Info(BrawCodec codec, BrawClip clip, FrameSink sink, Stream stdout, TextWriter stderr)
+    /// --gen5: a clone of the clip's processing attributes set to colour science Gen 5 — or default (Ptr 0) when the clip
+    /// is Gen 5 already, not in Film gamma, or the SDK refuses (a warning on stderr; then it is decoded as recorded, without a LUT as before).
+    /// `original`: the generation the clip was recorded in, when the SDK says. A clone that is not used is released here
+    /// (in a finally, whatever happens); the used one by Run's finally.
+    internal static BrawClipProcessingAttributes Gen5Attributes(BrawClip clip, TextWriter stderr, out int? original)
+    {
+        original = null;
+        if (clip.CloneClipProcessingAttributes(out var attrs) != Com.S_OK || attrs.Ptr == 0)
+        {
+            Com.Release(attrs.Ptr);
+            Say(stderr, "braw-decode: --gen5: the clip's processing attributes cannot be read — decoding as recorded");
+            return default;
+        }
+        bool use = false;
+        try
+        {
+            use = ToGen5(attrs, stderr, out original);
+            return use ? attrs : default;
+        }
+        finally
+        {
+            if (!use) Com.Release(attrs.Ptr);
+        }
+    }
+
+    /// Sets colour science Gen 5 on `attrs` and reads it back (spec 4.2: SetClipAttribute(ColorScienceGen, u16 5)).
+    /// Only Blackmagic Design Film is converted (spec 4.2: Film Gen 4 → Gen 5); Video / Extended Video are display-ready
+    /// and stay as recorded, silently. False — nothing to use — when the generation is unknown, already 5 or more, the
+    /// gamma is not Film, or the SDK does not take 5; an unknown generation or gamma and a refusal are warnings on stderr
+    /// (ruling T6-attr: attribute trouble never fails the decoder).
+    internal static bool ToGen5(BrawClipProcessingAttributes attrs, TextWriter stderr, out int? original)
+    {
+        original = attrs.Number(FourCC.ClipAttributeColorScienceGen, out var error);
+        if (original is not int gen)
+        {
+            Say(stderr, $"braw-decode: --gen5: colour science generation unknown{(error != null ? $" ({error})" : "")} — decoding as recorded");
+            return false;
+        }
+        if (gen >= 5) return false;
+        var gamma = attrs.Text(FourCC.ClipAttributeGamma, out error);
+        if (gamma == null)
+        {
+            Say(stderr, $"braw-decode: --gen5: gamma unknown{(error != null ? $" ({error})" : "")} — decoding as recorded");
+            return false;
+        }
+        if (!gamma.Equals(FilmGamma, StringComparison.OrdinalIgnoreCase)) return false;
+        int hr = attrs.SetNumber(FourCC.ClipAttributeColorScienceGen, 5);
+        var now = attrs.Number(FourCC.ClipAttributeColorScienceGen, out _);
+        if (hr == Com.S_OK && now == 5) return true;
+        Say(stderr, $"braw-decode: --gen5: colour science Gen 5 not accepted ({Com.Hex(hr)}, reads {now?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "nothing"}) — decoding as Gen {gen}");
+        return false;
+    }
+
+    static int Info(BrawCodec codec, BrawClip clip, FrameSink sink, Stream stdout, TextWriter stderr, BrawClipProcessingAttributes gen5, int? original)
     {
         ulong frames = clip.FrameCount;
         var slots = new[] { new FrameSlot() };
@@ -104,7 +170,12 @@ internal static class Decoder
             codec.FlushJobs();
         }
         (string? gamma, string? gamut, int? gen) = (null, null, null);
-        if (clip.CloneClipProcessingAttributes(out var attrs) == Com.S_OK && attrs.Ptr != 0)
+        if (gen5.Ptr != 0)
+        {
+            // Converted: the effective gamma / gamut / generation after the change (spec 4.2), plus the recorded one.
+            (gamma, gamut, gen) = Colour(gen5, stderr);
+        }
+        else if (clip.CloneClipProcessingAttributes(out var attrs) == Com.S_OK && attrs.Ptr != 0)
         {
             try { (gamma, gamut, gen) = Colour(attrs, stderr); }
             finally { Com.Release(attrs.Ptr); }
@@ -112,7 +183,7 @@ internal static class Decoder
         var s = slots[0];
         var facts = new ClipFacts(
             s.Ok ? s.Width : clip.Width, s.Ok ? s.Height : clip.Height, clip.Width, clip.Height, clip.FrameRate, frames,
-            clip.TimecodeForFrame(0) ?? "", clip.CameraType ?? "", gamma, gamut, gen);
+            clip.TimecodeForFrame(0) ?? "", clip.CameraType ?? "", gamma, gamut, gen, gen5.Ptr != 0 ? original : null);
         var bytes = Encoding.UTF8.GetBytes(InfoJson.Format(facts));
         return Write(stdout, bytes, bytes.Length) ? Ok : Closed(stderr);
     }
@@ -227,6 +298,9 @@ internal sealed unsafe class FrameSink(Scale scale, TextWriter stderr) : IBrawCa
     ulong first;
     int errors;
 
+    /// --gen5: the processing attributes every decode job uses (0 = the clip's own). Set before the first job.
+    public nint ClipAttributes { get; set; }
+
     public int Errors => Volatile.Read(ref errors);
 
     /// Called between batches only (no jobs in flight). Clears every slot's Ok (the Mac's `s.ok = false`): a slot
@@ -254,7 +328,7 @@ internal sealed unsafe class FrameSink(Scale scale, TextWriter stderr) : IBrawCa
             var frame = new BrawFrame(framePtr);
             if (result == Com.S_OK) result = frame.SetResourceFormat(FourCC.ResourceFormatRgbU16);
             if (result == Com.S_OK) result = frame.SetResolutionScale(scale);
-            if (result == Com.S_OK) result = frame.CreateJobDecodeAndProcessFrame(out decode);
+            if (result == Com.S_OK) result = frame.CreateJobDecodeAndProcessFrame(ClipAttributes, out decode);
             if (result == Com.S_OK)
             {
                 decode.SetUserData(user);

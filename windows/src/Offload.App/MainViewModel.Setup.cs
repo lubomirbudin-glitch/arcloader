@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows.Threading;
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.Space;
 
 namespace Offload.App;
 
@@ -11,10 +12,15 @@ public sealed partial class MainViewModel
 {
     readonly HashSet<string> selected = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> cardNames = new(StringComparer.OrdinalIgnoreCase);
+    // Cards whose "Doplnit jen nové klipy" is ticked (spec 2.2); it applies only while the card still has new files.
+    // A tick belongs to the history entry the user saw and is pruned as soon as its offer goes away (never returns by itself).
+    readonly AppendTicks appendTicks = new();
     readonly List<string> manualSources = [];
     // Volume labels of manual sources that are a drive root the scan does not list (an internal disk, a network
     // letter), read off the UI thread when the source is added.
     readonly Dictionary<string, string?> manualLabels = new(StringComparer.OrdinalIgnoreCase);
+    // How each source's disk is connected (UI návrh 6), looked up off the UI thread once per card in the drive.
+    readonly Dictionary<string, (string? Identity, string? Label)> sourceLinks = new(StringComparer.OrdinalIgnoreCase);
     List<VolumeItem> volumes = [];
     ExternalTools resolvedTools = new();
     bool scanning, rescan, useCustomDate;
@@ -25,9 +31,10 @@ public sealed partial class MainViewModel
     // Every ~5 s off the UI thread: missing destinations (a NAS that came back), present network/removable ones
     // (a NAS that dropped out), the LUT and the proxy folder are checked again.
     readonly DispatcherTimer healthTimer = new() { Interval = TimeSpan.FromSeconds(5) };
-    // The LUT's existence, checked off the UI thread (CanStart is evaluated 3×/s and must never touch a disk).
-    string? lutCheckedPath;
-    bool? lutExists;
+    // The own LUT files' existence (custom LUT, rules), checked off the UI thread (CanStart is evaluated 3×/s and must
+    // never touch a disk): the files checked and the first missing one.
+    string? lutCheckedKey;
+    LutFile? lutMissing;
     bool lutChecking, lutRecheck;
     // The same for the extra proxy folder (a disk that may be disconnected).
     string? folderCheckedPath;
@@ -60,7 +67,7 @@ public sealed partial class MainViewModel
         Task.Run(() => LutCatalog.Default).ContinueWith(t =>
         {
             if (closing) return;
-            if (t.IsCompletedSuccessfully) Proxy.CatalogLoaded(t.Result);
+            if (t.IsCompletedSuccessfully) Proxy.CatalogLoaded(lutCatalog = t.Result);
             else AppLog.Write($"LUT catalog: {t.Exception?.GetBaseException().Message}");
         }, TaskScheduler.FromCurrentSynchronizationContext());
         healthTimer.Tick += (_, _) => HealthCheck();
@@ -73,9 +80,10 @@ public sealed partial class MainViewModel
     {
         ejectedRoots.Clear();
         RefreshVolumes();
-        foreach (var d in Destinations) d.Probe();
+        _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // every destination and the proxy folder: free space, volume
         RefreshLut();
         RefreshProxyFolder();
+        ReloadHistory();   // and every card is looked at again
     }
 
     void HealthCheck()
@@ -84,6 +92,7 @@ public sealed partial class MainViewModel
         // Missing rows (a NAS that may come back) and present network/removable ones (a NAS that may drop out);
         // a row whose probe is still running is skipped by Probe itself.
         foreach (var d in Destinations.Where(d => d.ShouldReprobe)) d.Probe();
+        ReprobeStaleSpaceProblem();   // a red "není dost místa" on a fixed disk must clear once space is freed
         RefreshLut();
         RefreshProxyFolder();
     }
@@ -114,6 +123,7 @@ public sealed partial class MainViewModel
     /// Rescans volumes on a background thread; a request during a scan runs once more afterwards.
     public void RefreshVolumes()
     {
+        if (IsDemo) return;   // the demo's cards stay as the scenario put them
         if (scanning)
         {
             rescan = true;
@@ -155,7 +165,12 @@ public sealed partial class MainViewModel
         volumes = found;
         selected.Clear();
         selected.UnionWith(next);
-        foreach (var p in drop) cardNames.Remove(p);
+        foreach (var p in drop)
+        {
+            cardNames.Remove(p);
+            appendTicks.Drop(p);
+            inspections.Drop(p);   // its history line belonged to the card that left
+        }
         var sig = string.Join("\n", found.Where(v => !v.IsDestination).Select(v => $"{v.Path}|{v.Identity}|{v.Name}|{v.Total - v.Free}|{v.Format}|{v.LooksLikeCard}|{selected.Contains(v.Path)}"))
             + "\n" + string.Join("\n", manualSources.Select(p => $"{p}|{selected.Contains(p)}"));
         if (sig != sourcesSig)
@@ -171,7 +186,9 @@ public sealed partial class MainViewModel
             destSig = dsig;
             RebuildDestinations();
         }
-        foreach (var j in Jobs) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
+        InspectMissing();   // new or swapped cards
+        ResolveSourceLinks();   // how the new cards are connected
+        foreach (var j in Jobs.OfType<JobItemViewModel>()) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
         RefreshLut();   // the LUT may sit on a disk that just came or went
         RefreshProxyFolder();   // and so may the proxy folder
     }
@@ -185,9 +202,9 @@ public sealed partial class MainViewModel
         foreach (var v in volumes.Where(v => !v.IsDestination))
             Sources.Add(new SourceItemViewModel(this, v.Path, v.Name,
                 $"{Format.Bytes(v.Total - v.Free)} · {v.Format}{(v.LooksLikeCard ? "" : " · nevypadá jako karta")}",
-                v.LooksLikeCard ? SourceKind.Card : SourceKind.Drive, DefaultCardName(v.Path)));
+                v.LooksLikeCard ? SourceKind.Card : SourceKind.Drive));
         foreach (var p in manualSources)
-            Sources.Add(new SourceItemViewModel(this, p, Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p, p, SourceKind.Folder, DefaultCardName(p)));
+            Sources.Add(new SourceItemViewModel(this, p, Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p, p, SourceKind.Folder));
         Raise(nameof(HasSources));
         SetupChanged?.Invoke();
     }
@@ -203,6 +220,38 @@ public sealed partial class MainViewModel
         selected.Add(path);
         RebuildSources();
         ReadManualLabel(path);
+        Inspect(path);
+        ResolveSourceLinks();
+    }
+
+    /// The connection of every listed source whose card has not been looked at yet ("čtečka USB 3 · 5 Gb/s"), each off
+    /// the UI thread (DriveLinks asks the device; it never throws).
+    void ResolveSourceLinks()
+    {
+        if (IsDemo) return;
+        foreach (var s in Sources)
+        {
+            var path = s.Path;
+            var identity = IdentityOf(path);
+            if (sourceLinks.TryGetValue(path, out var known) && string.Equals(known.Identity, identity, StringComparison.OrdinalIgnoreCase)) continue;
+            sourceLinks[path] = (identity, null);
+            Task.Run(() => ConnectionLabel.Short(Offload.Core.Hardware.DriveLinks.Resolve(path), card: true)).ContinueWith(t =>
+            {
+                if (closing || !t.IsCompletedSuccessfully) return;
+                if (!sourceLinks.TryGetValue(path, out var now) || !string.Equals(now.Identity, identity, StringComparison.OrdinalIgnoreCase)) return;
+                sourceLinks[path] = (identity, t.Result);
+                RowFor(path)?.FactsChanged();
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+    }
+
+    /// The card tile's line: clips, size, file system, connection (memory only).
+    internal string SourceFacts(string path)
+    {
+        var volume = volumes.FirstOrDefault(v => string.Equals(v.Path, path, StringComparison.OrdinalIgnoreCase));
+        var link = sourceLinks.TryGetValue(path, out var l) && string.Equals(l.Identity, IdentityOf(path), StringComparison.OrdinalIgnoreCase) ? l.Label : null;
+        return SetupTexts.CardFacts(Insight(path), volume is { } v ? v.Total - v.Free : null, volume?.Format ?? Insight(path)?.Filesystem, link,
+            volume?.LooksLikeCard ?? true);
     }
 
     /// A drive root picked as a folder: its label is the card name the job will use — read it off the UI thread.
@@ -235,10 +284,33 @@ public sealed partial class MainViewModel
 
     internal bool IsSelected(string path) => selected.Contains(path);
 
+    /// The ticked sources in the order of the list (volumes, then manual folders).
+    List<string> SelectedSources() => volumes.Select(v => v.Path).Concat(manualSources).Where(selected.Contains).ToList();
+
+    /// The card folder name a start would use now: the typed name, otherwise the placeholder.
+    internal string PlannedName(string path) =>
+        cardNames.GetValueOrDefault(path) is { } typed && typed.Trim().Length > 0 ? typed.Trim() : Placeholder(path).Name;
+
+    /// Spec 2.3: the suggestion from the clips or the next in line, else the volume label / folder name. Memory only.
+    /// Cards are numbered in list order together with the other ticked cards, so the rows and Start agree.
+    internal (string Name, string? Hint) Placeholder(string path)
+    {
+        var paths = SelectedSources();
+        if (!paths.Contains(path, StringComparer.OrdinalIgnoreCase)) paths.Add(path);
+        var cards = paths.Select(p => new CardNameInput(p, cardNames.GetValueOrDefault(p), Insight(p), DefaultCardName(p))).ToList();
+        return CardNaming.Resolve(Settings.Naming.SuggestFromClips, cards, history, DateString, Layout.Today(), ActiveProjectName)[path];
+    }
+
+    void NamingChanged()
+    {
+        foreach (var s in Sources) s.NamingChanged();
+    }
+
     internal void SetSelected(string path, bool on)
     {
         if (on) selected.Add(path);
         else selected.Remove(path);
+        NamingChanged();   // the numbering of "next in line" follows the ticked cards
         SetupChanged?.Invoke();
     }
 
@@ -260,7 +332,33 @@ public sealed partial class MainViewModel
         }
     }
 
-    internal void SetCardName(string path, string name) => cardNames[path] = name;
+    internal void SetCardName(string path, string name)
+    {
+        cardNames[path] = name;
+        NamingChanged();   // a typed name is taken for the other cards' suggestions
+    }
+
+    /// The append checkbox's text, or null when the card has no new files to append (spec 2.2). Memory only.
+    internal string? AppendOffer(string path) =>
+        Insight(path) is { } i && AppendRules.Offer(i) ? AppendRules.CheckboxText(i.History!) : null;
+
+    internal bool AppendChosen(string path) => appendTicks.Chosen(path, Insight(path));
+
+    /// Ticked, or ticked until the offer went away: such a card is never started as a full copy (Start tells the user).
+    bool AppendWanted(string path) => appendTicks.Wants(path);
+
+    /// Removes the ticks whose offer is gone (the card changed, was swapped, the inspection failed). UI thread, memory only.
+    void PruneAppend() => appendTicks.Prune(Insight);
+
+    internal string? AppendFolder(string path) => AppendChosen(path) ? AppendRules.FolderText(Insight(path)!.History!.Entry) : null;
+
+    internal void SetAppend(string path, bool on)
+    {
+        if (!Allowed(DemoCommand.Append)) { SetupChanged?.Invoke(); return; }   // the toggle snaps back
+        if (on) appendTicks.Tick(path, Insight(path));
+        else appendTicks.Untick(path);
+        SetupChanged?.Invoke();
+    }
 
     // ── Cíle ───────────────────────────────────────────────────────────────
 
@@ -300,25 +398,88 @@ public sealed partial class MainViewModel
     public bool UseCustomDate
     {
         get => useCustomDate;
-        set { if (Set(ref useCustomDate, value)) Raise(nameof(PathPreview)); }
+        set
+        {
+            if (!Set(ref useCustomDate, value)) return;
+            Raise(nameof(PathPreview));
+            NamingChanged();   // "next in line" counts within the date folder
+        }
     }
 
     public DateTime? CustomDate
     {
         get => customDate;
-        set { if (Set(ref customDate, value)) Raise(nameof(PathPreview)); }
+        set
+        {
+            if (!Set(ref customDate, value)) return;
+            Raise(nameof(PathPreview));
+            NamingChanged();
+        }
+    }
+
+    public bool SuggestCardNames
+    {
+        get => Settings.Naming.SuggestFromClips;
+        set
+        {
+            Settings.Naming.SuggestFromClips = value;
+            SettingsChanged();
+            Raise();
+            NamingChanged();
+        }
     }
 
     public string DateString => UseCustomDate && CustomDate is DateTime d
         ? d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
         : Layout.Today();
 
-    public string PathPreview => $@"…\{DateString}\<název karty>\";
+    /// "…\2026-10-07\A035_ARRI\" with one card ticked, else "…\2026-10-07\<název karty>\".
+    public string PathPreview => SetupTexts.PathPreview(DateString, SelectedSources() is [var only] ? PlannedName(only) : null);
 
     public bool Verify
     {
         get => Settings.Verify;
         set { Settings.Verify = value; SettingsChanged(); Raise(); }
+    }
+
+    /// "Kontrolní součet" (spec 3.5): xxHash64 or xxHash64 + MD5 — `hash` in settings.json.
+    public IReadOnlyList<HashChoice> HashChoices => HashChoice.All;
+
+    public HashChoice Hash
+    {
+        get => HashChoice.Of(HashKinds.FromSetting(Settings.Hash));
+        set
+        {
+            if (value == null) return;
+            Settings.Hash = HashKinds.Wire(value.Kind);
+            SettingsChanged();
+            RaiseMany(nameof(Hash), nameof(VerifyLabel), nameof(Md5Note));
+        }
+    }
+
+    public string VerifyLabel => Texts.VerifyLabel(HashKinds.FromSetting(Settings.Hash));
+
+    /// Shown under the choice while MD5 is on.
+    public string? Md5Note => HashKinds.FromSetting(Settings.Hash).HasFlag(HashKind.Md5) ? Texts.Md5Slower : null;
+
+    /// "Seznam klipů CSV" / "Seznam klipů pro Avid (ALE)" (spec 3.3) — `outputs` in settings.json.
+    public bool ClipListCsv
+    {
+        get => Settings.Outputs.ClipListCsv;
+        set { Settings.Outputs.ClipListCsv = value; SettingsChanged(); Raise(); }
+    }
+
+    public bool ClipListAle
+    {
+        get => Settings.Outputs.ClipListAle;
+        set { Settings.Outputs.ClipListAle = value; SettingsChanged(); Raise(); }
+    }
+
+    /// "Denní report po každé kartě" (spec 3.2).
+    public bool DayReportAfterEachCard
+    {
+        get => Settings.Outputs.DayReport;
+        set { Settings.Outputs.DayReport = value; SettingsChanged(); Raise(); }
     }
 
     public bool AnalyzeClips
@@ -336,15 +497,14 @@ public sealed partial class MainViewModel
 
     // ── Proxy a dekodéry ───────────────────────────────────────────────────
 
-    /// A missing LUT blocks the start (red); missing ffmpeg only warns (orange). From the cached check — no disk here.
-    public string? LutProblem => ProxyPreflight.Blocking(Settings.Proxy, Settings.AnalyzeClips, CachedLutExists);
+    /// A missing LUT (custom, or an own rule's) blocks the start (red); missing ffmpeg only warns (orange). From the cached
+    /// check — no disk here; while the files in use have not been checked yet, nothing blocks.
+    public string? LutProblem =>
+        lutCheckedKey != null && lutCheckedKey == ProxyPreflight.LutKey(LutFiles) ? ProxyPreflight.MissingText(lutMissing) : null;
 
-    bool? CachedLutExists =>
-        ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is string lut && string.Equals(lut, lutCheckedPath, StringComparison.OrdinalIgnoreCase)
-            ? lutExists
-            : null;
+    IReadOnlyList<LutFile> LutFiles => ProxyPreflight.LutFilesInUse(Settings.Proxy, Settings.AnalyzeClips);
 
-    /// Checks the LUT off the UI thread; a request during a check runs once more afterwards.
+    /// Checks the LUT files off the UI thread; a request during a check runs once more afterwards.
     void RefreshLut()
     {
         if (lutChecking)
@@ -352,16 +512,17 @@ public sealed partial class MainViewModel
             lutRecheck = true;
             return;
         }
-        if (ProxyPreflight.LutInUse(Settings.Proxy, Settings.AnalyzeClips) is not string lut)
+        var files = LutFiles;
+        if (files.Count == 0)
         {
             SetLutState(null, null);
             return;
         }
         lutChecking = true;
-        Task.Run(() => File.Exists(lut)).ContinueWith(t =>
+        Task.Run(() => ProxyPreflight.FirstMissing(files)).ContinueWith(t =>
         {
             lutChecking = false;
-            if (t.IsCompletedSuccessfully) SetLutState(lut, t.Result);
+            if (t.IsCompletedSuccessfully) SetLutState(ProxyPreflight.LutKey(files), t.Result);
             else AppLog.Write($"LUT check: {t.Exception?.GetBaseException().Message}");
             if (lutRecheck)
             {
@@ -371,12 +532,12 @@ public sealed partial class MainViewModel
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    /// A new answer about the LUT: the red text and the start button follow it.
-    void SetLutState(string? lut, bool? exists)
+    /// A new answer about the LUT files (`key` = which, null = none in use): the red text and the start button follow it.
+    void SetLutState(string? key, LutFile? missing)
     {
         var before = LutProblem;
-        lutCheckedPath = lut;
-        lutExists = exists;
+        lutCheckedKey = key;
+        lutMissing = missing;
         if (LutProblem == before) return;
         RaiseMany(nameof(LutProblem), nameof(CanStart));
         SetupChanged?.Invoke();
@@ -401,14 +562,16 @@ public sealed partial class MainViewModel
         }
         if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is not string folder)
         {
+            folderTarget = null;
+            folderFree = null;
             SetProxyFolderState(null, null);
             return;
         }
         folderChecking = true;
-        Task.Run(() => Directory.Exists(folder)).ContinueWith(t =>
+        Task.Run(() => ProbeFolder(folder)).ContinueWith(t =>
         {
             folderChecking = false;
-            if (t.IsCompletedSuccessfully) SetProxyFolderState(folder, t.Result);
+            if (t.IsCompletedSuccessfully) ApplyFolderProbe(folder, t.Result);
             else AppLog.Write($"proxy folder check: {t.Exception?.GetBaseException().Message}");
             if (folderRecheck)
             {
@@ -416,6 +579,19 @@ public sealed partial class MainViewModel
                 RefreshProxyFolder();
             }
         }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// The proxy folder with its volume and free space (spec 2.5: the proxies count there too). Off the UI thread.
+    static (bool Exists, string? Volume, long? Free) ProbeFolder(string folder) =>
+        Directory.Exists(folder) ? (true, SpacePlanner.VolumeKey(folder), NativeIO.AvailableBytes(folder)) : (false, null, null);
+
+    /// UI thread: keeps the answer for the space check and the red text - unless the folder was changed meanwhile.
+    void ApplyFolderProbe(string folder, (bool Exists, string? Volume, long? Free) r)
+    {
+        if (ProxyPreflight.ExtraFolderInUse(Settings.Proxy) is not string now || !string.Equals(now, folder, StringComparison.OrdinalIgnoreCase)) return;
+        folderTarget = r.Exists && r.Volume != null ? new SpaceTarget(folder, r.Volume, folder) : null;
+        folderFree = r.Free;
+        SetProxyFolderState(folder, r.Exists);
     }
 
     /// A new answer about the proxy folder: the red text and the start button follow it.
@@ -429,6 +605,17 @@ public sealed partial class MainViewModel
         SetupChanged?.Invoke();
     }
 
+    /// Opens "Vlastní pravidla LUTů" (set by the window): the rules to edit, the built-in LUTs; the new rules or null.
+    public Func<IReadOnlyList<LutRule>, LutCatalog, List<LutRule>?>? EditLutRulesDialog { get; set; }
+
+    /// "Pravidla LUTů…": OK writes the rules into the active profile; their .cube files are checked again (off the UI thread).
+    internal void EditLutRules(LutCatalog catalog)
+    {
+        if (EditLutRulesDialog?.Invoke(Settings.Proxy.LutRules, catalog) is not { } rules) return;
+        Settings.Proxy.LutRules = rules;
+        Proxy.RulesChanged();   // saves (ProxyChanged) and rechecks the LUT files
+    }
+
     internal void ProxyChanged()
     {
         SettingsChanged();
@@ -440,7 +627,7 @@ public sealed partial class MainViewModel
 
     void RefreshTools()
     {
-        resolvedTools = Settings.Tools.Resolved();
+        resolvedTools = AllSettings.Tools.Resolved();
         Tools.Clear();
         void Row(string name, string purpose, string? path, Action<string> set) =>
             Tools.Add(new ToolRowViewModel(name, purpose, path, () =>
@@ -450,11 +637,11 @@ public sealed partial class MainViewModel
                 SettingsChanged();
                 RefreshTools();
             }));
-        Row("ffmpeg", "proxy, náhledy", resolvedTools.Ffmpeg, p => Settings.Tools.Ffmpeg = p);
-        Row("ffprobe", "metadata klipů", resolvedTools.Ffprobe, p => Settings.Tools.Ffprobe = p);
-        Row("braw-decode", "Blackmagic RAW", resolvedTools.BrawDecoder, p => Settings.Tools.BrawDecoder = p);
-        Row("REDline", "RED R3D", resolvedTools.Redline, p => Settings.Tools.Redline = p);
-        Row("art-cmd", "ARRIRAW", resolvedTools.ArtCmd, p => Settings.Tools.ArtCmd = p);
+        Row("ffmpeg", "proxy, náhledy", resolvedTools.Ffmpeg, p => AllSettings.Tools.Ffmpeg = p);
+        Row("ffprobe", "metadata klipů", resolvedTools.Ffprobe, p => AllSettings.Tools.Ffprobe = p);
+        Row("braw-decode", "Blackmagic RAW", resolvedTools.BrawDecoder, p => AllSettings.Tools.BrawDecoder = p);
+        Row("REDline", "RED R3D", resolvedTools.Redline, p => AllSettings.Tools.Redline = p);
+        Row("art-cmd", "ARRIRAW", resolvedTools.ArtCmd, p => AllSettings.Tools.ArtCmd = p);
         Raise(nameof(ToolsWarning));
     }
 }

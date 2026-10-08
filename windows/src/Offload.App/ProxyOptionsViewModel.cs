@@ -24,8 +24,35 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         BitrateUpCommand = new RelayCommand(() => BitrateMbps++, () => p.BitrateMbps < 50);
         ScaleDownCommand = new RelayCommand(() => ScalePercent--, () => ScalePercent > 50);
         ScaleUpCommand = new RelayCommand(() => ScalePercent++, () => ScalePercent < 100);
+        EditRulesCommand = new RelayCommand(() => owner.EditLutRules(catalog));
+        CodecChoices = Codecs.Select(c => new Choice(SetupTexts.CodecShort(c.Value), () => p.Codec == c.Value, () => Codec = c)).ToList();
+        HeightChoices = Heights.Select(h => new Choice(h.Label, () => p.Height == h.Value, () => Height = h)).ToList();
         BuildLutLists();
     }
+
+    /// The segmented Kodek and Výška of the settings page (UI návrh obr. 4).
+    public IReadOnlyList<Choice> CodecChoices { get; }
+    public IReadOnlyList<Choice> HeightChoices { get; }
+
+    /// "≈ 75 MB / minutu" next to the bitrate.
+    public string BitrateHint => SettingsTexts.BitrateHint(p.BitrateMbps);
+
+    /// "LUT podle kamery": every built-in LUT, the chosen one marked "použito".
+    public IReadOnlyList<LutRow> LutRows => catalog.Luts.Select(l => SettingsTexts.Row(l, p)).ToList();
+
+    /// The burn-in preview's frame lines (the crop of "Výřez"): shown only with a crop; star sizes of a 3 × 3 grid.
+    public bool HasFrame => SettingsTexts.Frame(p) != null;
+    public string FrameText => SettingsTexts.FrameText(p);
+    System.Windows.GridLength Star(Func<(double X, double Y, double W, double H), double> part) =>
+        new(SettingsTexts.Frame(p) is { } f ? Math.Max(part(f), 0.0001) : 1, System.Windows.GridUnitType.Star);
+    public System.Windows.GridLength FrameLeft => Star(f => f.X);
+    public System.Windows.GridLength FrameWidth => Star(f => f.W);
+    public System.Windows.GridLength FrameRight => Star(f => 1 - f.X - f.W);
+    public System.Windows.GridLength FrameTop => Star(f => f.Y);
+    public System.Windows.GridLength FrameHeight => Star(f => f.H);
+    public System.Windows.GridLength FrameBottom => Star(f => 1 - f.Y - f.H);
+    static readonly string[] FrameProperties =
+        [nameof(HasFrame), nameof(FrameText), nameof(FrameLeft), nameof(FrameWidth), nameof(FrameRight), nameof(FrameTop), nameof(FrameHeight), nameof(FrameBottom)];
 
     // The built-in LUTs are loaded off the UI thread (MainViewModel); until then only auto / none / custom are offered.
     LutCatalog catalog = new(null, []);
@@ -47,7 +74,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     {
         catalog = loaded;
         BuildLutLists();
-        RaiseMany(nameof(LutChoices), nameof(FallbackChoices), nameof(LutChoice), nameof(Fallback));
+        RaiseMany(nameof(LutChoices), nameof(FallbackChoices), nameof(LutChoice), nameof(Fallback), nameof(LutRows));
     }
 
     LutMode Mode => LutResolver.EffectiveMode(p);
@@ -95,7 +122,15 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         }
     }
 
-    static readonly string[] LutProperties = [nameof(LutChoice), nameof(ShowFallback), nameof(ShowCustom), nameof(LutName), nameof(LutPath)];
+    static readonly string[] LutProperties = [nameof(LutChoice), nameof(ShowFallback), nameof(ShowCustom), nameof(LutName), nameof(LutPath), nameof(ShowRules), nameof(LutRows)];
+
+    /// "Pravidla LUTů… (2)" (spec 4.2) — only with "Automaticky podle kamery": the rules apply in that mode only (R18).
+    public bool ShowRules => Mode == LutMode.Auto;
+    public string RulesButtonText => $"Pravidla LUTů… ({p.LutRules.Count})";
+    public RelayCommand EditRulesCommand { get; }
+
+    /// The rules were edited (MainViewModel.EditLutRules wrote them into the profile).
+    internal void RulesChanged() => Changed(nameof(RulesButtonText));
 
     public Option<string> Fallback
     {
@@ -143,13 +178,25 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     public Option<ProxyCodec> Codec
     {
         get => Codecs.First(c => c.Value == p.Codec);
-        set { if (value != null) { p.Codec = value.Value; Changed(nameof(Codec), nameof(ShowBitrate)); } }
+        set
+        {
+            if (value == null) return;
+            p.Codec = value.Value;
+            Changed(nameof(Codec), nameof(ShowBitrate));
+            foreach (var c in CodecChoices) c.Changed();
+        }
     }
 
     public Option<int> Height
     {
         get => Heights.FirstOrDefault(h => h.Value == p.Height) ?? Heights[2];
-        set { if (value != null) { p.Height = value.Value; Changed(nameof(Height)); } }
+        set
+        {
+            if (value == null) return;
+            p.Height = value.Value;
+            Changed(nameof(Height));
+            foreach (var h in HeightChoices) h.Changed();
+        }
     }
 
     public bool ShowBitrate => p.Codec is ProxyCodec.H264 or ProxyCodec.Hevc;
@@ -157,7 +204,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     public int BitrateMbps
     {
         get => p.BitrateMbps;
-        set { p.BitrateMbps = Math.Clamp(value, 2, 50); Changed(nameof(BitrateMbps), nameof(BitrateText)); }
+        set { p.BitrateMbps = Math.Clamp(value, 2, 50); Changed(nameof(BitrateMbps), nameof(BitrateText), nameof(BitrateHint)); }
     }
 
     public string BitrateText => $"{p.BitrateMbps} Mb/s";
@@ -165,7 +212,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     public Option<double?> Aspect
     {
         get => Aspects.FirstOrDefault(a => a.Value == p.FrameAspect) ?? Aspects[0];
-        set { if (value != null) { p.FrameAspect = value.Value; Changed(nameof(Aspect), nameof(ShowFrameScale)); } }
+        set { if (value != null) { p.FrameAspect = value.Value; Changed([nameof(Aspect), nameof(ShowFrameScale), .. FrameProperties]); } }
     }
 
     public bool ShowFrameScale => p.FrameAspect != null;
@@ -173,7 +220,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     public int ScalePercent
     {
         get => (int)Math.Round(p.FrameScale * 100);
-        set { p.FrameScale = Math.Clamp(value, 50, 100) / 100.0; Changed(nameof(ScalePercent), nameof(ScaleText)); }
+        set { p.FrameScale = Math.Clamp(value, 50, 100) / 100.0; Changed([nameof(ScalePercent), nameof(ScaleText), .. FrameProperties]); }
     }
 
     public string ScaleText => $"{ScalePercent} % obrazu";
@@ -184,7 +231,11 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     public bool BurnTimecode { get => p.BurnTimecode; set { p.BurnTimecode = value; Changed(nameof(BurnTimecode)); } }
     public bool Audio { get => p.Audio; set { p.Audio = value; Changed(nameof(Audio)); } }
     public bool SkipCameraProxies { get => p.SkipCameraProxies; set { p.SkipCameraProxies = value; Changed(nameof(SkipCameraProxies)); } }
+    /// 0.5.1: no proxy for an H.264/HEVC original that is lighter than the proxy would be — H.264/HEVC proxies only (LighterSource).
+    public bool SkipLighterSources { get => p.SkipLighterSources; set { p.SkipLighterSources = value; Changed(nameof(SkipLighterSources)); } }
     public bool CopyToAllDestinations { get => p.CopyToAllDestinations; set { p.CopyToAllDestinations = value; Changed(nameof(CopyToAllDestinations)); } }
+    /// Spec 4.2, R26: off by default until a Gen 4 sample confirms the SDK conversion.
+    public bool BrawGen4ToGen5 { get => p.BrawGen4ToGen5; set { p.BrawGen4ToGen5 = value; Changed(nameof(BrawGen4ToGen5)); } }
 
     static readonly string[] FolderProperties = [nameof(ExtraFolderName), nameof(ExtraFolderPath), nameof(HasExtraFolder)];
 

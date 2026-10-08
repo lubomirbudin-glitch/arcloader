@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Offload — nastavení proxy</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0E1012}
+a{color:#7DB6FF}a:hover{color:#A9CEFF}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height: 900px; width: 100%; box-sizing: border-box; background: #0E1012; color: #ECEFF2; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 20px; border-bottom: 1px solid #262B31; background: #121518">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border-radius: 8px; color: #C9D0D7; text-decoration: none; font-size: 13px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>Zpět</a>
+<div style="width: 1px; height: 22px; background: #262B31"></div>
+<div style="display: flex; flex-direction: column"><span style="font-size: 12px; color: #808994">Preset</span><span style="font-weight: 600">ALEXA 35 · Proxy 1080p H.264</span></div>
+<div style="flex: 1 1 20px"></div>
+<button style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2E343B; background: #1B1F23; color: #ECEFF2; font-size: 13px">Uložit jako nový preset</button>
+<button style="height: 34px; padding: 0 16px; border-radius: 8px; border: none; background: #2366D1; color: #FFFFFF; font-size: 13px; font-weight: 600">Hotovo</button>
+</header>
+
+<div style="flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: stretch">
+<nav aria-label="Sekce nastavení" style="flex: 1 1 200px; max-width: 240px; box-sizing: border-box; padding: 20px 14px; background: #14171A; border-right: 1px solid #262B31; display: flex; flex-direction: column; gap: 2px">
+<a href="#" style="padding: 9px 12px; border-radius: 8px; color: #C9D0D7; text-decoration: none">Struktura složek</a>
+<a href="#" style="padding: 9px 12px; border-radius: 8px; color: #C9D0D7; text-decoration: none">Ověření</a>
+<a href="#" style="padding: 9px 12px; border-radius: 8px; color: #C9D0D7; text-decoration: none">Analýza a náhledy</a>
+<a href="#" style="padding: 9px 12px; border-radius: 8px; color: #ECEFF2; background: #1F2933; font-weight: 600; text-decoration: none">Proxy</a>
+<a href="#" style="padding: 9px 12px; border-radius: 8px; color: #C9D0D7; text-decoration: none">Report</a>
+<a href="#" style="padding: 9px 12px; border-radius: 8px; color: #C9D0D7; text-decoration: none">Dekodéry RAW</a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 26px 32px 32px; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+
+<div style="flex: 1 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 26px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px"><h1 style="margin: 0; font-size: 22px; font-weight: 600">Proxy</h1><span style="color: #A7AFB8">Renderují se až po ověření — originály mají vždy přednost.</span></div>
+<label style="display: flex; align-items: center; gap: 10px; cursor: pointer"><span style="font-size: 13px; color: #C9D0D7">Zapnuto</span><span style="width: 42px; height: 24px; border-radius: 99px; background: #2366D1; display: flex; align-items: center; justify-content: flex-end; padding: 3px; box-sizing: border-box"><span style="width: 18px; height: 18px; border-radius: 50%; background: #FFFFFF"></span></span></label>
+</div>
+
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px 18px; align-items: center">
+<span style="color: #A7AFB8">Kodek</span>
+<div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; border-radius: 9px; background: #171A1E; border: 1px solid #262B31; width: fit-content">
+<button style="height: 32px; padding: 0 12px; border-radius: 7px; border: none; background: #2E3640; color: #ECEFF2; font-size: 13px; font-weight: 600">H.264</button>
+<button style="height: 32px; padding: 0 12px; border-radius: 7px; border: none; background: transparent; color: #A7AFB8; font-size: 13px">H.265</button>
+<button style="height: 32px; padding: 0 12px; border-radius: 7px; border: none; background: transparent; color: #A7AFB8; font-size: 13px">ProRes Proxy</button>
+<button style="height: 32px; padding: 0 12px; border-radius: 7px; border: none; background: transparent; color: #A7AFB8; font-size: 13px">DNxHR LB</button>
+</div>
+<span style="color: #A7AFB8">Výška</span>
+<div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; border-radius: 9px; background: #171A1E; border: 1px solid #262B31; width: fit-content">
+<button style="height: 32px; padding: 0 12px; border-radius: 7px; border: none; background: transparent; color: #A7AFB8; font-size: 13px">540p</button>
+<button style="height: 32px; padding: 0 12px; border-radius: 7px; border: none; background: transparent; color: #A7AFB8; font-size: 13px">720p</button>
+<button style="height: 32px; padding: 0 12px; border-radius: 7px; border: none; background: #2E3640; color: #ECEFF2; font-size: 13px; font-weight: 600">1080p</button>
+<button style="height: 32px; padding: 0 12px; border-radius: 7px; border: none; background: transparent; color: #A7AFB8; font-size: 13px">2160p</button>
+</div>
+<span style="color: #A7AFB8">Datový tok</span>
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="display: flex; align-items: center; border-radius: 8px; border: 1px solid #323840; background: #0F1215; overflow: hidden">
+<button aria-label="Snížit datový tok" style="width: 34px; height: 34px; border: none; background: transparent; color: #C9D0D7; font-size: 16px">−</button>
+<span style="padding: 0 10px; font-family: 'IBM Plex Mono', monospace; font-size: 13px">10 Mb/s</span>
+<button aria-label="Zvýšit datový tok" style="width: 34px; height: 34px; border: none; background: transparent; color: #C9D0D7; font-size: 16px">+</button>
+</div>
+<span style="font-size: 13px; color: #808994">≈ 75 MB / minutu</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><h2 style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #A7AFB8">LUT podle kamery</h2><button style="background: none; border: none; color: #7DB6FF; font-size: 13px; padding: 6px 0">Vlastní .cube…</button></div>
+<div style="border-radius: 12px; border: 1px solid #262B31; overflow: hidden; font-size: 13px">
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) 70px; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #22272C; background: #172235"><span style="font-weight: 600">ARRI · LogC4</span><span style="color: #C9D0D7">LogC4 / AWG4 → Rec.709</span><span style="color: #7DB6FF; text-align: right">použito</span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) 70px; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #22272C"><span>ARRI · LogC3</span><span style="color: #A7AFB8">LogC3 / AWG3 → Rec.709</span><span></span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) 70px; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #22272C"><span>Sony · S-Log3</span><span style="color: #A7AFB8">S-Gamut3.Cine → Rec.709</span><span></span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) 70px; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #22272C"><span>Canon · C-Log3</span><span style="color: #A7AFB8">Cinema Gamut → Rec.709</span><span></span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) 70px; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #22272C"><span>RED · Log3G10</span><span style="color: #A7AFB8">REDWideGamutRGB → Rec.709</span><span></span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) 70px; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #22272C"><span>Blackmagic · Gen 5</span><span style="color: #A7AFB8">Film Gen 5 → Rec.709</span><span></span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) 70px; gap: 12px; padding: 10px 14px; color: #808994"><span>+ Panasonic, DJI, Fujifilm</span><span></span><span></span></div>
+</div>
+<label style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #A7AFB8">Když kameru nepoznám:
+<select style="height: 32px; border-radius: 8px; border: 1px solid #323840; background: #0F1215; color: #ECEFF2; padding: 0 8px; font-family: inherit; font-size: 13px"><option>Bez LUTu (log)</option><option>Zeptat se</option></select>
+</label>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #A7AFB8">Další</h2>
+<label style="display: flex; align-items: center; gap: 10px"><input type="checkbox" checked style="width: 17px; height: 17px; accent-color: #5AA2FF; margin: 0">Zvuk v proxy</label>
+<label style="display: flex; align-items: center; gap: 10px"><input type="checkbox" checked style="width: 17px; height: 17px; accent-color: #5AA2FF; margin: 0">Přeskočit proxy nahrané kamerou (SUB / PROXY)</label>
+<label style="display: flex; align-items: center; gap: 10px"><input type="checkbox" checked style="width: 17px; height: 17px; accent-color: #5AA2FF; margin: 0">Kopírovat proxy na všechny cíle</label>
+</div>
+</div>
+
+<aside style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #A7AFB8">Náhled burn-inu</h2>
+<div style="position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #2A2F33; border: 1px solid #323840">
+<div style="position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; color: #6F7882; font-size: 12px">[náhled snímku z klipu]</div>
+<div style="position: absolute; left: 5%; right: 5%; top: 5%; bottom: 5%; border: 1px solid rgba(255,255,255,0.55)"></div>
+<span style="position: absolute; left: 6.5%; bottom: 8%; padding: 2px 6px; background: rgba(0,0,0,0.6); font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #FFFFFF">A035C010_261007_R2KQ</span>
+<span style="position: absolute; right: 6.5%; bottom: 8%; padding: 2px 6px; background: rgba(0,0,0,0.6); font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #FFFFFF">14:22:07:13</span>
+</div>
+<div style="border-radius: 12px; border: 1px solid #262B31; padding: 6px 14px; display: flex; flex-direction: column">
+<label style="display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #22272C"><input type="checkbox" checked style="width: 17px; height: 17px; accent-color: #5AA2FF; margin: 0"><span style="flex: 1 1 auto">Název klipu</span><span style="font-size: 12px; color: #808994">vlevo dole</span></label>
+<label style="display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #22272C"><input type="checkbox" checked style="width: 17px; height: 17px; accent-color: #5AA2FF; margin: 0"><span style="flex: 1 1 auto">Timecode</span><span style="font-size: 12px; color: #808994">vpravo dole</span></label>
+<label style="display: flex; align-items: center; gap: 10px; padding: 9px 0"><input type="checkbox" checked style="width: 17px; height: 17px; accent-color: #5AA2FF; margin: 0"><span style="flex: 1 1 auto">Frame lines</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #C9D0D7">90 %</span></label>
+</div>
+<p style="margin: 0; font-size: 13px; color: #808994; line-height: 1.5">Canon Cinema RAW Light a Sony X-OCN se zkopírují a ověří, proxy pro ně zatím nejde vyrobit.</p>
+</aside>
+</main>
+</div>
+</div>
+</x-dc>
+</body>
+</html>
+

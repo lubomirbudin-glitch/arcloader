@@ -53,15 +53,20 @@ public static class Layout
         var chars = s.Select(c => c < 0x20 || InvalidChars.Contains(c) ? '_' : c).ToArray();
         var o = new string(chars).Trim().TrimEnd('.', ' ');
         if (o.Length == 0) return "CARD";
+        if (OffloadFolders.Contains(o)) return o + "_";   // fix round 1, item 5: never a card called like our own folders
         return ReservedNames.Contains(BaseName(o)) ? "_" + o : o;
     }
+
+    /// Folders an offload makes inside a day or a card folder: a card of that name would be taken for one of them
+    /// (ruling M8: the day report would go into a card called _REPORT).
+    static readonly HashSet<string> OffloadFolders = new([ReportDirName, ProxyDirName, Mhl.DirName], StringComparer.OrdinalIgnoreCase);
 
     /// Why Windows cannot store a file or folder with this name, or null when it can.
     public static string? InvalidNameReason(string name)
     {
-        if (name.Any(c => c < 0x20 || InvalidChars.Contains(c))) return "contains a character Windows does not allow";
-        if (name.EndsWith('.') || name.EndsWith(' ')) return "ends with a dot or space";
-        if (ReservedNames.Contains(BaseName(name))) return "reserved device name on Windows";
+        if (name.Any(c => c < 0x20 || InvalidChars.Contains(c))) return Msg.InvalidChar;
+        if (name.EndsWith('.') || name.EndsWith(' ')) return Msg.EndsWithDotOrSpace;
+        if (ReservedNames.Contains(BaseName(name))) return Msg.ReservedName;
         return null;
     }
 

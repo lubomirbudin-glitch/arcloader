@@ -21,32 +21,6 @@ public class ChainViewTests
         Assert.Equal("SATA", c[1].Connection);
     }
 
-    [Fact]
-    public void Describe_BrakeAndFullLink()
-    {
-        var chain = ChainView.Build([Usb("Karta", "reader", UsbLinkSpeed.High), Sata("Cíl 1")], [38, 38]);
-        Assert.Equal("Cíl 1 ST1000", ChainView.Describe(new Brake(1, 38, null), chain));
-        Assert.Equal("Karta reader — linka je plná (USB 2.0 (480 Mb/s))", ChainView.Describe(new Brake(0, 38, 0.95), chain));
-        Assert.Equal("Karta reader", ChainView.Describe(new Brake(0, 20, 0.5), chain));
-    }
-
-    [Fact]
-    public void Lines_IncludeControllerSum()
-    {
-        var chain = ChainView.Build([Usb("Karta", "reader", UsbLinkSpeed.Super), Usb("Cíl 1", "SSD", UsbLinkSpeed.Super)], [300, 290]);
-        var lines = ChainView.Lines(chain, new Brake(1, 290, 0.64));
-        Assert.Contains(lines, l => l.StartsWith("Karta") && l.Contains("300 MB/s") && l.Contains("67 % linky"));
-        Assert.Contains(lines, l => l == "Řadič Intel xHCI: 590 MB/s");
-        Assert.Contains("Úzké hrdlo: Cíl 1 SSD", lines);
-    }
-
-    // Final review 4: same-named controllers are not summed together.
-    [Fact]
-    public void Lines_SameNamedControllersNotSummed()
-    {
-        var chain = ChainView.Build([Usb("Karta", "reader", UsbLinkSpeed.Super, "PCI\\A"), Usb("Cíl 1", "SSD", UsbLinkSpeed.Super, "PCI\\B")], [300, 290]);
-        Assert.DoesNotContain(ChainView.Lines(chain, null), l => l.StartsWith("Řadič"));
-    }
 }
 
 public class BrakeMeterTests

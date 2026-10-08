@@ -79,6 +79,19 @@ internal sealed class ToolProcess : IDisposable
 
     public void WaitForExit() => process.WaitForExit();
 
+    /// After the process exited: waits (bounded) until the redirected stderr reached EOF, so `StderrTail` holds the last
+    /// lines. `WaitForExit(timeout)` returns before the asynchronous readers are done — under load the final line was missing.
+    public void DrainStderr(int milliseconds = 5000)
+    {
+        try
+        {
+            if (process.HasExited) Task.Run(process.WaitForExit).Wait(milliseconds);
+        }
+        catch (Exception e) when (e is InvalidOperationException or AggregateException)
+        {
+        }
+    }
+
     public bool WaitForExit(int milliseconds) => process.WaitForExit(milliseconds);
 
     public void Kill()

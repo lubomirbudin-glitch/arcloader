@@ -27,6 +27,24 @@ public class ProxyRendererTests
         Assert.Equal(["0.000000", "0.020000", "0.000000"], ProxyRenderer.FramePositions(shortClip).Select(p => ProxyRenderer.SeekSeconds(shortClip, p)));
     }
 
+    // Plan 8 fix round 1, item 2b: only a custom LUT missing when stage 2 began gets the note.
+    [Fact]
+    public void LutNote_CustomLutGone()
+    {
+        using var dir = new TempDir();
+        var present = Path.Combine(dir.Path, "look.cube");
+        File.WriteAllText(present, "LUT_3D_SIZE 2\n");
+        var gone = Path.Combine(dir.Path, "gone.cube");
+        using var missing = new ProxyRenderer(new ProxySettings { LutMode = LutMode.Custom, LutPath = gone }, Tools);
+        using var found = new ProxyRenderer(new ProxySettings { LutMode = LutMode.Custom, LutPath = present }, Tools);
+
+        Assert.Equal("LUT nenalezen: gone.cube — proxy bez LUTu", missing.LutNote(CustomLut(gone)));
+        Assert.Null(found.LutNote(CustomLut(present)));
+        Assert.Null(missing.LutNote(null));
+        Assert.Null(missing.LutNote(LutUse.None("vypnuto v nastavení")));
+        Assert.Null(missing.LutNote(new LutUse("auto", "sony-slog3-sgamut3cine", "S-Log3", "x") { File = gone }));   // built-in
+    }
+
     [Fact]
     public void FramePositions_UnknownLengthOrSingleFrame_OnlyFirst()
     {
@@ -40,13 +58,13 @@ public class ProxyRendererTests
     public void UnsupportedReason()
     {
         using var none = new ProxyRenderer(new ProxySettings(), new ExternalTools { NoSearch = true }.Resolved());
-        Assert.Equal("ffmpeg not found", none.UnsupportedReason(VideoClip("a.mov")));
+        Assert.Equal("ffmpeg nenalezen", none.UnsupportedReason(VideoClip("a.mov")));
         var ff = new ExternalTools { Ffmpeg = @"C:\Windows\System32\cmd.exe", NoSearch = true }.Resolved();
         using var some = new ProxyRenderer(new ProxySettings(), ff);
         Assert.Null(some.UnsupportedReason(VideoClip("a.mov")));
         Assert.StartsWith("RED R3D", some.UnsupportedReason(new Clip { Name = "r", Path = "r.R3D", Format = ClipFormat.R3d, Segments = ["r.R3D"] }));
         Assert.StartsWith("Canon", some.UnsupportedReason(new Clip { Name = "c", Path = "c.CRM", Format = ClipFormat.CanonRaw, Segments = ["c.CRM"] }));
-        Assert.Equal("unknown format", some.UnsupportedReason(new Clip { Name = "u", Path = "u", Format = ClipFormat.Unknown, Segments = ["u"] }));
+        Assert.Equal("neznámý formát", some.UnsupportedReason(new Clip { Name = "u", Path = "u", Format = ClipFormat.Unknown, Segments = ["u"] }));
     }
 
     // Review focus 3
@@ -86,6 +104,50 @@ public class ProxyRendererTests
         Assert.Equal(new RawLook(true, null), ProxyRenderer.LookFor(new LutUse("auto", "red-log3g10-rwg", "n", "r") { File = "a.cube" }, info));
         Assert.Equal(new RawLook(true, "AWG4/D65/LogC4"), ProxyRenderer.LookFor(CustomLut(@"C:\l\show_LogC4_709.cube"), info));
         Assert.Equal(new RawLook(true, "AWG3/D65/LogC3"), ProxyRenderer.LookFor(CustomLut(@"C:\l\look.cube"), info));
+    }
+
+    /// A folder `depth` levels of 30-character names below `root` (a card's camera tree can be that deep).
+    internal static string Deep(string root, int depth) =>
+        Path.Combine([root, .. Enumerable.Range(1, depth).Select(n => $"folder_{n:00}_with_a_long_name_x")]);
+
+    // Review: a mirrored proxy path can exceed MAX_PATH (260). ffmpeg (or a decoder the user points to) gets a short
+    // `.part` path: beside the proxy while that is short, else at the top of `_PROXY` (same volume — the move is a
+    // rename), else the renderer's own work folder; the finished file is then moved, never over an existing one.
+    [Fact]
+    public void PartFor_StaysShort()
+    {
+        var work = @"C:\Temp\offload-1234abcd";
+        Assert.Equal(@"D:\Zaloha\2026-10-08\A001\_PROXY\idle\.1.mov.part", ProxyRenderer.PartFor(@"D:\Zaloha\2026-10-08\A001\_PROXY\idle\1.mov", work));
+        var deep = Deep(@"D:\Zaloha\2026-10-08\A001\_PROXY", 8) + @"\C0001.mov";
+        Assert.True(deep.Length > 260);
+        var part = ProxyRenderer.PartFor(deep, work);
+        Assert.StartsWith(@"D:\Zaloha\2026-10-08\A001\_PROXY\.", part);
+        Assert.EndsWith(".mov.part", part);
+        Assert.True(part.Length < 260, part);
+        var deepCard = Deep(@"D:\Zaloha", 8) + @"\_PROXY\idle\C0001.mov";   // even _PROXY is past the limit
+        Assert.StartsWith(work + @"", ProxyRenderer.PartFor(deepCard, work));
+    }
+
+    [FfmpegFact]
+    public void Render_DeepPathOverMaxPath()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeClip(Path.Combine(card, "C0001.mov"), seconds: 1);
+        using var r = new ProxyRenderer(new ProxySettings { Enabled = true, Height = 180 }, Tools) { ForcedEncoder = "libx264" };
+        var clip = new Clip { Name = "C0001", Path = "C0001.mov", Format = ClipFormat.Video, Segments = ["C0001.mov"], Bytes = 1 };
+        var info = r.Probe(clip, card);
+        foreach (var root in new[] { Path.Combine(dir.Path, "d1", "_PROXY"), Deep(Path.Combine(dir.Path, "d2"), 9) + @"\_PROXY" })
+        {
+            var output = Deep(root, 9) + @"\C0001.mov";
+            Assert.True(output.Length > 260);
+            r.Render(clip, card, info, null, output, _ => { }, () => false);
+            Assert.True(File.Exists(output));
+            Assert.Empty(Directory.GetFiles(Path.Combine(dir.Path), "*.part", SearchOption.AllDirectories));
+            // Never over an existing proxy.
+            Assert.ThrowsAny<Exception>(() => r.Render(clip, card, info, null, output, _ => { }, () => false));
+            Assert.Empty(Directory.GetFiles(Path.Combine(dir.Path), "*.part", SearchOption.AllDirectories));
+        }
     }
 
     static void RunFfmpeg(params string[] args) =>
@@ -377,6 +439,73 @@ public class ProxyRendererTests
         var output = Path.Combine(card, "_PROXY", "a.mov");
         r.Render(clip, card, r.Probe(clip, card), null, output, _ => { }, () => false);
         Assert.Equal("prores", FFProbe.Probe(TestMedia.Ffprobe!, output).Codec!.Split(' ')[0]);
+    }
+
+    // Spec 3.4: the proxy relinks — start TC and reel name on the timecode track, every audio stream of the source.
+    [FfmpegFact]
+    public void Render_ReelNameOnTimecodeTrack_EveryAudioStream()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeClip(Path.Combine(card, "a.mov"), seconds: 1, timecode: "01:00:00:00", audioStreams: 2);
+        using var r = new ProxyRenderer(new ProxySettings { Height = 360 }, Tools) { ForcedEncoder = "libx264" };
+        var clip = VideoClip("a.mov");
+        var info = r.Probe(clip, card);
+        Assert.Equal([1, 1], info.AudioStreams);
+        info.Reel = "A001";
+        var output = Path.Combine(card, "_PROXY", "a.mov");
+
+        r.Render(clip, card, info, null, output, _ => { }, () => false);
+
+        var streams = TestMedia.Streams(output);
+        var tmcd = Assert.Single(streams, s => s.Type == "data");
+        Assert.Equal(("A001", "01:00:00:00"), (tmcd.Tags["reel_name"], tmcd.Tags["timecode"]));
+        Assert.Equal([("aac", 1), ("aac", 1)], streams.Where(s => s.Type == "audio").Select(s => (s.Codec, s.Channels)));
+        Assert.Equal("A001", FFProbe.Probe(TestMedia.Ffprobe!, output).Reel);
+    }
+
+    // Review focus 5: a Sony MXF with 8 mono tracks — the ProRes proxy keeps all 8 (PCM) and gets the reel.
+    [FfmpegFact]
+    public void Render_SonyMxf_EightMonoTracks()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeMxf(Path.Combine(card, "C0001.MXF"), monoTracks: 8);
+        using var r = new ProxyRenderer(new ProxySettings { Height = 360, Codec = ProxyCodec.ProresProxy }, Tools);
+        var clip = VideoClip("C0001.MXF");
+        var info = r.Probe(clip, card);
+        Assert.Equal(8, info.AudioStreams.Count);
+        info.Reel = "A001";
+        var output = Path.Combine(card, "_PROXY", "C0001.mov");
+
+        r.Render(clip, card, info, null, output, _ => { }, () => false);
+
+        var streams = TestMedia.Streams(output);
+        Assert.Equal(Enumerable.Repeat<(string?, int)>(("pcm_s16le", 1), 8), streams.Where(s => s.Type == "audio").Select(s => (s.Codec, s.Channels)));
+        var tmcd = Assert.Single(streams, s => s.Type == "data");
+        Assert.Equal(("A001", "10:00:00:00"), (tmcd.Tags["reel_name"], tmcd.Tags["timecode"]));
+    }
+
+    // Spec 3.4: without timecode there is no timecode track — and so no reel name (Resolve relinks by name).
+    [FfmpegFact]
+    public void Render_NoTimecode_NoTimecodeTrackNoReel()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        TestMedia.MakeClip(Path.Combine(card, "a.mov"), seconds: 1, timecode: null);
+        using var r = new ProxyRenderer(new ProxySettings { Height = 360 }, Tools) { ForcedEncoder = "libx264" };
+        var clip = VideoClip("a.mov");
+        var info = r.Probe(clip, card);
+        Assert.Null(info.Timecode);
+        info.Reel = "A001";
+        var output = Path.Combine(card, "_PROXY", "a.mov");
+
+        r.Render(clip, card, info, null, output, _ => { }, () => false);
+
+        var streams = TestMedia.Streams(output);
+        Assert.DoesNotContain(streams, s => s.Type == "data");
+        Assert.DoesNotContain(streams, s => s.Tags.ContainsKey("reel_name"));
+        Assert.Single(streams, s => s.Type == "audio");
     }
 
     [FfmpegFact]

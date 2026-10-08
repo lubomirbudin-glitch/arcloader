@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.ExceptionServices;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Offload.Core;
@@ -15,7 +16,8 @@ public sealed class ProxyRenderer : IDisposable
     readonly Dictionary<ClipFormat, IRawBackend> backends = RawBackends.All.ToDictionary(b => b.Format);
 
     /// Tests only: other RAW backends (e.g. BRAW with a fake library search or a short --info timeout); they
-    /// replace the default one of the same format.
+    /// replace the default one of the same format — also the --gen5 BRAW backend the constructor makes for
+    /// proxy.brawGen4ToGen5 (init runs after the constructor; M11 c): a test that injects BRAW passes its own `gen5`.
     internal IEnumerable<IRawBackend> Backends
     {
         get => backends.Values;
@@ -26,10 +28,10 @@ public sealed class ProxyRenderer : IDisposable
         }
     }
     readonly string workDir;
-    readonly bool hasCustomLut;
     readonly bool hasFont;
-    /// Built-in LUT ids already copied into the work folder.
-    readonly HashSet<string> builtinLuts = new(StringComparer.Ordinal);
+    /// The LUT files already copied into the work folder (by their name there), and the ones that could not be.
+    readonly HashSet<string> copiedLuts = new(StringComparer.Ordinal);
+    readonly HashSet<string> failedLuts = new(StringComparer.Ordinal);
 
     public ProxySettings Settings { get; }
     public ExternalTools Tools { get; }
@@ -54,6 +56,28 @@ public sealed class ProxyRenderer : IDisposable
     /// Tests only: H.264/HEVC encoder to use instead of the probed one (OffloadOptions.ProxyEncoder).
     internal string? ForcedEncoder { get; init; }
 
+    /// Paths up to this length go to ffmpeg (and a RAW decoder) as they are; longer ones never do (MAX_PATH, 260).
+    const int ShortPath = 240;
+
+    /// Where the render writes before its final name: `.<name>.part` beside the proxy while that path is short; for a deep
+    /// mirrored folder `.<8 hex>.mov.part` at the top of the `_PROXY` above it (same volume, so the move is a rename);
+    /// when even that is too long, the renderer's work folder (then copied onto the destination).
+    internal static string PartFor(string output, string workDir)
+    {
+        var dir = Path.GetDirectoryName(output)!;
+        var beside = Path.Combine(dir, "." + Path.GetFileName(output) + ".part");
+        if (beside.Length <= ShortPath) return beside;
+        var temp = "." + Guid.NewGuid().ToString("N")[..8] + ".mov.part";
+        for (var d = dir; d != null; d = Path.GetDirectoryName(d))
+        {
+            if (!string.Equals(Path.GetFileName(d), Layout.ProxyDirName, StringComparison.OrdinalIgnoreCase)) continue;
+            var top = Path.Combine(d, temp);
+            if (top.Length <= ShortPath) return top;
+            break;
+        }
+        return Path.Combine(workDir, temp[1..]);
+    }
+
     /// The video encoder proxies are rendered with (probed once, on first use); null without ffmpeg.
     public string? EncoderName => Tools.Ffmpeg is string ffmpeg
         ? encoderName ??= (ForcedEncoder is string forced && Settings.Codec is ProxyCodec.H264 or ProxyCodec.Hevc ? forced : Encoders.Pick(ffmpeg, Settings.Codec))
@@ -63,16 +87,14 @@ public sealed class ProxyRenderer : IDisposable
     {
         Settings = settings;
         Tools = tools;
+        // Spec 4.2: Film Gen 4 BRAW decoded as Gen 5 (braw-decode --gen5) when switched on; its warnings go to the job's
+        // log (Log is read when one is written, after init).
+        if (settings.BrawGen4ToGen5) backends[ClipFormat.Braw] = new BrawBackend(gen5: true) { Log = m => Log?.Invoke(m) };
         workDir = Path.Combine(Path.GetTempPath(), "offload-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(workDir);
         try
         {
-            // The custom LUT is copied up front as before; built-in ones lazily, per clip (PrepareLut).
-            if (LutResolver.EffectiveMode(settings) == LutMode.Custom && !string.IsNullOrEmpty(settings.LutPath) && File.Exists(settings.LutPath))
-            {
-                File.Copy(settings.LutPath, Path.Combine(workDir, FilterGraph.LutFile));
-                hasCustomLut = true;
-            }
+            // LUTs are copied lazily, per clip and once each (PrepareLut): built-in ones, the custom one, own rules' ones.
             if (FontCandidates.FirstOrDefault(File.Exists) is string font)
             {
                 File.Copy(font, Path.Combine(workDir, FilterGraph.FontFile));
@@ -96,14 +118,14 @@ public sealed class ProxyRenderer : IDisposable
     /// null when the clip can be rendered, otherwise the reason it cannot.
     public string? UnsupportedReason(Clip clip)
     {
-        if (Tools.Ffmpeg == null) return "ffmpeg not found";
+        if (Tools.Ffmpeg == null) return Msg.FfmpegNotFound;
         return clip.Format switch
         {
             ClipFormat.Video => null,
-            ClipFormat.Unknown => "unknown format",
+            ClipFormat.Unknown => Msg.UnknownFormat,
             _ => backends.TryGetValue(clip.Format, out var b)
                 ? (b.IsAvailable(Tools) ? null : b.MissingHint)
-                : $"{clip.Format.Label()}: no decoder available",
+                : Msg.NoDecoder(clip.Format.Label()),
         };
     }
 
@@ -112,8 +134,10 @@ public sealed class ProxyRenderer : IDisposable
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
         {
-            var ffprobe = Tools.Ffprobe ?? throw new ToolError("ffprobe", -1, "ffprobe not found");
-            return FFProbe.Probe(ffprobe, path);
+            var ffprobe = Tools.Ffprobe ?? throw new ToolError("ffprobe", -1, Msg.FfprobeNotFound);
+            var info = FFProbe.Probe(ffprobe, path);
+            info.CameraSerial ??= SonyXml.Serial(path);   // Sony keeps it in the XML next to the clip (spec 4.2)
+            return info;
         }
         if (!backends.TryGetValue(clip.Format, out var b) || !b.IsAvailable(Tools))
             throw new ToolError(clip.Format.Label(), -1, UnsupportedReason(clip) ?? "");
@@ -182,24 +206,40 @@ public sealed class ProxyRenderer : IDisposable
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
             return new FrameSource { InputArgs = hwaccel ? ["-hwaccel", "auto", "-i", path] : ["-i", path] };
-        if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, "no decoder");
+        if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, Msg.NoDecoderShort);
         return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt));
     }
 
-    /// The .cube for this clip by its name in the work folder, or null for no LUT. The custom LUT was copied
-    /// in the constructor (null when it was missing); a built-in one is copied on first use, once per id.
-    string? PrepareLut(LutUse? lut)
+    /// The .cube for this clip by its name in the work folder, or null for no LUT. Copied on first use, once per file:
+    /// a built-in one as `lut-<id>.cube`, an own one (the custom LUT, a rule's) as `lut-custom-<8 hex of SHA-1 of its
+    /// path>.cube` — two rules with two .cube files in one job each get their own (spec 4.2). A file that cannot be
+    /// read (gone since the check before the start) means no LUT, logged once.
+    internal string? PrepareLut(LutUse? lut)
     {
         if (lut?.File is not string file) return null;
-        if (!lut.IsBuiltin) return hasCustomLut ? FilterGraph.LutFile : null;
-        var name = $"lut-{lut.Id}.cube";
-        if (!builtinLuts.Contains(lut.Id!))
+        var name = lut.IsBuiltin
+            ? $"lut-{lut.Id}.cube"
+            : $"lut-custom-{Convert.ToHexStringLower(SHA1.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(file).ToUpperInvariant())))[..8]}.cube";
+        if (copiedLuts.Contains(name)) return name;
+        if (failedLuts.Contains(name)) return null;
+        try
         {
             File.Copy(file, Path.Combine(workDir, name), overwrite: true);
-            builtinLuts.Add(lut.Id!);
         }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            failedLuts.Add(name);
+            Log?.Invoke($"LUT {file}: {e.Message} — no LUT");
+            return null;
+        }
+        copiedLuts.Add(name);
         return name;
     }
+
+    /// Plan 8: a clip whose own LUT (the custom one, or a rule's) cannot be read renders without it — the proxy says so
+    /// (null otherwise; built-in LUTs ship with the app).
+    public string? LutNote(LutUse? lut) =>
+        lut is { IsBuiltin: false, File: string file } && PrepareLut(lut) == null ? Msg.ProxyWithoutLut(Path.GetFileName(file)) : null;
 
     /// RAW decoders hand over log whenever a LUT follows; ARRI's target space must match a built-in ARRI LUT.
     internal static RawLook LookFor(LutUse? lut, ClipInfo info)
@@ -235,7 +275,7 @@ public sealed class ProxyRenderer : IDisposable
     /// `lut` null = no LUT (thumbnails taken from a finished proxy, which already has it).
     public List<Thumbnail> Thumbnails(Clip clip, string cardPath, ClipInfo info, LutUse? lut, Func<bool>? isCancelled = null)
     {
-        var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, "ffmpeg not found");
+        var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, Msg.FfmpegNotFound);
         isCancelled ??= () => false;
         var lutFile = PrepareLut(lut);
         var look = LookFor(lutFile != null ? lut : null, info);  // log only when a LUT really follows
@@ -303,7 +343,7 @@ public sealed class ProxyRenderer : IDisposable
     /// clip is then retried once in software — as is one that failed with it; without, the stall fails the proxy.
     public void Render(Clip clip, string cardPath, ClipInfo info, LutUse? lut, string output, Action<double> progress, Func<bool> isCancelled)
     {
-        var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, "ffmpeg not found");
+        var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, Msg.FfmpegNotFound);
         var lutFile = PrepareLut(lut);
         bool hwaccel = clip.Format == ClipFormat.Video && UseHardwareDecoding(info.Codec);
         Exception first;
@@ -364,22 +404,35 @@ public sealed class ProxyRenderer : IDisposable
             args.AddRange(["-map", "0:v:0"]);
             if (Settings.Audio && info.AudioChannels > 0 && src.AudioFromInput)
             {
-                args.AddRange(["-map", "0:a:0?"]);
-                args.AddRange(Encoders.AudioArgs(Settings.Codec));
+                args.AddRange(["-map", "0:a?"]);   // every audio stream (R14)
+                args.AddRange(Encoders.AudioArgs(Settings.Codec, info.AudioStreams));
             }
             args.AddRange(["-vf", vf]);
             args.AddRange(Encoders.VideoArgs(EncoderName!, Settings.Codec, Settings.BitrateMbps));
             args.AddRange(Encoders.Rec709Args);
-            if (Timecode.IsValid(info.Timecode)) args.AddRange(["-timecode", info.Timecode!]);
+            if (Timecode.IsValid(info.Timecode))
+            {
+                args.AddRange(["-timecode", info.Timecode!]);
+                // The MOV muxer writes it into the timecode track (tmcd) as its source reference: Premiere reads it as
+                // Tape Name, Resolve as Reel (ffprobe shows `reel_name` on the data stream). Without TC there is no tmcd.
+                if (info.Reel is { Length: > 0 } reel) args.AddRange(["-metadata:s:v:0", $"reel_name={reel}"]);
+            }
 
-            var dir = Path.GetDirectoryName(output)!;
-            NativeIO.Mkdirs(dir);
-            var part = Path.Combine(dir, "." + Path.GetFileName(output) + ".part");
+            NativeIO.Mkdirs(Path.GetDirectoryName(output)!);
+            // Short for ffmpeg at any depth of the card's folders (review: MAX_PATH); the final name is never taken from
+            // an existing proxy (spec 2.2) — the render fails instead.
+            var part = PartFor(output, workDir);
             args.AddRange(["-f", "mov", part]);
             try
             {
                 RunFfmpeg(ffmpeg, args, src, info.Duration, progress, isCancelled, StallTimeout);
-                NativeIO.Move(part, output, replace: true);
+                if (part.StartsWith(workDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (Path.Exists(output)) throw new IOError("rename", output, 80 /* ERROR_FILE_EXISTS */);
+                    ProxyCopy.CopyFile(part, output, replace: false);   // another volume: via `.part` beside it, then renamed
+                    NativeIO.Delete(part);
+                }
+                else NativeIO.Move(part, output, replace: false);
             }
             catch
             {
@@ -484,9 +537,11 @@ public sealed class ProxyRenderer : IDisposable
                 throw new ToolError("ffmpeg", -1, "cancelled");
             }
             ff.WaitForExit();
+            ff.DrainStderr();
             if (feeder != null)
             {
                 if (!feeder.WaitForExit(2000)) { feeder.Kill(); feederKilled = true; }
+                else feeder.DrainStderr();   // the decoder's last line must be in StderrTail before it becomes the error
                 pump!.Join(2000);
             }
             // A feeder that died on its own is the real cause; ffmpeg only saw a truncated stream. One that was killed,

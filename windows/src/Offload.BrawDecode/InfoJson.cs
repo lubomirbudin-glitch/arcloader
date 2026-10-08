@@ -5,9 +5,11 @@ namespace Offload.BrawDecode;
 
 /// What --info reports. Width/Height are the processed size at the requested scale (decoded from frame 0 —
 /// the SDK's rounding is the truth, not width/scale), Source* the sensor size.
+/// `ColorScienceGenOriginal`: with --gen5, the generation the clip was recorded in (ColorScienceGen is then the
+/// effective one).
 internal sealed record ClipFacts(
     uint Width, uint Height, uint SourceWidth, uint SourceHeight, float Fps, ulong Frames,
-    string Timecode, string Camera, string? Gamma, string? Gamut, int? ColorScienceGen);
+    string Timecode, string Camera, string? Gamma, string? Gamut, int? ColorScienceGen, int? ColorScienceGenOriginal = null);
 
 internal static class InfoJson
 {
@@ -23,6 +25,7 @@ internal static class InfoJson
         if (f.Gamma != null) sb.Append(inv, $",\"gamma\":\"{Escape(f.Gamma)}\"");
         if (f.Gamut != null) sb.Append(inv, $",\"gamut\":\"{Escape(f.Gamut)}\"");
         if (f.ColorScienceGen is int gen) sb.Append(inv, $",\"colorScienceGen\":{gen}");
+        if (f.ColorScienceGenOriginal is int original) sb.Append(inv, $",\"colorScienceGenOriginal\":{original}");
         sb.Append("}\n");
         return sb.ToString();
     }

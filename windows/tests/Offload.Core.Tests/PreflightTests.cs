@@ -33,21 +33,21 @@ public class PreflightTests
     }
 
     [Fact]
-    public void SourceMissing() => AssertPreflight("Source not found",
+    public void SourceMissing() => AssertPreflight(PreflightCode.SourceNotFound,
         e => e.Prepare(@"C:\offload-no-such-card", [Path.GetTempPath()], null, null));
 
     [Fact]
     public void NoDestination()
     {
         using var dir = new TempDir();
-        AssertPreflight("No destination given", e => e.Prepare(Card(dir), [], null, null));
+        AssertPreflight(PreflightCode.NoDestination, e => e.Prepare(Card(dir), [], null, null));
     }
 
     [Fact]
     public void DestinationMissing()
     {
         using var dir = new TempDir();
-        AssertPreflight("Destination not found", e => e.Prepare(Card(dir), [Path.Combine(dir.Path, "nope")], null, null));
+        AssertPreflight(PreflightCode.DestinationNotFound, e => e.Prepare(Card(dir), [Path.Combine(dir.Path, "nope")], null, null));
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class PreflightTests
         using var dir = new TempDir();
         var e = Assert.Throws<OffloadError>(() =>
             new OffloadEngine(new OffloadOptions { AllowSameDevice = true }).Prepare(Card(dir), [dir.Sub("d1")], null, null));
-        Assert.Contains("same volume as the source", e.Message);
+        Assert.Equal(PreflightCode.SameVolumeAsSource, e.Code);
     }
 
     [Fact]
@@ -65,6 +65,7 @@ public class PreflightTests
         using var dir = new TempDir();
         var e = Assert.Throws<OffloadError>(() =>
             new OffloadEngine(new OffloadOptions { AllowSourceVolume = true }).Prepare(Card(dir), [dir.Sub("d1"), dir.Sub("d2")], null, null));
+        Assert.Equal(PreflightCode.SharedVolume, e.Code);
         Assert.Contains("--allow-same-device", e.Message);
     }
 
@@ -72,7 +73,7 @@ public class PreflightTests
     public void EmptySource()
     {
         using var dir = new TempDir();
-        AssertPreflight("Source contains no files", e => e.Prepare(dir.Sub("empty"), [dir.Sub("d1")], null, null));
+        AssertPreflight(PreflightCode.EmptySource, e => e.Prepare(dir.Sub("empty"), [dir.Sub("d1")], null, null));
     }
 
     [Fact]
@@ -99,7 +100,7 @@ public class PreflightTests
         using var dir = new TempDir();
         var card = Card(dir);
         Directory.CreateDirectory(Path.Combine(card, folder));
-        AssertPreflight("Source looks like an earlier offload", e => e.Prepare(card, [dir.Sub("d1")], null, null));
+        AssertPreflight(PreflightCode.SourceIsOffload, e => e.Prepare(card, [dir.Sub("d1")], null, null));
     }
 
     [Fact]
@@ -107,7 +108,7 @@ public class PreflightTests
     {
         using var dir = new TempDir();
         var d1 = dir.Sub("d1");
-        AssertPreflight("Destination given twice", e => e.Prepare(Card(dir), [d1, d1.ToUpperInvariant() + @"\"], null, null));
+        AssertPreflight(PreflightCode.DuplicateDestination, e => e.Prepare(Card(dir), [d1, d1.ToUpperInvariant() + @"\"], null, null));
     }
 
     [Theory]
@@ -123,7 +124,7 @@ public class PreflightTests
             new OffloadEngine(new OffloadOptions { AllowSameDevice = true, AllowSourceVolume = true, ChunkSize = chunk })
                 .Prepare(Card(dir), [dir.Sub("d1")], null, null));
         Assert.True(e.IsPreflight);
-        Assert.Contains("ChunkSize", e.Message);
+        Assert.Equal(PreflightCode.ChunkSize, e.Code);
     }
 
     [Fact]
@@ -134,7 +135,7 @@ public class PreflightTests
             new OffloadEngine(new OffloadOptions { AllowSameDevice = true, AllowSourceVolume = true, BufferCount = 1 })
                 .Prepare(Card(dir), [dir.Sub("d1")], null, null));
         Assert.True(e.IsPreflight);
-        Assert.Contains("BufferCount", e.Message);
+        Assert.Equal(PreflightCode.BufferCount, e.Code);
     }
 
     [Theory]
@@ -144,13 +145,13 @@ public class PreflightTests
     public void BadDate_IsRejected(string date)
     {
         using var dir = new TempDir();
-        AssertPreflight("Date must be", e => e.Prepare(Card(dir), [dir.Sub("d1")], null, date));
+        AssertPreflight(PreflightCode.Date, e => e.Prepare(Card(dir), [dir.Sub("d1")], null, date));
     }
 
-    static void AssertPreflight(string message, Action<OffloadEngine> act)
+    static void AssertPreflight(PreflightCode code, Action<OffloadEngine> act)
     {
         var e = Assert.Throws<OffloadError>(() => act(new OffloadEngine(SameVolume())));
         Assert.True(e.IsPreflight);
-        Assert.Contains(message, e.Message);
+        Assert.Equal(code, e.Code);
     }
 }

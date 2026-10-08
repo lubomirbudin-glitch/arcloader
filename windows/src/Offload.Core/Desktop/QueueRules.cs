@@ -51,17 +51,38 @@ public static class QueueRules
     public static bool CardInDrive(string source, string? copied, IEnumerable<VolumeItem> scanned) =>
         copied != null && scanned.Any(v => SameDrive(v.Path, source) && string.Equals(v.Identity, copied, StringComparison.OrdinalIgnoreCase));
 
+    /// A waiting job stands behind a paused one (Tasks 1–3 review, minor 3): the copy queue runs one stage 1 at a time,
+    /// so a job paused in stage 1 holds every waiting card; one paused in stage 2 holds none of them.
+    public static bool BlockedByPaused(JobPhase phase, IEnumerable<(JobPhase Phase, bool Paused)> others) =>
+        phase == JobPhase.Waiting && others.Any(o => o.Paused && o.Phase is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying or JobPhase.Reporting);
+
     /// Measuring writes 1 GB to the destinations — not while a copy writes or verifies them.
     public static bool MeasureBlocked(IEnumerable<JobPhase> phases) =>
         phases.Any(p => p is JobPhase.Copying or JobPhase.Flushing or JobPhase.Verifying);
 
-    public static string ReportPath(string cardPath, string cardName) =>
-        Path.Combine(cardPath, Layout.ReportDirName, $"{cardName}_report.html");
+    /// A job card still needs the app (closing waits for it): not finished, an eject in flight, or — ruling I2 — its
+    /// day report is still being made on the post thread until the queue reports the job finished.
+    /// "Vymazat dokončené" therefore removes a card only when it is finished and not still needed (fix round 1, item 3).
+    public static bool StillNeeded(JobPhase phase, bool ejecting, bool dayReportPending, bool leftQueue) =>
+        !phase.IsFinished() || ejecting || (dayReportPending && !leftQueue);
+
+    /// A job that ended in stage 1 (done without stage 2, cancelled, failed) has only its day report left, which may queue
+    /// behind other cards' stage 2: the attention flash and sound come when the copy ends, not after that report.
+    public static bool AlertAtCopyEnd(JobPhase phase) => phase.IsFinished();
+
+    /// Spec 4.3: the end-of-job notification goes out when the copy ends if the job ended there (it must not wait for the
+    /// day report), and once more only if that did not happen: at JobFinished.
+    public static bool NotifyAtCopyEnd(JobPhase phase, bool notified) => !notified && phase.IsFinished();
+    public static bool NotifyAtJobEnd(bool notified) => !notified;
+
+    /// The HTML report of generation `generation` (an append has its own, spec 2.2).
+    public static string ReportPath(string cardPath, string cardName, int generation = 1) =>
+        Path.Combine(cardPath, Layout.ReportDirName, OffloadReport.HtmlName(cardName, generation));
 
     /// The HTML report from the first destination that has it (a destination may be disconnected), or null.
     /// Touches the destinations — never call it on the UI thread.
-    public static string? FirstReport(IEnumerable<string> cardPaths, string cardName) =>
-        cardPaths.Select(c => ReportPath(c, cardName)).FirstOrDefault(File.Exists);
+    public static string? FirstReport(IEnumerable<string> cardPaths, string cardName, int generation = 1) =>
+        cardPaths.Select(c => ReportPath(c, cardName, generation)).FirstOrDefault(File.Exists);
 
     static bool SameDrive(string a, string b) =>
         Root(a) is string ra && string.Equals(ra, Root(b), StringComparison.OrdinalIgnoreCase);

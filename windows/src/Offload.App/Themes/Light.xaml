@@ -1,0 +1,74 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Světlé téma. Same keys in Dark.xaml and Light.xaml (ThemeTokensTests); ThemeWatcher swaps them by the Windows setting.
+         Colours from docs/ui-navrh (README "Design tokeny", mockup/*.html); the light set is derived (contrast checked by the test). -->
+    <SolidColorBrush x:Key="Bg" Color="#F3F5F7" /> <!-- pozadí okna, pravý sloupec -->
+    <SolidColorBrush x:Key="BgHeader" Color="#FFFFFF" /> <!-- horní lišta, prázdné / čekající karty ve frontě -->
+    <SolidColorBrush x:Key="Panel" Color="#FFFFFF" /> <!-- levý sloupec, panely -->
+    <SolidColorBrush x:Key="Raised" Color="#F7F8FA" /> <!-- dlaždice (karta, disk), sekundární tlačítka -->
+    <SolidColorBrush x:Key="RaisedAlt" Color="#F1F3F5" /> <!-- nevybraná karta -->
+    <SolidColorBrush x:Key="Input" Color="#FFFFFF" /> <!-- textová pole, tabulka rychlostí -->
+    <SolidColorBrush x:Key="Line" Color="#DCE1E6" /> <!-- okraje panelů a dlaždic -->
+    <SolidColorBrush x:Key="LineSoft" Color="#E6E9ED" /> <!-- oddělovače řádků -->
+    <SolidColorBrush x:Key="LineStrong" Color="#C8CFD6" /> <!-- okraje tlačítek -->
+    <SolidColorBrush x:Key="LineInput" Color="#C3CAD2" /> <!-- okraje vstupů -->
+    <SolidColorBrush x:Key="Track" Color="#E1E5EA" /> <!-- podklad progress barů, kolečka s číslem disku -->
+    <SolidColorBrush x:Key="Text" Color="#15191D" /> <!-- primární text -->
+    <SolidColorBrush x:Key="Text2" Color="#4B545E" /> <!-- sekundární text, popisky -->
+    <SolidColorBrush x:Key="Text3" Color="#5E6873" /> <!-- nejslabší text (cesty, nápovědy) — min. 4,5 : 1 na Panel -->
+    <SolidColorBrush x:Key="TextSoft" Color="#3A424B" /> <!-- text tlačítek v liště, názvy řádků -->
+    <SolidColorBrush x:Key="Accent" Color="#2366D1" /> <!-- primární tlačítko (bílý text), logo -->
+    <SolidColorBrush x:Key="AccentHover" Color="#1D5BC0" /> <!-- primární tlačítko pod myší -->
+    <SolidColorBrush x:Key="AccentText" Color="#1A56B8" /> <!-- odkazy, ikony na modrém pozadí -->
+    <SolidColorBrush x:Key="AccentBar" Color="#2F7BE6" /> <!-- progress, checkboxy, potřebné místo v pruhu disku -->
+    <SolidColorBrush x:Key="AccentSoft" Color="#E2ECFB" /> <!-- pozadí ikony karty -->
+    <SolidColorBrush x:Key="AccentSoft2" Color="#EEF4FD" /> <!-- vybrané řádky, pilulka Běží -->
+    <SolidColorBrush x:Key="AccentBorder" Color="#7FA8E6" /> <!-- okraj vybrané karty -->
+    <SolidColorBrush x:Key="PillRunText" Color="#1A56B8" /> <!-- text pilulky Běží -->
+    <SolidColorBrush x:Key="OnAccent" Color="#FFFFFF" /> <!-- text na Accent -->
+    <SolidColorBrush x:Key="Success" Color="#147A4B" /> <!-- hotovo, ověřeno (text) -->
+    <SolidColorBrush x:Key="SuccessFill" Color="#2BBF7A" /> <!-- zelená výplň (štít, Vysunout kartu) -->
+    <SolidColorBrush x:Key="OnSuccess" Color="#06281A" /> <!-- text na SuccessFill -->
+    <SolidColorBrush x:Key="SuccessBg" Color="#EEF8F2" /> <!-- karta hotovo -->
+    <SolidColorBrush x:Key="SuccessBorder" Color="#A9DDBF" /> <!-- okraj karty hotovo -->
+    <SolidColorBrush x:Key="SuccessLine" Color="#CDEBD9" /> <!-- oddělovače v kartě hotovo -->
+    <SolidColorBrush x:Key="SuccessText2" Color="#1E6B45" /> <!-- popis pod nadpisem hotovo -->
+    <SolidColorBrush x:Key="SuccessLabel" Color="#4F6B5D" /> <!-- popisky čísel v kartě hotovo -->
+    <SolidColorBrush x:Key="SuccessBtnBg" Color="#FFFFFF" /> <!-- tlačítka v kartě hotovo -->
+    <SolidColorBrush x:Key="SuccessBtnBorder" Color="#A9DDBF" /> <!-- okraj tlačítek v kartě hotovo -->
+    <SolidColorBrush x:Key="CheckBg" Color="#DDF3E7" /> <!-- zelené odškrtnutí v kroku 3 -->
+    <SolidColorBrush x:Key="Warn" Color="#8F5600" /> <!-- už zálohováno, nesouhlasí soubor, málo místa (text) -->
+    <SolidColorBrush x:Key="WarnFill" Color="#F2B04A" /> <!-- žlutá výplň (trojúhelník, Zkopírovat znovu) -->
+    <SolidColorBrush x:Key="OnWarn" Color="#2A1A05" /> <!-- text na WarnFill -->
+    <SolidColorBrush x:Key="WarnBg" Color="#FFF6E6" /> <!-- karta s varováním -->
+    <SolidColorBrush x:Key="WarnBorder" Color="#EBC27F" /> <!-- okraj karty s varováním -->
+    <SolidColorBrush x:Key="WarnText2" Color="#7A4D0A" /> <!-- popis varování -->
+    <SolidColorBrush x:Key="WarnListBg" Color="#FFFBF3" /> <!-- seznam nesouhlasných souborů -->
+    <SolidColorBrush x:Key="WarnListBorder" Color="#F1D7A8" /> <!-- okraj seznamu nesouhlasných souborů -->
+    <SolidColorBrush x:Key="WarnSoftBg" Color="#FFF1D6" /> <!-- tlačítko Doplnit -->
+    <SolidColorBrush x:Key="WarnSoftBorder" Color="#EBC27F" /> <!-- okraj tlačítka Doplnit -->
+    <SolidColorBrush x:Key="WarnSoftText" Color="#7A4D0A" /> <!-- text tlačítka Doplnit -->
+    <SolidColorBrush x:Key="Danger" Color="#C2382B" /> <!-- chyba (ikony, výplně) -->
+    <SolidColorBrush x:Key="DangerText" Color="#B42318" /> <!-- Zrušit, text chyby -->
+    <SolidColorBrush x:Key="DangerText2" Color="#A3261A" /> <!-- ✕ hash v seznamu souborů -->
+    <SolidColorBrush x:Key="DangerBorder" Color="#F0B4AC" /> <!-- okraj tlačítka Zrušit -->
+    <SolidColorBrush x:Key="DangerBg" Color="#FFF1EF" /> <!-- karta s chybou -->
+    <SolidColorBrush x:Key="DangerCardBorder" Color="#F0B4AC" /> <!-- okraj karty s chybou -->
+    <SolidColorBrush x:Key="DiskUsed" Color="#A3ACB6" /> <!-- obsazené místo v pruhu disku -->
+    <SolidColorBrush x:Key="Chip" Color="#EBEEF1" /> <!-- štítek kamery, šedé ikony, pilulka Čeká -->
+    <SolidColorBrush x:Key="TabActive" Color="#E6EAEE" /> <!-- vybraná záložka Fronta / Historie karet -->
+    <SolidColorBrush x:Key="DashedLine" Color="#C3CAD2" /> <!-- přerušovaný rámeček prázdné karty -->
+    <SolidColorBrush x:Key="RunBorder" Color="#9DB9E6" /> <!-- okraj běžící úlohy -->
+    <SolidColorBrush x:Key="RunBg" Color="#FFFFFF" /> <!-- pozadí běžící úlohy -->
+    <SolidColorBrush x:Key="RowLine" Color="#E6E9ED" /> <!-- oddělovače v tabulkách -->
+    <SolidColorBrush x:Key="FlowLine" Color="#C3CAD2" /> <!-- čáry mezi ikonami prázdné fronty -->
+    <SolidColorBrush x:Key="NavActive" Color="#E2ECFB" /> <!-- vybraná sekce Nastavení -->
+    <SolidColorBrush x:Key="SegmentBg" Color="#EBEEF1" /> <!-- podklad segmentového přepínače -->
+    <SolidColorBrush x:Key="SegmentActive" Color="#FFFFFF" /> <!-- vybraný segment -->
+    <SolidColorBrush x:Key="ThumbBg" Color="#DDE3E0" /> <!-- dlaždice náhledu bez snímku -->
+    <SolidColorBrush x:Key="HoverBg" Color="#E9EDF1" /> <!-- tlačítka bez rámečku pod myší -->
+    <SolidColorBrush x:Key="PreviewBg" Color="#2A2F33" /> <!-- náhled burn-inu (obraz, v obou tématech tmavý) -->
+    <SolidColorBrush x:Key="PreviewText" Color="#8A939C" /> <!-- text v náhledu burn-inu -->
+    <SolidColorBrush x:Key="Shade" Color="#99000000" /> <!-- podklad popisků v náhledu burn-inu -->
+    <SolidColorBrush x:Key="FrameLine" Color="#8CFFFFFF" /> <!-- frame lines v náhledu burn-inu -->
+</ResourceDictionary>

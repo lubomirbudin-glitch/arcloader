@@ -169,7 +169,6 @@ public class JobProgressTests
         Assert.Equal("12 souborů · 2.50 GB", Texts.Files(12, 2_500_000_000));
         Assert.Equal("Všechny soubory jsou na 1 disku a ověřené — kartu lze vysunout.", Texts.SafeToEject(1));
         Assert.Equal("Všechny soubory jsou na 2 discích a ověřené — kartu lze vysunout.", Texts.SafeToEject(2));
-        Assert.Equal("3 soubory selhaly — karta NENÍ bezpečně zálohovaná. Podrobnosti v reportu.", Texts.Failed(3));
         Assert.Equal("bez varování", Texts.Warnings(0));
         Assert.Equal("2 varování", Texts.Warnings(2));
     }

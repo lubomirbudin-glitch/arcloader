@@ -10,6 +10,13 @@ public class LayoutTests
     [InlineData("", "CARD")]
     [InlineData("name. ", "name")]
     [InlineData("CON", "_CON")]
+    // Fix round 1, item 5 (ruling M8): a card named like a folder an offload makes inside a day or a card.
+    [InlineData("_REPORT", "_REPORT_")]
+    [InlineData("_report", "_report_")]
+    [InlineData("_PROXY", "_PROXY_")]
+    [InlineData("ascmhl", "ascmhl_")]
+    [InlineData("ASCMHL", "ASCMHL_")]
+    [InlineData("_REPORT_2", "_REPORT_2")]
     [InlineData("Natáčení den 1", "Natáčení den 1")]
     public void Sanitize(string input, string expected) => Assert.Equal(expected, Layout.Sanitize(input));
 

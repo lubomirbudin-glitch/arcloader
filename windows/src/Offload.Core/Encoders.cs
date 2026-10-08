@@ -57,8 +57,21 @@ public static class Encoders
     /// Every proxy is BT.709 legal range (FilterGraph.ToRec709 / TagRec709); the encoder and container say so as well.
     public static readonly string[] Rec709Args = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"];
 
-    public static string[] AudioArgs(ProxyCodec codec) =>
-        codec is ProxyCodec.H264 or ProxyCodec.Hevc ? ["-c:a", "aac", "-b:a", "192k"] : ["-c:a", "pcm_s16le"];
+    /// Every audio stream of the source (R14 - Premiere attaches a proxy only with the same tracks). H.264/HEVC: AAC with
+    /// 64 kb/s per channel of each stream (`streamChannels`, at least 128k, at most 512k); streams not known (a RAW
+    /// decoder's intermediate) all get 192k. ProRes: 16-bit PCM, as before.
+    public static List<string> AudioArgs(ProxyCodec codec, IReadOnlyList<int> streamChannels)
+    {
+        if (codec is not (ProxyCodec.H264 or ProxyCodec.Hevc)) return ["-c:a", "pcm_s16le"];
+        var args = new List<string> { "-c:a", "aac" };
+        if (streamChannels.Count == 0) args.AddRange(["-b:a", "192k"]);
+        for (int i = 0; i < streamChannels.Count; i++)
+            args.AddRange([$"-b:a:{i}", $"{AacKbps(streamChannels[i])}k"]);
+        return args;
+    }
+
+    /// AAC bitrate of one stream: 64 kb/s per channel, 128-512 kb/s.
+    public static int AacKbps(int channels) => Math.Clamp(64 * channels, 128, 512);
 
     public static string PixelFormat(ProxyCodec codec) =>
         codec is ProxyCodec.H264 or ProxyCodec.Hevc ? "yuv420p" : "yuv422p10le";

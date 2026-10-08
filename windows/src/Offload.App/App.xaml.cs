@@ -13,6 +13,8 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        var options = StartupOptions.Parse(e.Args);
+        if (options.Demo != null) AppData.UseDemoFolder();   // ruling I3: before anything reads or writes a file (the log too)
         // A bug in the UI must never take running offloads down: log it, tell the user, keep going.
         DispatcherUnhandledException += (_, ex) =>
         {
@@ -26,7 +28,11 @@ public partial class App : Application
             }
             ShowError(ex.Exception.Message);
         };
-        AppDomain.CurrentDomain.UnhandledException += (_, ex) => AppLog.Write(ex.ExceptionObject.ToString() ?? "");
+        AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
+        {
+            AppLog.Write(ex.ExceptionObject.ToString() ?? "");
+            TrayNotifier.Current?.RemoveIcon();   // a crash must not leave a ghost icon
+        };
         TaskScheduler.UnobservedTaskException += (_, ex) =>
         {
             AppLog.Write("unobserved task exception: " + ex.Exception);
@@ -34,7 +40,8 @@ public partial class App : Application
         };
         try
         {
-            var window = new MainWindow(new MainViewModel(StartupOptions.Parse(e.Args)));
+            ThemeWatcher.Start(this);
+            var window = new MainWindow(new MainViewModel(options));
             MainWindow = window;
             window.Show();
             started = true;

@@ -62,7 +62,13 @@ public static unsafe class NativeIO
     }
 
     /// Write + flush via a temp name, so a crash never leaves a half-written report.
-    public static void WriteFileDurably(string path, ReadOnlySpan<byte> data)
+    public static void WriteFileDurably(string path, ReadOnlySpan<byte> data) => WriteViaTemp(path, data, replace: true);
+
+    /// Like WriteFileDurably, but `path` must not exist yet: the rename never replaces (IOError "rename" when it is
+    /// there — the existing file stays as it was). For what an append adds next to earlier generations (ruling I1).
+    public static void WriteFileNew(string path, ReadOnlySpan<byte> data) => WriteViaTemp(path, data, replace: false);
+
+    static void WriteViaTemp(string path, ReadOnlySpan<byte> data, bool replace)
     {
         var tmp = Path.Combine(Path.GetDirectoryName(path)!, "." + Path.GetFileName(path) + ".tmp");
         try
@@ -72,7 +78,29 @@ public static unsafe class NativeIO
                 if (!data.IsEmpty) Write(h, data, 0, tmp);
                 Flush(h, tmp);
             }
-            Move(tmp, path, replace: true);
+            Move(tmp, path, replace);
+        }
+        catch
+        {
+            Delete(tmp);
+            throw;
+        }
+    }
+
+    /// Like WriteFileDurably, but an existing `path` is swapped with ReplaceFile: that works while another process (a
+    /// backup, an indexer, a reader) holds it open with FileShare.Delete, where a plain rename-over is denied.
+    public static void WriteFileReplacing(string path, ReadOnlySpan<byte> data)
+    {
+        if (!File.Exists(path))
+        {
+            WriteFileDurably(path, data);
+            return;
+        }
+        var tmp = Path.Combine(Path.GetDirectoryName(path)!, "." + Path.GetFileName(path) + ".new");
+        try
+        {
+            WriteFileDurably(tmp, data);
+            File.Replace(tmp, path, null);
         }
         catch
         {
@@ -87,6 +115,22 @@ public static unsafe class NativeIO
     {
         char* buf = stackalloc char[1024];
         return Win32.GetVolumePathName(Path.GetFullPath(path), buf, 1024) ? new string(buf) : null;
+    }
+
+    /// "<volume id>|<folder relative to the volume root>", upper-cased — the same for every spelling of a folder (case,
+    /// trailing slash, another drive letter or the volume GUID path); "|<full path>" when the volume is unknown. The key
+    /// of the append lock and the day-report lock (plan 6 ruling A1, plan 7 ruling M7).
+    /// Not the folder's identity: a mapped drive vs its UNC path, a `subst` drive, a junction or an 8.3 short name of
+    /// the same folder resolve to another volume or path and give another key — two such spellings are not serialized
+    /// (the same gap as AppendLock's; for the day report it goes into the plan 7 docs).
+    public static string FolderKey(string path)
+    {
+        var full = Path.GetFullPath(path).TrimEnd('\\');
+        var root = VolumeRoot(full);
+        var key = root != null && VolumeId(root) is string volume && full.StartsWith(root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)
+            ? volume + "|" + Path.GetRelativePath(root, full)
+            : "|" + full;
+        return key.ToUpperInvariant();
     }
 
     /// Identity of the volume a path is on: the volume GUID path, or the share root for network paths.
@@ -125,6 +169,10 @@ public static unsafe class NativeIO
 
     public static long? AvailableBytes(string path) =>
         Win32.GetDiskFreeSpaceEx(Path.GetFullPath(path), out var free, out _, out _) ? (long)free : null;
+
+    /// The size of the volume (a card's capacity — part of how history recognises a card, R1).
+    public static long? TotalBytes(string path) =>
+        Win32.GetDiskFreeSpaceEx(Path.GetFullPath(path), out _, out var total, out _) ? (long)total : null;
 
     /// Write size unit for unbuffered I/O on this file's volume (at least 4096).
     public static int SectorSize(SafeFileHandle h)

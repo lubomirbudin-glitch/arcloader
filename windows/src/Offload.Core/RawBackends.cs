@@ -69,7 +69,8 @@ internal sealed record BrawInfo(
     [property: JsonPropertyName("camera")] string Camera,
     [property: JsonPropertyName("gamma")] string? Gamma = null,
     [property: JsonPropertyName("gamut")] string? Gamut = null,
-    [property: JsonPropertyName("colorScienceGen")] int? ColorScienceGen = null);
+    [property: JsonPropertyName("colorScienceGen")] int? ColorScienceGen = null,
+    [property: JsonPropertyName("colorScienceGenOriginal")] int? ColorScienceGenOriginal = null);
 
 internal sealed class BrawBackend : IRawBackend
 {
@@ -82,14 +83,25 @@ internal sealed class BrawBackend : IRawBackend
 
     readonly Func<string, string?> _findLibrary;
     readonly TimeSpan _infoTimeout;
+    readonly bool _gen5;
+    /// M11 (b): the decoder answered --gen5 with a usage error (an older braw-decode the user pinned) — from then on it
+    /// runs without it, so BRAW clips still get proxies (Film Gen 4 then without the Gen 5 LUT).
+    volatile bool _gen5Rejected;
 
     /// `findLibrary` (decoder folder → library path) is injectable so tests do not depend on what is installed on the PC;
-    /// `infoTimeout` so tests need not wait a minute.
-    public BrawBackend(Func<string, string?>? findLibrary = null, TimeSpan? infoTimeout = null)
+    /// `infoTimeout` so tests need not wait a minute. `gen5` (proxy.brawGen4ToGen5, spec 4.2): braw-decode gets --gen5.
+    public BrawBackend(Func<string, string?>? findLibrary = null, TimeSpan? infoTimeout = null, bool gen5 = false)
     {
         _findLibrary = findLibrary ?? BrawLibrary.Find;
         _infoTimeout = infoTimeout ?? DefaultInfoTimeout;
+        _gen5 = gen5;
     }
+
+    /// Where the warning about a decoder without --gen5 goes (the job's log).
+    internal Action<string>? Log { get; init; }
+
+    /// --gen5 first, as the decoder's usage line lists it.
+    List<string> Args(params string[] rest) => _gen5 && !_gen5Rejected ? ["--gen5", .. rest] : [.. rest];
 
     /// braw-decode alone is not enough: without BlackmagicRawAPI.dll it can only fail.
     public bool IsAvailable(ExternalTools tools) =>
@@ -111,6 +123,7 @@ internal sealed class BrawBackend : IRawBackend
         Gamma = string.IsNullOrEmpty(i.Gamma) ? null : i.Gamma,
         Gamut = string.IsNullOrEmpty(i.Gamut) ? null : i.Gamut,
         ColorScienceGen = i.ColorScienceGen,
+        ColorScienceGenOriginal = i.ColorScienceGenOriginal,
     };
 
     /// The frame braw-decode starts at for a thumbnail `seconds` into the clip. Rounded: `seconds` comes from the
@@ -134,7 +147,21 @@ internal sealed class BrawBackend : IRawBackend
         string output;
         try
         {
-            output = ToolProcess.Run(tools.BrawDecoder!, ["--info", "--scale", scale, path], timeout: _infoTimeout);
+            var args = Args("--scale", scale, path);
+            try
+            {
+                output = ToolProcess.Run(tools.BrawDecoder!, ["--info", .. args], timeout: _infoTimeout);
+            }
+            catch (ToolError e) when (e.Status == 2 && args[0] == "--gen5")
+            {
+                // M11 (b): an older braw-decode does not know --gen5 — once, a warning, then on without it.
+                if (!_gen5Rejected)
+                {
+                    _gen5Rejected = true;
+                    Log?.Invoke("Blackmagic RAW: braw-decode nezná --gen5 (starší verze) — Film Gen 4 se dekóduje bez převodu na Gen 5");
+                }
+                output = ToolProcess.Run(tools.BrawDecoder!, ["--info", .. Args("--scale", scale, path)], timeout: _infoTimeout);
+            }
         }
         catch (ToolError e)
         {
@@ -173,7 +200,7 @@ internal sealed class BrawBackend : IRawBackend
         int target = singleFrameAt == null ? settings.Height : 180;
         var scale = Scale(info.Height ?? 2160, target);
         var dims = Info(path, scale, tools);
-        var args = new List<string> { "--scale", scale };
+        var args = Args("--scale", scale);
         if (singleFrameAt is double t)
         {
             int start = StartFrame(t, dims.Fps, dims.Frames);
