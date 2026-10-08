@@ -1,3 +1,5 @@
+using Offload.Core.VerifyInProxy;
+
 namespace Offload.Core;
 
 public sealed partial class OffloadEngine
@@ -20,7 +22,7 @@ public sealed partial class OffloadEngine
             NativeIO.Mkdirs(Path.Combine(path, Layout.ReportDirName));
             foreach (var d in plan.Scan.Dirs) NativeIO.Mkdirs(Layout.Join(path, d));
         }
-        var ws = cardPaths.Select((p, i) => new DestWriter(i, p, files.Count, Options)).ToArray();
+        var ws = cardPaths.Select((p, i) => new DestWriter(i, p, files.Count, Options, plan.Generation)).ToArray();
         var plannedNow = ws.Select(w => files.Where((f, i) => plan.Writes(i, w.Index)).Sum(f => f.Size)).ToArray();
         lock (gate)
         {
@@ -31,9 +33,12 @@ public sealed partial class OffloadEngine
         // Created before the try and disposed last: writer queues may still hold chunks that point into the pool's native buffers.
         BufferPool? pool = null;
         var hashers = new List<SourceHasher>();
+        var unrecorded = new System.Collections.Concurrent.ConcurrentQueue<(int File, DestWriter[] Targets)>();
         try
         {
             pool = new BufferPool(Options.BufferCount, Options.ChunkSize);
+            // A repair's copies take their place only after the copy (PlaceRepairCopies): it records them there.
+            if (plan.Expected == null) lock (gate) recorder = new SerialWorker("offload.manifest");
             // xxh64 (with XXH3-128 and the block hashes, plan 10), and MD5 on its own thread (spec 3.5).
             hashers = SourceHasher.For(plan.Hashes, files.Count, Options.HashFactory, Options.ChunkSize);
             var sourceErrors = new string?[files.Count];
@@ -92,11 +97,18 @@ public sealed partial class OffloadEngine
                     foreach (var h in hashers) h.Finish(i);
                     // A repair's new copy waits under its temporary name until the card's hash is known (below).
                     foreach (var w in targets) w.Finish(i, f, hold: plan.Expected != null);
+                    if (recorder != null && targets.Length > 0)
+                    {
+                        unrecorded.Enqueue((i, targets));
+                        recorder.Post(() => Record(plan, unrecorded, hashers));
+                    }
                 }
             }
             foreach (var h in hashers) h.Wait();
             foreach (var w in ws) w.Wait();
+            recorder?.Wait();
             var hashes = SourceHasher.Combine(hashers, files.Count);
+            var blocks = (ulong[]?[])hashers[0].Blocks.Clone();
             // A hash that threw leaves the file without it: the file failed, also when verification is off.
             for (int i = 0; i < files.Count; i++)
             {
@@ -105,6 +117,15 @@ public sealed partial class OffloadEngine
                 lock (gate) errorCount++;
             }
             var recorded = plan.Expected == null ? hashes : PlaceRepairCopies(plan, ws, hashes, sourceErrors);
+            if (plan.Expected != null)
+            {
+                foreach (var i in Enumerable.Range(0, files.Count).Where(i => ws.Any(w => plan.Writes(i, w.Index))))
+                    unrecorded.Enqueue((i, ws.Where(w => plan.Writes(i, w.Index)).ToArray()));
+                RecordNow(plan, unrecorded, recorded, blocks);
+            }
+            Blocks = blocks;
+            WriteRates = ws.Select(w => w.WriteRate).ToList();
+            WrittenUnbuffered = ws.Select(w => w.Unbuffered).ToList();
 
             SetPhase(CopyPhase.Flush);
             OnEachDestination(ws, w => w.FlushDevice());
@@ -146,9 +167,64 @@ public sealed partial class OffloadEngine
         }
         finally
         {
+            SerialWorker? r;
+            lock (gate)
+            {
+                r = recorder;
+                recorder = null;
+            }
+            r?.Dispose();   // runs what it still has first — before the writers it waits for are gone
             foreach (var w in ws) w.Dispose();
             foreach (var h in hashers) h.Dispose();
             pool?.Dispose();
+        }
+    }
+
+    /// The recorder's step (spec 4.5): every file finished so far goes into the manifest of each destination where it is
+    /// in its place — after the hashers and the writers are done with it; many small files in one write.
+    void Record(OffloadPlan plan, System.Collections.Concurrent.ConcurrentQueue<(int File, DestWriter[] Targets)> unrecorded, List<SourceHasher> hashers)
+    {
+        if (unrecorded.IsEmpty) return;
+        foreach (var h in hashers) h.Wait();
+        var xx = hashers[0];
+        var md5 = hashers.FirstOrDefault(h => h.Kind == HashKind.Md5);
+        var batch = new List<(int File, DestWriter[] Targets)>();
+        while (unrecorded.TryDequeue(out var item)) batch.Add(item);
+        foreach (var w in batch.SelectMany(b => b.Targets).Distinct()) w.Wait();
+        var hashes = batch.ToDictionary(b => b.File, b => new FileHashes(
+            xx.Values[b.File] is string x ? Convert.ToUInt64(x, 16) : null,
+            md5?.Values[b.File] is string m ? Convert.FromHexString(m) : null, xx.Xxh128[b.File]));
+        Append(plan, batch, hashes, i => xx.Blocks[i]);
+    }
+
+    /// A repair's files, recorded after they took their place, with the hashes the report records.
+    void RecordNow(OffloadPlan plan, System.Collections.Concurrent.ConcurrentQueue<(int File, DestWriter[] Targets)> unrecorded,
+        FileHashes[] recorded, ulong[]?[] blocks)
+    {
+        var batch = new List<(int File, DestWriter[] Targets)>();
+        while (unrecorded.TryDequeue(out var item)) batch.Add(item);
+        Append(plan, batch, batch.ToDictionary(b => b.File, b => recorded[b.File]), i => blocks[i]);
+    }
+
+    void Append(OffloadPlan plan, List<(int File, DestWriter[] Targets)> batch, Dictionary<int, FileHashes> hashes, Func<int, ulong[]?> blocksOf)
+    {
+        foreach (var w in batch.SelectMany(b => b.Targets).Distinct())
+        {
+            var records = new List<ManifestRecord>();
+            foreach (var (i, targets) in batch)
+            {
+                if (!targets.Contains(w) || w.Results[i].State != FileState.Written) continue;
+                if (hashes[i] is not { Xxh64: ulong x } h || blocksOf(i) is not { } blocks) continue;
+                var f = plan.Scan.Files[i];
+                records.Add(new ManifestRecord
+                {
+                    Generation = plan.Generation, Path = f.RelPath, Size = f.Size, Modified = f.ModifiedUtc, Xxh64 = Format.Hex64(x),
+                    Md5 = h.Md5Hex, Xxh128 = h.Xxh128, BlockSize = Options.ChunkSize, Blocks = ManifestRecord.Hex(blocks),
+                });
+            }
+            // Best effort: without its record a file is only copied again by a resume, never trusted blindly.
+            try { ManifestFile.Append(w.CardPath, records); }
+            catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException) { }
         }
     }
 

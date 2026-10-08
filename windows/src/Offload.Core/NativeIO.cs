@@ -10,14 +10,45 @@ public static unsafe class NativeIO
     const FileOptions NoBuffering = (FileOptions)0x20000000;
     public const int ErrorInvalidParameter = 87;
 
-    public static SafeFileHandle OpenRead(string path, bool unbuffered) =>
-        Wrap("open", path, () => File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+    public static SafeFileHandle OpenRead(string path, bool unbuffered)
+    {
+        if (unbuffered) ObserveUnbuffered(path, write: false);
+        return Wrap("open", path, () => File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             unbuffered ? NoBuffering | FileOptions.SequentialScan : FileOptions.SequentialScan));
+    }
 
     /// Creates or truncates a file. `preallocate` reserves the space up front, so a full disk fails here, not halfway.
-    public static SafeFileHandle OpenWrite(string path, bool unbuffered, long preallocate = 0) =>
-        Wrap("open", path, () => File.OpenHandle(path, FileMode.Create, FileAccess.Write, FileShare.None,
-            unbuffered ? NoBuffering : FileOptions.None, preallocate));
+    /// Unbuffered = FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH (plan 10, R8): a write is on the disk when it returns
+    /// and never in the file cache — what is read later comes from the disk (measured: no slower than without it).
+    public static SafeFileHandle OpenWrite(string path, bool unbuffered, long preallocate = 0)
+    {
+        if (unbuffered) ObserveUnbuffered(path, write: true);
+        return Wrap("open", path, () => File.OpenHandle(path, FileMode.Create, FileAccess.Write, FileShare.None,
+            unbuffered ? NoBuffering | FileOptions.WriteThrough : FileOptions.None, preallocate));
+    }
+
+    /// Tests only (plan 10 data safety, ruling I3): how the "volume" of a test's own folder treats unbuffered opens — every
+    /// unbuffered write open is recorded, and `RefuseUnbuffered` refuses them with ERROR_INVALID_PARAMETER as a volume
+    /// that ignores FILE_FLAG_NO_BUFFERING does. Keyed by full folder path, so tests running in parallel never meet.
+    internal sealed class TestVolume
+    {
+        public bool RefuseUnbuffered { get; init; }
+        public System.Collections.Concurrent.ConcurrentQueue<string> Writes { get; } = new();
+    }
+
+    internal static readonly System.Collections.Concurrent.ConcurrentDictionary<string, TestVolume> TestVolumes = new(StringComparer.OrdinalIgnoreCase);
+
+    static void ObserveUnbuffered(string path, bool write)
+    {
+        if (TestVolumes.IsEmpty) return;
+        var full = Path.GetFullPath(path);
+        foreach (var (folder, volume) in TestVolumes)
+        {
+            if (!full.StartsWith(folder.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) continue;
+            if (write) volume.Writes.Enqueue(full);
+            if (volume.RefuseUnbuffered) throw new IOError("open", path, ErrorInvalidParameter);
+        }
+    }
 
     public static SafeFileHandle OpenExisting(string path) =>
         Wrap("open", path, () => File.OpenHandle(path, FileMode.Open, FileAccess.Write, FileShare.None));

@@ -1,4 +1,7 @@
+using System.Diagnostics;
+using System.IO.Hashing;
 using Microsoft.Win32.SafeHandles;
+using Offload.Core.VerifyInProxy;
 
 namespace Offload.Core;
 
@@ -8,6 +11,7 @@ internal sealed class DestWriter : IDisposable
     readonly SerialWorker worker;
     readonly OffloadOptions options;
     readonly int index;
+    readonly int generation;
     SafeFileHandle? handle;
     string partPath = "";
     string? currentError;
@@ -15,6 +19,11 @@ internal sealed class DestWriter : IDisposable
     long written;
     long verified;
     volatile bool reading;
+    /// The file being written, the XXH3-64 of its blocks written so far, and how many of them a checkpoint holds (R6).
+    SourceFile? current;
+    readonly List<ulong> blockHashes = [];
+    int checkpointed;
+    long writeTicks, writeBytes;
 
     /// Repair: finished copies held under their `.offload-part` name until the card's hash is known (Commit / Discard).
     readonly Dictionary<int, string> held = [];
@@ -28,17 +37,29 @@ internal sealed class DestWriter : IDisposable
     public bool Unbuffered { get; private set; }
     public long Written => Interlocked.Read(ref written);
     public long Verified => Interlocked.Read(ref verified);
+    /// Bytes per second while writing (the time inside the writes only); null before the first write. Plan 10: the
+    /// fastest destination becomes the primary one (spec 6).
+    public double? WriteRate
+    {
+        get
+        {
+            long ticks = Interlocked.Read(ref writeTicks);
+            return ticks > 0 ? Interlocked.Read(ref writeBytes) / ((double)ticks / Stopwatch.Frequency) : null;
+        }
+    }
 
     /// Nothing is being written to or read back from this destination now: every block handed to it is on the disk
     /// (or failed there) and the read-back, if any, waits at the pause gate or is done. Pozastavit shows "Pozastaveno"
     /// only when every destination is idle — until then a disk must not be unplugged.
     public bool IsIdle => worker.IsIdle && !reading;
 
-    public DestWriter(int index, string cardPath, int fileCount, OffloadOptions options)
+    /// `generation`: the ASC MHL generation this copy writes — the manifest's checkpoints say it (R6).
+    public DestWriter(int index, string cardPath, int fileCount, OffloadOptions options, int generation = 1)
     {
         CardPath = cardPath;
         this.index = index;
         this.options = options;
+        this.generation = generation;
         Unbuffered = !options.ForceBuffered;
         Results = new DestFileResult[fileCount];
         worker = new SerialWorker($"offload.dest{index}");
@@ -55,6 +76,9 @@ internal sealed class DestWriter : IDisposable
     public void Begin(SourceFile file) => worker.Post(() =>
     {
         currentError = null;
+        current = file;
+        blockHashes.Clear();
+        checkpointed = 0;
         partPath = Layout.Join(CardPath, PartName(file.RelPath));
         try
         {
@@ -98,6 +122,7 @@ internal sealed class DestWriter : IDisposable
             options.BeforeDestWrite?.Invoke(index);
             // Unbuffered writes must be whole sectors: the last block is written padded, Finish trims the file.
             int len = Unbuffered ? (c.Length + align - 1) / align * align : c.Length;
+            long started = Stopwatch.GetTimestamp();
             try
             {
                 NativeIO.Write(handle, c.Buffer.Span[..len], c.Offset, partPath);
@@ -107,7 +132,11 @@ internal sealed class DestWriter : IDisposable
                 SwitchToBuffered();
                 NativeIO.Write(handle!, c.Buffer.Span[..c.Length], c.Offset, partPath);
             }
+            Interlocked.Add(ref writeTicks, Stopwatch.GetTimestamp() - started);
+            Interlocked.Add(ref writeBytes, c.Length);
             Interlocked.Add(ref written, c.Length);
+            blockHashes.Add(XxHash3.HashToUInt64(c.Buffer.Span[..c.Length]));
+            if (options.CheckpointBlocks > 0 && blockHashes.Count - checkpointed >= options.CheckpointBlocks) Checkpoint();
         }
         catch (Exception e)
         {
@@ -119,6 +148,24 @@ internal sealed class DestWriter : IDisposable
             c.Release();
         }
     });
+
+    /// R6: the blocks written since the last checkpoint go into the manifest — on the disk already (written through), so a
+    /// later append resumes after them. Only past the file cache: a buffered write may still be in RAM. Best effort: a
+    /// checkpoint that cannot be written only means a resume starts earlier.
+    void Checkpoint()
+    {
+        if (!Unbuffered || current is not { } f) return;
+        try
+        {
+            ManifestFile.Append(CardPath, new ManifestRecord
+            {
+                Kind = ManifestRecord.PartKind, Generation = generation, Path = f.RelPath, Size = f.Size, Modified = f.ModifiedUtc,
+                BlockSize = options.ChunkSize, First = checkpointed, Blocks = ManifestRecord.Hex(blockHashes.Skip(checkpointed)),
+            });
+            checkpointed = blockHashes.Count;
+        }
+        catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException) { }
+    }
 
     void SwitchToBuffered()
     {

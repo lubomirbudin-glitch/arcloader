@@ -14,6 +14,8 @@ public sealed partial class OffloadEngine
     int errorCount;
     long readBytes;
     DestWriter[] writers = [];
+    /// Plan 10: appends the manifest's `file` records on its own thread (spec 4.5: "po každém souboru řádek").
+    SerialWorker? recorder;
     long[]? planned;
     OffloadPlan? plan;
 
@@ -32,6 +34,12 @@ public sealed partial class OffloadEngine
 
     /// Waits while paused; false when the job was cancelled meanwhile (stage 2 uses it before every clip).
     public bool WaitWhilePaused() => Pauses.WaitWhilePaused(cts.Token);
+
+    /// After Run (plan 10): per file, the XXH3-64 of its blocks as the card gave them (null when it was not read to the
+    /// end); per destination, its write speed and whether it was written past the file cache.
+    public ulong[]?[] Blocks { get; private set; } = [];
+    public IReadOnlyList<double?> WriteRates { get; private set; } = [];
+    public IReadOnlyList<bool> WrittenUnbuffered { get; private set; } = [];
 
     /// The file error (report JSON, English like every file error) of the files left out because the card in the drive
     /// was not the copied one after a pause (ruling I1); the HTML says it in Czech.
@@ -263,7 +271,8 @@ public sealed partial class OffloadEngine
         {
             return new ProgressSnapshot(phase, plan?.Scan.TotalBytes ?? 0, plan?.Scan.Files.Count ?? 0, fileIndex, currentFile,
                 Interlocked.Read(ref readBytes), writers.Select(w => w.Written).ToArray(), writers.Select(w => w.Verified).ToArray(), errorCount,
-                Pauses.IsPaused, Pauses.IsHolding && writers.All(w => w.IsIdle), planned, writers.Select(w => w.VerifyPlanned).ToArray());
+                Pauses.IsPaused, Pauses.IsHolding && writers.All(w => w.IsIdle) && (recorder?.IsIdle ?? true), planned,
+                writers.Select(w => w.VerifyPlanned).ToArray());
         }
     }
 

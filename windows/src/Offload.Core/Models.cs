@@ -13,6 +13,9 @@ public sealed class OffloadOptions
     public HashKind Hashes { get; set; } = HashKind.Xxh64;
     /// Files at least this large are flushed individually; the rest are flushed once at the end.
     public long FullSyncThreshold { get; set; } = 256L << 20;
+    /// Plan 10, R6: every this many blocks of a file being written, its block hashes go into the manifest as a checkpoint
+    /// (64 × 16 MiB = 1 GiB); 0 = none.
+    internal int CheckpointBlocks { get; set; } = 64;
     public bool AllowSameDevice { get; set; }
     /// Tests only: source and destinations in temp folders share a volume.
     internal bool AllowSourceVolume { get; set; }
