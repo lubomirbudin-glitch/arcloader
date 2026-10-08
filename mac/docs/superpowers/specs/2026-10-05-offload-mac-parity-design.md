@@ -1,7 +1,9 @@
 # Offload pro Mac — dorovnání s Windows verzí (návrh)
 
-Datum: 2026-10-05 · Stav: ke schválení · Implementační plán:
-[`../plans/2026-10-05-offload-mac-parity.md`](../plans/2026-10-05-offload-mac-parity.md) · Jak začít na Macu:
+Datum: 2026-10-05 (doplněno 2026-10-08) · Stav: ke schválení · Implementační plán:
+[`../plans/2026-10-05-offload-mac-parity.md`](../plans/2026-10-05-offload-mac-parity.md) (úkoly 1–31), pokračování
+[`../plans/2026-10-08-offload-mac-parity-2.md`](../plans/2026-10-08-offload-mac-parity-2.md) (32–55) a
+[`../plans/2026-10-08-offload-mac-parity-3.md`](../plans/2026-10-08-offload-mac-parity-3.md) (56–70) · Jak začít na Macu:
 [`../plans/README-START.md`](../plans/README-START.md)
 
 Navazuje na: [`docs/ROZDILY.md`](../../../../docs/ROZDILY.md) (co Macu chybí — závazný seznam),
@@ -31,6 +33,9 @@ funkce a opravy, které uživatel chce i na Macu. Tento návrh říká **přesn�
    ffmpeg a ikona aplikace — viz oddíl „Doplněk 2026-10-05“ na konci (úkoly 18–25).
 12. Blackmagic RAW jako Windows po plánu 3 (gama → LUT, BRAW jen s knihovnou, limit `--info`, české poznámky, náhledy pod
    hlídačem) — oddíl „Doplněk 2“ na konci (úkoly 27–31; pořadí plánu 1–25, 27–31, 26).
+13. Dorovnání s Windows 0.6.0 (plány 6–10): historie karet, doplnění jako generace ASC MHL N, Ověřit zálohu, kontrola místa,
+   denní report, seznamy klipů, MD5 a XXH128, projekty, pravidla LUTů, oznámení, Pozastavit, Zkopírovat znovu, nový vzhled
+   (po schválení), Verify-in-Proxy s dvěma stavy karty — oddíl „Doplněk 3“ na konci (D.21–D.28, úkoly 32–70 po úkolu 26).
 
 ## 2. Výchozí stav
 
@@ -1023,3 +1028,240 @@ Nejistoty (ověřit na Macu; výsledek do commitu úkolu a sem):
 | ROZDILY „Blackmagic RAW (`braw-decode`)“ v záměrných rozdílech; FORMATY `info.gamma…` „zatím jen Windows“ | úkoly 31, 28 |
 | Windows plán 3 závěrečné opravy I1, M1–M4 (poznámky, limit, jeden pokus, QueryInterface) | úkoly 27, 29, 30 |
 | Zůstává otevřené (jako Windows): Film Gen 4; GUI řádek „braw-decode“ bez ohledu na knihovnu; vše, co ověří jen vzorek | VYVOJ-MAC „Naplánováno“ |
+
+## Doplněk 3 (2026-10-08): Windows plány 6–10 a dodatky 0.5.x — co Mac převezme, jak a proč
+
+Windows verze mezitím došla k **0.6.0** (plány 6–10). Tento doplněk říká, co z toho Mac převezme, **podle formátu a pravidel**
+(ne podle jmen tříd Windows), co se na macOS dělá jinak a proč, a co se zrcadlit nedá. Implementují ho úkoly **32–70** plánů
+[`../plans/2026-10-08-offload-mac-parity-2.md`](../plans/2026-10-08-offload-mac-parity-2.md) (32–55: plány 6–7) a
+[`../plans/2026-10-08-offload-mac-parity-3.md`](../plans/2026-10-08-offload-mac-parity-3.md) (56–70: plány 8–10). Začínají po
+úkolech 1–31 (verze 0.2.0). Platí oddíly 1–10 a doplňky 1–2 (texty shodné s Windows, výstupy podle FORMATY.md, UI nikdy nečeká na
+disk, test před kódem).
+
+Windows reference: návrh
+[`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../../../../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
+(§2 plán 6, §3 plán 7, §4 plán 8, R1–R27), návrh
+[`windows/docs/superpowers/specs/2026-10-08-offload-verify-in-proxy-design.md`](../../../../windows/docs/superpowers/specs/2026-10-08-offload-verify-in-proxy-design.md)
+(plán 10, R1–R12; zdrojem je specifikace uživatele „Offload — Verify-in-Proxy: technická specifikace“ v Claude Docs),
+[`docs/ui-navrh/README.md`](../../../../docs/ui-navrh/README.md) (plán 9, „Rozhodnutí (2026-10-07, závazné)“ v hlavičce Windows
+plánu 9), [`docs/FORMATY.md`](../../../../docs/FORMATY.md) (smlouva formátu), [`docs/VYVOJ-WINDOWS.md`](../../../../docs/VYVOJ-WINDOWS.md)
+(0.5.1, 0.5.2, „report: uložení do PDF“, 0.6.0) a kód `windows/src/Offload.Core` (jen pro texty a hraniční případy).
+
+### D.21 Přehled
+
+| Windows | Co Mac převezme | Úkoly | Windows reference |
+|---|---|---|---|
+| Plán 6 (0.2.0) | historie karet (`history.json`, otisk, `fsSerial`+kapacita), doplnění jako generace ASC MHL N, název z klipů, Ověřit zálohu proti všem generacím (report ověření), kontrola místa, české hlášky, zachování neznámých klíčů | 32–50 | návrh §2, R1–R11, R24, R27; `Append/AppendPlanner.cs`, `AppendLock.cs`, `History/*`, `Verification/*`, `Space/SpaceEstimator.cs`, `Messages.cs`, `CardRecord.cs` |
+| Plán 7 (0.3.0) | MD5 navíc k xxh64, seznamy klipů CSV/ALE, denní report, proxy pro přelinkování | 51–54 | návrh §3, R12–R16, R25; `Outputs/*`, `ReelNames.cs`, `Hashing.cs` |
+| 0.5.1, 2026-10-08 | proxy ve složkách jako na kartě, bez proxy u lehčího originálu, HTML lišta „Uložit jako PDF“, tisk, šířka tabulky, české chyby v HTML | 54, 55 | VYVOJ-WINDOWS 0.5.1 a „report: uložení do PDF“; `ProxyPaths.cs`, `LighterSource.cs`, `HtmlReport.cs` |
+| Plán 8 (0.4.0) | projekty, vlastní pravidla LUTů, `braw-decode --gen5`, oznámení + ntfy, kontrola aktualizací; podpis po svém (`codesign` + notarizace) | 56–60 | návrh §4, R17–R23, R26; `Desktop/Projects.cs`, `LutRules.cs`, `Notify/*`, `Updates/UpdateChecker.cs` |
+| Plán 9 (0.5.0), 0.5.2 | Pozastavit, Zkopírovat znovu (`neshoda_NNNN`), nový vzhled (po schválení Windows verze), Dnes, štítek kamery, odhad času, klikací „Po zkopírování“ | 61–64 | ui-navrh, rozhodnutí plánu 9; `PauseGate.cs`, `Append/RepairPlanner.cs`, `Desktop/JobCard.cs` |
+| Plán 10 (0.6.0) | Verify-in-Proxy (tap, čtení před SDK, pozadí, dorovnání), `verifyPending`/`verifyIncomplete` a potvrzení, blokový manifest a navázání po pádu, XXH128, obsahová kontrola, „Lze vyjmout × Lze formátovat“, `volumeSerial` | 39, 65–70 | verify-in-proxy návrh R1–R12; `VerifyInProxy/*`, `OffloadReport.Verify.cs`, `Append/ResumePlanner.cs` |
+
+**Proč v tomto pořadí:** nejdřív to, na čem stojí bezpečnost dat a kompatibilita formátu (hashe, report, „ověřeno“, dva stavy
+karty, ASC MHL, pořadí zápisu, zámky — úkoly 32–41), pak funkce, které je používají. Záloha z Macu musí jít na Windows ověřit,
+doplnit, opravit i dokončit a naopak; každý krok, který by mohl přepsat záznam nebo falešně zezelenat, má vlastní test.
+
+### D.22 Pravidla formátu a bezpečnosti dat (závazná pro Mac)
+
+**D.22.1 Pravdou je cíl, historie jen hledá.** Doplnění, oprava, navázání, denní report a Ověřit zálohu čtou reporty všech generací
+a soubory na cílových discích (`CardRecord`, úkol 38); `history.json` jen najde složky a ukáže řádek u karty (Windows R4). Historie je
+místní (`~/Library/Application Support/Offload/history.json` + `history/<id>.files.gz`, stejný tvar jako Windows — FORMATY „Místní
+soubory“), zápis pod zámkem, vyšší verze jen číst, poškozený soubor odložit. Klíč karty `fsSerial` + `capacity` (R1); otisk SHA-256
+nad `relpath\tsize\tmtimeTicksUtc` s .NET ticks, aby přenesená historie párovala (úkoly 36, 42).
+
+**D.22.2 Generace a dovolené přepisy.** Na cíli se smí přepsat jen: `<karta>.xxh64` a `<karta>.md5` (**jen prodloužit** — dřívější
+bajty beze změny, chybějící řádky z MHL, žádné opakované), `ascmhl/ascmhl_chain.xml` (dřívější záznamy stejné, jeden přibude, zápis
+atomicky), odvozené soubory (seznamy klipů, denní report) a reporty generace, kterou úloha právě píše a obnovuje, nebo která ještě
+nebyla potvrzená (`verifyPending`). Nikdy: dřívější reporty, dřívější generace MHL, datové soubory, proxy, soubory ověření. Nová
+generace = max + 1 a **stejná na všech cílech**; reporty `_NNNN` a soubor generace se vytvářejí „jen nové“ (`renamex_np(RENAME_EXCL)`).
+Pořadí: reporty → soubor generace → řetěz (**bod potvrzení**) → seznamy součtů; každé přerušení nechá složku, kterou další doplnění
+správně odmítne (`highestReportNumber ≠ poslední generace`) nebo dokončí (seznamy). Generace 1 nikdy přes existující řetěz.
+Doplnění odmítne nedostupný cíl, chybějící report/MHL, poškozený řetěz, rozdílné generace, cizí soubor na cíli, jinou kartu, konflikt
+velikosti/času (FAT ±celé hodiny), soubor dobrý jen na části cílů (úkoly 40, 41, 46, 47).
+
+**D.22.3 Oprava „Zkopírovat znovu“.** Generace N jako u doplnění, **zaznamenaný hash se nikdy nemění** (z celé kopie nebo doplnění),
+karta se přečte a porovná **před** zápisem, dobrá kopie se nikdy nepřepíše (jen přečte → MHL `action="verified"`), nesouhlasná se
+přesune do `_REPORT/neshoda_NNNN/<cesta>` (obsazené → `_2`, `_3`), nikdy nesmaže; report `kind: "repair"`, `rewritten`, `setAside`
+(úkol 62).
+
+**D.22.4 Report ověření a jeho umístění.** Ověřit zálohu nikdy nezapisuje do `ascmhl/`. Report do `<karta>/_REPORT/` jako
+`<karta>_verify_<stamp>Z.html/.pdf` + `offload_verify_<stamp>Z.json`; když historie MHL `_REPORT` neignoruje (cizí program), report
+jde do `<datum>/_REPORT/` vedle karty (JSON `<karta>_verify_<stamp>Z.json`) s českou větou o umístění (Windows R8 a oprava po revizi;
+úkol 45).
+
+**D.22.5 `verifyPending` a `verifyIncomplete`.** S ověřením během proxy zapíše fáze 1 reporty s `verifyPending: true` **bez generace
+MHL a bez seznamů součtů**; potvrzení po ověření zapíše **nejdřív MHL a řetěz**, pak reporty, pak seznamy (idempotentně). Selže-li
+potvrzení na některém cíli, složky, kam se výsledek zapsal, dostanou `verifyIncomplete: true`. Obojí znamená **„záloha nedokončená“**:
+nikdy „ověřeno“, nikdy „Lze formátovat“, Ověřit zálohu hlásí `unfinished`, oprava se odmítne, „Dokončit přerušenou zálohu“ (doplnění)
+dokončí **tutéž** generaci podle manifestu (úkoly 33, 38, 41, 45, 67, 69).
+
+**D.22.6 Jediná definice „ověřeno“.** `CardRecord.readBack` (úkol 38): nejnovější záznam souboru v této složce říká `verified` (nebo
+report ověřený a stav ne `written`; selhání je selhání) a report nemá `verifyPending` ani `verifyIncomplete`. Sloupec reportu se
+hledá podle sériového čísla svazku a cesty pod kořenem (`volumeSerial`, R12) nebo podle cesty; nenajde-li se (cizí cesty z Windows),
+musí `verified` říct **každý** sloupec. Používá ji historie, denní report, doplnění (`unverifiedEarlier`), oprava, `BackupState`
+a karta úlohy — nikdo jiný si „ověřeno“ nepočítá.
+
+**D.22.7 „Lze vyjmout“ × „Lze formátovat“.** Vyjmout = vše zapsané a vyprázdněné na všech cílech; formátovat = vše ověřené všude,
+výsledek zapsaný všude, u doplnění/opravy celá záloha bez selhání a neověřených souborů, žádný soubor karty mimo zálohu. Zelená,
+zvuk úspěchu, oznámení „hotovo“ a CLI kód 0 jen při „Lze formátovat“ bez varování; „Lze vyjmout“ samo je neutrální (Windows R5, I2;
+úkol 39).
+
+**D.22.8 Hashe.** `xxh64` vždy (16 hex; `.xxh64` a `hashAlgorithm` beze změny, aby zálohu ověřil starší Offload), `xxh128`
+(XXH3-128, 32 hex, kanonicky — horních 64 bitů první) u každého souboru a v MHL vedle `xxh64` (Windows R2), `md5` jen navíc
+(`hash: "both"`, `hashAlgorithms`), XXH3-64 bloků jen v manifestu. Doplnění a oprava počítají součty dřívější zálohy (úkoly 32, 51).
+
+**D.22.9 Nastavení.** `UserDefaults["settings"]` se stejným schématem jako Windows `settings.json`; neznámé klíče a nečitelné sekce se
+při uložení zachovají (R24), projekty s duplicitami a nečitelnými položkami se nemažou (úkoly 35, 56). Mac-only klíče: `notify.mac`
+(Windows `notify.windows` se na Macu zachová beze změny); `updates.manifest` ukazuje na Mac manifest (D.24).
+
+### D.23 macOS technika
+
+**D.23.1 `F_NOCACHE` a jeho meze (ověření během proxy).** Specifikace uživatele (tabulka „Platforma“) říká pro macOS: čtení bez
+cache `fcntl(fd, F_NOCACHE, 1)`, **spolehlivé veřejné API pro vyhození z cache není** (záložně `msync(MS_INVALIDATE)` na `mmap`
+souboru), `F_NOCACHE` je **jen nápověda** a testem je třeba ověřit, že druhé čtení jde opravdu z disku; hlavní pravidlo — zapisovat
+bez cache už ve fázi 1 (na macOS jediná spolehlivá cesta). Otevřená otázka specifikace: „Dá se na macOS spolehlivě ověřit, že čtení
+s `F_NOCACHE` nejde z cache, i na APFS a externích discích přes Thunderbolt?“ Mac pravidla (úkoly 65, 66, 68):
+1. Zápis na cíle s `F_NOCACHE` (jako od 0.1.0); kontrolní bod manifestu až po `F_FULLFSYNC` souboru (`F_NOCACHE` nezaručuje médium).
+2. **Důkaz místo nápovědy:** `mincore` nad sdíleným read-only mapováním souboru ukáže stránky v paměti. Cíl smí být ověřen z čtení
+   pro proxy, jen když sonda zapsaná s `F_NOCACHE` + `F_FULLFSYNC` po zavření **nemá v paměti nic**; a jen když `mincore` vůbec vidí
+   cache (soubor zapsaný normálně musí ukázat rezidentní stránky — jinak je „slepé“ a vše se ověřuje klasicky).
+3. Před každým ověřujícím čtením souboru kontrola rezidence; rezidentní → `msync(MS_INVALIDATE)` a znovu; pořád rezidentní →
+   tap se pro soubor nepoužije a klasické čtení se zapíše s poznámkou „Ověřeno čtením přes cache macOS …“ a varováním (obdoba
+   Windows ruling I3/C2 — nikdy tiché zelené).
+4. Síťové svazky (`statfs` bez `MNT_LOCAL`) vždy klasicky. Příkaz `purge` (celá cache, vyžaduje root) se nepoužívá.
+
+**D.23.2 Sériové číslo svazku.** IOKit a DiskArbitration dávají BSD jméno, médium a UUID svazku, **ne** 32bitové sériové číslo FS,
+které Windows ukládá. Mac ho čte z **boot sektoru** (`/dev/rdiskNsM`, 4096 B od nuly, jen čtení): exFAT 0x64, FAT32 0x43, FAT12/16
+0x27, NTFS 0x48 (dolních 32 bitů) — stejná hodnota jako Windows `GetVolumeInformation`. Když uzel zařízení nejde otevřít (patří
+rootovi) nebo FS není FAT/exFAT/NTFS: `fsSerial = "uuid:<VolumeUUID>"` (karta se pozná na tomtéž Macu) a `volumeSerial` v reportu
+`"uuid:<UUID>"` (Mac-only tvar; Windows takový disk nečte, a když ho čte, nepáruje — bezpečný směr: všechny sloupce musí říct
+`verified`). Kapacita `statfs` `f_blocks × f_bsize` (úkol 36).
+
+**D.23.3 Časy.** Na Macu je FAT `f_fstypename == "msdos"` (místní čas, tolerance celých hodin), exFAT `exfat` (UTC). Ticks .NET pro
+otisk a `.files.gz` se počítají přesně z `timespec`.
+
+**D.23.4 Zámky.** Windows: pojmenované mutexy `Local\Offload-history-<sha256>`, `Local\Offload-append-<sha256(svazek|cesta)>`,
+`Local\Offload-day-<sha1>` (jedna relace Windows). Mac: `flock(LOCK_EX|LOCK_NB)` na místních souborech
+`~/Library/Application Support/Offload/locks/{history,append,day}-<hash>.lock` (stejné hashe klíčů; klíč složky = UUID svazku + cesta
+pod kořenem, velkými). Proč `flock`: zámek patří otevřenému souboru (vylučuje i dvě úlohy v jednom procesu), jádro ho uvolní při pádu
+procesu (POSIX pojmenované semafory by zůstaly obsazené) a smí ho uvolnit jiné vlákno (Windows potřebuje držitelské vlákno). Zámkový
+soubor **nikdy na cíli** (cíl je smlouva formátu, často síťový). **Zámky Macu a Windows se navzájem nevidí** — Mac a PC, které píšou
+do téže sdílené zálohy, se nevylučují, stejně jako dva PC; chrání jen zápis „jen nový“ reportů `_NNNN` a generace MHL (úkol 37).
+
+**D.23.5 Oznámení.** `UNUserNotificationCenter` (macOS 10.14+), ne zastaralé `NSUserNotificationCenter`. Funguje jen v balíčku
+s `CFBundleIdentifier` (pod `swift run` se nevolá), oprávnění se vyžádá při zapnutí volby; oznámení jen když aplikace není v popředí
+(jinak zvuk a `requestUserAttention` jako dosud); CLI oznámení macOS neposílá, ntfy ano (úkol 59).
+
+**D.23.6 Vložení a výměna karty.** Detekce karet zůstává na `NSWorkspace` notifikacích (`didMount`/`didUnmount`, úkol 11) se
+skenem svazků na pozadí; FSEvents ani `DARegisterDiskAppearedCallback` nejsou potřeba (svazek je pro Offload zajímavý až připojený).
+DiskArbitration slouží ke čtení faktů (BSD jméno, protokol, UUID — úkol 14). Výměnu karty během pauzy pozná nové zjištění identity
+(`CardIdentity` + `fsSerial`/kapacita) před dalším čtením z karty (úkol 61); vytažení při čtení se projeví chybou I/O jako dosud.
+
+**D.23.7 Tap pro ffmpeg.** Proxy dělá ffmpeg i na Macu, proto tap = místní HTTP server na `127.0.0.1` jako Windows R3 (token, id,
+Host, jeden rozsah, limity), `-short_seek_size 65536`. `AVAssetResourceLoaderDelegate` (AVFoundation) by obsloužil jen přehrávání
+přes AVFoundation, ne ffmpeg — nepoužije se (úkol 68).
+
+**D.23.8 Knihovny.** XXH3-64/XXH3-128 z přibaleného xxHash 0.8.3 (`Sources/CXXHash`); MD5/SHA-1/SHA-512 přes CryptoKit
+(`Insecure.MD5`, `Insecure.SHA1` — `CC_MD5` je od 10.15 zastaralé); gzip `.files.gz` = vlastní hlavička + raw DEFLATE z Foundation
+(`NSData.compressed(using: .zlib)`) + CRC-32 a délka (přečte i soubor z .NET `GZipStream`). Žádné nové SwiftPM závislosti.
+
+**D.23.9 Zápis bez nahrazení.** `renamex_np(src, dst, RENAME_EXCL)` (APFS, HFS+); kde FS volbu nepodporuje (exFAT, FAT, SMB —
+`ENOTSUP`/`EINVAL`), kontrola existence těsně před `rename` (okno souběhu jako Windows `Path.Exists` + `Move` u složky pro proxy;
+u doplnění kryté zámkem složky). `IO.writeFileNew` = celý soubor pod dočasným jménem + `F_FULLFSYNC` + přejmenování bez nahrazení.
+
+### D.24 Co Mac nezrcadlí — a co platí místo toho
+
+| Windows | Proč na Macu ne | Pravidlo Macu |
+|---|---|---|
+| `FILE_FLAG_NO_BUFFERING` + kontrola nezarovnaným čtením (UnbufferedCheck), vyhození z cache zavřením handlu | macOS nemá vynucené čtení mimo cache ani API pro vyhození | `F_NOCACHE` + důkaz `mincore`, `msync(MS_INVALIDATE)`, jinak klasicky s poznámkou (D.23.1) |
+| `WRITE_THROUGH` zápis, kontrolní bod hned | `F_NOCACHE` nezaručuje médium | kontrolní bod po `F_FULLFSYNC` souboru |
+| Pojmenované mutexy `Local\…`, držitelské vlákno | jiný systém; mutex jen pro vlákno, které ho vzalo | `flock` v `Application Support/Offload/locks`, uvolnitelný odkudkoli; mezi Macem a Windows žádné vyloučení (D.23.4) |
+| `fsSerial` z `GetVolumeInformation` | API neexistuje | boot sektor, záložně `uuid:` (D.23.2) |
+| `Shell_NotifyIconW`, `notify.windows` | Windows API | `UNUserNotificationCenter`, `notify.mac` (D.23.5) |
+| `build.ps1 -Sign`, podepsat jen vlastní exe (R23) | notarizace vyžaduje podpis **všech** Mach-O v balíčku s hardened runtime | `build-app.sh --sign --notarize`, podepíše i přibalený ffmpeg/ffprobe; `braw-decode` s `disable-library-validation` (úkol 60) |
+| Manifest aktualizací společný | Mac a Windows se vydávají zvlášť | vlastní `offload-update-mac.json` stejného tvaru (úkol 60) |
+| Lokalizace chyb parseru `System.CommandLine` | `swift-argument-parser` lokalizaci nemá | chyby parseru CLI anglicky (ROZDILY) |
+| Názvy disků „Zaloha (D:)“ | Mac nemá písmena | „Zaloha (RAID)“ = složka (jméno svazku) |
+| Kontroly názvů Windows, FAT32 ≥ 4 GB, buffered I/O fallback, `"unbuffered": false` | Windows-only (spec oddíl 4) | beze změny; Mac klíč `unbuffered` ani `proxyEncoder` nepíše |
+| Ukázkový režim `--demo` (plán 9) | pomůcka pro snímky Windows GUI | Mac ho nemá (ROZDILY) |
+| Thunderbolt čtečky jako NVMe | Windows Thunderbolt nerozliší | Mac ukáže „Thunderbolt“ (štítek připojení, úkol 64) |
+
+### D.25 Nový vzhled — brána schválení
+
+`docs/ui-navrh/README.md` i rozhodnutí Windows plánu 9: **Mac převezme vzhled až po schválení Windows verze.** Úkoly 63–64 začínají
+dotazem na uživatele; neschválený vzhled = úkoly se přeskočí a všechny funkce plánů 6–10 mají ovládání ve stávajícím vzhledu (úkoly
+49, 56–62, 70). Rozhodnutí pro Mac: tmavé i světlé téma podle systému, systémové písmo (SF Pro, SF Mono), „Projekt“ místo
+„Preset“, šedý rám burn-inu (ne skutečný snímek), „Zkopírovat znovu“ jen nesouhlasné soubory a jen na postižený disk.
+
+### D.26 Testy (nové soubory)
+
+| Oblast | Soubor testů | Úkol |
+|---|---|---|
+| Hashe, vektory, bloky, registr | `HashingTests.swift` | 32 |
+| Klíče reportu, fixture Windows 0.6.0, „jen nový“ zápis | `ReportKeysTests.swift` | 33 |
+| Hlášky, kódy, `formatBytesCs` | `MessagesTests.swift`, `PreflightTests.swift` | 34 |
+| Nastavení s neznámými klíči | `SettingsStoreTests.swift` | 35 |
+| Boot sektor, klíč složky, časy FAT, ticks | `VolumeTests.swift`, `FileTimesTests.swift` | 36 |
+| Zámky | `FileLockTests.swift` | 37 |
+| `CardRecord`, „ověřeno“, `BackupState` | `CardRecordTests.swift` | 38 |
+| Dva stavy karty | `SafeStatesTests.swift` | 39 |
+| ASC MHL čtení a generace N | `MHLTests.swift` (+ fixture Windows) | 40 |
+| Pořadí zápisu, seznamy součtů, potvrzení | `GenerationWriteTests.swift` | 41 |
+| Historie, gzip, otisk | `HistoryStoreTests.swift`, `HistoryMatcherTests.swift`, `ReelNamesTests.swift`, `HistoryJobTests.swift` | 42–44 |
+| Ověřit zálohu | `BackupVerifierTests.swift`, `VerifyReportTests.swift` | 45 |
+| Doplnění | `AppendPlannerTests.swift`, `AppendEngineTests.swift` | 46–47 |
+| Místo | `SpaceTests.swift` | 48 |
+| Plán 7 | `HashCopyTests.swift`, `ClipListTests.swift`, `DayReportTests.swift`, `ProxyRelinkTests.swift`, `ProxyPathsTests.swift`, `LighterSourceTests.swift`, `HTMLErrorsTests.swift` | 51–55 |
+| Plán 8 | `ProjectsTests.swift`, `LutRulesTests.swift`, `BrawDecodeTests.swift` (gen5), `JobOutcomeTests.swift`, `NtfyClientTests.swift`, `UpdateCheckerTests.swift` | 56–60 |
+| Plán 9 | `PauseTests.swift`, `RepairPlannerTests.swift`, `RepairEngineTests.swift`, `SetupTextsTests.swift`, `JobCardTests.swift`, `TimeEstimateTests.swift`, `CardFactsTests.swift` | 61–64 |
+| Plán 10 | `CacheProbeTests.swift`, `ManifestTests.swift`, `BlockVerifierTests.swift`, `DeferredVerifyTests.swift`, `RangeServerTests.swift`, `VerifySessionTests.swift`, `ResumeTests.swift`, `ContentCheckTests.swift`, `VerifyInProxyCLITests.swift` | 65–70 |
+
+### D.27 Nejistoty (ověřit na Macu; výsledek do commitu úkolu a sem)
+
+| # | Co | Předpoklad | Jak ověřit |
+|---|---|---|---|
+| 1 | Čtení boot sektoru karty bez sudo | uzel `/dev/rdiskNsM` vyměnitelné karty smí přihlášený uživatel číst (u obrazů `hdiutil` ano) | úkol 36 krok 3: `ls -l /dev/rdisk*` u skutečné karty ve čtečce (USB, SD slot, Thunderbolt CFexpress); když ne, platí `uuid:` a ROZDILY to řekne |
+| 2 | `fsSerial` a kapacita jako Windows | boot sektor = `vol E:`; `f_blocks × f_bsize` = `TotalNumberOfBytes` | táž karta na Windows a Macu (úkol 36 krok 3) |
+| 3 | `mincore` vidí stránky UBC souboru, který proces nemá namapovaný | ano (stránky jsou v objektu VM souboru) | `CacheProbeTests.testResidentPagesAreDetected`; když selže, Mac verify-in-proxy nepoužije (bezpečně) |
+| 4 | Zápis s `F_NOCACHE` nezůstane v cache na APFS, exFAT, HFS+, SMB, Thunderbolt RAID | ano, kromě sítě | `CacheProbeTests` s `OFFLOAD_TEST_DEST` na každém (úkol 65 krok 3) |
+| 5 | ffmpeg přes tap: počet čtení a rychlost | ≤ 1,05 × soubor s `-short_seek_size 65536`, ≤ 5 % pomalejší | úkol 68 krok 3; MOV `moov` na konci, MP4, MXF |
+| 6 | Oznámení u ad-hoc podepsané aplikace | `requestAuthorization` se zeptá a oznámení dojde | úkol 59 krok 3 |
+| 7 | `braw-decode` s hardened runtime načte `BlackmagicRawAPI.framework` | s `com.apple.security.cs.disable-library-validation` ano | úkol 60 krok 4 (BRAW proxy z notarizované aplikace) |
+| 8 | `msync(MS_INVALIDATE)` vyhodí čisté stránky souboru | někdy; proto jen pojistka | `CacheProbeTests` — po normálním zápisu `evict` a `residentPages` (výsledek zapsat, na chování nemá vliv) |
+| 9 | `PRIO_DARWIN_BG` pro čtení na pozadí | sníží prioritu I/O, nezastaví čtení | úkol 68 krok 3 (rychlost pozadí, dopad na proxy) |
+| 10 | Jména souborů NFC/NFD v otisku a historii | karta (FAT/exFAT) vrací jména tak, jak jsou uložená; otisk se shodne s Windows | karta s diakritikou v názvu: otisk Mac × Windows (jen přenos historie — na zálohu vliv nemá) |
+| 11 | Gatekeeper a notarizace s přibaleným statickým ffmpeg | podepsaný s hardened runtime projde | úkol 60 krok 4, `spctl -a -vv` |
+
+### D.28 Mapa změn souborů a pokrytí
+
+| Soubor (Mac) | Úkoly |
+|---|---|
+| `Sources/OffloadKit/Hashing.swift` (nový), `Hash.swift`, `MHL.swift`, `MHLReader.swift` (nový) | 32, 40 |
+| `Sources/OffloadKit/Report.swift`, `IO.swift`, `HTMLReport.swift` | 33, 39, 41, 51, 55, 70 |
+| `Sources/OffloadKit/Messages.swift` (nový), `Engine.swift` | 34, 47, 48, 51, 61, 62, 65, 67 |
+| `Sources/OffloadKit/Volume.swift`, `FileLock.swift`, `CardRecord.swift` (nové) | 36–38 |
+| `Sources/OffloadKit/History/*` (nové) | 42–44 |
+| `Sources/OffloadKit/Verification/*` (nové) | 45 |
+| `Sources/OffloadKit/Append/{AppendPlanner,RepairPlanner,ResumePlanner}.swift` (nové) | 46, 62, 69 |
+| `Sources/OffloadKit/Space/SpaceEstimator.swift`, `Outputs/*`, `ProxyPaths.swift`, `LighterSource.swift`, `ReelNames.swift` (nové) | 43, 48, 52–54 |
+| `Sources/OffloadKit/Desktop/{AppSettings,Projects,VerifyJob,RepairRules,JobCard,SetupTexts,TimeEstimate,CardFacts}.swift` | 35, 49, 56, 62–64 |
+| `Sources/OffloadKit/LutRules.swift`, `Luts.swift`, `Media.swift`, `RawBackends.swift`, `Tools/braw-decode/braw-decode.cpp` | 57, 58 |
+| `Sources/OffloadKit/Notify/*`, `Updates/*`, `PauseGate.swift` (nové) | 59–61 |
+| `Sources/OffloadKit/VerifyInProxy/*` (nové) | 65–70 |
+| `Sources/OffloadKit/Job.swift`, `Proxy.swift`, `ProxyCopy.swift` | 39, 44, 47, 48, 51–54, 57, 61, 62, 67, 68, 70 |
+| `Sources/offload/main.swift` | 34, 44, 45, 47, 48, 51–54, 56, 57, 59, 70 |
+| `Sources/OffloadApp/*` | 39, 49, 56, 57, 59–64, 69, 70 |
+| `scripts/build-app.sh` | 59, 60 |
+| `docs/FORMATY.md`, `docs/ROZDILY.md`, `docs/VYVOJ-MAC.md`, `mac/README.md` | každý úkol podle textu; verze 0.3.0 (50), 0.4.0 (55), 0.5.0 (60), 0.6.0 (64), 0.7.0 (70) |
+
+| „Naplánováno“ ve VYVOJ-MAC (stav 2026-10-08) | Kde se zavírá |
+|---|---|
+| Karty a bezpečnost dat (plán 6) | úkoly 32–50 |
+| Výstupy pro produkci a střih (plán 7) | úkoly 51–55 |
+| Nastavení, oznámení, distribuce (plán 8) | úkoly 56–60 |
+| Nový vzhled (plán 9) — po schválení | úkoly 61–64 (63–64 s bránou D.25) |
+| Převzít z Windows — HTML reporty (2026-10-08) | úkol 55 |
+| Převzít z Windows 0.6.0 — Verify-in-Proxy | úkoly 39, 65–70 (místo AVFoundation HTTP tap — D.23.7) |
+| Převzít z Windows 0.5.1 — proxy | úkol 54 |
+| Mimo plán (Film Gen 4 rozhodnutí, řádek „braw-decode nalezeno“ bez knihovny, ostré testy s hardwarem, náhledy R3D/ARRI bez proxy, zrušení `ffprobe`, selhání kopie proxy v souhrnu CLI) | zůstává ve VYVOJ-MAC „Naplánováno — mimo plán“ |
