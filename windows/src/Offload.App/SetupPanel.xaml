@@ -19,6 +19,63 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- The tick of a step 3 row as a real switch: the same green tick / grey ring, a hand, focus ring from the keyboard. -->
+        <Style x:Key="RowSwitch" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="Box" Width="20" Height="20" CornerRadius="6" Background="{DynamicResource CheckBg}" BorderBrush="Transparent" BorderThickness="1.5">
+                            <ContentControl x:Name="Tick" Style="{StaticResource IconLine}" Content="{StaticResource IconCheck}" Width="13" Height="13" Tag="2.6"
+                                            Foreground="{DynamicResource Success}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="False">
+                                <Setter TargetName="Box" Property="Background" Value="Transparent" />
+                                <Setter TargetName="Box" Property="CornerRadius" Value="10" />
+                                <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource LineStrong}" />
+                                <Setter TargetName="Tick" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- The label and the detail of a step 3 row: one button that opens the settings section; a hand and a soft highlight. -->
+        <Style x:Key="RowButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" CornerRadius="6" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" Padding="6,4">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverBg}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
     <Border Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
         <DockPanel x:Name="Root">
@@ -301,7 +358,7 @@
 
                     <!-- 3 · PO ZKOPÍROVÁNÍ -->
                     <DockPanel Margin="0,26,0,0">
-                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Upravit projekt" Command="{Binding OpenSettingsCommand}"
+                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Upravit projekt" Command="{Binding OpenSettingsSectionCommand}" CommandParameter="folders"
                                 AutomationProperties.AutomationId="EditProjectButton" Visibility="{Binding IsCompact, Converter={StaticResource BoolToCollapsed}}" />
                         <TextBlock Text="3 · PO ZKOPÍROVÁNÍ" Style="{StaticResource StepTitle}" />
                     </DockPanel>
@@ -313,22 +370,38 @@
                                     <Border BorderBrush="{DynamicResource LineSoft}" BorderThickness="0,0,0,1" Padding="14,11">
                                         <StackPanel>
                                             <DockPanel>
-                                                <Border DockPanel.Dock="Left" Style="{StaticResource RowMark}" Margin="0,0,12,0">
-                                                    <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconCheck}" Width="13" Height="13" Tag="2.6"
-                                                                    Foreground="{DynamicResource Success}" Visibility="{Binding On, Converter={StaticResource BoolToVisible}}" />
-                                                </Border>
-                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Value}" FontSize="12" Foreground="{DynamicResource Text2}" VerticalAlignment="Center" />
-                                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Warn}" Value="True">
-                                                                    <Setter Property="Foreground" Value="{DynamicResource Warn}" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
+                                                <!-- a switch (verify, analysis, proxy) or, for the report that is always written, a fixed tick -->
+                                                <Grid DockPanel.Dock="Left" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                    <CheckBox Style="{StaticResource RowSwitch}" IsChecked="{Binding On, Mode=OneWay}"
+                                                              Command="{Binding DataContext.ToggleAfterCopyCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                              CommandParameter="{Binding Kind}"
+                                                              IsEnabled="{Binding DataContext.AfterCopyEnabled, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                              Visibility="{Binding HasSwitch, Converter={StaticResource BoolToVisible}}"
+                                                              AutomationProperties.AutomationId="{Binding Kind, StringFormat=AfterCopySwitch{0}}" AutomationProperties.Name="{Binding Label}" />
+                                                    <Border Style="{StaticResource RowMark}" ToolTip="{Binding SwitchTip}" Visibility="{Binding HasSwitch, Converter={StaticResource BoolToCollapsed}}"
+                                                            AutomationProperties.Name="{Binding SwitchTip}">
+                                                        <ContentControl Style="{StaticResource IconLine}" Content="{StaticResource IconCheck}" Width="13" Height="13" Tag="2.6"
+                                                                        Foreground="{DynamicResource Success}" />
+                                                    </Border>
+                                                </Grid>
+                                                <Button Style="{StaticResource RowButton}" Command="{Binding DataContext.OpenSettingsSectionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding Section}" AutomationProperties.AutomationId="{Binding Kind, StringFormat=AfterCopyRow{0}}">
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Value}" FontSize="12" Foreground="{DynamicResource Text2}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Warn}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource Warn}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </DockPanel>
+                                                </Button>
                                             </DockPanel>
                                             <TextBlock Text="{Binding DataContext.VerifyOffWarning, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Style="{StaticResource TextWarn}"
                                                        FontSize="12" Margin="32,6,0,0" Visibility="{Binding Warn, Converter={StaticResource BoolToVisible}}" />

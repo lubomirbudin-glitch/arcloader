@@ -22,6 +22,22 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 9 | nový vzhled podle `docs/ui-navrh/`: tmavé a světlé téma, horní lišta, kroky 1–3, karty úloh s průběhem po cílech, pozastavení, oprava nesouhlasných souborů, dnešní historie, okno Nastavení (0.5.0) | hotovo (čeká ruční test 40–49 s kartou a vizuální kontrolu proti `docs/ui-navrh/screeny`) |
 
 
+## 2026-10-08 — Po zkopírování: klikací volby
+
+Verze **0.5.2**. Podnět: v levém sloupci, v kroku „3 · Po zkopírování“, nešlo na nic kliknout ani nic nastavit — čtyři
+řádky byly jen text (a „Upravit projekt“ otevíralo Nastavení pokaždé v naposledy otevřené části).
+
+- **Přepínače:** zelená značka řádků Ověření, Analýza a Proxy je skutečný přepínač nastavení aktivního projektu
+  (`Verify`, `AnalyzeClips`, `Proxy.Enabled`) přes stejné vlastnosti jako stránka Nastavení, tedy s uložením po 400 ms
+  mimo UI vlákno. Značka Reportu je pevná (tooltip „Report se vytváří vždy“). Přepínače jsou neaktivní při startu
+  (`CanSwitchProject`) a v demu (`DemoGate`, `SettingsSave`). Analýza a proxy na sobě nezávisí (fáze 2 běží, když je zapnuté
+  aspoň jedno), takže mezi nimi žádné pravidlo není.
+- **Klik na řádek:** název a text vpravo otevřou Nastavení v části `verify` / `analysis` / `proxy` / `report`; řádek je
+  tlačítko (ruka, jemné zvýraznění `HoverBg`, Tab + Enter/Mezerník). „Upravit projekt“ otevře část `folders`.
+- **Core:** `AfterCopyKind`, `AfterCopyRules` (`Section`, `HasSwitch`, `CanToggle`, `Toggle`), `AfterCopyRow.Kind`;
+  `SettingsSections` přesunuto z App do Core. Testy: `AfterCopyRulesTests`.
+- Návod (kapitola o levém sloupci) doplněn a znovu vykreslen (`render.ps1`).
+
 ## 2026-10-08 — proxy: složky jako na kartě, lehké originály bez proxy
 
 Verze **0.5.1**. Podnět: skutečná záloha karty se stejnými názvy souborů v několika složkách (`idle\1.mp4`,
