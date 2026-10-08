@@ -23,6 +23,13 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 10 | Verify-in-Proxy: primární disk ověřený čtením pro proxy (HTTP tap pro ffmpeg, čtení přes cache pro RAW SDK), ostatní disky na pozadí, „Lze vyjmout“ × „Lze formátovat“, blokový manifest a navázání po pádu, XXH128 v ASC MHL, obsahová kontrola dekodérem (0.6.0) | hotovo (čeká ruční test 50–58: karta, RAW, přímý zápis na zařízení) |
 
 
+## 2026-10-08 — drobnosti po plánu 10
+
+Verze **0.6.1**.
+
+- Doplnění i klasické ověření na zaseknutém disku: čtení na pozadí běží dál na vlastním vlákně každého svazku (nízká I/O priorita), doplnění po proxy v `Finish` na vlákně navíc; `VerifySession.WaitFor` je hlídá jako proxy (`StallTimeout` bez přečteného bloku, pauza a čekání na tap se nepočítají; stejný vzor jako mode B v `Prepare` a `TapFile.Dispose`, který nečeká). Zaseklé vlákno se opustí (nic už nezapíše), zbylé soubory jeho cílů selžou s důvodem „disk přestal odpovídat při ověřování“, zámky se pustí, úloha doběhne a nikdy není zelená (SafeToFormat zůstává false). Test s čtečkou, která blokuje: `FillIn_HungDisk_FailsItsFiles_FinishReturns`.
+- Nestabilní test `NtfyClientTests.SendOutcome_DoesNotHoldTheCaller_LogsTheResult`: skutečná příčina nebyla fronta vláken, ale to, že klient se po 0,5 s vzdá i před odesláním (spojení nebo vlákno hladovělo déle než limit), takže požadavek na server nikdy nedorazil a test čekal 30 s na `WaitForRequests`. Test už na příchod požadavku nečeká; „nic se neposílá“ ověřuje na samostatném serveru, kde je to jisté hned po návratu volání.
+
 ## 2026-10-08 — plán 10: Verify-in-Proxy
 
 Verze **0.6.0**. Návrh: [`windows/docs/superpowers/specs/2026-10-08-offload-verify-in-proxy-design.md`](../windows/docs/superpowers/specs/2026-10-08-offload-verify-in-proxy-design.md)

@@ -12,6 +12,9 @@ public static partial class Msg
     public const string ClassicSetting = "ověření během proxy je vypnuté — ověřeno zpětným čtením";
     public const string ClassicSecondary = "další cíl — ověřeno čtením na pozadí";
 
+    /// A destination's disk stopped answering while it was verified (the files are failed, the job finishes).
+    public const string VerifyDiskHung = "disk přestal odpovídat při ověřování";
+
     // Spec 10 notes (report "verifyNotes", the job's warning).
     public static string UnstableRead(string path, string disk, IReadOnlyList<int> blocks) =>
         $"Nestabilní čtení: {path} na {disk} (blok {string.Join(", ", blocks)}) dal při jednom čtení jiná data — při dalším souhlasil s kartou.";

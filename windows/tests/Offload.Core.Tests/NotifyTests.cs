@@ -230,13 +230,16 @@ public class NtfyClientTests
         Assert.False(send.IsCompleted);
         await send.WaitAsync(TimeSpan.FromSeconds(30));
         lock (log) Assert.Equal("ntfy: Server neodpověděl do 0.5 s.", Assert.Single(log).Replace(',', '.'));
-        // The listener records a request on its own pool thread — under the whole suite that can come after the client
-        // gave up: wait for it (bounded) before counting.
-        Assert.True(server.WaitForRequests(1, TimeSpan.FromSeconds(30)), "the request never reached the listener");
-
-        await NtfyClient.SendOutcomeAsync(new NtfySettings { Enabled = false, Server = server.Url, Topic = "t" }, outcome, log.Add);
-        await NtfyClient.SendOutcomeAsync(settings, outcome with { Kind = OutcomeKind.Ejectable }, log.Add);
-        Assert.Single(server.Requests);   // off, and "kartu lze vysunout": nothing sent
+        // Whether the request reached the listener before the 0.5 s limit cancelled it depends on the machine's load (a
+        // connect or a pool thread starved for longer than the limit: the client gives up before sending anything), so
+        // nothing here waits for it. "Nothing is sent" is proven on a server of its own: those calls are awaited and
+        // finish without a request, so it holds the moment they return.
+        using var untouched = new LocalHttp();
+        var off = new NtfySettings { Enabled = false, Server = untouched.Url, Topic = "t" };
+        await NtfyClient.SendOutcomeAsync(off, outcome, log.Add);
+        await NtfyClient.SendOutcomeAsync(new NtfySettings { Enabled = true, Server = untouched.Url, Topic = "t" }, outcome with { Kind = OutcomeKind.Ejectable }, log.Add);
+        Assert.Empty(untouched.Requests);   // off, and "kartu lze vysunout": nothing sent
+        lock (log) Assert.Single(log);
     }
 
     // Final fix 2: only the headers are read — a server that streams a huge body after an error status does not hold
