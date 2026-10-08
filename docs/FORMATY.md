@@ -198,7 +198,8 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
   velikost nebo čas (tolerance 2 s, na FAT celé hodiny); soubor na cíli, který žádný report nezná;
 - dvě doplnění do téže složky karty najednou nejdou: pojmenovaný mutex `Local\Offload-append-<sha256(svazek|cesta)>`
   na každou složku karty, bez čekání (druhé skončí „S touto zálohou právě pracuje jiná úloha …“); celá kopie bere zámek
-  jen s ověřením během proxy (od zápisu reportů s `verifyPending` do zápisu výsledku ověření; doplnění ho tehdy drží i
+  jen s ověřením během proxy (od zápisu reportů s `verifyPending` do zápisu výsledku ověření; report složky, kam se
+  výsledek zapsal, když jinam ne, nese `verifyIncomplete: true` — nikdy „ověřeno“, dokud ho navázání nepřepíše; doplnění ho tehdy drží i
   přes 2. fázi — plán 10, I4).
 
 ### Oprava — „Zkopírovat znovu“ (Windows od 0.5.0, Mac naplánováno)
@@ -331,7 +332,10 @@ Pravidla (Windows od 0.3.0):
 `%APPDATA%\Offload\history.json` + `%APPDATA%\Offload\history\<id>.files.gz` (Mac: `~/Library/Application Support/Offload/`)
 — historie offloadů, nikam se neposílá (složku lze přesměrovat proměnnou `OFFLOAD_SETTINGS_DIR`). UTF-8 bez BOM,
 odsazené, data ISO 8601 UTC na sekundy; zapisuje GUI i CLI (`--no-history` vypne) pod pojmenovaným mutexem
-`Local\Offload-history`, přes dočasné jméno. Zapisuje se konec dokončené kopie nebo doplnění; zrušená kopie ne. Kořen
+`Local\Offload-history-<sha256 plné cesty složky velkými písmeny>` (jeden na složku historie, GUI i CLI nad stejnou
+složkou ho sdílejí; od plánu 10), přes dočasné jméno. Záznam úlohy čeká na zámek až 60 s, pak se zapíše na pozadí
+(úloha hlásí varování, nikdy se tiše neztratí). Zapisuje se start celé kopie (`unfinished`), konec dokončené kopie nebo
+doplnění a výsledek ověření s proxy; zrušená kopie ne. Kořen
 `{ "version": 1, "entries": [...] }`; vyšší neznámá verze = jen číst, nezapisovat. Nejvýš 5 000 záznamů (nejstarší
 podle `finished` se smažou i se seznamem souborů). Poškozený soubor se přejmenuje na
 `history.json.corrupt-<yyyyMMdd-HHmmss>` a začne se prázdný.

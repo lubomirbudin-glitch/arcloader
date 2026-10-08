@@ -25,7 +25,9 @@ public class ReadBackSerialTests
         };
         var rec = new RecordedFile(report.Files[0], 1, report);
         // The disk that was D: is F: now: by its path it would read the other disk's "verified".
-        Assert.True(CardRecord.ReadBack(rec, @"F:\B\2026-10-08\A001"));
+        // Fix round 1 (M-d): the folder's serial unknown — never its path's column, every column must say so.
+        Assert.False(CardRecord.ReadBack(rec, @"F:\B\2026-10-08\A001"));
+        Assert.Equal(-1, CardRecord.ColumnOf(report, @"D:\B\2026-10-08\A001"));
         Assert.False(CardRecord.ReadBack(rec, @"F:\B\2026-10-08\A001", "AAAA-0001"));
         Assert.True(CardRecord.ReadBack(rec, @"D:\B\2026-10-08\A001", "BBBB-0002"));
         Assert.Equal(-1, CardRecord.ColumnOf(report, @"F:\B\2026-10-08\A001", "CCCC-0003"));   // an unknown disk: no column

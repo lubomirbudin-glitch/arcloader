@@ -89,6 +89,10 @@ public sealed partial class OffloadReport
     /// Plan 10: the copy is done and its verification runs with the proxies (stage 2) — written at the end of the copy,
     /// gone once verified. A report saying so has no ASC MHL generation yet (OffloadReport.Commit). Absent otherwise.
     [JsonPropertyName("verifyPending")] public bool? VerifyPending { get; set; }
+    /// Plan 10 fix round 1 (M-a): the verification results were written into this card folder, but not into every other
+    /// destination of the copy (a commit failed there) — this folder is not the whole truth: never "ověřeno" until a
+    /// resume writes the generation again. Absent otherwise. The Mac ignores it.
+    [JsonPropertyName("verifyIncomplete")] public bool? VerifyIncomplete { get; set; }
     /// Spec 9: seconds from the start until every file was verified on every destination (pauses left out); absent when
     /// that was never reached. The Mac ignores it.
     [JsonPropertyName("safeToFormatSeconds")] public double? SafeToFormatSeconds { get; set; }

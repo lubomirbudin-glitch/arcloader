@@ -29,6 +29,10 @@ public static partial class Msg
     public static string VerifyNotCommitted(string detail) =>
         $"Výsledek ověření se nepodařilo zapsat ({detail}) — kartu zatím neformátujte; zálohu dokončí „Dokončit přerušenou zálohu“ (Doplnit, offload append).";
 
+    // Fix round 1, item 2b: a record of the job that the history lock kept out.
+    public const string HistoryDelayed = "Historie karet je právě zaneprázdněná — záznam této zálohy se zapíše, jakmile to půjde (aplikaci zatím nezavírejte).";
+    public const string HistoryNotWritten = "Záznam této zálohy se do historie karet nepodařilo zapsat (historie byla dlouho zaneprázdněná) — záloha na discích je v pořádku, jen ji karta při dalším vložení nepozná.";
+
     // R6 (resume).
     public static string ResumeDiverged(string cardPath, int generation) =>
         $"{cardPath}: nedokončená záloha (generace {generation}) nesouhlasí s ostatními cíli — zkontrolujte ji ručně.";

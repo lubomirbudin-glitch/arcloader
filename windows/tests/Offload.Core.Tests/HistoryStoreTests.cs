@@ -38,7 +38,7 @@ public static class HistoryFixtures
     }
 }
 
-/// These tests hold or abandon the machine-wide `Local\Offload-history` mutex and time its writers, while every OffloadJob test
+/// These tests hold or abandon the history mutex (plan 10 fix round 1: one per history folder) and time its writers, while every OffloadJob test
 /// now records history through the same mutex — so this class runs with nothing else in parallel.
 [CollectionDefinition("HistoryMutex", DisableParallelization = true)]
 public class HistoryMutexCollection;
@@ -135,7 +135,7 @@ public class HistoryStoreTests
         using var release = new ManualResetEventSlim();
         var holder = new Thread(() =>
         {
-            using var m = new Mutex(false, @"Local\Offload-history");
+            using var m = new Mutex(false, HistoryStore.LockName(dir.Path));
             m.WaitOne();
             held.Set();
             release.Wait(TimeSpan.FromSeconds(30));
@@ -307,7 +307,7 @@ public class HistoryStoreTests
     {
         using var dir = new TempDir();
         var store = new HistoryStore(dir.Path);
-        var t = new Thread(() => new Mutex(false, @"Local\Offload-history").WaitOne());   // exits without releasing
+        var t = new Thread(() => new Mutex(false, HistoryStore.LockName(dir.Path)).WaitOne());   // exits without releasing
         t.Start();
         t.Join();
         Assert.True(store.Record(HistoryFixtures.Entry(T0), null));

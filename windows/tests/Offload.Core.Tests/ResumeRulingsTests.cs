@@ -193,19 +193,43 @@ public class ResumeRulingsTests
         Assert.Contains("Dokončit přerušenou zálohu", Msg.RepairUnfinished);
     }
 
-    // I5: an unfinished backup with nothing new on the card still offers to finish it.
+    static readonly CardVolume Vol = new("card1", "1A2B3C4D", 256_060_514_304, "A001", "exFAT");
+
+    /// What the Karty list learns about `card` (fix round 1, item 1: through CardInspector, as the GUI does).
+    static CardInsight Inspect(string card, HistoryStore store) =>
+        CardInspector.Inspect(card, store.Load(), store, CancellationToken.None, _ => Vol, _ => null, _ => null);
+
+    // I5 + fix round 1, item 1: an unfinished backup with nothing new on the card is reachable and offered — through the
+    // inspector the Karty list uses; a finished one with nothing new is not (as before).
     [Fact]
     public void Unfinished_NothingNew_StillOffered()
     {
-        var e = new HistoryEntry { Id = "x", CardName = "A001", Unfinished = true, Finished = T, Destinations = [new() { Root = @"D:\Zaloha", CardPath = @"D:\Zaloha\2026-10-08\A001" }] };
-        var vol = new CardVolume("card1", "1A2B3C4D", 256_060_514_304, "A001", "exFAT");
-        var identical = new CardInsight { Source = @"E:\", Volume = vol, AppendReachable = true, History = new HistoryMatch(e, HistoryMatchKind.Identical, [], 0, [], 0) };
+        using var dir = new TempDir();
+        var card = dir.Sub("CARD");
+        CardFile(card, "CLIP/A.mov", Block, 1);
+        var cardPath = dir.Sub("d1", "2026-10-08", "A001");
+        var store = new HistoryStore(dir.Sub("h"));
+        var scan = Scanner.Scan(card);
+        var (fingerprint, shape) = CardFingerprint.Compute(scan);
+        var e = new HistoryEntry
+        {
+            Id = "20261008T090000Z-00000001", CardName = "A001", Unfinished = true, Finished = T, Card = Vol.ToHistoryCard(), Fingerprint = fingerprint,
+            Shape = shape, Destinations = [new() { Root = dir.Sub("d1"), CardPath = cardPath }],
+        };
+        Assert.True(store.Record(e, scan.Files));
+
+        var identical = Inspect(card, store);
+        Assert.Equal(HistoryMatchKind.Identical, identical.History!.Kind);
+        Assert.True(identical.AppendReachable);
         Assert.True(AppendRules.Offer(identical));
         Assert.Equal("Dokončit přerušenou zálohu (dokončí ověření)", AppendRules.CheckboxText(identical.History!));
         Assert.False(BackedUpPrompt.ShouldAsk(identical));
-        // A finished backup with nothing new: no tick, as before.
+        // A finished backup with nothing new: not reachable, no tick, as before.
         e.Unfinished = false;
-        Assert.False(AppendRules.Offer(identical));
+        Assert.True(store.Record(e, scan.Files));
+        var finished = Inspect(card, store);
+        Assert.False(finished.AppendReachable);
+        Assert.False(AppendRules.Offer(finished));
     }
 
     // I5 end to end: the app dies during stage 2 (verify-in-proxy) — history says "nedokončeno", the card re-inserted
@@ -216,7 +240,10 @@ public class ResumeRulingsTests
     {
         using var dir = new TempDir();
         var card = VerifyInProxyRulingsTests.Card(dir);
-        var job = new OffloadJob(VerifyInProxyRulingsTests.Config(card, [dir.Sub("d1"), dir.Sub("d2")], dir), VerifyInProxyRulingsTests.Options());
+        var job = new OffloadJob(VerifyInProxyRulingsTests.Config(card, [dir.Sub("d1"), dir.Sub("d2")], dir), VerifyInProxyRulingsTests.Options())
+        {
+            VolumeOf = _ => Vol,   // the card's volume, as history knows it again
+        };
         Assert.True(job.RunCopy());
         var store = new HistoryStore(Path.Combine(dir.Path, "history"));
         var entry = Assert.Single(store.Load());
@@ -226,10 +253,10 @@ public class ResumeRulingsTests
         var paths = job.Plan!.CardPaths;
         Assert.All(paths, p => Assert.True(Pending(p)));
 
-        var scan = Scanner.Scan(card);
-        var match = HistoryMatcher.Match(scan, CardFingerprint.Compute(scan).Fingerprint, entry, store.ReadFileList(entry), "NTFS");
+        var insight = Inspect(card, store);   // the card inserted again, as the Karty list reads it
+        var match = insight.History!;
         Assert.Equal(HistoryMatchKind.Identical, match.Kind);
-        var insight = new CardInsight { Source = card, Volume = new CardVolume("card1", "1A2B3C4D", 1_000_000, "A001", "exFAT"), AppendReachable = true, History = match };
+        Assert.True(insight.AppendReachable);
         Assert.True(AppendRules.Offer(insight));
         Assert.StartsWith("Dokončit přerušenou zálohu", AppendRules.CheckboxText(match));
         Assert.False(BackedUpPrompt.ShouldAsk(insight));
@@ -248,6 +275,7 @@ public class ResumeRulingsTests
         Assert.False(done.Unfinished);
         Assert.True(done.Verified);
         Assert.Equal(HistoryGeneration.Full, Assert.Single(done.Generations).Kind);
+        Assert.False(AppendRules.Offer(Inspect(card, store)));   // finished: nothing more offered
         Assert.All(paths, p =>
         {
             Assert.False(Pending(p));

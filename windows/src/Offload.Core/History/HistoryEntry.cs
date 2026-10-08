@@ -66,6 +66,9 @@ public sealed class HistoryEntry
     [JsonPropertyName("unfinished"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool Unfinished { get; set; }
 }
 
+/// What a history write did (HistoryStore.Write): Busy — the lock stayed held, try again; Unchanged — nothing to change.
+public enum HistoryWrite { Written, Unchanged, Busy, Failed }
+
 /// How a card volume is recognised again (R1): the file system's serial number plus the capacity. The volume GUID is
 /// not part of it — Windows gives the same card another GUID in another reader or slot.
 public sealed record CardKey(string FsSerial, long Capacity);

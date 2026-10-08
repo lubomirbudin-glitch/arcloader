@@ -112,6 +112,10 @@ public sealed record JobStatus
 
     /// This status with `line` added to the warnings.
     public JobStatus WithWarning(string line) => this with { Warning = Warning == null ? line : Warning + "\n" + line };
+
+    /// This status without the warning line `line` (one that no longer holds, e.g. a history record written later).
+    public JobStatus WithoutWarning(string line) =>
+        Warning?.Split('\n').Where(l => l != line).ToList() is { } rest ? this with { Warning = rest.Count == 0 ? null : string.Join("\n", rest) } : this;
 }
 
 /// One card: copy → verify → report → clip analysis → optional proxies → PDF. Used by both the CLI and the app.
@@ -334,7 +338,8 @@ public sealed class OffloadJob
         }
         using var awake = KeepAwake();
         IDisposable? folders = null;
-        bool copying = false;   // the engine may have written to the destinations: a day report is due even on failure
+        bool copying = false;
+        bool writing = false;   // Engine.Run started: a failure from here on may be resumed (R6)   // the engine may have written to the destinations: a day report is due even on failure
         try
         {
             // An append holds its card folders until stage 1 ends (fix round 1, item 1) and plans under that hold — a
@@ -353,13 +358,14 @@ public sealed class OffloadJob
             if (plan.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(plan.UnverifiedEarlier)));
             Update(s => s with { Phase = JobPhase.Copying });
             copying = true;
-            // R6: history knows the copy from its start — one the app never finishes can be resumed from its card.
-            if (plan.Mode == PlanMode.Full) RecordStart(plan, log);
             // Plan 10 (R11): the read-back waits for stage 2, where the proxies read the copies.
             Engine.Options.DeferVerify = VerifiesInProxy(plan);
             // Ruling I4: a full copy that will write reports saying verifyPending takes its new card folders' lock first —
             // no append, repair or resume may touch the generation until its verification results are written.
             if (Engine.Options.DeferVerify && folders == null) folders = AppendLock.AcquireHeld(plan.CardPaths);
+            // R6: history knows the copy from its start — one the app never finishes can be resumed from its card.
+            if (plan.Mode == PlanMode.Full) RecordStart(plan, log);
+            writing = true;   // from here on the destinations may hold what a resume completes
             var report = Engine.Run(plan);
             Report = report;
             pausedAtCopyEnd = Engine.Pauses.PausedTotal;
@@ -484,6 +490,9 @@ public sealed class OffloadJob
         }
         catch (Exception e)
         {
+            // Fix round 1 (M-e): failed before the copy wrote anything, or with nothing a resume could complete (no
+            // manifest record, no pending report) — no "nedokončeno" entry.
+            if (!writing || NothingToResume()) ForgetStart(log);
             EndPendingUnverified(log);
             var next = copying && DayReportNext();   // ruling M9: best effort after a failed copy too
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
@@ -493,6 +502,13 @@ public sealed class OffloadJob
         {
             folders?.Dispose();
         }
+    }
+
+    /// Fix round 1 (M-e): the card folders hold no generation a resume (R6) could complete.
+    bool NothingToResume()
+    {
+        try { return Plan is not { } p || ResumePlanner.Find(p.CardPaths) == null; }
+        catch (Exception) { return false; }   // diverged: kept, a look by hand is due
     }
 
     /// Stage 1 ended with an exception after its reports said verifyPending (no stage 2 follows): the generation is
@@ -542,38 +558,133 @@ public sealed class OffloadJob
         catch (Exception e) { log?.Invoke($"card volume: {e.Message}"); }
     }
 
-    HistoryStore Store(Action<string>? log) => Config.HistoryFolder is string folder ? new HistoryStore(folder, log) : HistoryStore.Default(log);
+    /// Tests: how long a record of this job waits for the history lock (fix round 1, item 2b: 60 s — jobs never run on
+    /// the UI thread), and the background retry of a record that still could not be written: its pause and attempts.
+    internal TimeSpan HistoryLockWait { get; init; } = TimeSpan.FromSeconds(60);
+    internal TimeSpan HistoryRetryDelay { get; init; } = TimeSpan.FromSeconds(30);
+    internal int HistoryRetries { get; init; } = 20;
+
+    readonly Lock historyGate = new();
+    readonly Queue<(string What, Func<HistoryStore, HistoryWrite> Write)> historyBacklog = new();
+    bool historyRetrying;
+
+    /// Fix round 1, item 2b: a record of this job's own (its start, its copy, its verification, a repair, a removal) is
+    /// never dropped silently. It waits up to HistoryLockWait for the history lock; still busy — logged, a Czech warning on
+    /// the job card, and it is written in the background as soon as it can be (in order: a later record waits behind it);
+    /// the warning goes once it is written, or says so for good after HistoryRetries attempts.
+    void RecordReliably(string what, Func<HistoryStore, HistoryWrite> write, Action<string>? log)
+    {
+        if (!Config.RecordHistory) return;
+        lock (historyGate)
+        {
+            if (historyBacklog.Count > 0)
+            {
+                historyBacklog.Enqueue((what, write));
+                return;
+            }
+        }
+        if (AttemptHistory(what, write, log) != HistoryWrite.Busy) return;
+        log?.Invoke($"history: busy for {HistoryLockWait.TotalSeconds:0} s — the {what} record is written later");
+        lock (historyGate)
+        {
+            historyBacklog.Enqueue((what, write));
+            if (historyRetrying) return;
+            historyRetrying = true;
+        }
+        Update(s => s.WithWarning(Msg.HistoryDelayed));
+        new Thread(() => RetryHistory(log)) { IsBackground = true, Name = "offload.history-retry" }.Start();
+    }
+
+    HistoryWrite AttemptHistory(string what, Func<HistoryStore, HistoryWrite> write, Action<string>? log)
+    {
+        try
+        {
+            var folder = Config.HistoryFolder ?? HistoryStore.DefaultFolder;
+            return write(new HistoryStore(folder, log) { LockTimeout = HistoryLockWait });
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history ({what}): {e.Message}");
+            return HistoryWrite.Failed;
+        }
+    }
+
+    void RetryHistory(Action<string>? log)
+    {
+        for (int attempt = 0; attempt < HistoryRetries; attempt++)
+        {
+            Thread.Sleep(HistoryRetryDelay);
+            while (true)
+            {
+                (string What, Func<HistoryStore, HistoryWrite> Write) next;
+                lock (historyGate)
+                {
+                    if (historyBacklog.Count == 0)
+                    {
+                        historyRetrying = false;
+                        Update(s => s.WithoutWarning(Msg.HistoryDelayed));
+                        return;
+                    }
+                    next = historyBacklog.Peek();
+                }
+                if (AttemptHistory(next.What, next.Write, log) == HistoryWrite.Busy) break;
+                log?.Invoke($"history: the {next.What} record written after the history was busy");
+                lock (historyGate) historyBacklog.Dequeue();
+            }
+        }
+        int lost;
+        lock (historyGate)
+        {
+            lost = historyBacklog.Count;
+            historyBacklog.Clear();
+            historyRetrying = false;
+        }
+        log?.Invoke($"history: still busy — {lost} record(s) of this job not written");
+        Update(s => s.WithoutWarning(Msg.HistoryDelayed).WithWarning(Msg.HistoryNotWritten));
+    }
+
+    /// Tests: the history records of this job are all written (none waits in the background).
+    internal bool HistorySettled
+    {
+        get { lock (historyGate) return historyBacklog.Count == 0 && !historyRetrying; }
+    }
+
+    /// Fix round 1, item 2c: the backup has no generation left to complete and no report still pending — a stale
+    /// "nedokončeno" heals. Read before the history lock is taken (it reads the card folders).
+    internal static bool Settled(IReadOnlyList<string> cardPaths)
+    {
+        try
+        {
+            return ResumePlanner.Find(cardPaths) == null && cardPaths.All(p => !CardRecord.Load(p).VerifyPending);
+        }
+        catch (Exception)
+        {
+            return false;   // diverged or unreadable: stays as it is
+        }
+    }
 
     /// R6: the entry of a full copy as it starts — "unfinished", no files yet; RecordHistory replaces it at the end.
     void RecordStart(OffloadPlan plan, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
-        try
+        var id = HistoryStore.NewId(DateTime.UtcNow);
+        var cardPaths = plan.CardPaths;
+        var entry = new HistoryEntry
         {
-            var store = Store(log);
-            var id = HistoryStore.NewId(DateTime.UtcNow);
-            var cardPaths = plan.CardPaths;
-            var entry = new HistoryEntry
-            {
-                Id = id, Source = plan.Source, CardName = plan.CardName, Date = plan.Date, Project = plan.Project, Unfinished = true,
-                Finished = DateTime.UtcNow, HashAlgorithms = [.. HashKinds.Names(plan.Hashes)], Card = cardVolume?.ToHistoryCard(),
-                Destinations = plan.DestRoots.Select((root, i) => new HistoryDestination { Root = root, CardPath = cardPaths[i] }).ToList(),
-            };
-            if (store.UpdateWithFiles(id, _ => (entry, []))) startEntry = id;
-        }
-        catch (Exception e)
-        {
-            log?.Invoke($"history: {e.Message}");
-        }
+            Id = id, Source = plan.Source, CardName = plan.CardName, Date = plan.Date, Project = plan.Project, Unfinished = true,
+            Finished = DateTime.UtcNow, HashAlgorithms = [.. HashKinds.Names(plan.Hashes)], Card = cardVolume?.ToHistoryCard(),
+            Destinations = plan.DestRoots.Select((root, i) => new HistoryDestination { Root = root, CardPath = cardPaths[i] }).ToList(),
+        };
+        startEntry = id;   // the later records of this job name it, also while it waits to be written (in order)
+        RecordReliably("start", store => store.Write(id, _ => (entry, [])), log);
     }
 
-    /// The start entry of a copy that was cancelled goes again.
+    /// The start entry of a copy that was cancelled (or failed before it wrote anything) goes again.
     void ForgetStart(Action<string>? log)
     {
         if (startEntry is not string id) return;
-        try { Store(log).Remove(id); }
-        catch (Exception e) { log?.Invoke($"history: {e.Message}"); }
         startEntry = null;
+        RecordReliably("removal", store => store.RemoveEntry(id), log);
     }
 
     /// The finished stage 1 (with failed files too) goes into history.json; this never fails the job. An append adds
@@ -582,18 +693,19 @@ public sealed class OffloadJob
     void RecordHistory(OffloadPlan plan, OffloadReport report, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
-        try
+        var card = plan.FullScan ?? plan.Scan;
+        var (fingerprint, shape) = CardFingerprint.Compute(card);
+        var cardPaths = plan.CardPaths;
+        var start = startEntry;
+        // Fix round 2, item C (ruling R2): verified as the card folders' reports say it now — the one definition the
+        // day report uses too (a generation cancelled during its read-back is not in history, but is on the disks).
+        var whole = BackupState.Of(cardPaths);
+        bool settled = plan.Resuming && report.VerifyPending != true && Settled(cardPaths);
+        RecordReliably("copy", store =>
         {
-            var store = Store(log);
-            var card = plan.FullScan ?? plan.Scan;
-            var (fingerprint, shape) = CardFingerprint.Compute(card);
-            var cardPaths = plan.CardPaths;
             // The id only finds the entry; everything about it is read and changed under the lock below.
-            var id = (plan.Mode == PlanMode.Append ? EntryOf(store, cardPaths)?.Id : startEntry) ?? HistoryStore.NewId(report.Finished);
-            // Fix round 2, item C (ruling R2): verified as the card folders' reports say it now — the one definition the
-            // day report uses too (a generation cancelled during its read-back is not in history, but is on the disks).
-            var whole = BackupState.Of(cardPaths);
-            store.UpdateWithFiles(id, existing =>
+            var id = (plan.Mode == PlanMode.Append ? EntryOf(store, cardPaths)?.Id : start) ?? HistoryStore.NewId(report.Finished);
+            return store.Write(id, existing =>
             {
                 if (existing is { Unfinished: true, Generations.Count: 0 })
                 {
@@ -631,17 +743,13 @@ public sealed class OffloadJob
                 });
                 entry.Reels = ReelSuggestion.FromClips(ClipDetector.Detect(card.Files)).Reels.ToList();
                 // R6: a resumed generation — the entry as the folders say it now (its first run may have counted failures).
-                if (plan.Resuming) Apply(entry, whole);
+                if (plan.Resuming) Apply(entry, whole, settled);
                 // Ruling I5: "nedokončeno" until the verification results are written (RecordVerified) — a backup whose
                 // app ended in stage 2 offers "Dokončit přerušenou zálohu" on its card, also with nothing new on it.
                 entry.Unfinished = report.VerifyPending == true;
                 return WithCard(store, entry, existing, card, fingerprint, shape);
             });
-        }
-        catch (Exception e)
-        {
-            log?.Invoke($"history: {e.Message}");
-        }
+        }, log);
     }
 
     /// A repair adds its generation to the entry of the card folders it repaired; whether the card is now backed up and
@@ -650,84 +758,71 @@ public sealed class OffloadJob
     void RecordRepair(OffloadPlan plan, OffloadReport report, BackupState whole, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
-        try
+        bool settled = Settled(plan.CardPaths);
+        RecordReliably("repair", store =>
         {
-            var store = Store(log);
             if (EntryOf(store, plan.CardPaths) is not { } found)
             {
                 log?.Invoke("history: the repaired backup is not in history — nothing recorded");
-                return;
+                return HistoryWrite.Unchanged;
             }
-            store.Update(found.Id, existing =>
+            return store.Write(found.Id, existing =>
             {
                 if (existing == null) return null;
                 existing.Finished = report.Finished;
-                Apply(existing, whole);
+                Apply(existing, whole, settled);
                 existing.Generations.RemoveAll(g => g.Seq == plan.Generation);
                 existing.Generations.Add(new HistoryGeneration
                 {
                     Seq = plan.Generation, Kind = HistoryGeneration.Repair, Finished = report.Finished,
                     Files = plan.Scan.Files.Count, Bytes = plan.Scan.TotalBytes, Verified = report.Verified,
                 });
-                return existing;
+                return (existing, null);
             });
-        }
-        catch (Exception e)
-        {
-            log?.Invoke($"history: {e.Message}");
-        }
+        }, log);
     }
 
     /// Ruling R2: whether the backup is complete and read back, as BackupState read it from the card folders — the one
-    /// definition the day report (CardRecord.Verified) and the eject verdict use.
-    static void Apply(HistoryEntry entry, BackupState whole)
+    /// definition the day report (CardRecord.Verified) and the eject verdict use. `settled` (fix round 1, item 2c): no
+    /// generation is left to complete and no report is pending — a stale "nedokončeno" heals.
+    static void Apply(HistoryEntry entry, BackupState whole, bool settled)
     {
         entry.Success = whole.Failed == 0;
         entry.FailedFiles = whole.Failed == 0 ? null : whole.Failed;
         entry.Verified = whole.Unverified == 0;
+        if (settled) entry.Unfinished = false;
     }
 
     /// "Nic k opravě": the entry of the backup learns its state from the reports — no new generation.
     void RefreshFromBackup(IReadOnlyList<string> cardPaths, BackupState whole, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
-        try
-        {
-            var store = Store(log);
-            if (EntryOf(store, cardPaths) is not { } found) return;
-            store.Update(found.Id, existing =>
+        bool settled = Settled(cardPaths);
+        RecordReliably("refresh", store => EntryOf(store, cardPaths) is { } found
+            ? store.Write(found.Id, existing =>
             {
-                if (existing != null) Apply(existing, whole);
-                return existing;
-            });
-        }
-        catch (Exception e)
-        {
-            log?.Invoke($"history: {e.Message}");
-        }
+                if (existing == null) return null;
+                Apply(existing, whole, settled);
+                return (existing, null);
+            })
+            : HistoryWrite.Unchanged, log);
     }
 
     /// "Nic nového" (minors M17): the entry of that backup learns the card as it is now — no new generation.
     void RefreshHistory(AppendPlan a, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
-        try
-        {
-            var store = Store(log);
-            if (EntryOf(store, a.CardPaths) is not { } found) return;
-            var (fingerprint, shape) = CardFingerprint.Compute(a.FullScan);
-            var whole = BackupState.Of(a.CardPaths);   // fix round 2, item C: as the reports say it now
-            store.UpdateWithFiles(found.Id, existing =>
+        var (fingerprint, shape) = CardFingerprint.Compute(a.FullScan);
+        var whole = BackupState.Of(a.CardPaths);   // fix round 2, item C: as the reports say it now
+        bool settled = Settled(a.CardPaths);
+        RecordReliably("refresh", store => EntryOf(store, a.CardPaths) is { } found
+            ? store.Write(found.Id, existing =>
             {
                 if (existing == null) return null;
-                Apply(existing, whole);
+                Apply(existing, whole, settled);
                 return WithCard(store, existing, existing, a.FullScan, fingerprint, shape);
-            });
-        }
-        catch (Exception e)
-        {
-            log?.Invoke($"history: {e.Message}");
-        }
+            })
+            : HistoryWrite.Unchanged, log);
     }
 
     /// The card as it is now (`fingerprint`, `shape`, the volume) into `entry`; its file list, `files` and `bytes` are
@@ -866,6 +961,7 @@ public sealed class OffloadJob
                 catch (OffloadError e) { Update(st => st.WithWarning(Msg.VerifyNotCommitted(e.Message))); }
             }
             bool committed = held != null;
+            var written = new List<string>();
             if (held != null)
             {
                 foreach (var path in plan.CardPaths)
@@ -876,12 +972,27 @@ public sealed class OffloadJob
                         // An unplugged disk: never a folder made anew for the record alone.
                         if (!Directory.Exists(path)) throw new DirectoryNotFoundException(Msg.CardFolderGone);
                         final.Commit(path);
+                        written.Add(path);
                     }
                     catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException or OffloadError or InvalidOperationException)
                     {
                         committed = false;
                         log?.Invoke($"commit {path}: {e.Message}");
                         Update(st => st.WithWarning(Msg.VerifyNotCommitted($"{path}: {e.Message}")));
+                    }
+                }
+            }
+            if (!committed && written.Count > 0)
+            {
+                // Fix round 1 (M-a): the folders that were written say so — on its own a folder would look verified
+                // (its day report green) while another destination still lacks the results. A resume clears it.
+                final.VerifyIncomplete = true;
+                foreach (var path in written)
+                {
+                    try { final.Commit(path); }
+                    catch (Exception e) when (e is IOError or IOException or UnauthorizedAccessException or OffloadError or InvalidOperationException)
+                    {
+                        log?.Invoke($"commit {path} (incomplete): {e.Message}");
                     }
                 }
             }
@@ -928,24 +1039,17 @@ public sealed class OffloadJob
     void RecordVerified(OffloadPlan plan, OffloadReport report, BackupState whole, bool committed, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
-        try
-        {
-            var store = Store(log);
-            if (EntryOf(store, plan.CardPaths) is not { } found) return;
-            store.Update(found.Id, existing =>
+        RecordReliably("verification", store => EntryOf(store, plan.CardPaths) is { } found
+            ? store.Write(found.Id, existing =>
             {
                 if (existing == null) return null;
-                Apply(existing, whole);
+                Apply(existing, whole, settled: false);
                 existing.Finished = report.Finished;
                 existing.Unfinished = !committed;
                 foreach (var g in existing.Generations.Where(g => g.Seq == plan.Generation)) g.Verified = report.Verified;
-                return existing;
-            });
-        }
-        catch (Exception e)
-        {
-            log?.Invoke($"history: {e.Message}");
-        }
+                return (existing, null);
+            })
+            : HistoryWrite.Unchanged, log);
     }
 
     /// How long a cancelled job waits for another writer of its day before it leaves the day report out.
