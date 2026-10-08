@@ -24,6 +24,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## 2026-10-08 — plán 10: Verify-in-Proxy
 
+- Úkol 7: `RangeServer` — HTTP s rozsahy jen na 127.0.0.1, token a id místo cesty, kontrola `Host`, limity spojení a hlaviček; navíc: protistrana mimo loopback se zahodí nepřečtená, hlavička musí dorazit celá do 30 s (M7, proti slowloris).
 - Úkoly 4–6, oprava po revizi: `OffloadReport.Commit` jde opakovat (generace už v řetězu se nezapíše znovu, generace 1 nikdy přes existující řetěz); záznam malého souboru do manifestu až po vyprázdnění cache disku; handle bez `NO_BUFFERING | WRITE_THROUGH` = cíl přes cache; kontrola čtení mimo cache podle skutečné cesty sondy (junction/symlink na síť) a atributů zapsaného souboru.
 - Úkol 6: odložené ověření — reporty s `verifyPending`, generace ASC MHL a seznamy hashů až po ověření (`OffloadReport.Commit`); pole `verifyMethod`, `verifyNote`, `volumeSerial`, `safeToFormatSeconds`, `verifyNotes`; metoda v komentáři generace MHL; `SafeToEject` reportu je teď `SafeToFormat`.
 - Úkol 5: kontrola čtení mimo cache pro každý cíl (nezarovnané čtení s `NO_BUFFERING` musí svazek odmítnout, sonda v `_REPORT`); síťové cíle a cíle zapsané přes cache se ověřují zpětným čtením (R8); sériové číslo svazku (R12).
