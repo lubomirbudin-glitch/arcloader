@@ -160,6 +160,21 @@ public class HtmlReportTests
         Assert.Contains("<span class=\"mono\">_PROXY/</span> · také ve složce <span class=\"mono\">E:\\Proxy &amp; co</span></p>", HtmlReport.Render(r));
     }
 
+    // 0.5.1: a finished proxy links to its file — relative to _REPORT, in the card's folders (_PROXY mirrors them).
+    [Fact]
+    public void Clips_DoneProxyLinksToItsFile()
+    {
+        var r = Reports.Sample(Card);
+        r.Clips.Add(new ClipEntry
+        {
+            Clip = new Clip { Name = "A&B", Path = "idle cam/A&B.mov", Format = ClipFormat.Video, Segments = ["idle cam/A&B.mov"], Bytes = 1 },
+            ProxyStatus = ProxyStatus.Done,
+            ProxyPath = "_PROXY/idle cam/A&B.mov",
+        });
+        var html = HtmlReport.Render(r);
+        Assert.Contains("<td class=\"st ok\"><a href=\"../_PROXY/idle%20cam/A%26B.mov\" title=\"_PROXY/idle cam/A&amp;B.mov\">hotovo</a></td>", html);
+    }
+
     [Fact]
     public void Write_CreatesAllReportFiles()
     {

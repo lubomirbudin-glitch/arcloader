@@ -134,6 +134,12 @@ public static partial class HtmlReport
         _ => ("muted", "—"),
     };
 
+    /// The proxy status; a finished proxy links to its file (the report is in `_REPORT`, the proxy in `_PROXY` beside it).
+    static string ProxyCell(ClipEntry c, string label) =>
+        c.ProxyStatus == ProxyStatus.Done && c.ProxyPath is string rel
+            ? $"<a href=\"../{Esc(string.Join("/", rel.Split('/').Select(Uri.EscapeDataString)))}\" title=\"{Esc(rel)}\">{label}</a>"
+            : label;
+
     /// Disk column: last folder of the root, or the drive itself ("E:\").
     static string DiskName(string root)
     {
@@ -258,7 +264,7 @@ public static partial class HtmlReport
             h.Append($"<td class=\"wrap hide-sm\">{Esc(string.Join(" · ", codecParts))}</td><td class=\"nw hide-sm\">{Esc(i?.ResolutionLabel ?? "")}</td><td class=\"num\">{Esc(i?.FpsLabel ?? "")}</td>");
             h.Append($"<td class=\"num\">{Esc(i?.DurationLabel ?? "")}</td><td class=\"mono hide-sm\">{Esc(i?.Timecode ?? "")}</td>");
             h.Append($"<td class=\"num hide-sm\">{audio}</td>");
-            h.Append($"<td class=\"num\">{Format.Bytes(c.Clip.Bytes)}</td><td class=\"st {pc}\">{pl}</td></tr>\n");
+            h.Append($"<td class=\"num\">{Format.Bytes(c.Clip.Bytes)}</td><td class=\"st {pc}\">{ProxyCell(c, pl)}</td></tr>\n");
         }
         h.Append("</table></div>\n");
         if (r.Proxy is { Enabled: true } p)

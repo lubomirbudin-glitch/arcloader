@@ -791,8 +791,11 @@ public sealed class OffloadJob
             return report;
         }
         Update(s => s with { Phase = JobPhase.Proxies, ClipCount = entries.Count });
+        // 0.5.1: _PROXY mirrors the card's folders. An append keeps the layout of the backup it goes into (an older flat
+        // one stays flat — its proxies are never moved) and never takes a name a proxy there already has.
+        var tree = plan.Mode == PlanMode.Full ? ProxyTree.Mirror : ProxyPaths.Of(cardPaths);
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (plan.Mode == PlanMode.Append) usedNames.UnionWith(ExistingProxyNames(cardPaths));
+        if (plan.Mode != PlanMode.Full) usedNames.UnionWith(ProxyPaths.Existing(cardPaths));
         for (int i = 0; i < entries.Count; i++)
         {
             if (IsCancelled || !Engine.WaitWhilePaused()) break;
@@ -819,9 +822,7 @@ public sealed class OffloadJob
                 Update(s => s with { ProxiesFailed = s.ProxiesFailed + 1 });
                 continue;
             }
-            var name = clip.Name;
-            for (int n = 2; !usedNames.Add(name); n++) name = $"{clip.Name}_{n}";
-            var rel = Layout.ProxyDirName + "/" + name + ".mov";
+            var (rel, name) = ProxyPaths.Pick(clip, tree, usedNames);
             var sw = Stopwatch.StartNew();
             try
             {
@@ -855,7 +856,8 @@ public sealed class OffloadJob
                 if (Config.Proxy.ExtraFolder is string extra)
                 {
                     // The user's proxy folder: also never fails the proxy (the disk may have been disconnected).
-                    var (_, error) = ProxyCopy.ToExtraFolder(Layout.Join(cardPaths[d], rel), extra, plan.Date, plan.CardName, name + ".mov");
+                    var (_, error) = ProxyCopy.ToExtraFolder(Layout.Join(cardPaths[d], rel), extra, plan.Date, plan.CardName,
+                        rel[(Layout.ProxyDirName.Length + 1)..]);   // the same folders as in _PROXY
                     if (error != null)
                     {
                         var note = $"kopie do {extra} selhala: {error}";
@@ -916,25 +918,6 @@ public sealed class OffloadJob
             if (!isCancelled()) log?.Invoke($"thumbnails {clip.Name}: {e.Message}");
             return [];
         }
-    }
-
-    /// The proxies earlier generations rendered: a new clip of the same name becomes "_2" in an append (spec 2.2).
-    static List<string> ExistingProxyNames(IReadOnlyList<string> cardPaths)
-    {
-        var names = new List<string>();
-        foreach (var p in cardPaths)
-        {
-            var dir = Path.Combine(p, Layout.ProxyDirName);
-            try
-            {
-                if (Directory.Exists(dir)) names.AddRange(Directory.EnumerateFiles(dir, "*.mov").Select(f => Path.GetFileNameWithoutExtension(f)));
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A destination that went away: nothing is rendered or copied there now either.
-            }
-        }
-        return names;
     }
 
     /// PDF copy of the report on every destination. Rendered once, then copied; a failure here never fails the offload.

@@ -707,7 +707,11 @@ public class AppendEngineTests
         Assert.Equal(whole, File.ReadAllBytes(list));
     }
 
-    // Spec 2.2: an existing proxy is never overwritten; a new clip of the same name gets "_2".
+    static OffloadOptions ProxyOptions() =>
+        new() { ChunkSize = 1 << 20, BufferCount = 4, AllowSameDevice = true, AllowSourceVolume = true, ProxyEncoder = "libx264" };
+
+    // Spec 2.2: an existing proxy is never overwritten. 0.5.1: _PROXY mirrors the card's folders, so a new clip of the
+    // same name in another folder keeps its name; one in the same folder gets "_2".
     [FfmpegFact]
     public void Proxies_ExistingNeverOverwritten()
     {
@@ -715,11 +719,48 @@ public class AppendEngineTests
         var card = dir.Sub("A001");
         TestMedia.MakeClip(Path.Combine(card, "CLIP1", "C0001.MP4"), seconds: 1);
         var history = dir.Sub("appdata");
-        var options = new OffloadOptions { ChunkSize = 1 << 20, BufferCount = 4, AllowSameDevice = true, AllowSourceVolume = true, ProxyEncoder = "libx264" };
+        var options = ProxyOptions();
         var proxy = new ProxySettings { Enabled = true, Height = 360 };
         var full = new OffloadJob(new JobConfig(card, [dir.Sub("d1")]) { Date = "2026-10-06", Proxy = proxy, HistoryFolder = history }, options);
         full.Run();
         var cardPath = full.Plan!.CardPaths[0];
+        var first = File.ReadAllBytes(Path.Combine(cardPath, "_PROXY", "CLIP1", "C0001.mov"));
+        TestMedia.MakeClip(Path.Combine(card, "CLIP2", "C0001.MP4"), seconds: 1, timecode: "02:00:00:00");
+        // A proxy of the same name already in the new clip's folder (put there by hand): never overwritten either.
+        TestFs.WriteRandom(Path.Combine(cardPath, "_PROXY", "CLIP3", "C0002.mov"), 100, 5);
+        TestMedia.MakeClip(Path.Combine(card, "CLIP3", "C0002.MP4"), seconds: 1, timecode: "03:00:00:00");
+
+        var append = new OffloadJob(new JobConfig(card, []) { Proxy = proxy, HistoryFolder = history, AppendInto = full.Plan.CardPaths }, options);
+        var report = append.Run();
+
+        Assert.Equal(JobPhase.Done, append.Status().Phase);
+        Assert.Equal(first, File.ReadAllBytes(Path.Combine(cardPath, "_PROXY", "CLIP1", "C0001.mov")));
+        Assert.Equal(["_PROXY/CLIP2/C0001.mov", "_PROXY/CLIP3/C0002_2.mov"], report!.Clips.Select(c => c.ProxyPath));
+        Assert.Null(report.Clips[0].ProxyNote);
+        Assert.Equal("Proxy přejmenována na C0002_2 (shoda jmen) — přelinkujte ji ručně.", report.Clips[1].ProxyNote);
+        Assert.Equal(100, new FileInfo(Path.Combine(cardPath, "_PROXY", "CLIP3", "C0002.mov")).Length);
+        Assert.True(File.Exists(Path.Combine(cardPath, "_REPORT", "A001_report_0002.html")));
+    }
+
+    // 0.5.1: a backup made with flat _PROXY (Windows 0.5.0 and older, the Mac) stays flat — an append never moves the
+    // proxies there and puts its own beside them with the old rule ("_2" and the note).
+    [FfmpegFact]
+    public void Proxies_OldFlatBackup_StaysFlat()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("A001");
+        TestMedia.MakeClip(Path.Combine(card, "CLIP1", "C0001.MP4"), seconds: 1);
+        var history = dir.Sub("appdata");
+        var options = ProxyOptions();
+        var proxy = new ProxySettings { Enabled = true, Height = 360 };
+        var full = new OffloadJob(new JobConfig(card, [dir.Sub("d1")]) { Date = "2026-10-06", Proxy = proxy, HistoryFolder = history }, options);
+        full.Run();
+        var cardPath = full.Plan!.CardPaths[0];
+        // Make it look like 0.5.0 made it: the proxy at the top of _PROXY, and the report saying so.
+        File.Move(Path.Combine(cardPath, "_PROXY", "CLIP1", "C0001.mov"), Path.Combine(cardPath, "_PROXY", "C0001.mov"));
+        Directory.Delete(Path.Combine(cardPath, "_PROXY", "CLIP1"));
+        var json = Path.Combine(cardPath, "_REPORT", "offload_report.json");
+        File.WriteAllText(json, File.ReadAllText(json).Replace("\"_PROXY/CLIP1/C0001.mov\"", "\"_PROXY/C0001.mov\""));
         var first = File.ReadAllBytes(Path.Combine(cardPath, "_PROXY", "C0001.mov"));
         TestMedia.MakeClip(Path.Combine(card, "CLIP2", "C0001.MP4"), seconds: 1, timecode: "02:00:00:00");
 
@@ -730,6 +771,6 @@ public class AppendEngineTests
         Assert.Equal(first, File.ReadAllBytes(Path.Combine(cardPath, "_PROXY", "C0001.mov")));
         Assert.Equal("_PROXY/C0001_2.mov", Assert.Single(report!.Clips).ProxyPath);
         Assert.Equal("Proxy přejmenována na C0001_2 (shoda jmen) — přelinkujte ji ručně.", report.Clips[0].ProxyNote);
-        Assert.True(File.Exists(Path.Combine(cardPath, "_REPORT", "A001_report_0002.html")));
+        Assert.False(Directory.Exists(Path.Combine(cardPath, "_PROXY", "CLIP2")));
     }
 }
