@@ -267,7 +267,7 @@ public class ContentCheckTests
     static Clip VideoClip(string rel) => new() { Name = Path.GetFileNameWithoutExtension(rel), Path = rel, Format = ClipFormat.Video, Segments = [rel], Bytes = 1 };
 
     /// ProRes: the encoder is not probed, the fake below only ever sees the render itself.
-    static ProxySettings FakeSettings => new() { Enabled = true, Height = 180, Codec = ProxyCodec.ProresProxy, BurnFilename = false, BurnTimecode = false, Audio = false };
+    static ProxySettings FakeSettings => new() { Enabled = true, Height = 180, Codec = ProxyCodec.ProresProxy, BurnFilename = false, BurnTimecode = false, Audio = false, HardwareDecode = true };
 
     /// A stand-in for ffmpeg: with -hwaccel it runs `hw`, without it `sw` (cmd labels below).
     static ExternalTools Fake(string dir, string hw, string sw)

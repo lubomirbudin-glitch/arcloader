@@ -223,6 +223,9 @@ public sealed class ProxySettings
     /// Blackmagic RAW Film Gen 4 decoded as Gen 5, so the Gen 5 LUT fits (spec 4.2) — off by default until a Gen 4
     /// sample confirms it (R26); absent while off.
     [JsonPropertyName("brawGen4ToGen5"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool BrawGen4ToGen5 { get; set; }
+    /// H.264/HEVC sources decoded on the GPU (`-hwaccel auto`) — off by default (since 2026-10-09): on the Mac, hardware decoding
+    /// returned green frames for some clips without any error. Encoding stays on the GPU (NVENC/QSV/AMF). Absent while off.
+    [JsonPropertyName("hardwareDecode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool HardwareDecode { get; set; }
     /// Own LUT rules (spec 4.2), top one first — used only in Auto mode, before the camera is recognised. Rules of a newer
     /// version stay in their place (ruling I3).
     [JsonIgnore] public List<LutRule> LutRules { get; set; } = [];

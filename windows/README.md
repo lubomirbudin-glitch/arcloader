@@ -429,6 +429,13 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
       kopii; `offload copy … --primary 2` → report „během proxy“ u cíle 2; `--primary 3` se dvěma cíli → česká chyba „cílů je jen 2“ a kód 1, nic se nekopíruje; síťový cíl (NAS) → „síťový cíl — ověřeno
       zpětným čtením“
 
+Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na vývojovém PC nejsou — testy jen s náhradami):
+
+- [ ] 59. **Proxy bez hardwarového dekódování:** karta s H.264/HEVC 4K → proxy bez zeleného snímku (kontrola
+      `ffprobe -f lavfi -i "movie=<proxy>,signalstats"` — žádný snímek s UAVG i VAVG u nuly); Nastavení → Proxy
+      „Hardwarové dekódování (experimentální)“ zapnout → log ffmpeg má `-hwaccel auto`, proxy dál bez zelených snímků;
+      `offload … --proxy --hw-decode` totéž.
+
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
 ## Použití
@@ -453,6 +460,7 @@ offload bench --hash md5                                    # rychlost MD5 proti
 offload E:\ --project "Film X"                              # nastavení projektu z aplikace; volby z příkazové řádky mají přednost
 offload E:\ -d D:\Zaloha --proxy --lut-rule camera=FX6:sony-slog3-sgamut3cine --lut-rule "folder=A00*/*:C:\luts\show.cube"
 offload E:\ -d D:\Zaloha --proxy --braw-gen5                 # BRAW Film Gen 4 jako Gen 5 (neověřeno, čeká vzorek Gen 4)
+offload E:\ -d D:\Zaloha --proxy --hw-decode                 # H.264/HEVC dekóduje grafická karta (experimentální)
 offload E:\ -d D:\Zaloha --ntfy https://ntfy.sh/muj-tajny-kanal   # výsledek na telefon (jen název karty, výsledek, počty)
 ```
 
@@ -496,6 +504,12 @@ LUT nepoužije.
 souboru; když už tam soubor je, uloží se jako `_2`, `_3`… — nic se nepřepíše).
 Neexistující složka zastaví start chybou (exit 1); když složka zmizí během úlohy (odpojený disk), proxy zůstanou na cílech
 a u klipu je v reportu poznámka „kopie do … selhala“.
+
+`--hw-decode` (2026-10-09, `proxy.hardwareDecode`, v GUI Nastavení → Proxy „Hardwarové dekódování (experimentální)“):
+originály H.264/HEVC dekóduje pro proxy grafická karta (`-hwaccel auto`). Výchozí je softwarové dekódování — Mac dostal
+z hardwarového dekodéru zelené snímky bez chyby; na tomto PC (i5-14400F, RTX 3070, ffmpeg 8.1, `-hwaccel auto` = DXVA2)
+byly všechny snímky v pořádku a 4K H.264 bylo softwarově rychlejší (3,3–4,4 s proti 5,7–6,2 s), 4K HEVC hardwarově
+(3,6 s proti 5,1–8,4 s). Kódování (NVENC/QSV/AMF) zůstává hardwarové; selhání s hardwarovým dekódováním se zkusí znovu softwarově.
 
 `--proxy-always` (od 0.5.1): proxy i pro klip, jehož originál je lehčí — ve výchozím stavu (`proxy.skipLighterSources`, jen u proxy
 H.264/HEVC — s `--proxy-codec prores…` se proxy renderuje vždy — a jen když se nepoužije LUT ani ořez) originál H.264/HEVC, který není větší než proxy a nemá vyšší datový tok, proxy nedostane („bez proxy — originál je lehčí

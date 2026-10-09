@@ -9,8 +9,9 @@ public class ProxyWatchdogTests
 {
     static Clip VideoClip(string rel) => new() { Name = Path.GetFileNameWithoutExtension(rel), Path = rel, Format = ClipFormat.Video, Segments = [rel], Bytes = 1 };
 
-    /// ProRes: the encoder is not probed, so the fake ffmpeg below only ever sees the render itself.
-    static ProxySettings FakeSettings => new() { Enabled = true, Height = 180, Codec = ProxyCodec.ProresProxy, BurnFilename = false, BurnTimecode = false, Audio = false };
+    /// ProRes: the encoder is not probed, so the fake ffmpeg below only ever sees the render itself. Hardware decoding is
+    /// switched on (proxy.hardwareDecode, off by default since 2026-10-09): these tests are about its software retry.
+    static ProxySettings FakeSettings => new() { Enabled = true, Height = 180, Codec = ProxyCodec.ProresProxy, BurnFilename = false, BurnTimecode = false, Audio = false, HardwareDecode = true };
 
     [Theory]
     [InlineData("h264", true)]

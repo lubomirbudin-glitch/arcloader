@@ -767,6 +767,10 @@ stejného jména v různých složkách se tak nepřejmenují a střižna je př
       vždy — ProRes volíte kvůli plynulému střihu. Originály ProRes, DNx, MJPEG, RAW a originály větší než proxy (např. 4K,
       i s nízkým tokem) dostanou proxy vždy. Vypnuto = proxy pro každý klip (v příkazové řádce
       <code>--proxy-always</code>).</td></tr>
+  <tr><td><b class="ui">Hardwarové dekódování (experimentální)</b></td><td>vypnuto</td><td>Originály H.264 a H.265 dekóduje
+      grafická karta. Ve výchozím stavu je dekóduje procesor: na Macu hardwarový dekodér občas vrátil zelený snímek bez
+      jakékoli chyby. Kódování proxy běží na grafické kartě (NVIDIA, Intel, AMD) vždy. V příkazové řádce
+      <code>--hw-decode</code>.</td></tr>
   <tr><td><b class="ui">Kopírovat proxy na všechny cíle</b></td><td>zapnuto</td><td>Proxy se renderuje jednou na první cíl a pak se
       zkopíruje do <code>_PROXY</code> na ostatních cílech. Vypnuto = proxy jen na jednom cíli.</td></tr>
   <tr><td><b class="ui">Kopírovat proxy i do složky</b></td><td>nevybráno</td><td>Další kopie proxy do vlastní složky — viz níže.</td></tr>
@@ -1418,6 +1422,7 @@ offload luts                                          # seznam vestavěných LUT
   <tr><td class="k"><code>--no-day-report</code></td><td>po kopii nevytvářet denní report</td></tr>
   <tr><td class="k"><code>--project</code></td><td>nastavení projektu uloženého v aplikaci jako výchozí hodnoty; co napíšete na příkazovou řádku, má přednost (<code>-d</code> nahradí cíle projektu); neznámý projekt = chyba</td></tr>
   <tr><td class="k"><code>--lut-rule</code></td><td>vlastní pravidlo LUTu <code>&lt;camera|serial|reel|folder&gt;=&lt;hodnota&gt;:&lt;id|none|cesta.cube&gt;</code>, opakovatelné, pořadí = priorita (jen s <code>--lut auto</code>)</td></tr>
+  <tr><td class="k"><code>--hw-decode</code></td><td>originály H.264/H.265 pro proxy dekóduje grafická karta (experimentální; výchozí je procesor)</td></tr>
   <tr><td class="k"><code>--braw-gen5</code></td><td>Blackmagic RAW Film Gen 4 dekódovat jako Gen 5 (neověřeno, čeká vzorek Gen 4)</td></tr>
   <tr><td class="k"><code>--ntfy</code></td><td>výsledek na telefon přes ntfy, např. <code>https://ntfy.sh/muj-tajny-kanal</code> (i odmítnutí před kopií; po konci čeká nejvýš 11 s)</td></tr>
 </table>
@@ -1507,7 +1512,7 @@ upřesní) a <code>--no-history</code> (potom je <code>--into</code> povinné). 
   <tr><td><span class="txt-bad">Složka pro proxy není dostupná: …</span></td><td>Připojte disk se složkou, nebo volbu zrušte křížkem u <b class="ui">Kopírovat proxy i do složky</b>.</td></tr>
   <tr><td><span class="txt-warn">ffmpeg/ffprobe nenalezen — náhledy a proxy se přeskočí, kopie a ověření proběhnou.</span></td><td>Chybí přibalený ffmpeg nebo ffprobe ve složce <code>bin</code>. Rozbalte ZIP znovu celý, nebo v <b class="ui">Nastavení → Dekodéry RAW</b> vyberte cestu k nástroji.</td></tr>
   <tr><td>Proxy se renderují pomalu</td><td>Bez grafické karty NVIDIA (Intel a AMD se zkoušejí, ale nejsou ověřené) se H.264/H.265 kódují procesorem. ProRes se kóduje procesorem vždy. Pomůže nižší <b class="ui">Výška</b> (např. 720p). Kopie další karty mezitím běží.</td></tr>
-  <tr><td>Poznámka „ffmpeg se zasekl (60 s bez nového snímku) …; proxy nevznikla“</td><td>ffmpeg minutu nevydal žádný snímek; Offload ho ukončil a jednou to zkusil bez hardwarového dekódování. Úloha jede dál, ostatní klipy se zpracují. Klip zkontrolujte (může být poškozený).</td></tr>
+  <tr><td>Poznámka „ffmpeg se zasekl (60 s bez nového snímku) …; proxy nevznikla“</td><td>ffmpeg minutu nevydal žádný snímek; Offload ho ukončil (se zapnutým hardwarovým dekódováním to ještě jednou zkusil bez něj). Úloha jede dál, ostatní klipy se zpracují. Klip zkontrolujte (může být poškozený).</td></tr>
   <tr><td>„Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW …“</td><td>Nainstalujte zdarma Blackmagic RAW Player (nebo DaVinci Resolve). Pozor: řádek <b>braw-decode</b> v Nastavení → Dekodéry RAW je zelený i bez knihovny — stav BRAW poznáte z poznámky u klipu v reportu.</td></tr>
   <tr><td>„Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna … starší než kamera …“</td><td>Nainstalujte aktuální Blackmagic RAW Player. Pokud to nepomůže, klip může být poškozený.</td></tr>
   <tr><td>„Blackmagic RAW: knihovnu … nelze použít …“</td><td>Nainstalujte aktuální Blackmagic RAW Player.</td></tr>

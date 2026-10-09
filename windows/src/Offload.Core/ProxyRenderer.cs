@@ -197,8 +197,9 @@ public sealed class ProxyRenderer : IDisposable
             ? Timecode.Add(info.Timecode!, p.Frame, fps)
             : $"#{p.Frame}";
 
-    /// Hardware decoding only where it helps and is safe: H.264 and HEVC. Everything else (FFV1, ProRes, MJPEG, ...)
-    /// decodes in software: ffmpeg 8.1 with -hwaccel auto hung forever on FFV1 (Vulkan VK_ERROR_DEVICE_LOST).
+    /// Hardware decoding (when proxy.hardwareDecode is on) only where it helps and is safe: H.264 and HEVC. Everything
+    /// else (FFV1, ProRes, MJPEG, ...) decodes in software: ffmpeg 8.1 with -hwaccel auto hung forever on FFV1 (Vulkan
+    /// VK_ERROR_DEVICE_LOST).
     internal static bool UseHardwareDecoding(string? codec) =>
         codec != null && (codec.StartsWith("h264", StringComparison.OrdinalIgnoreCase) || codec.StartsWith("hevc", StringComparison.OrdinalIgnoreCase));
 
@@ -385,7 +386,8 @@ public sealed class ProxyRenderer : IDisposable
     {
         var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, Msg.FfmpegNotFound);
         var lutFile = PrepareLut(lut);
-        bool hwaccel = clip.Format == ClipFormat.Video && UseHardwareDecoding(info.Codec);
+        // Hardware decoding only when switched on (proxy.hardwareDecode, off by default: green frames on the Mac).
+        bool hwaccel = Settings.HardwareDecode && clip.Format == ClipFormat.Video && UseHardwareDecoding(info.Codec);
         Exception first;
         try
         {
