@@ -449,20 +449,67 @@ internal sealed class ArriBackend : IRawBackend
         return (args, json, json != null);
     }
 
-    public ClipInfo Probe(string path, ExternalTools tools, string workDir)
+    /// Where the note about a full metadata export goes (the job's log).
+    internal Action<string>? Log { get; init; }
+
+    /// How long the one-frame metadata export may take: it reads a frame, not the clip; a hung tool must never hang the job.
+    internal TimeSpan ExportTimeout { get; init; } = TimeSpan.FromSeconds(120);
+
+    public ClipInfo Probe(string path, ExternalTools tools, string workDir) => Probe(path, tools, workDir, container: null);
+
+    /// The clip's metadata from `art-cmd export` of its first frame only (`--duration 1`): without it art-cmd writes the
+    /// metadata of every frame, i.e. reads the whole clip — minutes per 100 GB clip (Mac, card A_0009: analysis over 15
+    /// min). An art-cmd that refuses the option gets the full export, as before. The frame count does not depend on what
+    /// a one-frame export reports as `clipDuration`: an .ari sequence counts its files, an MXF takes ffprobe's (`container`).
+    public ClipInfo Probe(string path, ExternalTools tools, string workDir, ClipInfo? container)
     {
         var dir = RawBackends.FreshDir(workDir, "art-meta");
         try
         {
             var json = Path.Combine(dir, "meta.json");
-            // art-cmd writes art.log into its working directory — never let that be the card or a destination.
-            ToolProcess.Run(tools.ArtCmd!, ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look"], dir);
-            return ParseMetadata(File.ReadAllText(json));
+            List<string> args = ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look"];
+            string text;
+            try
+            {
+                // art-cmd writes art.log into its working directory — never let that be the card or a destination.
+                ToolProcess.Run(tools.ArtCmd!, [.. args, "--duration", "1"], dir, ExportTimeout);
+                text = File.ReadAllText(json);
+            }
+            catch (Exception e) when (e is ToolError { Status: not -1 } or FileNotFoundException)
+            {
+                // Refused (not timed out): the whole clip's metadata, slow but known to work.
+                Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: art-cmd export --duration 1: {e.Message} — exporting the metadata of every frame");
+                NativeIO.Delete(json);
+                ToolProcess.Run(tools.ArtCmd!, args, dir);
+                text = File.ReadAllText(json);
+            }
+            var c = ParseMetadata(text);
+            if (c.Frames is not > 1 && CountFrames(path, container, c.FrameRate) is int frames)
+            {
+                c.Frames = frames;
+                if (Timecode.Fps(c.FrameRate) is double fps) c.Duration = frames / fps;
+            }
+            return c;
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+            RawBackends.DeleteDir(dir);
         }
+    }
+
+    /// The clip's frame count without art-cmd: the .ari files of a sequence (its path is the folder), else ffprobe's frames
+    /// of the MXF, else its duration × the ARRI frame rate; null when none is known.
+    internal static int? CountFrames(string path, ClipInfo? container, string? frameRate)
+    {
+        if (Directory.Exists(path))
+        {
+            int n = Directory.EnumerateFiles(path, "*.ari").Count();
+            return n > 0 ? n : null;
+        }
+        if (container?.Frames is int f && f > 0) return f;
+        if (container?.Duration is double d && d > 0 && Timecode.Fps(frameRate ?? container.FrameRate) is double fps)
+            return (int)Math.Round(d * fps, MidpointRounding.AwayFromZero);
+        return null;
     }
 
     public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)

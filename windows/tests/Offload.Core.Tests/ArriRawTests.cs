@@ -256,4 +256,165 @@ public class ArriRawTests
         Assert.Null(IntermediateProgress.ExpectedBytes(new ClipInfo { Width = 4608, Height = 3164 }, s));
         Assert.Null(IntermediateProgress.ExpectedBytes(new ClipInfo { Frames = 24 }, s));
     }
+
+    // --- 5. Analysis: art-cmd exports one frame's metadata, ffprobe has a time limit, each tool looks once ---
+
+    const string OneFrameMeta = """
+        {"clipBasedMetadata":{"cameraModel":"ALEXA 35","videoCodec":"ARRIRAW","storedSize":{"width":4608,"height":3164},
+          "clipDuration":1,"sceneColorEncodingTransferCurve":"LogC4","lensSqueeze":2000,
+          "nativePictureEssenceDescriptor":{"file":{"sampleRate":"24/1"}}},
+         "frameBasedMetadata":{"frames":[{"timecode":"10:00:00:00"}]}}
+        """;
+
+    /// A stand-in for ffprobe: logs its call into ffprobe.txt, then prints probe.json beside it, or hangs.
+    static string FakeFfprobe(string dir, bool hang = false)
+    {
+        File.WriteAllText(Path.Combine(dir, "probe.json"), """
+            {"streams":[{"index":0,"codec_type":"video","codec_name":"unknown","r_frame_rate":"24/1","avg_frame_rate":"24/1","duration":"10.000000"}],
+             "format":{"format_name":"mxf","duration":"10.000000"}}
+            """);
+        var path = Path.Combine(dir, "ffprobe.cmd");
+        var body = hang ? "ping -n 60 127.0.0.1 >nul" : "type \"%~dp0probe.json\"";
+        File.WriteAllText(path, $"""
+            @echo off
+            echo call>>"%~dp0ffprobe.txt"
+            {body}
+            exit /b 0
+
+            """.Replace("\n", "\r\n"));
+        return path;
+    }
+
+    static (string Card, ExternalTools Tools) AnalysisSetup(TempDir dir, string meta, string export = "Meta", bool ffprobeHangs = false, bool artCmd = true)
+    {
+        var card = dir.Sub("card");
+        File.WriteAllText(Path.Combine(card, "A001C001.mxf"), "not really ARRIRAW");
+        File.WriteAllText(Path.Combine(dir.Path, "meta.json"), meta);
+        var tools = new ExternalTools
+        {
+            ArtCmd = artCmd ? FakeArtCmd(dir.Path, export: export) : null,
+            Ffmpeg = FakeFfmpeg(dir.Path),
+            Ffprobe = FakeFfprobe(dir.Path, ffprobeHangs),
+            NoSearch = true,
+        }.Resolved();
+        return (card, tools);
+    }
+
+    static Clip Mxf => new() { Name = "A001C001", Path = "A001C001.mxf", Format = ClipFormat.Video, Segments = ["A001C001.mxf"], Bytes = 1 };
+
+    static int CallCount(string dir, string file) => File.Exists(Path.Combine(dir, file)) ? File.ReadAllLines(Path.Combine(dir, file)).Count(l => l == "call") : 0;
+
+    [Fact]
+    public void Analysis_OneFrameExport_FramesFromFfprobe_EachToolOnce()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta);   // worst case: the one-frame export says clipDuration 1
+        using var r = new ProxyRenderer(Settings, tools);
+
+        var (clip, info) = r.Analyze(Mxf, card);
+
+        Assert.Equal(ClipFormat.Arriraw, clip.Format);
+        Assert.Equal((4608, 3164), (info.Width, info.Height));
+        Assert.Equal("24", info.FrameRate);
+        Assert.Equal(240, info.Frames);
+        Assert.Equal(10.0, info.Duration);
+        Assert.Equal("10:00:00:00", info.Timecode);
+        Assert.Equal("ALEXA 35", info.Camera);
+        Assert.Equal("LogC4", info.LogEncoding);
+        Assert.Equal(2.0, info.Squeeze);
+        var export = Assert.Single(Calls(dir.Path));
+        Assert.Equal("export", export[0]);
+        int at = export.IndexOf("--duration");
+        Assert.True(at > 0, string.Join(" ", export));
+        Assert.Equal("1", export[at + 1]);
+        Assert.Equal(1, CallCount(dir.Path, "ffprobe.txt"));
+    }
+
+    [Fact]
+    public void Analysis_ClipDurationOfTheWholeClip_Kept()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta.Replace("\"clipDuration\":1", "\"clipDuration\":241"));
+        using var r = new ProxyRenderer(Settings, tools);
+        var (_, info) = r.Analyze(Mxf, card);
+        Assert.Equal(241, info.Frames);
+    }
+
+    [Fact]
+    public void Analysis_AriSequence_CountsItsFiles()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta);
+        var folder = Path.Combine(card, "A001C002");
+        Directory.CreateDirectory(folder);
+        for (int i = 0; i < 5; i++) File.WriteAllText(Path.Combine(folder, $"A001C002.{i:0000000}.ari"), "x");
+        using var r = new ProxyRenderer(Settings, tools);
+        var seq = new Clip { Name = "A001C002", Path = "A001C002", Format = ClipFormat.Arriraw, Segments = [@"A001C002\A001C002.0000000.ari"], Bytes = 1 };
+
+        var (clip, info) = r.Analyze(seq, card);
+
+        Assert.Same(seq, clip);
+        Assert.Equal(5, info.Frames);
+        Assert.Equal(0, CallCount(dir.Path, "ffprobe.txt"));
+        Assert.Contains("--duration", Assert.Single(Calls(dir.Path)));
+    }
+
+    [Fact]
+    public void Analysis_DurationRefused_FullExport_Logged()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta.Replace("\"clipDuration\":1", "\"clipDuration\":240"), export: "RejectDuration");
+        var log = new List<string>();
+        using var r = new ProxyRenderer(Settings, tools) { Log = l => { lock (log) log.Add(l); } };
+
+        var (clip, info) = r.Analyze(Mxf, card);
+
+        Assert.Equal(ClipFormat.Arriraw, clip.Format);
+        Assert.Equal(240, info.Frames);
+        var calls = Calls(dir.Path);
+        Assert.Equal(2, calls.Count);
+        Assert.Contains("--duration", calls[0]);
+        Assert.DoesNotContain("--duration", calls[1]);
+        lock (log) Assert.Contains(log, l => l.Contains("art-cmd export --duration 1") && l.Contains("every frame"));
+    }
+
+    [Fact]
+    public void Analysis_FfprobeHangsOnMxf_TimeLimit_ThenTheArriTool()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta.Replace("\"clipDuration\":1", "\"clipDuration\":240"), ffprobeHangs: true);
+        using var r = new ProxyRenderer(Settings, tools) { MxfProbeTimeout = TimeSpan.FromSeconds(1) };
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        var (clip, info) = r.Analyze(Mxf, card);
+
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
+        Assert.Equal(ClipFormat.Arriraw, clip.Format);
+        Assert.Equal(240, info.Frames);
+    }
+
+    [Fact]
+    public void Analysis_FfprobeHangsOnMxf_WithoutArtCmd_TimeoutIsTheError()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta, ffprobeHangs: true, artCmd: false);
+        using var r = new ProxyRenderer(Settings, tools) { MxfProbeTimeout = TimeSpan.FromSeconds(1) };
+        var e = Assert.Throws<ToolError>(() => r.Analyze(Mxf, card));
+        Assert.Contains("neodpověděl do 1 s", e.Message);
+    }
+
+    [Fact]
+    public void Analysis_DecodableMxf_FfprobeOnly()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta);
+        File.WriteAllText(Path.Combine(dir.Path, "probe.json"), """
+            {"streams":[{"codec_type":"video","codec_name":"prores","width":3840,"height":2160,"r_frame_rate":"24/1","avg_frame_rate":"24/1","nb_frames":"240","duration":"10.0"}],"format":{"duration":"10.0"}}
+            """);
+        using var r = new ProxyRenderer(Settings, tools);
+        var (clip, info) = r.Analyze(Mxf, card);
+        Assert.Equal(ClipFormat.Video, clip.Format);
+        Assert.Equal(3840, info.Width);
+        Assert.False(File.Exists(Path.Combine(dir.Path, "calls.txt")));   // art-cmd never asked
+    }
 }

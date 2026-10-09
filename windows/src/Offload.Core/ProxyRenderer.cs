@@ -91,6 +91,7 @@ public sealed class ProxyRenderer : IDisposable
         // Spec 4.2: Film Gen 4 BRAW decoded as Gen 5 (braw-decode --gen5) when switched on; its warnings go to the job's
         // log (Log is read when one is written, after init).
         if (settings.BrawGen4ToGen5) backends[ClipFormat.Braw] = new BrawBackend(gen5: true) { Log = m => Log?.Invoke(m) };
+        backends[ClipFormat.Arriraw] = new ArriBackend { Log = m => Log?.Invoke(m) };   // a full metadata export is logged
         workDir = Path.Combine(Path.GetTempPath(), "offload-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(workDir);
         try
@@ -130,13 +131,44 @@ public sealed class ProxyRenderer : IDisposable
         };
     }
 
-    public ClipInfo Probe(Clip clip, string cardPath)
+    /// How long ffprobe may take on an MXF during the analysis: an ARRIRAW MXF (100+ GB) must never hold it — after the
+    /// limit the ARRI tool is asked instead (Analyze). Tests shorten it.
+    internal TimeSpan MxfProbeTimeout { get; init; } = TimeSpan.FromSeconds(60);
+
+    static bool IsMxf(Clip clip) => clip.Path.EndsWith(".mxf", StringComparison.OrdinalIgnoreCase);
+
+    /// The clip analysis (stage 2): ffprobe — an MXF with a time limit — and, for an MXF ffmpeg cannot decode, the ARRI
+    /// tool, which then reclassifies it as ARRIRAW. Each tool looks at a clip once (ARRI's frame count comes from
+    /// ffprobe's answer, not from a second probe). The clip may come back reclassified; a video clip whose info has no
+    /// width is one ffmpeg cannot decode.
+    public (Clip Clip, ClipInfo Info) Analyze(Clip clip, string cardPath)
+    {
+        if (clip.Format != ClipFormat.Video || !IsMxf(clip)) return (clip, Probe(clip, cardPath));
+        ClipInfo? probed = null;
+        ToolError? failed = null;
+        try
+        {
+            probed = Probe(clip, cardPath, MxfProbeTimeout);
+        }
+        catch (ToolError e) when (e.Status == -1 && backends[ClipFormat.Arriraw].IsAvailable(Tools))
+        {
+            failed = e;   // timed out (or could not run): perhaps ARRIRAW — the ARRI tool decides
+        }
+        if (probed?.Width != null) return (clip, probed);
+        if (ReclassifyUndecodableMxf(clip, cardPath, probed) is { } arri) return arri;
+        if (failed != null) throw failed;
+        return (clip, probed!);
+    }
+
+    public ClipInfo Probe(Clip clip, string cardPath) => Probe(clip, cardPath, ffprobeTimeout: null);
+
+    ClipInfo Probe(Clip clip, string cardPath, TimeSpan? ffprobeTimeout)
     {
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
         {
             var ffprobe = Tools.Ffprobe ?? throw new ToolError("ffprobe", -1, Msg.FfprobeNotFound);
-            var info = FFProbe.Probe(ffprobe, path);
+            var info = ffprobeTimeout is TimeSpan limit ? FFProbe.Probe(ffprobe, path, limit) : FFProbe.Probe(ffprobe, path);
             info.CameraSerial ??= SonyXml.Serial(path);   // Sony keeps it in the XML next to the clip (spec 4.2)
             return info;
         }
@@ -160,15 +192,17 @@ public sealed class ProxyRenderer : IDisposable
         }
     }
 
-    /// MXF is a container for many codecs; ARRIRAW/ARRICORE inside it only the ARRI tool can read.
-    public (Clip Clip, ClipInfo Info)? ReclassifyUndecodableMxf(Clip clip, string cardPath)
+    /// MXF is a container for many codecs; ARRIRAW/ARRICORE inside it only the ARRI tool can read. `container`: what
+    /// ffprobe said about the file (its duration gives the frame count), null when it did not answer.
+    public (Clip Clip, ClipInfo Info)? ReclassifyUndecodableMxf(Clip clip, string cardPath, ClipInfo? container = null)
     {
-        if (clip.Format != ClipFormat.Video || !clip.Path.EndsWith(".mxf", StringComparison.OrdinalIgnoreCase)) return null;
+        if (clip.Format != ClipFormat.Video || !IsMxf(clip)) return null;
         var arri = backends[ClipFormat.Arriraw];
         if (!arri.IsAvailable(Tools)) return null;
         try
         {
-            var info = arri.Probe(Layout.Join(cardPath, clip.Path), Tools, workDir);
+            var path = Layout.Join(cardPath, clip.Path);
+            var info = arri is ArriBackend a ? a.Probe(path, Tools, workDir, container) : arri.Probe(path, Tools, workDir);
             if (info.Width == null) return null;
             return (new Clip { Name = clip.Name, Path = clip.Path, Format = ClipFormat.Arriraw, Segments = clip.Segments, Bytes = clip.Bytes, IsCameraProxy = clip.IsCameraProxy }, info);
         }
