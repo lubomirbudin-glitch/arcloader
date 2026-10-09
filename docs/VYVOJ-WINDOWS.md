@@ -34,35 +34,38 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
   ověřeno ano/ne, kopie reportu na počítači). Zdroj dat: `history.json` + reporty `offload_report*.json` (z disků, nebo
   z lokální kopie `Offload reporty`, když disk už odešel). Uložit lokálně a volitelně na vybraný disk.
 
-- **Zjištění z ostrého nasazení Mac verze (2026-10-08/09) — prověřit a převzít na Windows** (Mac opravy v commitech
-  `138cdba`, `3a970b5`, `572f059`, podrobně v [VYVOJ-MAC.md](VYVOJ-MAC.md)):
-  1. **Zelené snímky v proxy.** Mac dekódoval H.264/HEVC hardwarově (VideoToolbox) a na Intelu dostal občas zelený
-     snímek bez jakékoli chyby — Mac hardwarové *de*kódování vypnul (kódování zůstává hardwarové; softwarové dekódování
-     4K H.264 bylo na i9 dokonce rychlejší: 3,2 s proti 7,4 s). Windows dekóduje H.264/HEVC s `-hwaccel auto`
-     (`ProxyRenderer.SourceFor`) — zkontrolovat proxy po snímcích (`signalstats`, U i V u nuly = zelená) a případně vypnout.
-  2. **ARRIRAW `--desqueeze` jen u anamorfních klipů** (`RawBackends.cs` ř. ~405 ho dává vždy): na 4.6K Open Gate
-     zpomalí art-cmd na polovinu (11,6 → 25,7 snímku/s bez něj) a u sférických objektivů nic nedělá.
-  3. **Priorita procesů proxy.** Mac pouštěl proxy s nízkou prioritou (QoS utility) a ARRIRAW 4.6K jel v aplikaci
-     ~1,4 snímku/s, stejné volání z terminálu ~12; teď user-initiated. Zkontrolovat prioritu procesu a I/O u ffmpeg
-     a art-cmd na Windows (BelowNormal / nízká I/O priorita by dekódování 570 MB/s brzdila stejně).
-  4. **Průběh během art-cmd.** Proxy z ARRIRAW ukazovaly celé dekódování 0 % (art-cmd průběh nehlásí, uživatel
-     myslel, že se to zaseklo). Mac odhaduje průběh z velikosti mezisouboru ProRes LT (0–80 %), ffmpeg zbytek.
-  5. **Analýza ARRIRAW trvá minuty na klip.** `art-cmd export` (`RawBackends.cs` ř. ~419) vypisuje metadata každého
-     snímku, takže nejspíš čte celý klip (karta 855 GB / 7 klipů: analýza přes 15 min). Zkusit `--duration 1`.
-  6. **ARRIRAW bez LUTu** — `--target-colorspace` spolu s `--embedded-look` art-cmd odmítne, skončí kódem 0 a nic
-     nezapíše (klip bez proxy). Na Macu opraveno v `3b43352`; Windows `RawBackends.cs` ř. ~381.
-  7. **Vestavěný LUT ARRI LogC4 → Rec.709 zvedá černou** — nejtmavší hodnota snímku 62 proti 23 s oficiálním LUTem
-     ARRI, obraz působí vybledle. Je to sdílený `shared/luts/generate.py` (tónová křivka) — opravit pro obě verze.
-     Mac mezitím umí vlastní soubor `~/Library/Application Support/Offload/luts/<id>.cube`, který vestavěný LUT nahradí
-     (např. oficiální LUT ARRI); Windows obdobně `%APPDATA%\Offload\luts\<id>.cube`.
-  8. **HTML report s klipy ARRI 4.6K** (tři náhledy, dlouhé názvy a cesty) se na Macu nevešel do okna a přetékal —
-     zkontrolovat stejný report na Windows v okně ~1300 px; PDF se na Macu navíc zmenší, když je širší než A4.
-- **Nové úkoly (zadání uživatele 2026-10-09, obě verze):**
-  - **automatické načítání:** externí disky se po připojení samy přidají do cílů, čtečky/karty do zdrojů
-    (nikdy ne kartu jako cíl ani systémový disk; odebraný cíl si zapamatovat);
-  - **kopie reportu i na počítači:** `Dokumenty\Offload reporty\<datum>\<karta>\` (`_REPORT` + `ascmhl`), obnovit
-    při každém přepisu reportu; selhání nesmí shodit úlohu — disky s materiálem se odevzdávají dál a report pak chybí;
-  - **zrychlit analýzu ARRIRAW** (bod 5).
+- **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzi 0.7.0 (body 3–6 v 0.7.1), viz níže.
+
+## 2026-10-09 — 0.7.0: zjištění z ostrého nasazení Mac verze
+
+Verze **0.7.0**. Převzaté body 1, 2, 7, 8 a nové úkoly z ostrého nasazení Mac verze (Mac commity `138cdba`, `3a970b5`,
+`572f059`, `3b43352`). Tři souběžné větve; testy pod sdíleným zámkem (souběžné sady shazovaly časové testy).
+
+- **1 – zelené snímky:** proxy H.264/HEVC se ve výchozím stavu dekódují softwarově, kódování zůstává hardwarové.
+  Měřeno na i5-14400F + RTX 3070 (DXVA2): 4K H.264 softwarově rychlejší (≈4 s proti ≈6 s), HEVC hardwarově rychlejší;
+  `signalstats` po snímcích 0 zelených (zelené byly jen na Intelu/VideoToolbox na Macu). Zapnout jde v Nastavení →
+  Proxy „Hardwarové dekódování (experimentální)“ (`proxy.hardwareDecode`), CLI `--hw-decode`.
+- **2 – ARRIRAW:** `--desqueeze` jen u anamorfních klipů (na 4.6K Open Gate až dvojnásobná rychlost art-cmd).
+- **3–6 (priorita procesů, průběh během art-cmd, rychlá analýza ARRIRAW, ARRIRAW bez LUTu)** jsou napsané a dokončují
+  se ve větvi `windows-mac-findings-raw` — přijdou ve verzi 0.7.1.
+- **7 – černá ve vestavěných LUTech:** tónová křivka sdílených LUTů (`shared/luts/generate.py`) má patu x²/(x+0,025):
+  šum kamery (6 clon pod šedou) 7 % → 3 %, 4 clony pod šedou 13 % → 8 %, šedá dál 0,42, světla beze změny; všech 11
+  `.cube` přegenerováno (platí i pro Mac). Pixel 62/255 teď 54; zbytek rozdílu proti 23 u LUTu ARRI je nejspíš jiný
+  rozsah vstupu ARRI souboru — ruční test se skutečným klipem.
+- **7 – vlastní LUT:** `%APPDATA%\Offload\luts\<id>.cube` nahradí vestavěný LUT se stejným id v aplikaci i CLI;
+  v seznamu „(vlastní soubor)“, v reportu cesta.
+- **8 – report ARRI 4.6K:** okno 1300 px v pořádku; v 1000 px se slévaly timecody pod náhledy a lámala slova v tabulce
+  cílů; v PDF byly useknuté sloupce TC, Audio, Velikost a Proxy — opraveno; stránka širší než A4 se před tiskem zmenší.
+- **PDF z Edge se zpožděním:** Edge 154 skončí s kódem 0 dřív, než PDF zapíše (znovu se spouští kvůli
+  `__COMPAT_LAYER`); Offload mu dává `--edge-skip-compat-layer-relaunch` a na hotové PDF čeká až 60 s.
+- **Automatické načtení disků:** připojený externí disk se sám přidá do Cílů, karta ve čtečce se sama zaškrtne
+  v Kartách. Jako cíl nikdy čtečka, vyměnitelné médium, interní/systémový disk ani disk se strukturou kamery nebo
+  klipy přímo v kořeni (SSD z kamery); klipy o složku a víc níž přidání nebrání (tak vypadá záloha) a disk s výstupem
+  Offloadu je vždy cíl. Odebraný disk si aplikace pamatuje (sériové číslo + kapacita); plný nebo jen pro čtení jen
+  s upozorněním; nic během Startu ani v demu. Per projekt.
+- **Kopie reportu i na počítači:** `_REPORT` a `ascmhl` každé karty (bez médií) do
+  `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu reportu; selhání jen poznámkou.
+  Nastavení → Report, CLI `--no-local-report`.
 
 ## 2026-10-08 — drobnosti po plánu 10
 
