@@ -62,7 +62,7 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   - **Ruční kontroly GUI z dorovnání 0.2.0** (aplikace se během vývoje nespouštěla; od 2026-10-08 běží ostře, ale tyhle
     případy se cíleně nezkoušely):
     - úkol 11: zdroj-složka bez „Vysunout kartu“; zrušení úlohy ve frontě → oranžové „Zrušeno“, bez zvuku Basso,
-    „Vyčistit hotové“; ⌘Q během kopie → Pokračovat / Ukončit, žádný `.offload-part`; odpojený cíl → „Disk není připojen“
+      „Vyčistit hotové“; ⌘Q během kopie → Pokračovat / Ukončit, žádný `.offload-part`; odpojený cíl → „Disk není připojen“
       do 5 s; chybějící LUT → červeně, start neaktivní; jiná karta v téže čtečce → bez tlačítka vysunutí;
     - úkol 17: ⌘U otevře okno Hardware, druhé ⌘U ho jen přenese dopředu; měření a Zastavit; název portu zůstane po
       restartu; měření neaktivní během kopie; ⌘Q během měření; „Čekám, až doběhne předchozí test…“; řetěz a oranžové
