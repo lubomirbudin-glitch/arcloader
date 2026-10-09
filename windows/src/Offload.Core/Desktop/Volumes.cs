@@ -6,7 +6,11 @@ namespace Offload.Core.Desktop;
 /// `Identity` (`CardIdentity`) tells two cards in the same slot apart. `Label`: the volume label as scanned (the
 /// default card name — the UI thread never reads it from the disk).
 public sealed record VolumeItem(string Name, string Path, long Total, long Free, string Format, bool LooksLikeCard, bool IsDestination,
-    string? Identity = null, string? Label = null);
+    string? Identity = null, string? Label = null)
+{
+    /// What the automatic choice of cards and destinations needs (AutoDrives), gathered by the scan; null in a fixture.
+    public DriveFacts? Facts { get; init; }
+}
 
 public static class Volumes
 {
@@ -44,6 +48,71 @@ public static class Volumes
         }
     }
 
+    /// Top-level folders of camera media the destination check knows besides Markers (ARRI, RED).
+    static readonly HashSet<string> DeepMarkers = new(Markers.Concat(["ARRI", "RDC"]), StringComparer.OrdinalIgnoreCase);
+
+    static readonly HashSet<string> OwnFolders = new([Layout.ReportDirName, Layout.ProxyDirName, Mhl.DirName], StringComparer.OrdinalIgnoreCase);
+
+    /// The stricter check before a volume may become a destination (task "Automatické načtení disků"): LooksLikeCameraCard,
+    /// ARRI and RED folders at the top, or clips two folders down (an ARRI Codex drive: reel\clip\clip.mxf). A date
+    /// folder (an offload backup: date\card\…) and our own folders are not looked into. Reads only; false when unreadable.
+    public static bool LooksLikeCameraMedia(string path)
+    {
+        if (LooksLikeCameraCard(path)) return true;
+        static bool HasMedia(string dir)
+        {
+            try
+            {
+                return Directory.EnumerateFileSystemEntries(dir).Take(500).Any(n => MediaExt.Contains(System.IO.Path.GetExtension(n)));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+        try
+        {
+            if (Directory.EnumerateDirectories(path).Any(d => DeepMarkers.Contains(System.IO.Path.GetFileName(d)))) return true;
+            foreach (var top in Directory.EnumerateDirectories(path).Where(d => Looked(System.IO.Path.GetFileName(d))).Take(20))
+            {
+                try
+                {
+                    if (Directory.EnumerateDirectories(top).Where(d => Looked(System.IO.Path.GetFileName(d))).Take(20).Any(HasMedia)) return true;
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // System Volume Information and friends.
+                }
+            }
+            return false;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// A folder the deeper check looks into: not hidden, not ours, not a date folder of an offload backup.
+    static bool Looked(string name) =>
+        !name.StartsWith('.') && !name.StartsWith('$') && !OwnFolders.Contains(name)
+        && !string.Equals(name, "System Volume Information", StringComparison.OrdinalIgnoreCase)
+        && !DateTime.TryParseExact(name, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _);
+
+    /// Nothing on the volume but what Windows keeps on every one. Reads only; unreadable = not empty.
+    public static bool IsEmptyVolume(string root)
+    {
+        try
+        {
+            return !Directory.EnumerateFileSystemEntries(root).Any(e => System.IO.Path.GetFileName(e) is var n
+                && !string.Equals(n, "System Volume Information", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(n, "$RECYCLE.BIN", StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     /// Offered as a card source: removable media, or a fixed disk on USB/SD/MMC; never the system drive.
     public static bool IsCandidate(DriveType type, StorageBus bus, bool isSystem) =>
         !isSystem && (type == DriveType.Removable
@@ -69,8 +138,9 @@ public static class Volumes
                 bool isDest = destRoots.Any(r => HwTest.SameVolume(r, root));
                 var letter = root.TrimEnd((char)92);
                 var name = string.IsNullOrWhiteSpace(d.VolumeLabel) ? letter : $"{d.VolumeLabel} ({letter})";
+                bool card = !isDest && LooksLikeCameraCard(root);
                 found.Add(new VolumeItem(name, root, d.TotalSize, d.AvailableFreeSpace, d.DriveFormat,
-                    !isDest && LooksLikeCameraCard(root), isDest, CardIdentity.Of(root), d.VolumeLabel));
+                    card, isDest, CardIdentity.Of(root), d.VolumeLabel) { Facts = FactsOf(d, root, name, bus, card, isDest) });
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -79,6 +149,35 @@ public static class Volumes
         }
         found.Sort((a, b) => Win32.StrCmpLogicalW(a.Name, b.Name));
         return found;
+    }
+
+    /// The facts of a listed volume for AutoDrives — only what its role needs: the reader's device for a fixed USB disk,
+    /// the deeper camera check for a disk that may become a destination, emptiness for a reader's card. Never throws.
+    static DriveFacts FactsOf(DriveInfo d, string root, string name, StorageBus bus, bool card, bool isDest)
+    {
+        var facts = new DriveFacts
+        {
+            Root = root, Name = name, Type = d.DriveType, Bus = bus, LooksLikeCard = card,
+            Total = d.TotalSize, Free = d.AvailableFreeSpace,
+        };
+        try
+        {
+            facts = facts with { DiskId = AutoDrives.DiskId(NativeIO.VolumeSerial(root), d.TotalSize), ReadOnly = NativeIO.IsReadOnlyVolume(root) };
+            if (d.DriveType == DriveType.Removable || (d.DriveType == DriveType.Fixed && bus == StorageBus.Usb))
+            {
+                var (deviceBus, product, disks) = DriveLinks.Device(root);
+                facts = facts with { Bus = bus == StorageBus.Unknown ? deviceBus : bus, Product = product, DisksOnDevice = disks };
+            }
+            var role = AutoDrives.Role(facts);
+            // Only a disk that may become a destination is looked at deeper (one that already is one is not).
+            if (role == DriveRole.Disk && !isDest && LooksLikeCameraMedia(root)) facts = facts with { LooksLikeCard = true };
+            if (role == DriveRole.ReaderSlot) facts = facts with { Empty = IsEmptyVolume(root) };
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // Pulled out meanwhile: what is known stays; an unknown identity is never added.
+        }
+        return facts;
     }
 
     /// Every ready fixed or removable disk by its root (the Hardware test with no card and no destination chosen).
@@ -125,15 +224,21 @@ public static class Volumes
         return roots;
     }
 
-    /// The selection after a rescan (Mac `refreshVolumes`): a card that just appeared is ticked; a source that
-    /// disappeared or now holds a destination drops out; manual folders stay.
+    /// The selection after a rescan (Mac `refreshVolumes`): a card that just appeared is ticked (`autoCards`, the
+    /// setting "karty ve čtečkách jako zdroje": camera folders, or a reader's card that is not empty — AutoDrives); a
+    /// source that disappeared or now holds a destination drops out; manual folders stay.
     public static HashSet<string> SelectionAfterRefresh(IEnumerable<string> previousPaths, IReadOnlyList<VolumeItem> found,
-        IEnumerable<string> selected, IReadOnlyList<string> manual)
+        IEnumerable<string> selected, IReadOnlyList<string> manual, bool autoCards = true)
     {
         var previous = new HashSet<string>(previousPaths, StringComparer.OrdinalIgnoreCase);
         var result = new HashSet<string>(selected, StringComparer.OrdinalIgnoreCase);
         foreach (var v in found)
-            if (v.LooksLikeCard && !previous.Contains(v.Path)) result.Add(v.Path);
+        {
+            if (v.IsDestination || previous.Contains(v.Path)) continue;
+            bool tick = v.Facts is { } f ? AutoDrives.TickOnArrival(f with { LooksLikeCard = v.LooksLikeCard || f.LooksLikeCard }, autoCards)
+                : autoCards && v.LooksLikeCard;
+            if (tick) result.Add(v.Path);
+        }
         result.RemoveWhere(p =>
             !found.Any(v => string.Equals(v.Path, p, StringComparison.OrdinalIgnoreCase) && !v.IsDestination)
             && !manual.Contains(p, StringComparer.OrdinalIgnoreCase));

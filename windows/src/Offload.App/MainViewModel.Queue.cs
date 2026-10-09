@@ -242,6 +242,7 @@ public sealed partial class MainViewModel
             starting = false;
             SetStartStatus(null);
             RaiseMany(nameof(CanStart), nameof(CanSwitchProject), nameof(AfterCopyEnabled));
+            AutoDrivesAfterStart();   // a disk connected during the checks is added now
         }
     }
 

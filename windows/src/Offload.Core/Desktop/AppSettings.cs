@@ -40,6 +40,8 @@ public class SettingsProfile
     [JsonPropertyName("outputs")] public OutputSettings Outputs { get; set; } = new();
     /// Windows notification and ntfy — spec 4.3.
     [JsonPropertyName("notify")] public NotifySettings Notify { get; set; } = new();
+    /// Connected disks as destinations, cards in readers as sources (task 2026-10-09) — `autoDrives`.
+    [JsonPropertyName("autoDrives")] public AutoDriveSettings AutoDrive { get; set; } = new();
 
     /// Keys this version does not know (a newer version wrote them): kept as they are and written back, so going back
     /// to an older version never loses anything (R24).
@@ -99,7 +101,7 @@ public static class SettingsStore
     public static string DefaultPath => Path.Combine(AppData.Folder, "settings.json");
 
     /// The keys of a profile (top level and every project) Load reads into properties.
-    static readonly string[] ProfileKeys = ["destRoots", "verify", "verifyInProxy", "verifyPrimary", "analyzeClips", "proxy", "naming", "hash", "outputs", "notify"];
+    static readonly string[] ProfileKeys = ["destRoots", "verify", "verifyInProxy", "verifyPrimary", "analyzeClips", "proxy", "naming", "hash", "outputs", "notify", "autoDrives"];
     /// The global top-level keys; every other top-level key goes to AppSettings.Extra.
     static readonly string[] GlobalKeys = ["tools", "portNames", "updates", "projects", "activeProject"];
 
@@ -197,6 +199,7 @@ public static class SettingsStore
         Kept(obj, p, "naming", (NamingSettings v) => p.Naming = v, () => new NamingSettings());
         Kept(obj, p, "outputs", (OutputSettings v) => p.Outputs = v, () => new OutputSettings());
         Kept(obj, p, "notify", (NotifySettings v) => p.Notify = v, () => new NotifySettings());
+        Kept(obj, p, "autoDrives", (AutoDriveSettings v) => p.AutoDrive = v, () => new AutoDriveSettings());
         foreach (var (key, value) in obj)
             if (!ProfileKeys.Contains(key) && !alsoKnown.Contains(key)) (p.Extra ??= [])[key] = value;
     }
@@ -271,6 +274,10 @@ public static class SettingsStore
         s.Outputs ??= new OutputSettings();
         s.Notify ??= new NotifySettings();
         s.Notify.Ntfy ??= new NtfySettings();
+        s.AutoDrive ??= new AutoDriveSettings();
+        s.AutoDrive.Added = (s.AutoDrive.Added ?? []).Where(a => a is { Root.Length: > 0, Disk.Length: > 0 }).ToList();
+        s.AutoDrive.Removed = (s.AutoDrive.Removed ?? []).Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (string.IsNullOrWhiteSpace(s.Notify.Ntfy.Server)) s.Notify.Ntfy.Server = NtfySettings.DefaultServer;
         s.Notify.Ntfy.Topic = (s.Notify.Ntfy.Topic ?? "").Trim();
         var p = s.Proxy;

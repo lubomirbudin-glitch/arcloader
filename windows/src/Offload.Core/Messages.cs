@@ -249,4 +249,8 @@ public static partial class Msg
     public const string UnknownFormat = "neznámý formát";
     public const string NoDecoderShort = "chybí dekodér";
     public static string NoDecoder(string format) => $"{format}: chybí dekodér";
+
+    // Automatické načtení disků (2026-10-09)
+    public static string AutoDiskFull(string name) => $"Disk {name} je plný — jako cíl se nepřidal.";
+    public static string AutoDiskReadOnly(string name) => $"Disk {name} je jen pro čtení — jako cíl se nepřidal.";
 }

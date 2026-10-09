@@ -94,6 +94,17 @@
                         <CheckBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Check}" Margin="0,16,0,0" Content="Navrhovat název karty podle klipů"
                                   IsChecked="{Binding SuggestCardNames}" AutomationProperties.AutomationId="SuggestCardNames" />
                     </Grid>
+                    <!-- Automatické načtení disků (2026-10-09): per project, like everything on this page -->
+                    <TextBlock Text="PŘIPOJENÉ DISKY" Style="{StaticResource StepTitle}" Margin="0,30,0,10" />
+                    <CheckBox Style="{StaticResource Check}" Content="{x:Static core:SettingsTexts.AutoDestinationsLabel}" IsChecked="{Binding AutoAddDestinations}"
+                              AutomationProperties.AutomationId="AutoAddDestinations" />
+                    <TextBlock Text="{x:Static core:SettingsTexts.AutoDestinationsNote}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="26,4,0,0" />
+                    <CheckBox Style="{StaticResource Check}" Content="{x:Static core:SettingsTexts.AutoCardsLabel}" IsChecked="{Binding AutoAddCards}" Margin="0,14,0,0"
+                              AutomationProperties.AutomationId="AutoAddCards" />
+                    <TextBlock Text="{x:Static core:SettingsTexts.AutoCardsNote}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="26,4,0,0" />
+                    <Button Style="{StaticResource SecondaryButton}" Content="{Binding ForgetRemovedText}" Command="{Binding ForgetRemovedDisksCommand}" HorizontalAlignment="Left"
+                            Margin="0,14,0,0" Visibility="{Binding ForgetRemovedText, Converter={StaticResource NullToCollapsed}}"
+                            AutomationProperties.AutomationId="ForgetRemovedDisks" />
                 </StackPanel>
 
                 <!-- ── Ověření ── -->
