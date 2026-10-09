@@ -28,8 +28,9 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 - **Souhrnný report z vybraných záloh (zadání uživatele 2026-10-09, obě verze):** v historii karet označit libovolný
   počet záloh (karet, i z různých dnů a disků) a vytvořit z nich **jeden souhrnný report** (HTML + PDF, bez náhledů):
   natáčecí den (dny), za každou kartu i celkem: počet klipů a souborů, **velikost**, **stopáž** (součet délek klipů),
-  **čas první a poslední klapky** (TC / čas záznamu prvního a posledního klipu — upřesnit, odkud: TC denní doby,
-  metadata kamery, nebo čas souboru), kamery, stav ověření a **na kterých discích je co zálohované** (disk, cesta,
+  **čas první a poslední klapky** = začátek **prvního a posledního nahraného klipu** (rozhodnutí uživatele
+  2026-10-09; pořadí podle času záznamu z metadat kamery, jinak podle čísla klipu `A001C001…`; čas = startovní TC
+  klipu, u ALEXY TC denní doby), kamery, stav ověření a **na kterých discích je co zálohované** (disk, cesta,
   ověřeno ano/ne, kopie reportu na počítači). Zdroj dat: `history.json` + reporty `offload_report*.json` (z disků, nebo
   z lokální kopie `Offload reporty`, když disk už odešel). Uložit lokálně a volitelně na vybraný disk.
 
