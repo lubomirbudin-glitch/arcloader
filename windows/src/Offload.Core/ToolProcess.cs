@@ -61,6 +61,9 @@ internal sealed class ToolProcess : IDisposable
 
     public int Id => process.Id;
 
+    /// CPU class and I/O priority hint (2 = normal) of the running tool — for tests.
+    internal (ProcessPriorityClass Cpu, int Io) Priority() => (process.PriorityClass, Win32.ProcessIoPriority(process));
+
     public void Start(Action<string>? onStdoutLine)
     {
         try
@@ -71,6 +74,9 @@ internal sealed class ToolProcess : IDisposable
         {
             throw new ToolError(Name, -1, e.Message);
         }
+        // Normal CPU and I/O priority whatever Offload itself runs at (Win32.RaiseToNormal): proxies and RAW decodes are
+        // what the user waits for. (Plan 10's verify readers lower only their own threads — nothing a child inherits.)
+        Win32.RaiseToNormal(process);
         process.BeginErrorReadLine();
         if (onStdoutLine != null)
         {
@@ -130,4 +136,5 @@ internal sealed class ToolProcess : IDisposable
         if (p.ExitCode != 0) throw new ToolError(p.Name, p.ExitCode, p.StderrTail);
         lock (output) return output.ToString();
     }
+
 }

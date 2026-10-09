@@ -94,6 +94,67 @@ internal static unsafe partial class Win32
     internal static int IoPriority() =>
         NtQueryInformationThread(GetCurrentThread(), ThreadIoPriority, out int priority, sizeof(int), out _) == 0 ? priority : -1;
 
+    const int ProcessIoPriorityClass = 33;   // PROCESSINFOCLASS ProcessIoPriority
+    const int IoPriorityNormal = 2;
+    const uint ProcessModeBackgroundBegin = 0x00100000;
+    const uint ProcessModeBackgroundEnd = 0x00200000;
+
+    [LibraryImport("ntdll.dll")]
+    private static partial int NtQueryInformationProcess(nint process, int infoClass, out int info, uint length, out uint returned);
+
+    [LibraryImport("ntdll.dll")]
+    private static partial int NtSetInformationProcess(nint process, int infoClass, ref int info, uint length);
+
+    [LibraryImport("kernel32.dll")]
+    private static partial nint GetCurrentProcess();
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetPriorityClass(nint process, uint priorityClass);
+
+    /// A process's I/O priority hint (0 very low, 1 low, 2 normal …); -1 when it cannot be told.
+    internal static int ProcessIoPriority(System.Diagnostics.Process p) =>
+        NtQueryInformationProcess(p.Handle, ProcessIoPriorityClass, out int priority, sizeof(int), out _) == 0 ? priority : -1;
+
+    internal static bool SetProcessIoPriority(System.Diagnostics.Process p, int priority) =>
+        NtSetInformationProcess(p.Handle, ProcessIoPriorityClass, ref priority, sizeof(int)) == 0;
+
+    /// A tool Offload started (ffmpeg, art-cmd, REDline, braw-decode …) at least at normal CPU and I/O priority. Windows
+    /// hands a child its parent's class when that is BelowNormal or Idle (Offload started by a scheduler or a launcher
+    /// at low priority) and very low I/O priority when the parent is in background mode — a RAW decode reading 570 MB/s
+    /// would crawl (on the Mac 1.4 instead of 11.6 fps). Never lowers anything; best effort (the process may be gone).
+    internal static void RaiseToNormal(System.Diagnostics.Process p)
+    {
+        try
+        {
+            if (p.PriorityClass is System.Diagnostics.ProcessPriorityClass.Idle or System.Diagnostics.ProcessPriorityClass.BelowNormal)
+                p.PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal;
+            if (ProcessIoPriority(p) is >= 0 and < IoPriorityNormal) SetProcessIoPriority(p, IoPriorityNormal);
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+        }
+    }
+
+    /// Tests only: the whole current process in background mode (low CPU, I/O and memory priority) until Dispose.
+    internal static IDisposable BackgroundProcess()
+    {
+        bool on = SetPriorityClass(GetCurrentProcess(), ProcessModeBackgroundBegin);
+        return new ProcessBackgroundMode(on);
+    }
+
+    sealed class ProcessBackgroundMode(bool on) : IDisposable
+    {
+        bool ended = !on;
+
+        public void Dispose()
+        {
+            if (ended) return;
+            ended = true;
+            SetPriorityClass(GetCurrentProcess(), ProcessModeBackgroundEnd);
+        }
+    }
+
     /// Explorer's natural order ("C2" before "C10") — the Windows counterpart of localizedStandardCompare.
     [LibraryImport("shlwapi.dll", StringMarshalling = StringMarshalling.Utf16)]
     internal static partial int StrCmpLogicalW(string a, string b);
