@@ -11,13 +11,7 @@ public class ToolPriorityTests
     /// A child that lives long enough to be looked at.
     static ToolProcess Waiting() => new(Path.Combine(Environment.SystemDirectory, "ping.exe"), ["-n", "30", "127.0.0.1"], null, pipeStdin: false);
 
-    [Fact]
-    public void Started_NormalCpuAndIo()
-    {
-        using var p = Waiting();
-        p.Start(_ => { });
-        Assert.Equal((ProcessPriorityClass.Normal, 2), p.Priority());
-    }
+    // A tool started from a normal Offload: see ToolPriorityInheritanceTests for a low one (with its control).
 
     // Plan 10: the background verify readers read at low I/O priority on their own thread — a tool started from such a
     // thread still runs at normal priority, and the reader keeps its low priority.
@@ -80,36 +74,55 @@ public class ToolPriorityTests
     }
 }
 
-/// The whole test process low (BelowNormal, then background mode): alone, after the parallel tests.
+/// The whole test process low (BelowNormal, then background mode): alone, after the parallel tests. Each case starts a
+/// plain child first — the control: it really is low, so the tool's normal priority comes from ToolProcess raising it,
+/// not from a Windows build that hands nothing down.
 [Collection("LowPriorityProcess")]
 public class ToolPriorityInheritanceTests
 {
+    static string Ping => Path.Combine(Environment.SystemDirectory, "ping.exe");
+
+    static Process PlainChild() =>
+        Process.Start(new ProcessStartInfo(Ping, "-n 30 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true })!;
+
+    static (ProcessPriorityClass, int) Tool()
+    {
+        using var p = new ToolProcess(Ping, ["-n", "30", "127.0.0.1"], null, pipeStdin: false);
+        p.Start(_ => { });
+        return p.Priority();
+    }
+
     [Fact]
-    public void LowParent_ToolStillNormal()
+    public void BelowNormalParent_PlainChildLow_ToolNormal()
     {
         var self = Process.GetCurrentProcess();
         var before = self.PriorityClass;
         try
         {
             self.PriorityClass = ProcessPriorityClass.BelowNormal;
-            using (var p = new ToolProcess(Path.Combine(Environment.SystemDirectory, "ping.exe"), ["-n", "30", "127.0.0.1"], null, pipeStdin: false))
+            using (var plain = PlainChild())
             {
-                p.Start(_ => { });
-                Assert.Equal((ProcessPriorityClass.Normal, 2), p.Priority());
+                try { Assert.Equal(ProcessPriorityClass.BelowNormal, plain.PriorityClass); }
+                finally { plain.Kill(); }
             }
-            self.PriorityClass = before;
-
-            using var background = Win32.BackgroundProcess();
-            using (var p = new ToolProcess(Path.Combine(Environment.SystemDirectory, "ping.exe"), ["-n", "30", "127.0.0.1"], null, pipeStdin: false))
-            {
-                p.Start(_ => { });
-                Assert.Equal((ProcessPriorityClass.Normal, 2), p.Priority());
-            }
+            Assert.Equal((ProcessPriorityClass.Normal, 2), Tool());
         }
         finally
         {
             self.PriorityClass = before;
         }
+    }
+
+    [Fact]
+    public void BackgroundModeParent_PlainChildIoZero_ToolNormal()
+    {
+        using var background = Win32.BackgroundProcess();
+        using (var plain = PlainChild())
+        {
+            try { Assert.Equal(0, Win32.ProcessIoPriority(plain)); }
+            finally { plain.Kill(); }
+        }
+        Assert.Equal((ProcessPriorityClass.Normal, 2), Tool());
     }
 }
 

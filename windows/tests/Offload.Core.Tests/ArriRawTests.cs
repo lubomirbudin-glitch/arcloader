@@ -201,6 +201,7 @@ public class ArriRawTests
         lock (log) Assert.Contains("art-cmd failed (exit 0): no output file: [info] processing", log);
         Assert.False(File.Exists(Path.Combine(card, "_PROXY", "A001C001.mov")));
         Assert.False(File.Exists(Path.Combine(dir.Path, "ffmpeg.txt")));   // ffmpeg never ran
+        Assert.Empty(Directory.GetDirectories(r.WorkDir, "ari-*"));        // the intermediate's folder is gone
     }
 
     [Fact]
