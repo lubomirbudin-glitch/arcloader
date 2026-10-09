@@ -144,6 +144,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   z VideoToolboxu zelené snímky bez chyby); kódování zůstává hardwarové. Windows ho umí zapnout volbou „Hardwarové
   dekódování (experimentální)“ / `--hw-decode` (`proxy.hardwareDecode`), Mac volbu nemá.
 - **Vlastní soubor místo vestavěného LUTu:** jen Mac (`~/Library/Application Support/Offload/luts/<id>.cube`).
+- **Rychlá analýza ARRIRAW** (2026-10-09): jen Windows. art-cmd exportuje metadata jen prvního snímku (`--duration 1`,
+  limit 120 s; když volbu odmítne, celý export jako dřív) a počet snímků bere z ffprobe (sekvence `.ari`: počet souborů),
+  ffprobe má na MXF limit 60 s. Když ffprobe nedoběhne a export počet neřekne, délka klipu zůstane neznámá (prázdná).
+  Mac (`3a970b5`) exportuje metadata všech snímků, tj. čte celý klip (karta A_0009: analýza přes 15 min), a ffprobe
+  limit nemá. art-cmd a REDline jdou na Windows zrušit uprostřed dekódování (Mac čeká, až doběhnou).
 - **Zámky dne a doplnění** (Windows): klíč je „id svazku + cesta na něm“ — namapovaný disk a jeho UNC cesta, `subst`,
   junction a krátká jména 8.3 dávají jiné klíče a zámek se neuplatní. Mac žádný z těchto zámků nezná (poslední zápis vyhraje).
 - **Doplnění z jiného procesu** při přepisu seznamu klipů a denního reportu (stage 2): nehlídá se; vyhraje poslední zápis a
