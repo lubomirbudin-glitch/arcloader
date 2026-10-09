@@ -7,6 +7,12 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Pauza zálohy (zadání uživatele 2026-10-09, obě verze):** tlačítko Pozastavit nechá **doběhnout rozpracovaný dílčí
+  krok** — soubor při kopii a ověření, klip při analýze a renderu proxy — a teprve pak úlohu zastaví (žádný napůl
+  zapsaný soubor, žádný přerušený render). Pokračovat **plynule naváže** dalším souborem / klipem, bez opakování hotové
+  práce a bez nového spuštění úlohy; stav „pozastavuji (dokončuji …)“ → „pozastaveno“ musí být vidět. Windows od 0.5.0
+  pozastavuje mezi 16MB bloky a mezi klipy 2. fáze — sladit s tímto zadáním (pozastavení po dokončení souboru/klipu).
+
 - **Souhrnný report z vybraných záloh (zadání uživatele 2026-10-09, obě verze):** v historii karet označit libovolný
   počet záloh (karet, i z různých dnů a disků) a vytvořit z nich **jeden souhrnný report** (HTML + PDF, bez náhledů):
   natáčecí den (dny), za každou kartu i celkem: počet klipů a souborů, **velikost**, **stopáž** (součet délek klipů),
