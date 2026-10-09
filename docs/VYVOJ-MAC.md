@@ -7,6 +7,15 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Zrychlit analýzu klipů ARRIRAW (zadání uživatele 2026-10-09, priorita):** u karty A_0009 (855 GB, 7 klipů
+  ARRIRAW 4.6K OG) trvala analýza přes 15 minut ještě před prvním proxy. Podezření: `art-cmd export` (probe v
+  `ARRIRAWBackend`, volaný i z `reclassifyUndecodableMXF`) vypisuje metadata **každého snímku**, takže čte celý ~120GB
+  klip, a to jen kvůli metadatům klipu a TC prvního snímku. Postup: (1) změřit `art-cmd export` s `--duration 1` proti
+  bez něj na velkém klipu; (2) když platí, exportovat jen 1 snímek (případně `--start 0 --duration 1`) a ověřit, že
+  rozlišení, fps, počet snímků (`clipDuration`), TC, kamera, log a squeeze zůstanou stejné; (3) zkontrolovat, že se
+  klip neprobuje dvakrát (ffprobe → reclassify → probe); (4) ffprobe na ARRIRAW MXF má mít časový limit. Cíl: analýza
+  karty v řádu sekund na klip. Totéž ověřit na Windows (`RawBackends.cs`).
+
 - **Kopie reportu i na počítači (zadání uživatele 2026-10-09):** každý report karty (`_REPORT/` — HTML, PDF, JSON,
   TXT, `.xxh64`, případně `.md5`, CSV/ALE — a `ascmhl/`) se po dokončení úlohy zkopíruje i lokálně, např.
   `~/Documents/Offload reporty/<datum>/<karta>/`, a při každém přepisu reportu (analýza, proxy) se kopie obnoví.
