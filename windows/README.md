@@ -441,6 +441,8 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
 - [ ] 61. **Priorita nástrojů:** spustit Offload s nízkou prioritou (`start /belownormal Offload.exe`) → během proxy
       ve Správci úloh (Podrobnosti → Priorita, Process Explorer → I/O priorita) ffmpeg, art-cmd, REDline a braw-decode
       „Normální“; ARRIRAW 4.6K dekóduje stejně rychle jako stejné volání art-cmd z terminálu.
+- [ ] 62. **Průběh ARRIRAW:** proxy klipu ARRIRAW → pruh klipu během art-cmd plynule roste do ~76 %, pak ffmpeg do 100 %;
+      nikdy nestojí na 0 % celé dekódování.
 - [ ] 64. **ARRIRAW bez LUTu:** `offload … --proxy --lut none` s klipem ALEXA 35 a ALEXA Mini → proxy v Rec.709
       (vestavěný vzhled kamery), art-cmd bez `--target-colorspace`; poškozený klip / art-cmd, který skončí kódem 0 bez
       souboru → poznámka „ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla ([error] …)“.

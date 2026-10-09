@@ -426,10 +426,23 @@ public sealed class ProxyRenderer : IDisposable
         $"ffmpeg se zasekl ({after.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s bez nového snímku)"
         + (retriedInSoftware ? " i bez hardwarového dekódování; proxy nevznikla" : "");
 
+    /// How often the size of the ARRI intermediate is looked at (IntermediateProgress); tests shorten it.
+    internal TimeSpan IntermediatePoll { get; init; } = TimeSpan.FromSeconds(1);
+
     void RenderOnce(string ffmpeg, Clip clip, string cardPath, ClipInfo info, LutUse? lut, string? lutFile, string output,
         Action<double> progress, Func<bool> isCancelled, bool hwaccel, string? inputUrl, ContentWatch? content)
     {
-        var src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl);
+        FrameSource src;
+        if (clip.Format == ClipFormat.Arriraw)
+        {
+            // ARRIRAW: art-cmd writes the whole ProRes LT intermediate first and reports no progress itself — its growing
+            // size is 0–80 % of the clip, ffmpeg's own progress the rest (the bar never sits at 0 % for the whole decode).
+            using (IntermediateProgress.Start(workDir, info, Settings, progress, IntermediatePoll))
+                src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl);
+            var whole = progress;
+            progress = f => whole(IntermediateProgress.Share + (1 - IntermediateProgress.Share) * f);
+        }
+        else src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl);
         string? label = null;
         try
         {
@@ -614,6 +627,77 @@ public sealed class ProxyRenderer : IDisposable
             try { input?.Dispose(); } catch (Exception) { }
             try { sink?.Dispose(); } catch (Exception) { }
         }
+    }
+}
+
+/// Progress while art-cmd writes the ARRIRAW intermediate (`<workDir>\ari-*\intermediate.mxf`), which it does not report
+/// itself: the file's size against the size it should reach — frames × output pixels × 0.21 bytes, about ProRes 422 LT
+/// (≈ 100 Mb/s at 1080p 29.97) — as 0–80 % of the clip. An estimate, so never more than 95 % of that share.
+internal sealed class IntermediateProgress : IDisposable
+{
+    public const double Share = 0.8;
+    const double BytesPerPixel = 0.21;
+
+    readonly string workDir;
+    readonly double expected;
+    readonly Action<double> progress;
+    readonly Timer timer;
+    readonly Lock gate = new();
+    bool stopped;
+    double reported;
+
+    IntermediateProgress(string workDir, double expected, Action<double> progress, TimeSpan interval)
+    {
+        this.workDir = workDir;
+        this.expected = expected;
+        this.progress = progress;
+        timer = new Timer(_ => Poll(), null, interval, interval);
+    }
+
+    /// The intermediate's expected size in bytes, or null when the clip's frames or size are not known.
+    internal static double? ExpectedBytes(ClipInfo info, ProxySettings s)
+    {
+        long? frames = info.Frames is int known ? known
+            : info.Duration is double d && Timecode.Fps(info.FrameRate) is double fps ? (long)Math.Round(d * fps) : null;
+        if (frames is not long n || n <= 0 || info.Width is not int w || info.Height is not int h || h <= 0) return null;
+        double outH = s.Height;
+        double aspect = s.FrameAspect ?? w * (info.Squeeze ?? 1) / h;
+        return n * outH * (outH * aspect) * BytesPerPixel;
+    }
+
+    /// Null (nothing to report) when the expected size cannot be told.
+    public static IntermediateProgress? Start(string workDir, ClipInfo info, ProxySettings s, Action<double> progress, TimeSpan interval) =>
+        ExpectedBytes(info, s) is double expected ? new IntermediateProgress(workDir, expected, progress, interval) : null;
+
+    void Poll()
+    {
+        // Never an exception on the timer's thread: a folder or file going away just means "no new size".
+        try
+        {
+            long size = 0;
+            foreach (var dir in Directory.EnumerateDirectories(workDir, "ari-*"))
+            {
+                var file = new FileInfo(Path.Combine(dir, "intermediate.mxf"));
+                if (file.Exists) size = Math.Max(size, file.Length);
+            }
+            double fraction = Math.Min(0.95, size / expected) * Share;
+            lock (gate)
+            {
+                if (stopped || fraction <= reported) return;
+                reported = fraction;
+                progress(fraction);
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    /// No report after this returns (a poll in progress finishes first).
+    public void Dispose()
+    {
+        lock (gate) stopped = true;
+        timer.Dispose();
     }
 }
 

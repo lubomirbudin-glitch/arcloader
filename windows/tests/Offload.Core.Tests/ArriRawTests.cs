@@ -221,4 +221,39 @@ public class ArriRawTests
         Assert.Equal("b | c | d", RawBackends.LogTail("a\nb\n\nc\nd\n"));
         Assert.Equal("", RawBackends.LogTail(""));
     }
+
+    // --- 4. Progress while art-cmd writes the intermediate: 0–80 % from its size, ffmpeg the rest ---
+
+    [Fact]
+    public void Progress_FromTheGrowingIntermediate_ThenFfmpeg()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        File.WriteAllBytes(Path.Combine(dir.Path, "chunk.bin"), new byte[25_000]);
+        // 10 frames at 180 × 324 (1.8:1) × 0.21 bytes ≈ 122 kB expected; the fake writes 4 × 25 kB, a second apart.
+        var info = new ClipInfo { Codec = "ARRIRAW", Width = 1800, Height = 1000, FrameRate = "10", Frames = 10, Duration = 1 };
+        Assert.Equal(10 * 180 * 324 * 0.21, IntermediateProgress.ExpectedBytes(info, Settings)!.Value, 3);
+        var seen = new List<double>();
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Grow")) { IntermediatePoll = TimeSpan.FromMilliseconds(100) };
+        Render(r, card, info, f => { lock (seen) seen.Add(f); });
+
+        lock (seen)
+        {
+            var during = seen.Where(f => f > 0 && f < IntermediateProgress.Share).ToList();
+            Assert.True(during.Count >= 2, $"progress during art-cmd: {string.Join(", ", seen)}");
+            Assert.All(during, f => Assert.True(f <= 0.95 * IntermediateProgress.Share));
+            for (int i = 1; i < seen.Count; i++) Assert.True(seen[i] >= seen[i - 1], $"not rising: {string.Join(", ", seen)}");
+            Assert.Equal(1.0, seen[^1], 6);   // ffmpeg's end is the clip's end
+        }
+    }
+
+    [Fact]
+    public void ExpectedBytes_DesqueezedOrFrameLines_UnknownWithoutFrames()
+    {
+        var s = new ProxySettings { Height = 1080 };
+        Assert.Equal(24 * 1080 * (1080 * 4608 * 2.0 / 3164) * 0.21, IntermediateProgress.ExpectedBytes(new ClipInfo { Width = 4608, Height = 3164, Frames = 24, Squeeze = 2 }, s)!.Value, 3);
+        Assert.Equal(48 * 1080 * (1080 * 1.66) * 0.21, IntermediateProgress.ExpectedBytes(new ClipInfo { Width = 4608, Height = 3164, Duration = 2, FrameRate = "24" }, new ProxySettings { Height = 1080, FrameAspect = 1.66 })!.Value, 3);
+        Assert.Null(IntermediateProgress.ExpectedBytes(new ClipInfo { Width = 4608, Height = 3164 }, s));
+        Assert.Null(IntermediateProgress.ExpectedBytes(new ClipInfo { Frames = 24 }, s));
+    }
 }
