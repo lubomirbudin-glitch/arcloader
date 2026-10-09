@@ -163,7 +163,16 @@ public sealed partial class MainViewModel
 
     void ApplyVolumes(List<VolumeItem> found)
     {
-        var next = Volumes.SelectionAfterRefresh(volumes.Select(v => v.Path), found, selected, manualSources, Settings.AutoDrive.Cards);
+        // One decision per volume — destination, source or neither — applied in this one step (controller ruling
+        // 2026-10-09): a disk the automatic choice makes a destination is never ticked in Karty, not even for a moment.
+        var auto = Settings.AutoDrive;
+        if (starting && !IsDemo) autoDriveDeferred = true;
+        var decision = Volumes.Decide(volumes.Select(v => v.Path), found, selected, manualSources, auto.Cards,
+            IsDemo ? null : new AutoDriveInput(found.Select(v => v.Facts).OfType<DriveFacts>().ToList(), Settings.DestRoots,
+                auto.Added, auto.Removed, auto.Destinations, Locked: starting));
+        found = decision.Found;
+        var next = decision.Selected;
+        bool dropped = !starting && !IsDemo && ApplyAutoDrives(decision.Plan);
         // Another card on the same drive letter (gone, or swapped faster than one scan) must not inherit the name.
         var drop = Volumes.NamesToDrop(volumes, found);
         volumes = found;
@@ -190,7 +199,7 @@ public sealed partial class MainViewModel
             destSig = dsig;
             RebuildDestinations();
         }
-        ApplyAutoDrives(found);   // connected disks as destinations (may rescan)
+        if (dropped) RefreshVolumes();   // a disk that took a dropped destination's letter is offered as a card again
         InspectMissing();   // new or swapped cards
         ResolveSourceLinks();   // how the new cards are connected
         foreach (var j in Jobs.OfType<JobItemViewModel>()) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
@@ -403,27 +412,19 @@ public sealed partial class MainViewModel
     /// Why a connected disk was not added as a destination (full, read-only), or null.
     public string? AutoDriveHint => autoDriveHint;
 
-    /// A scan's answer on the UI thread (memory only — the scan gathered the facts off it): connected external disks
-    /// are added as destinations, auto-added ones whose disk is gone are dropped. Never during a Start (ruling I1: the
-    /// profile shown must not change under its checks — done after it) nor in the demo.
-    void ApplyAutoDrives(List<VolumeItem> found)
+    /// The automatic destinations of a scan's decision (Volumes.Decide), into the profile on the UI thread before anything
+    /// is shown: connected external disks added, auto-added ones whose disk is gone dropped. Never during a Start (ruling
+    /// I1: the profile shown must not change under its checks — done after it) nor in the demo. True when one was dropped.
+    bool ApplyAutoDrives(AutoDrivePlan plan)
     {
-        if (IsDemo) return;
-        if (starting)
-        {
-            autoDriveDeferred = true;
-            return;
-        }
         var auto = Settings.AutoDrive;
-        var plan = AutoDrives.Plan(new AutoDriveInput(found.Select(v => v.Facts).OfType<DriveFacts>().ToList(), Settings.DestRoots,
-            auto.Added, auto.Removed, auto.Destinations, Locked: false));
         var hint = plan.Hints.Count > 0 ? string.Join("\n", plan.Hints) : null;
         if (hint != autoDriveHint)
         {
             autoDriveHint = hint;
             Raise(nameof(AutoDriveHint));
         }
-        if (!plan.Changes) return;
+        if (!plan.Changes) return false;
         foreach (var root in plan.Drop)
         {
             Settings.DestRoots.RemoveAll(r => string.Equals(r, root, StringComparison.OrdinalIgnoreCase));
@@ -436,7 +437,8 @@ public sealed partial class MainViewModel
             auto.Added.Add(add);
             AppLog.Write($"auto drives: {add.Root} ({add.Disk}) added as a destination");
         }
-        DestinationsChanged();   // saves, rebuilds the rows and rescans (the disk leaves Karty)
+        SettingsChanged();   // the destination rows are rebuilt by ApplyVolumes (the list changed)
+        return plan.Drop.Count > 0;
     }
 
     /// Start has ended: a scan it held back is applied now.

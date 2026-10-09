@@ -470,4 +470,74 @@ public class AutoDrivesTests
         Assert.True(Added(backup));
         Assert.Equal("EEEE0005:4000000000000", AutoDrives.RemovedDisk(@"E:\", [backup]));
     }
+
+    // ── one decision per volume (controller ruling 2026-10-09) ───────────
+
+    /// The user's E: as the scan lists it: clips one folder down, so the card rule (as in 0.6.1) calls it a card.
+    static VolumeItem BackupE() =>
+        new("WD Elements (E:)", @"E:\", 4000 * GB, 1000 * GB, "NTFS", LooksLikeCard: true, IsDestination: false)
+        { Facts = Disk(@"E:\", "EEEE0005:4000000000000") with { LooksLikeCard = true } };
+
+    static VolumeItem CameraSsd() =>
+        new("BRAW (F:)", @"F:\", 1000 * GB, 200 * GB, "exFAT", LooksLikeCard: true, IsDestination: false)
+        { Facts = Disk(@"F:\", "FFFF0006:1000000000000", product: "Samsung T7") with { LooksLikeCard = true, CameraAtRoot = true } };
+
+    static AutoDriveInput Auto(IReadOnlyList<VolumeItem> found, bool addDisks = true, bool locked = false, IReadOnlyList<string>? removed = null) =>
+        Input(found.Select(v => v.Facts!).ToList(), removed: removed, addDisks: addDisks, locked: locked);
+
+    [Fact]
+    public void Decide_BackupDiskArrives_DestinationOnly_NeverTicked()
+    {
+        IReadOnlyList<VolumeItem> found = [BackupE()];
+        var d = Volumes.Decide([], found, [], [], autoCards: true, Auto(found));
+        Assert.Equal([@"E:\"], d.Plan.Add.Select(a => a.Root));
+        Assert.True(d.Found.Single().IsDestination);
+        Assert.False(d.Found.Single().LooksLikeCard);
+        Assert.DoesNotContain(@"E:\", d.Selected);
+        Assert.Equal(VolumeUse.Destination, Volumes.ArrivalUse(found[0], autoDestination: true, autoCards: true));
+    }
+
+    [Fact]
+    public void Decide_DuringStart_NotAdded_NotTickedEither()
+    {
+        IReadOnlyList<VolumeItem> found = [BackupE()];
+        var d = Volumes.Decide([], found, [], [], autoCards: true, Auto(found, locked: true));
+        Assert.False(d.Plan.Changes);
+        Assert.False(d.Found.Single().IsDestination);
+        Assert.DoesNotContain(@"E:\", d.Selected);
+        // After the Start the next scan adds it — and it was never ticked in between.
+        var after = Volumes.Decide([@"E:\"], d.Found, d.Selected, [], autoCards: true, Auto(found));
+        Assert.Single(after.Plan.Add);
+        Assert.Empty(after.Selected);
+    }
+
+    [Fact]
+    public void Decide_AutoAddOffOrDiskRemoved_Ticked_AsIn061()
+    {
+        // 0.6.1 already ticks E: in Karty (clips one folder down); without the automatic destination that stays so.
+        IReadOnlyList<VolumeItem> found = [BackupE()];
+        Assert.Contains(@"E:\", Volumes.Decide([], found, [], [], autoCards: true, Auto(found, addDisks: false)).Selected);
+        Assert.Contains(@"E:\", Volumes.Decide([], found, [], [], autoCards: true, Auto(found, removed: ["EEEE0005:4000000000000"])).Selected);
+        Assert.Contains(@"E:\", Volumes.SelectionAfterRefresh([], found, [], []));
+    }
+
+    [Fact]
+    public void Decide_CameraSsdAndBackupTogether_SsdSource_BackupDestination()
+    {
+        IReadOnlyList<VolumeItem> found = [BackupE(), CameraSsd()];
+        var d = Volumes.Decide([], found, [], [], autoCards: true, Auto(found));
+        Assert.Equal([@"E:\"], d.Plan.Add.Select(a => a.Root));
+        Assert.Equal([@"F:\"], d.Selected);
+        Assert.Equal(VolumeUse.Source, Volumes.ArrivalUse(found[1], autoDestination: false, autoCards: true));
+        Assert.Equal(VolumeUse.Neither, Volumes.ArrivalUse(found[1], autoDestination: false, autoCards: false));
+    }
+
+    [Fact]
+    public void Decide_Demo_NoAutomaticDestinations()
+    {
+        IReadOnlyList<VolumeItem> found = [BackupE()];
+        var d = Volumes.Decide([], found, [], [], autoCards: true, auto: null);
+        Assert.False(d.Plan.Changes);
+        Assert.Contains(@"E:\", d.Selected);
+    }
 }
