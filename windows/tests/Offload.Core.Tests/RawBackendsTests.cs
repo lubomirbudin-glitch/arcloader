@@ -91,7 +91,7 @@ public class RawBackendsTests
         var (args, json, cropped) = ArriBackend.Args(@"E:\c.mxf", @"C:\t\i.mxf", info, new ProxySettings { FrameAspect = 1.66, Height = 1080 }, new RawLook(false, null), @"C:\t\p.json");
         Assert.True(cropped);
         Assert.Equal(["process", "--input", @"E:\c.mxf", "--video-codec", "prores422lt", "--deflip", "--output", @"C:\t\i.mxf",
-            "--parameters", @"C:\t\p.json", "--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"], args);
+            "--parameters", @"C:\t\p.json", "--embedded-look"], args);   // no LUT: the embedded look alone (art-cmd refuses it with a target space)
         var p = JsonNode.Parse(json!)!;
         Assert.Equal(0, (int)p["inputCrop"]!["displayXOffsetOverride"]!);
         Assert.Equal(194, (int)p["inputCrop"]!["displayYOffsetOverride"]!);
@@ -125,7 +125,8 @@ public class RawBackendsTests
         var (arri, _, _) = ArriBackend.Args("in", "out", new ClipInfo(), new ProxySettings(), new RawLook(true, "AWG4/D65/LogC4"), "p.json");
         Assert.Contains("AWG4/D65/LogC4", arri);
         var (arri709, _, _) = ArriBackend.Args("in", "out", new ClipInfo(), new ProxySettings(), new RawLook(false, null), "p.json");
-        Assert.Contains("Rec.709/D65/BT.1886", arri709);
+        Assert.Equal("--embedded-look", arri709[^1]);
+        Assert.DoesNotContain("--target-colorspace", arri709);
     }
 
     [Fact]

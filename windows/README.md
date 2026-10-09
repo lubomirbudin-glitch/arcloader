@@ -460,6 +460,21 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
 - [ ] 60. **ARRIRAW sférický / anamorfní (art-cmd):** sférický klip ALEXA 35 4.6K OG → art-cmd bez `--desqueeze`
       (Správce úloh → Podrobnosti → příkazový řádek), rychlost dekódování ~2× vyšší než dřív; anamorfní klip (2×) →
       s `--desqueeze`, proxy roztažená na správný poměr stran.
+- [ ] 61. **Priorita nástrojů:** spustit Offload s nízkou prioritou (`start /belownormal Offload.exe`) → během proxy
+      ve Správci úloh (Podrobnosti → Priorita, Process Explorer → I/O priorita) ffmpeg, art-cmd, REDline a braw-decode
+      „Normální“; ARRIRAW 4.6K dekóduje stejně rychle jako stejné volání art-cmd z terminálu.
+- [ ] 62. **Průběh ARRIRAW:** proxy klipu ARRIRAW → pruh klipu během art-cmd plynule roste do ~76 %, pak ffmpeg do 100 %;
+      nikdy nestojí na 0 % celé dekódování.
+- [ ] 63. **Analýza ARRIRAW:** karta ALEXA 35 s velkými klipy (100+ GB) → analýza v řádu sekund na klip (art-cmd
+      `export … --duration 1`); v reportu rozlišení, fps, délka (počet snímků jako v ARRI Reference Tool), TC prvního
+      snímku, kamera, log (LogC4) a squeeze stejné jako dřív; art-cmd, který `--duration` nezná → v logu „exporting the
+      metadata of every frame“ a analýza projde (pomalu); sekvence `.ari` → počet snímků = počet souborů. Zjistit, jaké
+      `clipDuration` vrátí export jednoho snímku: když 1 a ffprobe na MXF nedoběhne, délka zůstane prázdná (v logu „length
+      unknown“). X-OCN MXF s nainstalovaným art-cmd → art-cmd jen jednou, poznámka cituje jeho chybu. Zrušení úlohy během
+      dekódování art-cmd → art-cmd do vteřiny skončí.
+- [ ] 64. **ARRIRAW bez LUTu:** `offload … --proxy --lut none` s klipem ALEXA 35 a ALEXA Mini → proxy v Rec.709
+      (vestavěný vzhled kamery), art-cmd bez `--target-colorspace`; poškozený klip / art-cmd, který skončí kódem 0 bez
+      souboru → poznámka „ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla ([error] …)“.
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 

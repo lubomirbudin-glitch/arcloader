@@ -36,7 +36,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Proxy (LUT, burn-in, frame lines, TC) | ✅ | ✅ ověřeno NVENC + software (libx264); QSV/AMF neověřeno (není HW); čeká ostrý test na skutečném médiu |
 | Blackmagic RAW | ✅ `braw-decode` (C++, knihovna z SDK / Player / Resolve); ověřeno se vzorkem URSA Mini Pro 4.6K (Film Gen 4, 4 snímky), vzorek Gen 5 chybí | ✅ `braw-decode.exe` (C#, knihovna z SDK / Player / Resolve); čeká ověření se vzorkem .braw |
 | RED R3D (REDline) | ✅ | ✅ kód, neověřeno s nástroji |
-| ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ ověřeno se skutečným art-cmd (ALEXA 35, ALEXA Mini) | ✅ kód, neověřeno s nástroji; **známá chyba:** bez LUTu předá art-cmd `--target-colorspace` spolu s `--embedded-look` (`RawBackends.cs` ř. 381) — art-cmd to odmítne, skončí kódem 0 a nic nezapíše → klip bez proxy a náhledů (Mac opraveno v `3b43352`: bez LUTu jen `--embedded-look`) |
+| ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ ověřeno se skutečným art-cmd (ALEXA 35, ALEXA Mini) | ✅ kód, neověřeno s nástroji (bez LUTu jen `--embedded-look` jako Mac `3b43352`; kód 0 bez výstupu = chyba s poznámkou) |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
 | **Test USB portů na vyžádání + doporučení** | ✅ CLI (`offload ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
@@ -148,6 +148,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Vlastní soubor místo vestavěného LUTu:** obě verze — Mac `~/Library/Application Support/Offload/luts/<id>.cube`,
   Windows `%APPDATA%\Offload\luts\<id>.cube`; v seznamu „(vlastní soubor)“. Windows navíc zapíše cestu k souboru do
   důvodu LUTu v reportu (`clips[].lut.reason`).
+- **Rychlá analýza ARRIRAW** (2026-10-09): obě verze exportují art-cmd metadata jen prvního snímku (`--duration 1`)
+  a počet snímků berou z ffprobe (sekvence `.ari`: počet souborů). Rozdíly: Windows má limit exportu 120 s a ffprobe
+  na MXF 60 s (Mac 180 s a 120 s); když zkrácený export selže u klipu, který je podle značek nebo názvu ARRI, Windows
+  pustí celý export jako dřív; když ffprobe nedoběhne a export počet neřekne, délka klipu zůstane neznámá (prázdná).
+  art-cmd a REDline jdou na Windows zrušit uprostřed dekódování (Mac čeká, až doběhnou).
 - **Zámky dne a doplnění** (Windows): klíč je „id svazku + cesta na něm“ — namapovaný disk a jeho UNC cesta, `subst`,
   junction a krátká jména 8.3 dávají jiné klíče a zámek se neuplatní. Mac žádný z těchto zámků nezná (poslední zápis vyhraje).
 - **Doplnění z jiného procesu** při přepisu seznamu klipů a denního reportu (stage 2): nehlídá se; vyhraje poslední zápis a

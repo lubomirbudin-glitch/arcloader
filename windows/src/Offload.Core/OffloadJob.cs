@@ -1144,21 +1144,15 @@ public sealed class OffloadJob
             }
             try
             {
-                var info = renderer.Probe(clip, cardPaths[d]);
-                if (clip.Format == ClipFormat.Video && info.Width == null)
+                // ffprobe (an MXF with a time limit), and the ARRI tool for an MXF ffmpeg cannot decode — once each.
+                var (analyzed, info, undecodable) = renderer.Analyze(clip, cardPaths[d]);
+                entries[i].Clip = analyzed;
+                if (analyzed.Format == ClipFormat.Video && info.Width == null)
                 {
-                    if (renderer.ReclassifyUndecodableMxf(clip, cardPaths[d]) is { } arri)
-                    {
-                        entries[i].Clip = arri.Clip;
-                        info = arri.Info;
-                    }
-                    else
-                    {
-                        info.Reel = ReelResolver.Resolve(clip, info, plan.CardName);
-                        entries[i].Info = info;
-                        entries[i].ProbeError = "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy";
-                        continue;
-                    }
+                    info.Reel = ReelResolver.Resolve(clip, info, plan.CardName);
+                    entries[i].Info = info;
+                    entries[i].ProbeError = undecodable ?? "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy";
+                    continue;
                 }
                 // Spec 3.4: the camera's tag, else the clip name, else the card folder — into the report and the proxy.
                 info.Reel = ReelResolver.Resolve(entries[i].Clip, info, plan.CardName);
