@@ -14,6 +14,9 @@ public sealed record BuiltinLut(
     [property: JsonPropertyName("gamut")] string Gamut)
 {
     [JsonIgnore] public string Path { get; init; } = "";
+
+    /// The user's own file from %APPDATA%\Offload\luts replaced the built-in one (LutCatalog.WithUserOverrides).
+    [JsonIgnore] public bool UserFile { get; init; }
 }
 
 /// The built-in LUTs shipped next to the app (Offload\luts) or, in a development build, shared\luts in the repo.
@@ -24,8 +27,40 @@ public sealed class LutCatalog(string? folder, IReadOnlyList<BuiltinLut> luts)
 
     public BuiltinLut? Find(string? id) => id == null ? null : Luts.FirstOrDefault(l => l.Id == id);
 
-    static readonly Lazy<LutCatalog> DefaultCatalog = new(() => Load(DefaultFolder));
+    static readonly Lazy<LutCatalog> DefaultCatalog = new(LoadDefault);
+
+    /// The app's and CLI's catalog: the built-in LUTs, each replaced by the user's own file where there is one.
     public static LutCatalog Default => DefaultCatalog.Value;
+
+    /// Builds what Default holds (Default itself is loaded once, on first use).
+    public static LutCatalog LoadDefault() => Load(DefaultFolder).WithUserOverrides(UserFolder);
+
+    /// %APPDATA%\Offload\luts (or OFFLOAD_SETTINGS_DIR\luts): `<id>.cube` there replaces the built-in LUT with that id
+    /// — like ~/Library/Application Support/Offload/luts on the Mac.
+    public static string UserFolder => System.IO.Path.Combine(Desktop.AppData.Folder, "luts");
+
+    public const string UserFileSuffix = " (vlastní soubor)";
+
+    /// The user's own file for a camera log wins over the built-in approximation — e.g. ARRI's official Rec.709 LUT saved
+    /// as %APPDATA%\Offload\luts\arri-logc4-awg4.cube (vendor LUTs may not be shipped with the app, but anyone may use
+    /// them on their own computer). Only valid 3D .cube files count; other names in the folder are ignored. Never throws.
+    public LutCatalog WithUserOverrides(string? folder)
+    {
+        if (string.IsNullOrEmpty(folder)) return this;
+        try
+        {
+            if (!Directory.Exists(folder)) return this;
+            return new(Folder, Luts.Select(l =>
+            {
+                var own = System.IO.Path.Combine(folder, l.Id + ".cube");
+                return System.IO.File.Exists(own) && IsValidCube(own) ? l with { Path = own, Name = l.Name + UserFileSuffix, UserFile = true } : l;
+            }).ToList());
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return this;
+        }
+    }
 
     public static string? DefaultFolder
     {
@@ -180,7 +215,11 @@ public static class LutResolver
     }
 
     static LutUse? Builtin(LutCatalog cat, string? id, string source, string reason) =>
-        cat.Find(id) is { } lut ? new LutUse(source, lut.Id, lut.Name, reason) { File = lut.Path } : null;
+        cat.Find(id) is { } lut ? new LutUse(source, lut.Id, lut.Name, WithUserFile(reason, lut)) { File = lut.Path } : null;
+
+    /// The report says when the user's own file replaced the built-in LUT, and which one.
+    internal static string WithUserFile(string reason, BuiltinLut lut) =>
+        lut.UserFile ? $"{reason}; soubor {lut.Path}" : reason;
 
     /// BRAW decodes in the gamma the clip was shot in: only "Blackmagic Design Film" Gen 5 matches the built-in LUT.
     /// Video / Extended Video / Custom / HDR gammas are display-ready already; an older decoder without the gamma

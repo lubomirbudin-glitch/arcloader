@@ -17,11 +17,17 @@ static class TestEnvironment
         try
         {
             if (Directory.Exists(HistoryRoot))
-                foreach (var old in Directory.EnumerateDirectories(HistoryRoot, "history-*"))
-                    try { Directory.Delete(old, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+                foreach (var pattern in new[] { "history-*", "appdata-*" })
+                    foreach (var old in Directory.EnumerateDirectories(HistoryRoot, pattern))
+                        try { Directory.Delete(old, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         HistoryStore.DefaultFolderOverride = Path.Combine(HistoryRoot, "history-" + Environment.ProcessId);
+        // Everything else the app keeps in %APPDATA%\Offload (own LUTs in luts\, settings, update state) goes to a temp
+        // folder too, through the app's own seam — the developer's own files never change a test (or the other way round).
+        var appData = Path.Combine(HistoryRoot, "appdata-" + Environment.ProcessId);
+        Directory.CreateDirectory(appData);
+        Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", appData);
     }
 #pragma warning restore CA2255
 }
@@ -36,4 +42,5 @@ public class TestEnvironmentTests
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         Assert.False(folder.StartsWith(appData, StringComparison.OrdinalIgnoreCase));
     }
+
 }

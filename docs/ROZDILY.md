@@ -143,7 +143,9 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Hardwarové dekódování proxy** (2026-10-08): Mac ho vypnul (VideoToolbox na Intelu dával zelené snímky), Windows
   dekóduje H.264/HEVC s `-hwaccel auto` — na Windows prověřit (VYVOJ-WINDOWS, Naplánováno).
 - **ARRIRAW `--desqueeze`:** Mac jen u anamorfních klipů (2× rychlejší dekódování), Windows vždy.
-- **Vlastní soubor místo vestavěného LUTu:** jen Mac (`~/Library/Application Support/Offload/luts/<id>.cube`).
+- **Vlastní soubor místo vestavěného LUTu:** obě verze — Mac `~/Library/Application Support/Offload/luts/<id>.cube`,
+  Windows `%APPDATA%\Offload\luts\<id>.cube`; v seznamu „(vlastní soubor)“. Windows navíc zapíše cestu k souboru do
+  důvodu LUTu v reportu (`clips[].lut.reason`).
 - **Zámky dne a doplnění** (Windows): klíč je „id svazku + cesta na něm“ — namapovaný disk a jeho UNC cesta, `subst`,
   junction a krátká jména 8.3 dávají jiné klíče a zámek se neuplatní. Mac žádný z těchto zámků nezná (poslední zápis vyhraje).
 - **Doplnění z jiného procesu** při přepisu seznamu klipů a denního reportu (stage 2): nehlídá se; vyhraje poslední zápis a

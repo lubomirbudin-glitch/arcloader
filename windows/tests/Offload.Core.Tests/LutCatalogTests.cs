@@ -40,4 +40,60 @@ public class LutCatalogTests
         Assert.False(LutCatalog.IsValidCube(bad));
         Assert.False(LutCatalog.IsValidCube(Path.Combine(dir.Path, "missing.cube")));
     }
+
+    internal static readonly string[] Cube2 = ["TITLE \"vendor\"", "LUT_3D_SIZE 2", "0 0 0", "1 0 0", "0 1 0", "1 1 0", "0 0 1", "1 0 1", "0 1 1", "1 1 1"];
+
+    // Mac 572f059: the user's own <id>.cube (e.g. ARRI's official Rec.709 LUT) wins over the built-in approximation.
+    [Fact]
+    public void UserOverride_ReplacesTheBuiltinWithTheSameId()
+    {
+        using var dir = new TempDir();
+        var own = Path.Combine(dir.Path, "arri-logc4-awg4.cube");
+        File.WriteAllLines(own, Cube2);
+        File.WriteAllLines(Path.Combine(dir.Path, "sony-slog3-sgamut3.cube"), ["LUT_3D_SIZE 2", "0 0 0"]);   // broken: ignored
+        File.WriteAllLines(Path.Combine(dir.Path, "my-look.cube"), Cube2);                                  // no such id: ignored
+        var builtin = LutCatalog.Load(LutCatalog.DefaultFolder);
+        var cat = builtin.WithUserOverrides(dir.Path);
+
+        Assert.Equal(11, cat.Luts.Count);
+        Assert.Equal(builtin.Folder, cat.Folder);
+        var arri = cat.Find("arri-logc4-awg4")!;
+        Assert.Equal(own, arri.Path);
+        Assert.True(arri.UserFile);
+        Assert.Equal("ARRI LogC4 / AWG4 → Rec.709 (vlastní soubor)", arri.Name);
+        foreach (var l in cat.Luts.Where(l => l.Id != "arri-logc4-awg4"))
+        {
+            Assert.Equal(builtin.Find(l.Id), l);
+            Assert.False(l.UserFile);
+        }
+        Assert.Null(cat.Find("my-look"));
+        Assert.Equal(builtin.Luts, builtin.WithUserOverrides(Path.Combine(dir.Path, "missing")).Luts);
+        Assert.Equal(builtin.Luts, builtin.WithUserOverrides(null).Luts);
+    }
+
+    [Fact]
+    public void UserOverride_InTheReport_NameAndReason()
+    {
+        using var dir = new TempDir();
+        var own = Path.Combine(dir.Path, "arri-logc4-awg4.cube");
+        File.WriteAllLines(own, Cube2);
+        var cat = LutCatalog.Load(LutCatalog.DefaultFolder).WithUserOverrides(dir.Path);
+        var clip = new Clip { Name = "A009C002_261008_R2PK", Path = "A009C002_261008_R2PK.mxf", Format = ClipFormat.Arriraw, Segments = ["A009C002_261008_R2PK.mxf"], Bytes = 1 };
+        var info = new ClipInfo { Camera = "ALEXA 35", LogEncoding = "LogC4" };
+
+        var auto = LutResolver.Resolve(clip, info, @"X:\A009C002_261008_R2PK.mxf", new ProxySettings { LutMode = LutMode.Auto }, cat);
+        Assert.Equal(("auto", "arri-logc4-awg4", own), (auto.Source, auto.Id, auto.File));
+        Assert.EndsWith("(vlastní soubor)", auto.Name);
+        Assert.Equal($"ARRIRAW (LogC4); soubor {own}", auto.Reason);
+        Assert.True(auto.IsBuiltin);   // same input convention as the LUT it replaces (pre-map, art-cmd LogC4)
+
+        var chosen = LutResolver.Resolve(clip, info, "", new ProxySettings { LutMode = LutMode.Builtin, LutBuiltin = "arri-logc4-awg4" }, cat);
+        Assert.Equal(own, chosen.File);
+        Assert.EndsWith($"; soubor {own}", chosen.Reason);
+
+        var rule = LutRules.Use(1, new LutRule { Lut = "arri-logc4-awg4" }, cat);
+        Assert.Equal(own, rule.File);
+        Assert.EndsWith($"; soubor {own}", rule.Reason);
+        Assert.EndsWith("(vlastní soubor)", rule.Name);
+    }
 }

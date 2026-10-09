@@ -179,7 +179,9 @@ klikněte na „Další informace“ → „Přesto spustit“.
   kamery (ALEXA 35 → LogC4, ostatní ALEXA/AMIRA → LogC3), ARRIRAW podle metadat, Blackmagic RAW (BRAW) podle gamy klipu (Film Gen 5 → vestavěný LUT; Film starší generace = bez LUTu, s volbou „převést na Gen 5“ (Dekodéry; **neověřené**, čeká vzorek Gen 4) LUT Gen 5; Video, Extended Video a další gamy = bez LUTu; bez údaje o gamě se předpokládá Film Gen 5),
   RED → Log3G10. Canon, Panasonic, DJI a Fuji se zatím nepoznají (chybí vzorové klipy), D-Log M vestavěný LUT nemá —
   takové klipy dostanou záložní LUT. U ARRI jde o předpoklad pro ProRes: klip nahraný přímo v Rec.709 by LUT dostal
-  neprávem, pak zvolte „Bez LUT“. Report ukáže u každého klipu použitý LUT a důvod. Na vzorcích z kamer se ještě
+  neprávem, pak zvolte „Bez LUT“. Report ukáže u každého klipu použitý LUT a důvod. Vlastní soubor
+  `%APPDATA%\Offload\luts\<id>.cube` (např. oficiální `arri-logc4-awg4.cube` od ARRI) nahradí vestavěný LUT se stejným
+  id v aplikaci i CLI — v seznamu má „(vlastní soubor)“, v reportu je jeho cesta v důvodu LUTu. Na vzorcích z kamer se ještě
   ověří rozsah: R3D a ARRIRAW (přes ProRes/MXF mezisoubor) a ProRes z ALEXA 35 (LogC4) se berou jako legální video.
 - **Spuštění:** tlačítko „▶ Spustit offload“ (s úlohou ve frontě „Zařadit do fronty“) nebo Ctrl+Enter; nad ním
   „1 karta → 2 disky · 1,70 GB“ a odhad času (jen z rychlostí naměřených v tomto spuštění; jinak jen velikost). Každá karta
@@ -489,7 +491,8 @@ nápovědy a chyby parseru česky tam, kde je System.CommandLine 2.0.12 přelož
 protože `copy` vyžaduje kartu a cíl, takže `copy --lut list` by neprošlo parsováním. `--lut-fallback <id|none>` je LUT
 pro klipy, které `auto` nepozná (výchozí `none`). Neznámé id skončí chybou (exit 1). Vestavěné LUTy jsou v balíčku
 ve složce `luts\` vedle `Offload.exe` (11 souborů `.cube` + `luts.json`); chybějící složka nic neshodí, `auto` pak
-LUT nepoužije.
+LUT nepoužije. Soubor `%APPDATA%\Offload\luts\<id>.cube` nahradí vestavěný LUT se stejným id (`offload luts` ho vypíše
+s „(vlastní soubor)“).
 
 `--proxy-folder <složka>` (jen s `--proxy`): každá hotová proxy se kromě `_PROXY` na cílech zkopíruje i do
 `<složka>\<datum>\<karta>\<složka klipu>\` (od 0.5.1 stejné podsložky jako `_PROXY`, tedy jako na kartě; stejný název
