@@ -58,6 +58,12 @@ public class ArriRawTests
             :IgnoreDuration
             if defined DUR goto Nothing
             goto Meta
+            :RejectDurationOddly
+            if defined DUR (
+              echo [2026-10-05 10:00:00.000] [art] [error] Unrecognised argument: 1
+              exit /b 2
+            )
+            goto Meta
             :Real
             if defined TCS if defined LOOK (
               echo [2026-10-05 10:00:00.000] [art] [error] target-colorspace argument is only valid for embedded looks with DRT LUTs
@@ -361,10 +367,11 @@ public class ArriRawTests
         return path;
     }
 
-    static (string Card, ExternalTools Tools) AnalysisSetup(TempDir dir, string meta, string export = "Meta", bool ffprobeHangs = false, bool artCmd = true)
+    static (string Card, ExternalTools Tools) AnalysisSetup(TempDir dir, string meta, string export = "Meta", bool ffprobeHangs = false, bool artCmd = true,
+        string file = "A001C001.mxf")
     {
         var card = dir.Sub("card");
-        File.WriteAllText(Path.Combine(card, "A001C001.mxf"), "not really ARRIRAW");
+        File.WriteAllText(Path.Combine(card, file), "not really ARRIRAW");
         File.WriteAllText(Path.Combine(dir.Path, "meta.json"), meta);
         var tools = new ExternalTools
         {
@@ -376,7 +383,16 @@ public class ArriRawTests
         return (card, tools);
     }
 
-    static Clip Mxf => new() { Name = "A001C001", Path = "A001C001.mxf", Format = ClipFormat.Video, Segments = ["A001C001.mxf"], Bytes = 1 };
+    static Clip Mxf => MxfNamed("A001C001.mxf");
+
+    static Clip MxfNamed(string file) =>
+        new() { Name = Path.GetFileNameWithoutExtension(file), Path = file, Format = ClipFormat.Video, Segments = [file], Bytes = 1 };
+
+    /// ffprobe's answer for an MXF it cannot decode, with the camera tags an ARRI MXF carries.
+    const string ArriTaggedProbe = """
+        {"streams":[{"index":0,"codec_type":"video","codec_name":"unknown","r_frame_rate":"24/1","avg_frame_rate":"24/1","duration":"10.000000"}],
+         "format":{"format_name":"mxf","duration":"10.000000","tags":{"company_name":"ARRI","product_name":"ALEXA 35"}}}
+        """;
 
     static int CallCount(string dir, string file) => File.Exists(Path.Combine(dir, file)) ? File.ReadAllLines(Path.Combine(dir, file)).Count(l => l == "call") : 0;
 
@@ -506,17 +522,17 @@ public class ArriRawTests
         lock (seen) Assert.All(seen, f => Assert.True(double.IsFinite(f) && f >= 0 && f <= 1, string.Join(", ", seen)));
     }
 
-    /// Only a refused --duration gets the slow full export: art-cmd failing on the file (an X-OCN MXF, a corrupt clip) is
-    /// asked once, and the clip's note says what art-cmd said — not a guess at Sony X-OCN.
+    /// An MXF that says nothing of ARRI (an X-OCN clip, say): art-cmd failing on it is asked once, and the clip's note says
+    /// what art-cmd said — not a guess at Sony X-OCN.
     [Fact]
-    public void Analysis_ArtCmdFailsOnTheFile_NoFullExport_NoteQuotesIt()
+    public void Analysis_ArtCmdFailsOnAForeignMxf_NoFullExport_NoteQuotesIt()
     {
         using var dir = new TempDir();
-        var (card, tools) = AnalysisSetup(dir, OneFrameMeta, export: "Fail");
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta, export: "Fail", file: "CLIP0001.mxf");
         var log = new List<string>();
         using var r = new ProxyRenderer(Settings, tools) { Log = l => { lock (log) log.Add(l); } };
 
-        var a = r.Analyze(Mxf, card);
+        var a = r.Analyze(MxfNamed("CLIP0001.mxf"), card);
 
         Assert.Equal(ClipFormat.Video, a.Clip.Format);
         Assert.Null(a.Info.Width);
@@ -525,9 +541,73 @@ public class ArriRawTests
         lock (log)
         {
             Assert.DoesNotContain(log, l => l.Contains("every frame"));
-            Assert.Contains(log, l => l.Contains("A001C001") && l.Contains("[error] clip cannot be read"));
+            Assert.Contains(log, l => l.Contains("CLIP0001") && l.Contains("[error] clip cannot be read"));
         }
     }
+
+    /// Re-review N-2: how the real art-cmd words a refused --duration is not known. On a clip known to be ARRI any failure
+    /// of the quick export gets the full export — here a refusal that never says "duration" — so the clip is analysed.
+    [Fact]
+    public void Analysis_KnownArriByName_RefusalInOtherWords_FullExport()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta.Replace("\"clipDuration\":1", "\"clipDuration\":240"), export: "RejectDurationOddly");
+        var log = new List<string>();
+        using var r = new ProxyRenderer(Settings, tools) { Log = l => { lock (log) log.Add(l); } };
+
+        var (clip, info) = r.Analyze(Mxf, card);   // A001C001.mxf: ARRI's clip naming
+
+        Assert.Equal(ClipFormat.Arriraw, clip.Format);
+        Assert.Equal(240, info.Frames);
+        var calls = Calls(dir.Path);
+        Assert.Equal(2, calls.Count);
+        Assert.DoesNotContain("--duration", calls[1]);
+        lock (log) Assert.Contains(log, l => l.Contains("failed (exit 2)") && l.Contains("Unrecognised argument") && l.Contains("every frame"));
+    }
+
+    [Fact]
+    public void Analysis_KnownArriByTags_RefusalInOtherWords_FullExport()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta.Replace("\"clipDuration\":1", "\"clipDuration\":240"), export: "RejectDurationOddly", file: "CLIP0001.mxf");
+        File.WriteAllText(Path.Combine(dir.Path, "probe.json"), ArriTaggedProbe);
+        using var r = new ProxyRenderer(Settings, tools);
+
+        var (clip, info) = r.Analyze(MxfNamed("CLIP0001.mxf"), card);
+
+        Assert.Equal(ClipFormat.Arriraw, clip.Format);
+        Assert.Equal(240, info.Frames);
+        Assert.Equal(2, Calls(dir.Path).Count);
+    }
+
+    [Fact]
+    public void Analysis_AriSequence_RefusalInOtherWords_FullExport()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta, export: "RejectDurationOddly");
+        var folder = Path.Combine(card, "Clip2");
+        Directory.CreateDirectory(folder);
+        for (int i = 0; i < 3; i++) File.WriteAllText(Path.Combine(folder, $"Clip2.{i:0000000}.ari"), "x");
+        using var r = new ProxyRenderer(Settings, tools);
+        var seq = new Clip { Name = "Clip2", Path = "Clip2", Format = ClipFormat.Arriraw, Bytes = 3,
+            Segments = [.. Enumerable.Range(0, 3).Select(i => $"Clip2/Clip2.{i:0000000}.ari")] };
+
+        var (_, info) = r.Analyze(seq, card);
+
+        Assert.Equal(4608, info.Width);
+        Assert.Equal(2, Calls(dir.Path).Count);
+    }
+
+    [Theory]
+    [InlineData("A001C003_231009_R1AB.mxf", null, true)]
+    [InlineData("A_0009C001_231009_123456_a1B2C.mxf", null, true)]
+    [InlineData("A001R2EC/clip.mxf", null, true)]
+    [InlineData("CLIP0001.mxf", "ALEXA Mini LF", true)]
+    [InlineData("CLIP0001.mxf", "ARRI", true)]
+    [InlineData("CLIP0001.mxf", null, false)]
+    [InlineData("XDROOT/Clip/C0001.MXF", "PXW-FX9", false)]
+    public void LooksLikeArri_TagsOrNaming(string path, string? camera, bool expected) =>
+        Assert.Equal(expected, ProxyRenderer.LooksLikeArri(MxfNamed(path), camera == null ? null : new ClipInfo { Camera = camera }));
 
     [Fact]
     public void Analysis_OneFrameExportWritesNothing_FullExport()

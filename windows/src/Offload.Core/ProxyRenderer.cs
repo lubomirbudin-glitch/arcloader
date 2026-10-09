@@ -164,6 +164,22 @@ public sealed class ProxyRenderer : IDisposable
 
     /// The note of an MXF that neither ffmpeg nor art-cmd could read: art-cmd's own words (its error line, or that it
     /// timed out) — the clip may be ARRIRAW that art-cmd failed on, so never a guess at another codec.
+    /// An MXF that says it is ARRI: ffprobe's camera tags (company / product name: ARRI, ALEXA, AMIRA — the cameras the
+    /// LUT choice knows as ARRI), or ARRI's naming of the clip or of a folder above it ("A001C003…", "A_0009C001…", reel
+    /// folder "A001R2EC"). Generous on purpose: a false match costs a slow analysis (a camera with ARRI-like names, such
+    /// as Sony VENICE, gets the full export when art-cmd fails on it), a missed one costs the clip its proxy.
+    internal static bool LooksLikeArri(Clip clip, ClipInfo? container)
+    {
+        if (container?.Camera is string camera
+            && (camera.Contains("ARRI", StringComparison.OrdinalIgnoreCase) || camera.Contains("ALEXA", StringComparison.OrdinalIgnoreCase)
+                || camera.Contains("AMIRA", StringComparison.OrdinalIgnoreCase)))
+            return true;
+        var parts = clip.Path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+        return parts.Select((p, i) => i == parts.Length - 1 ? Path.GetFileNameWithoutExtension(p) : p).Any(ArriName.IsMatch);
+    }
+
+    static readonly System.Text.RegularExpressions.Regex ArriName = new(@"^[A-Z]_?\d{3,4}(C\d{3}|R[0-9A-Z]{2,4}$)");
+
     internal static string UndecodableNote(Exception arriError)
     {
         var why = arriError is ToolError t ? t.Detail : arriError.Message;
@@ -187,7 +203,7 @@ public sealed class ProxyRenderer : IDisposable
         if (!backends.TryGetValue(clip.Format, out var b) || !b.IsAvailable(Tools))
             throw new ToolError(clip.Format.Label(), -1, UnsupportedReason(clip) ?? "");
         // An .ari sequence: its frames are the files the scanner found.
-        return Logged(() => b is ArriBackend arri ? arri.Probe(path, Tools, workDir, container: null, clip.Segments.Count) : b.Probe(path, Tools, workDir));
+        return Logged(() => b is ArriBackend arri ? arri.Probe(path, Tools, workDir, container: null, clip.Segments.Count, knownArri: true) : b.Probe(path, Tools, workDir));
     }
 
     /// A decoder error turned into a note for the clip (RawDecoderException): the decoder's own words — its stderr,
@@ -220,7 +236,7 @@ public sealed class ProxyRenderer : IDisposable
         try
         {
             var path = Layout.Join(cardPath, clip.Path);
-            var info = arri is ArriBackend a ? a.Probe(path, Tools, workDir, container) : arri.Probe(path, Tools, workDir);
+            var info = arri is ArriBackend a ? a.Probe(path, Tools, workDir, container, knownArri: LooksLikeArri(clip, container)) : arri.Probe(path, Tools, workDir);
             if (info.Width == null) return null;
             return (new Clip { Name = clip.Name, Path = clip.Path, Format = ClipFormat.Arriraw, Segments = clip.Segments, Bytes = clip.Bytes, IsCameraProxy = clip.IsCameraProxy }, info);
         }

@@ -145,7 +145,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   dekódování (experimentální)“ / `--hw-decode` (`proxy.hardwareDecode`), Mac volbu nemá.
 - **Vlastní soubor místo vestavěného LUTu:** jen Mac (`~/Library/Application Support/Offload/luts/<id>.cube`).
 - **Rychlá analýza ARRIRAW** (2026-10-09): jen Windows. art-cmd exportuje metadata jen prvního snímku (`--duration 1`,
-  limit 120 s; když volbu odmítne, celý export jako dřív) a počet snímků bere z ffprobe (sekvence `.ari`: počet souborů),
+  limit 120 s; když selže u klipu, který je podle značek nebo názvu ARRI, celý export jako dřív) a počet snímků bere
+  z ffprobe (sekvence `.ari`: počet souborů),
   ffprobe má na MXF limit 60 s. Když ffprobe nedoběhne a export počet neřekne, délka klipu zůstane neznámá (prázdná).
   Mac (`3a970b5`) exportuje metadata všech snímků, tj. čte celý klip (karta A_0009: analýza přes 15 min), a ffprobe
   limit nemá. art-cmd a REDline jdou na Windows zrušit uprostřed dekódování (Mac čeká, až doběhnou).

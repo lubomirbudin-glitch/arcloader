@@ -475,42 +475,59 @@ internal sealed class ArriBackend : IRawBackend
     /// How long the one-frame metadata export may take: it reads a frame, not the clip; a hung tool must never hang the job.
     internal TimeSpan ExportTimeout { get; init; } = TimeSpan.FromSeconds(120);
 
-    public ClipInfo Probe(string path, ExternalTools tools, string workDir) => Probe(path, tools, workDir, container: null);
+    /// Through the interface the clip is already ARRIRAW (an .ari sequence): any failure of the quick export falls back.
+    public ClipInfo Probe(string path, ExternalTools tools, string workDir) => Probe(path, tools, workDir, container: null, knownArri: true);
 
     /// The clip's metadata from `art-cmd export` of its first frame only (`--duration 1`): without it art-cmd writes the
     /// metadata of every frame, i.e. reads the whole clip — minutes per 100 GB clip (Mac, card A_0009: analysis over 15
-    /// min). An art-cmd that refuses the option gets the full export, as before. The frame count does not depend on what
-    /// a one-frame export reports as `clipDuration`: an .ari sequence counts its frames (`segments`, the scanner's), an
-    /// MXF takes ffprobe's (`container`). When neither is known and the export said ≤ 1, the length stays unknown — a
-    /// one-frame export's 1 may be just that frame, and a wrong length (1 frame, 0.04 s) is worse than none.
-    public ClipInfo Probe(string path, ExternalTools tools, string workDir, ClipInfo? container, int? segments = null)
+    /// min). The frame count does not depend on what a one-frame export reports as `clipDuration`: an .ari sequence counts
+    /// its frames (`segments`, the scanner's), an MXF takes ffprobe's (`container`). When neither is known and the export
+    /// said ≤ 1, the length stays unknown — a one-frame export's 1 may be just that frame, and a wrong length (1 frame,
+    /// 0.04 s) is worse than none.
+    ///
+    /// When the quick export fails, safety comes before speed: on a clip `knownArri` (an .ari sequence; an MXF whose tags
+    /// or name say ARRI) every failure — a non-zero exit, or exit 0 without usable metadata — gets the full export, as
+    /// before the quick one existed; how art-cmd words a refused option is not known for sure, so its words only go to the
+    /// log. Another MXF falls back only when art-cmd exited 0 without writing the metadata; any other failure (no ARRIRAW,
+    /// or damaged) keeps art-cmd's error. A time limit is never retried.
+    public ClipInfo Probe(string path, ExternalTools tools, string workDir, ClipInfo? container, int? segments = null, bool knownArri = false)
     {
         var dir = RawBackends.FreshDir(workDir, "art-meta");
         try
         {
             var json = Path.Combine(dir, "meta.json");
             List<string> args = ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look"];
-            string text;
             bool oneFrame = true;
             // art-cmd writes art.log into its working directory — never let that be the card or a destination. It logs
             // (its errors too) to stdout. A time limit: it reads one frame, and a hung tool must never hang the job.
             var (exit, output) = ToolProcess.RunCombined(tools.ArtCmd!, [.. args, "--duration", "1"], dir, ExportTimeout);
-            if (exit == 0 && File.Exists(json)) text = File.ReadAllText(json);
-            else if (exit == 0 || RefusesDuration(output))
+            bool written = exit == 0 && File.Exists(json);
+            ClipInfo? c = null;
+            if (written)
             {
-                // An art-cmd without --duration for export: the whole clip's metadata, slow but known to work. Any other
-                // failure (the file is no ARRIRAW, or damaged) would only fail again after reading the whole clip.
-                Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: art-cmd export --duration 1: "
-                    + (exit == 0 ? "no metadata written" : RawBackends.LogTail(output)) + " — exporting the metadata of every frame");
+                try
+                {
+                    c = ParseMetadata(File.ReadAllText(json));
+                }
+                catch (Exception e) when (knownArri && e is ToolError or JsonException)
+                {
+                    // unusable metadata: the full export below
+                }
+            }
+            if (c == null)
+            {
+                if (!knownArri && (exit != 0 || written)) throw new ToolError("art-cmd", exit, RawBackends.LogTail(output));
+                var why = exit != 0
+                    ? (RefusesDuration(output) ? "does not know --duration" : $"failed (exit {exit})") + ": " + RawBackends.LogTail(output)
+                    : written ? "wrote unreadable metadata" : "wrote no metadata";
+                Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: art-cmd export --duration 1 {why} — exporting the metadata of every frame");
                 NativeIO.Delete(json);
                 (exit, output) = ToolProcess.RunCombined(tools.ArtCmd!, args, dir);
                 if (exit != 0) throw new ToolError("art-cmd", exit, RawBackends.LogTail(output));
                 if (!File.Exists(json)) throw new ToolError("art-cmd", 0, "no metadata written: " + RawBackends.LogTail(output));
-                text = File.ReadAllText(json);
+                c = ParseMetadata(File.ReadAllText(json));
                 oneFrame = false;
             }
-            else throw new ToolError("art-cmd", exit, RawBackends.LogTail(output));
-            var c = ParseMetadata(text);
             if (c.Frames is not > 1)
             {
                 if (CountFrames(path, container, c.FrameRate, segments) is int frames)
@@ -534,7 +551,7 @@ internal sealed class ArriBackend : IRawBackend
         }
     }
 
-    /// art-cmd's words for an option it does not know name it: its error lines (or last lines) mention "duration".
+    /// For the log only: art-cmd's error lines (or last lines) mention "duration" — probably the option was refused.
     internal static bool RefusesDuration(string output) =>
         RawBackends.LogTail(output).Contains("duration", StringComparison.OrdinalIgnoreCase);
 
