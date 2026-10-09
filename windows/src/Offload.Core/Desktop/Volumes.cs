@@ -13,6 +13,13 @@ public sealed record VolumeItem(string Name, string Path, long Total, long Free,
     public DriveFacts? Facts { get; init; }
 }
 
+/// What a connected volume is to the setup: a destination, a source (ticked in Karty) or neither.
+public enum VolumeUse { Neither, Source, Destination }
+
+/// Volumes.Decide: the volumes (the ones the automatic choice took marked as destinations), the selection, and the
+/// destinations to add and drop.
+public sealed record VolumeDecision(List<VolumeItem> Found, HashSet<string> Selected, AutoDrivePlan Plan);
+
 public static class Volumes
 {
     static readonly HashSet<string> Markers = new(StringComparer.OrdinalIgnoreCase)
@@ -282,6 +289,38 @@ public static class Volumes
         return facts;
     }
 
+    /// What a volume that just appeared is (controller ruling 2026-10-09): a destination — one already, or one the
+    /// automatic choice makes one (`autoDestination`): never a source, not even for a moment — else a source when the
+    /// card rule ticks it (AutoDrives.TickOnArrival), else neither. Pure.
+    public static VolumeUse ArrivalUse(VolumeItem v, bool autoDestination, bool autoCards)
+    {
+        if (v.IsDestination || autoDestination) return VolumeUse.Destination;
+        bool tick = v.Facts is { } f ? AutoDrives.TickOnArrival(f with { LooksLikeCard = v.LooksLikeCard || f.LooksLikeCard }, autoCards)
+            : autoCards && v.LooksLikeCard;
+        return tick ? VolumeUse.Source : VolumeUse.Neither;
+    }
+
+    /// A scan's whole answer in one pure step, applied at once on the UI thread (no state in between is ever shown):
+    /// the automatic destinations first (`auto`; null = none, the demo), the volumes they take marked as destinations,
+    /// then the selection — a volume the automatic choice makes a destination is never ticked. While `auto.Locked` (a
+    /// Start checking the profile, ruling I1) nothing is added, but a disk that would be is not ticked either: it is
+    /// added after the Start.
+    public static VolumeDecision Decide(IEnumerable<string> previousPaths, IReadOnlyList<VolumeItem> found, IEnumerable<string> selected,
+        IReadOnlyList<string> manual, bool autoCards, AutoDriveInput? auto)
+    {
+        var plan = AutoDrivePlan.None;
+        var wouldAdd = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (auto != null)
+        {
+            var full = AutoDrives.Plan(auto with { Locked = false });
+            wouldAdd.UnionWith(full.Add.Select(a => a.Root));
+            if (!auto.Locked) plan = full;
+        }
+        var added = new HashSet<string>(plan.Add.Select(a => a.Root), StringComparer.OrdinalIgnoreCase);
+        var marked = found.Select(v => added.Contains(v.Path) ? v with { IsDestination = true, LooksLikeCard = false } : v).ToList();
+        return new VolumeDecision(marked, SelectionAfterRefresh(previousPaths, marked, selected, manual, autoCards, wouldAdd), plan);
+    }
+
     /// Every ready fixed or removable disk by its root (the Hardware test with no card and no destination chosen).
     /// `skip` (ejected cards) is left out before anything asks the drive — even `IsReady` would mount the card again.
     /// Touches the drives — never call it on the UI thread.
@@ -329,17 +368,16 @@ public static class Volumes
     /// The selection after a rescan (Mac `refreshVolumes`): a card that just appeared is ticked (`autoCards`, the
     /// setting "karty ve čtečkách jako zdroje": camera folders, or a reader's card that is not empty — AutoDrives); a
     /// source that disappeared or now holds a destination drops out; manual folders stay.
+    /// `autoDestinations`: roots the automatic choice makes destinations (VolumeUse.Destination) — never ticked.
     public static HashSet<string> SelectionAfterRefresh(IEnumerable<string> previousPaths, IReadOnlyList<VolumeItem> found,
-        IEnumerable<string> selected, IReadOnlyList<string> manual, bool autoCards = true)
+        IEnumerable<string> selected, IReadOnlyList<string> manual, bool autoCards = true, IReadOnlySet<string>? autoDestinations = null)
     {
         var previous = new HashSet<string>(previousPaths, StringComparer.OrdinalIgnoreCase);
         var result = new HashSet<string>(selected, StringComparer.OrdinalIgnoreCase);
         foreach (var v in found)
         {
-            if (v.IsDestination || previous.Contains(v.Path)) continue;
-            bool tick = v.Facts is { } f ? AutoDrives.TickOnArrival(f with { LooksLikeCard = v.LooksLikeCard || f.LooksLikeCard }, autoCards)
-                : autoCards && v.LooksLikeCard;
-            if (tick) result.Add(v.Path);
+            if (previous.Contains(v.Path)) continue;
+            if (ArrivalUse(v, autoDestinations?.Contains(v.Path) == true, autoCards) == VolumeUse.Source) result.Add(v.Path);
         }
         result.RemoveWhere(p =>
             !found.Any(v => string.Equals(v.Path, p, StringComparison.OrdinalIgnoreCase) && !v.IsDestination)
