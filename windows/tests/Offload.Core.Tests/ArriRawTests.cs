@@ -1,0 +1,146 @@
+namespace Offload.Core.Tests;
+
+/// ARRIRAW findings from the first live use of the Mac version (2026-10-08/09), with a fake art-cmd that logs its
+/// arguments (art-cmd itself is not installed on this PC — the real tool is a manual test).
+public class ArriRawTests
+{
+    static Clip ArriClip(string rel = "A001C001.mxf") =>
+        new() { Name = Path.GetFileNameWithoutExtension(rel), Path = rel, Format = ClipFormat.Arriraw, Segments = [rel], Bytes = 1 };
+
+    static ProxySettings Settings => new() { Enabled = true, Height = 180, Codec = ProxyCodec.ProresProxy, BurnFilename = false, BurnTimecode = false, Audio = false };
+
+    /// A stand-in for art-cmd: logs each argument on its own line (a "call" line first) into calls.txt beside it, then
+    /// `process` writes its --output, `export` copies meta.json (beside it) to its --output.
+    internal static string FakeArtCmd(string dir, string process = "Write", string export = "Meta")
+    {
+        var path = Path.Combine(dir, "art-cmd.cmd");
+        File.WriteAllText(path, $$"""
+            @echo off
+            setlocal
+            set "LOG=%~dp0calls.txt"
+            set "HERE=%~dp0"
+            set OUT=
+            set CMD=%~1
+            set DUR=
+            set TCS=
+            set LOOK=
+            echo call>>"%LOG%"
+            :next
+            if "%~1"=="" goto run
+            >>"%LOG%" echo(%~1
+            if "%~1"=="--output" set "OUT=%~2"
+            if "%~1"=="--duration" set DUR=1
+            if "%~1"=="--target-colorspace" set TCS=1
+            if "%~1"=="--embedded-look" set LOOK=1
+            shift
+            goto next
+            :run
+            if "%CMD%"=="export" goto {{export}}
+            goto {{process}}
+            :Write
+            echo intermediate>"%OUT%"
+            exit /b 0
+            :Meta
+            copy /y "%HERE%meta.json" "%OUT%" >nul
+            exit /b 0
+            :Nothing
+            echo [2026-10-05 10:00:00.000] [art] [info] processing
+            exit /b 0
+            :Fail
+            echo [2026-10-05 10:00:00.000] [art] [error] clip cannot be read
+            exit /b 3
+            :RejectDuration
+            if defined DUR exit /b 2
+            goto Meta
+            :Real
+            if defined TCS if defined LOOK (
+              echo [2026-10-05 10:00:00.000] [art] [error] target-colorspace argument is only valid for embedded looks with DRT LUTs
+              exit /b 0
+            )
+            echo intermediate>"%OUT%"
+            exit /b 0
+            :Grow
+            type nul>"%OUT%"
+            for /l %%i in (1,1,4) do (
+              type "%HERE%chunk.bin">>"%OUT%"
+              ping -n 2 127.0.0.1 >nul
+            )
+            exit /b 0
+
+            """.Replace("\n", "\r\n"));
+        return path;
+    }
+
+    /// A stand-in for ffmpeg: logs its arguments into ffmpeg.txt, reports a finished second, writes its last argument.
+    internal static string FakeFfmpeg(string dir)
+    {
+        var path = Path.Combine(dir, "ffmpeg.cmd");
+        File.WriteAllText(path, """
+            @echo off
+            setlocal
+            set "LOG=%~dp0ffmpeg.txt"
+            set LAST=
+            :next
+            if "%~1"=="" goto run
+            >>"%LOG%" echo(%~1
+            set "LAST=%~1"
+            shift
+            goto next
+            :run
+            echo out_time_us=1000000
+            echo progress=end
+            echo x>"%LAST%"
+            exit /b 0
+
+            """.Replace("\n", "\r\n"));
+        return path;
+    }
+
+    static ExternalTools Tools(string dir, string process = "Write", string export = "Meta") =>
+        new ExternalTools { ArtCmd = FakeArtCmd(dir, process, export), Ffmpeg = FakeFfmpeg(dir), NoSearch = true }.Resolved();
+
+    /// Each art-cmd call's arguments.
+    static List<List<string>> Calls(string dir)
+    {
+        var calls = new List<List<string>>();
+        foreach (var line in File.ReadAllLines(Path.Combine(dir, "calls.txt")))
+        {
+            if (line == "call") calls.Add([]);
+            else calls[^1].Add(line);
+        }
+        return calls;
+    }
+
+    static void Render(ProxyRenderer r, string card, ClipInfo info, Action<double>? progress = null, LutUse? lut = null) =>
+        r.Render(ArriClip(), card, info, lut, Path.Combine(card, "_PROXY", "A001C001.mov"), progress ?? (_ => { }), () => false);
+
+    // --- 2. --desqueeze only for anamorphic clips (it halves art-cmd's speed and does nothing for spherical lenses) ---
+
+    [Fact]
+    public void Desqueeze_OnlyForAnamorphicClips()
+    {
+        var (spherical, _, _) = ArriBackend.Args("in", "out", new ClipInfo { Width = 4608, Height = 3164 }, Settings, new RawLook(false, null), "p.json");
+        Assert.DoesNotContain("--desqueeze", spherical);
+        Assert.Contains("--output-height", spherical);
+        var (unknown, _, _) = ArriBackend.Args("in", "out", new ClipInfo(), Settings, new RawLook(false, null), "p.json");
+        Assert.DoesNotContain("--desqueeze", unknown);
+        var (anamorphic, _, _) = ArriBackend.Args("in", "out", new ClipInfo { Width = 4608, Height = 3164, Squeeze = 2.0 }, Settings, new RawLook(false, null), "p.json");
+        Assert.Contains("--desqueeze", anamorphic);
+        var (hawk, _, _) = ArriBackend.Args("in", "out", new ClipInfo { Squeeze = 1.3 }, Settings, new RawLook(false, null), "p.json");
+        Assert.Contains("--desqueeze", hawk);
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(2.0, true)]
+    public void Desqueeze_WhatArtCmdIsGiven(double? squeeze, bool expected)
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path));
+        Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1, Squeeze = squeeze });
+        var process = Assert.Single(Calls(dir.Path));
+        Assert.Equal("process", process[0]);
+        Assert.Equal(expected, process.Contains("--desqueeze"));
+    }
+}

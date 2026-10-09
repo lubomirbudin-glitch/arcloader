@@ -435,6 +435,9 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
       `ffprobe -f lavfi -i "movie=<proxy>,signalstats"` — žádný snímek s UAVG i VAVG u nuly); Nastavení → Proxy
       „Hardwarové dekódování (experimentální)“ zapnout → log ffmpeg má `-hwaccel auto`, proxy dál bez zelených snímků;
       `offload … --proxy --hw-decode` totéž.
+- [ ] 60. **ARRIRAW sférický / anamorfní (art-cmd):** sférický klip ALEXA 35 4.6K OG → art-cmd bez `--desqueeze`
+      (Správce úloh → Podrobnosti → příkazový řádek), rychlost dekódování ~2× vyšší než dřív; anamorfní klip (2×) →
+      s `--desqueeze`, proxy roztažená na správný poměr stran.
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
