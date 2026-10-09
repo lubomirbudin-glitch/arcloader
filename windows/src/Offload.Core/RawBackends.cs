@@ -50,11 +50,23 @@ internal static class RawBackends
         return d;
     }
 
+    /// Best effort, with a few short retries: a tool killed a moment ago (its children end a little later) or a virus
+    /// scanner may still hold a file or the folder itself.
     public static void DeleteDir(string dir)
     {
-        try { Directory.Delete(dir, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+                return;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                if (attempt >= 10) return;
+                Thread.Sleep(100);
+            }
+        }
     }
 
     /// A RAW tool's log lines that explain a failure, on one line: its [error]/[critical] lines (else the last three),

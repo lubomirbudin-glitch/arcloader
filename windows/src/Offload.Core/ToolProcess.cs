@@ -155,16 +155,14 @@ internal sealed class ToolProcess : IDisposable
         p.Start(Add);
         while (!p.WaitForExit(200))
         {
-            if (isCancelled?.Invoke() == true)
-            {
-                p.Kill();
-                throw new ToolError(p.Name, -1, "cancelled");
-            }
-            if (timeout is TimeSpan limit && Environment.TickCount64 - started > limit.TotalMilliseconds)
-            {
-                p.Kill();
-                throw new ToolError(p.Name, -1, $"neodpověděl do {limit.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s — ukončen");
-            }
+            bool cancelled = isCancelled?.Invoke() == true;
+            if (!cancelled && !(timeout is TimeSpan limit && Environment.TickCount64 - started > limit.TotalMilliseconds)) continue;
+            p.Kill();
+            // Bounded: the caller removes the tool's folder next, which a dying process may still hold.
+            p.WaitForExit(5000);
+            throw new ToolError(p.Name, -1, cancelled
+                ? "cancelled"
+                : $"neodpověděl do {timeout!.Value.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s — ukončen");
         }
         p.WaitForExit();   // without a limit it also waits until both pipes reached their end
         lock (output) return (p.ExitCode, output.ToString());
