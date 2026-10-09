@@ -340,16 +340,22 @@ public class ArriRawTests
         Assert.Equal(241, info.Frames);
     }
 
+    /// The frames the scanner found (its segments), not whatever *.ari lies in the folder (a Mac's "._" copies match too).
     [Fact]
-    public void Analysis_AriSequence_CountsItsFiles()
+    public void Analysis_AriSequence_CountsItsSegments()
     {
         using var dir = new TempDir();
         var (card, tools) = AnalysisSetup(dir, OneFrameMeta);
         var folder = Path.Combine(card, "A001C002");
         Directory.CreateDirectory(folder);
         for (int i = 0; i < 5; i++) File.WriteAllText(Path.Combine(folder, $"A001C002.{i:0000000}.ari"), "x");
+        File.WriteAllText(Path.Combine(folder, "._A001C002.0000000.ari"), "AppleDouble");
         using var r = new ProxyRenderer(Settings, tools);
-        var seq = new Clip { Name = "A001C002", Path = "A001C002", Format = ClipFormat.Arriraw, Segments = [@"A001C002\A001C002.0000000.ari"], Bytes = 1 };
+        var seq = new Clip
+        {
+            Name = "A001C002", Path = "A001C002", Format = ClipFormat.Arriraw, Bytes = 5,
+            Segments = [.. Enumerable.Range(0, 5).Select(i => $"A001C002/A001C002.{i:0000000}.ari")],
+        };
 
         var (clip, info) = r.Analyze(seq, card);
 
@@ -378,19 +384,50 @@ public class ArriRawTests
         lock (log) Assert.Contains(log, l => l.Contains("art-cmd export --duration 1") && l.Contains("every frame"));
     }
 
+    /// The case the time limit is for, with the worst answer a one-frame export can give (clipDuration 1): ffprobe gave
+    /// nothing to count with, so the length is unknown — never 1 frame (00:00:00:01, a bar stuck at 76 %).
     [Fact]
-    public void Analysis_FfprobeHangsOnMxf_TimeLimit_ThenTheArriTool()
+    public void Analysis_FfprobeHangsOnMxf_TimeLimit_ThenTheArriTool_LengthUnknownNotOneFrame()
     {
         using var dir = new TempDir();
-        var (card, tools) = AnalysisSetup(dir, OneFrameMeta.Replace("\"clipDuration\":1", "\"clipDuration\":240"), ffprobeHangs: true);
-        using var r = new ProxyRenderer(Settings, tools) { MxfProbeTimeout = TimeSpan.FromSeconds(1) };
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta, ffprobeHangs: true);
+        var log = new List<string>();
+        using var r = new ProxyRenderer(Settings, tools) { MxfProbeTimeout = TimeSpan.FromSeconds(1), Log = l => { lock (log) log.Add(l); } };
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         var (clip, info) = r.Analyze(Mxf, card);
 
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
         Assert.Equal(ClipFormat.Arriraw, clip.Format);
+        Assert.Equal((4608, 3164), (info.Width, info.Height));
+        Assert.Null(info.Frames);
+        Assert.Null(info.Duration);
+        Assert.Null(IntermediateProgress.ExpectedBytes(info, Settings));   // no estimate from a wrong size
+        lock (log) Assert.Contains(log, l => l.Contains("A001C001") && l.Contains("unknown"));
+    }
+
+    [Fact]
+    public void Analysis_FfprobeHangsOnMxf_ClipDurationOfTheWholeClip_Kept()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta.Replace("\"clipDuration\":1", "\"clipDuration\":240"), ffprobeHangs: true);
+        using var r = new ProxyRenderer(Settings, tools) { MxfProbeTimeout = TimeSpan.FromSeconds(1) };
+        var (_, info) = r.Analyze(Mxf, card);
         Assert.Equal(240, info.Frames);
+        Assert.Equal(10.0, info.Duration);
+    }
+
+    /// A clip of unknown length still gets its proxy; progress stays a number between 0 and 1.
+    [Fact]
+    public void Render_UnknownLength_ProxyMade_ProgressStaysInRange()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var seen = new List<double>();
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path)) { IntermediatePoll = TimeSpan.FromMilliseconds(50) };
+        Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24" }, f => { lock (seen) seen.Add(f); });
+        Assert.True(File.Exists(Path.Combine(card, "_PROXY", "A001C001.mov")));
+        lock (seen) Assert.All(seen, f => Assert.True(double.IsFinite(f) && f >= 0 && f <= 1, string.Join(", ", seen)));
     }
 
     [Fact]

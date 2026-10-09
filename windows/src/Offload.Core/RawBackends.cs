@@ -460,8 +460,10 @@ internal sealed class ArriBackend : IRawBackend
     /// The clip's metadata from `art-cmd export` of its first frame only (`--duration 1`): without it art-cmd writes the
     /// metadata of every frame, i.e. reads the whole clip — minutes per 100 GB clip (Mac, card A_0009: analysis over 15
     /// min). An art-cmd that refuses the option gets the full export, as before. The frame count does not depend on what
-    /// a one-frame export reports as `clipDuration`: an .ari sequence counts its files, an MXF takes ffprobe's (`container`).
-    public ClipInfo Probe(string path, ExternalTools tools, string workDir, ClipInfo? container)
+    /// a one-frame export reports as `clipDuration`: an .ari sequence counts its frames (`segments`, the scanner's), an
+    /// MXF takes ffprobe's (`container`). When neither is known and the export said ≤ 1, the length stays unknown — a
+    /// one-frame export's 1 may be just that frame, and a wrong length (1 frame, 0.04 s) is worse than none.
+    public ClipInfo Probe(string path, ExternalTools tools, string workDir, ClipInfo? container, int? segments = null)
     {
         var dir = RawBackends.FreshDir(workDir, "art-meta");
         try
@@ -469,6 +471,7 @@ internal sealed class ArriBackend : IRawBackend
             var json = Path.Combine(dir, "meta.json");
             List<string> args = ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look"];
             string text;
+            bool oneFrame = true;
             try
             {
                 // art-cmd writes art.log into its working directory — never let that be the card or a destination.
@@ -482,12 +485,23 @@ internal sealed class ArriBackend : IRawBackend
                 NativeIO.Delete(json);
                 ToolProcess.Run(tools.ArtCmd!, args, dir);
                 text = File.ReadAllText(json);
+                oneFrame = false;
             }
             var c = ParseMetadata(text);
-            if (c.Frames is not > 1 && CountFrames(path, container, c.FrameRate) is int frames)
+            if (c.Frames is not > 1)
             {
-                c.Frames = frames;
-                if (Timecode.Fps(c.FrameRate) is double fps) c.Duration = frames / fps;
+                if (CountFrames(path, container, c.FrameRate, segments) is int frames)
+                {
+                    c.Frames = frames;
+                    c.Duration = Timecode.Fps(c.FrameRate) is double fps ? frames / fps : null;
+                }
+                else if (oneFrame)
+                {
+                    Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: length unknown — art-cmd export --duration 1 says clipDuration "
+                        + $"{c.Frames?.ToString(CultureInfo.InvariantCulture) ?? "(none)"} and ffprobe gave no length");
+                    c.Frames = null;
+                    c.Duration = null;
+                }
             }
             return c;
         }
@@ -497,13 +511,14 @@ internal sealed class ArriBackend : IRawBackend
         }
     }
 
-    /// The clip's frame count without art-cmd: the .ari files of a sequence (its path is the folder), else ffprobe's frames
-    /// of the MXF, else its duration × the ARRI frame rate; null when none is known.
-    internal static int? CountFrames(string path, ClipInfo? container, string? frameRate)
+    /// The clip's frame count without art-cmd: a sequence's frames (its path is the folder) — the scanner's `segments`,
+    /// else its .ari files without a Mac's "._" copies — else ffprobe's frames of the MXF, else its duration × the ARRI
+    /// frame rate; null when none is known.
+    internal static int? CountFrames(string path, ClipInfo? container, string? frameRate, int? segments = null)
     {
         if (Directory.Exists(path))
         {
-            int n = Directory.EnumerateFiles(path, "*.ari").Count();
+            int n = segments ?? Directory.EnumerateFiles(path, "*.ari").Count(f => !Path.GetFileName(f).StartsWith("._", StringComparison.Ordinal));
             return n > 0 ? n : null;
         }
         if (container?.Frames is int f && f > 0) return f;

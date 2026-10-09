@@ -174,7 +174,8 @@ public sealed class ProxyRenderer : IDisposable
         }
         if (!backends.TryGetValue(clip.Format, out var b) || !b.IsAvailable(Tools))
             throw new ToolError(clip.Format.Label(), -1, UnsupportedReason(clip) ?? "");
-        return Logged(() => b.Probe(path, Tools, workDir));
+        // An .ari sequence: its frames are the files the scanner found.
+        return Logged(() => b is ArriBackend arri ? arri.Probe(path, Tools, workDir, container: null, clip.Segments.Count) : b.Probe(path, Tools, workDir));
     }
 
     /// A decoder error turned into a note for the clip (RawDecoderException): the decoder's own words — its stderr,
