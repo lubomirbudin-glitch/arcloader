@@ -819,6 +819,10 @@ je s NVIDIA), jinak procesorem. ProRes se kóduje vždy procesorem. Použitý ko
       celá cesta v bublině. Když soubor zmizí (např. odpojený disk), offload nejde spustit a červeně je
       <span class="txt-bad">„LUT nenalezen: … — vyberte jiný nebo ho odeberte.“</span></td></tr>
 </table>
+<p><b>Oficiální LUT výrobce místo vestavěného:</b> uložte ho jako <code>%APPDATA%\Offload\luts\&lt;id&gt;.cube</code>
+(id vypíše <code>offload luts</code>, např. <code>arri-logc4-awg4.cube</code> pro ARRI LogC4) a Offload spusťte znovu. Vestavěný
+LUT se stejným id se pak všude nahradí tímto souborem — v seznamu má <span class="q">„(vlastní soubor)“</span> a report ho
+uvede u klipu. Vestavěné LUTy jsou vlastní výpočet (licence výrobců nedovolují jejich LUTy přibalit).</p>
 
 <h4>Vestavěné LUTy (Log → Rec.709)</h4>
 <table>

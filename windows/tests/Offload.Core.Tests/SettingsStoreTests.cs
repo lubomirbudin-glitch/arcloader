@@ -436,9 +436,33 @@ public class SettingsStoreTests
         Assert.Null(ProxyPreflight.Warning(new ProxySettings { Enabled = true }, true, new ExternalTools { Ffmpeg = "f", Ffprobe = "p" }));
     }
 
+    // %APPDATA%\Offload\luts — in the tests the folder OFFLOAD_SETTINGS_DIR points to (TestEnvironment), never the real one.
+    [Fact]
+    public void UserFolder_IsInAppData_DefaultCatalogReadsIt()
+    {
+        // Here, next to AppDataFolder_Override: tests of one class never run at the same time, so OFFLOAD_SETTINGS_DIR holds.
+        _ = LutCatalog.Default;   // initialised before the file below exists, so no other test ever sees it
+        Assert.False(AppData.Folder.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(Path.Combine(AppData.Folder, "luts"), LutCatalog.UserFolder);
+        Assert.False(LutCatalog.UserFolder.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StringComparison.OrdinalIgnoreCase));
+        Directory.CreateDirectory(LutCatalog.UserFolder);
+        var own = Path.Combine(LutCatalog.UserFolder, "red-log3g10-rwg.cube");
+        File.WriteAllLines(own, LutCatalogTests.Cube2);
+        try
+        {
+            Assert.Equal(own, LutCatalog.LoadDefault().Find("red-log3g10-rwg")!.Path);
+        }
+        finally
+        {
+            File.Delete(own);
+        }
+        Assert.False(LutCatalog.LoadDefault().Find("red-log3g10-rwg")!.UserFile);
+    }
+
     [Fact]
     public void AppDataFolder_Override()
     {
+        _ = LutCatalog.Default;   // never first loaded from the real %APPDATA% in the moment below
         var old = Environment.GetEnvironmentVariable("OFFLOAD_SETTINGS_DIR");
         try
         {
@@ -446,6 +470,7 @@ public class SettingsStoreTests
             Assert.Equal(@"X:\iso", AppData.Folder);
             Assert.Equal(@"X:\iso\settings.json", SettingsStore.DefaultPath);
             Assert.Equal(@"X:\iso\hwtest.json", Hardware.HwTest.DefaultPath);
+            Assert.Equal(@"X:\iso\luts", LutCatalog.UserFolder);
             // Unset (also when the shell running the tests has it set): %APPDATA%\Offload.
             Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", null);
             Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Offload"), AppData.Folder);

@@ -186,7 +186,7 @@ public static class LutRules
         if (r.LutPath is string path) return new LutUse("rule", null, Path.GetFileName(path), reason) { File = path };
         if (string.Equals(r.Lut, "none", StringComparison.OrdinalIgnoreCase)) return LutUse.None(reason);
         return cat.Find(r.Lut) is { } lut
-            ? new LutUse("rule", lut.Id, lut.Name, reason) { File = lut.Path }
+            ? new LutUse("rule", lut.Id, lut.Name, LutResolver.WithUserFile(reason, lut)) { File = lut.Path }
             : LutUse.None($"{reason} — vestavěný LUT nenalezen");
     }
 }

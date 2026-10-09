@@ -29,8 +29,40 @@ LUT očekává RGB tak, jak ho dodá ffmpeg po roztažení videa v legálním ro
 Log se dekóduje na scénově lineární hodnoty, gamut se převede do BT.709 (CAT02) a pak se použije tónování (konstanty v `generate.py`):
 
 - 18 % šedá se zobrazí na kód výstupu `GREY_CODE = 0.42`,
+- pata (toe) `TOE = 0.025`: display-lineární hodnota x → x² / (x + TOE) stáhne stíny do černé — střední tóny a světla
+  se skoro nemění (nad TOE je sklon ≈ 1), expozice se zvedne tak, aby šedá zůstala na 0,42,
 - od display-lineární hodnoty `KNEE = 0.5` začíná měkké dotočení světel (exponenciální rameno do 1,0),
 - výstup se kóduje inverzí `GAMMA = 2.4` (BT.1886).
+
+Pata je od 2026-10-09. Dřív výstup kódovala jen mocnina 1/2,4, která žádné stíny do černé nestáhne: šum kamery
+(~6 clon pod šedou) vycházel na 7 % a dvě clony pod šedou na 24 %, takže obraz proti oficiálnímu LUTu ARRI působil
+vybledle (ostré nasazení Macu: nejtmavší hodnota snímku 62 proti 23). Teď (u všech 11 LUTů stejně, hodnoty výstupu 0–1):
+
+| Scéna | bez paty | s patou |
+|---|---|---|
+| černá kamery (kód z bílé knihy, např. 95/1023) | 0,000 | 0,000 |
+| šum kamery, 6 clon pod šedou | 0,074 | 0,028 |
+| 4 clony pod šedou | 0,132 | 0,082 |
+| 2 clony pod šedou | 0,236 | 0,203 |
+| 18 % šedá | 0,420 | 0,420 |
+| 2 clony nad šedou | 0,748 | 0,783 |
+
+Testy hlídají, že kód černé z bílých knih výrobců (LogC3, LogC4, S-Log3, Film Gen 5, Log3G10, C-Log2/3, V-Log, D-Log,
+F-Log2) i šum kamery (6 clon pod šedou) vyjdou nejvýš na 3 % — přesně i po interpolaci kostky 33³, jak ji použije
+ffmpeg (šum nejvýš 4,5 %) —, že dvě clony pod šedou zůstanou viditelná tmavá šedá (0,15–0,23) a že šedá i dotočení světel
+platí dál.
+
+## Vlastní soubor místo vestavěného LUTu
+
+Oficiální LUTy výrobců (např. ARRI LogC4 → Rec.709) nesmí být v aplikaci přibalené, ale každý je může použít na svém
+počítači: soubor `<id>.cube` (id z tabulky nahoře, např. `arri-logc4-awg4.cube`) ve složce
+
+- Mac: `~/Library/Application Support/Offload/luts/`,
+- Windows: `%APPDATA%\Offload\luts\` (s proměnnou `OFFLOAD_SETTINGS_DIR` ve složce `luts` pod ní),
+
+nahradí vestavěný LUT se stejným id v aplikaci i v příkazové řádce. V seznamu LUTů má název „(vlastní soubor)“ a report
+ho uvede u klipu v názvu i důvodu LUTu. Dostane stejný vstup jako vestavěný LUT (viz „Konvence vstupu“). Platí jen platný
+3D `.cube`; jiné názvy souborů ve složce se ignorují. Aplikace soubor načte při spuštění.
 
 ## Generování a testy
 
