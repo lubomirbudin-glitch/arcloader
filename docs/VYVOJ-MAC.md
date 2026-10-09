@@ -60,7 +60,8 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   (`codesign` + notarizace).
 
 - **Nový vzhled (Windows plán 9, 2026-10-07, 0.5.0):** návrh [`docs/ui-navrh/`](ui-navrh/) (README = zadání;
-  „Rozhodnutí (2026-10-07, závazné)“ v hlavičce plánu 9). Mac převezme **až po schválení Windows verze**: rozvržení (horní lišta, kroky
+  „Rozhodnutí (2026-10-07, závazné)“ v hlavičce plánu 9). **Uživatel 2026-10-09 rozhodl: Mac dostane nové UI podle Windows verze** (včetně klikacích voleb kroku 3 z Windows 0.5.2;
+  podklady `docs/ui-navrh/`, Windows plán 9 a `windows/src/Offload.App` jako vzor) — převzít: rozvržení (horní lišta, kroky
   1–3, karty úloh po stavech, stránka Nastavení, dnes a historie karet), přepínač **projektů** místo presetů, tmavé
   i světlé téma podle systému; **Pozastavit** (brána mezi 16MB bloky kopie a zpětného čtení a mezi klipy 2. fáze, žádný
   proces se neuspává, zámek dne se během pauzy nedrží, report `copyPausedSeconds` / `verifyPausedSeconds`);
@@ -101,6 +102,29 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
       „Vlastní…“ ponechá volbu; vestavěný LUT přežije restart; výběr složky pro proxy, červená hláška po odpojení, křížek
       ji smaže; kontrola odpojení těsně před startem; ostrý offload se složkou → řádky v reportu;
     - úkol 25: ikona v Docku, ⌘⇥ a Finderu; 11 LUTů v *Proxy › LUT*.
+
+## 2026-10-08/09 — první ostré nasazení, opravy (build „Offload b“, 0.2.0b)
+
+Ostrý offload karet ALEXA 35 (ARRIRAW 4.6K Open Gate, karty až 855 GB) na Samsung T7. Opravy podle toho, co se ukázalo:
+
+- **PDF report** se vejde na A4 na šířku — tiskové styly za základními, buňky se zalamují, menší náhledy; když je obsah
+  i tak širší, stránka se před tiskem zmenší (`138cdba`).
+- **Zelené snímky v proxy:** hardwarové dekódování H.264/HEVC (VideoToolbox) vypnuto — vracelo zelené snímky bez chyby;
+  kódování zůstává hardwarové; softwarové dekódování bylo na i9 rychlejší (4K H.264 3,2 s proti 7,4 s) (`138cdba`).
+- **ARRIRAW proxy:** procesy s prioritou user-initiated místo utility (v aplikaci 1,4 snímku/s, z terminálu 11,6);
+  `--desqueeze` jen u anamorfních klipů (bez něj 25,7 snímku/s); průběh během art-cmd odhadem z velikosti mezisouboru
+  (0–80 %), dřív stálo celé dekódování na 0 % (`3a970b5`).
+- **HTML report** do šířky 1600 px, menší náhledy, dlouhé názvy a cesty se zalamují — vidět všechny sloupce (`572f059`).
+- **Vlastní LUT místo vestavěného:** `~/Library/Application Support/Offload/luts/<id>.cube` nahradí vestavěný LUT se
+  stejným id (v nabídce „(vlastní soubor)“) — nainstalované oficiální LUTy ARRI LogC4 a LogC3; vestavěný LogC4 zvedal
+  černou (62 proti 23) (`572f059`).
+- `scripts/build-app.sh <štítek>` postaví `build/Offload-<štítek>.app` vedle běžného buildu (`572f059`).
+- Sloučeno z GitHubu (Windows do 0.5.2) a rozpracované dorovnání s Windows plány 6–8 (paralelní proudy, jen základy:
+  hashe MD5/SHA-1/xxh3/xxh128/C4, čtení a zápis generací ASC MHL, české hlášky `Msg`, odhad místa, drop-frame
+  timecode) — poznámky a návrh dalšího postupu v [`mac/docs/parita-0.3/`](../mac/docs/parita-0.3/). Proud P (cívka v proxy,
+  všechny zvukové stopy, `7ce73ca`) je ve větvi `worktree-agent-acbfd248aeb877f96`, do main zatím nesloučen.
+- Zjištění: zpomalení kopie na ~400 MB/s způsobil jeden z T7 (stejný model, vlastní řadič 10 Gb/s — nejspíš zahřátí);
+  analýza ARRIRAW trvá minuty na klip (úkol výše); PDF vzniká až na konci úlohy (ponecháno).
 
 ## 2026-10-06 — verze 0.2.0: dorovnání s Windows (plán mac-parity)
 

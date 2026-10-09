@@ -135,6 +135,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
   a ukazuje ho v řádku „Proxy: H.264 (h264_nvenc), …“ v HTML/PDF. Mac klíč nezná a ignoruje ho.
 - **Verze v reportu:** Mac `0.2.0`, Windows `0.3.0-win` — z reportu je vidět, která verze kopírovala.
+- **Hardwarové dekódování proxy** (2026-10-08): Mac ho vypnul (VideoToolbox na Intelu dával zelené snímky), Windows
+  dekóduje H.264/HEVC s `-hwaccel auto` — na Windows prověřit (VYVOJ-WINDOWS, Naplánováno).
+- **ARRIRAW `--desqueeze`:** Mac jen u anamorfních klipů (2× rychlejší dekódování), Windows vždy.
+- **Vlastní soubor místo vestavěného LUTu:** jen Mac (`~/Library/Application Support/Offload/luts/<id>.cube`).
 - **Zámky dne a doplnění** (Windows): klíč je „id svazku + cesta na něm“ — namapovaný disk a jeho UNC cesta, `subst`,
   junction a krátká jména 8.3 dávají jiné klíče a zámek se neuplatní. Mac žádný z těchto zámků nezná (poslední zápis vyhraje).
 - **Doplnění z jiného procesu** při přepisu seznamu klipů a denního reportu (stage 2): nehlídá se; vyhraje poslední zápis a

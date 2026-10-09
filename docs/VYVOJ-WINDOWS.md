@@ -22,6 +22,38 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 | 9 | nový vzhled podle `docs/ui-navrh/`: tmavé a světlé téma, horní lišta, kroky 1–3, karty úloh s průběhem po cílech, pozastavení, oprava nesouhlasných souborů, dnešní historie, okno Nastavení (0.5.0) | hotovo (čeká ruční test 40–49 s kartou a vizuální kontrolu proti `docs/ui-navrh/screeny`) |
 
 
+## Naplánováno
+
+- **Zjištění z ostrého nasazení Mac verze (2026-10-08/09) — prověřit a převzít na Windows** (Mac opravy v commitech
+  `138cdba`, `3a970b5`, `572f059`, podrobně v [VYVOJ-MAC.md](VYVOJ-MAC.md)):
+  1. **Zelené snímky v proxy.** Mac dekódoval H.264/HEVC hardwarově (VideoToolbox) a na Intelu dostal občas zelený
+     snímek bez jakékoli chyby — Mac hardwarové *de*kódování vypnul (kódování zůstává hardwarové; softwarové dekódování
+     4K H.264 bylo na i9 dokonce rychlejší: 3,2 s proti 7,4 s). Windows dekóduje H.264/HEVC s `-hwaccel auto`
+     (`ProxyRenderer.SourceFor`) — zkontrolovat proxy po snímcích (`signalstats`, U i V u nuly = zelená) a případně vypnout.
+  2. **ARRIRAW `--desqueeze` jen u anamorfních klipů** (`RawBackends.cs` ř. ~405 ho dává vždy): na 4.6K Open Gate
+     zpomalí art-cmd na polovinu (11,6 → 25,7 snímku/s bez něj) a u sférických objektivů nic nedělá.
+  3. **Priorita procesů proxy.** Mac pouštěl proxy s nízkou prioritou (QoS utility) a ARRIRAW 4.6K jel v aplikaci
+     ~1,4 snímku/s, stejné volání z terminálu ~12; teď user-initiated. Zkontrolovat prioritu procesu a I/O u ffmpeg
+     a art-cmd na Windows (BelowNormal / nízká I/O priorita by dekódování 570 MB/s brzdila stejně).
+  4. **Průběh během art-cmd.** Proxy z ARRIRAW ukazovaly celé dekódování 0 % (art-cmd průběh nehlásí, uživatel
+     myslel, že se to zaseklo). Mac odhaduje průběh z velikosti mezisouboru ProRes LT (0–80 %), ffmpeg zbytek.
+  5. **Analýza ARRIRAW trvá minuty na klip.** `art-cmd export` (`RawBackends.cs` ř. ~419) vypisuje metadata každého
+     snímku, takže nejspíš čte celý klip (karta 855 GB / 7 klipů: analýza přes 15 min). Zkusit `--duration 1`.
+  6. **ARRIRAW bez LUTu** — `--target-colorspace` spolu s `--embedded-look` art-cmd odmítne, skončí kódem 0 a nic
+     nezapíše (klip bez proxy). Na Macu opraveno v `3b43352`; Windows `RawBackends.cs` ř. ~381.
+  7. **Vestavěný LUT ARRI LogC4 → Rec.709 zvedá černou** — nejtmavší hodnota snímku 62 proti 23 s oficiálním LUTem
+     ARRI, obraz působí vybledle. Je to sdílený `shared/luts/generate.py` (tónová křivka) — opravit pro obě verze.
+     Mac mezitím umí vlastní soubor `~/Library/Application Support/Offload/luts/<id>.cube`, který vestavěný LUT nahradí
+     (např. oficiální LUT ARRI); Windows obdobně `%APPDATA%\Offload\luts\<id>.cube`.
+  8. **HTML report s klipy ARRI 4.6K** (tři náhledy, dlouhé názvy a cesty) se na Macu nevešel do okna a přetékal —
+     zkontrolovat stejný report na Windows v okně ~1300 px; PDF se na Macu navíc zmenší, když je širší než A4.
+- **Nové úkoly (zadání uživatele 2026-10-09, obě verze):**
+  - **automatické načítání:** externí disky se po připojení samy přidají do cílů, čtečky/karty do zdrojů
+    (nikdy ne kartu jako cíl ani systémový disk; odebraný cíl si zapamatovat);
+  - **kopie reportu i na počítači:** `Dokumenty\Offload reporty\<datum>\<karta>\` (`_REPORT` + `ascmhl`), obnovit
+    při každém přepisu reportu; selhání nesmí shodit úlohu — disky s materiálem se odevzdávají dál a report pak chybí;
+  - **zrychlit analýzu ARRIRAW** (bod 5).
+
 ## 2026-10-08 — Po zkopírování: klikací volby
 
 Verze **0.5.2**. Podnět: v levém sloupci, v kroku „3 · Po zkopírování“, nešlo na nic kliknout ani nic nastavit — čtyři
