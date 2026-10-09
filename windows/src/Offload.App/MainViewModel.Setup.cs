@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows.Threading;
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.Outputs;
 using Offload.Core.Space;
 
 namespace Offload.App;
@@ -59,6 +60,8 @@ public sealed partial class MainViewModel
         AddSourceCommand = new RelayCommand(AddManualSource);
         AddDestinationCommand = new RelayCommand(AddDestination);
         ForgetRemovedDisksCommand = new RelayCommand(ForgetRemovedDisks);
+        ChooseLocalReportFolderCommand = new RelayCommand(ChooseLocalReportFolder);
+        DefaultLocalReportFolderCommand = new RelayCommand(DefaultLocalReportFolder);
         foreach (var path in Options.Sources) AddManualSourcePath(path);
         RebuildDestinations();
         RefreshTools();
@@ -596,6 +599,36 @@ public sealed partial class MainViewModel
     {
         get => Settings.Outputs.DayReport;
         set { Settings.Outputs.DayReport = value; SettingsChanged(); Raise(); }
+    }
+
+    /// "Kopie reportu i na tomto počítači" (task 2026-10-09) — `outputs.localReport`.
+    public bool LocalReportCopy
+    {
+        get => Settings.Outputs.LocalReport;
+        set { Settings.Outputs.LocalReport = value; SettingsChanged(); Raise(); }
+    }
+
+    /// The folder the reports are copied to: the chosen one, else `<Dokumenty>\Offload reporty` (memory only).
+    public string LocalReportFolderText => Settings.Outputs.LocalReportFolder ?? LocalReports.DefaultRoot;
+
+    public bool LocalReportFolderCustom => Settings.Outputs.LocalReportFolder != null;
+
+    public RelayCommand ChooseLocalReportFolderCommand { get; private set; } = null!;
+    public RelayCommand DefaultLocalReportFolderCommand { get; private set; } = null!;
+
+    void ChooseLocalReportFolder()
+    {
+        if (Dialogs.PickFolder("Vyberte složku pro kopie reportů na tomto počítači") is not string folder) return;
+        Settings.Outputs.LocalReportFolder = folder;
+        SettingsChanged();
+        RaiseMany(nameof(LocalReportFolderText), nameof(LocalReportFolderCustom));
+    }
+
+    void DefaultLocalReportFolder()
+    {
+        Settings.Outputs.LocalReportFolder = null;
+        SettingsChanged();
+        RaiseMany(nameof(LocalReportFolderText), nameof(LocalReportFolderCustom));
     }
 
     public bool AnalyzeClips

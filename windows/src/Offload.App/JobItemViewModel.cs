@@ -217,6 +217,8 @@ public sealed partial class JobItemViewModel : QueueItem
     public string? ErrorText => progress.Status.Error;
     /// "Nic nového — záloha je úplná." (spec 2.2) and similar information.
     public string? NoteText => progress.Status.Note;
+    /// Task 2026-10-09: the copy of the report on this computer failed (a note, never the job's result).
+    public string? LocalReportNoteText => progress.Status.LocalReportNote;
     /// Orange, never an error: e.g. "5 souborů z dřívější zálohy nebylo ověřeno — doporučeno Ověřit zálohu."
     public string? WarningText => progress.Status.Warning;
     public string? SummaryText => IsFinished && !IsCancelled && Job.Report is { } r ? JobProgress.SummaryText(r) : null;

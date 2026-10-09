@@ -5,11 +5,13 @@ namespace Offload.Core.Desktop;
 
 public enum VerifyJobState { Waiting, Running, Done, Cancelled, Failed }
 
-public sealed record VerifyJobStatus(VerifyJobState State, VerifyProgress? Progress, VerifyResult? Result, string? Error, string? ReportPath, string? ReportError = null);
+public sealed record VerifyJobStatus(VerifyJobState State, VerifyProgress? Progress, VerifyResult? Result, string? Error, string? ReportPath, string? ReportError = null,
+    string? LocalReportNote = null);
 
 /// "Ověřit zálohu…" as a queue item (spec 2.4): it runs in the copy queue, one after another with the copies — both
 /// load the same disks. `RunCopy` verifies (and writes the report), returns false: there is no stage 2.
-public sealed class VerifyJob(string cardPath, bool writeReport, Action<string>? log = null) : IQueuedJob
+/// `localReports` (task 2026-10-09): a written verification report is copied to this computer with the card's report.
+public sealed class VerifyJob(string cardPath, bool writeReport, Action<string>? log = null, string? localReports = null) : IQueuedJob
 {
     readonly CancellationTokenSource cts = new();
     readonly Lock gate = new();
@@ -59,7 +61,9 @@ public sealed class VerifyJob(string cardPath, bool writeReport, Action<string>?
                     reportError = Msg.ReportNotWritten(e.Message);
                 }
             }
-            Set(s => s with { State = r.Cancelled ? VerifyJobState.Cancelled : VerifyJobState.Done, Result = r, ReportPath = report, ReportError = reportError });
+            var localNote = report != null ? CopyLocally(r) : null;
+            Set(s => s with { State = r.Cancelled ? VerifyJobState.Cancelled : VerifyJobState.Done, Result = r, ReportPath = report, ReportError = reportError,
+                LocalReportNote = localNote });
         }
         catch (Exception e)
         {
@@ -71,6 +75,25 @@ public sealed class VerifyJob(string cardPath, bool writeReport, Action<string>?
 
     public void RunPost()
     {
+    }
+
+    /// The card folder's report (with the new verification report) on this computer again; the day's `_REPORT` too when
+    /// the verification report went there (ruling V2). A failure is the Czech note, never the result.
+    string? CopyLocally(VerifyResult r)
+    {
+        if (localReports == null) return null;
+        try
+        {
+            Outputs.LocalReports.MirrorCard([CardPath], localReports);
+            if (!r.ReportInsideCard && Path.GetDirectoryName(CardPath.TrimEnd('\\', '/')) is string day)
+                Outputs.LocalReports.MirrorDay([day], localReports);
+            return null;
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"local report copy: {e.Message}");
+            return Msg.LocalReportFailed(e.Message);
+        }
     }
 }
 
@@ -109,8 +132,12 @@ public static class VerifyJobView
     }
 
     /// The Czech note when the report went outside the card folder (ruling V2); null otherwise.
-    public static string? ReportNote(VerifyJobStatus s) =>
-        s is { ReportPath: { } path, Result.ReportInsideCard: false } ? VerifyTexts.ReportOutsideNote(path) : null;
+    public static string? ReportNote(VerifyJobStatus s)
+    {
+        var outside = s is { ReportPath: { } path, Result.ReportInsideCard: false } ? VerifyTexts.ReportOutsideNote(path) : null;
+        // Task 2026-10-09: the local copy that failed is a note too.
+        return outside != null && s.LocalReportNote != null ? outside + "\n" + s.LocalReportNote : outside ?? s.LocalReportNote;
+    }
 
     public static double Fraction(VerifyProgress? p) => p is { TotalBytes: > 0 } ? Math.Clamp((double)p.Bytes / p.TotalBytes, 0, 1) : 0;
 }

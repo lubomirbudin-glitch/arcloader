@@ -24,6 +24,11 @@ public static class SettingsTexts
     /// "Zapomenout odebrané disky (2)".
     public static string ForgetRemovedLabel(int count) => $"Zapomenout odebrané disky ({count})";
 
+    /// Kopie reportu i na počítači (2026-10-09), Nastavení → Report.
+    public const string LocalReportLabel = "Kopie reportu i na tomto počítači";
+    public const string LocalReportNote =
+        "Po každé kartě se _REPORT a ascmhl zkopírují do <složka>\\<datum>\\<karta>\\ a obnoví se při každém přepisu reportu (analýza, proxy, ověření, doplnění, oprava, denní report) — disky s materiálem se odevzdávají dál, report zůstane tady. Média se nikdy nekopírují; když se kopie nepovede, úloha běží dál.";
+
     /// "≈ 75 MB / minutu" under the bitrate (video only; the audio adds little).
     public static string BitrateHint(int mbps) => $"≈ {mbps * 60 / 8} MB / minutu";
 

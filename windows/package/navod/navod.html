@@ -599,7 +599,8 @@ v liště stránky; tlačítko <b class="ui">Uložit jako nový projekt…</b> z
       <b class="ui">Ukládat report ověření</b> (kapitoly 1, 5 a 8)</td></tr>
   <tr><td><b class="ui">Analýza a náhledy</b></td><td>analýza klipů a tři snímky v reportu (kapitola 5)</td></tr>
   <tr><td><b class="ui">Proxy</b></td><td>vše o proxy, LUTech a náhled burn-inu (kapitola 6)</td></tr>
-  <tr><td><b class="ui">Report</b></td><td>seznamy klipů CSV a ALE, denní report po každé kartě, <b class="ui">Denní report…</b> (kapitoly 5 a 7)</td></tr>
+  <tr><td><b class="ui">Report</b></td><td>seznamy klipů CSV a ALE, denní report po každé kartě, <b class="ui">Denní report…</b>,
+      <b class="ui">Kopie reportu i na tomto počítači</b> a její složka (kapitoly 5 a 7)</td></tr>
   <tr><td><b class="ui">Oznámení</b></td><td>souhrn a <b class="ui">Upravit oznámení…</b> (kapitola 8)</td></tr>
   <tr><td><b class="ui">Dekodéry RAW</b></td><td>nástroje ffmpeg, ffprobe, braw-decode, REDline, art-cmd a převod BRAW Film Gen 4 → Gen 5
       (níže a kapitola 6); platí pro všechny projekty</td></tr>
@@ -907,6 +908,12 @@ a poznámku, co chybí.</p>
 <!-- ============ 7 ============ -->
 <section class="chapter" id="ch7">
 <h2 class="ch"><span class="n">7</span>Report</h2>
+<p><b>Kopie na tomto počítači:</b> disky s materiálem se odevzdávají dál, proto se report každé karty (<code>_REPORT</code>
+a <code>ascmhl</code>, nikdy klipy ani proxy) zkopíruje i do <code>Dokumenty\Offload reporty\&lt;datum&gt;\&lt;karta&gt;\</code>
+a obnoví se při každém přepisu reportu (analýza, proxy, ověření, doplnění, oprava, denní report do
+<code>…\&lt;datum&gt;\_REPORT\</code>). Jiná karta stejného jména téhož dne dostane <code>_2</code> jako na cíli. Vypíná se
+a složka se mění v Nastavení → Report (patří k projektu), v příkazové řádce <code>--no-local-report</code>. Když se kopie
+nepovede, úloha doběhne normálně a na její kartě je jen šedá poznámka.</p>
 
 <p>Report se zapisuje do složky <code>_REPORT</code> ve složce karty <b>na každém cíli</b>. Hlavní je HTML report
 <code>&lt;karta&gt;_report.html</code>; vedle je stejný report jako PDF <code>&lt;karta&gt;_report.pdf</code> (A4 na šířku,

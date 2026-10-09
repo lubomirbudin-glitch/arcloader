@@ -272,6 +272,7 @@ public static class SettingsStore
         s.Proxy ??= new ProxySettings();
         s.Naming ??= new NamingSettings();
         s.Outputs ??= new OutputSettings();
+        s.Outputs.LocalReportFolder = string.IsNullOrWhiteSpace(s.Outputs.LocalReportFolder) ? null : s.Outputs.LocalReportFolder.Trim();
         s.Notify ??= new NotifySettings();
         s.Notify.Ntfy ??= new NtfySettings();
         s.AutoDrive ??= new AutoDriveSettings();

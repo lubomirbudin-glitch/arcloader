@@ -22,6 +22,8 @@ static class TestEnvironment
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         HistoryStore.DefaultFolderOverride = Path.Combine(HistoryRoot, "history-" + Environment.ProcessId);
+        // Task 2026-10-09: the local report copies of CLI and settings-made jobs go to %TEMP%, never the real Documents.
+        Offload.Core.Outputs.LocalReports.DocumentsOverride = Path.Combine(HistoryRoot, "history-" + Environment.ProcessId, "Documents");
     }
 #pragma warning restore CA2255
 }

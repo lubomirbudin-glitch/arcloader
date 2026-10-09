@@ -344,7 +344,12 @@ Pravidla (Windows od 0.3.0):
 - `hash` (`"xxh64"` | `"both"`, výchozí `"xxh64"`, Windows od 0.3.0): kontrolní součty kopie; `both` = xxh64 + MD5. Jiná
   hodnota (z novější verze) se zachová a čte jako `xxh64`.
 - `outputs` (Windows od 0.3.0): `dayReport` (bool, `true`) — denní report po každé úloze; `clipListCsv` (bool, `true`),
-  `clipListAle` (bool, `false`) — seznamy klipů. Neznámé klíče sekce se zachovají.
+  `clipListAle` (bool, `false`) — seznamy klipů; `localReport` (bool, `true`, úkol 2026-10-09) — kopie reportu karty na
+  tomto počítači; `localReportFolder` (string | `null` = `<Dokumenty>\Offload reporty`). Neznámé klíče sekce se zachovají.
+- Kopie reportu na počítači (Windows, úkol 2026-10-09): `<složka>\<datum>\<karta>\_REPORT\…` a `…\ascmhl\…` jako na
+  cíli (bez médií: bez `_REPORT\neshoda_NNNN\`, klipů a proxy), denní report do `<složka>\<datum>\_REPORT\`. Ve složce
+  karty je skrytý soubor `.offload-origin` (`<started UTC>|<cardName>|<source>` z `offload_report.json`): podle něj se jiná
+  karta stejného jména téhož dne uloží do `<karta>_2`, `_3` … (pravidlo jako na cíli); složka bez něj se nikdy nepoužije.
 - Projekty (Windows od 0.4.0): klíče profilu na horní úrovni (`destRoots`, `verify`, `analyzeClips`, `hash`, `naming`,
   `outputs`, `notify`, `proxy`, `autoDrives`) jsou profil „Bez projektu“; `projects` je pole pojmenovaných profilů stejného tvaru
   s klíčem `name` (oříznutý, 1–60 znaků, jedinečný bez ohledu na velikost písmen, „Bez projektu“ vyhrazené);

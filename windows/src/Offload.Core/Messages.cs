@@ -253,4 +253,9 @@ public static partial class Msg
     // Automatické načtení disků (2026-10-09)
     public static string AutoDiskFull(string name) => $"Disk {name} je plný — jako cíl se nepřidal.";
     public static string AutoDiskReadOnly(string name) => $"Disk {name} je jen pro čtení — jako cíl se nepřidal.";
+
+    // Kopie reportu i na počítači (2026-10-09)
+    public static string LocalReportFailed(string detail) => $"Kopie reportu na tento počítač se nepovedla: {detail} — report je jen na cílových discích.";
+    public const string LocalReportOnCard = "složka pro kopii reportu je na kartě — na kartu se nikdy nezapisuje";
+    public static string LocalReportWritten(string path) => $"Kopie reportu: {path}";
 }

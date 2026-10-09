@@ -28,7 +28,15 @@ public sealed partial class MainViewModel
             var html = await Task.Run(() =>
             {
                 var day = DayReportService.DayFolderOf(folder);
-                return DayReportService.RegenerateDay(day, DayReportService.OutputsFor(day, all), m => AppLog.Write($"day report: {m}"));
+                var outputs = DayReportService.OutputsFor(day, all);
+                var made = DayReportService.RegenerateDay(day, outputs, m => AppLog.Write($"day report: {m}"));
+                // Task 2026-10-09: the day report on this computer too (a failure is only logged — the report itself is made).
+                if (LocalReports.RootFor(outputs) is string local)
+                {
+                    try { LocalReports.MirrorDay([day], local); }
+                    catch (Exception e) { AppLog.Write($"day report local copy: {e.Message}"); }
+                }
+                return made;
             });
             if (closing) return;
             if (Shell.Open(html) is string error) ShowMessage(error);

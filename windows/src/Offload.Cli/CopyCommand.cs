@@ -179,6 +179,8 @@ static class CopyCommand
             Console.WriteLine($"Report: {QueueRules.ReportPath(plan.CardPaths[0], plan.CardName, plan.Generation)}");
         }
         foreach (var day in job.DayReports) Console.WriteLine(Msg.DayReportWritten(day));
+        if (job.LocalReport is string local) Console.WriteLine(Msg.LocalReportWritten(local));
+        if (status.LocalReportNote != null) Console.WriteLine(status.LocalReportNote);
         if (status.Note != null) Console.WriteLine(status.Note);
         if (status.Warning != null) Console.WriteLine("Varování: " + status.Warning);
         if (status.Error != null) Console.WriteLine(Msg.CliError + status.Error);
