@@ -29,6 +29,8 @@ public sealed class ProxyRenderer : IDisposable
         }
     }
     readonly string workDir;
+    /// The renderer's temp folder (intermediates, LUT copies) — for tests.
+    internal string WorkDir => workDir;
     readonly bool hasFont;
     /// The LUT files already copied into the work folder (by their name there), and the ones that could not be.
     readonly HashSet<string> copiedLuts = new(StringComparer.Ordinal);
@@ -91,6 +93,7 @@ public sealed class ProxyRenderer : IDisposable
         // Spec 4.2: Film Gen 4 BRAW decoded as Gen 5 (braw-decode --gen5) when switched on; its warnings go to the job's
         // log (Log is read when one is written, after init).
         if (settings.BrawGen4ToGen5) backends[ClipFormat.Braw] = new BrawBackend(gen5: true) { Log = m => Log?.Invoke(m) };
+        backends[ClipFormat.Arriraw] = new ArriBackend { Log = m => Log?.Invoke(m) };   // a full metadata export is logged
         workDir = Path.Combine(Path.GetTempPath(), "offload-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(workDir);
         try
@@ -130,19 +133,77 @@ public sealed class ProxyRenderer : IDisposable
         };
     }
 
-    public ClipInfo Probe(Clip clip, string cardPath)
+    /// How long ffprobe may take on an MXF during the analysis: an ARRIRAW MXF (100+ GB) must never hold it — after the
+    /// limit the ARRI tool is asked instead (Analyze). Tests shorten it.
+    internal TimeSpan MxfProbeTimeout { get; init; } = TimeSpan.FromSeconds(60);
+
+    static bool IsMxf(Clip clip) => clip.Path.EndsWith(".mxf", StringComparison.OrdinalIgnoreCase);
+
+    /// The clip analysis (stage 2): ffprobe — an MXF with a time limit — and, for an MXF ffmpeg cannot decode, the ARRI
+    /// tool, which then reclassifies it as ARRIRAW. Each tool looks at a clip once (ARRI's frame count comes from
+    /// ffprobe's answer, not from a second probe). The clip may come back reclassified; a video clip whose info has no
+    /// width is one ffmpeg cannot decode.
+    public ClipAnalysis Analyze(Clip clip, string cardPath)
+    {
+        if (clip.Format != ClipFormat.Video || !IsMxf(clip)) return new(clip, Probe(clip, cardPath));
+        ClipInfo? probed = null;
+        ToolError? failed = null;
+        try
+        {
+            probed = Probe(clip, cardPath, MxfProbeTimeout);
+        }
+        catch (ToolError e) when (e.Status == -1 && backends[ClipFormat.Arriraw].IsAvailable(Tools))
+        {
+            failed = e;   // timed out (or could not run): perhaps ARRIRAW — the ARRI tool decides
+        }
+        if (probed?.Width != null) return new(clip, probed);
+        if (ReclassifyUndecodableMxf(clip, cardPath, probed, out var arriError) is { } arri) return new(arri.Clip, arri.Info);
+        if (failed != null) throw failed;
+        return new(clip, probed!, arriError != null ? UndecodableNote(arriError) : null);
+    }
+
+    /// The note of an MXF that neither ffmpeg nor art-cmd could read: art-cmd's own words (its error line, or that it
+    /// timed out) — the clip may be ARRIRAW that art-cmd failed on, so never a guess at another codec.
+    /// An MXF that says it is ARRI: ffprobe's camera tags (company / product name: ARRI, ALEXA, AMIRA — the cameras the
+    /// LUT choice knows as ARRI), or ARRI's naming of the clip or of a folder above it ("A001C003…", "A_0009C001…", reel
+    /// folder "A001R2EC"). Generous on purpose: a false match costs a slow analysis (a camera with ARRI-like names, such
+    /// as Sony VENICE, gets the full export when art-cmd fails on it), a missed one costs the clip its proxy.
+    internal static bool LooksLikeArri(Clip clip, ClipInfo? container)
+    {
+        if (container?.Camera is string camera
+            && (camera.Contains("ARRI", StringComparison.OrdinalIgnoreCase) || camera.Contains("ALEXA", StringComparison.OrdinalIgnoreCase)
+                || camera.Contains("AMIRA", StringComparison.OrdinalIgnoreCase)))
+            return true;
+        var parts = clip.Path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+        return parts.Select((p, i) => i == parts.Length - 1 ? Path.GetFileNameWithoutExtension(p) : p).Any(ArriName.IsMatch);
+    }
+
+    static readonly System.Text.RegularExpressions.Regex ArriName = new(@"^[A-Z]_?\d{3,4}(C\d{3}|R[0-9A-Z]{2,4}$)");
+
+    internal static string UndecodableNote(Exception arriError)
+    {
+        var why = arriError is ToolError t ? t.Detail : arriError.Message;
+        why = string.Join(" | ", why.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        if (why.Length > 300) why = why[..300] + "…";
+        return $"kodek nepodporován ffmpegem a art-cmd (ARRIRAW) ho nepřečetl: {why} — zkopírováno a ověřeno, bez proxy";
+    }
+
+    public ClipInfo Probe(Clip clip, string cardPath) => Probe(clip, cardPath, ffprobeTimeout: null);
+
+    ClipInfo Probe(Clip clip, string cardPath, TimeSpan? ffprobeTimeout)
     {
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
         {
             var ffprobe = Tools.Ffprobe ?? throw new ToolError("ffprobe", -1, Msg.FfprobeNotFound);
-            var info = FFProbe.Probe(ffprobe, path);
+            var info = ffprobeTimeout is TimeSpan limit ? FFProbe.Probe(ffprobe, path, limit) : FFProbe.Probe(ffprobe, path);
             info.CameraSerial ??= SonyXml.Serial(path);   // Sony keeps it in the XML next to the clip (spec 4.2)
             return info;
         }
         if (!backends.TryGetValue(clip.Format, out var b) || !b.IsAvailable(Tools))
             throw new ToolError(clip.Format.Label(), -1, UnsupportedReason(clip) ?? "");
-        return Logged(() => b.Probe(path, Tools, workDir));
+        // An .ari sequence: its frames are the files the scanner found.
+        return Logged(() => b is ArriBackend arri ? arri.Probe(path, Tools, workDir, container: null, clip.Segments.Count, knownArri: true) : b.Probe(path, Tools, workDir));
     }
 
     /// A decoder error turned into a note for the clip (RawDecoderException): the decoder's own words — its stderr,
@@ -160,21 +221,31 @@ public sealed class ProxyRenderer : IDisposable
         }
     }
 
-    /// MXF is a container for many codecs; ARRIRAW/ARRICORE inside it only the ARRI tool can read.
-    public (Clip Clip, ClipInfo Info)? ReclassifyUndecodableMxf(Clip clip, string cardPath)
+    /// MXF is a container for many codecs; ARRIRAW/ARRICORE inside it only the ARRI tool can read. `container`: what
+    /// ffprobe said about the file (its duration gives the frame count), null when it did not answer.
+    public (Clip Clip, ClipInfo Info)? ReclassifyUndecodableMxf(Clip clip, string cardPath, ClipInfo? container = null) =>
+        ReclassifyUndecodableMxf(clip, cardPath, container, out _);
+
+    /// `error`: why the ARRI tool could not read the clip (logged too); null when it was not asked or found no picture.
+    internal (Clip Clip, ClipInfo Info)? ReclassifyUndecodableMxf(Clip clip, string cardPath, ClipInfo? container, out Exception? error)
     {
-        if (clip.Format != ClipFormat.Video || !clip.Path.EndsWith(".mxf", StringComparison.OrdinalIgnoreCase)) return null;
+        error = null;
+        if (clip.Format != ClipFormat.Video || !IsMxf(clip)) return null;
         var arri = backends[ClipFormat.Arriraw];
         if (!arri.IsAvailable(Tools)) return null;
         try
         {
-            var info = arri.Probe(Layout.Join(cardPath, clip.Path), Tools, workDir);
+            var path = Layout.Join(cardPath, clip.Path);
+            var info = arri is ArriBackend a ? a.Probe(path, Tools, workDir, container, knownArri: LooksLikeArri(clip, container)) : arri.Probe(path, Tools, workDir);
             if (info.Width == null) return null;
             return (new Clip { Name = clip.Name, Path = clip.Path, Format = ClipFormat.Arriraw, Segments = clip.Segments, Bytes = clip.Bytes, IsCameraProxy = clip.IsCameraProxy }, info);
         }
-        catch (Exception)
+        catch (Exception e)
         {
-            // Best effort: any failure (tool error, malformed metadata JSON, ...) just means "not ARRI".
+            // Not ARRI as far as can be told (a tool error, a time limit, malformed metadata JSON …): the clip is copied and
+            // verified without a proxy; why goes to the log and, through Analyze, to the clip's note.
+            error = e;
+            Log?.Invoke($"ARRI check {clip.Name}: {e.Message}");
             return null;
         }
     }
@@ -197,8 +268,9 @@ public sealed class ProxyRenderer : IDisposable
             ? Timecode.Add(info.Timecode!, p.Frame, fps)
             : $"#{p.Frame}";
 
-    /// Hardware decoding only where it helps and is safe: H.264 and HEVC. Everything else (FFV1, ProRes, MJPEG, ...)
-    /// decodes in software: ffmpeg 8.1 with -hwaccel auto hung forever on FFV1 (Vulkan VK_ERROR_DEVICE_LOST).
+    /// Hardware decoding (when proxy.hardwareDecode is on) only where it helps and is safe: H.264 and HEVC. Everything
+    /// else (FFV1, ProRes, MJPEG, ...) decodes in software: ffmpeg 8.1 with -hwaccel auto hung forever on FFV1 (Vulkan
+    /// VK_ERROR_DEVICE_LOST).
     internal static bool UseHardwareDecoding(string? codec) =>
         codec != null && (codec.StartsWith("h264", StringComparison.OrdinalIgnoreCase) || codec.StartsWith("hevc", StringComparison.OrdinalIgnoreCase));
 
@@ -207,7 +279,8 @@ public sealed class ProxyRenderer : IDisposable
     /// the whole mdat by reading it: 200 % of the file); with it 100 % + the few header bytes (plan 10 measurements).
     internal static readonly string[] TapInputArgs = ["-short_seek_size", "65536"];
 
-    FrameSource SourceFor(Clip clip, string cardPath, ClipInfo info, RawLook look, double? singleFrameAt, bool hwaccel, string? inputUrl = null)
+    FrameSource SourceFor(Clip clip, string cardPath, ClipInfo info, RawLook look, double? singleFrameAt, bool hwaccel, string? inputUrl = null,
+        Func<bool>? isCancelled = null, Action<string>? intermediate = null)
     {
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
@@ -220,7 +293,9 @@ public sealed class ProxyRenderer : IDisposable
             };
         }
         if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, Msg.NoDecoderShort);
-        return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt));
+        return Logged(() => b is ArriBackend arri && intermediate != null
+            ? arri.Source(path, info, Settings, look, Tools, workDir, singleFrameAt, isCancelled, intermediate)
+            : b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt, isCancelled));
     }
 
     /// The .cube for this clip by its name in the work folder, or null for no LUT. Copied on first use, once per file:
@@ -301,7 +376,7 @@ public sealed class ProxyRenderer : IDisposable
             var output = Path.Combine(workDir, $"thumb-{Guid.NewGuid():N}.jpg");
             try
             {
-                src = SourceFor(clip, cardPath, info, look, pos.Seconds, hwaccel: false);
+                src = SourceFor(clip, cardPath, info, look, pos.Seconds, hwaccel: false, isCancelled: isCancelled);
                 var vf = FilterGraph.Thumbnail(lutFile, NeedsPreMap(lut, src, info));  // the pre-map depends on the source
                 bool video = clip.Format == ClipFormat.Video;
                 var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y" };
@@ -385,7 +460,8 @@ public sealed class ProxyRenderer : IDisposable
     {
         var ffmpeg = Tools.Ffmpeg ?? throw new ToolError("ffmpeg", -1, Msg.FfmpegNotFound);
         var lutFile = PrepareLut(lut);
-        bool hwaccel = clip.Format == ClipFormat.Video && UseHardwareDecoding(info.Codec);
+        // Hardware decoding only when switched on (proxy.hardwareDecode, off by default: green frames on the Mac).
+        bool hwaccel = Settings.HardwareDecode && clip.Format == ClipFormat.Video && UseHardwareDecoding(info.Codec);
         Exception first;
         try
         {
@@ -424,10 +500,23 @@ public sealed class ProxyRenderer : IDisposable
         $"ffmpeg se zasekl ({after.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s bez nového snímku)"
         + (retriedInSoftware ? " i bez hardwarového dekódování; proxy nevznikla" : "");
 
+    /// How often the size of the ARRI intermediate is looked at (IntermediateProgress); tests shorten it.
+    internal TimeSpan IntermediatePoll { get; init; } = TimeSpan.FromSeconds(1);
+
     void RenderOnce(string ffmpeg, Clip clip, string cardPath, ClipInfo info, LutUse? lut, string? lutFile, string output,
         Action<double> progress, Func<bool> isCancelled, bool hwaccel, string? inputUrl, ContentWatch? content)
     {
-        var src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl);
+        FrameSource src;
+        if (clip.Format == ClipFormat.Arriraw)
+        {
+            // ARRIRAW: art-cmd writes the whole ProRes LT intermediate first and reports no progress itself — its growing
+            // size is 0–80 % of the clip, ffmpeg's own progress the rest (the bar never sits at 0 % for the whole decode).
+            using (var estimate = IntermediateProgress.Start(info, Settings, progress, IntermediatePoll))
+                src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl, isCancelled, estimate == null ? null : estimate.Watch);
+            var whole = progress;
+            progress = f => whole(IntermediateProgress.Share + (1 - IntermediateProgress.Share) * f);
+        }
+        else src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl, isCancelled);
         string? label = null;
         try
         {
@@ -612,6 +701,95 @@ public sealed class ProxyRenderer : IDisposable
             try { input?.Dispose(); } catch (Exception) { }
             try { sink?.Dispose(); } catch (Exception) { }
         }
+    }
+}
+
+/// What the clip analysis found: the clip (an MXF may come back as ARRIRAW), its info, and — for an MXF ffmpeg cannot
+/// decode whose ARRI check failed — why, as the clip's note (null: the generic "kodek nepodporován" one).
+public sealed record ClipAnalysis(Clip Clip, ClipInfo Info, string? UndecodableNote = null)
+{
+    public void Deconstruct(out Clip clip, out ClipInfo info)
+    {
+        clip = Clip;
+        info = Info;
+    }
+}
+
+/// Progress while art-cmd writes the ARRIRAW intermediate, which it does not report itself: the size of this clip's
+/// intermediate (Watch — never one an earlier clip left in the work folder) against the size it should reach — frames ×
+/// output pixels × 0.21 bytes, about ProRes 422 LT (≈ 100 Mb/s at 1080p 29.97) — as 0–80 % of the clip. An estimate, so
+/// never more than 95 % of that share.
+internal sealed class IntermediateProgress : IDisposable
+{
+    public const double Share = 0.8;
+    const double BytesPerPixel = 0.21;
+
+    readonly double expected;
+    readonly Action<double> progress;
+    readonly Timer timer;
+    readonly Lock gate = new();
+    string? file;
+    bool stopped;
+    double reported;
+
+    IntermediateProgress(double expected, Action<double> progress, TimeSpan interval)
+    {
+        this.expected = expected;
+        this.progress = progress;
+        timer = new Timer(_ => Poll(), null, interval, interval);
+    }
+
+    /// The intermediate's expected size in bytes, or null when the clip's frames or size are not known (or make no
+    /// sense: a width or aspect of 0 would give 0 bytes and a NaN fraction).
+    internal static double? ExpectedBytes(ClipInfo info, ProxySettings s)
+    {
+        long? frames = info.Frames is int known ? known
+            : info.Duration is double d && Timecode.Fps(info.FrameRate) is double fps ? (long)Math.Round(d * fps) : null;
+        if (frames is not long n || n <= 0 || info.Width is not int w || w <= 0 || info.Height is not int h || h <= 0 || s.Height <= 0) return null;
+        double outH = s.Height;
+        double aspect = s.FrameAspect ?? w * (info.Squeeze ?? 1) / h;
+        double expected = n * outH * (outH * aspect) * BytesPerPixel;
+        return double.IsFinite(expected) && expected > 0 ? expected : null;
+    }
+
+    /// Null (nothing to report) when the expected size cannot be told.
+    public static IntermediateProgress? Start(ClipInfo info, ProxySettings s, Action<double> progress, TimeSpan interval) =>
+        ExpectedBytes(info, s) is double expected ? new IntermediateProgress(expected, progress, interval) : null;
+
+    /// The intermediate art-cmd is about to write for this clip; nothing is reported before.
+    public void Watch(string intermediate)
+    {
+        lock (gate) file = intermediate;
+    }
+
+    void Poll()
+    {
+        // Never an exception on the timer's thread: a folder or file going away just means "no new size".
+        try
+        {
+            string? watched;
+            lock (gate) watched = file;
+            if (watched == null) return;
+            var info = new FileInfo(watched);
+            long size = info.Exists ? info.Length : 0;
+            double fraction = Math.Min(0.95, size / expected) * Share;
+            lock (gate)
+            {
+                if (stopped || fraction <= reported) return;
+                reported = fraction;
+                progress(fraction);
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    /// No report after this returns (a poll in progress finishes first).
+    public void Dispose()
+    {
+        lock (gate) stopped = true;
+        timer.Dispose();
     }
 }
 

@@ -60,7 +60,7 @@ public class HtmlReportVerifyTests
         var html = HtmlReport.Render(report);
 
         Assert.Contains("<th>Svazek</th><th>Ověření</th>", html);
-        Assert.Contains($"<td class=\"mono\">{report.Destinations[0].VolumeSerial}</td><td>zpětné čtení</td>", html);
+        Assert.Contains($"<td class=\"mono nw\">{report.Destinations[0].VolumeSerial}</td><td class=\"nw\">zpětné čtení</td>", html);
         Assert.Contains("do „lze formátovat“", html);
         Assert.Contains("XXH64 + XXH128", html);
         Assert.Contains("  verify: read-back", report.Summary);
@@ -81,7 +81,7 @@ public class HtmlReportVerifyTests
         Assert.Equal("během proxy", Desktop.JobCard.Summary(r, TimeSpan.FromSeconds(10)).Single(f => f.Label == "Ověření").Value);
         Assert.Contains("  verify: verify-in-proxy", r.Summary);
         Assert.Contains("Content warnings: 1 (A001C003 01:00:02:13)", r.Summary);
-        Assert.Contains("<td>během proxy</td>", HtmlReport.Render(r));
+        Assert.Contains("<td class=\"nw\">během proxy</td>", HtmlReport.Render(r));
         r.Destinations[0].VerifyMethod = ReportDestination.ReadBack;
         Assert.EndsWith("MB/s", Desktop.JobCard.Summary(r, TimeSpan.FromSeconds(10)).Single(f => f.Label == "Ověření").Value);
     }

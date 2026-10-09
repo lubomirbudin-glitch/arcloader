@@ -233,6 +233,8 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     public bool SkipCameraProxies { get => p.SkipCameraProxies; set { p.SkipCameraProxies = value; Changed(nameof(SkipCameraProxies)); } }
     /// 0.5.1: no proxy for an H.264/HEVC original that is lighter than the proxy would be — H.264/HEVC proxies only (LighterSource).
     public bool SkipLighterSources { get => p.SkipLighterSources; set { p.SkipLighterSources = value; Changed(nameof(SkipLighterSources)); } }
+    /// H.264/HEVC decoded on the GPU — off by default (green frames on the Mac); encoding stays on the GPU.
+    public bool HardwareDecode { get => p.HardwareDecode; set { p.HardwareDecode = value; Changed(nameof(HardwareDecode)); } }
     public bool CopyToAllDestinations { get => p.CopyToAllDestinations; set { p.CopyToAllDestinations = value; Changed(nameof(CopyToAllDestinations)); } }
     /// Spec 4.2, R26: off by default until a Gen 4 sample confirms the SDK conversion.
     public bool BrawGen4ToGen5 { get => p.BrawGen4ToGen5; set { p.BrawGen4ToGen5 = value; Changed(nameof(BrawGen4ToGen5)); } }

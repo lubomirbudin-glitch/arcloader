@@ -179,7 +179,9 @@ klikněte na „Další informace“ → „Přesto spustit“.
   kamery (ALEXA 35 → LogC4, ostatní ALEXA/AMIRA → LogC3), ARRIRAW podle metadat, Blackmagic RAW (BRAW) podle gamy klipu (Film Gen 5 → vestavěný LUT; Film starší generace = bez LUTu, s volbou „převést na Gen 5“ (Dekodéry; **neověřené**, čeká vzorek Gen 4) LUT Gen 5; Video, Extended Video a další gamy = bez LUTu; bez údaje o gamě se předpokládá Film Gen 5),
   RED → Log3G10. Canon, Panasonic, DJI a Fuji se zatím nepoznají (chybí vzorové klipy), D-Log M vestavěný LUT nemá —
   takové klipy dostanou záložní LUT. U ARRI jde o předpoklad pro ProRes: klip nahraný přímo v Rec.709 by LUT dostal
-  neprávem, pak zvolte „Bez LUT“. Report ukáže u každého klipu použitý LUT a důvod. Na vzorcích z kamer se ještě
+  neprávem, pak zvolte „Bez LUT“. Report ukáže u každého klipu použitý LUT a důvod. Vlastní soubor
+  `%APPDATA%\Offload\luts\<id>.cube` (např. oficiální `arri-logc4-awg4.cube` od ARRI) nahradí vestavěný LUT se stejným
+  id v aplikaci i CLI — v seznamu má „(vlastní soubor)“, v reportu je jeho cesta v důvodu LUTu. Na vzorcích z kamer se ještě
   ověří rozsah: R3D a ARRIRAW (přes ProRes/MXF mezisoubor) a ProRes z ALEXA 35 (LogC4) se berou jako legální video.
 - **Spuštění:** tlačítko „▶ Spustit offload“ (s úlohou ve frontě „Zařadit do fronty“) nebo Ctrl+Enter; nad ním
   „1 karta → 2 disky · 1,70 GB“ a odhad času (jen z rychlostí naměřených v tomto spuštění; jinak jen velikost). Každá karta
@@ -428,6 +430,51 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
 - [ ] 58. **Nastavení a CLI:** Nastavení → Ověření → vypnout „Ověřit primární disk během proxy“ → ověření zase hned po
       kopii; `offload copy … --primary 2` → report „během proxy“ u cíle 2; `--primary 3` se dvěma cíli → česká chyba „cílů je jen 2“ a kód 1, nic se nekopíruje; síťový cíl (NAS) → „síťový cíl — ověřeno
       zpětným čtením“
+- [ ] 59. **Automatické načtení disků — USB disk:** připojit externí USB disk (NTFS, prázdný nebo se staršími zálohami
+      `<datum>\<karta>\…`) → do 2 s se sám objeví v „2 · Cíle“ (a zmizí z „Karty“); odpojit ho → z cílů zmizí; připojit
+      znovu → zase je tam; křížkem ho odebrat → po odpojení a připojení se už nepřidá (Nastavení → Struktura složek →
+      „Zapomenout odebrané disky (1)“ to vrátí); disk s méně než 1 GB volna nebo jen pro čtení (`diskpart` →
+      `attributes volume set readonly`) → nepřidá se, pod cíli oranžově „Disk … je plný / jen pro čtení — jako cíl se
+      nepřidal.“; interní disk SATA/NVMe ani systémový disk se nepřidá nikdy; záložní disk s klipy ve složce (uživatelův
+      E: WD Elements) → přidá se (v „Karty“ zůstane jen do přidání); SSD z kamery s klipy BRAW/MOV přímo v kořeni nebo
+      disk se strukturou kamery v kořeni (PRIVATE, DCIM, CLIP, ARRI, RED…) → nepřidá se; disk se zálohou z Offloadu
+      (`_REPORT` nebo `ascmhl` do 3 složek) → přidá se vždy
+- [ ] 60. **Automatické načtení disků — čtečka:** čtečka SD/CFexpress s kartou z kamery → karta je v „1 · Karty“ zaškrtnutá
+      a **nikdy** není v cílech (ani CFexpress čtečka, kterou Windows hlásí jako pevný disk USB — rozhodne struktura kamery,
+      název výrobku čtečky nebo víc slotů na jednom zařízení); karta ze zvukového rekordéru (jen WAV) → zaškrtnutá; prázdná
+      karta → v seznamu, nezaškrtnutá; vypnout „Automaticky označovat karty ve čtečkách jako zdroje“ → nová karta se
+      nezaškrtne; během kontrol „Spustit offload“ připojit disk → přidá se až po spuštění (ruling I1); `--demo` → nic se nepřidá
+- [ ] 61. **Kopie reportu na počítači:** po kopii karty je `Dokumenty\Offload reporty\<datum>\<karta>\` s `_REPORT`
+      (HTML, PDF, JSON, TXT, `.xxh64`, CSV, manifest) a `ascmhl`, bez klipů a proxy; po proxy/analýze se HTML s náhledy
+      obnoví; denní report v `…\<datum>\_REPORT\`; Doplnit / Zkopírovat znovu / Dokončit / Ověřit zálohu → kopie se
+      obnoví; druhá karta téhož jména téhož dne → `A001_2`; Nastavení → Report → vypnout nebo „Změnit…“ složku (síťová
+      složka, odpojený disk) → úloha doběhne, na kartě úlohy jen šedá poznámka „Kopie reportu na tento počítač se
+      nepovedla…“; Dokumenty přesunuté na OneDrive/jiný disk → kopie jde tam; `offload copy … --no-local-report` → nic
+
+Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na vývojovém PC nejsou — testy jen s náhradami):
+
+- [ ] 62. **Proxy bez hardwarového dekódování:** karta s H.264/HEVC 4K → proxy bez zeleného snímku (kontrola
+      `ffprobe -f lavfi -i "movie=<proxy>,signalstats"` — žádný snímek s UAVG i VAVG u nuly); Nastavení → Proxy
+      „Hardwarové dekódování (experimentální)“ zapnout → log ffmpeg má `-hwaccel auto`, proxy dál bez zelených snímků;
+      `offload … --proxy --hw-decode` totéž.
+- [ ] 63. **ARRIRAW sférický / anamorfní (art-cmd):** sférický klip ALEXA 35 4.6K OG → art-cmd bez `--desqueeze`
+      (Správce úloh → Podrobnosti → příkazový řádek), rychlost dekódování ~2× vyšší než dřív; anamorfní klip (2×) →
+      s `--desqueeze`, proxy roztažená na správný poměr stran.
+- [ ] 64. **Priorita nástrojů:** spustit Offload s nízkou prioritou (`start /belownormal Offload.exe`) → během proxy
+      ve Správci úloh (Podrobnosti → Priorita, Process Explorer → I/O priorita) ffmpeg, art-cmd, REDline a braw-decode
+      „Normální“; ARRIRAW 4.6K dekóduje stejně rychle jako stejné volání art-cmd z terminálu.
+- [ ] 65. **Průběh ARRIRAW:** proxy klipu ARRIRAW → pruh klipu během art-cmd plynule roste do ~76 %, pak ffmpeg do 100 %;
+      nikdy nestojí na 0 % celé dekódování.
+- [ ] 66. **Analýza ARRIRAW:** karta ALEXA 35 s velkými klipy (100+ GB) → analýza v řádu sekund na klip (art-cmd
+      `export … --duration 1`); v reportu rozlišení, fps, délka (počet snímků jako v ARRI Reference Tool), TC prvního
+      snímku, kamera, log (LogC4) a squeeze stejné jako dřív; art-cmd, který `--duration` nezná → v logu „exporting the
+      metadata of every frame“ a analýza projde (pomalu); sekvence `.ari` → počet snímků = počet souborů. Zjistit, jaké
+      `clipDuration` vrátí export jednoho snímku: když 1 a ffprobe na MXF nedoběhne, délka zůstane prázdná (v logu „length
+      unknown“). X-OCN MXF s nainstalovaným art-cmd → art-cmd jen jednou, poznámka cituje jeho chybu. Zrušení úlohy během
+      dekódování art-cmd → art-cmd do vteřiny skončí.
+- [ ] 67. **ARRIRAW bez LUTu:** `offload … --proxy --lut none` s klipem ALEXA 35 a ALEXA Mini → proxy v Rec.709
+      (vestavěný vzhled kamery), art-cmd bez `--target-colorspace`; poškozený klip / art-cmd, který skončí kódem 0 bez
+      souboru → poznámka „ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla ([error] …)“.
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
@@ -453,6 +500,7 @@ offload bench --hash md5                                    # rychlost MD5 proti
 offload E:\ --project "Film X"                              # nastavení projektu z aplikace; volby z příkazové řádky mají přednost
 offload E:\ -d D:\Zaloha --proxy --lut-rule camera=FX6:sony-slog3-sgamut3cine --lut-rule "folder=A00*/*:C:\luts\show.cube"
 offload E:\ -d D:\Zaloha --proxy --braw-gen5                 # BRAW Film Gen 4 jako Gen 5 (neověřeno, čeká vzorek Gen 4)
+offload E:\ -d D:\Zaloha --proxy --hw-decode                 # H.264/HEVC dekóduje grafická karta (experimentální)
 offload E:\ -d D:\Zaloha --ntfy https://ntfy.sh/muj-tajny-kanal   # výsledek na telefon (jen název karty, výsledek, počty)
 ```
 
@@ -489,13 +537,20 @@ nápovědy a chyby parseru česky tam, kde je System.CommandLine 2.0.12 přelož
 protože `copy` vyžaduje kartu a cíl, takže `copy --lut list` by neprošlo parsováním. `--lut-fallback <id|none>` je LUT
 pro klipy, které `auto` nepozná (výchozí `none`). Neznámé id skončí chybou (exit 1). Vestavěné LUTy jsou v balíčku
 ve složce `luts\` vedle `Offload.exe` (11 souborů `.cube` + `luts.json`); chybějící složka nic neshodí, `auto` pak
-LUT nepoužije.
+LUT nepoužije. Soubor `%APPDATA%\Offload\luts\<id>.cube` nahradí vestavěný LUT se stejným id (`offload luts` ho vypíše
+s „(vlastní soubor)“).
 
 `--proxy-folder <složka>` (jen s `--proxy`): každá hotová proxy se kromě `_PROXY` na cílech zkopíruje i do
 `<složka>\<datum>\<karta>\<složka klipu>\` (od 0.5.1 stejné podsložky jako `_PROXY`, tedy jako na kartě; stejný název
 souboru; když už tam soubor je, uloží se jako `_2`, `_3`… — nic se nepřepíše).
 Neexistující složka zastaví start chybou (exit 1); když složka zmizí během úlohy (odpojený disk), proxy zůstanou na cílech
 a u klipu je v reportu poznámka „kopie do … selhala“.
+
+`--hw-decode` (2026-10-09, `proxy.hardwareDecode`, v GUI Nastavení → Proxy „Hardwarové dekódování (experimentální)“):
+originály H.264/HEVC dekóduje pro proxy grafická karta (`-hwaccel auto`). Výchozí je softwarové dekódování — Mac dostal
+z hardwarového dekodéru zelené snímky bez chyby; na tomto PC (i5-14400F, RTX 3070, ffmpeg 8.1, `-hwaccel auto` = DXVA2)
+byly všechny snímky v pořádku a 4K H.264 bylo softwarově rychlejší (3,3–4,4 s proti 5,7–6,2 s), 4K HEVC hardwarově
+(3,6 s proti 5,1–8,4 s). Kódování (NVENC/QSV/AMF) zůstává hardwarové; selhání s hardwarovým dekódováním se zkusí znovu softwarově.
 
 `--proxy-always` (od 0.5.1): proxy i pro klip, jehož originál je lehčí — ve výchozím stavu (`proxy.skipLighterSources`, jen u proxy
 H.264/HEVC — s `--proxy-codec prores…` se proxy renderuje vždy — a jen když se nepoužije LUT ani ořez) originál H.264/HEVC, který není větší než proxy a nemá vyšší datový tok, proxy nedostane („bez proxy — originál je lehčí

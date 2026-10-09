@@ -23,14 +23,16 @@ sealed class StageTwoOptions
     readonly Option<string?> proxyFolder = new("--proxy-folder") { Description = "Also copy every proxy to <folder>\\<date>\\<card name>\\ (with --proxy; never overwrites)." };
     readonly Option<bool> noClipList = new("--no-clip-list") { Description = "No clip list CSV (_REPORT\\<card>_clips.csv)." };
     readonly Option<bool> ale = new("--ale") { Description = "Also write the clip list for Avid (_REPORT\\<card>_clips.ale)." };
+    readonly Option<bool> hwDecode = new("--hw-decode") { Description = "Decode H.264/HEVC sources of proxies on the GPU (experimental; by default they decode in software — hardware decoding gave green frames on the Mac). Encoding uses the GPU either way." };
     readonly Option<bool> brawGen5 = new("--braw-gen5") { Description = "Decode Blackmagic RAW Film Gen 4 as Gen 5 (the Gen 5 LUT then fits). Not yet verified with a Gen 4 sample." };
     readonly Option<bool> noDayReport = new("--no-day-report") { Description = "Do not make the day report (<date>\\_REPORT\\<date>_day_report.html) again after the copy." };
     readonly Option<bool> classicVerify = new("--classic-verify") { Description = "Read every destination back right after the copy (as before 0.6.0) instead of verifying the primary one while the proxies are made." };
     readonly Option<int?> primary = new("--primary") { Description = "Destination (1, 2 …, in the order of --dest) the proxies read and verify; default: the fastest one measured during the copy." };
+    readonly Option<bool> noLocalReport = new("--no-local-report") { Description = "Do not copy the card's report (_REPORT, ascmhl) to Documents\\Offload reporty\\<date>\\<card name>\\ on this computer." };
 
     public void AddTo(Command cmd)
     {
-        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, proxyAlways, noBurnIn, proxyFolder, noClipList, ale, noDayReport, brawGen5, classicVerify, primary })
+        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, proxyAlways, hwDecode, noBurnIn, proxyFolder, noClipList, ale, noDayReport, brawGen5, classicVerify, primary, noLocalReport })
             cmd.Options.Add(o);
     }
 
@@ -85,6 +87,7 @@ sealed class StageTwoOptions
         if (Given(proxyAlways)) p.SkipLighterSources = !r.GetValue(proxyAlways);
         if (Given(noBurnIn)) p.BurnFilename = p.BurnTimecode = !r.GetValue(noBurnIn);
         if (Given(brawGen5)) p.BrawGen4ToGen5 = r.GetValue(brawGen5);
+        if (Given(hwDecode)) p.HardwareDecode = r.GetValue(hwDecode);
         if (Given(proxyFolder)) p.ExtraFolder = r.GetValue(proxyFolder) is string pf ? CliPath.Full(pf) : null;
         config.Proxy = p;
 
@@ -92,7 +95,10 @@ sealed class StageTwoOptions
         if (Given(noClipList)) outputs.ClipListCsv = !r.GetValue(noClipList);
         if (Given(ale)) outputs.ClipListAle = r.GetValue(ale);
         if (Given(noDayReport)) outputs.DayReport = !r.GetValue(noDayReport);
+        if (Given(noLocalReport)) outputs.LocalReport = !r.GetValue(noLocalReport);
         config.Outputs = outputs;
+        // Task 2026-10-09: the report on this computer too (the project's folder, else Documents\\Offload reporty).
+        config.LocalReports = LocalReports.RootFor(outputs);
         config.AnalyzeClips = Given(noAnalyze) ? !r.GetValue(noAnalyze) : project!.AnalyzeClips;
         // Plan 10 (R11): verify-in-proxy unless --classic-verify (or the project switched it off); --primary picks the disk.
         config.VerifyInProxy = Given(classicVerify) ? !r.GetValue(classicVerify) : project!.VerifyInProxy;

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows.Threading;
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.Outputs;
 using Offload.Core.Space;
 
 namespace Offload.App;
@@ -58,6 +59,9 @@ public sealed partial class MainViewModel
         RefreshVolumesCommand = new RelayCommand(RefreshAll);
         AddSourceCommand = new RelayCommand(AddManualSource);
         AddDestinationCommand = new RelayCommand(AddDestination);
+        ForgetRemovedDisksCommand = new RelayCommand(ForgetRemovedDisks);
+        ChooseLocalReportFolderCommand = new RelayCommand(ChooseLocalReportFolder);
+        DefaultLocalReportFolderCommand = new RelayCommand(DefaultLocalReportFolder);
         foreach (var path in Options.Sources) AddManualSourcePath(path);
         RebuildDestinations();
         RefreshTools();
@@ -159,7 +163,16 @@ public sealed partial class MainViewModel
 
     void ApplyVolumes(List<VolumeItem> found)
     {
-        var next = Volumes.SelectionAfterRefresh(volumes.Select(v => v.Path), found, selected, manualSources);
+        // One decision per volume — destination, source or neither — applied in this one step (controller ruling
+        // 2026-10-09): a disk the automatic choice makes a destination is never ticked in Karty, not even for a moment.
+        var auto = Settings.AutoDrive;
+        if (starting && !IsDemo) autoDriveDeferred = true;
+        var decision = Volumes.Decide(volumes.Select(v => v.Path), found, selected, manualSources, auto.Cards,
+            IsDemo ? null : new AutoDriveInput(found.Select(v => v.Facts).OfType<DriveFacts>().ToList(), Settings.DestRoots,
+                auto.Added, auto.Removed, auto.Destinations, Locked: starting));
+        found = decision.Found;
+        var next = decision.Selected;
+        bool dropped = !starting && !IsDemo && ApplyAutoDrives(decision.Plan);
         // Another card on the same drive letter (gone, or swapped faster than one scan) must not inherit the name.
         var drop = Volumes.NamesToDrop(volumes, found);
         volumes = found;
@@ -186,6 +199,7 @@ public sealed partial class MainViewModel
             destSig = dsig;
             RebuildDestinations();
         }
+        if (dropped) RefreshVolumes();   // a disk that took a dropped destination's letter is offered as a card again
         InspectMissing();   // new or swapped cards
         ResolveSourceLinks();   // how the new cards are connected
         foreach (var j in Jobs.OfType<JobItemViewModel>()) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
@@ -369,14 +383,107 @@ public sealed partial class MainViewModel
     {
         if (Dialogs.PickFolder("Vyber cílovou složku (root)") is not string path) return;
         if (!Settings.DestRoots.Contains(path, StringComparer.OrdinalIgnoreCase)) Settings.DestRoots.Add(path);
+        // Added by hand: a disk removed earlier is no longer remembered as unwanted (from the last scan — memory only).
+        if (AutoDrives.RemovedDisk(path, ScannedFacts) is string disk) Settings.AutoDrive.Removed.RemoveAll(r => string.Equals(r, disk, StringComparison.OrdinalIgnoreCase));
         DestinationsChanged();
     }
 
     internal void RemoveDestination(string root)
     {
         Settings.DestRoots.RemoveAll(r => string.Equals(r, root, StringComparison.OrdinalIgnoreCase));
+        // Task 2026-10-09: a removed disk is remembered by its identity (serial + capacity) and never added by itself again
+        // — the one the app added (also while it is disconnected), or a connected external disk the destination was on.
+        var auto = Settings.AutoDrive;
+        var disk = auto.Added.FirstOrDefault(a => string.Equals(a.Root, root, StringComparison.OrdinalIgnoreCase))?.Disk
+            ?? AutoDrives.RemovedDisk(root, ScannedFacts);
+        auto.Added.RemoveAll(a => string.Equals(a.Root, root, StringComparison.OrdinalIgnoreCase));
+        if (disk != null && !auto.Removed.Contains(disk, StringComparer.OrdinalIgnoreCase)) auto.Removed.Add(disk);
+        Raise(nameof(ForgetRemovedText));
         DestinationsChanged();
     }
+
+    // ── Automatické načtení disků (2026-10-09) ─────────────────────────────
+
+    string? autoDriveHint;
+    bool autoDriveDeferred;
+
+    IEnumerable<DriveFacts> ScannedFacts => volumes.Select(v => v.Facts).OfType<DriveFacts>();
+
+    /// Why a connected disk was not added as a destination (full, read-only), or null.
+    public string? AutoDriveHint => autoDriveHint;
+
+    /// The automatic destinations of a scan's decision (Volumes.Decide), into the profile on the UI thread before anything
+    /// is shown: connected external disks added, auto-added ones whose disk is gone dropped. Never during a Start (ruling
+    /// I1: the profile shown must not change under its checks — done after it) nor in the demo. True when one was dropped.
+    bool ApplyAutoDrives(AutoDrivePlan plan)
+    {
+        var auto = Settings.AutoDrive;
+        var hint = plan.Hints.Count > 0 ? string.Join("\n", plan.Hints) : null;
+        if (hint != autoDriveHint)
+        {
+            autoDriveHint = hint;
+            Raise(nameof(AutoDriveHint));
+        }
+        if (!plan.Changes) return false;
+        foreach (var root in plan.Drop)
+        {
+            Settings.DestRoots.RemoveAll(r => string.Equals(r, root, StringComparison.OrdinalIgnoreCase));
+            auto.Added.RemoveAll(a => string.Equals(a.Root, root, StringComparison.OrdinalIgnoreCase));
+            AppLog.Write($"auto drives: {root} disconnected — dropped from the destinations");
+        }
+        foreach (var add in plan.Add)
+        {
+            Settings.DestRoots.Add(add.Root);
+            auto.Added.Add(add);
+            AppLog.Write($"auto drives: {add.Root} ({add.Disk}) added as a destination");
+        }
+        SettingsChanged();   // the destination rows are rebuilt by ApplyVolumes (the list changed)
+        return plan.Drop.Count > 0;
+    }
+
+    /// Start has ended: a scan it held back is applied now.
+    void AutoDrivesAfterStart()
+    {
+        if (!autoDriveDeferred) return;
+        autoDriveDeferred = false;
+        RefreshVolumes();
+    }
+
+    public bool AutoAddDestinations
+    {
+        get => Settings.AutoDrive.Destinations;
+        set
+        {
+            Settings.AutoDrive.Destinations = value;
+            SettingsChanged();
+            Raise();
+            RefreshVolumes();
+        }
+    }
+
+    public bool AutoAddCards
+    {
+        get => Settings.AutoDrive.Cards;
+        set
+        {
+            Settings.AutoDrive.Cards = value;
+            SettingsChanged();
+            Raise();
+        }
+    }
+
+    /// "Zapomenout odebrané disky (2)", or null when none is remembered.
+    public string? ForgetRemovedText => Settings.AutoDrive.Removed.Count > 0 ? SettingsTexts.ForgetRemovedLabel(Settings.AutoDrive.Removed.Count) : null;
+
+    void ForgetRemovedDisks()
+    {
+        Settings.AutoDrive.Removed.Clear();
+        SettingsChanged();
+        Raise(nameof(ForgetRemovedText));
+        RefreshVolumes();
+    }
+
+    public RelayCommand ForgetRemovedDisksCommand { get; private set; } = null!;
 
     void DestinationsChanged()
     {
@@ -494,6 +601,36 @@ public sealed partial class MainViewModel
     {
         get => Settings.Outputs.DayReport;
         set { Settings.Outputs.DayReport = value; SettingsChanged(); Raise(); }
+    }
+
+    /// "Kopie reportu i na tomto počítači" (task 2026-10-09) — `outputs.localReport`.
+    public bool LocalReportCopy
+    {
+        get => Settings.Outputs.LocalReport;
+        set { Settings.Outputs.LocalReport = value; SettingsChanged(); Raise(); }
+    }
+
+    /// The folder the reports are copied to: the chosen one, else `<Dokumenty>\Offload reporty` (memory only).
+    public string LocalReportFolderText => Settings.Outputs.LocalReportFolder ?? LocalReports.DefaultRoot;
+
+    public bool LocalReportFolderCustom => Settings.Outputs.LocalReportFolder != null;
+
+    public RelayCommand ChooseLocalReportFolderCommand { get; private set; } = null!;
+    public RelayCommand DefaultLocalReportFolderCommand { get; private set; } = null!;
+
+    void ChooseLocalReportFolder()
+    {
+        if (Dialogs.PickFolder("Vyberte složku pro kopie reportů na tomto počítači") is not string folder) return;
+        Settings.Outputs.LocalReportFolder = folder;
+        SettingsChanged();
+        RaiseMany(nameof(LocalReportFolderText), nameof(LocalReportFolderCustom));
+    }
+
+    void DefaultLocalReportFolder()
+    {
+        Settings.Outputs.LocalReportFolder = null;
+        SettingsChanged();
+        RaiseMany(nameof(LocalReportFolderText), nameof(LocalReportFolderCustom));
     }
 
     public bool AnalyzeClips

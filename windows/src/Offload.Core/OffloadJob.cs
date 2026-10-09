@@ -51,6 +51,9 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     /// Plan 10 (spec 6): the destination the proxies read and verify (0-based, CLI --primary N); null = the fastest one
     /// measured during the copy.
     public int? PrimaryDestination { get; set; }
+    /// Task 2026-10-09: the folder every card's report is copied to on this computer (LocalReports.RootFor of the
+    /// profile; CLI --no-local-report = null); null = no local copy (also every test that does not ask for one).
+    public string? LocalReports { get; set; }
 }
 
 /// `Finishing` (plan 10): after the proxies, the verification reads what they did not and waits for the other disks.
@@ -109,6 +112,8 @@ public sealed record JobStatus
     public TimeSpan PausedTotal { get; init; }
     /// Warnings that do not fail the job (orange), one per line — e.g. unverified files of the earlier backup.
     public string? Warning { get; init; }
+    /// Task 2026-10-09: why the copy of the report on this computer failed (Czech) — a note only, never the job's result.
+    public string? LocalReportNote { get; init; }
 
     /// This status with `line` added to the warnings.
     public JobStatus WithWarning(string line) => this with { Warning = Warning == null ? line : Warning + "\n" + line };
@@ -157,6 +162,9 @@ public sealed class OffloadJob
     public string? SourceIdentity => sourceIdentity;
     /// The day reports (HTML) this job made again when it ended, one per destination that has it (the CLI prints them).
     public IReadOnlyList<string> DayReports => dayReports;
+    /// Task 2026-10-09: the local copy of the card's report (`<folder>\<datum>\<karta>`) once made; null otherwise.
+    public string? LocalReport => localReport;
+    volatile string? localReport;
 
     /// Tests: what CardIdentity.Of / CardVolume.Of would read from the drive.
     internal Func<string, string?> Identify { get; init; } = CardIdentity.Of;
@@ -400,6 +408,7 @@ public sealed class OffloadJob
                 // Cancelled after the copy wrote its verifyPending reports: nothing was verified — the generation is
                 // committed with its copies "written" (unverified), as a cancel in stage 2 does (ruling I1: never green).
                 if (report.VerifyPending == true) Report = FinishVerification(null, plan, report, log);
+                CopyLocally(plan, log);
                 // Marked before the phase changes: whoever sees it finished also sees the day report pending (fix round 1, item 3).
                 var cancelled = DayReportNext();   // the card shows as not complete (spec 3.2); not recorded in history
                 Update(s => s with { Phase = JobPhase.Cancelled });
@@ -413,6 +422,7 @@ public sealed class OffloadJob
                 // report and in history; the rest was never read. The job fails; no stage 2 (lists and PDF as without it).
                 WriteClipLists(plan, log);
                 WritePdfReports(report, plan, log);
+                CopyLocally(plan, log);
                 var next = DayReportNext();
                 Update(s => s with { Phase = JobPhase.Failed, Error = Msg.CardChangedWhilePaused });
                 return next;
@@ -422,10 +432,12 @@ public sealed class OffloadJob
             {
                 WriteClipLists(plan, log);   // the clips found in the files, without metadata (spec 3.3)
                 WritePdfReports(report, plan, log);
+                CopyLocally(plan, log);
                 var done = DayReportNext();
                 Update(s => s with { Phase = JobPhase.Done });
                 return done;
             }
+            CopyLocally(plan, log);   // the report of the copy is on this computer before the proxies start
             Update(s => s with { Phase = JobPhase.Analyzing });
             return true;
         }
@@ -475,6 +487,7 @@ public sealed class OffloadJob
                 }
                 // Nothing to copy does not make the earlier backup verified (fix round 1, item 3).
                 if (a.UnverifiedEarlier > 0) Update(s => s.WithWarning(Msg.UnverifiedEarlier(a.UnverifiedEarlier)));
+                CopyLocally(a.CardPaths, log);   // a hash list healed, or a local copy still missing
             }
             // Conservative (no false green): any warning keeps both verdicts off, as before plan 10.
             Update(s => s with { Phase = JobPhase.Done, Note = e.Message, SafeToEject = s.Warning == null, SafeToFormat = s.Warning == null });
@@ -484,6 +497,7 @@ public sealed class OffloadJob
         {
             ForgetStart(log);
             EndPendingUnverified(log);
+            if (writing && Plan is { } cancelledPlan) CopyLocally(cancelledPlan, log);
             var next = copying && DayReportNext();
             Update(s => s with { Phase = JobPhase.Cancelled });
             return next;
@@ -494,6 +508,7 @@ public sealed class OffloadJob
             // manifest record, no pending report) — no "nedokončeno" entry.
             if (!writing || NothingToResume()) ForgetStart(log);
             EndPendingUnverified(log);
+            if (writing && Plan is { } failedPlan) CopyLocally(failedPlan, log);   // whatever report the copy left
             var next = copying && DayReportNext();   // ruling M9: best effort after a failed copy too
             Update(s => s with { Phase = JobPhase.Failed, Error = e.Message });
             return next;
@@ -864,7 +879,11 @@ public sealed class OffloadJob
             try
             {
                 using var keepAwake = KeepAwake();
-                if (Plan is { } p) RegenerateDayReports(p, log);
+                if (Plan is { } p)
+                {
+                    RegenerateDayReports(p, log);
+                    CopyLocally(p, log, day: true);
+                }
             }
             finally
             {
@@ -909,6 +928,7 @@ public sealed class OffloadJob
             Update(s => s with { Phase = JobPhase.Reporting });
             WritePdfReports(final, plan, log);
             RegenerateDayReports(plan, log);
+            CopyLocally(plan, log, day: true);   // analysis, proxies, verification results, PDF and the day report
             Update(s => s with { Phase = IsCancelled ? JobPhase.Cancelled : JobPhase.Done });
         }
         else
@@ -916,6 +936,7 @@ public sealed class OffloadJob
             WriteClipLists(plan, log);   // the generation must not be missing from the lists
             WritePdfReports(final, plan, log);
             RegenerateDayReports(plan, log);
+            CopyLocally(plan, log, day: true);
             Update(s => s with { Phase = JobPhase.Failed, Error = failed.Message });
         }
     }
@@ -1123,21 +1144,15 @@ public sealed class OffloadJob
             }
             try
             {
-                var info = renderer.Probe(clip, cardPaths[d]);
-                if (clip.Format == ClipFormat.Video && info.Width == null)
+                // ffprobe (an MXF with a time limit), and the ARRI tool for an MXF ffmpeg cannot decode — once each.
+                var (analyzed, info, undecodable) = renderer.Analyze(clip, cardPaths[d]);
+                entries[i].Clip = analyzed;
+                if (analyzed.Format == ClipFormat.Video && info.Width == null)
                 {
-                    if (renderer.ReclassifyUndecodableMxf(clip, cardPaths[d]) is { } arri)
-                    {
-                        entries[i].Clip = arri.Clip;
-                        info = arri.Info;
-                    }
-                    else
-                    {
-                        info.Reel = ReelResolver.Resolve(clip, info, plan.CardName);
-                        entries[i].Info = info;
-                        entries[i].ProbeError = "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy";
-                        continue;
-                    }
+                    info.Reel = ReelResolver.Resolve(clip, info, plan.CardName);
+                    entries[i].Info = info;
+                    entries[i].ProbeError = undecodable ?? "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy";
+                    continue;
                 }
                 // Spec 3.4: the camera's tag, else the clip name, else the card folder — into the report and the proxy.
                 info.Reel = ReelResolver.Resolve(entries[i].Clip, info, plan.CardName);
@@ -1157,6 +1172,7 @@ public sealed class OffloadJob
         report.Clips = entries;
         report.Proxy = Config.Proxy;
         RewriteReports(report, plan, log);
+        CopyLocally(plan, log);   // the analysed report, before the proxies (they may take hours)
 
         if (!Config.Proxy.Enabled || IsCancelled) return report;
         if (ProxySpaceProblem(entries, plan, renderer) is string noRoom)
@@ -1369,6 +1385,48 @@ public sealed class OffloadJob
             catch (Exception e) { log?.Invoke($"report rewrite {path}: {e.Message}"); /* the first report is already there; this only adds clip details */ }
         }
         WriteClipLists(plan, log);
+    }
+
+    void CopyLocally(OffloadPlan plan, Action<string>? log, bool day = false) => CopyLocally(plan.CardPaths, log, day ? plan : null);
+
+    /// Task 2026-10-09: the card's report (and with `dayOf` the day report) copied to this computer again — after every
+    /// rewrite of the report. Reads the destinations only; a failure is a note on the job and a log line, never its result.
+    /// A local folder on the card itself is refused: nothing is ever written to the card.
+    void CopyLocally(IReadOnlyList<string> cardPaths, Action<string>? log, OffloadPlan? dayOf = null)
+    {
+        if (Config.LocalReports is not string root) return;
+        try
+        {
+            if (Inside(root, Config.Source)) throw new IOException(Msg.LocalReportOnCard);
+            if (Outputs.LocalReports.MirrorCard(cardPaths, root) is string copied)
+            {
+                if (copied != localReport) log?.Invoke($"local report copy: {copied}");
+                localReport = copied;
+            }
+            if (dayOf != null && Config.Outputs.DayReport) Outputs.LocalReports.MirrorDay([.. dayOf.DestRoots.Select(r => Path.Combine(r, dayOf.Date))], root);
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"local report copy: {e.Message}");
+            var note = Msg.LocalReportFailed(e.Message);
+            Update(s => s with { LocalReportNote = note });
+        }
+    }
+
+    /// `path` is `folder` or inside it (a drive root holds everything on its drive). String work only.
+    static bool Inside(string path, string folder)
+    {
+        try
+        {
+            const char Sep = (char)92;
+            var p = Path.GetFullPath(path).TrimEnd(Sep) + Sep;
+            var f = Path.GetFullPath(folder.Length == 2 && folder[1] == ':' ? folder + Sep : folder).TrimEnd(Sep) + Sep;
+            return p.StartsWith(f, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 
     /// Spec 3.3: `_REPORT\<card>_clips.csv/.ale` on every destination, from the reports there — every generation (R25).

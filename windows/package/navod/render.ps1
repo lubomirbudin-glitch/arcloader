@@ -21,7 +21,7 @@ try {
     $edgeArgs = @(
         '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--disable-extensions',
         "--user-data-dir=`"$(Join-Path $work 'profile')`"",
-        '--no-pdf-header-footer', "--print-to-pdf=`"$tmp`"", $uri
+        '--edge-skip-compat-layer-relaunch', '--no-pdf-header-footer', "--print-to-pdf=`"$tmp`"", $uri
     )
     $p = Start-Process -FilePath $edge -ArgumentList $edgeArgs -PassThru -WindowStyle Hidden
     if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'Edge did not print the manual in 120 s' }

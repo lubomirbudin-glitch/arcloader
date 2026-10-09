@@ -115,7 +115,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `xxh128`? (XXH3-128, 32 malých hex, Windows od 0.6.0), `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
 | `skipped[]` | string | vynechané systémové položky |
 | `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`? (relativní k složce karty, např. `_PROXY/idle/1.mov` — viz „Proxy ve složkách jako na kartě“), `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje), `content`? {`state` (`ok` / `warn`), `kind` (`decode`, `audio`, `timestamps`, `frames`, `end`), `frame`, `timecode`, `message`, `framesDecoded`, `framesExpected`} (Windows od 0.6.0: co dekodér hlásil při tvorbě proxy — `warn` je vada souboru z kamery, kopie přitom souhlasí s kartou; Mac ignoruje) |
-| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `skipLighterSources` (jen Windows od 0.5.1), `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5` — viz níže) |
+| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `skipLighterSources` (jen Windows od 0.5.1), `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5`, od 2026-10-09 `hardwareDecode` — viz níže) |
 | `proxyEncoder` | string? | jen Windows: enkodér ffmpeg, kterým se renderovaly proxy (`h264_nvenc`, `libx264`, `prores_ks` …); chybí, když se žádná proxy nevyrenderovala |
 
 Hodnoty výčtů:
@@ -160,6 +160,11 @@ Design Film, Video a Extended Video zůstanou. **Neověřeno** — čeká na vzo
 jako `<extraFolder>\<datum>\<karta>\<složka klipu>\<klip>.mov` — stejné podsložky jako v `_PROXY` (před 0.5.1 a u ploché
 zálohy bez nich; při shodě jména ve složce `_2`, `_3`…). Chybí, když není nastavená. Stejný klíč
 je v sekci `proxy` souboru `settings.json`. Mac 0.2.0 kopíruje ještě bez podsložek (`<extraFolder>/<datum>/<karta>/<klip>.mov`).
+
+`proxy.hardwareDecode` (bool, chybí = `false`, jen Windows od 2026-10-09; i v `settings.json`, CLI `--hw-decode`; zapisuje
+se jen zapnuté): originály H.264/HEVC dekóduje pro proxy grafická karta (`-hwaccel auto`; jiné kodeky nikdy). Výchozí je
+softwarové dekódování — Mac dostal z hardwarového dekodéru zelené snímky bez jakékoli chyby. Kódování proxy (NVENC/QSV/AMF)
+se tím nemění. Mac klíč nezná.
 
 `proxy.skipLighterSources` (bool, chybí = `true`, Windows od 0.5.1; i v `settings.json`, CLI `--proxy-always` = `false`;
 platí **jen u proxy H.264/HEVC** — s kodekem proxy ProRes se proxy renderuje vždy, ProRes se volí kvůli plynulému střihu —
@@ -344,9 +349,14 @@ Pravidla (Windows od 0.3.0):
 - `hash` (`"xxh64"` | `"both"`, výchozí `"xxh64"`, Windows od 0.3.0): kontrolní součty kopie; `both` = xxh64 + MD5. Jiná
   hodnota (z novější verze) se zachová a čte jako `xxh64`.
 - `outputs` (Windows od 0.3.0): `dayReport` (bool, `true`) — denní report po každé úloze; `clipListCsv` (bool, `true`),
-  `clipListAle` (bool, `false`) — seznamy klipů. Neznámé klíče sekce se zachovají.
+  `clipListAle` (bool, `false`) — seznamy klipů; `localReport` (bool, `true`, úkol 2026-10-09) — kopie reportu karty na
+  tomto počítači; `localReportFolder` (string | `null` = `<Dokumenty>\Offload reporty`). Neznámé klíče sekce se zachovají.
+- Kopie reportu na počítači (Windows, úkol 2026-10-09): `<složka>\<datum>\<karta>\_REPORT\…` a `…\ascmhl\…` jako na
+  cíli (bez médií: bez `_REPORT\neshoda_NNNN\`, klipů a proxy), denní report do `<složka>\<datum>\_REPORT\`. Ve složce
+  karty je skrytý soubor `.offload-origin` (`<started UTC>|<cardName>|<source>` z `offload_report.json`): podle něj se jiná
+  karta stejného jména téhož dne uloží do `<karta>_2`, `_3` … (pravidlo jako na cíli); složka bez něj se nikdy nepoužije.
 - Projekty (Windows od 0.4.0): klíče profilu na horní úrovni (`destRoots`, `verify`, `analyzeClips`, `hash`, `naming`,
-  `outputs`, `notify`, `proxy`) jsou profil „Bez projektu“; `projects` je pole pojmenovaných profilů stejného tvaru
+  `outputs`, `notify`, `proxy`, `autoDrives`) jsou profil „Bez projektu“; `projects` je pole pojmenovaných profilů stejného tvaru
   s klíčem `name` (oříznutý, 1–60 znaků, jedinečný bez ohledu na velikost písmen, „Bez projektu“ vyhrazené);
   `activeProject` je jméno nebo `null` (jméno neexistujícího projektu se při čtení změní na `null`; zachová se jen
   jméno projektu uloženého beze změny — položka, kterou tato verze nečte — a platí „Bez projektu“; `activeProject`
@@ -354,6 +364,11 @@ Pravidla (Windows od 0.3.0):
   zůstanou v souboru beze změny a při uložení se zapíšou zpět za čitelné projekty (nic se neztratí ani nenásobí).
   `projects`, které není pole, se zachová beze změny, dokud se v aplikaci neuloží projekt. Společné zůstávají `tools`,
   `portNames` a `updates`.
+- `autoDrives` (Windows, úkol 2026-10-09, součást projektu): `destinations` (bool, `true`) — připojené externí disky USB
+  přidávat jako cíle; `cards` (bool, `true`) — karty ve čtečkách po vložení zaškrtnout; `added` (pole `{ "root", "disk" }`)
+  — cíle, které aplikace přidala sama (po odpojení disku je zase odebere); `removed` (pole textů) — disky, které uživatel
+  z cílů odebral, a proto se samy znovu nepřidají. Disk = `"<sériové číslo svazku hex 8>:<kapacita v bajtech>"`,
+  např. `"1A2B3C4D:2000398934016"`. Neznámé klíče sekce se zachovají.
 - `notify` (Windows od 0.4.0, součást projektu): `windows` (bool, `true`) — oznámení Windows; `ntfy` { `enabled` (bool,
   `false`), `server` (string, `https://ntfy.sh`), `topic` (string, `""`; písmena bez diakritiky, číslice, `-` a `_`,
   nejvýš 64 znaků) } — bez přihlašovacího tokenu.

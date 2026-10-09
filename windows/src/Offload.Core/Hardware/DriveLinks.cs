@@ -91,6 +91,27 @@ public static unsafe class DriveLinks
         }
     }
 
+    /// The device behind a volume for telling a card reader from a disk (AutoDrives): its bus, product name and how many
+    /// disks its parent device has (cfgmgr32 — a multi-slot reader shows one disk per slot). Never throws: (Unknown, "", 1)
+    /// when unknown.
+    public static (StorageBus Bus, string Product, int Disks) Device(string root)
+    {
+        try
+        {
+            (int Bus, string Product) d = (0, "");
+            using (var volume = UsbNative.OpenForQuery(@"\\.\" + root.TrimEnd('\\')))
+                if (volume != null) d = Descriptor(volume);
+            int disks = 1;
+            if (DiskNode(root) is uint disk && DevNodes.Parent(disk) is uint parent)
+                disks = Math.Max(1, DevNodes.Children(parent).Count(c => DevNodes.Id(c).Contains("DISK", StringComparison.OrdinalIgnoreCase)));
+            return (BusFrom(d.Bus), d.Product, disks);
+        }
+        catch (Exception)
+        {
+            return (StorageBus.Unknown, "", 1);
+        }
+    }
+
     /// A network location: the share (UNC) as the product, else the drive letter.
     internal static DriveLink Network(string root, string? unc) =>
         new(root, StorageBus.Network, string.IsNullOrWhiteSpace(unc) ? root.TrimEnd('\\') : unc.TrimEnd('\\'), null);

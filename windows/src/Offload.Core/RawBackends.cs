@@ -12,8 +12,10 @@ internal interface IRawBackend
     string MissingHint { get; }
     bool IsAvailable(ExternalTools tools);
     ClipInfo Probe(string path, ExternalTools tools, string workDir);
-    /// `singleFrameAt` (seconds) asks for just one frame — used for report thumbnails.
-    FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt);
+    /// `singleFrameAt` (seconds) asks for just one frame — used for report thumbnails. `isCancelled`: a decoder that writes an
+    /// intermediate first (art-cmd, REDline) is killed when it turns true.
+    FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null);
 }
 
 /// What a RAW decoder should hand ffmpeg: camera log (a LUT follows) or its own Rec.709 look.
@@ -47,6 +49,47 @@ internal static class RawBackends
         Directory.CreateDirectory(d);
         return d;
     }
+
+    /// Best effort, with a few short retries: a tool killed a moment ago (its children end a little later) or a virus
+    /// scanner may still hold a file or the folder itself.
+    public static void DeleteDir(string dir)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+                return;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                if (attempt >= 10) return;
+                Thread.Sleep(100);
+            }
+        }
+    }
+
+    /// A RAW tool's log lines that explain a failure, on one line: its [error]/[critical] lines (else the last three),
+    /// without the timestamp and logger prefix ("[2026-10-05 10:00:00.000] [art] [error] …" → "[error] …").
+    public static string LogTail(string output) => ErrorLines(output) ?? string.Join(" | ", Lines(output).TakeLast(3));
+
+    /// Only the [error]/[critical] lines (as LogTail writes them), or null when the tool logged none.
+    public static string? ErrorLines(string output)
+    {
+        var errors = Lines(output).Where(s => s.StartsWith("[error]", StringComparison.Ordinal) || s.StartsWith("[critical]", StringComparison.Ordinal)).ToList();
+        return errors.Count > 0 ? string.Join(" | ", errors) : null;
+    }
+
+    static List<string> Lines(string output) => output.Split('\n', StringSplitOptions.TrimEntries)
+        .Select(s => System.Text.RegularExpressions.Regex.Replace(s, @"^\[[^\]]*\]\s*\[[^\]]*\]\s*(?=\[)", ""))
+        .Select(s => s.Length > 300 ? s[..300] : s)
+        .Where(s => s.Length > 0).ToList();
+
+    /// A RAW tool that ended with exit code 0 but wrote no output (art-cmd does that when it refuses an argument): never a
+    /// silent "no proxy" — the clip's note says so in Czech, the tool's own words (`log`, LogTail) go with it and to the log.
+    public static RawDecoderException NoOutput(string format, string tool, string log) =>
+        new($"{format}: {tool} skončil bez chyby, ale nic nezapsal — proxy nevznikla" + (log.Length > 0 ? $" ({log})" : ""),
+            new ToolError(tool, 0, "no output file" + (log.Length > 0 ? ": " + log : "")));
 }
 
 /// A RAW decoder's error turned into a note for the clip. The decoder's own error (with its stderr) is the inner
@@ -195,7 +238,8 @@ internal sealed class BrawBackend : IRawBackend
 
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => ToClipInfo(Info(path, "eighth", tools));
 
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null)
     {
         int target = singleFrameAt == null ? settings.Height : 180;
         var scale = Scale(info.Height ?? 2160, target);
@@ -281,14 +325,24 @@ internal sealed class R3dBackend : IRawBackend
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) =>
         ParseMeta(ToolProcess.Run(tools.Redline!, ["--i", path, "--printMeta", "1"]));
 
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null)
     {
         // Thumbnails come from the finished proxy instead (one REDline run per clip is enough).
         if (singleFrameAt != null) throw new ToolError("REDline", -1, "thumbnail from proxy");
         var dir = RawBackends.FreshDir(workDir, "r3d");
-        ToolProcess.Run(tools.Redline!, Args(path, dir, info, settings, look));
-        var mov = RawBackends.NewestFile(dir, "mov") ?? throw new ToolError("REDline", -1, $"no output in {dir}");
-        return new FrameSource { InputArgs = ["-i", mov], Cleanup = [dir] };
+        try
+        {
+            var (exit, log) = ToolProcess.RunCombined(tools.Redline!, Args(path, dir, info, settings, look), isCancelled: isCancelled);
+            if (exit != 0) throw new ToolError("REDline", exit, RawBackends.LogTail(log));
+            var mov = RawBackends.NewestFile(dir, "mov") ?? throw RawBackends.NoOutput("RED R3D", "REDline", RawBackends.LogTail(log));
+            return new FrameSource { InputArgs = ["-i", mov], Cleanup = [dir] };
+        }
+        catch
+        {
+            RawBackends.DeleteDir(dir);
+            throw;
+        }
     }
 }
 
@@ -402,40 +456,154 @@ internal sealed class ArriBackend : IRawBackend
         }
         else
         {
-            args.AddRange(["--desqueeze", "--output-height", s.Height.ToString(CultureInfo.InvariantCulture)]);
+            // --desqueeze only for anamorphic lenses: it halves art-cmd's speed (4.6K Open Gate 25.7 → 11.6 fps on the
+            // Mac) and changes nothing for spherical ones. ParseMetadata sets Squeeze only above 1.01.
+            if (sq > 1.01) args.Add("--desqueeze");
+            args.AddRange(["--output-height", s.Height.ToString(CultureInfo.InvariantCulture)]);
         }
         if (look.Log) args.AddRange(["--target-colorspace", look.ArriColorSpace ?? ColorSpace(null, c)]);
-        else args.AddRange(["--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"]);
+        // No LUT: the camera's embedded look (ARRI's display transform to Rec.709; plain LogC when the clip has none).
+        // Never with --target-colorspace: art-cmd refuses that pair for looks without DRT LUTs ("target-colorspace argument
+        // is only valid for embedded looks with DRT LUTs") — and exits 0 without writing anything (Mac 3b43352).
+        else args.Add("--embedded-look");
         return (args, json, json != null);
     }
 
-    public ClipInfo Probe(string path, ExternalTools tools, string workDir)
+    /// Where the note about a full metadata export goes (the job's log).
+    internal Action<string>? Log { get; init; }
+
+    /// How long the one-frame metadata export may take: it reads a frame, not the clip; a hung tool must never hang the job.
+    internal TimeSpan ExportTimeout { get; init; } = TimeSpan.FromSeconds(120);
+
+    /// Through the interface the clip is already ARRIRAW (an .ari sequence): any failure of the quick export falls back.
+    public ClipInfo Probe(string path, ExternalTools tools, string workDir) => Probe(path, tools, workDir, container: null, knownArri: true);
+
+    /// The clip's metadata from `art-cmd export` of its first frame only (`--duration 1`): without it art-cmd writes the
+    /// metadata of every frame, i.e. reads the whole clip — minutes per 100 GB clip (Mac, card A_0009: analysis over 15
+    /// min). The frame count does not depend on what a one-frame export reports as `clipDuration`: an .ari sequence counts
+    /// its frames (`segments`, the scanner's), an MXF takes ffprobe's (`container`). When neither is known and the export
+    /// said ≤ 1, the length stays unknown — a one-frame export's 1 may be just that frame, and a wrong length (1 frame,
+    /// 0.04 s) is worse than none.
+    ///
+    /// When the quick export fails, safety comes before speed: on a clip `knownArri` (an .ari sequence; an MXF whose tags
+    /// or name say ARRI) every failure — a non-zero exit, or exit 0 without usable metadata — gets the full export, as
+    /// before the quick one existed; how art-cmd words a refused option is not known for sure, so its words only go to the
+    /// log. Another MXF falls back only when art-cmd exited 0 without writing the metadata; any other failure (no ARRIRAW,
+    /// or damaged) keeps art-cmd's error. A time limit is never retried.
+    public ClipInfo Probe(string path, ExternalTools tools, string workDir, ClipInfo? container, int? segments = null, bool knownArri = false)
     {
         var dir = RawBackends.FreshDir(workDir, "art-meta");
         try
         {
             var json = Path.Combine(dir, "meta.json");
-            // art-cmd writes art.log into its working directory — never let that be the card or a destination.
-            ToolProcess.Run(tools.ArtCmd!, ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look"], dir);
-            return ParseMetadata(File.ReadAllText(json));
+            List<string> args = ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look"];
+            bool oneFrame = true;
+            // art-cmd writes art.log into its working directory — never let that be the card or a destination. It logs
+            // (its errors too) to stdout. A time limit: it reads one frame, and a hung tool must never hang the job.
+            var (exit, output) = ToolProcess.RunCombined(tools.ArtCmd!, [.. args, "--duration", "1"], dir, ExportTimeout);
+            bool written = exit == 0 && File.Exists(json);
+            ClipInfo? c = null;
+            if (written)
+            {
+                try
+                {
+                    c = ParseMetadata(File.ReadAllText(json));
+                }
+                catch (Exception e) when (knownArri && e is ToolError or JsonException)
+                {
+                    // unusable metadata: the full export below
+                }
+            }
+            if (c == null)
+            {
+                if (!knownArri && (exit != 0 || written)) throw new ToolError("art-cmd", exit, RawBackends.LogTail(output));
+                var why = exit != 0
+                    ? (RefusesDuration(output) ? "does not know --duration" : $"failed (exit {exit})") + ": " + RawBackends.LogTail(output)
+                    : written ? "wrote unreadable metadata" : "wrote no metadata";
+                Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: art-cmd export --duration 1 {why} — exporting the metadata of every frame");
+                NativeIO.Delete(json);
+                (exit, output) = ToolProcess.RunCombined(tools.ArtCmd!, args, dir);
+                if (exit != 0) throw new ToolError("art-cmd", exit, RawBackends.LogTail(output));
+                if (!File.Exists(json)) throw new ToolError("art-cmd", 0, "no metadata written: " + RawBackends.LogTail(output));
+                c = ParseMetadata(File.ReadAllText(json));
+                oneFrame = false;
+            }
+            if (c.Frames is not > 1)
+            {
+                if (CountFrames(path, container, c.FrameRate, segments) is int frames)
+                {
+                    c.Frames = frames;
+                    c.Duration = Timecode.Fps(c.FrameRate) is double fps ? frames / fps : null;
+                }
+                else if (oneFrame)
+                {
+                    Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: length unknown — art-cmd export --duration 1 says clipDuration "
+                        + $"{c.Frames?.ToString(CultureInfo.InvariantCulture) ?? "(none)"} and ffprobe gave no length");
+                    c.Frames = null;
+                    c.Duration = null;
+                }
+            }
+            return c;
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+            RawBackends.DeleteDir(dir);
         }
     }
 
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)
+    /// For the log only: art-cmd's error lines (or last lines) mention "duration" — probably the option was refused.
+    internal static bool RefusesDuration(string output) =>
+        RawBackends.LogTail(output).Contains("duration", StringComparison.OrdinalIgnoreCase);
+
+    /// The clip's frame count without art-cmd: a sequence's frames (its path is the folder) — the scanner's `segments`,
+    /// else its .ari files without a Mac's "._" copies — else ffprobe's frames of the MXF, else its duration × the ARRI
+    /// frame rate; null when none is known.
+    internal static int? CountFrames(string path, ClipInfo? container, string? frameRate, int? segments = null)
+    {
+        if (Directory.Exists(path))
+        {
+            int n = segments ?? Directory.EnumerateFiles(path, "*.ari").Count(f => !Path.GetFileName(f).StartsWith("._", StringComparison.Ordinal));
+            return n > 0 ? n : null;
+        }
+        if (container?.Frames is int f && f > 0) return f;
+        if (container?.Duration is double d && d > 0 && Timecode.Fps(frameRate ?? container.FrameRate) is double fps)
+            return (int)Math.Round(d * fps, MidpointRounding.AwayFromZero);
+        return null;
+    }
+
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null) =>
+        Source(path, info, settings, look, tools, workDir, singleFrameAt, isCancelled, intermediate: null);
+
+    /// `intermediate` is told the intermediate's path before art-cmd starts writing it (the progress estimate follows
+    /// that file only, never one an earlier clip left behind).
+    internal FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled, Action<string>? intermediate)
     {
         if (singleFrameAt != null) throw new ToolError("art-cmd", -1, "thumbnail from proxy");
         var dir = RawBackends.FreshDir(workDir, "ari");
         var output = Path.Combine(dir, "intermediate.mxf");
         var parameters = Path.Combine(dir, "parameters.json");
-        var (args, json, cropped) = Args(path, output, info, settings, look, parameters);
-        if (json != null) File.WriteAllText(parameters, json);
-        ToolProcess.Run(tools.ArtCmd!, args, dir);
-        if (!File.Exists(output)) throw new ToolError("art-cmd", -1, "no output");
-        return new FrameSource { InputArgs = ["-i", output], AlreadyCropped = cropped, Cleanup = [dir] };
+        try
+        {
+            var (args, json, cropped) = Args(path, output, info, settings, look, parameters);
+            if (json != null) File.WriteAllText(parameters, json);
+            intermediate?.Invoke(output);
+            // art-cmd logs (its errors too) to stdout and may exit 0 without the output file — or with an empty one: both
+            // cases quote its own lines.
+            var (exit, log) = ToolProcess.RunCombined(tools.ArtCmd!, args, dir, isCancelled: isCancelled);
+            if (exit != 0) throw new ToolError("art-cmd", exit, RawBackends.LogTail(log));
+            var written = new FileInfo(output);
+            if (!written.Exists || written.Length == 0) throw RawBackends.NoOutput("ARRIRAW", "art-cmd", RawBackends.LogTail(log));
+            // Exit 0 with error lines (a damaged frame?): the proxy is made, art-cmd's words go to the job's log.
+            if (RawBackends.ErrorLines(log) is string errors) Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: art-cmd ended with exit 0 but logged: {errors}");
+            return new FrameSource { InputArgs = ["-i", output], AlreadyCropped = cropped, Cleanup = [dir] };
+        }
+        catch
+        {
+            RawBackends.DeleteDir(dir);
+            throw;
+        }
     }
 }
 
@@ -447,6 +615,7 @@ internal sealed class CanonRawBackend : IRawBackend
     public string MissingHint => "Canon Cinema RAW Light: pro Windows neexistuje dekodér pro příkazovou řádku — zkopírováno a ověřeno, proxy přeskočeno";
     public bool IsAvailable(ExternalTools tools) => false;
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => throw new ToolError("Canon RAW", -1, MissingHint);
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt) =>
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null) =>
         throw new ToolError("Canon RAW", -1, MissingHint);
 }

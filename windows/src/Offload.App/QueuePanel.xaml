@@ -335,6 +335,9 @@
                                         Visibility="{Binding ContentRows.Count, Converter={StaticResource CountToVisible}}" />
                         <TextBlock Text="{Binding NoteText}" Foreground="{DynamicResource SuccessText2}" TextWrapping="Wrap" Margin="0,0,0,10"
                                    Visibility="{Binding NoteText, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="JobNoteText" />
+                        <!-- task 2026-10-09: the local copy of the report failed — a note, never the result -->
+                        <TextBlock Text="{Binding LocalReportNoteText}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,0,0,10"
+                                   Visibility="{Binding LocalReportNoteText, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="JobLocalReportNote" />
                         <TextBlock Text="{Binding WarningText}" Style="{StaticResource TextWarn}" Margin="0,0,0,10" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
                                    AutomationProperties.AutomationId="JobWarningText" />
                         <TextBlock Text="{Binding ErrorText}" Style="{StaticResource TextWarn}" Margin="0,0,0,10" Visibility="{Binding ErrorText, Converter={StaticResource NullToCollapsed}}" />
@@ -462,6 +465,9 @@
                         <TextBlock Text="{Binding HeadSub}" Foreground="{DynamicResource DangerText}" TextWrapping="Wrap" Margin="0,3,0,0" AutomationProperties.AutomationId="JobHeadSub" />
                         <TextBlock Text="{Binding NoteText}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="{Binding NoteText, Converter={StaticResource NullToCollapsed}}"
                                    AutomationProperties.AutomationId="JobNoteText" />
+                        <!-- task 2026-10-09: the local copy of the report failed — a note, never the result -->
+                        <TextBlock Text="{Binding LocalReportNoteText}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                   Visibility="{Binding LocalReportNoteText, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="JobLocalReportNote" />
                         <TextBlock Text="{Binding WarningText}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
                                    AutomationProperties.AutomationId="JobWarningText" />
                         <TextBlock Text="{Binding ProfileNote}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding ProfileNote, Converter={StaticResource NullToCollapsed}}"
@@ -485,6 +491,9 @@
                     <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VerdictChips}" Focusable="False" />
                     <TextBlock Text="{Binding NoteText}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="{Binding NoteText, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobNoteText" />
+                    <!-- task 2026-10-09: the local copy of the report failed — a note, never the result -->
+                    <TextBlock Text="{Binding LocalReportNoteText}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Visibility="{Binding LocalReportNoteText, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="JobLocalReportNote" />
                     <TextBlock Text="{Binding WarningText}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding WarningText, Converter={StaticResource NullToCollapsed}}"
                                AutomationProperties.AutomationId="JobWarningText" />
                     <TextBlock Text="{Binding ProfileNote}" Style="{StaticResource TextWarn}" Margin="0,8,0,0" Visibility="{Binding ProfileNote, Converter={StaticResource NullToCollapsed}}"

@@ -36,7 +36,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Proxy (LUT, burn-in, frame lines, TC) | ✅ | ✅ ověřeno NVENC + software (libx264); QSV/AMF neověřeno (není HW); čeká ostrý test na skutečném médiu |
 | Blackmagic RAW | ✅ `braw-decode` (C++, knihovna z SDK / Player / Resolve); ověřeno se vzorkem URSA Mini Pro 4.6K (Film Gen 4, 4 snímky), vzorek Gen 5 chybí | ✅ `braw-decode.exe` (C#, knihovna z SDK / Player / Resolve); čeká ověření se vzorkem .braw |
 | RED R3D (REDline) | ✅ | ✅ kód, neověřeno s nástroji |
-| ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ ověřeno se skutečným art-cmd (ALEXA 35, ALEXA Mini) | ✅ kód, neověřeno s nástroji; **známá chyba:** bez LUTu předá art-cmd `--target-colorspace` spolu s `--embedded-look` (`RawBackends.cs` ř. 381) — art-cmd to odmítne, skončí kódem 0 a nic nezapíše → klip bez proxy a náhledů (Mac opraveno v `3b43352`: bez LUTu jen `--embedded-look`) |
+| ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ ověřeno se skutečným art-cmd (ALEXA 35, ALEXA Mini) | ✅ kód, neověřeno s nástroji (bez LUTu jen `--embedded-look` jako Mac `3b43352`; kód 0 bez výstupu = chyba s poznámkou) |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
 | **Test USB portů na vyžádání + doporučení** | ✅ CLI (`offload ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
@@ -70,6 +70,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
 | **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ⏳ naplánováno | ✅ 0.6.0 |
 | **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ⏳ naplánováno | ✅ 0.6.0 |
+| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
+| **Automatické načtení disků** (externí USB disk → cíl, karta ve čtečce → zaškrtnutá; odebraný disk si pamatuje, `autoDrives`) | ⏳ naplánováno | ✅ GUI (čeká ruční test se skutečným diskem a čtečkou) |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
 
@@ -86,8 +88,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Paralelismus | GCD sériové fronty | vlákno + fronta na cíl (`SerialWorker`) |
 | xxHash64 | C knihovna xxhash | `System.IO.Hashing.XxHash64` |
 | HW enkodér proxy | VideoToolbox | NVENC → QSV → AMF → software (zjistí se automaticky) |
-| Dekódování pro proxy | VideoToolbox (-hwaccel videotoolbox) jen pro H.264/HEVC | -hwaccel auto jen pro H.264/HEVC |
-| PDF | WebKit tisk | Edge headless `--print-to-pdf` |
+| Dekódování pro proxy | softwarově (VideoToolbox vypnutý, zelené snímky) | softwarově; volitelně `-hwaccel auto` jen pro H.264/HEVC (`proxy.hardwareDecode`, `--hw-decode`, experimentální) |
+| PDF | WebKit tisk; co je širší než A4 na šířku, se před tiskem zmenší | Edge headless `--print-to-pdf`; co je širší než A4 na šířku, se před tiskem zmenší |
 | Detekce karet | `NSWorkspace` notifikace | `WM_DEVICECHANGE` |
 | Vysunutí | `unmountAndEjectDevice` | `FSCTL_LOCK/DISMOUNT_VOLUME` + `CM_Request_Device_Eject` |
 | Nastavení | `UserDefaults` (stejné schéma vč. `portNames`, `proxy.lutMode/lutBuiltin/lutFallback/extraFolder`) | `%APPDATA%\Offload\settings.json` (stejné schéma) |
@@ -140,10 +142,17 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
   a ukazuje ho v řádku „Proxy: H.264 (h264_nvenc), …“ v HTML/PDF. Mac klíč nezná a ignoruje ho.
 - **Verze v reportu:** Mac `0.2.0`, Windows `0.3.0-win` — z reportu je vidět, která verze kopírovala.
-- **Hardwarové dekódování proxy** (2026-10-08): Mac ho vypnul (VideoToolbox na Intelu dával zelené snímky), Windows
-  dekóduje H.264/HEVC s `-hwaccel auto` — na Windows prověřit (VYVOJ-WINDOWS, Naplánováno).
-- **ARRIRAW `--desqueeze`:** Mac jen u anamorfních klipů (2× rychlejší dekódování), Windows vždy.
-- **Vlastní soubor místo vestavěného LUTu:** jen Mac (`~/Library/Application Support/Offload/luts/<id>.cube`).
+- **Hardwarové dekódování proxy** (2026-10-08/09): obě verze dekódují H.264/HEVC softwarově (Mac na Intelu dostal
+  z VideoToolboxu zelené snímky bez chyby); kódování zůstává hardwarové. Windows ho umí zapnout volbou „Hardwarové
+  dekódování (experimentální)“ / `--hw-decode` (`proxy.hardwareDecode`), Mac volbu nemá.
+- **Vlastní soubor místo vestavěného LUTu:** obě verze — Mac `~/Library/Application Support/Offload/luts/<id>.cube`,
+  Windows `%APPDATA%\Offload\luts\<id>.cube`; v seznamu „(vlastní soubor)“. Windows navíc zapíše cestu k souboru do
+  důvodu LUTu v reportu (`clips[].lut.reason`).
+- **Rychlá analýza ARRIRAW** (2026-10-09): obě verze exportují art-cmd metadata jen prvního snímku (`--duration 1`)
+  a počet snímků berou z ffprobe (sekvence `.ari`: počet souborů). Rozdíly: Windows má limit exportu 120 s a ffprobe
+  na MXF 60 s (Mac 180 s a 120 s); když zkrácený export selže u klipu, který je podle značek nebo názvu ARRI, Windows
+  pustí celý export jako dřív; když ffprobe nedoběhne a export počet neřekne, délka klipu zůstane neznámá (prázdná).
+  art-cmd a REDline jdou na Windows zrušit uprostřed dekódování (Mac čeká, až doběhnou).
 - **Zámky dne a doplnění** (Windows): klíč je „id svazku + cesta na něm“ — namapovaný disk a jeho UNC cesta, `subst`,
   junction a krátká jména 8.3 dávají jiné klíče a zámek se neuplatní. Mac žádný z těchto zámků nezná (poslední zápis vyhraje).
 - **Doplnění z jiného procesu** při přepisu seznamu klipů a denního reportu (stage 2): nehlídá se; vyhraje poslední zápis a

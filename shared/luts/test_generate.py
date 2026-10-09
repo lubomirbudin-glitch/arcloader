@@ -19,8 +19,37 @@ REFERENCE_GREY = {
 }
 
 
+# Camera code value (code / 1023) of scene black (0 % reflectance), from the same white papers.
+REFERENCE_BLACK = {
+    "arri-logc3-awg3": 0.092809,
+    "arri-logc4-awg4": 95 / 1023,
+    "sony-slog3-sgamut3cine": 95 / 1023,
+    "sony-slog3-sgamut3": 95 / 1023,
+    "bmd-film-gen5": 0.092466,
+    "red-log3g10-rwg": 0.091551,
+    "canon-clog2-cinemagamut": 0.092864,
+    "canon-clog3-cinemagamut": 128 / 1023,
+    "panasonic-vlog-vgamut": 128 / 1024,
+    "dji-dlog-dgamut": 0.0929,
+    "fujifilm-flog2-fgamut": 95 / 1023,
+}
+
+# The noise floor of current cinema cameras sits about six stops under 18 % grey; from there down the picture must
+# look black (ARRI's own Rec.709 LUT puts it near display black too) — not the lifted, washed-out grey of a plain gamma.
+NOISE_FLOOR = 0.18 * 2.0 ** -6
+BLACK_MAX = 0.03
+
+
 def grey_input(p, linear=0.18):
     return gen.code_to_video(gen.encode(p, np.array([linear, linear, linear])))
+
+
+def cube_neutral(p, code):
+    """Output (green) of the generated cube for a neutral camera code, interpolated along the grey diagonal like ffmpeg."""
+    n = gen.SIZE
+    axis = np.linspace(0.0, 1.0, n)
+    diag = gen.transform(p, np.stack([axis] * 3, axis=-1))[:, 1]
+    return float(np.interp(float(gen.code_to_video(code)), axis, diag))
 
 
 class Properties(unittest.TestCase):
@@ -34,6 +63,28 @@ class Properties(unittest.TestCase):
         for p in gen.PROFILES:
             out = gen.transform(p, grey_input(p, 0.0))
             self.assertLessEqual(out.max(), 0.02, (p["id"], out))
+
+    def test_camera_black_code_is_display_black(self):
+        self.assertEqual(set(REFERENCE_BLACK), {p["id"] for p in gen.PROFILES})
+        for p in gen.PROFILES:
+            code = REFERENCE_BLACK[p["id"]]
+            self.assertAlmostEqual(float(gen.encode(p, np.array([0.0]))[0]), code, delta=0.001, msg=p["id"])
+            out = gen.transform(p, gen.code_to_video(np.array([code] * 3)))
+            self.assertLessEqual(out.max(), BLACK_MAX, (p["id"], out))
+            # what ffmpeg actually applies: the 33-point cube, interpolated
+            self.assertLessEqual(cube_neutral(p, code), BLACK_MAX, p["id"])
+
+    def test_noise_floor_is_display_black(self):
+        for p in gen.PROFILES:
+            out = gen.transform(p, grey_input(p, NOISE_FLOOR))
+            self.assertLessEqual(out.max(), BLACK_MAX, (p["id"], out))
+            self.assertLessEqual(cube_neutral(p, float(gen.encode(p, np.array([NOISE_FLOOR]))[0])), 0.045, p["id"])
+
+    def test_shadows_keep_detail(self):
+        # the toe darkens, it does not crush: two stops under grey stays a clearly visible dark grey
+        for p in gen.PROFILES:
+            out = gen.transform(p, grey_input(p, 0.18 / 4))
+            self.assertTrue(np.all((out >= 0.15) & (out <= 0.23)), (p["id"], out))
 
     def test_neutral_axis_is_neutral_and_monotonic(self):
         for p in gen.PROFILES:

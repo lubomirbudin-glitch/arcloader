@@ -15,7 +15,7 @@ public class HtmlReportTests
         Assert.Contains("<td class=\"ok\">ověřeno</td>", html);
         Assert.Contains("<details><summary>Všechny soubory (2)</summary>", html);
         Assert.Contains("prefers-color-scheme:dark", html);
-        Assert.Contains("offload 0.6.1-win", html);
+        Assert.Contains("offload 0.7.1-win", html);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class HtmlReportTests
         var css = HtmlReport.Styles(false);
         Assert.Contains("overflow-wrap:anywhere", css);
         Assert.Contains("table.clips{table-layout:fixed", css);
-        Assert.Contains(".thumbs figure{margin:0;flex:1 1 0;min-width:0;max-width:128px}", css);
+        Assert.Contains(".thumbs figure{margin:0;flex:1 1 0;min-width:0;max-width:128px;", css);
         Assert.Contains("max-width:100%", css);
         Assert.DoesNotContain("vertical-align:middle;white-space:nowrap", css);
         Assert.DoesNotContain("src=\"http", css);
@@ -173,6 +173,38 @@ public class HtmlReportTests
         Assert.DoesNotContain("také ve složce", HtmlReport.Render(r));
         r.Proxy.ExtraFolder = @"E:\Proxy & co";
         Assert.Contains("<span class=\"mono\">_PROXY/</span> · také ve složce <span class=\"mono\">E:\\Proxy &amp; co</span></p>", HtmlReport.Render(r));
+    }
+
+    // Mac findings 2026-10-09 (ARRI 4.6K report): in print the narrow-screen columns come back as columns — a <col> made a
+    // table cell broke the fixed column widths and cut TC, Audio, Velikost and Proxy off the right edge of the PDF.
+    [Fact]
+    public void Print_HiddenColumnsStayTableColumns()
+    {
+        var css = HtmlReport.Styles(forPrint: true);
+        Assert.Contains("col.hide-sm{display:table-column}", css);
+        Assert.Contains("th.hide-sm,td.hide-sm{display:table-cell}", css);
+        Assert.DoesNotContain("}.hide-sm{display:table-cell}", css);
+        // the PDF safety net (PdfReport.FitScript) can only see what does not scroll inside a panel
+        Assert.Contains(".panel{overflow:visible}", HtmlReport.Render(Reports.Sample(Card), forPrint: true).Split("</style>")[0]);
+    }
+
+    // Three timecodes under three thumbnails in a ~1000 px window ran into one another ("11:21:33:1111:21:50:02…").
+    [Fact]
+    public void ThumbnailCaptions_ShrinkWithTheirThumbnail()
+    {
+        var css = HtmlReport.Styles(forPrint: false);
+        Assert.Contains(".thumbs figure{margin:0;flex:1 1 0;min-width:0;max-width:128px;container-type:inline-size}", css);
+        Assert.Contains("font-size:min(10px,14cqi)", css);
+    }
+
+    // The destinations table: short words never break inside ("exFA|T", "Chyb|y" at 1000 px), only the folder path wraps.
+    [Fact]
+    public void Destinations_ShortCellsDoNotBreak()
+    {
+        var html = HtmlReport.Render(Reports.Sample(Card));
+        Assert.Contains("<td class=\"nw\">NTFS</td>", html);
+        Assert.Contains("table:not(.clips) th{white-space:nowrap}", html);
+        Assert.Contains("td.nw{white-space:nowrap}", html);
     }
 
     // 0.5.1: a finished proxy links to its file — relative to _REPORT, in the card's folders (_PROXY mirrors them).
