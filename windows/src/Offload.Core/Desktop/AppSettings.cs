@@ -23,6 +23,13 @@ public class SettingsProfile
 {
     [JsonPropertyName("destRoots")] public List<string> DestRoots { get; set; } = [];
     [JsonPropertyName("verify")] public bool Verify { get; set; } = true;
+    /// Plan 10 (R11): "Ověřit primární disk během proxy" — on by default; off = the read-back right after the copy.
+    [JsonPropertyName("verifyInProxy")] public bool VerifyInProxy { get; set; } = true;
+    /// Plan 10 (spec 6): which destination the proxies read and verify — "fastest" (measured during the copy, default) or
+    /// "first" (the first in the order of the destinations). A value this version does not know is "fastest".
+    [JsonPropertyName("verifyPrimary")] public string VerifyPrimary { get; set; } = PrimaryFastest;
+    public const string PrimaryFastest = "fastest";
+    public const string PrimaryFirst = "first";
     [JsonPropertyName("analyzeClips")] public bool AnalyzeClips { get; set; } = true;
     [JsonPropertyName("proxy")] public ProxySettings Proxy { get; set; } = new();
     [JsonPropertyName("naming")] public NamingSettings Naming { get; set; } = new();
@@ -92,7 +99,7 @@ public static class SettingsStore
     public static string DefaultPath => Path.Combine(AppData.Folder, "settings.json");
 
     /// The keys of a profile (top level and every project) Load reads into properties.
-    static readonly string[] ProfileKeys = ["destRoots", "verify", "analyzeClips", "proxy", "naming", "hash", "outputs", "notify"];
+    static readonly string[] ProfileKeys = ["destRoots", "verify", "verifyInProxy", "verifyPrimary", "analyzeClips", "proxy", "naming", "hash", "outputs", "notify"];
     /// The global top-level keys; every other top-level key goes to AppSettings.Extra.
     static readonly string[] GlobalKeys = ["tools", "portNames", "updates", "projects", "activeProject"];
 
@@ -182,6 +189,8 @@ public static class SettingsStore
         Section(obj, p, "destRoots", e => p.DestRoots = e.EnumerateArray()
             .Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList());
         Section(obj, p, "verify", e => p.Verify = e.GetBoolean());
+        Section(obj, p, "verifyInProxy", e => p.VerifyInProxy = e.GetBoolean());
+        Section(obj, p, "verifyPrimary", e => p.VerifyPrimary = e.GetString() is { Length: > 0 } v ? v : SettingsProfile.PrimaryFastest);
         Section(obj, p, "analyzeClips", e => p.AnalyzeClips = e.GetBoolean());
         Section(obj, p, "hash", e => p.Hash = e.GetString() is { Length: > 0 } h ? h : "xxh64");
         Kept(obj, p, "proxy", (ProxySettings v) => p.Proxy = v, () => new ProxySettings());

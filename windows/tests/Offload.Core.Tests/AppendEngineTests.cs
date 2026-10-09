@@ -27,7 +27,16 @@ public class AppendEngineTests
 
     /// The only earlier files an append may rewrite (spec 2.2): the hash list (lines added) and the chain (entry added) —
     /// and the clip list, which is derived from every generation and written whole (spec 3.3, R25).
-    static readonly string[] Rewritten = [@"_REPORT\A001.xxh64", @"ascmhl\ascmhl_chain.xml", @"_REPORT\A001_clips.csv"];
+    /// The record files an append may change: the hash list and the manifest only by adding at the end (checked by
+    /// AssertAppendedOnly), the chain and the clip list replaced.
+    static readonly string[] Rewritten = [@"_REPORT\A001.xxh64", @"ascmhl\ascmhl_chain.xml", @"_REPORT\A001_clips.csv", @"_REPORT\offload-manifest.jsonl"];
+
+    /// Plan 10: the manifest is append-only — every earlier byte is still there, new lines only after them.
+    static void AssertAppendedOnly(Dictionary<string, byte[]> before, Dictionary<string, byte[]> after)
+    {
+        foreach (var name in new[] { @"_REPORT\A001.xxh64", @"_REPORT\offload-manifest.jsonl" })
+            if (before.TryGetValue(name, out var was)) Assert.Equal(was, after[name][..was.Length]);
+    }
 
     [Fact]
     public void Generation2_OnBothDestinations_EarlierFilesUntouched()
@@ -52,10 +61,11 @@ public class AppendEngineTests
         Assert.Equal((PlanMode.Append, 2), (append.Plan!.Mode, append.Plan.Generation));
         for (int d = 0; d < paths.Count; d++)
         {
-            // Every earlier file byte for byte — the data, the reports, the PDF, generation 0001 — but the two rewritten ones.
+            // Every earlier file byte for byte — the data, the reports, the PDF, generation 0001 — but the record files.
             var after = AppendFixtures.Tree(paths[d]);
             foreach (var (name, bytes) in trees[d].Where(kv => !Rewritten.Contains(kv.Key, StringComparer.OrdinalIgnoreCase)))
                 Assert.Equal(bytes, after[name]);
+            AssertAppendedOnly(trees[d], after);
             var report = Path.Combine(paths[d], "_REPORT");
             foreach (var name in new[] { "offload_report_0002.json", "offload_report_0002.txt", "A001_report_0002.html" })
                 Assert.True(File.Exists(Path.Combine(report, name)), name);
@@ -72,7 +82,8 @@ public class AppendEngineTests
             Assert.Equal([1, 2], mhl.Generations.Select(g => g.Seq));
             Assert.Equal([1, 2], mhl.Chain.Select(c => c.Seq));
             Assert.Equal(["CLIP/A001C003.mov"], mhl.Generations[1].Files.Select(f => f.Path));
-            Assert.Equal("original", Assert.Single(mhl.Generations[1].Files[0].Hashes).Action);
+            Assert.All(mhl.Generations[1].Files[0].Hashes, h => Assert.Equal("original", h.Action));
+            Assert.Equal(["xxh64", "xxh128"], mhl.Generations[1].Files[0].Hashes.Select(h => h.Algorithm));
             Assert.Equal(mhl.Generations[0].Ignore, mhl.Generations[1].Ignore);
             var gen2 = XDocument.Load(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_A001_*.mhl").Single());
             XNamespace ns = "urn:ASC:MHL:v2.0";
@@ -186,6 +197,7 @@ public class AppendEngineTests
             var after = AppendFixtures.Tree(paths[d]);
             foreach (var (name, bytes) in trees[d].Where(kv => !Rewritten.Contains(kv.Key, StringComparer.OrdinalIgnoreCase)))
                 Assert.Equal(bytes, after[name]);
+            AssertAppendedOnly(trees[d], after);
             Assert.True(File.Exists(Path.Combine(paths[d], "_REPORT", "offload_report_0003.json")));
             var verify = BackupVerifier.Verify(paths[d], chunkSize: 4096);
             Assert.True(verify.Success);
@@ -302,10 +314,11 @@ public class AppendEngineTests
 
         Assert.Equal(JobPhase.Done, append.Status().Phase);
         Assert.Equal("2 soubory z dřívější zálohy nebyly ověřeny — doporučeno Ověřit zálohu.", append.Status().Warning);
-        // Plan 9 fix round 1, item 1 (as ruling I2 for a repair): the new files are verified, the card is not —
-        // no "kartu lze vysunout".
-        Assert.True(append.Report!.SafeToEject);
-        Assert.False(append.Status().SafeToEject);
+        // Plan 9 fix round 1, item 1 (as ruling I2 for a repair): the new files are verified, the card is not — R5 (plan
+        // 10): every file is on the disk, so "Lze vyjmout", but never "Lze formátovat".
+        Assert.True(append.Report!.SafeToFormat);
+        Assert.True(append.Status().SafeToEject);
+        Assert.False(append.Status().SafeToFormat);
     }
 
     // Fix round 1, item 1: two appends into the same card folders at once (GUI + CLI). The second refuses before it
@@ -618,7 +631,7 @@ public class AppendEngineTests
         Assert.StartsWith(before, list);
         Assert.EndsWith($"{report.Files.Single().Md5}  CLIP/A001C003.mov\n", list);
         var gen2 = Verification.MhlReader.Read(paths[0])!.Generations[1];
-        Assert.Equal(["xxh64", "md5"], gen2.Files.Single().Hashes.Select(h => h.Algorithm));
+        Assert.Equal(["xxh64", "xxh128", "md5"], gen2.Files.Single().Hashes.Select(h => h.Algorithm));
         Assert.Equal(["xxh64", "md5"], new HistoryStore(history).Load().Single().HashAlgorithms);
     }
 
@@ -653,13 +666,14 @@ public class AppendEngineTests
         Assert.Equal((JobPhase.Done, PlanMode.Append, 2), (append.Status().Phase, append.Plan!.Mode, append.Plan.Generation));
         Assert.True(append.Status().SafeToEject);
         string[] rewritten = [.. Rewritten, @"_REPORT\A001.md5"];
+        Assert.All(trees, t => Assert.True(t.ContainsKey(@"_REPORT\offload-manifest.jsonl")));
         for (int d = 0; d < paths.Count; d++)
         {
             var after = AppendFixtures.Tree(paths[d]);
             var changed = trees[d].Where(kv => !kv.Value.AsSpan().SequenceEqual(after[kv.Key])).Select(kv => kv.Key).ToList();
             Assert.All(changed, name => Assert.Contains(name, rewritten, StringComparer.OrdinalIgnoreCase));
             Assert.Contains(@"_REPORT\A001.md5", changed, StringComparer.OrdinalIgnoreCase);
-            foreach (var name in new[] { @"_REPORT\A001.xxh64", @"_REPORT\A001.md5" })
+            foreach (var name in new[] { @"_REPORT\A001.xxh64", @"_REPORT\A001.md5", @"_REPORT\offload-manifest.jsonl" })
                 Assert.Equal(trees[d][name], after[name][..trees[d][name].Length]);   // earlier lines byte for byte
             var md5 = Encoding.UTF8.GetString(after[@"_REPORT\A001.md5"]);
             Assert.EndsWith($"{report.Files.Single().Md5}  CLIP/A001C003.mov\n", md5);
@@ -667,7 +681,7 @@ public class AppendEngineTests
             var verify = BackupVerifier.Verify(paths[d], chunkSize: 4096);
             Assert.True(verify.Success);
             Assert.Equal(3, verify.Ok);
-            Assert.Equal(["xxh64", "md5"], verify.HashAlgorithms);
+            Assert.Equal(["xxh64", "md5", "xxh128"], verify.HashAlgorithms);
         }
     }
 

@@ -13,8 +13,13 @@ public static class Texts
 
     public static string Clips(int n) => $"{n} {Plural(n, "klip", "klipy", "klipů")}";
 
+    /// R5 (plan 10) "Lze vyjmout": copied everywhere, the verification may still run.
     public static string SafeToEject(int disks) =>
-        $"Všechny soubory jsou na {disks} {Plural(disks, "disku", "discích", "discích")} a ověřené — kartu lze vysunout.";
+        $"Všechny soubory jsou na {disks} {Plural(disks, "disku", "discích", "discích")} — kartu lze vyjmout. Formátovat až po ověření.";
+
+    /// R5 (plan 10) "Lze formátovat": verified everywhere.
+    public static string SafeToFormat(int disks) =>
+        $"Všechny soubory jsou na {disks} {Plural(disks, "disku", "discích", "discích")} a ověřené — kartu lze vyjmout i formátovat.";
 
     public static string Warnings(int n) => n == 0 ? "bez varování" : $"{n} varování";
 

@@ -61,6 +61,8 @@ public static class RepairPlanner
         AppendPlanner.Backup backup;
         try
         {
+            // R6: a backup an earlier run never finished is completed by an append first, never repaired.
+            if (ResumePlanner.Find(cardPaths) != null) throw OffloadError.Preflight(PreflightCode.RepairConflict, Msg.RepairUnfinished);
             backup = AppendPlanner.CheckBackup(cardPaths);
         }
         catch (OffloadError e) when (e.Code is PreflightCode code)
@@ -76,7 +78,7 @@ public static class RepairPlanner
         var todo = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int d = 0; d < paths.Count; d++)
             foreach (var (path, rec) in records[d].Files)
-                if (rec.File.SourceError != null || !Good(rec, paths[d], d) || !CardRecord.ReadBack(rec, paths[d])) todo.Add(path);
+                if (rec.File.SourceError != null || !Good(rec, paths[d], d) || !CardRecord.ReadBack(rec, paths[d], records[d].VolumeSerial)) todo.Add(path);
         // The card is scanned before "Nic k opravě" (batch 10–12 review): a file shot after the backup is in no report,
         // and with nothing to repair it must still keep the card from "kartu lze vysunout".
         var scan = Scanner.Scan(source, ct);
@@ -107,7 +109,7 @@ public static class RepairPlanner
                 {
                     // A good copy: never written — but it must be there to be read back (as an append requires).
                     if (!exists) throw OffloadError.Preflight(PreflightCode.AppendMissingFile, Msg.AppendMissingFile(AppendPlanner.Disk(paths[d]), path));
-                    before[d] = CardRecord.ReadBack(rec, paths[d]);
+                    before[d] = CardRecord.ReadBack(rec, paths[d], records[d].VolumeSerial);
                     continue;
                 }
                 mask[d] = true;
@@ -190,7 +192,8 @@ public static class RepairPlanner
                 .SelectMany(g => g.Report.Files.Where(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase) && f.Xxh64 != null))
                 .FirstOrDefault();
         var f = Newest(repairs: false) ?? Newest(repairs: true);
-        return f == null ? new FileHashes(null, null) : new FileHashes(Convert.ToUInt64(f.Xxh64, 16), f.Md5 is string m ? Convert.FromHexString(m) : null);
+        return f == null ? new FileHashes(null, null)
+            : new FileHashes(Convert.ToUInt64(f.Xxh64, 16), f.Md5 is string m ? Convert.FromHexString(m) : null, f.Xxh128);
     }
 
     /// The newest record of a file holds a good copy on the destination of `cardPath` (its column in that report). A

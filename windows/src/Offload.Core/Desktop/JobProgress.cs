@@ -130,6 +130,7 @@ public sealed class JobProgress
         { Phase: JobPhase.Verifying, Copy: { TotalBytes: > 0 } v } =>
             v.ToVerifyTotal == 0 ? 1 : v.VerifiedBytes.Sum() / (double)v.ToVerifyTotal,
         { Phase: JobPhase.Analyzing or JobPhase.Proxies, ClipCount: > 0 } s => (s.ClipIndex + s.ClipFraction) / s.ClipCount,
+        { Phase: JobPhase.Finishing, VerifyTotal: > 0 } f => (double)f.VerifiedBytes / f.VerifyTotal,
         { Phase: JobPhase.Done } => 1,
         _ => 0,
     };
@@ -154,7 +155,9 @@ public sealed class JobProgress
 
     public CardTone Tone => Status.Phase switch
     {
-        JobPhase.Done => Status.CopySucceeded == false ? CardTone.Error : CardTone.Ok,
+        // Ruling I2 (plan 10): the success tone only when every copy is verified everywhere (SafeToFormat) — copied alone
+        // ("Lze vyjmout") is not green.
+        JobPhase.Done => Status.CopySucceeded == false ? CardTone.Error : Status.SafeToFormat ? CardTone.Ok : CardTone.Warning,
         JobPhase.Failed => CardTone.Error,
         JobPhase.Cancelled => CardTone.Warning,
         JobPhase.Waiting => CardTone.Waiting,
@@ -185,6 +188,7 @@ public sealed class JobProgress
                 JobPhase.Analyzing => $"Klip {s.ClipIndex + 1}/{s.ClipCount} · {s.ClipName}",
                 JobPhase.Proxies =>
                     $"Proxy {s.ClipIndex + 1}/{s.ClipCount} · {s.ClipName} · {(s.ClipFraction * 100).ToString("0", CultureInfo.InvariantCulture)} %",
+                JobPhase.Finishing => $"Ověřeno {Format.BytesCs3(s.VerifiedBytes)} / {Format.BytesCs3(s.VerifyTotal)}",
                 _ => s.Phase.Label() + "…",
             };
         }

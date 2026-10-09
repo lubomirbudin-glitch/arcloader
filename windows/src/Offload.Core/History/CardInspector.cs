@@ -64,8 +64,12 @@ public static class CardInspector
                 var list = candidate.Fingerprint == fingerprint ? null : store?.ReadFileList(candidate);
                 match = HistoryMatcher.Match(scan, fingerprint, candidate, list, filesystem);
             }
-            bool reachable = volume != null && match is { Kind: HistoryMatchKind.NewFiles } m
-                             && m.Entry.Destinations.Count > 0 && m.Entry.Destinations.All(d => d.CardPath != "" && (directoryExists ?? Directory.Exists)(d.CardPath));
+            // Fix round 1, item 1 (ruling I5): a backup the app never finished is reachable for "Dokončit přerušenou
+            // zálohu" also with nothing new on the card.
+            bool reachable = volume != null
+                             && match is { Kind: HistoryMatchKind.NewFiles } or { Kind: HistoryMatchKind.Identical, Entry.Unfinished: true }
+                             && match.Entry.Destinations.Count > 0
+                             && match.Entry.Destinations.All(d => d.CardPath != "" && (directoryExists ?? Directory.Exists)(d.CardPath));
             ct.ThrowIfCancellationRequested();
             var clips = ClipDetector.Detect(scan.Files);
             var (name, note, _) = ReelSuggestion.FromClips(clips);

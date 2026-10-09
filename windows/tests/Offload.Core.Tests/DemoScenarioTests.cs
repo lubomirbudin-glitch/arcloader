@@ -13,8 +13,8 @@ public class DemoScenarioTests
     [Fact]
     public void Parse_AndStartupOptions_OffByDefault()
     {
-        Assert.Equal([DemoState.Ready, DemoState.Running, DemoState.Finished, DemoState.Settings],
-            new[] { "pripraveno", "probiha", "HOTOVO", "nastaveni" }.Select(s => DemoScenario.Parse(s)!.Value));
+        Assert.Equal([DemoState.Ready, DemoState.Running, DemoState.Finished, DemoState.Settings, DemoState.Verifying],
+            new[] { "pripraveno", "probiha", "HOTOVO", "nastaveni", "overuje" }.Select(s => DemoScenario.Parse(s)!.Value));
         Assert.Null(DemoScenario.Parse("x"));
         Assert.Null(StartupOptions.Parse([]).Demo);
         Assert.Equal(DemoState.Running, StartupOptions.Parse(["--demo", "probiha"]).Demo);
@@ -32,6 +32,36 @@ public class DemoScenarioTests
         var backedUp = DemoScenario.BackedUp(@"C:\demo", Roots);
         Assert.True(AppendRules.Offer(backedUp.Insight));
         Assert.Equal("3 karty · 412 GB · vše ověřeno", HistoryView.Today(DemoScenario.Today(Roots, DateTime.Now), DateTime.Now)!.Summary);
+    }
+
+    // Plan 10 (R5): `--demo overuje` shows both verdicts for the screenshots — a card copied and verifying with its
+    // proxies ("Lze vyjmout", neutral, "Ověřuje se…"), one with a content defect waiting for a look ("Lze formátovat po
+    // kontrole vad", the yellow label with its timecode) and the green one ("Lze formátovat").
+    [Fact]
+    public void Verifying_BothVerdicts()
+    {
+        var verifying = DemoScenario.Verifying(@"C:\demo\A036_ARRI", Roots);
+        var s = verifying.Status();
+        Assert.Equal(JobCardKind.Running, JobCard.Headline("A036_ARRI", s, null, Disks).Kind);
+        var (eject, format) = JobCard.Chips(s);
+        Assert.Equal(("Lze vyjmout", ChipTone.Neutral, "Ověřuje se…", ChipTone.Neutral), (eject.Text, eject.Tone, format.Text, format.Tone));
+        Assert.Equal(["1 · Kopírování", "2 · Proxy", "3 · Ověření", "4 · Report"], JobCard.Steps(s, verifying.Config, 0.4).Select(x => x.Text));
+        Assert.Equal(("Proxy 10 / 24", "A036C010_261007_R2KQ · 40 %"), JobCard.FileLine(s));
+        Assert.False(verifying.RunCopy());   // a preview never runs
+
+        var defect = DemoScenario.ContentDefect(@"C:\demo\A037_ARRI", Roots, _ => [0xFF, 0xD8]);
+        var h = JobCard.Headline("A037_ARRI", defect.Status(), defect.Report, Disks);
+        Assert.Equal((JobCardKind.Problem, "A037_ARRI — před formátováním zkontrolujte vady obsahu"), (h.Kind, h.Title));
+        Assert.Equal(("Lze vyjmout", "Lze formátovat po kontrole vad", ChipTone.Warning),
+            (JobCard.Chips(defect.Status()).Eject.Text, JobCard.Chips(defect.Status()).Format.Text, JobCard.Chips(defect.Status()).Format.Tone));
+        Assert.Equal(("A037C007", "01:00:12:05 · poškozená data", true), JobCard.ContentLines(defect.Report!).Single() is var l ? (l.Clip, l.Label, l.HasPicture) : default);
+        Assert.True(JobCard.NeedsContentConfirm(defect.Status(), confirmed: false));
+        Assert.Equal((JobCardKind.Done, "A037_ARRI — kartu lze formátovat"),
+            JobCard.Headline("A037_ARRI", defect.Status(), defect.Report, Disks, contentConfirmed: true) is var c ? (c.Kind, c.Title) : default);
+
+        var done = DemoScenario.Done(@"C:\demo\A035_ARRI", Roots, null);
+        Assert.Equal(("Lze vyjmout", ChipTone.Ok, "Lze formátovat", ChipTone.Ok),
+            JobCard.Chips(done.Status()) is var (e2, f2) ? (e2.Text, e2.Tone, f2.Text, f2.Tone) : default);
     }
 
     [Fact]
@@ -72,7 +102,7 @@ public class DemoScenarioTests
     {
         var done = DemoScenario.Done(@"C:\demo\A035_ARRI", Roots, _ => [0xFF, 0xD8]);
         var h = JobCard.Headline("A035_ARRI", done.Status(), done.Report, Disks);
-        Assert.Equal((JobCardKind.Done, "A035_ARRI — kartu lze vysunout", "Všech 24 souborů je na 2 discích a ověřených (xxHash64)."), (h.Kind, h.Title, h.Sub));
+        Assert.Equal((JobCardKind.Done, "A035_ARRI — kartu lze formátovat", "Všech 24 souborů je na 2 discích a ověřených (xxHash64)."), (h.Kind, h.Title, h.Sub));
         Assert.Equal(["602 MB/s", "799 MB/s", "24 / 24", "6 min 12 s"], JobCard.Summary(done.Report!, null).Select(f => f.Value));
         Assert.Equal(5, JobCard.Thumbs(done.Report!).Thumbs.Count);
 

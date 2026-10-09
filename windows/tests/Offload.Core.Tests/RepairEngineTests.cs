@@ -38,7 +38,7 @@ public class RepairEngineTests
 
         var report = engine.Run(plan);
 
-        Assert.True(report.SafeToEject);
+        Assert.True(report.SafeToFormat);
         Assert.Equal((PlanMode.Repair, 2, "repair"), (plan.Mode, report.Generation!.Value, report.Kind));
         var f = Assert.Single(report.Files);
         Assert.Equal(RepairFixtures.Bad, f.Path);
@@ -64,7 +64,9 @@ public class RepairEngineTests
             Assert.Empty(mhl.ChainProblems);
             Assert.Equal([1, 2], mhl.Chain.Select(c => c.Seq));
             var gen2 = Assert.Single(mhl.Generations[1].Files);
-            Assert.Equal(d == 0 ? "verified" : "original", Assert.Single(gen2.Hashes).Action);
+            // Plan 10 (R2): xxh64 and xxh128, both with the same action.
+            Assert.Equal(["xxh64", "xxh128"], gen2.Hashes.Select(h => h.Algorithm));
+            Assert.All(gen2.Hashes, h => Assert.Equal(d == 0 ? "verified" : "original", h.Action));
             Assert.Equal(f.Xxh64, gen2.Hashes[0].Value);
             Assert.StartsWith("Offload oprava: 1 soubor znovu z ", File.ReadAllText(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_*.mhl").Single()).Split("<comment>")[1]);
             Assert.Empty(CardRecord.Load(paths[d]).FailedFiles);
@@ -163,7 +165,7 @@ public class RepairEngineTests
         File.WriteAllBytes(cardFile, original);
         File.SetLastWriteTimeUtc(cardFile, time);
         var (last, lastPlan) = Prepare(card, paths);
-        Assert.True(last.Run(lastPlan).SafeToEject);
+        Assert.True(last.Run(lastPlan).SafeToFormat);
         Assert.Equal(before[0][RepairFixtures.Bad].Bytes, File.ReadAllBytes(Layout.Join(paths[0], RepairFixtures.Bad)));
         Assert.Equal(before[1][RepairFixtures.Bad].Bytes, File.ReadAllBytes(Layout.Join(paths[1], "_REPORT/neshoda_0005/CLIP/A001C002.mov")));
         foreach (var p in paths) Assert.True(BackupVerifier.Verify(p, chunkSize: 4096).Success);
@@ -211,7 +213,7 @@ public class RepairEngineTests
         Assert.Equal([false, true], next.Write[0]);
         Assert.Equal("_REPORT/neshoda_0003/CLIP/A001C002.mov", next.SetAside[0][1]);
         var (engine2, plan2) = Prepare(card, paths);
-        Assert.True(engine2.Run(plan2).SafeToEject);
+        Assert.True(engine2.Run(plan2).SafeToFormat);
         Assert.Equal(goodTime, File.GetLastWriteTimeUtc(good));
         foreach (var p in paths) Assert.True(BackupVerifier.Verify(p, chunkSize: 4096).Success);
     }

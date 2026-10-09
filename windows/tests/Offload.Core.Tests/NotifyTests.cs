@@ -17,16 +17,16 @@ public class JobOutcomeTests
 
     static JobStatus Status(JobPhase phase, int proxiesDone = 0, int proxiesFailed = 0, string? warning = null, string? error = null, string? note = null,
         bool safe = true) =>
-        new() { Phase = phase, ProxiesDone = proxiesDone, ProxiesFailed = proxiesFailed, Warning = warning, Error = error, Note = note, SafeToEject = safe, CopySucceeded = true };
+        new() { Phase = phase, ProxiesDone = proxiesDone, ProxiesFailed = proxiesFailed, Warning = warning, Error = error, Note = note, SafeToEject = safe, SafeToFormat = safe, CopySucceeded = true };
 
     [Fact]
     public void Done_VerifiedOnDisks_WithProxies()
     {
         var o = JobOutcomes.Final("A001", Status(JobPhase.Done, proxiesDone: 24), Report())!;
-        Assert.Equal((OutcomeKind.Done, "Offload: A001 hotovo", "Ověřeno na 1 disku. Proxy: 24 hotovo."), (o.Kind, o.Title, o.Message));
+        Assert.Equal((OutcomeKind.Done, "Offload: A001 hotovo", "Ověřeno na 1 disku — kartu lze formátovat. Proxy: 24 hotovo."), (o.Kind, o.Title, o.Message));
         Assert.Equal(o.Message, o.PhoneMessage);
         Assert.Equal((3, "white_check_mark"), (o.Priority, o.Tags.Single()));
-        Assert.Equal("Ověřeno na 1 disku.", JobOutcomes.Final("A001", Status(JobPhase.Done), Report())!.Message);
+        Assert.Equal("Ověřeno na 1 disku — kartu lze formátovat.", JobOutcomes.Final("A001", Status(JobPhase.Done), Report())!.Message);
     }
 
     [Fact]
@@ -43,6 +43,29 @@ public class JobOutcomeTests
         Assert.Equal(OutcomeKind.Attention, skipped.Kind);
         Assert.Equal("Kopie je ověřená, ale: " + space, skipped.Message);
         Assert.Equal("Kopie je ověřená, ale vyžaduje pozornost — podrobnosti v aplikaci.", skipped.PhoneMessage);
+    }
+
+    // Final review, item 5: a report verified as read, but the card not SafeToFormat (e.g. the results not written into
+    // every folder) — never "ověřená" in the notification, only "hotová".
+    [Fact]
+    public void Attention_NotSafeToFormat_NeverSaysVerified()
+    {
+        var space = Msg.ProxiesSkippedForSpace("Zaloha (D:)", 30_000_000_000, 12_000_000_000);
+        var outcomes = new[]
+        {
+            JobOutcomes.Final("A001", Status(JobPhase.Done, proxiesFailed: 2, safe: false), Report())!,
+            JobOutcomes.Final("A001", Status(JobPhase.Failed, error: "x", safe: false), Report())!,
+            JobOutcomes.Final("A001", Status(JobPhase.Done, warning: space, safe: false), Report())!,
+        };
+        Assert.Equal("Kopie je hotová, ale 2 proxy selhaly.", outcomes[0].Message);
+        Assert.Equal("Kopie je hotová, ale zpracování po kopii selhalo.", outcomes[1].Message);
+        Assert.Equal("Kopie je hotová, ale: " + space, outcomes[2].Message);
+        Assert.Equal("Kopie je hotová, ale vyžaduje pozornost — podrobnosti v aplikaci.", outcomes[2].PhoneMessage);
+        Assert.All(outcomes, o =>
+        {
+            Assert.Equal(OutcomeKind.Attention, o.Kind);
+            Assert.DoesNotContain("ověřen", o.Message + o.PhoneMessage, StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     [Fact]
@@ -70,7 +93,7 @@ public class JobOutcomeTests
     public void Ejectable_OnlyWhileStageTwoRuns_WindowsOnly()
     {
         var e = JobOutcomes.CopyDone("A001", Status(JobPhase.Proxies), proxies: true)!;
-        Assert.Equal((OutcomeKind.Ejectable, "Offload: A001 — kartu lze vysunout", "Proxy se ještě renderují."), (e.Kind, e.Title, e.Message));
+        Assert.Equal((OutcomeKind.Ejectable, "Offload: A001 — kartu lze vyjmout", "Proxy se ještě renderují."), (e.Kind, e.Title, e.Message));
         Assert.False(e.ForPhone);
         Assert.Null(JobOutcomes.CopyDone("A001", Status(JobPhase.Done), proxies: true));
         Assert.Null(JobOutcomes.CopyDone("A001", Status(JobPhase.Analyzing, safe: false), proxies: false));
@@ -207,13 +230,16 @@ public class NtfyClientTests
         Assert.False(send.IsCompleted);
         await send.WaitAsync(TimeSpan.FromSeconds(30));
         lock (log) Assert.Equal("ntfy: Server neodpověděl do 0.5 s.", Assert.Single(log).Replace(',', '.'));
-        // The listener records a request on its own pool thread — under the whole suite that can come after the client
-        // gave up: wait for it (bounded) before counting.
-        Assert.True(server.WaitForRequests(1, TimeSpan.FromSeconds(30)), "the request never reached the listener");
-
-        await NtfyClient.SendOutcomeAsync(new NtfySettings { Enabled = false, Server = server.Url, Topic = "t" }, outcome, log.Add);
-        await NtfyClient.SendOutcomeAsync(settings, outcome with { Kind = OutcomeKind.Ejectable }, log.Add);
-        Assert.Single(server.Requests);   // off, and "kartu lze vysunout": nothing sent
+        // Whether the request reached the listener before the 0.5 s limit cancelled it depends on the machine's load (a
+        // connect or a pool thread starved for longer than the limit: the client gives up before sending anything), so
+        // nothing here waits for it. "Nothing is sent" is proven on a server of its own: those calls are awaited and
+        // finish without a request, so it holds the moment they return.
+        using var untouched = new LocalHttp();
+        var off = new NtfySettings { Enabled = false, Server = untouched.Url, Topic = "t" };
+        await NtfyClient.SendOutcomeAsync(off, outcome, log.Add);
+        await NtfyClient.SendOutcomeAsync(new NtfySettings { Enabled = true, Server = untouched.Url, Topic = "t" }, outcome with { Kind = OutcomeKind.Ejectable }, log.Add);
+        Assert.Empty(untouched.Requests);   // off, and "kartu lze vysunout": nothing sent
+        lock (log) Assert.Single(log);
     }
 
     // Final fix 2: only the headers are read — a server that streams a huge body after an error status does not hold

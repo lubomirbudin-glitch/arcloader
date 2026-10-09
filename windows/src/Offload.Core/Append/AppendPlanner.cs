@@ -24,6 +24,16 @@ public sealed class AppendPlan
     public int UnverifiedEarlier { get; init; }
     /// The hash types of the earlier backup — an append uses them, not the current setting (spec 3.5).
     public IReadOnlyList<string> HashAlgorithms { get; init; } = ["xxh64"];
+    /// R6 (plan 10): this append completes generation `Generation`, which an earlier run never committed — NewFiles are
+    /// then that generation's files with what ResumePlanner.Decide found for each (aligned with NewFiles).
+    public bool Resuming { get; init; }
+    public IReadOnlyList<bool[]>? Write { get; init; }
+    public IReadOnlyList<VerifyInProxy.ManifestRecord?>? Known { get; init; }
+    public IReadOnlyList<bool>? HashOnly { get; init; }
+    public IReadOnlyList<VerifyInProxy.PartCheckpoint?>? Resume { get; init; }
+    /// A resume of a generation already in an ASC MHL chain: card files it cannot take (shot since) — the next append
+    /// copies them; until then the card is not safe (OffloadPlan.NotInBackup).
+    public int Later { get; init; }
 }
 
 /// Pure decisions over the card and the content of the card folders (R4): the truth is what is on the destinations —
@@ -47,13 +57,21 @@ public static class AppendPlanner
 
     /// Steps 0 and 1: one backup `<root>\<date>\<card>` with the same date and name everywhere, every report readable,
     /// every ASC MHL chain intact and of the same length, and the numbered reports in agreement with it. Reads only.
-    internal static Backup CheckBackup(IReadOnlyList<string> cardPaths)
+    /// `unfinished` (R6): the generation a resume completes — only the generations before it are checked (generation 1:
+    /// nothing is committed yet, the folders need no report).
+    internal static Backup CheckBackup(IReadOnlyList<string> cardPaths, Unfinished? unfinished = null)
     {
         if (cardPaths.Count == 0) throw OffloadError.Preflight(PreflightCode.NoDestination, Msg.NoDestination);
         var paths = cardPaths.Select(p => Path.GetFullPath(p).TrimEnd('\\')).ToList();
 
         // 0. One backup: `<root>\<date>\<card>` with the same date and name everywhere — the copy goes exactly there.
         var (roots, date, cardName) = Split(paths);
+        if (unfinished is { Generation: 1 })
+        {
+            foreach (var p in paths)
+                if (!Directory.Exists(p)) throw OffloadError.Preflight(PreflightCode.AppendUnavailable, Msg.AppendUnavailable(p));
+            return new Backup(paths, roots, date, cardName, paths.Select(p => new CardRecord { CardPath = p }).ToList(), 1);
+        }
 
         // 1. Every earlier backup is there, with its report and its ASC MHL chain (R7).
         var records = new List<CardRecord>();
@@ -61,7 +79,7 @@ public static class AppendPlanner
         foreach (var cardPath in paths)
         {
             if (!Directory.Exists(cardPath)) throw OffloadError.Preflight(PreflightCode.AppendUnavailable, Msg.AppendUnavailable(cardPath));
-            var record = CardRecord.Load(cardPath);
+            var record = CardRecord.Load(cardPath, unfinished?.Generation - 1);
             if (record.ReportMissing) throw OffloadError.Preflight(PreflightCode.AppendNoReport, Msg.AppendNoReport(cardPath));
             if (record.Error != null) throw OffloadError.Preflight(PreflightCode.AppendNoReport, Msg.AppendBadReport(cardPath, record.Error));
             // An append report nobody can read: the files it recorded would look like someone else's.
@@ -72,7 +90,9 @@ public static class AppendPlanner
             // generation would extend is not what was written — have it checked first.
             if (mhl.ChainProblems.Count > 0) throw OffloadError.Preflight(PreflightCode.AppendMhlDamaged, Msg.AppendMhlDamaged(cardPath));
             records.Add(record);
-            generations.Add(mhl.Chain.Max(c => c.Seq));
+            // R6 + ruling I1: the generation a resume completes may be committed in some folders already — the backup
+            // before it is what is checked here.
+            generations.Add(Math.Min(mhl.Chain.Max(c => c.Seq), (unfinished?.Generation ?? int.MaxValue) - 1));
         }
         if (generations.Distinct().Count() > 1)
         {
@@ -94,7 +114,9 @@ public static class AppendPlanner
     internal static AppendPlan Plan(string source, IReadOnlyList<string> cardPaths, CancellationToken ct, string? sourceFilesystem,
         Func<string, string>? destFilesystem = null)
     {
-        var (paths, roots, date, cardName, records, generation) = CheckBackup(cardPaths);
+        // R6 (plan 10): a generation an earlier run never committed is completed by this append, not numbered after it.
+        var unfinished = ResumePlanner.Find(cardPaths);
+        var (paths, roots, date, cardName, records, generation) = CheckBackup(cardPaths, unfinished);
 
         // 2. The card, compared with every backup: a known file must be the same on the card, in the report and on disk.
         var scan = Scanner.Scan(source, ct);
@@ -102,22 +124,27 @@ public static class AppendPlanner
         // Ruling I5: a FAT destination shifts its own file times after a change of time, whatever the card is.
         var diskLocalTime = paths.Select(p => cardLocalTime || FileTimes.StoresLocalTime(destFilesystem?.Invoke(p) ?? NativeIO.FilesystemType(p))).ToList();
         var newFiles = new List<SourceFile>();
+        var presence = new List<bool[]>();
         var conflicts = new List<string>();
-        int unverified = 0, known = 0;
+        int unverified = 0, known = 0, later = 0;
         foreach (var f in scan.Files)
         {
             ct.ThrowIfCancellationRequested();
             int present = 0, goodInRecord = 0;
             bool unverifiedFile = false;
+            var here = new bool[paths.Count];
             for (int d = 0; d < paths.Count; d++)
             {
                 var onDisk = new FileInfo(Layout.Join(paths[d], f.RelPath));
                 bool exists = onDisk.Exists;
                 if (exists) present++;
+                here[d] = exists;
                 if (!records[d].Files.TryGetValue(f.RelPath, out var rec))
                 {
-                    // Not in any report but on the disk: someone else's file — never overwritten, never trusted.
-                    if (exists) conflicts.Add(Msg.AppendUnknownFile(Disk(paths[d]), f.RelPath));
+                    // Not in any report but on the disk: someone else's file — never overwritten, never trusted. Unless the
+                    // unfinished run wrote it (R6): its manifest names the card's file there.
+                    if (exists && unfinished?.Owns(d, f, onDisk.Length, diskLocalTime[d]) != true)
+                        conflicts.Add(Msg.AppendUnknownFile(Disk(paths[d]), f.RelPath));
                     continue;
                 }
                 int column = CardRecord.DestinationIndex(rec.Report, paths[d], d);
@@ -131,7 +158,7 @@ public static class AppendPlanner
                     continue;
                 }
                 goodInRecord++;
-                if (!CardRecord.ReadBack(rec, paths[d])) unverifiedFile = true;   // ruling R2: the one definition
+                if (!CardRecord.ReadBack(rec, paths[d], records[d].VolumeSerial)) unverifiedFile = true;   // ruling R2: the one definition (R12: by disk)
                 if (rec.File.Size != f.Size || !FileTimes.Close(rec.File.Modified, f.ModifiedUtc, cardLocalTime))
                     conflicts.Add(Conflict(f, Disk(paths[d]), rec.File.Size, rec.File.Modified));
                 else if (!exists)
@@ -140,8 +167,21 @@ public static class AppendPlanner
                     conflicts.Add(Conflict(f, Disk(paths[d]), onDisk.Length, onDisk.LastWriteTimeUtc));
             }
             if (unverifiedFile) unverified++;
-            if (goodInRecord > 0) known++;
-            if (goodInRecord == 0 && present == 0) newFiles.Add(f);
+            if (goodInRecord > 0 || unfinished?.Mentions(f) == true) known++;
+            // A generation already in an ASC MHL chain (ruling I1) takes no file it does not list: one shot since waits for
+            // the next append — the card is not safe meanwhile (NotInBackup).
+            if (goodInRecord == 0 && present == 0 && unfinished?.Fixed is { } only && !only.Contains(f.RelPath))
+            {
+                later++;
+                continue;
+            }
+            // R6: a file of the unfinished generation on some disks (its copies there are the run's own — else a conflict
+            // above) is part of this generation too.
+            if (goodInRecord == 0 && (present == 0 || unfinished != null))
+            {
+                newFiles.Add(f);
+                presence.Add(here);
+            }
             else if (goodInRecord > 0 && goodInRecord < paths.Count && present < paths.Count)
                 throw OffloadError.Preflight(PreflightCode.AppendDiverged,
                     Msg.AppendDiverged($"{f.RelPath} je jen na {string.Join(", ", paths.Where(p => File.Exists(Layout.Join(p, f.RelPath))).Select(Disk))}"));
@@ -162,7 +202,11 @@ public static class AppendPlanner
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToList();
-        var first = records[0].Generations[0].Report;
+        var first = records[0].Generations.FirstOrDefault()?.Report;
+        var resumed = unfinished == null ? default
+            : ResumePlanner.Decide(unfinished, paths, newFiles, presence, diskLocalTime);
+        // Generation 1 resumed: no report yet — the hashes the run used, as its manifest says (MD5 when it has it).
+        var algorithms = first?.Algorithms ?? (unfinished!.Manifests.Any(m => m.Any(r => r.Md5 != null)) ? ["xxh64", "md5"] : ["xxh64"]);
         return new AppendPlan
         {
             Source = Path.GetFullPath(source),
@@ -175,7 +219,13 @@ public static class AppendPlanner
             NewFiles = newFiles,
             NewDirs = newDirs,
             UnverifiedEarlier = unverified,
-            HashAlgorithms = first.Algorithms,
+            HashAlgorithms = algorithms,
+            Resuming = unfinished != null,
+            Later = later,
+            Write = unfinished == null ? null : resumed.Write,
+            Known = unfinished == null ? null : resumed.Known,
+            HashOnly = unfinished == null ? null : resumed.HashOnly,
+            Resume = unfinished == null ? null : resumed.Resume,
         };
     }
 

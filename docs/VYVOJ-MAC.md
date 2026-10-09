@@ -27,71 +27,42 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   struktury karty. Rozlišit čtečku od disku (USB třída / IOKit, typ svazku, struktura kamerové karty), nikdy nepřidat
   jako cíl svazek, který vypadá jako karta, ani interní disk; přidaný cíl jde odebrat a zapamatovat si odebrání.
 
-- **Karty a bezpečnost dat (Windows plán 6, 2026-10-06):** návrh
-  [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
-  §2 a §8. Mac převezme: **historii** (`history.json` v Application Support ve stejném formátu — FORMATY.md „Místní
-  soubory“; klíč karty = sériové číslo souborového systému + kapacita, ověřit, že u FAT/exFAT vyjde na Macu totéž
-  `fsSerial` jako na Windows; řádek u karty a dialog „Karty už jsou zálohované“ ve `Views.swift`); **doplnění** (plánovač
-  doplnění v OffloadKit, `MHL.swift` generace N + nahrazení řetězu, `Report.swift` klíč `generation` a jména `_NNNN`,
-  zámek složky karty, `offload append`); **název z klipů** (vzory `ReelNames`, další v řadě, zástupný text); **ověření
-  zálohy** (čtení MHL všech generací a hashů, report `_verify_<stamp>Z` s výjimkou pro MHL bez ignorování `_REPORT`,
-  menu); **kontrolu místa** (odhad a plán po svazcích, tabulka toků, přepočet před proxy); **české hlášky** (`Msg`
-  a kódy kontrol v `Engine.swift` a `main.swift`).
+- **Dorovnání 2 s Windows 0.6.0 — plány 6–10 a dodatky 0.5.x (2026-10-08):** návrh — oddíl „Doplněk 3“ (D.21–D.28)
+  v [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
+  plán po úkolech s kódem a testy [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md)
+  (úkoly 32–55: karty a bezpečnost dat, výstupy pro produkci a střih) a
+  [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-3.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-3.md)
+  (úkoly 56–70: nastavení, oznámení, distribuce; Pozastavit, Zkopírovat znovu, nový vzhled; Verify-in-Proxy), pořadí a milníky
+  v [`README-START`](../mac/docs/superpowers/plans/README-START.md) (oddíl 4). Začíná po úkolu 26 (0.2.0). Pokrývá všechno, co tu
+  dřív stálo jako „Karty a bezpečnost dat“, „Výstupy pro produkci a střih“, „Nastavení, oznámení, distribuce“, „Nový vzhled“
+  a „Převzít z Windows“ (HTML reporty 2026-10-08, proxy 0.5.1, Verify-in-Proxy 0.6.0) — mapa v D.28. Rozhodnutí oproti dřívějším
+  odrážkám: ověření během proxy přes **HTTP tap pro ffmpeg** jako Windows, ne AVFoundation (D.23.7); „ověřeno“ z čtení jen
+  s důkazem `mincore`, že soubor není v cache (D.23.1); sériové číslo karty z boot sektoru (D.23.2); zámky `flock` (D.23.4);
+  oznámení `UNUserNotificationCenter` (D.23.5); vlastní manifest aktualizací `offload-update-mac.json` a notarizace s podpisem
+  všech binárek (D.24); nový vzhled až po schválení Windows verze (D.25). Úkol 70 tuto odrážku smaže.
 
-- **Výstupy pro produkci a střih (Windows plán 7, 2026-10-07):** návrh
-  [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
-  §3 a §8. Mac převezme: **denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf` a seznam klipů dne, tvorba po
-  úloze v `Job.swift`, stejné sloupce a texty — FORMATY.md „Denní report“); **seznamy klipů** CSV/ALE stejných sloupců
-  (FORMATY.md „Seznam klipů“); **proxy pro přelinkování** (`Proxy.swift`: `reel_name` ve stopě TC, všechny zvukové
-  stopy, cívka tag → název → složka, klíč `clips[].info.reel`); **MD5** (`Hash.swift` + CommonCrypto MD5, volba
-  xxh64/both, `hashAlgorithms`, `files[].md5`, `<karta>.md5`, MHL `<md5>`, `verify` z MHL)); **jména karet** `_REPORT`, `_PROXY`, `ascmhl` s `_` na konci a prázdná `<karta>\_REPORT` hned při začátku kopie (D1); seznam ALE bez BOM a volba doplnění: `<karta>.md5` je třetí soubor, který doplnění přepíše (jako `.xxh64`).
+- **Nový vzhled — rozhodnuto (uživatel 2026-10-09):** Mac dostane nové UI podle Windows verze (včetně klikacích voleb
+  kroku 3 z Windows 0.5.2) — podmínka „až po schválení Windows verze“ (D.25) je tím splněná; úkoly nového vzhledu
+  v plánu parity 3 nemusí čekat. Vzor: [`docs/ui-navrh/`](ui-navrh/), Windows plán 9 a `windows/src/Offload.App`.
 
-- **Nastavení, oznámení, distribuce (Windows plán 8, 2026-10-07):** návrh
-  [`windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md`](../windows/docs/superpowers/specs/2026-10-06-offload-vylepseni-design.md)
-  §4 a §8. Mac převezme: **projekty** (`projects` / `activeProject` v `UserDefaults`, stejné chování přepínače — během
-  startu zamčený, úloha ve frontě má vlastní kopii nastavení; `project` v reportu a historii, doplnění podle projektu
-  dřívější zálohy a „Bez projektu“, když už neexistuje, další v řadě po projektech, projekt v hlavičce denního
-  reportu); **vlastní pravidla LUTů** (`lutRules` v `LutResolver` před automatikou, `lut.source = rule`, cíl „Bez LUT“
-  dává `none`, pravidla neznámého typu zachovat a přeskočit, `cameraSerial` ze Sony XML a QuickTime tagů);
-  **`braw-decode --gen5`** v C++ (jen Film Gen 4; klon atributů klipu, `ColorScienceGen` = 5, `colorScienceGenOriginal`
-  v `--info`; neověřeno bez vzorku Gen 4); **oznámení** (texty `JobOutcome`, ntfy JSON POST s pevným textem bez cest;
-  úloha, která skončí v 1. fázi chybou, oznámí hned při konci kopie); **kontrolu aktualizací** (formát manifestu,
-  limity velikosti, síťové cesty se neotevírají; vlastní soubor pro Mac rozhodne Mac). Podpis má Mac vlastní
-  (`codesign` + notarizace).
-
-- **Nový vzhled (Windows plán 9, 2026-10-07, 0.5.0):** návrh [`docs/ui-navrh/`](ui-navrh/) (README = zadání;
-  „Rozhodnutí (2026-10-07, závazné)“ v hlavičce plánu 9). **Uživatel 2026-10-09 rozhodl: Mac dostane nové UI podle Windows verze** (včetně klikacích voleb kroku 3 z Windows 0.5.2;
-  podklady `docs/ui-navrh/`, Windows plán 9 a `windows/src/Offload.App` jako vzor) — převzít: rozvržení (horní lišta, kroky
-  1–3, karty úloh po stavech, stránka Nastavení, dnes a historie karet), přepínač **projektů** místo presetů, tmavé
-  i světlé téma podle systému; **Pozastavit** (brána mezi 16MB bloky kopie a zpětného čtení a mezi klipy 2. fáze, žádný
-  proces se neuspává, zámek dne se během pauzy nedrží, report `copyPausedSeconds` / `verifyPausedSeconds`);
-  **Zkopírovat znovu** (oprava jako generace ASC MHL N: jen selhané soubory, jen na cíle, kde selhaly, dobrá kopie
-  `verified`, nesouhlasná do `_REPORT/neshoda_NNNN/`, `kind: "repair"`, `rewritten`, `setAside`, historie
-  `generations[].kind = repair` — FORMATY.md „Oprava“); štítek kamery z prvního klipu a typ připojení (Mac pozná
-  i Thunderbolt); odhad času jen z rychlostí naměřených v relaci.
-
-- **Mimo plán — zbývá (stav po verzi 0.2.0):**
-  - Blackmagic RAW Film Gen 4: Windows od 0.4.0 umí převod na Gen 5 (`--gen5`, výchozí vypnuto, neověřeno — čeká vzorek
-    Gen 4); Mac zatím bez LUTu (provizorně) — rozhodne uživatel (spec D.15). Na Macu je vzorek Gen 4 (`profile.braw`
-    z Blackmagic RAW Speed Test).
-  - Nastavení nástrojů: řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny Blackmagic RAW (stav BRAW je vidět z poznámky
-    u klipu) — otevřené i na Windows.
-  - Náhledy R3D/ARRI bez proxy, zrušení `ffprobe`, selhání kopie proxy v souhrnu CLI — otevřené i na Windows (návrh, oddíl 4).
-  - Windows: ARRIRAW bez LUTu má stále chybu opravenou na Macu v `3b43352` — `windows/src/Offload.Core/RawBackends.cs`
-    (ř. 381) předává art-cmd `--target-colorspace` spolu s `--embedded-look`, art-cmd to odmítne, skončí kódem 0 a nic
-    nezapíše (klip bez proxy a náhledů). Na Windows straně neopraveno.
-  - **Chybějící vzorky:** BRAW Film Gen 5 (automatický LUT), BRAW klip s ≥ 10 snímky (`testFramesAcrossBatchesInOrder`,
-    dávky po 8), BRAW s gamou Video; vizuální srovnání BRAW proxy s Blackmagic RAW Playerem; R3D se skutečným REDline;
-    skutečné Sony `…M01.XML` z kamery.
-  - **Ruční test se skutečným hardwarem** (README-START, oddíl 7): skutečná karta ve čtečce (FAT32 i exFAT, vysunutí, jiná
-    karta v téže čtečce) a USB disky — HDD, aby „brzdí“ ukázalo pomalejší disk ze správného důvodu, SSD 10 Gb/s (linka
-    „USB 3 (10 Gb/s a víc)“, `testUsbVolumesResolveToASocket` s USB diskem), týž disk přes USB 2 (varování), čtečka za USB 3
-    hubem / dokem, UAS, Thunderbolt disk (`volumeIsInternal`), SMB svazek, Apple Silicon (`usb-drd*`); BRAW bez knihovny
-    na Macu bez Playeru / Resolve; křížové ověření s kopií z Windows (`offload verify` oběma směry) a `ascmhl verify`
-    (`ascmhl` tu není nainstalovaný).
-  - **GUI nikdy nespuštěné** (během dorovnání se aplikace nespouštěla — na Macu se pracovalo); zkontrolovat ručně:
+- **Mimo plán — zbývá i po obou plánech** (žádný úkol to neřeší):
+  - Blackmagic RAW Film Gen 4: zda klip ve Film Gen 4 **bez** převodu dostane LUT — rozhodne uživatel (převod `--gen5` přinese
+    úkol 58, výchozí vypnuto, neověřeno bez vzorku Gen 4; stejně jako Windows).
+  - Nastavení nástrojů: řádek „braw-decode“ ukazuje „nalezeno“ i bez knihovny Blackmagic RAW — otevřené i na Windows.
+  - Ověření se vzorkem `.braw`, ostrý test s kartou, REDline a art-cmd — ruční, postup v README-START (oddíly 6–7); úkoly
+    jen říkají, co zkusit.
+  - Náhledy R3D/ARRI bez proxy, zrušení `ffprobe`, selhání kopie proxy v souhrnu CLI — otevřené i na Windows.
+  - Zámky Macu a Windows se navzájem nevidí: Mac a PC, které zároveň doplňují do téže sdílené zálohy, se nevylučují (jako dva PC;
+    spec D.23.4) — bez sdíleného zámku na cíli to vyřešit nejde a ten FORMATY nemá.
+  - Ukázkový režim `--demo` (Windows plán 9, pomůcka pro snímky) — pro Mac se neplánuje.
+  - Chyby parseru CLI (`swift-argument-parser`) zůstanou anglicky — knihovna nemá lokalizaci.
+  - Apple Developer ID (placený účet) pro notarizaci — rozhodne uživatel; bez něj build-app.sh podepisuje ad hoc jako dosud.
+  - Mimo rozsah i na Windows: import historie z existujících `_REPORT` na cílech, token ntfy, Telegram, ověření během proxy na
+    síťových cílech, hashování na GPU.
+  - **Ruční kontroly GUI z dorovnání 0.2.0** (aplikace se během vývoje nespouštěla; od 2026-10-08 běží ostře, ale tyhle
+    případy se cíleně nezkoušely):
     - úkol 11: zdroj-složka bez „Vysunout kartu“; zrušení úlohy ve frontě → oranžové „Zrušeno“, bez zvuku Basso,
-      „Vyčistit hotové“; ⌘Q během kopie → Pokračovat / Ukončit, žádný `.offload-part`; odpojený cíl → „Disk není připojen“
+    „Vyčistit hotové“; ⌘Q během kopie → Pokračovat / Ukončit, žádný `.offload-part`; odpojený cíl → „Disk není připojen“
       do 5 s; chybějící LUT → červeně, start neaktivní; jiná karta v téže čtečce → bez tlačítka vysunutí;
     - úkol 17: ⌘U otevře okno Hardware, druhé ⌘U ho jen přenese dopředu; měření a Zastavit; název portu zůstane po
       restartu; měření neaktivní během kopie; ⌘Q během měření; „Čekám, až doběhne předchozí test…“; řetěz a oranžové

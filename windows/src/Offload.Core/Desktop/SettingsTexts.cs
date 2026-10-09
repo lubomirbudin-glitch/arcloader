@@ -8,6 +8,12 @@ public sealed record LutRow(string Id, string Title, string Detail, string? Mark
 /// The settings page (UI návrh obr. 4), without a window.
 public static class SettingsTexts
 {
+    /// Plan 10 (R11), Nastavení → Ověření.
+    public const string VerifyInProxyLabel = "Ověřit primární disk během proxy";
+    public const string VerifyInProxyNote =
+        "Primární disk se ověří při čtení pro proxy, ostatní souběžně na pozadí — bez druhého čtení navíc. Kartu lze vyjmout po kopii, formátovat až po ověření všech disků. Bez proxy se ověřuje zpětným čtením.";
+    public const string VerifyPrimaryFirstLabel = "Primární je první cíl (jinak nejrychlejší disk změřený při kopii)";
+
     /// "≈ 75 MB / minutu" under the bitrate (video only; the audio adds little).
     public static string BitrateHint(int mbps) => $"≈ {mbps * 60 / 8} MB / minutu";
 

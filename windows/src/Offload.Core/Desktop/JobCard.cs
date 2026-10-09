@@ -33,6 +33,14 @@ public sealed record CardHeadline(JobCardKind Kind, string Title, string Sub);
 /// What the card header says under the name: the files or clips, the size and the camera.
 public sealed record JobCardFacts(int Files, int Clips, long Bytes, string? Camera, bool Append);
 
+public enum ChipTone { Neutral, Ok, Warning, Error }
+
+/// One of the card row's two verdicts (R5, spec 9): "Lze vyjmout" or "Lze formátovat" and how it looks.
+public sealed record CardChip(string Text, ChipTone Tone);
+
+/// One content warning of a finished card (spec 7, 9): the clip and the label with the place and the kind of the defect.
+public sealed record ContentLine(string Clip, string Label, bool HasPicture);
+
 /// The texts and numbers of the new job card (UI návrh, nové věci 1–4) — pure functions, the window only binds them.
 public static class JobCard
 {
@@ -92,23 +100,28 @@ public static class JobCard
     static double Share(long done, long of) => of <= 0 ? 0 : Math.Clamp((double)done / of, 0, 1);
 
     /// The phase indicator: Kopírování · Ověření · Proxy (or Analýza) · Report — the phases this job does, numbered in a
-    /// row; done ones full, the active one as far as it got. Empty for a finished job that did not end Done.
+    /// row; done ones full, the active one as far as it got. Empty for a finished job that did not end Done. Plan 10: with
+    /// verify-in-proxy the verification follows the proxies — Kopírování · Proxy · Ověření · Report.
     public static IReadOnlyList<PhaseStep> Steps(JobStatus s, JobConfig config, double phaseProgress)
     {
-        var labels = new List<string> { "Kopírování" };
-        if (config.Verify) labels.Add("Ověření");
         bool stage2 = config.RepairInto == null && (config.Proxy.Enabled || config.AnalyzeClips);
+        bool inProxy = config.Verify && config.VerifyInProxy && config.Proxy.Enabled && config.RepairInto == null;
+        var labels = new List<string> { "Kopírování" };
+        if (config.Verify && !inProxy) labels.Add("Ověření");
         if (stage2) labels.Add(config.Proxy.Enabled ? "Proxy" : "Analýza");
+        if (inProxy) labels.Add("Ověření");
         labels.Add("Report");
         if (s.Phase is JobPhase.Failed or JobPhase.Cancelled) return [];
+        int verify = labels.IndexOf("Ověření");
         int active = s.Phase switch
         {
             JobPhase.Waiting => -1,
             JobPhase.Copying or JobPhase.Flushing => 0,
             JobPhase.Verifying => 1,
             // The first report is written at the end of stage 1 (before the clips): the copy's last step, full.
-            JobPhase.Reporting when s.CopySucceeded == null => config.Verify ? 1 : 0,
-            JobPhase.Analyzing or JobPhase.Proxies => stage2 ? labels.Count - 2 : labels.Count - 1,
+            JobPhase.Reporting when s.CopySucceeded == null => config.Verify && !inProxy ? 1 : 0,
+            JobPhase.Analyzing or JobPhase.Proxies => stage2 ? (inProxy ? verify - 1 : labels.Count - 2) : labels.Count - 1,
+            JobPhase.Finishing => verify,
             JobPhase.Reporting => labels.Count - 1,
             _ => labels.Count,   // Done
         };
@@ -135,6 +148,7 @@ public static class JobCard
             JobPhase.Copying when c != null => ($"Soubor {Math.Min(c.FileIndex + 1, c.TotalFiles)} / {c.TotalFiles}", Path.GetFileName(c.CurrentFile)),
             JobPhase.Flushing => ("Zápis cache disků", ""),
             JobPhase.Verifying when c != null => ("Ověřování", $"{Format.BytesCs3(c.VerifiedBytes.Sum())} / {Format.BytesCs3(c.ToVerifyTotal)}"),
+            JobPhase.Finishing => ("Dokončení ověření", $"{Format.BytesCs3(s.VerifiedBytes)} / {Format.BytesCs3(s.VerifyTotal)}"),
             JobPhase.Analyzing => ($"Klip {s.ClipIndex + 1} / {s.ClipCount}", s.ClipName),
             JobPhase.Proxies => ($"Proxy {s.ClipIndex + 1} / {s.ClipCount}", $"{s.ClipName} · {(s.ClipFraction * 100).ToString("0", CultureInfo.InvariantCulture)} %"),
             JobPhase.Reporting => ("Report", ""),
@@ -146,7 +160,7 @@ public static class JobCard
     public static string? Remaining(JobPhase phase, double? phaseSeconds, double? totalSeconds)
     {
         if (phaseSeconds is not double t) return totalSeconds is double only ? $"zbývá ~{JobProgress.EtaText(only)} celkem" : null;
-        var what = phase switch { JobPhase.Copying => "kopie", JobPhase.Verifying => "ověření", _ => phase.Label().ToLower(Cs) };
+        var what = phase switch { JobPhase.Copying => "kopie", JobPhase.Verifying or JobPhase.Finishing => "ověření", _ => phase.Label().ToLower(Cs) };
         var text = $"zbývá ~{JobProgress.EtaText(t)} {what}";
         return totalSeconds is double total && total > t ? $"{text} · ~{JobProgress.EtaText(total)} celkem" : text;
     }
@@ -167,10 +181,12 @@ public static class JobCard
         var proxy = r.Proxy is { Enabled: true }
             ? $"{r.Clips.Count(c => c.ProxyStatus == ProxyStatus.Done)} / {r.Clips.Count(c => !(c.ProxyStatus == ProxyStatus.Skipped && (c.ProxyNote == null || c.OriginalLighter)))}"
             : "vypnuto";
+        // Plan 10: verified with the proxies — its time is the proxies', no rate of its own.
+        bool inProxy = r.Destinations.Any(d => d.VerifyMethod == ReportDestination.InProxy);
         return
         [
             new("Kopie", Format.Rate(r.TotalBytes, r.CopySeconds)),
-            new("Ověření", r.Verified ? Format.Rate(r.TotalBytes, r.VerifySeconds) : "vypnuto"),
+            new("Ověření", !r.Verified ? "vypnuto" : inProxy ? "během proxy" : Format.Rate(r.TotalBytes, r.VerifySeconds)),
             new("Proxy", proxy),
             new("Celkem", Duration(elapsed ?? (r.Finished - r.Started - TimeSpan.FromSeconds(r.PausedSeconds)))),
         ];
@@ -203,45 +219,81 @@ public static class JobCard
     public static string? MoreFiles(int total, int shown) =>
         total > shown ? $"… a {Texts.Plural(total - shown, "další", "další", "dalších")} {total - shown} {Texts.Plural(total - shown, "soubor", "soubory", "souborů")} v reportu" : null;
 
-    /// The headline of a finished job (and of a waiting / running one: just its kind). The green "kartu lze vysunout" is
-    /// the job's own verdict (`JobStatus.SafeToEject`, shared with the eject notification and history), never recomputed
-    /// from this job's report: a repair's report lists only the repaired files. `backup`: the whole backup as
-    /// BackupState read it (repair, append) for the words under a card that must not be ejected yet; `blockedByPaused`:
-    /// a waiting job stands behind a paused one.
+    /// The headline of a finished job (and of a waiting / running one: just its kind). The green "kartu lze formátovat"
+    /// is the job's own verdict (`JobStatus.SafeToFormat`, R5 — shared with the notification and history), never
+    /// recomputed from this job's report: a repair's report lists only the repaired files. "Lze vyjmout" (SafeToEject)
+    /// alone is never green (ruling I2). `backup`: the whole backup as BackupState read it (repair, append) for the words
+    /// under a card that must not be formatted yet; `blockedByPaused`: a waiting job stands behind a paused one;
+    /// `contentConfirmed`: the user confirmed the content warnings (spec 7) — until then the card is not green.
     public static CardHeadline Headline(string card, JobStatus s, OffloadReport? r, IReadOnlyList<string> destNames,
-        BackupState? backup = null, bool blockedByPaused = false)
+        BackupState? backup = null, bool blockedByPaused = false, bool contentConfirmed = false)
     {
         if (s.Phase == JobPhase.Waiting)
             return new(JobCardKind.Waiting, card, blockedByPaused ? WaitingForPaused : "Čeká ve frontě");
         if (!s.Phase.IsFinished()) return new(JobCardKind.Running, card, "");
         if (s.Phase == JobPhase.Cancelled)
-            return new(JobCardKind.Cancelled, $"{card} — zrušeno", s.SafeToEject
+            return new(JobCardKind.Cancelled, $"{card} — zrušeno", s.SafeToFormat
                 ? "Kopie je hotová a ověřená, zrušilo se jen zpracování po kopii."
+                : s.SafeToEject
+                ? "Kopie je hotová, ale neověřená — kartu lze vyjmout, neformátujte ji (Zkopírovat znovu ji ověří)."
                 : "Karta není kompletně zálohovaná — zkopírujte ji znovu celou.");
         if (r == null)
         {
             // Nothing new / nothing to repair: green only when the backup is really complete and verified.
-            if (s.Phase == JobPhase.Done && !s.SafeToEject)
-                return new(JobCardKind.Problem, $"{card} — kartu zatím nevysunujte", NotSafeWhy(s, backup));
+            if (s.Phase == JobPhase.Done && !s.SafeToFormat)
+                return new(JobCardKind.Problem, $"{card} — kartu zatím neformátujte", NotSafeWhy(s, backup));
             return s.Phase == JobPhase.Done
                 ? new(JobCardKind.Done, $"{card} — záloha je úplná", s.Note ?? Msg.NothingNew)
                 : new(JobCardKind.Failed, $"{card} — offload selhal", s.Error ?? "Kopie se nepodařila.");
         }
-        string notYet = $"{card} — kartu zatím nevysunujte";
+        string notYet = s.SafeToEject ? $"{card} — lze vyjmout, formátovat zatím ne" : $"{card} — kartu zatím nevysunujte";
         if (!r.Success) return new(JobCardKind.Problem, notYet, backup is { Failed: > 0 } b ? $"V záloze {Files(b.Failed)} stále nesouhlasí." : ProblemText(r, destNames));
         if (!r.Verified) return new(JobCardKind.Problem, $"{card} — zkopírováno bez ověření", SetupTexts.VerifyOffWarning);
-        if (!s.SafeToEject)
+        if (!s.SafeToFormat)
         {
             // This job's files are good, but the backup as a whole is not (earlier files never read back, files of the
-            // card that are in no report, files that still fail): the card stays in.
+            // card that are in no report, files that still fail): not formatted yet.
             return new(JobCardKind.Problem, notYet, NotSafeWhy(s, backup));
         }
+        // Spec 7: the copy is exact, but the decoder found defects — formatting only once the user has looked.
+        if (s.ContentWarnings > 0 && !contentConfirmed)
+            return new(JobCardKind.Problem, $"{card} — před formátováním zkontrolujte vady obsahu", Msg.ContentWarnings(s.ContentWarnings));
         var safe = r.IsRepair ? "Všechny soubory zálohy jsou teď na všech discích a ověřené." : SafeText(r.TotalFiles, r.Destinations.Count, HashKinds.Label(HashKinds.FromNames(r.Algorithms)));
         // Stage 2 (previews, proxies) failed after a good copy: the copy is safe, but say the processing did not finish.
         if (s.Phase == JobPhase.Failed)
             safe = $"{safe} Zpracování po kopii ale selhalo: {s.Error ?? "neznámá chyba"}";
-        return new(JobCardKind.Done, $"{card} — kartu lze vysunout", safe);
+        return new(JobCardKind.Done, $"{card} — kartu lze formátovat", safe);
     }
+
+    /// R5, spec 9: the card row's two verdicts, never merged — "Lze vyjmout" once everything is copied, "Lze formátovat"
+    /// once everything is verified (yellow until content warnings are confirmed). Ruling I2: green (Ok) only where the
+    /// card may be formatted — "Lze vyjmout" alone is neutral. The window hides them while the job waits.
+    public static (CardChip Eject, CardChip Format) Chips(JobStatus s, bool contentConfirmed = false)
+    {
+        bool running = s.Phase != JobPhase.Waiting && !s.Phase.IsFinished();
+        var format = s.SafeToFormat
+            ? s.ContentWarnings > 0 && !contentConfirmed ? new CardChip("Lze formátovat po kontrole vad", ChipTone.Warning) : new CardChip("Lze formátovat", ChipTone.Ok)
+            : running ? new CardChip(s.SafeToEject ? "Ověřuje se…" : "Formátovat zatím ne", ChipTone.Neutral)
+            : new CardChip("Neformátovat", s.SafeToEject ? ChipTone.Warning : ChipTone.Error);
+        var eject = s.SafeToEject ? new CardChip("Lze vyjmout", format.Tone == ChipTone.Ok ? ChipTone.Ok : ChipTone.Neutral)
+            : running ? new CardChip("Vyjmout zatím ne", ChipTone.Neutral) : new CardChip("Nevyjímat", ChipTone.Error);
+        return (eject, format);
+    }
+
+    /// Spec 7: the button that unlocks the green verdict once the user has looked at the content warnings (Offload never
+    /// formats a card itself).
+    public const string ContentConfirmText = "Zkontrolováno — kartu lze formátovat";
+
+    /// The confirmation is offered on a finished card that may be formatted but for its content warnings, until given.
+    public static bool NeedsContentConfirm(JobStatus s, bool confirmed) =>
+        s.Phase.IsFinished() && s.SafeToFormat && s.ContentWarnings > 0 && !confirmed;
+
+    /// Spec 7, 9: every clip with a content warning — its name and the yellow label "01:00:02:13 · poškozená data" (the
+    /// kind alone without a timecode), and whether the report has a picture of the place.
+    public static IReadOnlyList<ContentLine> ContentLines(OffloadReport r) =>
+        r.ContentWarnings.Select(c => new ContentLine(c.Clip.Name,
+            c.Content!.Timecode is { Length: > 0 } tc ? $"{tc} · {VerifyInProxy.ContentResult.KindText(c.Content.Kind)}" : VerifyInProxy.ContentResult.KindText(c.Content.Kind),
+            c.Content.Jpeg is { Length: > 0 })).ToList();
 
     static string NotSafeWhy(JobStatus s, BackupState? backup) => backup switch
     {

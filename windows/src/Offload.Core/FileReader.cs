@@ -11,6 +11,11 @@ public sealed class FileReader : IDisposable
 
     public bool Unbuffered { get; private set; } = true;
 
+    /// Plan 10 (ruling I3): every read so far really came from the disk — the handle kept FILE_FLAG_NO_BUFFERING (a volume
+    /// may drop it silently), the file is not NTFS-compressed or EFS-encrypted (their non-cached reads may still be
+    /// served through the cache) and no read fell back to the cache. False = what was read may have come from memory.
+    public bool FromDisk { get; private set; }
+
     public FileReader(string path)
     {
         this.path = path;
@@ -22,6 +27,29 @@ public sealed class FileReader : IDisposable
         {
             Unbuffered = false;
             handle = NativeIO.OpenRead(path, unbuffered: false);
+        }
+        FromDisk = Unbuffered && ReadsFromDisk(handle);
+    }
+
+    static bool ReadsFromDisk(SafeFileHandle h)
+    {
+        try
+        {
+            return NativeIO.ReadsPastTheCache(h) && (File.GetAttributes(h) & (FileAttributes.Compressed | FileAttributes.Encrypted)) == 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// The file's length now.
+    public long Length
+    {
+        get
+        {
+            try { return RandomAccess.GetLength(handle); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { throw new IOError("read", path, e); }
         }
     }
 
@@ -36,6 +64,7 @@ public sealed class FileReader : IDisposable
         {
             handle.Dispose();
             Unbuffered = false;
+            FromDisk = false;
             handle = NativeIO.OpenRead(path, unbuffered: false);
             return NativeIO.Read(handle, buffer, offset, path);
         }

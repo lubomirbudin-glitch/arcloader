@@ -14,6 +14,8 @@ public sealed partial class OffloadEngine
     int errorCount;
     long readBytes;
     DestWriter[] writers = [];
+    /// Plan 10: appends the manifest's `file` records on its own thread (spec 4.5: "po každém souboru řádek").
+    SerialWorker? recorder;
     long[]? planned;
     OffloadPlan? plan;
 
@@ -32,6 +34,18 @@ public sealed partial class OffloadEngine
 
     /// Waits while paused; false when the job was cancelled meanwhile (stage 2 uses it before every clip).
     public bool WaitWhilePaused() => Pauses.WaitWhilePaused(cts.Token);
+
+    /// Cancelled with Cancel(): the verification of stage 2 stops on it too (plan 10).
+    internal CancellationToken Cancellation => cts.Token;
+
+    /// After Run (plan 10): per file, the XXH3-64 of its blocks as the card gave them (null when it was not read to the
+    /// end); per destination, its write speed and whether it was written past the file cache.
+    public ulong[]?[] Blocks { get; private set; } = [];
+    public IReadOnlyList<double?> WriteRates { get; private set; } = [];
+    public IReadOnlyList<bool> WrittenUnbuffered { get; private set; } = [];
+
+    /// Ruling I1, asked again in stage 2 (plan 10, spec 10): is the copied card still in the drive? Null = never asked.
+    internal bool? CardStillThere() => SameCard is null ? null : StillSameCard();
 
     /// The file error (report JSON, English like every file error) of the files left out because the card in the drive
     /// was not the copied one after a pause (ruling I1); the HTML says it in Czech.
@@ -101,13 +115,34 @@ public sealed partial class OffloadEngine
         var problems = Scanner.WindowsProblems(scan);
         if (problems.Count > 0) throw OffloadError.Preflight(PreflightCode.BadNames, Msg.BadNames(problems));
         var (space, warnings) = CheckFilesFit(a.DestRoots, scan, extra?.Invoke(scan));
+        // Ruling M2: a resume works in the block size of the run it completes — its manifest's, not the setting's (ChunkMB
+        // may have changed since): the recorded blocks, the checkpoints and the verification must agree. A record of
+        // another size has its hash read from the card again (HashOnly); a part of another size is copied from its start.
+        if (a.Resuming && ManifestBlockSize(a) is int recorded) Options.ChunkSize = recorded;
+        int size = Options.ChunkSize;
         return new OffloadPlan
         {
             Source = a.Source, Scan = scan, Date = a.Date, CardName = a.CardName, DestRoots = a.DestRoots,
             Mode = PlanMode.Append, Generation = a.Generation, FullScan = a.FullScan, UnverifiedEarlier = a.UnverifiedEarlier,
             Space = space, SpaceWarnings = warnings,
             Hashes = HashKinds.FromNames(a.HashAlgorithms),   // the earlier backup's, not the current setting (spec 3.5)
+            // R6: completing an unfinished generation — what is on the disks already is not written again.
+            Resuming = a.Resuming, Write = a.Write, NotInBackup = a.Later,
+            Known = a.Known?.Select(k => k?.BlockSize == size ? k : null).ToList(),
+            HashOnly = a.HashOnly?.Select((h, i) => h || a.Known?[i] is { } k && k.BlockSize != size).ToList(),
+            Resume = a.Resume?.Select(r => r?.BlockSize == size ? r : null).ToList(),
         };
+    }
+
+    /// Ruling M2: the block size the unfinished run recorded (its records and checkpoints — one run writes one size; the
+    /// most common one otherwise), when it is one this engine can read and write (whole sectors, at most 256 MiB).
+    static int? ManifestBlockSize(AppendPlan a)
+    {
+        var sizes = (a.Known ?? []).OfType<VerifyInProxy.ManifestRecord>().Select(k => k.BlockSize)
+            .Concat((a.Resume ?? []).OfType<VerifyInProxy.PartCheckpoint>().Select(r => r.BlockSize)).ToList();
+        if (sizes.Count == 0) return null;
+        int size = sizes.GroupBy(s => s).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key;
+        return size > 0 && size % 4096 == 0 && size <= 256 << 20 ? size : null;
     }
 
     /// A repair ("Zkopírovat znovu", UI návrh 4): the checks of an append (options, source, the earlier backup and its
@@ -263,7 +298,8 @@ public sealed partial class OffloadEngine
         {
             return new ProgressSnapshot(phase, plan?.Scan.TotalBytes ?? 0, plan?.Scan.Files.Count ?? 0, fileIndex, currentFile,
                 Interlocked.Read(ref readBytes), writers.Select(w => w.Written).ToArray(), writers.Select(w => w.Verified).ToArray(), errorCount,
-                Pauses.IsPaused, Pauses.IsHolding && writers.All(w => w.IsIdle), planned, writers.Select(w => w.VerifyPlanned).ToArray());
+                Pauses.IsPaused, Pauses.IsHolding && writers.All(w => w.IsIdle) && (recorder?.IsIdle ?? true), planned,
+                writers.Select(w => w.VerifyPlanned).ToArray());
         }
     }
 

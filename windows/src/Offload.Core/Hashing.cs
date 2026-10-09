@@ -41,8 +41,9 @@ public static class HashKinds
     public static string Label(HashKind kinds) => Normalize(kinds).HasFlag(HashKind.Md5) ? "xxHash64 + MD5" : "xxHash64";
 }
 
-/// The checksums of one file; null = not computed (the file failed, or MD5 was not asked for).
-public readonly record struct FileHashes(ulong? Xxh64, byte[]? Md5)
+/// The checksums of one file; null = not computed (the file failed, or MD5 was not asked for). `Xxh128` (plan 10, R2):
+/// XXH3-128 as ASC MHL writes it (32 lower-case hex digits) — every copy computes it next to xxh64; null in older reports.
+public readonly record struct FileHashes(ulong? Xxh64, byte[]? Md5, string? Xxh128 = null)
 {
     public string? Xxh64Hex => Xxh64 is ulong x ? Format.Hex64(x) : null;
     public string? Md5Hex => Md5 is { } m ? Convert.ToHexStringLower(m) : null;

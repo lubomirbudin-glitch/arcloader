@@ -29,7 +29,7 @@ public class BackupVerifierTests
         Assert.True(r.Success);
         Assert.Equal("ascmhl", r.Basis);
         Assert.Equal(1, r.Generations);
-        Assert.Equal(["xxh64"], r.HashAlgorithms);
+        Assert.Equal(["xxh64", "xxh128"], r.HashAlgorithms);   // plan 10 (R2): every record has xxh128 too — one read for both
         Assert.Equal((3, 3, 151_000L, 151_000L), (r.Ok, r.TotalFiles, r.TotalBytes, r.BytesRead));
         Assert.Empty(r.Extra);
         Assert.Empty(r.ChainProblems);

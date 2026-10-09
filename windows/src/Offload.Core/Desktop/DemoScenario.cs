@@ -4,8 +4,9 @@ namespace Offload.Core.Desktop;
 
 /// `Offload.exe --demo <stav>` (off by default): the window filled with the states of docs/ui-navrh/screeny, for the
 /// visual check against the design — nothing is scanned, inspected, copied or written. pripraveno = obr. 1, probiha =
-/// obr. 2, hotovo = obr. 3, nastaveni = obr. 4.
-public enum DemoState { Ready, Running, Finished, Settings }
+/// obr. 2, hotovo = obr. 3, nastaveni = obr. 4; overuje (plan 10, R5) = both verdicts: a card copied and verifying with
+/// its proxies ("Lze vyjmout"), one with a content defect and the green one ("Lze formátovat").
+public enum DemoState { Ready, Running, Finished, Settings, Verifying }
 
 /// A card of the demo: where it "is" (a folder path that need not exist), its look and how it is connected.
 public sealed record DemoCard(string Path, string Label, CardInsight Insight, string Connection, string Format, long Total, long Free);
@@ -20,6 +21,7 @@ public static class DemoScenario
         "probiha" => DemoState.Running,
         "hotovo" => DemoState.Finished,
         "nastaveni" => DemoState.Settings,
+        "overuje" => DemoState.Verifying,
         _ => null,
     };
 
@@ -144,7 +146,47 @@ public static class DemoScenario
         var config = new JobConfig(source, roots) { Proxy = new ProxySettings { Enabled = true } };
         return OffloadJob.ForPreview(config, Plan(source, "A035_ARRI", roots, files), () => new JobStatus
         {
-            Phase = JobPhase.Done, SafeToEject = true, CopySucceeded = true, ProxiesDone = 24,
+            Phase = JobPhase.Done, SafeToEject = true, SafeToFormat = true, CopySucceeded = true, ProxiesDone = 24,
+        }, report);
+    }
+
+    /// Plan 10 (R5): A036_ARRI copied to both disks, its proxies render and verify the primary — "Lze vyjmout", formatting
+    /// waits (clip 10 of 24 at 40 %).
+    public static OffloadJob Verifying(string source, IReadOnlyList<string> roots)
+    {
+        var clips = Clips("A036", 24);
+        var files = Files(clips, 96_000_000_000 / 24);
+        var config = new JobConfig(source, roots) { Proxy = new ProxySettings { Enabled = true } };
+        return OffloadJob.ForPreview(config, Plan(source, "A036_ARRI", roots, files), () => new JobStatus
+        {
+            Phase = JobPhase.Proxies, CopySucceeded = true, SafeToEject = true, ClipCount = 24, ClipIndex = 9, ClipName = clips[9].Name, ClipFraction = 0.4,
+            ProxiesDone = 9,
+        });
+    }
+
+    /// Plan 10 (spec 7): A037_ARRI verified everywhere, but the decoder found damaged data in one clip — yellow until the
+    /// user has looked ("Lze formátovat po kontrole vad", the label with its timecode, Náhled, the confirmation).
+    public static OffloadJob ContentDefect(string source, IReadOnlyList<string> roots, Func<int, byte[]>? picture)
+    {
+        var clips = Clips("A037", 12);
+        var files = Files(clips, 48_000_000_000 / 12);
+        var report = Report(source, "A037_ARRI", roots,
+            files.Select(f => new ReportFile { Path = f.RelPath, Size = f.Size, Xxh64 = "0123456789abcdef", Destinations = ["verified", "verified"], Errors = [null, null] }).ToList(),
+            files.Sum(f => f.Size), 610, 790);
+        report.Proxy = new ProxySettings { Enabled = true };
+        report.Clips = clips.Select((c, i) => new ClipEntry
+        {
+            Clip = new Clip { Name = $"A037C{i + 1:000}", Path = c.Path, Segments = c.Segments, Format = ClipFormat.Video },
+            ProxyStatus = ProxyStatus.Done,
+            Content = i == 6
+                ? new VerifyInProxy.ContentResult { State = VerifyInProxy.ContentResult.Warn, Kind = "decode", Timecode = "01:00:12:05", Message = "corrupt decoded frame", Jpeg = picture?.Invoke(i) }
+                : new VerifyInProxy.ContentResult(),
+        }).ToList();
+        var config = new JobConfig(source, roots) { Proxy = new ProxySettings { Enabled = true } };
+        return OffloadJob.ForPreview(config, Plan(source, "A037_ARRI", roots, files), () => new JobStatus
+        {
+            Phase = JobPhase.Done, SafeToEject = true, SafeToFormat = true, CopySucceeded = true, ProxiesDone = 12, ContentWarnings = 1,
+            Warning = Msg.ContentWarnings(1),
         }, report);
     }
 

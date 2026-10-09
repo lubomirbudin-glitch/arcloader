@@ -9,19 +9,28 @@ using Offload.Core.Desktop;
 namespace Offload.Core.History;
 
 /// %APPDATA%\Offload\history.json + history\<id>.files.gz (spec 2.1, 5.2). Local to this PC, never sent anywhere.
-/// The GUI and the CLI may run at once: every read-modify-write holds the named mutex `Local\Offload-history`
-/// (at most 5 s, then the entry is skipped with a log line), and the file is replaced via a temporary name.
-/// Never throws — a broken history must never stop an offload.
+/// The GUI and the CLI may run at once: every read-modify-write holds the named mutex of this history folder
+/// (LockName — plan 10 fix round 1: one per folder, so the GUI and the CLI on the same folder share it and nothing else
+/// waits for it; at most LockTimeout, then the write reports Busy — a job waits longer and retries, OffloadJob), and the
+/// file is replaced via a temporary name. Never throws — a broken history must never stop an offload.
 public sealed partial class HistoryStore(string folder, Action<string>? log = null)
 {
     public const int CurrentVersion = 1;
-    const string MutexName = @"Local\Offload-history";
+
+    /// `Local\Offload-history-<sha256 hex of the full folder path, upper-cased>` — the same for every spelling of the
+    /// folder (case, a trailing separator).
+    public static string LockName(string folder) =>
+        @"Local\Offload-history-" + Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            Path.GetFullPath(folder).TrimEnd('\\', '/').ToUpperInvariant())));
 
     /// %APPDATA%\Offload (or OFFLOAD_SETTINGS_DIR). Tests set DefaultFolderOverride once, so no test ever writes into
     /// the developer's own history — not even while another test changes OFFLOAD_SETTINGS_DIR.
     public static HistoryStore Default(Action<string>? log = null) => new(DefaultFolderOverride ?? AppData.Folder, log);
 
     internal static string? DefaultFolderOverride { get; set; }
+
+    /// The folder Default uses.
+    internal static string DefaultFolder => DefaultFolderOverride ?? AppData.Folder;
 
     public string Folder { get; } = folder;
     public string FilePath => Path.Combine(Folder, "history.json");
@@ -78,14 +87,49 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
     public bool Update(string id, Func<HistoryEntry?, HistoryEntry?> modify, IReadOnlyList<SourceFile>? files = null) =>
         UpdateWithFiles(id, e => modify(e) is { } changed ? (changed, files) : null);
 
+    /// Removes entry `id` and its file list (plan 10: the start entry of a full copy that was cancelled). False when it was
+    /// not there or nothing could be written — logged.
+    public bool Remove(string id) => RemoveEntry(id) == HistoryWrite.Written;
+
+    /// Remove with the reason when nothing was removed (Busy: the lock stayed held for LockTimeout — try again).
+    public HistoryWrite RemoveEntry(string id)
+    {
+        if (!SafeId().IsMatch(id)) return HistoryWrite.Failed;
+        try
+        {
+            using var held = Lock();
+            if (held == null)
+            {
+                log?.Invoke($"history: busy for {LockTimeout.TotalSeconds:0} s — the entry {id} is not removed");
+                return HistoryWrite.Busy;
+            }
+            var (entries, version) = ReadFile(repair: true);
+            if (version > CurrentVersion) return HistoryWrite.Failed;
+            if (entries.RemoveAll(e => e.Id == id) == 0) return HistoryWrite.Unchanged;
+            if (FileListPath(id) is string list) NativeIO.Delete(list);
+            NativeIO.WriteFileReplacing(FilePath, JsonSerializer.SerializeToUtf8Bytes(new HistoryFile { Entries = entries }, Json));
+            return HistoryWrite.Written;
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"history: {e.Message}");
+            return HistoryWrite.Failed;
+        }
+    }
+
     /// Update whose `modify` also returns the file list (null = keep the stored one) — e.g. the union with the stored
     /// list (ReadFileList), read under the same hold of the lock (an append, spec 5.2). A null result changes nothing.
-    public bool UpdateWithFiles(string id, Func<HistoryEntry?, (HistoryEntry Entry, IReadOnlyList<SourceFile>? Files)?> modify)
+    public bool UpdateWithFiles(string id, Func<HistoryEntry?, (HistoryEntry Entry, IReadOnlyList<SourceFile>? Files)?> modify) =>
+        Write(id, modify) == HistoryWrite.Written;
+
+    /// UpdateWithFiles with the reason when nothing was written: Busy (the lock stayed held for LockTimeout — a job tries
+    /// again), Unchanged (`modify` changed nothing), Failed (a newer version, a bad id, a disk failure — logged).
+    public HistoryWrite Write(string id, Func<HistoryEntry?, (HistoryEntry Entry, IReadOnlyList<SourceFile>? Files)?> modify)
     {
         if (!SafeId().IsMatch(id))
         {
             log?.Invoke($"history: invalid id \"{id}\" — not written");
-            return false;
+            return HistoryWrite.Failed;
         }
         try
         {
@@ -93,19 +137,19 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
             if (held == null)
             {
                 log?.Invoke($"history: busy for {LockTimeout.TotalSeconds:0} s — the entry {id} is skipped");
-                return false;
+                return HistoryWrite.Busy;
             }
             var (entries, version) = ReadFile(repair: true);
             if (version > CurrentVersion)
             {
                 log?.Invoke($"history: version {version} is newer than this app — read only, the entry {id} is skipped");
-                return false;
+                return HistoryWrite.Failed;
             }
-            if (modify(entries.FirstOrDefault(e => e.Id == id)) is not ({ } entry, var files)) return false;
+            if (modify(entries.FirstOrDefault(e => e.Id == id)) is not ({ } entry, var files)) return HistoryWrite.Unchanged;
             if (entry.Id != id)
             {
                 log?.Invoke($"history: the entry changed its id from {id} to \"{entry.Id}\" — not written");
-                return false;
+                return HistoryWrite.Failed;
             }
             if (files != null)
             {
@@ -119,12 +163,12 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
                 if (FileListPath(gone.Id) is string list) NativeIO.Delete(list);
             NativeIO.Mkdirs(Folder);
             NativeIO.WriteFileReplacing(FilePath, JsonSerializer.SerializeToUtf8Bytes(new HistoryFile { Entries = keep }, Json));
-            return true;
+            return HistoryWrite.Written;
         }
         catch (Exception e)
         {
             log?.Invoke($"history: {e.Message}");
-            return false;
+            return HistoryWrite.Failed;
         }
     }
 
@@ -235,7 +279,7 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
             Mutex? mutex = null;
             try
             {
-                mutex = new Mutex(false, MutexName);
+                mutex = new Mutex(false, LockName(Folder));
                 var left = deadline - DateTime.UtcNow;
                 if (mutex.WaitOne(left > TimeSpan.Zero ? left : TimeSpan.Zero)) return new Held(mutex);
                 mutex.Dispose();

@@ -114,6 +114,7 @@ public class StageTwoTests
         var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1"), dir.Sub("d2")])
         {
             Proxy = new ProxySettings { Enabled = true, Height = 360 },
+            PrimaryDestination = 0,   // plan 10: the proxy is rendered on the primary destination — here d1, not the faster one
         }, Options());
         Assert.True(job.RunCopy());
         var paths = job.Plan!.CardPaths;
@@ -357,7 +358,8 @@ public class StageTwoTests
         var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1")]) { Verify = false, Proxy = new ProxySettings { Enabled = true, Height = 360 } }, options);
         var report = job.Run();
         Assert.Equal(JobPhase.Done, job.Status().Phase);
-        Assert.False(job.Status().SafeToEject);
+        Assert.True(job.Status().SafeToEject);     // R5: copied
+        Assert.False(job.Status().SafeToFormat);   // never read back
         Assert.Equal(ProxyStatus.Done, Assert.Single(report!.Clips).ProxyStatus);
     }
 }

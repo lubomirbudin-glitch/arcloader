@@ -13,6 +13,12 @@ public sealed class OffloadOptions
     public HashKind Hashes { get; set; } = HashKind.Xxh64;
     /// Files at least this large are flushed individually; the rest are flushed once at the end.
     public long FullSyncThreshold { get; set; } = 256L << 20;
+    /// Plan 10, R6: every this many blocks of a file being written, its block hashes go into the manifest as a checkpoint
+    /// (64 × 16 MiB = 1 GiB); 0 = none.
+    internal int CheckpointBlocks { get; set; } = 64;
+    /// Plan 10 (verify-in-proxy): the job verifies in stage 2 — the copy leaves out the read-back, writes its reports with
+    /// "verifyPending" and no ASC MHL / hash list yet (OffloadReport.Commit writes them once verified).
+    internal bool DeferVerify { get; set; }
     public bool AllowSameDevice { get; set; }
     /// Tests only: source and destinations in temp folders share a volume.
     internal bool AllowSourceVolume { get; set; }
@@ -22,6 +28,8 @@ public sealed class OffloadOptions
     internal Action<int>? BeforeFileCopy { get; set; }
     /// Tests only: called on the copy thread after every file is copied and flushed, just before verification.
     internal Action? BeforeVerify { get; set; }
+    /// Tests only: called on the copy thread after the copy and the manifest records, just before FlushDevice.
+    internal Action? BeforeDeviceFlush { get; set; }
     /// Tests only: called on destination `index`'s thread before every block it writes; an exception it throws is a write
     /// error there (a disk pulled out).
     internal Action<int>? BeforeDestWrite { get; set; }
@@ -91,7 +99,19 @@ public sealed class OffloadPlan
     /// the repair ends (cancelled) before reading it again (fix round 1, item 2).
     public IReadOnlyList<bool[]>? ReadBackBefore { get; init; }
     /// Repair: card files that no report of the backup records (fix round 1, item 1) — the card is not safe to eject.
+    /// A resume of a generation already in an ASC MHL chain: card files it cannot take (the next append copies them).
     public int NotInBackup { get; init; }
+    /// R6 resume: this copy completes generation `Generation`, which an earlier run started and never committed to the ASC
+    /// MHL chain (it crashed, or its verification never ended) — its reports, if any, are replaced, never created anew.
+    public bool Resuming { get; init; }
+    /// R6 resume: per file, the manifest record of an earlier run that copied it completely onto every destination — not
+    /// read from the card again (its hashes and blocks are the record's); null = copied now.
+    public IReadOnlyList<VerifyInProxy.ManifestRecord?>? Known { get; init; }
+    /// R6 resume: per file, the checkpoint its `.offload-part` on every destination it goes to resumes from; null = from 0.
+    public IReadOnlyList<VerifyInProxy.PartCheckpoint?>? Resume { get; init; }
+    /// R6 resume: per file, nothing is written (it is in its place on every destination with no record) but the card is
+    /// read for its hashes — the verification then checks the copies against them.
+    public IReadOnlyList<bool>? HashOnly { get; init; }
 
     /// File `file` gets written to destination `dest`.
     public bool Writes(int file, int dest) => Write?[file][dest] ?? true;

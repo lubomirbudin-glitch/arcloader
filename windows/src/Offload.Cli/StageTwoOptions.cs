@@ -25,10 +25,12 @@ sealed class StageTwoOptions
     readonly Option<bool> ale = new("--ale") { Description = "Also write the clip list for Avid (_REPORT\\<card>_clips.ale)." };
     readonly Option<bool> brawGen5 = new("--braw-gen5") { Description = "Decode Blackmagic RAW Film Gen 4 as Gen 5 (the Gen 5 LUT then fits). Not yet verified with a Gen 4 sample." };
     readonly Option<bool> noDayReport = new("--no-day-report") { Description = "Do not make the day report (<date>\\_REPORT\\<date>_day_report.html) again after the copy." };
+    readonly Option<bool> classicVerify = new("--classic-verify") { Description = "Read every destination back right after the copy (as before 0.6.0) instead of verifying the primary one while the proxies are made." };
+    readonly Option<int?> primary = new("--primary") { Description = "Destination (1, 2 …, in the order of --dest) the proxies read and verify; default: the fastest one measured during the copy." };
 
     public void AddTo(Command cmd)
     {
-        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, proxyAlways, noBurnIn, proxyFolder, noClipList, ale, noDayReport, brawGen5 })
+        foreach (var o in new Option[] { noAnalyze, proxy, lut, lutFallback, lutRule, proxyHeight, frameAspect, frameScale, proxyCodec, proxyBitrate, proxyAlways, noBurnIn, proxyFolder, noClipList, ale, noDayReport, brawGen5, classicVerify, primary })
             cmd.Options.Add(o);
     }
 
@@ -92,6 +94,15 @@ sealed class StageTwoOptions
         if (Given(noDayReport)) outputs.DayReport = !r.GetValue(noDayReport);
         config.Outputs = outputs;
         config.AnalyzeClips = Given(noAnalyze) ? !r.GetValue(noAnalyze) : project!.AnalyzeClips;
+        // Plan 10 (R11): verify-in-proxy unless --classic-verify (or the project switched it off); --primary picks the disk.
+        config.VerifyInProxy = Given(classicVerify) ? !r.GetValue(classicVerify) : project!.VerifyInProxy;
+        if (r.GetValue(primary) is int n)
+        {
+            if (n < 1) throw new ArgumentException(Msg.PrimaryNotPositive(n));
+            config.PrimaryDestination = n - 1;
+            if (config.DestRoots.Count > 0) CheckPrimary(config, config.DestRoots.Count);   // a copy knows its destinations here
+        }
+        else config.PrimaryDestination = project != null ? JobConfigs.Primary(project) : null;
 
         if (r.GetValue(proxyFolder) != null && !p.Enabled)
             Console.Error.WriteLine(Msg.ProxyFolderNoEffect);
@@ -99,5 +110,12 @@ sealed class StageTwoOptions
             throw new ArgumentException(Msg.ProxyFolderNotFound(folder));
         // A project's own LUT (or, from task 5, a rule's) that is gone stops the job before it starts, as in the app.
         if (ProxyPreflight.Blocking(p, config.AnalyzeClips) is string missing) throw new ArgumentException(missing);
+    }
+
+    /// --primary N above the number of destinations is refused (it used to fall back to the fastest disk silently).
+    /// An append calls it again once the earlier backup's folders are known.
+    public static void CheckPrimary(JobConfig config, int destinations)
+    {
+        if (config.PrimaryDestination is int i && i >= destinations) throw new ArgumentException(Msg.PrimaryTooHigh(i + 1, destinations));
     }
 }

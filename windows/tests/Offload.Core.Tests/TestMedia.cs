@@ -36,6 +36,16 @@ public static class TestMedia
         ToolProcess.Run(Ffmpeg!, args);
     }
 
+    /// H.264 MP4 with the moov atom first ("faststart"), 640×360 at 25 fps with timecode 01:00:00:00, no audio — a file
+    /// whose damaged or cut-off tail still opens (plan 10: the tap's faststart case and the content check).
+    public static void MakeFaststart(string path, double seconds = 2)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var d = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ToolProcess.Run(Ffmpeg!, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-f", "lavfi", "-i", $"testsrc2=s=640x360:r=25:d={d}",
+            "-c:v", "libx264", "-g", "25", "-pix_fmt", "yuv420p", "-timecode", "01:00:00:00", "-movflags", "+faststart", path]);
+    }
+
     /// A Sony-like MXF: MPEG-2 1080p25 with `monoTracks` 24-bit PCM mono streams and timecode `timecode`.
     public static void MakeMxf(string path, int monoTracks, string timecode = "10:00:00:00", double seconds = 1)
     {

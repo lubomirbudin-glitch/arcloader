@@ -21,6 +21,7 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 | Výstupy pro produkci a střih (plán 7, 0.3.0): denní report, seznam klipů CSV/ALE, proxy pro přelinkování, MD5 | hotovo (čeká ruční test v Resolve, Premiere, Avid, Excelu) |
 | Nastavení, oznámení, distribuce (plán 8, 0.4.0): projekty, vlastní pravidla LUTů, BRAW Film Gen 4 → Gen 5, oznámení Windows a ntfy, kontrola aktualizací, podpis | hotovo (čeká ruční test: projekty a oznámení v GUI, podpis s certifikátem; převod Gen 4 je neověřený, čeká vzorek .braw Gen 4) |
 | Nový vzhled (plán 9, 0.5.0, návrh `docs/ui-navrh/`): tmavé i světlé téma podle Windows, horní lišta, kroky 1–3, karty úloh s průběhem po cílech, Pozastavit, Zkopírovat znovu (oprava), dnes a historie karet, stránka Nastavení, štítek kamery a připojení, odhad času | hotovo (čeká ruční test 40–49 s kartou; snímky ukázkového režimu porovnané s `docs/ui-navrh/screeny`) |
+| Verify-in-Proxy (plán 10, 0.6.0): ověření primárního disku čtením pro proxy, ostatní na pozadí, „Lze vyjmout“ × „Lze formátovat“, blokový manifest a navázání po pádu, XXH128, obsahová kontrola | hotovo (čeká ruční test 50–58) |
 
 ## Build a testy
 
@@ -139,7 +140,8 @@ klikněte na „Další informace“ → „Přesto spustit“.
   Fronta / Historie karet a „DNES“; volby jsou na stránce Nastavení (ikona s posuvníky, Ctrl+,; Esc zavře). Tmavé
   i světlé téma podle Windows (`Themes/Dark.xaml`, `Light.xaml`); `OFFLOAD_THEME=dark|light` téma vynutí (pro snímky).
   Ukázkový režim pro vizuální kontrolu: `Offload.exe --demo pripraveno|probiha|hotovo|nastaveni` (stavy obrazovek
-  z `docs/ui-navrh/screeny`; výchozí vypnutý). Demo je zapečetěné: vlastní složka dat v %TEMP% (nastavení, historie i log;
+  z `docs/ui-navrh/screeny`; výchozí vypnutý) a `--demo overuje` (plán 10: karta zkopírovaná a ověřovaná s proxy „Lze
+  vyjmout“, karta s vadou obsahu a zelená „Lze formátovat“). Demo je zapečetěné: vlastní složka dat v %TEMP% (nastavení, historie i log;
   `OFFLOAD_SETTINGS_DIR` se ignoruje), nic nekopíruje ani nezapisuje, Spustit, Doplnit, Zkopírovat znovu, měření portů,
   úpravy projektů, oznámení, aktualizace, Ověřit zálohu, Denní report i Vysunout jsou vypnuté; jen Pozastavit / Pokračovat /
   Zrušit na ukázkové úloze mění, co karta ukazuje. Snímky přes `scripts\app-drive.ps1` (`Start-Offload -Arguments '--demo probiha'`,
@@ -396,6 +398,36 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
       obrazovky z `docs/ui-navrh/screeny` (01–04), srovnat se snímky v tmavém i světlém tématu (`OFFLOAD_THEME`) a v úzkém okně
       (`Resize-Offload $p 1000 900`); Spustit, Doplnit, Zkopírovat znovu, Vysunout a Ověřit zálohu jsou vypnuté, v `%APPDATA%\Offload`
       se nic nezměnilo (nastavení, historie ani log), složka dat je `%TEMP%\Offload-demo-…`; bez `--demo` se okno chová jako dřív
+- [ ] 50. **Verify-in-Proxy na kartě (0.6.0):** karta s MOV/MP4/MXF, proxy zapnuté, 2 disky (NVMe + USB HDD) → po kopii
+      čip „Lze vyjmout“ neutrálně (ne zeleně) a „Ověřuje se…“; Správce úloh: disk primárního cíle (nejrychlejší) se během proxy čte jen
+      jednou (Monitor prostředků: čtení ≈ velikost klipů), druhý disk se čte souběžně; po proxy krátce „Dokončení ověření“,
+      pak „Lze formátovat“ zeleně a oznámení „… — kartu lze formátovat“; report: Ověření „během proxy“ u primárního cíle,
+      „zpětné čtení“ u druhého, sériová čísla svazků, „do „lze formátovat““
+- [ ] 51. **Čas proti samotné proxy (spec 11):** stejná karta jednou s `offload copy --proxy --classic-verify` a jednou
+      bez → čas do „Lze formátovat“ (`safeToFormatSeconds`) s jedním cílem nejvýš o 5 % delší než render proxy samotný;
+      se dvěma cíli proxy nezpomalí o víc než 5 %
+- [ ] 52. **RAW (režim B):** karta BRAW (a R3D/ARRIRAW, když je nástroj) → Monitor prostředků: soubor klipu se z disku
+      přečte asi 2× (ruling B1: Offload ho ověří čtením mimo cache a SDK si ho pak přečte z disku znovu, ne z paměti —
+      zrychlení 1,05× se u RAW nesplňuje), report „během proxy“; klip větší než polovina volné RAM → ověří ho dorovnání zpětným čtením (report pořád správně)
+- [ ] 53. **Test cache s přímým zápisem na zařízení (vyžaduje správce, spec 11):** VHDX 4 GB (Správa disků → Vytvořit
+      VHD), NTFS, jako druhý cíl; po kopii (čip „Lze vyjmout“) zapsat jeden bajt doprostřed klipu **přímo na zařízení**
+      (`\\.\PhysicalDriveN`, HxD → Otevřít disk, bez souborového systému, takže cache Windows o změně neví) → cíl na VHDX
+      musí skončit „nesouhlasí blok …“, žádné „Lze formátovat“; totéž pro primární cíl (změna před proxy)
+- [ ] 54. **Vada obsahu:** klip z kamery s poškozeným snímkem (nebo uříznutý MP4) → kopie „ověřeno“, žlutý štítek vady
+      s timecodem, Náhled otevře obrázek místa; „Lze formátovat po kontrole vad“, po „Zkontrolováno — kartu lze formátovat“ zeleně
+- [ ] 55. **Pád během kopie:** velká karta, během kopie velkého klipu ukončit Offload ve Správci úloh → znovu spustit,
+      vložit kartu → řádek „Nedokončená záloha … lze ji dokončit“ a zaškrtávátko „Dokončit přerušenou zálohu“; Start →
+      dokončené soubory se znovu nečtou (Monitor prostředků: karta se čte jen pro zbytek), rozepsaný klip pokračuje, výsledek
+      ověřený, `ascmhl verify` projde
+- [ ] 56. **Pád během ověření:** s proxy zavřít Offload ve Správci úloh během „Ověřuje se…“ → report `verifyPending`,
+      denní report „OVĚŘUJE SE“; Doplnit/Dokončit → karta se nečte, disky se ověří a generace se zapíše
+- [ ] 57. **Odpojený disk během ověření:** během proxy odpojit druhý disk → jeho soubory „✕ čtení“, „Neformátovat“,
+      primární cíl ověřený, záloha „nedokončená“ (výsledek se do odpojeného disku nezapsal; Zkopírovat znovu se zatím odmítne
+      s odkazem na Dokončit); po připojení vložit kartu → nejdřív „Dokončit přerušenou zálohu“ → karta se nečte, druhý disk
+      se přečte a ověří, „Lze formátovat“; jen když tam pak některé soubory nesouhlasí, Zkopírovat znovu
+- [ ] 58. **Nastavení a CLI:** Nastavení → Ověření → vypnout „Ověřit primární disk během proxy“ → ověření zase hned po
+      kopii; `offload copy … --primary 2` → report „během proxy“ u cíle 2; `--primary 3` se dvěma cíli → česká chyba „cílů je jen 2“ a kód 1, nic se nekopíruje; síťový cíl (NAS) → „síťový cíl — ověřeno
+      zpětným čtením“
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 

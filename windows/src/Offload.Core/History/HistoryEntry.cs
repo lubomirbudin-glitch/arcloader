@@ -60,7 +60,14 @@ public sealed class HistoryEntry
     [JsonPropertyName("destinations")] public List<HistoryDestination> Destinations { get; set; } = [];
     [JsonPropertyName("generations")] public List<HistoryGeneration> Generations { get; set; } = [];
     [JsonPropertyName("reels")] public List<string> Reels { get; set; } = [];
+    /// R6 (plan 10): a full copy that started and has not ended yet — written when the copy starts, so a copy the app
+    /// never finished (it crashed, the PC went off) is known: its card offers "Dokončit přerušenou zálohu" (an append
+    /// that resumes it). Its file list is empty until the copy ends. Absent when false.
+    [JsonPropertyName("unfinished"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool Unfinished { get; set; }
 }
+
+/// What a history write did (HistoryStore.Write): Busy — the lock stayed held, try again; Unchanged — nothing to change.
+public enum HistoryWrite { Written, Unchanged, Busy, Failed }
 
 /// How a card volume is recognised again (R1): the file system's serial number plus the capacity. The volume GUID is
 /// not part of it — Windows gives the same card another GUID in another reader or slot.

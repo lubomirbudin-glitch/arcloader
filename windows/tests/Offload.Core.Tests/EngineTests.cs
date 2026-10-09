@@ -41,7 +41,7 @@ public class EngineTests
 
         var report = engine.Run(plan);
 
-        Assert.True(report.SafeToEject);
+        Assert.True(report.SafeToFormat);
         Assert.Equal(Sizes.Length, report.TotalFiles);
         foreach (var cardPath in plan.CardPaths)
         {
@@ -81,7 +81,7 @@ public class EngineTests
         // A block that never comes back to the pool hangs the copy: TimeoutException instead of a hung test run.
         var report = await Task.Run(() => engine.Run(plan)).WaitAsync(TimeSpan.FromSeconds(60));
 
-        Assert.True(report.SafeToEject);
+        Assert.True(report.SafeToFormat);
         foreach (var cardPath in plan.CardPaths)
             foreach (var (rel, data) in files)
                 Assert.Equal(data, File.ReadAllBytes(Layout.Join(cardPath, rel)));
@@ -195,7 +195,7 @@ public class EngineTests
         Assert.Contains("<th>xxh64</th><th>md5</th>", html);   // a column per algorithm (preflight M3)
         Assert.All(report.Files, f => Assert.Contains($"<td class=\"mono\">{f.Md5}</td>", html));
         var mhl = Verification.MhlReader.Read(plan.CardPaths[0])!;
-        Assert.All(mhl.Files.Values, r => Assert.Equal(["xxh64", "md5"], r.Hashes.Select(h => h.Algorithm)));
+        Assert.All(mhl.Files.Values, r => Assert.Equal(["xxh64", "xxh128", "md5"], r.Hashes.Select(h => h.Algorithm)));
         // <md5> carries the same action and hashdate as <xxh64> (spec 3.5, preflight M3).
         System.Xml.Linq.XNamespace ns = "urn:ASC:MHL:v2.0";
         var gen = System.Xml.Linq.XDocument.Load(Directory.GetFiles(Path.Combine(plan.CardPaths[0], "ascmhl"), "0001_*.mhl").Single());
@@ -211,7 +211,7 @@ public class EngineTests
         }
         var verify = Verification.BackupVerifier.Verify(plan.CardPaths[0], chunkSize: Chunk);
         Assert.True(verify.Success);
-        Assert.Equal(["xxh64", "md5"], verify.HashAlgorithms);
+        Assert.Equal(["xxh64", "md5", "xxh128"], verify.HashAlgorithms);
 
         // xxh64 alone (the default): no md5 key, no .md5 list, no <md5> in the MHL.
         var plain = new OffloadEngine(Options());
@@ -221,7 +221,7 @@ public class EngineTests
         Assert.All(plainReport.Files, f => Assert.Null(f.Md5));
         Assert.False(File.Exists(Path.Combine(plainPlan.CardPaths[0], "_REPORT", "A001.md5")));
         Assert.DoesNotContain("<th>md5</th>", File.ReadAllText(Path.Combine(plainPlan.CardPaths[0], "_REPORT", "A001_report.html")));
-        Assert.All(Verification.MhlReader.Read(plainPlan.CardPaths[0])!.Files.Values, r => Assert.Equal(["xxh64"], r.Hashes.Select(h => h.Algorithm)));
+        Assert.All(Verification.MhlReader.Read(plainPlan.CardPaths[0])!.Files.Values, r => Assert.Equal(["xxh64", "xxh128"], r.Hashes.Select(h => h.Algorithm)));
         Assert.DoesNotContain("md5", plainReport.ToJson());
     }
 
@@ -233,7 +233,7 @@ public class EngineTests
         var data = TestFs.WriteRandom(Path.Combine(card, "big.mov"), (16 << 20) + 1, 42);
         var engine = new OffloadEngine(new OffloadOptions { AllowSameDevice = true, AllowSourceVolume = true });
         var plan = engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-04");
-        Assert.True(engine.Run(plan).SafeToEject);
+        Assert.True(engine.Run(plan).SafeToFormat);
         Assert.Equal(data, File.ReadAllBytes(Path.Combine(plan.CardPaths[0], "big.mov")));
     }
 
@@ -245,7 +245,7 @@ public class EngineTests
         MakeCard(card);
         var engine = new OffloadEngine(Options(forceBuffered: true));
         var report = engine.Run(engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-04"));
-        Assert.True(report.SafeToEject);
+        Assert.True(report.SafeToFormat);
         Assert.False(report.Destinations[0].Unbuffered);
         Assert.Contains("(buffered I/O)", report.Summary);
     }
@@ -261,7 +261,7 @@ public class EngineTests
         var engine = new OffloadEngine(options);
         var report = engine.Run(engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-04"));
         Assert.True(report.Success);
-        Assert.False(report.SafeToEject);
+        Assert.False(report.SafeToFormat);
         Assert.All(report.Files, f => Assert.Equal(["written"], f.Destinations));
     }
 
@@ -275,7 +275,7 @@ public class EngineTests
         var plan = engine.Prepare(card, [dir.Sub("d1")], null, "2026-10-04");
         engine.Cancel();
         var report = engine.Run(plan);
-        Assert.False(report.SafeToEject);
+        Assert.False(report.SafeToFormat);
         Assert.All(report.Files, f => Assert.Equal("cancelled", f.SourceError));
         Assert.Empty(Directory.GetFiles(Path.Combine(plan.CardPaths[0], "CLIP")));
     }
@@ -292,7 +292,7 @@ public class EngineTests
         while (engine.Snapshot().ReadBytes == 0 && !run.IsCompleted) await Task.Delay(1);
         engine.Cancel();
         var report = await run;
-        Assert.False(report.SafeToEject);
+        Assert.False(report.SafeToFormat);
         Assert.False(report.Verified);
         AssertNoPartFiles(dir.Path);
     }
@@ -314,7 +314,7 @@ public class EngineTests
         Assert.StartsWith("source size changed during copy", bad.SourceError);
         Assert.Equal(["failed"], bad.Destinations);
         Assert.All(report.Files.Where(f => f.Path != "CLIP/F08.mov"), f => Assert.Equal(["verified"], f.Destinations));
-        Assert.False(report.SafeToEject);
+        Assert.False(report.SafeToFormat);
         Assert.False(File.Exists(Path.Combine(plan.CardPaths[0], "CLIP", "F08.mov")));
         AssertNoPartFiles(dir.Path);
     }
@@ -332,7 +332,7 @@ public class EngineTests
 
         var report = engine.Run(plan);
 
-        Assert.False(report.SafeToEject);
+        Assert.False(report.SafeToFormat);
         Assert.Equal(0, report.Destinations[0].FilesFailed);
         Assert.Equal(1, report.Destinations[1].FilesFailed);
         var f = report.Files.Single(x => x.Path == "CLIP/F03.mov");
@@ -357,7 +357,7 @@ public class EngineTests
         var second = new OffloadEngine(Options());
         var plan2 = second.Prepare(card, [d1], null, "2026-10-04");
         Assert.Equal("A001_2", plan2.CardName);
-        Assert.True(second.Run(plan2).SafeToEject);
+        Assert.True(second.Run(plan2).SafeToFormat);
         Assert.Equal(firstJson, File.ReadAllText(Path.Combine(plan1.CardPaths[0], "_REPORT", "offload_report.json")));
     }
 
@@ -375,7 +375,7 @@ public class EngineTests
 
         var report = engine.Run(plan);
 
-        Assert.True(report.SafeToEject);
+        Assert.True(report.SafeToFormat);
         var cardPath = plan.CardPaths[0];
         Assert.Equal(a, File.ReadAllBytes(Path.Combine(cardPath, "Záběr 01", "klip č.1.mov")));
         var list = File.ReadAllText(Path.Combine(cardPath, "_REPORT", "Natáčení den 1.xxh64"), Encoding.UTF8);

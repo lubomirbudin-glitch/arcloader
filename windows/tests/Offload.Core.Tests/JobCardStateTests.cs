@@ -27,6 +27,9 @@ public class JobCardStateTests
         var notSafe = new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = false }.WithWarning("2 soubory z dřívější zálohy nebyly ověřeny.");
         var h = JobCard.Headline("A001", notSafe, r, Disks);
         Assert.Equal((JobCardKind.Problem, "A001 — kartu zatím nevysunujte", "2 soubory z dřívější zálohy nebyly ověřeny."), (h.Kind, h.Title, h.Sub));
+        // R5 (plan 10): everything copied, not everything verified — the card may come out, but not be formatted.
+        h = JobCard.Headline("A001", notSafe with { SafeToEject = true }, r, Disks);
+        Assert.Equal((JobCardKind.Problem, "A001 — lze vyjmout, formátovat zatím ne"), (h.Kind, h.Title));
         h = JobCard.Headline("A001", notSafe, r, Disks, new BackupState(0, 2));
         Assert.Equal("2 soubory dřívější zálohy nebylo ověřeno.", h.Sub);
         h = JobCard.Headline("A001", notSafe, r, Disks, new BackupState(1, 0));
@@ -37,7 +40,7 @@ public class JobCardStateTests
     public void Repair_Green_SaysTheWholeBackup_NotTheRepairedFiles()
     {
         var r = Report(true, OffloadReport.RepairKind, F("verified", "verified"));
-        var h = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = true }, r, Disks, new BackupState(0, 0));
+        var h = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = true, SafeToFormat = true }, r, Disks, new BackupState(0, 0));
         Assert.Equal((JobCardKind.Done, "Všechny soubory zálohy jsou teď na všech discích a ověřené."), (h.Kind, h.Sub));
         var still = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Done, CopySucceeded = false }, Report(true, OffloadReport.RepairKind, F("verified", "failed", "boom")), Disks, new BackupState(1, 0));
         Assert.Equal((JobCardKind.Problem, "V záloze 1 soubor stále nesouhlasí."), (still.Kind, still.Sub));
@@ -66,19 +69,19 @@ public class JobCardStateTests
     {
         var unsafeDone = new JobStatus { Phase = JobPhase.Done, SafeToEject = false, Note = "Nic nového." }.WithWarning("3 soubory dřívější zálohy nebyly ověřeny.");
         var h = JobCard.Headline("A001", unsafeDone, null, Disks);
-        Assert.Equal((JobCardKind.Problem, "A001 — kartu zatím nevysunujte", "3 soubory dřívější zálohy nebyly ověřeny."), (h.Kind, h.Title, h.Sub));
+        Assert.Equal((JobCardKind.Problem, "A001 — kartu zatím neformátujte", "3 soubory dřívější zálohy nebyly ověřeny."), (h.Kind, h.Title, h.Sub));
         Assert.Equal("2 soubory dřívější zálohy nebylo ověřeno.", JobCard.Headline("A001", unsafeDone, null, Disks, new BackupState(0, 2)).Sub);
         // The really complete backup stays green.
         Assert.Equal((JobCardKind.Done, "A001 — záloha je úplná"),
-            (JobCard.Headline("A001", unsafeDone with { SafeToEject = true }, null, Disks).Kind, JobCard.Headline("A001", unsafeDone with { SafeToEject = true }, null, Disks).Title));
+            (JobCard.Headline("A001", unsafeDone with { SafeToEject = true, SafeToFormat = true }, null, Disks).Kind, JobCard.Headline("A001", unsafeDone with { SafeToEject = true, SafeToFormat = true }, null, Disks).Title));
     }
 
     [Fact]
     public void Stage2Failed_AfterAGoodCopy_KeepsTheCopySafeWording_AndSaysTheProcessingFailed()
     {
         var r = Report(true, null, F("verified", "verified"));
-        var h = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Failed, CopySucceeded = true, SafeToEject = true, Error = "ffmpeg spadl" }, r, Disks);
-        Assert.Equal((JobCardKind.Done, "A001 — kartu lze vysunout"), (h.Kind, h.Title));
+        var h = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Failed, CopySucceeded = true, SafeToEject = true, SafeToFormat = true, Error = "ffmpeg spadl" }, r, Disks);
+        Assert.Equal((JobCardKind.Done, "A001 — kartu lze formátovat"), (h.Kind, h.Title));
         Assert.Contains("Zpracování po kopii ale selhalo: ffmpeg spadl", h.Sub);
         Assert.StartsWith("Soubor je na 2 discích", h.Sub);
     }

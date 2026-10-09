@@ -37,7 +37,7 @@ public class VerifyReportTests
         var keys = root.EnumerateObject().Select(p => p.Name).ToList();
         Assert.Equal(keys.Order(StringComparer.Ordinal), keys);
         Assert.Equal(["basis", "cardPath", "chainProblems", "changed", "extra", "failedAtCopy", "failedSuperseded", "finished", "generations", "hashAlgorithms",
-            "missing", "ok", "started", "success", "tool", "totalBytes", "totalFiles", "unreadable", "version"], keys);
+            "missing", "ok", "started", "success", "tool", "totalBytes", "totalFiles", "unfinished", "unreadable", "version"], keys);
         Assert.Equal("2026-10-06T08:15:00Z", root.GetProperty("started").GetString());
         Assert.False(root.GetProperty("success").GetBoolean());
         Assert.Equal("CLIP/d.mov", root.GetProperty("unreadable")[0].GetProperty("path").GetString());
