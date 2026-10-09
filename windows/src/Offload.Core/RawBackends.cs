@@ -12,8 +12,10 @@ internal interface IRawBackend
     string MissingHint { get; }
     bool IsAvailable(ExternalTools tools);
     ClipInfo Probe(string path, ExternalTools tools, string workDir);
-    /// `singleFrameAt` (seconds) asks for just one frame — used for report thumbnails.
-    FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt);
+    /// `singleFrameAt` (seconds) asks for just one frame — used for report thumbnails. `isCancelled`: a decoder that writes an
+    /// intermediate first (art-cmd, REDline) is killed when it turns true.
+    FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null);
 }
 
 /// What a RAW decoder should hand ffmpeg: camera log (a LUT follows) or its own Rec.709 look.
@@ -220,7 +222,8 @@ internal sealed class BrawBackend : IRawBackend
 
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => ToClipInfo(Info(path, "eighth", tools));
 
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null)
     {
         int target = singleFrameAt == null ? settings.Height : 180;
         var scale = Scale(info.Height ?? 2160, target);
@@ -306,14 +309,15 @@ internal sealed class R3dBackend : IRawBackend
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) =>
         ParseMeta(ToolProcess.Run(tools.Redline!, ["--i", path, "--printMeta", "1"]));
 
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null)
     {
         // Thumbnails come from the finished proxy instead (one REDline run per clip is enough).
         if (singleFrameAt != null) throw new ToolError("REDline", -1, "thumbnail from proxy");
         var dir = RawBackends.FreshDir(workDir, "r3d");
         try
         {
-            var (exit, log) = ToolProcess.RunCombined(tools.Redline!, Args(path, dir, info, settings, look));
+            var (exit, log) = ToolProcess.RunCombined(tools.Redline!, Args(path, dir, info, settings, look), isCancelled: isCancelled);
             if (exit != 0) throw new ToolError("REDline", exit, RawBackends.LogTail(log));
             var mov = RawBackends.NewestFile(dir, "mov") ?? throw RawBackends.NoOutput("RED R3D", "REDline", RawBackends.LogTail(log));
             return new FrameSource { InputArgs = ["-i", mov], Cleanup = [dir] };
@@ -527,7 +531,8 @@ internal sealed class ArriBackend : IRawBackend
         return null;
     }
 
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt)
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null)
     {
         if (singleFrameAt != null) throw new ToolError("art-cmd", -1, "thumbnail from proxy");
         var dir = RawBackends.FreshDir(workDir, "ari");
@@ -538,7 +543,7 @@ internal sealed class ArriBackend : IRawBackend
             var (args, json, cropped) = Args(path, output, info, settings, look, parameters);
             if (json != null) File.WriteAllText(parameters, json);
             // art-cmd logs (its errors too) to stdout and may exit 0 without the output file: both cases quote its own lines.
-            var (exit, log) = ToolProcess.RunCombined(tools.ArtCmd!, args, dir);
+            var (exit, log) = ToolProcess.RunCombined(tools.ArtCmd!, args, dir, isCancelled: isCancelled);
             if (exit != 0) throw new ToolError("art-cmd", exit, RawBackends.LogTail(log));
             if (!File.Exists(output)) throw RawBackends.NoOutput("ARRIRAW", "art-cmd", RawBackends.LogTail(log));
             return new FrameSource { InputArgs = ["-i", output], AlreadyCropped = cropped, Cleanup = [dir] };
@@ -559,6 +564,7 @@ internal sealed class CanonRawBackend : IRawBackend
     public string MissingHint => "Canon Cinema RAW Light: pro Windows neexistuje dekodér pro příkazovou řádku — zkopírováno a ověřeno, proxy přeskočeno";
     public bool IsAvailable(ExternalTools tools) => false;
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => throw new ToolError("Canon RAW", -1, MissingHint);
-    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt) =>
+    public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled = null) =>
         throw new ToolError("Canon RAW", -1, MissingHint);
 }

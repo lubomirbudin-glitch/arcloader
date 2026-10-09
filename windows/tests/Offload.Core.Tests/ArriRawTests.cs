@@ -59,6 +59,9 @@ public class ArriRawTests
             )
             echo intermediate>"%OUT%"
             exit /b 0
+            :Hang
+            ping -n 60 127.0.0.1 >nul
+            exit /b 0
             :Grow
             type nul>"%OUT%"
             for /l %%i in (1,1,4) do (
@@ -453,5 +456,53 @@ public class ArriRawTests
         Assert.Equal(ClipFormat.Video, clip.Format);
         Assert.Equal(3840, info.Width);
         Assert.False(File.Exists(Path.Combine(dir.Path, "calls.txt")));   // art-cmd never asked
+    }
+
+    // --- Review M-6: art-cmd and REDline end on cancel; RunCombined has a time limit ---
+
+    [Fact]
+    public void Cancel_WhileArtCmdDecodes_EndsPromptly_NoLeftovers()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Hang"));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var e = Assert.Throws<ToolError>(() => r.Render(ArriClip(), card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1 },
+            null, Path.Combine(card, "_PROXY", "A001C001.mov"), _ => { }, () => sw.ElapsedMilliseconds > 1000));
+        Assert.Contains("cancelled", e.Message);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(20), $"took {sw.Elapsed}");
+        Assert.Empty(Directory.GetDirectories(r.WorkDir, "ari-*"));
+        Assert.False(File.Exists(Path.Combine(dir.Path, "ffmpeg.txt")));   // ffmpeg never ran
+    }
+
+    [Fact]
+    public void Cancel_WhileRedlineDecodes_EndsPromptly()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var redline = Path.Combine(dir.Path, "REDline.cmd");
+        File.WriteAllText(redline, "@echo off\r\nping -n 60 127.0.0.1 >nul\r\nexit /b 0\r\n");
+        var tools = new ExternalTools { Redline = redline, Ffmpeg = FakeFfmpeg(dir.Path), NoSearch = true }.Resolved();
+        using var r = new ProxyRenderer(Settings, tools);
+        var clip = new Clip { Name = "A001", Path = "A001.R3D", Format = ClipFormat.R3d, Segments = ["A001.R3D"], Bytes = 1 };
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var e = Assert.Throws<ToolError>(() => r.Render(clip, card, new ClipInfo { Height = 2160, Duration = 1, FrameRate = "24" }, null,
+            Path.Combine(card, "_PROXY", "A001.mov"), _ => { }, () => sw.ElapsedMilliseconds > 1000));
+        Assert.Contains("cancelled", e.Message);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(20), $"took {sw.Elapsed}");
+        Assert.Empty(Directory.GetDirectories(r.WorkDir, "r3d-*"));
+    }
+
+    [Fact]
+    public void RunCombined_TimeLimit_KilledAndSaid()
+    {
+        using var dir = new TempDir();
+        var cmd = Path.Combine(dir.Path, "hang.cmd");
+        File.WriteAllText(cmd, "@echo off\r\necho started\r\nping -n 60 127.0.0.1 >nul\r\n");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var e = Assert.Throws<ToolError>(() => ToolProcess.RunCombined(cmd, [], dir.Path, TimeSpan.FromSeconds(1)));
+        Assert.Equal(-1, e.Status);
+        Assert.Contains("neodpověděl do 1 s", e.Message);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(20), $"took {sw.Elapsed}");
     }
 }

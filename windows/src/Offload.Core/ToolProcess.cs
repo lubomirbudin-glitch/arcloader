@@ -137,9 +137,12 @@ internal sealed class ToolProcess : IDisposable
         lock (output) return output.ToString();
     }
 
-    /// For tools that log to stdout and may report a failure there with exit code 0 (art-cmd): runs to completion and
-    /// returns the exit code with stdout and stderr together, in the order the lines came; the caller decides what failed.
-    public static (int ExitCode, string Output) RunCombined(string exe, IReadOnlyList<string> args, string? cwd = null)
+    /// For tools that log to stdout and may report a failure there with exit code 0 (art-cmd, REDline): runs to completion
+    /// and returns the exit code with stdout and stderr together, in the order the lines came; the caller decides what
+    /// failed. A RAW decode takes minutes, so it is looked at every 200 ms: when `isCancelled` turns true, or after
+    /// `timeout`, the tool is killed with its children and a ToolError (exit -1) says why.
+    public static (int ExitCode, string Output) RunCombined(string exe, IReadOnlyList<string> args, string? cwd = null, TimeSpan? timeout = null,
+        Func<bool>? isCancelled = null)
     {
         using var p = new ToolProcess(exe, args, cwd, pipeStdin: false);
         var output = new StringBuilder();
@@ -148,7 +151,21 @@ internal sealed class ToolProcess : IDisposable
             lock (output) output.Append(line).Append('\n');
         }
         p.StderrLine = Add;
+        long started = Environment.TickCount64;
         p.Start(Add);
+        while (!p.WaitForExit(200))
+        {
+            if (isCancelled?.Invoke() == true)
+            {
+                p.Kill();
+                throw new ToolError(p.Name, -1, "cancelled");
+            }
+            if (timeout is TimeSpan limit && Environment.TickCount64 - started > limit.TotalMilliseconds)
+            {
+                p.Kill();
+                throw new ToolError(p.Name, -1, $"neodpověděl do {limit.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s — ukončen");
+            }
+        }
         p.WaitForExit();   // without a limit it also waits until both pipes reached their end
         lock (output) return (p.ExitCode, output.ToString());
     }

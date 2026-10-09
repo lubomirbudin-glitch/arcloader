@@ -29,6 +29,8 @@ public sealed class ProxyRenderer : IDisposable
         }
     }
     readonly string workDir;
+    /// The renderer's temp folder (intermediates, LUT copies) — for tests.
+    internal string WorkDir => workDir;
     readonly bool hasFont;
     /// The LUT files already copied into the work folder (by their name there), and the ones that could not be.
     readonly HashSet<string> copiedLuts = new(StringComparer.Ordinal);
@@ -243,7 +245,8 @@ public sealed class ProxyRenderer : IDisposable
     /// the whole mdat by reading it: 200 % of the file); with it 100 % + the few header bytes (plan 10 measurements).
     internal static readonly string[] TapInputArgs = ["-short_seek_size", "65536"];
 
-    FrameSource SourceFor(Clip clip, string cardPath, ClipInfo info, RawLook look, double? singleFrameAt, bool hwaccel, string? inputUrl = null)
+    FrameSource SourceFor(Clip clip, string cardPath, ClipInfo info, RawLook look, double? singleFrameAt, bool hwaccel, string? inputUrl = null,
+        Func<bool>? isCancelled = null)
     {
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
@@ -256,7 +259,7 @@ public sealed class ProxyRenderer : IDisposable
             };
         }
         if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, Msg.NoDecoderShort);
-        return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt));
+        return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt, isCancelled));
     }
 
     /// The .cube for this clip by its name in the work folder, or null for no LUT. Copied on first use, once per file:
@@ -337,7 +340,7 @@ public sealed class ProxyRenderer : IDisposable
             var output = Path.Combine(workDir, $"thumb-{Guid.NewGuid():N}.jpg");
             try
             {
-                src = SourceFor(clip, cardPath, info, look, pos.Seconds, hwaccel: false);
+                src = SourceFor(clip, cardPath, info, look, pos.Seconds, hwaccel: false, isCancelled: isCancelled);
                 var vf = FilterGraph.Thumbnail(lutFile, NeedsPreMap(lut, src, info));  // the pre-map depends on the source
                 bool video = clip.Format == ClipFormat.Video;
                 var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y" };
@@ -473,11 +476,11 @@ public sealed class ProxyRenderer : IDisposable
             // ARRIRAW: art-cmd writes the whole ProRes LT intermediate first and reports no progress itself — its growing
             // size is 0–80 % of the clip, ffmpeg's own progress the rest (the bar never sits at 0 % for the whole decode).
             using (IntermediateProgress.Start(workDir, info, Settings, progress, IntermediatePoll))
-                src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl);
+                src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl, isCancelled);
             var whole = progress;
             progress = f => whole(IntermediateProgress.Share + (1 - IntermediateProgress.Share) * f);
         }
-        else src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl);
+        else src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl, isCancelled);
         string? label = null;
         try
         {
