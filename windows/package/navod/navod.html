@@ -515,8 +515,10 @@ to napíše. Start kontroluje jen ty LUTy a složky pro proxy, které se v úloh
   <li><b class="ui">+ Přidat disk</b> vybere cílovou složku (kořen, pod který se zakládají složky s datem). Cílů může být
     libovolně; seznam si aplikace pamatuje (patří k projektu).</li>
   <li><b>Připojený externí disk USB se přidá sám</b> (kořen disku, např. <code>G:\</code>) a po odpojení z cílů zase zmizí.
-    Jako cíl se nikdy nepřidá karta (struktura kamery: DCIM, PRIVATE, CLIP, CONTENTS, ARRI, RED…), čtečka karet ani interní
-    nebo systémový disk (SATA, NVMe — i disk za Thunderboltem, ten přidejte ručně). Disk, který křížkem odeberete, si
+    Jako cíl se nikdy nepřidá karta nebo SSD z kamery (struktura kamery přímo v kořeni disku: DCIM, PRIVATE, CLIP, CONTENTS,
+    ARRI, RED…, nebo klipy přímo v kořeni jako na SSD z Blackmagicu či Atomosu), čtečka karet ani interní
+    nebo systémový disk (SATA, NVMe — i disk za Thunderboltem, ten přidejte ručně). Záložní disk s klipy ve složkách se
+    přidá, stejně jako každý disk se zálohou z Offloadu. Disk, který křížkem odeberete, si
     aplikace zapamatuje (podle sériového čísla a kapacity) a sama ho už nepřidá; <b class="ui">+ Přidat disk</b> nebo
     <b class="ui">Zapomenout odebrané disky</b> v Nastavení to vrátí. Plný disk (méně než 1 GB volna) nebo disk jen pro čtení
     se nepřidá — pod cíli je oranžově <span class="txt-warn">Disk BACKUP (G:) je plný — jako cíl se nepřidal.</span>

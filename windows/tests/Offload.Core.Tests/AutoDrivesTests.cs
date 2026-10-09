@@ -324,4 +324,150 @@ public class AutoDrivesTests
         Touch(Path.Combine(dir.Path, "Projekty", "notes.txt"));
         Assert.False(Volumes.LooksLikeCameraMedia(dir.Path));
     }
+
+    // ── destination decision (controller ruling 2026-10-09) ─────────────
+
+    /// The facts the scan gathers for a fixed USB disk at `path` (Volumes.FactsOf): the source heuristic as it is, Offload
+    /// output first, the camera structure at the root only without it.
+    static DriveFacts Scanned(string path)
+    {
+        bool output = Volumes.HasOffloadOutput(path);
+        return Disk(path) with
+        {
+            LooksLikeCard = Volumes.LooksLikeCameraCard(path) || Volumes.LooksLikeCameraMedia(path),
+            OffloadOutput = output,
+            CameraAtRoot = !output && Volumes.CameraAtRoot(path),
+        };
+    }
+
+    static bool Added(DriveFacts f) => AutoDrives.Plan(Input([f])).Add.Count == 1;
+
+    [Fact]
+    public void Destination_BackupWithClipsOneLevelDown_Added()
+    {
+        // The user's E: (WD Elements): clips one folder down — the source heuristic still calls it a card (Karty
+        // unchanged), but as a destination it is a backup disk.
+        using var dir = new TempDir();
+        Touch(Path.Combine(dir.Path, "Footage", "A001C001.mov"));
+        var f = Scanned(dir.Path);
+        Assert.True(Volumes.LooksLikeCameraCard(dir.Path));
+        Assert.False(f.CameraAtRoot);
+        Assert.True(Added(f));
+    }
+
+    [Fact]
+    public void Destination_ClipsSeveralLevelsDown_Added()
+    {
+        using var dir = new TempDir();
+        Touch(Path.Combine(dir.Path, "Natáčení", "Den 1", "A001", "CLIP", "A001C001.braw"));
+        Touch(Path.Combine(dir.Path, "Archiv", "A_0009", "A_0009C001_251009_R1AB", "A_0009C001_251009_R1AB.mxf"));
+        Assert.True(Added(Scanned(dir.Path)));
+    }
+
+    [Theory]
+    [InlineData("A001_C001_1009AB.braw")]   // Blackmagic SSD (BRAW)
+    [InlineData("ATOMOS_0001.mov")]         // Atomos SSD
+    [InlineData("C0001.MP4")]
+    public void Destination_CameraSsdWithClipsAtTheRoot_NotAdded(string file)
+    {
+        using var dir = new TempDir();
+        Touch(Path.Combine(dir.Path, file));
+        var f = Scanned(dir.Path);
+        Assert.True(f.CameraAtRoot);
+        Assert.False(Added(f));
+    }
+
+    [Theory]
+    [InlineData(@"PRIVATE\M4ROOT\CLIP\C0001.MP4")]
+    [InlineData(@"PRIVATE\AVCHD\BDMV\STREAM\00000.MTS")]
+    [InlineData(@"DCIM\100CANON\IMG_0001.JPG")]
+    [InlineData(@"CLIP\A001C001.mov")]
+    [InlineData(@"CONTENTS\CLIPS001\AA0001.MXF")]
+    [InlineData(@"XDROOT\Clip\C0001.MXF")]
+    [InlineData(@"A001_0101XX.RDM\A001_C001_0101AB.RDC\A001_C001_0101AB_001.R3D")]
+    [InlineData(@"A001_C001_0101AB.RDC\A001_C001_0101AB_001.R3D")]
+    [InlineData(@"ARRI\readme.txt")]
+    [InlineData(@"A_0009\A_0009C001_251009_R1AB\A_0009C001_251009_R1AB.mxf")]   // ARRI Codex reel
+    [InlineData(@"A002R1AB\A002C001_150101_R1AB\A002C001_150101_R1AB.mxf")]     // ARRI reel, older naming
+    public void Destination_CameraStructureAtTheRoot_NotAdded(string file)
+    {
+        using var dir = new TempDir();
+        Touch(Path.Combine(dir.Path, file));
+        var f = Scanned(dir.Path);
+        Assert.True(f.CameraAtRoot);
+        Assert.False(Added(f));
+    }
+
+    [Fact]
+    public void CameraAtRoot_ReelNameWithoutClipFolders_NoCamera()
+    {
+        using var dir = new TempDir();
+        Touch(Path.Combine(dir.Path, "A_0009", "notes.txt"));
+        Assert.False(Volumes.CameraAtRoot(dir.Path));
+    }
+
+    [Theory]
+    [InlineData(@"2026-10-09\A001\_REPORT\offload_report.json")]
+    [InlineData(@"2026-10-09\A001\_REPORT\offload_report_0002.json")]
+    [InlineData(@"Projekt\A001\_REPORT\offload-manifest.jsonl")]
+    [InlineData(@"2026-10-09\A001\ascmhl\0001_A001_2026-10-09_120000Z.mhl")]
+    [InlineData(@"_REPORT\offload_report.json")]
+    public void HasOffloadOutput_WithinThreeFolders(string file)
+    {
+        using var dir = new TempDir();
+        Touch(Path.Combine(dir.Path, file));
+        Assert.True(Volumes.HasOffloadOutput(dir.Path));
+    }
+
+    [Theory]
+    [InlineData(@"Projekt\2026-10-09\A001\_REPORT\offload_report.json")]   // four down: past the bound
+    [InlineData(@"2026-10-09\A001\_REPORT\notes.txt")]                      // a _REPORT that is not ours
+    [InlineData(@"Footage\A001C001.mov")]
+    public void HasOffloadOutput_NotThere(string file)
+    {
+        using var dir = new TempDir();
+        Touch(Path.Combine(dir.Path, file));
+        Assert.False(Volumes.HasOffloadOutput(dir.Path));
+    }
+
+    [Fact]
+    public void HasOffloadOutput_Bounded_StopsAtTheBudget()
+    {
+        using var dir = new TempDir();
+        for (int i = 0; i < 10; i++) Directory.CreateDirectory(Path.Combine(dir.Path, $"a{i}"));
+        Touch(Path.Combine(dir.Path, "z", "A001", "_REPORT", "offload_report.json"));
+        Assert.True(Volumes.HasOffloadOutput(dir.Path));
+        Assert.False(Volumes.HasOffloadOutput(dir.Path, budget: 5));
+    }
+
+    [Fact]
+    public void Destination_OffloadOutputBeatsCameraStructure_Added()
+    {
+        // A backup disk that also has a DCIM folder and a loose clip at the root: Offload's output settles it.
+        using var dir = new TempDir();
+        Touch(Path.Combine(dir.Path, "DCIM", "100CANON", "IMG_0001.JPG"));
+        Touch(Path.Combine(dir.Path, "A001C001.mov"));
+        Touch(Path.Combine(dir.Path, "2026-10-09", "A001", "_REPORT", "offload_report.json"));
+        var f = Scanned(dir.Path);
+        Assert.True(f.OffloadOutput);
+        Assert.True(Added(f));
+    }
+
+    [Fact]
+    public void Destination_ReaderOrRemovable_NeverAdded_EvenWithOffloadOutput()
+    {
+        Assert.False(Added(Reader(@"F:\") with { OffloadOutput = true }));
+        Assert.False(Added(Disk(@"F:\", product: "SanDisk CFexpress Reader") with { OffloadOutput = true }));
+        Assert.False(Added(Disk(@"F:\") with { DisksOnDevice = 2, OffloadOutput = true }));
+        Assert.False(Added(Disk(@"F:\") with { Type = DriveType.Removable, OffloadOutput = true }));
+        Assert.False(Added(Disk(@"D:\") with { Bus = StorageBus.Sata, OffloadOutput = true }));
+    }
+
+    [Fact]
+    public void RemovedDisk_BackupWithClipsDown_Remembered()
+    {
+        var backup = Disk(@"E:\", "EEEE0005:4000000000000") with { LooksLikeCard = true };
+        Assert.True(Added(backup));
+        Assert.Equal("EEEE0005:4000000000000", AutoDrives.RemovedDisk(@"E:\", [backup]));
+    }
 }

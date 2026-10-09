@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Offload.Core.Hardware;
 
 namespace Offload.Core.Desktop;
@@ -98,6 +99,101 @@ public static class Volumes
         && !string.Equals(name, "System Volume Information", StringComparison.OrdinalIgnoreCase)
         && !DateTime.TryParseExact(name, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _);
 
+    /// Root folders of an ARRI drive (Codex, SxS): the reel ("A_0009", "A002R1AB") holding clip folders ("A_0009C001_…",
+    /// "A002C001_…").
+    static readonly Regex ArriReel = new(@"^[A-Z](_\d{4}|\d{3}R[A-Z0-9]{3,4})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    static readonly Regex ArriClip = new(@"^[A-Z]_?\d{3,4}C\d{3}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// A camera's own structure at the root of the volume — what keeps it from becoming a destination by itself (ruling
+    /// 2026-10-09): a camera folder (Markers, ARRI), RED's .RDM/.RDC folders, an ARRI reel with clip folders, or clips
+    /// right in the root (Blackmagic, Atomos and BRAW SSDs record there). Clips further down do not count: that is how a
+    /// backup looks. Reads the root and at most 50 reel folders; false when unreadable.
+    public static bool CameraAtRoot(string root)
+    {
+        try
+        {
+            foreach (var entry in Directory.EnumerateFileSystemEntries(root).Take(2000))
+            {
+                var name = System.IO.Path.GetFileName(entry);
+                if (File.Exists(entry))
+                {
+                    if (MediaExt.Contains(System.IO.Path.GetExtension(name))) return true;
+                    continue;
+                }
+                if (Markers.Contains(name) || string.Equals(name, "ARRI", StringComparison.OrdinalIgnoreCase)
+                    || name.EndsWith(".RDM", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".RDC", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            foreach (var reel in Directory.EnumerateDirectories(root).Where(d => ArriReel.IsMatch(System.IO.Path.GetFileName(d))).Take(50))
+            {
+                try
+                {
+                    if (Directory.EnumerateDirectories(reel).Take(200).Any(d => ArriClip.IsMatch(System.IO.Path.GetFileName(d)))) return true;
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            }
+            return false;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// Offload's own output on the volume within `maxDepth` folders (ruling 2026-10-09): a `_REPORT` with an Offload
+    /// report or `offload-manifest.jsonl`, or an `ascmhl` folder — `<date>\<card>\_REPORT` is three down. Breadth first,
+    /// bounded (at most `budget` folders, 200 per folder), stops at the first hit; hidden and system folders are skipped.
+    /// Reads only — never call it on the UI thread.
+    public static bool HasOffloadOutput(string root, int maxDepth = 3, int budget = 3000)
+    {
+        var level = new List<string> { root };
+        for (int depth = 1; depth <= maxDepth && level.Count > 0; depth++)
+        {
+            var next = new List<string>();
+            foreach (var dir in level)
+            {
+                IEnumerable<string> subs;
+                try
+                {
+                    subs = Directory.EnumerateDirectories(dir).Take(200).ToList();
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+                {
+                    continue;
+                }
+                foreach (var sub in subs)
+                {
+                    var name = System.IO.Path.GetFileName(sub);
+                    if (string.Equals(name, Mhl.DirName, StringComparison.OrdinalIgnoreCase)) return true;
+                    if (string.Equals(name, Layout.ReportDirName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (IsOffloadReportDir(sub)) return true;
+                        continue;
+                    }
+                    if (name.StartsWith('.') || name.StartsWith('$') || string.Equals(name, "System Volume Information", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (--budget <= 0) return false;
+                    next.Add(sub);
+                }
+            }
+            level = next;
+        }
+        return false;
+    }
+
+    static bool IsOffloadReportDir(string dir)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(dir).Take(500).Select(f => System.IO.Path.GetFileName(f)).Any(n =>
+                string.Equals(n, VerifyInProxy.ManifestFile.FileName, StringComparison.OrdinalIgnoreCase)
+                || (n.StartsWith("offload_report", StringComparison.OrdinalIgnoreCase) && n.EndsWith(".json", StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     /// Nothing on the volume but what Windows keeps on every one. Reads only; unreadable = not empty.
     public static bool IsEmptyVolume(string root)
     {
@@ -171,6 +267,12 @@ public static class Volumes
             var role = AutoDrives.Role(facts);
             // Only a disk that may become a destination is looked at deeper (one that already is one is not).
             if (role == DriveRole.Disk && !isDest && LooksLikeCameraMedia(root)) facts = facts with { LooksLikeCard = true };
+            // The destination decision (ruling 2026-10-09): Offload output settles it, else the camera structure at the root.
+            if (!isDest && !facts.IsSystem && !AutoDrives.ReaderLike(facts) && d.DriveType == DriveType.Fixed && facts.Bus == StorageBus.Usb)
+            {
+                bool output = HasOffloadOutput(root);
+                facts = facts with { OffloadOutput = output, CameraAtRoot = !output && CameraAtRoot(root) };
+            }
             if (role == DriveRole.ReaderSlot) facts = facts with { Empty = IsEmptyVolume(root) };
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)

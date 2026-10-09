@@ -433,7 +433,10 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
       znovu → zase je tam; křížkem ho odebrat → po odpojení a připojení se už nepřidá (Nastavení → Struktura složek →
       „Zapomenout odebrané disky (1)“ to vrátí); disk s méně než 1 GB volna nebo jen pro čtení (`diskpart` →
       `attributes volume set readonly`) → nepřidá se, pod cíli oranžově „Disk … je plný / jen pro čtení — jako cíl se
-      nepřidal.“; interní disk SATA/NVMe ani systémový disk se nepřidá nikdy
+      nepřidal.“; interní disk SATA/NVMe ani systémový disk se nepřidá nikdy; záložní disk s klipy ve složce (uživatelův
+      E: WD Elements) → přidá se (v „Karty“ zůstane jen do přidání); SSD z kamery s klipy BRAW/MOV přímo v kořeni nebo
+      disk se strukturou kamery v kořeni (PRIVATE, DCIM, CLIP, ARRI, RED…) → nepřidá se; disk se zálohou z Offloadu
+      (`_REPORT` nebo `ascmhl` do 3 složek) → přidá se vždy
 - [ ] 60. **Automatické načtení disků — čtečka:** čtečka SD/CFexpress s kartou z kamery → karta je v „1 · Karty“ zaškrtnutá
       a **nikdy** není v cílech (ani CFexpress čtečka, kterou Windows hlásí jako pevný disk USB — rozhodne struktura kamery,
       název výrobku čtečky nebo víc slotů na jednom zařízení); karta ze zvukového rekordéru (jen WAV) → zaškrtnutá; prázdná

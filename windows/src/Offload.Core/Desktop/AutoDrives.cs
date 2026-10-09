@@ -19,8 +19,14 @@ public sealed record DriveFacts
     public string Product { get; init; } = "";
     /// Disks on the same USB device (cfgmgr32): a multi-slot card reader has one per slot.
     public int DisksOnDevice { get; init; } = 1;
-    /// Camera folders or clips on it (Volumes.LooksLikeCameraMedia — also two folders down, ARRI and RED).
+    /// Camera folders or clips on it (Volumes.LooksLikeCameraMedia — also two folders down, ARRI and RED): ticked in
+    /// Karty on arrival. Not what decides a destination (a backup disk holds clips too) — CameraAtRoot does.
     public bool LooksLikeCard { get; init; }
+    /// A camera's own structure at the root (Volumes.CameraAtRoot): camera folders, RED/ARRI layout, or clips right in
+    /// the root (a Blackmagic/Atomos SSD) — never added as a destination. Media further down does not count.
+    public bool CameraAtRoot { get; init; }
+    /// Offload's own output within three folders (Volumes.HasOffloadOutput): a destination whatever else is on it.
+    public bool OffloadOutput { get; init; }
     /// Nothing on it but what Windows puts on every volume.
     public bool Empty { get; init; }
     public bool ReadOnly { get; init; }
@@ -107,6 +113,13 @@ public static class AutoDrives
             _ => false,
         };
 
+    /// May the volume be added as a destination by itself (controller ruling 2026-10-09): an external USB disk — never a
+    /// reader slot, removable media or an internal disk — that is no camera media by its root. Offload output on it
+    /// settles it: a destination. Clips one or more folders down (how a backup looks) never block it.
+    public static bool DestinationCandidate(DriveFacts f) =>
+        !f.IsSystem && !ReaderLike(f) && f.Type == DriveType.Fixed && f.Bus == StorageBus.Usb
+        && (f.OffloadOutput || !f.CameraAtRoot);
+
     /// The destinations to add and drop now. `Locked` (a Start checking the profile shown — ruling I1 — or the demo):
     /// nothing. Never a disk that is removed (by its identity), already a destination (a root or a folder on it), full
     /// or read-only (a hint says why), or of unknown identity. An auto-added destination whose disk is not connected
@@ -129,7 +142,7 @@ public static class AutoDrives
         {
             foreach (var f in input.Present)
             {
-                if (Role(f) != DriveRole.Disk || f.DiskId is not string id || removed.Contains(id)) continue;
+                if (!DestinationCandidate(f) || f.DiskId is not string id || removed.Contains(id)) continue;
                 if (dests.Any(d => SameRoot(RootOf(d), f.Root))) continue;
                 if (f.ReadOnly) { hints.Add(Msg.AutoDiskReadOnly(f.Name)); continue; }
                 if (f.Free < FullBelow) { hints.Add(Msg.AutoDiskFull(f.Name)); continue; }
@@ -151,7 +164,7 @@ public static class AutoDrives
     /// The disk a removed destination stood on, to be remembered (task: "odebraný cíl si zapamatovat"): the connected
     /// external disk holding `root`, or null (a folder on an internal disk, a network path, a disk not connected).
     public static string? RemovedDisk(string root, IEnumerable<DriveFacts> present) =>
-        present.FirstOrDefault(f => Role(f) == DriveRole.Disk && SameRoot(RootOf(root), f.Root))?.DiskId;
+        present.FirstOrDefault(f => DestinationCandidate(f) && SameRoot(RootOf(root), f.Root))?.DiskId;
 }
 
 /// The automatic choice in settings.json (per profile, plan 8): `autoDrives`.
