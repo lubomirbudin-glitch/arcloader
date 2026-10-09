@@ -1124,13 +1124,13 @@ public sealed class OffloadJob
             try
             {
                 // ffprobe (an MXF with a time limit), and the ARRI tool for an MXF ffmpeg cannot decode — once each.
-                var (analyzed, info) = renderer.Analyze(clip, cardPaths[d]);
+                var (analyzed, info, undecodable) = renderer.Analyze(clip, cardPaths[d]);
                 entries[i].Clip = analyzed;
                 if (analyzed.Format == ClipFormat.Video && info.Width == null)
                 {
                     info.Reel = ReelResolver.Resolve(clip, info, plan.CardName);
                     entries[i].Info = info;
-                    entries[i].ProbeError = "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy";
+                    entries[i].ProbeError = undecodable ?? "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy";
                     continue;
                 }
                 // Spec 3.4: the camera's tag, else the clip name, else the card folder — into the report and the proxy.

@@ -50,7 +50,13 @@ public class ArriRawTests
             echo [2026-10-05 10:00:00.000] [art] [error] clip cannot be read
             exit /b 3
             :RejectDuration
-            if defined DUR exit /b 2
+            if defined DUR (
+              echo [2026-10-05 10:00:00.000] [art] [error] Unknown option: --duration
+              exit /b 2
+            )
+            goto Meta
+            :IgnoreDuration
+            if defined DUR goto Nothing
             goto Meta
             :Real
             if defined TCS if defined LOOK (
@@ -431,6 +437,62 @@ public class ArriRawTests
         Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24" }, f => { lock (seen) seen.Add(f); });
         Assert.True(File.Exists(Path.Combine(card, "_PROXY", "A001C001.mov")));
         lock (seen) Assert.All(seen, f => Assert.True(double.IsFinite(f) && f >= 0 && f <= 1, string.Join(", ", seen)));
+    }
+
+    /// Only a refused --duration gets the slow full export: art-cmd failing on the file (an X-OCN MXF, a corrupt clip) is
+    /// asked once, and the clip's note says what art-cmd said — not a guess at Sony X-OCN.
+    [Fact]
+    public void Analysis_ArtCmdFailsOnTheFile_NoFullExport_NoteQuotesIt()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta, export: "Fail");
+        var log = new List<string>();
+        using var r = new ProxyRenderer(Settings, tools) { Log = l => { lock (log) log.Add(l); } };
+
+        var a = r.Analyze(Mxf, card);
+
+        Assert.Equal(ClipFormat.Video, a.Clip.Format);
+        Assert.Null(a.Info.Width);
+        Assert.Single(Calls(dir.Path));
+        Assert.Equal("kodek nepodporován ffmpegem a art-cmd (ARRIRAW) ho nepřečetl: [error] clip cannot be read — zkopírováno a ověřeno, bez proxy", a.UndecodableNote);
+        lock (log)
+        {
+            Assert.DoesNotContain(log, l => l.Contains("every frame"));
+            Assert.Contains(log, l => l.Contains("A001C001") && l.Contains("[error] clip cannot be read"));
+        }
+    }
+
+    [Fact]
+    public void Analysis_OneFrameExportWritesNothing_FullExport()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta.Replace("\"clipDuration\":1", "\"clipDuration\":240"), export: "IgnoreDuration");
+        using var r = new ProxyRenderer(Settings, tools);
+        var (clip, info) = r.Analyze(Mxf, card);
+        Assert.Equal(ClipFormat.Arriraw, clip.Format);
+        Assert.Equal(240, info.Frames);
+        Assert.Equal(2, Calls(dir.Path).Count);
+    }
+
+    /// art-cmd timing out on the one-frame export: the note says so (the clip may well be ARRIRAW), the log too.
+    [Fact]
+    public void Analysis_ArtCmdTimesOut_NoteSaysSo()
+    {
+        using var dir = new TempDir();
+        var (card, tools) = AnalysisSetup(dir, OneFrameMeta, export: "Hang");
+        var log = new List<string>();
+        using var r = new ProxyRenderer(Settings, tools)
+        {
+            Backends = [new ArriBackend { ExportTimeout = TimeSpan.FromSeconds(1) }],
+            Log = l => { lock (log) log.Add(l); },
+        };
+
+        var a = r.Analyze(Mxf, card);
+
+        Assert.Equal(ClipFormat.Video, a.Clip.Format);
+        Assert.Single(Calls(dir.Path));
+        Assert.Equal("kodek nepodporován ffmpegem a art-cmd (ARRIRAW) ho nepřečetl: neodpověděl do 1 s — ukončen — zkopírováno a ověřeno, bez proxy", a.UndecodableNote);
+        lock (log) Assert.Contains(log, l => l.Contains("A001C001") && l.Contains("neodpověděl do 1 s"));
     }
 
     [Fact]

@@ -476,21 +476,24 @@ internal sealed class ArriBackend : IRawBackend
             List<string> args = ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look"];
             string text;
             bool oneFrame = true;
-            try
+            // art-cmd writes art.log into its working directory — never let that be the card or a destination. It logs
+            // (its errors too) to stdout. A time limit: it reads one frame, and a hung tool must never hang the job.
+            var (exit, output) = ToolProcess.RunCombined(tools.ArtCmd!, [.. args, "--duration", "1"], dir, ExportTimeout);
+            if (exit == 0 && File.Exists(json)) text = File.ReadAllText(json);
+            else if (exit == 0 || RefusesDuration(output))
             {
-                // art-cmd writes art.log into its working directory — never let that be the card or a destination.
-                ToolProcess.Run(tools.ArtCmd!, [.. args, "--duration", "1"], dir, ExportTimeout);
-                text = File.ReadAllText(json);
-            }
-            catch (Exception e) when (e is ToolError { Status: not -1 } or FileNotFoundException)
-            {
-                // Refused (not timed out): the whole clip's metadata, slow but known to work.
-                Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: art-cmd export --duration 1: {e.Message} — exporting the metadata of every frame");
+                // An art-cmd without --duration for export: the whole clip's metadata, slow but known to work. Any other
+                // failure (the file is no ARRIRAW, or damaged) would only fail again after reading the whole clip.
+                Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: art-cmd export --duration 1: "
+                    + (exit == 0 ? "no metadata written" : RawBackends.LogTail(output)) + " — exporting the metadata of every frame");
                 NativeIO.Delete(json);
-                ToolProcess.Run(tools.ArtCmd!, args, dir);
+                (exit, output) = ToolProcess.RunCombined(tools.ArtCmd!, args, dir);
+                if (exit != 0) throw new ToolError("art-cmd", exit, RawBackends.LogTail(output));
+                if (!File.Exists(json)) throw new ToolError("art-cmd", 0, "no metadata written: " + RawBackends.LogTail(output));
                 text = File.ReadAllText(json);
                 oneFrame = false;
             }
+            else throw new ToolError("art-cmd", exit, RawBackends.LogTail(output));
             var c = ParseMetadata(text);
             if (c.Frames is not > 1)
             {
@@ -514,6 +517,10 @@ internal sealed class ArriBackend : IRawBackend
             RawBackends.DeleteDir(dir);
         }
     }
+
+    /// art-cmd's words for an option it does not know name it: its error lines (or last lines) mention "duration".
+    internal static bool RefusesDuration(string output) =>
+        RawBackends.LogTail(output).Contains("duration", StringComparison.OrdinalIgnoreCase);
 
     /// The clip's frame count without art-cmd: a sequence's frames (its path is the folder) — the scanner's `segments`,
     /// else its .ari files without a Mac's "._" copies — else ffprobe's frames of the MXF, else its duration × the ARRI

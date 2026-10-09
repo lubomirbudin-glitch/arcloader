@@ -143,9 +143,9 @@ public sealed class ProxyRenderer : IDisposable
     /// tool, which then reclassifies it as ARRIRAW. Each tool looks at a clip once (ARRI's frame count comes from
     /// ffprobe's answer, not from a second probe). The clip may come back reclassified; a video clip whose info has no
     /// width is one ffmpeg cannot decode.
-    public (Clip Clip, ClipInfo Info) Analyze(Clip clip, string cardPath)
+    public ClipAnalysis Analyze(Clip clip, string cardPath)
     {
-        if (clip.Format != ClipFormat.Video || !IsMxf(clip)) return (clip, Probe(clip, cardPath));
+        if (clip.Format != ClipFormat.Video || !IsMxf(clip)) return new(clip, Probe(clip, cardPath));
         ClipInfo? probed = null;
         ToolError? failed = null;
         try
@@ -156,10 +156,20 @@ public sealed class ProxyRenderer : IDisposable
         {
             failed = e;   // timed out (or could not run): perhaps ARRIRAW — the ARRI tool decides
         }
-        if (probed?.Width != null) return (clip, probed);
-        if (ReclassifyUndecodableMxf(clip, cardPath, probed) is { } arri) return arri;
+        if (probed?.Width != null) return new(clip, probed);
+        if (ReclassifyUndecodableMxf(clip, cardPath, probed, out var arriError) is { } arri) return new(arri.Clip, arri.Info);
         if (failed != null) throw failed;
-        return (clip, probed!);
+        return new(clip, probed!, arriError != null ? UndecodableNote(arriError) : null);
+    }
+
+    /// The note of an MXF that neither ffmpeg nor art-cmd could read: art-cmd's own words (its error line, or that it
+    /// timed out) — the clip may be ARRIRAW that art-cmd failed on, so never a guess at another codec.
+    internal static string UndecodableNote(Exception arriError)
+    {
+        var why = arriError is ToolError t ? t.Detail : arriError.Message;
+        why = string.Join(" | ", why.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        if (why.Length > 300) why = why[..300] + "…";
+        return $"kodek nepodporován ffmpegem a art-cmd (ARRIRAW) ho nepřečetl: {why} — zkopírováno a ověřeno, bez proxy";
     }
 
     public ClipInfo Probe(Clip clip, string cardPath) => Probe(clip, cardPath, ffprobeTimeout: null);
@@ -197,8 +207,13 @@ public sealed class ProxyRenderer : IDisposable
 
     /// MXF is a container for many codecs; ARRIRAW/ARRICORE inside it only the ARRI tool can read. `container`: what
     /// ffprobe said about the file (its duration gives the frame count), null when it did not answer.
-    public (Clip Clip, ClipInfo Info)? ReclassifyUndecodableMxf(Clip clip, string cardPath, ClipInfo? container = null)
+    public (Clip Clip, ClipInfo Info)? ReclassifyUndecodableMxf(Clip clip, string cardPath, ClipInfo? container = null) =>
+        ReclassifyUndecodableMxf(clip, cardPath, container, out _);
+
+    /// `error`: why the ARRI tool could not read the clip (logged too); null when it was not asked or found no picture.
+    internal (Clip Clip, ClipInfo Info)? ReclassifyUndecodableMxf(Clip clip, string cardPath, ClipInfo? container, out Exception? error)
     {
+        error = null;
         if (clip.Format != ClipFormat.Video || !IsMxf(clip)) return null;
         var arri = backends[ClipFormat.Arriraw];
         if (!arri.IsAvailable(Tools)) return null;
@@ -209,9 +224,12 @@ public sealed class ProxyRenderer : IDisposable
             if (info.Width == null) return null;
             return (new Clip { Name = clip.Name, Path = clip.Path, Format = ClipFormat.Arriraw, Segments = clip.Segments, Bytes = clip.Bytes, IsCameraProxy = clip.IsCameraProxy }, info);
         }
-        catch (Exception)
+        catch (Exception e)
         {
-            // Best effort: any failure (tool error, malformed metadata JSON, ...) just means "not ARRI".
+            // Not ARRI as far as can be told (a tool error, a time limit, malformed metadata JSON …): the clip is copied and
+            // verified without a proxy; why goes to the log and, through Analyze, to the clip's note.
+            error = e;
+            Log?.Invoke($"ARRI check {clip.Name}: {e.Message}");
             return null;
         }
     }
@@ -665,6 +683,17 @@ public sealed class ProxyRenderer : IDisposable
             try { input?.Dispose(); } catch (Exception) { }
             try { sink?.Dispose(); } catch (Exception) { }
         }
+    }
+}
+
+/// What the clip analysis found: the clip (an MXF may come back as ARRIRAW), its info, and — for an MXF ffmpeg cannot
+/// decode whose ARRI check failed — why, as the clip's note (null: the generic "kodek nepodporován" one).
+public sealed record ClipAnalysis(Clip Clip, ClipInfo Info, string? UndecodableNote = null)
+{
+    public void Deconstruct(out Clip clip, out ClipInfo info)
+    {
+        clip = Clip;
+        info = Info;
     }
 }
 
