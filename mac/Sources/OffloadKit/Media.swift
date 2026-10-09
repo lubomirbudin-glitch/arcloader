@@ -125,7 +125,8 @@ public enum ClipDetector {
 
 enum FFProbe {
     static func probe(_ ffprobe: String, _ path: String) throws -> ClipInfo {
-        let out = try ToolProcess.run(ffprobe, ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", path])
+        let out = try ToolProcess.run(ffprobe, ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", path],
+                                      timeout: 120)
         return try parse(Data(out.utf8))
     }
 

@@ -237,8 +237,12 @@ struct ARRIRAWBackend: RawBackend {
         let json = NSTemporaryDirectory() + "art-meta-\(UUID().uuidString).json"
         defer { try? FileManager.default.removeItem(atPath: json) }
         // art-cmd writes art.log into the working directory — never let that be the card or a destination.
-        try ToolProcess.run(tools.artCmd!, ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look"],
-                            cwd: NSTemporaryDirectory())
+        // Only the FIRST frame: a full export walks the metadata of every frame, i.e. reads the whole clip (minutes on a
+        // 120 GB ARRIRAW 4.6K clip); clip metadata and the start timecode are all there in frame 0. The frame count then
+        // comes from the container (ffprobe) or, for an .ari sequence, from the number of frame files.
+        try ToolProcess.run(tools.artCmd!, ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look",
+                                            "--start", "0", "--duration", "1"],
+                            cwd: NSTemporaryDirectory(), timeout: 180)
         guard var root = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: json))) as? [String: Any] else {
             throw ToolError(tool: "art-cmd", status: -1, message: "unreadable metadata")
         }
@@ -264,9 +268,11 @@ struct ARRIRAWBackend: RawBackend {
         if let rate = value("nativePictureEssenceDescriptor.file.sampleRate") as? String {
             c.frameRate = rate.hasSuffix("/1") ? String(rate.dropLast(2)) : rate
         }
-        c.frames = int("clipDuration")
         let parts = (c.frameRate ?? "").split(separator: "/").compactMap { Double($0) }
         let fps = parts.count == 2 ? parts[0] / parts[1] : parts.first
+        // With --duration 1 art-cmd reports clipDuration = 1; trust it only when it is larger.
+        if let n = int("clipDuration"), n > 1 { c.frames = n }
+        else { c.frames = ARRIRAWBackend.frameCount(path, fps: fps, tools: tools) }
         if let n = c.frames, let fps, fps > 0 { c.duration = Double(n) / fps }
         c.timecode = value("frames.timecode") as? String
         c.camera = value("cameraModel") as? String
@@ -278,6 +284,32 @@ struct ARRIRAWBackend: RawBackend {
         }
         c.audioChannels = flat.keys.contains { $0.hasSuffix("nativeSoundEssenceDescriptorList.blockAlign") } ? 2 : 0
         return c
+    }
+
+    /// Frame count without reading the clip: an .ari/.arx sequence folder counts its frame files; an MXF takes the
+    /// video stream's duration from ffprobe (the MXF index — fast) as `duration_ts` (time base 1/fps) or duration × fps.
+    static func frameCount(_ path: String, fps: Double?, tools: ExternalTools) -> Int? {
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
+            let n = ((try? FileManager.default.contentsOfDirectory(atPath: path)) ?? [])
+                .filter { ["ari", "arx"].contains(($0 as NSString).pathExtension.lowercased()) }.count
+            return n > 0 ? n : nil
+        }
+        guard let ffprobe = tools.ffprobe,
+              let out = try? ToolProcess.run(ffprobe, ["-v", "error", "-select_streams", "v:0", "-show_entries",
+                                                        "stream=duration_ts,time_base,duration:format=duration",
+                                                        "-of", "json", path], timeout: 60),
+              let root = try? JSONSerialization.jsonObject(with: Data(out.utf8)) as? [String: Any] else { return nil }
+        let stream = (root["streams"] as? [[String: Any]])?.first ?? [:]
+        let tb = (stream["time_base"] as? String).map { $0.split(separator: "/").compactMap { Double($0) } } ?? []
+        if let ts = (stream["duration_ts"] as? NSNumber)?.intValue ?? (stream["duration_ts"] as? String).flatMap({ Int($0) }),
+           tb.count == 2, let fps, fps > 0, abs(tb[1] / tb[0] - fps) < 0.01, ts > 0 {
+            return ts
+        }
+        let seconds = (stream["duration"] as? String).flatMap(Double.init)
+            ?? ((root["format"] as? [String: Any])?["duration"] as? String).flatMap(Double.init)
+        guard let seconds, let fps, fps > 0, seconds > 0 else { return nil }
+        return Int((seconds * fps).rounded())
     }
 
     /// The LUT decides which log it needs when its name says so; otherwise the clip's own log encoding

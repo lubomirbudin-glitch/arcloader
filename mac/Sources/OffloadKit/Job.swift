@@ -167,6 +167,8 @@ public final class OffloadJob {
             let plan = try prepare()
             update { $0.phase = .copying }
             let report = try engine.run(plan)
+            // The record of the copy (report, hashes, MHL) on this Mac too, right after verification.
+            LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
             setReport(report)
             update {
                 $0.safeToEject = report.safeToEject
@@ -250,7 +252,13 @@ public final class OffloadJob {
                 continue
             }
             do {
-                var info = try renderer.probe(clip, cardPath: plan.cardPaths[d])
+                var info: ClipInfo
+                do {
+                    info = try renderer.probe(clip, cardPath: plan.cardPaths[d])
+                } catch where clip.format == .video && (clip.path as NSString).pathExtension.lowercased() == "mxf" {
+                    info = ClipInfo()   // ffprobe failed or timed out on an MXF: let the ARRI tool try below
+                    log?("probe \(clip.name): ffprobe: \(error) — trying art-cmd")
+                }
                 if clip.format == .video && info.width == nil {
                     if let (arri, arriInfo) = renderer.reclassifyUndecodableMXF(clip, cardPath: plan.cardPaths[d]) {
                         entries[i].clip = arri
@@ -378,12 +386,14 @@ public final class OffloadJob {
             // The HTML report is already on disk; the PDF is a convenience copy.
             fputs("PDF report failed: \(error)\n", stderr)
         }
+        LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
     }
 
     private func rewriteReports(_ report: OffloadReport, plan: OffloadPlan) {
         for path in plan.cardPaths {
             try? report.write(cardPath: path, includeHashRecords: false)
         }
+        LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
     }
 
     private func tryThumbnails(_ renderer: ProxyRenderer, _ clip: Clip, cardPath: String, info: ClipInfo,

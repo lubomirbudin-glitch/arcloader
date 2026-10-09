@@ -210,6 +210,8 @@ struct StructureSection: View {
                 }
             }
             Text("…/\(model.dateString)/<název karty>/").font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+            Toggle("Připojené disky automaticky do cílů", isOn: $model.settings.autoDestinations)
+                .help("Externí disk, na který jde zapisovat a který nevypadá jako karta, se po připojení sám přidá do cílů; odpojený zmizí. Ručně odebraný disk se znovu nepřidá.")
             Toggle("Ověřit kopie zpětným čtením (xxHash64)", isOn: $model.settings.verify)
             if !model.settings.verify {
                 Label("Bez ověření není jisté, že data na disku jsou v pořádku.", systemImage: "exclamationmark.triangle")

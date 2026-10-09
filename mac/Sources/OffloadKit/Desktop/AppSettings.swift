@@ -9,6 +9,10 @@ public struct AppSettings: Codable, Equatable {
     public var proxy = ProxySettings()
     public var tools = ExternalTools()
     public var portNames: [String: String] = [:]
+    /// Connected external drives join the destinations by themselves, unplugged ones leave (2026-10-09).
+    public var autoDestinations = true
+    /// Drives the user removed from the destinations by hand — never added automatically again (identity or name).
+    public var ignoredVolumes: [String] = []
 
     public init() {}
 }
@@ -28,6 +32,8 @@ public enum SettingsStore {
         if let p = section(root["proxy"], as: ProxySettings.self) { s.proxy = p }
         if let t = section(root["tools"], as: ExternalTools.self) { s.tools = t }
         if let names = root["portNames"] as? [String: Any] { s.portNames = names.compactMapValues { $0 as? String } }
+        if let v = bool(root["autoDestinations"]) { s.autoDestinations = v }
+        if let v = root["ignoredVolumes"] as? [Any] { s.ignoredVolumes = v.compactMap { $0 as? String } }
         return normalize(s, catalog: catalog)
     }
 

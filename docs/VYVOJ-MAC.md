@@ -7,26 +7,6 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
-- **Zrychlit analýzu klipů ARRIRAW (zadání uživatele 2026-10-09, priorita):** u karty A_0009 (855 GB, 7 klipů
-  ARRIRAW 4.6K OG) trvala analýza přes 15 minut ještě před prvním proxy. Podezření: `art-cmd export` (probe v
-  `ARRIRAWBackend`, volaný i z `reclassifyUndecodableMXF`) vypisuje metadata **každého snímku**, takže čte celý ~120GB
-  klip, a to jen kvůli metadatům klipu a TC prvního snímku. Postup: (1) změřit `art-cmd export` s `--duration 1` proti
-  bez něj na velkém klipu; (2) když platí, exportovat jen 1 snímek (případně `--start 0 --duration 1`) a ověřit, že
-  rozlišení, fps, počet snímků (`clipDuration`), TC, kamera, log a squeeze zůstanou stejné; (3) zkontrolovat, že se
-  klip neprobuje dvakrát (ffprobe → reclassify → probe); (4) ffprobe na ARRIRAW MXF má mít časový limit. Cíl: analýza
-  karty v řádu sekund na klip. Totéž ověřit na Windows (`RawBackends.cs`).
-
-- **Kopie reportu i na počítači (zadání uživatele 2026-10-09):** každý report karty (`_REPORT/` — HTML, PDF, JSON,
-  TXT, `.xxh64`, případně `.md5`, CSV/ALE — a `ascmhl/`) se po dokončení úlohy zkopíruje i lokálně, např.
-  `~/Documents/Offload reporty/<datum>/<karta>/`, a při každém přepisu reportu (analýza, proxy) se kopie obnoví.
-  Důvod: disky s materiálem se odevzdávají dál a report pak na place chybí (stalo se u disků 1 a 2). Selhání lokální
-  kopie nesmí shodit úlohu (jen poznámka). Platí pro obě verze (Windows: `%USERPROFILE%\Documents\Offload reporty\`).
-
-- **Automatické načtení disků (zadání uživatele 2026-10-08):** externí disky se po připojení samy přidají do **cílů**
-  a čtečky karet (resp. karty v nich) do **zdrojů** — dnes se cíle vybírají ručně a zdroje se označují jen podle
-  struktury karty. Rozlišit čtečku od disku (USB třída / IOKit, typ svazku, struktura kamerové karty), nikdy nepřidat
-  jako cíl svazek, který vypadá jako karta, ani interní disk; přidaný cíl jde odebrat a zapamatovat si odebrání.
-
 - **Dorovnání 2 s Windows 0.6.0 — plány 6–10 a dodatky 0.5.x (2026-10-08):** návrh — oddíl „Doplněk 3“ (D.21–D.28)
   v [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
   plán po úkolech s kódem a testy [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md)
@@ -73,6 +53,19 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
       „Vlastní…“ ponechá volbu; vestavěný LUT přežije restart; výběr složky pro proxy, červená hláška po odpojení, křížek
       ji smaže; kontrola odpojení těsně před startem; ostrý offload se složkou → řádky v reportu;
     - úkol 25: ikona v Docku, ⌘⇥ a Finderu; 11 LUTů v *Proxy › LUT*.
+
+## 2026-10-09 — build „Offload C“ (0.2.0C): rychlá analýza ARRIRAW, report i na Macu, disky do cílů samy
+
+- **Analýza ARRIRAW za sekundy:** `art-cmd export` jen z prvního snímku (`--start 0 --duration 1`, limit 180 s) — celý
+  export četl metadata každého snímku, tedy celý ~120GB klip (karta A_0009: přes 15 min). Počet snímků z ffprobe
+  (`duration_ts` z indexu MXF) nebo z počtu souborů u sekvence `.ari`; ověřeno na vzorcích ALEXA 35 a Mini (165 / 240
+  snímků, TC, kamera, LogC4/LogC3 stejné jako z celého exportu). ffprobe má limit 120 s; když u MXF selže, zkusí se art-cmd.
+- **Kopie reportu na Macu:** `~/Documents/Offload reporty/<datum>/<karta>/` (`_REPORT` + `ascmhl`) hned po ověření
+  a po každém přepisu reportu (i PDF); disky se jen čtou, selhání jen v logu (`LocalReports.swift`; v XCTestu vypnuté).
+- **Připojené disky samy do cílů** (přepínač „Připojené disky automaticky do cílů“, výchozí zapnuto): zapisovatelný
+  externí disk, který nevypadá jako karta a není zdrojem, se přidá se stejnou podsložkou jako ostatní cíle (např.
+  `/Volumes/TSOTB_5/3ND`); odpojený disk z cílů zmizí; ručně odebraný disk se znovu nepřidá (`ignoredVolumes`).
+  Cíle mimo /Volumes (složka na Macu) se nemění. Karty ve čtečkách se do zdrojů označují jako dosud.
 
 ## 2026-10-08/09 — první ostré nasazení, opravy (build „Offload b“, 0.2.0b)
 

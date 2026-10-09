@@ -232,11 +232,23 @@ final class AppModel: ObservableObject {
         let roots = settings.destRoots
         probeQueue.async { [weak self] in
             let found = Volumes.scan(destRoots: roots)
-            DispatchQueue.main.async { self?.applyVolumes(found) }
+            let mounted = Set((FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: nil, options: []) ?? [])
+                .map(\.path))
+            DispatchQueue.main.async { self?.applyVolumes(found, mounted: mounted) }
         }
     }
 
-    private func applyVolumes(_ found: [VolumeItem]) {
+    private func applyVolumes(_ found: [VolumeItem], mounted: Set<String>) {
+        if settings.autoDestinations {
+            let next = Volumes.autoDestinations(current: settings.destRoots, found: found, mounted: mounted,
+                                                ignored: Set(settings.ignoredVolumes),
+                                                sources: selectedSources.union(manualSources))
+            if next != settings.destRoots {
+                settings.destRoots = next
+                refreshVolumes()   // the new destinations are no longer card candidates
+                return
+            }
+        }
         selectedSources = Volumes.selectionAfterRefresh(previousPaths: volumes.map(\.path), found: found,
                                                         selected: selectedSources, manual: manualSources)
         volumes = found
@@ -313,10 +325,19 @@ final class AppModel: ObservableObject {
     func addDestination() {
         guard let path = pickFolder(title: "Vyber cílovou složku (root)") else { return }
         if !settings.destRoots.contains(path) { settings.destRoots.append(path) }
+        if let vol = Volumes.volumeRoot(of: path) {   // added by hand again: automatic again
+            let key = volumes.first { $0.path == vol }.map(Volumes.volumeKey) ?? (vol as NSString).lastPathComponent
+            settings.ignoredVolumes.removeAll { $0 == key || $0 == (vol as NSString).lastPathComponent }
+        }
         refreshVolumes()
     }
 
     func removeDestination(_ path: String) {
+        // Removed by hand: remember the drive so it is not added automatically again.
+        if let vol = Volumes.volumeRoot(of: path) {
+            let key = volumes.first { $0.path == vol }.map(Volumes.volumeKey) ?? (vol as NSString).lastPathComponent
+            if !settings.ignoredVolumes.contains(key) { settings.ignoredVolumes.append(key) }
+        }
         settings.destRoots.removeAll { $0 == path }
         refreshVolumes()
     }
