@@ -402,7 +402,10 @@ internal sealed class ArriBackend : IRawBackend
         }
         else
         {
-            args.AddRange(["--desqueeze", "--output-height", s.Height.ToString(CultureInfo.InvariantCulture)]);
+            // --desqueeze only for anamorphic lenses: it halves art-cmd's speed (4.6K Open Gate 25.7 → 11.6 fps on the
+            // Mac) and changes nothing for spherical ones. ParseMetadata sets Squeeze only above 1.01.
+            if (sq > 1.01) args.Add("--desqueeze");
+            args.AddRange(["--output-height", s.Height.ToString(CultureInfo.InvariantCulture)]);
         }
         if (look.Log) args.AddRange(["--target-colorspace", look.ArriColorSpace ?? ColorSpace(null, c)]);
         else args.AddRange(["--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"]);

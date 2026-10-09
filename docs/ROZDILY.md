@@ -88,7 +88,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Paralelismus | GCD sériové fronty | vlákno + fronta na cíl (`SerialWorker`) |
 | xxHash64 | C knihovna xxhash | `System.IO.Hashing.XxHash64` |
 | HW enkodér proxy | VideoToolbox | NVENC → QSV → AMF → software (zjistí se automaticky) |
-| Dekódování pro proxy | VideoToolbox (-hwaccel videotoolbox) jen pro H.264/HEVC | -hwaccel auto jen pro H.264/HEVC |
+| Dekódování pro proxy | softwarově (VideoToolbox vypnutý, zelené snímky) | softwarově; volitelně `-hwaccel auto` jen pro H.264/HEVC (`proxy.hardwareDecode`, `--hw-decode`, experimentální) |
 | PDF | WebKit tisk; co je širší než A4 na šířku, se před tiskem zmenší | Edge headless `--print-to-pdf`; co je širší než A4 na šířku, se před tiskem zmenší |
 | Detekce karet | `NSWorkspace` notifikace | `WM_DEVICECHANGE` |
 | Vysunutí | `unmountAndEjectDevice` | `FSCTL_LOCK/DISMOUNT_VOLUME` + `CM_Request_Device_Eject` |
@@ -142,9 +142,9 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
   a ukazuje ho v řádku „Proxy: H.264 (h264_nvenc), …“ v HTML/PDF. Mac klíč nezná a ignoruje ho.
 - **Verze v reportu:** Mac `0.2.0`, Windows `0.3.0-win` — z reportu je vidět, která verze kopírovala.
-- **Hardwarové dekódování proxy** (2026-10-08): Mac ho vypnul (VideoToolbox na Intelu dával zelené snímky), Windows
-  dekóduje H.264/HEVC s `-hwaccel auto` — na Windows prověřit (VYVOJ-WINDOWS, Naplánováno).
-- **ARRIRAW `--desqueeze`:** Mac jen u anamorfních klipů (2× rychlejší dekódování), Windows vždy.
+- **Hardwarové dekódování proxy** (2026-10-08/09): obě verze dekódují H.264/HEVC softwarově (Mac na Intelu dostal
+  z VideoToolboxu zelené snímky bez chyby); kódování zůstává hardwarové. Windows ho umí zapnout volbou „Hardwarové
+  dekódování (experimentální)“ / `--hw-decode` (`proxy.hardwareDecode`), Mac volbu nemá.
 - **Vlastní soubor místo vestavěného LUTu:** obě verze — Mac `~/Library/Application Support/Offload/luts/<id>.cube`,
   Windows `%APPDATA%\Offload\luts\<id>.cube`; v seznamu „(vlastní soubor)“. Windows navíc zapíše cestu k souboru do
   důvodu LUTu v reportu (`clips[].lut.reason`).

@@ -102,7 +102,7 @@ public class RawBackendsTests
     }
 
     [Fact]
-    public void Arri_ArgsWithoutCropDesqueezeAndLog()
+    public void Arri_ArgsWithoutCrop_SphericalNoDesqueeze_Log()
     {
         var info = new ClipInfo { Camera = "ALEXA 35" };
         var custom = new LutUse("custom", null, "look.cube", "vlastní LUT") { File = "look.cube" };
@@ -110,7 +110,7 @@ public class RawBackendsTests
         Assert.False(cropped);
         Assert.Null(json);
         Assert.Equal(["process", "--input", "in", "--video-codec", "prores422lt", "--deflip", "--output", "out",
-            "--desqueeze", "--output-height", "720", "--target-colorspace", "AWG4/D65/LogC4"], args);
+            "--output-height", "720", "--target-colorspace", "AWG4/D65/LogC4"], args);   // spherical: no --desqueeze
     }
 
     // Review focus 5
