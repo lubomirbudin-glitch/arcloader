@@ -264,7 +264,7 @@ public sealed class ProxyRenderer : IDisposable
     internal static readonly string[] TapInputArgs = ["-short_seek_size", "65536"];
 
     FrameSource SourceFor(Clip clip, string cardPath, ClipInfo info, RawLook look, double? singleFrameAt, bool hwaccel, string? inputUrl = null,
-        Func<bool>? isCancelled = null)
+        Func<bool>? isCancelled = null, Action<string>? intermediate = null)
     {
         var path = Layout.Join(cardPath, clip.Path);
         if (clip.Format == ClipFormat.Video)
@@ -277,7 +277,9 @@ public sealed class ProxyRenderer : IDisposable
             };
         }
         if (!backends.TryGetValue(clip.Format, out var b)) throw new ToolError(clip.Format.Label(), -1, Msg.NoDecoderShort);
-        return Logged(() => b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt, isCancelled));
+        return Logged(() => b is ArriBackend arri && intermediate != null
+            ? arri.Source(path, info, Settings, look, Tools, workDir, singleFrameAt, isCancelled, intermediate)
+            : b.Source(path, info, Settings, look, Tools, workDir, singleFrameAt, isCancelled));
     }
 
     /// The .cube for this clip by its name in the work folder, or null for no LUT. Copied on first use, once per file:
@@ -493,8 +495,8 @@ public sealed class ProxyRenderer : IDisposable
         {
             // ARRIRAW: art-cmd writes the whole ProRes LT intermediate first and reports no progress itself — its growing
             // size is 0–80 % of the clip, ffmpeg's own progress the rest (the bar never sits at 0 % for the whole decode).
-            using (IntermediateProgress.Start(workDir, info, Settings, progress, IntermediatePoll))
-                src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl, isCancelled);
+            using (var estimate = IntermediateProgress.Start(info, Settings, progress, IntermediatePoll))
+                src = SourceFor(clip, cardPath, info, LookFor(lutFile != null ? lut : null, info), null, hwaccel, inputUrl, isCancelled, estimate == null ? null : estimate.Watch);
             var whole = progress;
             progress = f => whole(IntermediateProgress.Share + (1 - IntermediateProgress.Share) * f);
         }
@@ -697,56 +699,63 @@ public sealed record ClipAnalysis(Clip Clip, ClipInfo Info, string? UndecodableN
     }
 }
 
-/// Progress while art-cmd writes the ARRIRAW intermediate (`<workDir>\ari-*\intermediate.mxf`), which it does not report
-/// itself: the file's size against the size it should reach — frames × output pixels × 0.21 bytes, about ProRes 422 LT
-/// (≈ 100 Mb/s at 1080p 29.97) — as 0–80 % of the clip. An estimate, so never more than 95 % of that share.
+/// Progress while art-cmd writes the ARRIRAW intermediate, which it does not report itself: the size of this clip's
+/// intermediate (Watch — never one an earlier clip left in the work folder) against the size it should reach — frames ×
+/// output pixels × 0.21 bytes, about ProRes 422 LT (≈ 100 Mb/s at 1080p 29.97) — as 0–80 % of the clip. An estimate, so
+/// never more than 95 % of that share.
 internal sealed class IntermediateProgress : IDisposable
 {
     public const double Share = 0.8;
     const double BytesPerPixel = 0.21;
 
-    readonly string workDir;
     readonly double expected;
     readonly Action<double> progress;
     readonly Timer timer;
     readonly Lock gate = new();
+    string? file;
     bool stopped;
     double reported;
 
-    IntermediateProgress(string workDir, double expected, Action<double> progress, TimeSpan interval)
+    IntermediateProgress(double expected, Action<double> progress, TimeSpan interval)
     {
-        this.workDir = workDir;
         this.expected = expected;
         this.progress = progress;
         timer = new Timer(_ => Poll(), null, interval, interval);
     }
 
-    /// The intermediate's expected size in bytes, or null when the clip's frames or size are not known.
+    /// The intermediate's expected size in bytes, or null when the clip's frames or size are not known (or make no
+    /// sense: a width or aspect of 0 would give 0 bytes and a NaN fraction).
     internal static double? ExpectedBytes(ClipInfo info, ProxySettings s)
     {
         long? frames = info.Frames is int known ? known
             : info.Duration is double d && Timecode.Fps(info.FrameRate) is double fps ? (long)Math.Round(d * fps) : null;
-        if (frames is not long n || n <= 0 || info.Width is not int w || info.Height is not int h || h <= 0) return null;
+        if (frames is not long n || n <= 0 || info.Width is not int w || w <= 0 || info.Height is not int h || h <= 0 || s.Height <= 0) return null;
         double outH = s.Height;
         double aspect = s.FrameAspect ?? w * (info.Squeeze ?? 1) / h;
-        return n * outH * (outH * aspect) * BytesPerPixel;
+        double expected = n * outH * (outH * aspect) * BytesPerPixel;
+        return double.IsFinite(expected) && expected > 0 ? expected : null;
     }
 
     /// Null (nothing to report) when the expected size cannot be told.
-    public static IntermediateProgress? Start(string workDir, ClipInfo info, ProxySettings s, Action<double> progress, TimeSpan interval) =>
-        ExpectedBytes(info, s) is double expected ? new IntermediateProgress(workDir, expected, progress, interval) : null;
+    public static IntermediateProgress? Start(ClipInfo info, ProxySettings s, Action<double> progress, TimeSpan interval) =>
+        ExpectedBytes(info, s) is double expected ? new IntermediateProgress(expected, progress, interval) : null;
+
+    /// The intermediate art-cmd is about to write for this clip; nothing is reported before.
+    public void Watch(string intermediate)
+    {
+        lock (gate) file = intermediate;
+    }
 
     void Poll()
     {
         // Never an exception on the timer's thread: a folder or file going away just means "no new size".
         try
         {
-            long size = 0;
-            foreach (var dir in Directory.EnumerateDirectories(workDir, "ari-*"))
-            {
-                var file = new FileInfo(Path.Combine(dir, "intermediate.mxf"));
-                if (file.Exists) size = Math.Max(size, file.Length);
-            }
+            string? watched;
+            lock (gate) watched = file;
+            if (watched == null) return;
+            var info = new FileInfo(watched);
+            long size = info.Exists ? info.Length : 0;
             double fraction = Math.Min(0.95, size / expected) * Share;
             lock (gate)
             {

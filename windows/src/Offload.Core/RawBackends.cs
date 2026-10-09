@@ -59,15 +59,19 @@ internal static class RawBackends
 
     /// A RAW tool's log lines that explain a failure, on one line: its [error]/[critical] lines (else the last three),
     /// without the timestamp and logger prefix ("[2026-10-05 10:00:00.000] [art] [error] …" → "[error] …").
-    public static string LogTail(string output)
+    public static string LogTail(string output) => ErrorLines(output) ?? string.Join(" | ", Lines(output).TakeLast(3));
+
+    /// Only the [error]/[critical] lines (as LogTail writes them), or null when the tool logged none.
+    public static string? ErrorLines(string output)
     {
-        var lines = output.Split('\n', StringSplitOptions.TrimEntries)
-            .Select(s => System.Text.RegularExpressions.Regex.Replace(s, @"^\[[^\]]*\]\s*\[[^\]]*\]\s*(?=\[)", ""))
-            .Select(s => s.Length > 300 ? s[..300] : s)
-            .Where(s => s.Length > 0).ToList();
-        var errors = lines.Where(s => s.StartsWith("[error]", StringComparison.Ordinal) || s.StartsWith("[critical]", StringComparison.Ordinal)).ToList();
-        return string.Join(" | ", errors.Count > 0 ? errors : lines.TakeLast(3));
+        var errors = Lines(output).Where(s => s.StartsWith("[error]", StringComparison.Ordinal) || s.StartsWith("[critical]", StringComparison.Ordinal)).ToList();
+        return errors.Count > 0 ? string.Join(" | ", errors) : null;
     }
+
+    static List<string> Lines(string output) => output.Split('\n', StringSplitOptions.TrimEntries)
+        .Select(s => System.Text.RegularExpressions.Regex.Replace(s, @"^\[[^\]]*\]\s*\[[^\]]*\]\s*(?=\[)", ""))
+        .Select(s => s.Length > 300 ? s[..300] : s)
+        .Where(s => s.Length > 0).ToList();
 
     /// A RAW tool that ended with exit code 0 but wrote no output (art-cmd does that when it refuses an argument): never a
     /// silent "no proxy" — the clip's note says so in Czech, the tool's own words (`log`, LogTail) go with it and to the log.
@@ -539,7 +543,13 @@ internal sealed class ArriBackend : IRawBackend
     }
 
     public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
-        Func<bool>? isCancelled = null)
+        Func<bool>? isCancelled = null) =>
+        Source(path, info, settings, look, tools, workDir, singleFrameAt, isCancelled, intermediate: null);
+
+    /// `intermediate` is told the intermediate's path before art-cmd starts writing it (the progress estimate follows
+    /// that file only, never one an earlier clip left behind).
+    internal FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,
+        Func<bool>? isCancelled, Action<string>? intermediate)
     {
         if (singleFrameAt != null) throw new ToolError("art-cmd", -1, "thumbnail from proxy");
         var dir = RawBackends.FreshDir(workDir, "ari");
@@ -549,10 +559,15 @@ internal sealed class ArriBackend : IRawBackend
         {
             var (args, json, cropped) = Args(path, output, info, settings, look, parameters);
             if (json != null) File.WriteAllText(parameters, json);
-            // art-cmd logs (its errors too) to stdout and may exit 0 without the output file: both cases quote its own lines.
+            intermediate?.Invoke(output);
+            // art-cmd logs (its errors too) to stdout and may exit 0 without the output file — or with an empty one: both
+            // cases quote its own lines.
             var (exit, log) = ToolProcess.RunCombined(tools.ArtCmd!, args, dir, isCancelled: isCancelled);
             if (exit != 0) throw new ToolError("art-cmd", exit, RawBackends.LogTail(log));
-            if (!File.Exists(output)) throw RawBackends.NoOutput("ARRIRAW", "art-cmd", RawBackends.LogTail(log));
+            var written = new FileInfo(output);
+            if (!written.Exists || written.Length == 0) throw RawBackends.NoOutput("ARRIRAW", "art-cmd", RawBackends.LogTail(log));
+            // Exit 0 with error lines (a damaged frame?): the proxy is made, art-cmd's words go to the job's log.
+            if (RawBackends.ErrorLines(log) is string errors) Log?.Invoke($"ARRIRAW {Path.GetFileName(path)}: art-cmd ended with exit 0 but logged: {errors}");
             return new FrameSource { InputArgs = ["-i", output], AlreadyCropped = cropped, Cleanup = [dir] };
         }
         catch

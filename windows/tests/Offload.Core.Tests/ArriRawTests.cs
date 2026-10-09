@@ -68,6 +68,13 @@ public class ArriRawTests
             :Hang
             ping -n 60 127.0.0.1 >nul
             exit /b 0
+            :Empty
+            type nul>"%OUT%"
+            exit /b 0
+            :WriteWithError
+            echo [2026-10-05 10:00:00.000] [art] [error] frame 12: checksum mismatch
+            echo intermediate>"%OUT%"
+            exit /b 0
             :Grow
             type nul>"%OUT%"
             for /l %%i in (1,1,4) do (
@@ -264,6 +271,65 @@ public class ArriRawTests
         Assert.Equal(48 * 1080 * (1080 * 1.66) * 0.21, IntermediateProgress.ExpectedBytes(new ClipInfo { Width = 4608, Height = 3164, Duration = 2, FrameRate = "24" }, new ProxySettings { Height = 1080, FrameAspect = 1.66 })!.Value, 3);
         Assert.Null(IntermediateProgress.ExpectedBytes(new ClipInfo { Width = 4608, Height = 3164 }, s));
         Assert.Null(IntermediateProgress.ExpectedBytes(new ClipInfo { Frames = 24 }, s));
+    }
+
+    /// Metadata with a width of 0 (malformed, or a field art-cmd leaves at 0) gives no estimate — never 0/0 = NaN progress.
+    [Fact]
+    public void ExpectedBytes_ZeroWidthOrAspect_NoEstimate()
+    {
+        Assert.Null(IntermediateProgress.ExpectedBytes(new ClipInfo { Width = 0, Height = 3164, Frames = 24 }, new ProxySettings { Height = 1080 }));
+        Assert.Null(IntermediateProgress.ExpectedBytes(new ClipInfo { Width = 4608, Height = 3164, Frames = 24 }, new ProxySettings { Height = 1080, FrameAspect = 0 }));
+        Assert.Null(IntermediateProgress.ExpectedBytes(new ClipInfo { Width = 4608, Height = 3164, Frames = 24 }, new ProxySettings { Height = 0 }));
+    }
+
+    /// An intermediate left over from an earlier clip (a file a killed ffmpeg or a virus scanner still held) is not this
+    /// clip's: the estimate follows only the folder of the art-cmd run in progress.
+    [Fact]
+    public void Progress_IgnoresAStaleIntermediate()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        File.WriteAllBytes(Path.Combine(dir.Path, "chunk.bin"), new byte[25_000]);
+        var info = new ClipInfo { Codec = "ARRIRAW", Width = 1800, Height = 1000, FrameRate = "10", Frames = 10, Duration = 1 };
+        var seen = new List<double>();
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Grow")) { IntermediatePoll = TimeSpan.FromMilliseconds(100) };
+        var stale = Directory.CreateDirectory(Path.Combine(r.WorkDir, "ari-stale0"));
+        File.WriteAllBytes(Path.Combine(stale.FullName, "intermediate.mxf"), new byte[2_000_000]);   // 16× the expected size
+
+        Render(r, card, info, f => { lock (seen) seen.Add(f); });
+
+        lock (seen)
+        {
+            var during = seen.Where(f => f > 0 && f < IntermediateProgress.Share).ToList();
+            Assert.True(during.Count >= 2, $"progress during art-cmd: {string.Join(", ", seen)}");
+            Assert.True(during[0] < 0.5 * IntermediateProgress.Share, $"first estimate from the stale file: {string.Join(", ", seen)}");
+        }
+    }
+
+    // --- Review M-5: an empty intermediate is no output; art-cmd's [error] lines with exit 0 go to the log ---
+
+    [Fact]
+    public void EmptyIntermediate_IsNoOutput()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Empty"));
+        var e = Assert.ThrowsAny<Exception>(() => Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1 }));
+        Assert.StartsWith("ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla", e.Message);
+        Assert.False(File.Exists(Path.Combine(dir.Path, "ffmpeg.txt")));   // ffmpeg never ran
+        Assert.Empty(Directory.GetDirectories(r.WorkDir, "ari-*"));
+    }
+
+    [Fact]
+    public void ExitZeroWithErrorLines_ProxyMade_ErrorLogged()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var log = new List<string>();
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "WriteWithError")) { Log = l => { lock (log) log.Add(l); } };
+        Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1 });
+        Assert.True(File.Exists(Path.Combine(card, "_PROXY", "A001C001.mov")));
+        lock (log) Assert.Contains(log, l => l.Contains("art-cmd") && l.Contains("[error] frame 12: checksum mismatch"));
     }
 
     // --- 5. Analysis: art-cmd exports one frame's metadata, ffprobe has a time limit, each tool looks once ---
