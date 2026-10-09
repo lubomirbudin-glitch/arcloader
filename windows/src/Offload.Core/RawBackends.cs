@@ -47,6 +47,31 @@ internal static class RawBackends
         Directory.CreateDirectory(d);
         return d;
     }
+
+    public static void DeleteDir(string dir)
+    {
+        try { Directory.Delete(dir, recursive: true); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    /// A RAW tool's log lines that explain a failure, on one line: its [error]/[critical] lines (else the last three),
+    /// without the timestamp and logger prefix ("[2026-10-05 10:00:00.000] [art] [error] …" → "[error] …").
+    public static string LogTail(string output)
+    {
+        var lines = output.Split('\n', StringSplitOptions.TrimEntries)
+            .Select(s => System.Text.RegularExpressions.Regex.Replace(s, @"^\[[^\]]*\]\s*\[[^\]]*\]\s*(?=\[)", ""))
+            .Select(s => s.Length > 300 ? s[..300] : s)
+            .Where(s => s.Length > 0).ToList();
+        var errors = lines.Where(s => s.StartsWith("[error]", StringComparison.Ordinal) || s.StartsWith("[critical]", StringComparison.Ordinal)).ToList();
+        return string.Join(" | ", errors.Count > 0 ? errors : lines.TakeLast(3));
+    }
+
+    /// A RAW tool that ended with exit code 0 but wrote no output (art-cmd does that when it refuses an argument): never a
+    /// silent "no proxy" — the clip's note says so in Czech, the tool's own words (`log`, LogTail) go with it and to the log.
+    public static RawDecoderException NoOutput(string format, string tool, string log) =>
+        new($"{format}: {tool} skončil bez chyby, ale nic nezapsal — proxy nevznikla" + (log.Length > 0 ? $" ({log})" : ""),
+            new ToolError(tool, 0, "no output file" + (log.Length > 0 ? ": " + log : "")));
 }
 
 /// A RAW decoder's error turned into a note for the clip. The decoder's own error (with its stderr) is the inner
@@ -286,9 +311,18 @@ internal sealed class R3dBackend : IRawBackend
         // Thumbnails come from the finished proxy instead (one REDline run per clip is enough).
         if (singleFrameAt != null) throw new ToolError("REDline", -1, "thumbnail from proxy");
         var dir = RawBackends.FreshDir(workDir, "r3d");
-        ToolProcess.Run(tools.Redline!, Args(path, dir, info, settings, look));
-        var mov = RawBackends.NewestFile(dir, "mov") ?? throw new ToolError("REDline", -1, $"no output in {dir}");
-        return new FrameSource { InputArgs = ["-i", mov], Cleanup = [dir] };
+        try
+        {
+            var (exit, log) = ToolProcess.RunCombined(tools.Redline!, Args(path, dir, info, settings, look));
+            if (exit != 0) throw new ToolError("REDline", exit, RawBackends.LogTail(log));
+            var mov = RawBackends.NewestFile(dir, "mov") ?? throw RawBackends.NoOutput("RED R3D", "REDline", RawBackends.LogTail(log));
+            return new FrameSource { InputArgs = ["-i", mov], Cleanup = [dir] };
+        }
+        catch
+        {
+            RawBackends.DeleteDir(dir);
+            throw;
+        }
     }
 }
 
@@ -408,7 +442,10 @@ internal sealed class ArriBackend : IRawBackend
             args.AddRange(["--output-height", s.Height.ToString(CultureInfo.InvariantCulture)]);
         }
         if (look.Log) args.AddRange(["--target-colorspace", look.ArriColorSpace ?? ColorSpace(null, c)]);
-        else args.AddRange(["--target-colorspace", "Rec.709/D65/BT.1886", "--embedded-look"]);
+        // No LUT: the camera's embedded look (ARRI's display transform to Rec.709; plain LogC when the clip has none).
+        // Never with --target-colorspace: art-cmd refuses that pair for looks without DRT LUTs ("target-colorspace argument
+        // is only valid for embedded looks with DRT LUTs") — and exits 0 without writing anything (Mac 3b43352).
+        else args.Add("--embedded-look");
         return (args, json, json != null);
     }
 
@@ -434,11 +471,21 @@ internal sealed class ArriBackend : IRawBackend
         var dir = RawBackends.FreshDir(workDir, "ari");
         var output = Path.Combine(dir, "intermediate.mxf");
         var parameters = Path.Combine(dir, "parameters.json");
-        var (args, json, cropped) = Args(path, output, info, settings, look, parameters);
-        if (json != null) File.WriteAllText(parameters, json);
-        ToolProcess.Run(tools.ArtCmd!, args, dir);
-        if (!File.Exists(output)) throw new ToolError("art-cmd", -1, "no output");
-        return new FrameSource { InputArgs = ["-i", output], AlreadyCropped = cropped, Cleanup = [dir] };
+        try
+        {
+            var (args, json, cropped) = Args(path, output, info, settings, look, parameters);
+            if (json != null) File.WriteAllText(parameters, json);
+            // art-cmd logs (its errors too) to stdout and may exit 0 without the output file: both cases quote its own lines.
+            var (exit, log) = ToolProcess.RunCombined(tools.ArtCmd!, args, dir);
+            if (exit != 0) throw new ToolError("art-cmd", exit, RawBackends.LogTail(log));
+            if (!File.Exists(output)) throw RawBackends.NoOutput("ARRIRAW", "art-cmd", RawBackends.LogTail(log));
+            return new FrameSource { InputArgs = ["-i", output], AlreadyCropped = cropped, Cleanup = [dir] };
+        }
+        catch
+        {
+            RawBackends.DeleteDir(dir);
+            throw;
+        }
     }
 }
 

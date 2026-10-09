@@ -137,4 +137,19 @@ internal sealed class ToolProcess : IDisposable
         lock (output) return output.ToString();
     }
 
+    /// For tools that log to stdout and may report a failure there with exit code 0 (art-cmd): runs to completion and
+    /// returns the exit code with stdout and stderr together, in the order the lines came; the caller decides what failed.
+    public static (int ExitCode, string Output) RunCombined(string exe, IReadOnlyList<string> args, string? cwd = null)
+    {
+        using var p = new ToolProcess(exe, args, cwd, pipeStdin: false);
+        var output = new StringBuilder();
+        void Add(string line)
+        {
+            lock (output) output.Append(line).Append('\n');
+        }
+        p.StderrLine = Add;
+        p.Start(Add);
+        p.WaitForExit();   // without a limit it also waits until both pipes reached their end
+        lock (output) return (p.ExitCode, output.ToString());
+    }
 }

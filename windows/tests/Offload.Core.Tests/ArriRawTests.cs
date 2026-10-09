@@ -143,4 +143,82 @@ public class ArriRawTests
         Assert.Equal("process", process[0]);
         Assert.Equal(expected, process.Contains("--desqueeze"));
     }
+    // --- 6. No LUT: --embedded-look alone; exit code 0 without an output file is an error with a Czech note ---
+
+    [Fact]
+    public void NoLut_EmbeddedLookAlone_TheRealRefusalCannotHappen()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Real"));
+        Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1, Camera = "ALEXA 35" });
+        Assert.True(File.Exists(Path.Combine(card, "_PROXY", "A001C001.mov")));
+        var process = Assert.Single(Calls(dir.Path));
+        Assert.Equal("--embedded-look", process[^1]);
+        Assert.DoesNotContain("--target-colorspace", process);
+    }
+
+    [Fact]
+    public void WithLut_TargetColorspaceWithoutEmbeddedLook()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var cube = Path.Combine(dir.Path, "look.cube");
+        File.WriteAllText(cube, "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n");
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Real"));
+        Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1, Camera = "ALEXA 35" },
+            lut: new LutUse("custom", null, "look.cube", "vlastní LUT") { File = cube });
+        var process = Assert.Single(Calls(dir.Path));
+        Assert.Contains("--target-colorspace", process);
+        Assert.DoesNotContain("--embedded-look", process);
+    }
+
+    [Fact]
+    public void ExitZeroWithoutOutput_CzechNote_ToolWordsInTheLog_NoLeftovers()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var log = new List<string>();
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Nothing")) { Log = l => { lock (log) log.Add(l); } };
+        var e = Assert.ThrowsAny<Exception>(() => Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1 }));
+        Assert.Equal("ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla ([info] processing)", e.Message);
+        lock (log) Assert.Contains("art-cmd failed (exit 0): no output file: [info] processing", log);
+        Assert.False(File.Exists(Path.Combine(card, "_PROXY", "A001C001.mov")));
+        Assert.False(File.Exists(Path.Combine(dir.Path, "ffmpeg.txt")));   // ffmpeg never ran
+    }
+
+    [Fact]
+    public void NonZeroExit_QuotesTheErrorLine()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Fail"));
+        var e = Assert.Throws<ToolError>(() => Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1 }));
+        Assert.Equal("art-cmd failed (exit 3): [error] clip cannot be read", e.Message);
+    }
+
+    [Fact]
+    public void Redline_ExitZeroWithoutOutput_CzechNote()
+    {
+        using var dir = new TempDir();
+        var card = dir.Sub("card");
+        var redline = Path.Combine(dir.Path, "REDline.cmd");
+        File.WriteAllText(redline, "@echo off\r\necho Loading clip\r\necho Done\r\nexit /b 0\r\n");
+        var tools = new ExternalTools { Redline = redline, Ffmpeg = FakeFfmpeg(dir.Path), NoSearch = true }.Resolved();
+        using var r = new ProxyRenderer(Settings, tools);
+        var clip = new Clip { Name = "A001", Path = "A001.R3D", Format = ClipFormat.R3d, Segments = ["A001.R3D"], Bytes = 1 };
+        var e = Assert.ThrowsAny<Exception>(() => r.Render(clip, card, new ClipInfo { Height = 2160, Duration = 1, FrameRate = "24" }, null,
+            Path.Combine(card, "_PROXY", "A001.mov"), _ => { }, () => false));
+        Assert.Equal("RED R3D: REDline skončil bez chyby, ale nic nezapsal — proxy nevznikla (Loading clip | Done)", e.Message);
+    }
+
+    [Fact]
+    public void LogTail_ErrorLinesWithoutPrefix_ElseLastThree()
+    {
+        Assert.Equal("[error] target-colorspace argument is only valid for embedded looks with DRT LUTs",
+            RawBackends.LogTail("[2026-10-05 01:00:00.000] [art] [info] start\n[2026-10-05 01:00:00.001] [art] [error] target-colorspace argument is only valid for embedded looks with DRT LUTs\n[2026-10-05 01:00:00.002] [art] [info] done\n"));
+        Assert.Equal("[critical] boom | [error] two", RawBackends.LogTail("[t] [a] [critical] boom\r\n[t] [a] [error] two\r\n"));
+        Assert.Equal("b | c | d", RawBackends.LogTail("a\nb\n\nc\nd\n"));
+        Assert.Equal("", RawBackends.LogTail(""));
+    }
 }
