@@ -7,6 +7,12 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Kopie reportu i na počítači (zadání uživatele 2026-10-09):** každý report karty (`_REPORT/` — HTML, PDF, JSON,
+  TXT, `.xxh64`, případně `.md5`, CSV/ALE — a `ascmhl/`) se po dokončení úlohy zkopíruje i lokálně, např.
+  `~/Documents/Offload reporty/<datum>/<karta>/`, a při každém přepisu reportu (analýza, proxy) se kopie obnoví.
+  Důvod: disky s materiálem se odevzdávají dál a report pak na place chybí (stalo se u disků 1 a 2). Selhání lokální
+  kopie nesmí shodit úlohu (jen poznámka). Platí pro obě verze (Windows: `%USERPROFILE%\Documents\Offload reporty\`).
+
 - **Automatické načtení disků (zadání uživatele 2026-10-08):** externí disky se po připojení samy přidají do **cílů**
   a čtečky karet (resp. karty v nich) do **zdrojů** — dnes se cíle vybírají ručně a zdroje se označují jen podle
   struktury karty. Rozlišit čtečku od disku (USB třída / IOKit, typ svazku, struktura kamerové karty), nikdy nepřidat
