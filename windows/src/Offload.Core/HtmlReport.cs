@@ -17,8 +17,9 @@ public static partial class HtmlReport
 
     const string RootCss = ":root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e3e3e0;--ok:#1f8a4c;--okbg:#e5f4ea;--bad:#c62828;--badbg:#fdeaea;--warn:#a86400;--warnbg:#fdf2dc;--accent:#3a5bd9}";
     const string DarkCss = "@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2e33;--ok:#4cc27c;--okbg:#14301f;--bad:#ff6b6b;--badbg:#3a1717;--warn:#f0b04a;--warnbg:#382a10;--accent:#8aa2ff}}";
-    /// For the PDF: the full file list expanded and a denser type size (the page rule is in BaseCss).
-    const string PrintCss = "body{font-size:11px}main{padding:0;max-width:none}th,td{padding:5px 7px}h2{break-after:avoid}.stat b{font-size:17px}";
+    /// For the PDF: the full file list expanded and a denser type size (the page rule is in BaseCss). Comes after BaseCss,
+    /// so it wins; panels never scroll, so PdfReport.FitScript sees anything wider than the page and zooms it out.
+    const string PrintCss = "body{font-size:11px}main{padding:0;max-width:none}th,td{padding:5px 7px}h2{break-after:avoid}.stat b{font-size:17px}.panel{overflow:visible}code,.mono{font-size:10px}";
     const string BaseCss =
         "@page{size:A4 landscape;margin:10mm}\n" +
         "*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 \"Segoe UI\",-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;overflow-wrap:anywhere}\n" +
@@ -37,20 +38,21 @@ public static partial class HtmlReport
         ".panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow-x:auto}\n" +
         "table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere}\n" +
         "table.clips{table-layout:fixed}table.clips td,table.clips th{padding:8px 6px;overflow-wrap:normal}table.clips td.clip{overflow-wrap:anywhere}table.clips td.st{overflow-wrap:normal;word-break:normal;hyphens:none}table.clips td.st a{color:inherit}table.clips td.num,table.clips th.num,table.clips td.nw{white-space:nowrap}\n" +
+        "td.nw{white-space:nowrap}table:not(.clips) th{white-space:nowrap}\n" +
         ".c-thumb{width:20%}.c-clip{width:19%}.c-codec{width:8%}.c-res{width:9%}.c-fps{width:5%}.c-dur{width:6%}.c-tc{width:9%}.c-audio{width:5%}.c-size{width:8%}.c-proxy{width:11%}\n" +
         "th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}tr{break-inside:avoid}\n" +
         "td.num{text-align:right;font-variant-numeric:tabular-nums}code,.mono{font:12px ui-monospace,Consolas,Menlo,monospace}\n" +
         "td.clip{min-width:0}.wrap{white-space:normal}\n" +
         ".thumb{display:block;width:100%;max-width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:4px}\n" +
         ".nothumb{width:100%;max-width:128px;aspect-ratio:16/9;border-radius:4px;background:var(--line)}\n" +
-        ".thumbs{display:flex;flex-wrap:wrap;gap:4px}.thumbs figure{margin:0;flex:1 1 0;min-width:0;max-width:128px}.thumbs figcaption{font:10px ui-monospace,Consolas,monospace;color:var(--muted);text-align:center}\n" +
+        ".thumbs{display:flex;flex-wrap:wrap;gap:4px}.thumbs figure{margin:0;flex:1 1 0;min-width:0;max-width:128px;container-type:inline-size}.thumbs figcaption{font:10px ui-monospace,Consolas,monospace;font-size:min(10px,14cqi);color:var(--muted);text-align:center;white-space:nowrap}\n" +
         ".clipname{font-weight:600}.path,.note{color:var(--muted);font-size:12px}\n" +
         "details summary{cursor:pointer;padding:10px 0;font-weight:600}\n" +
         ".err{color:var(--bad)}\n" +
         "footer{margin-top:40px;color:var(--muted);font-size:12px}\n" +
         "@media (max-width:760px){main{padding:16px 10px 40px}.hide-sm{display:none}.thumbs figcaption{display:none}.c-thumb{width:22%}.c-clip{width:26%}.c-fps{width:8%}.c-dur{width:12%}.c-size{width:12%}.c-proxy{width:20%}table.clips td.st{font-size:12px}}\n" +
         // Printing from any browser, even from a dark screen: white page, dark text.
-        "@media print{" + RootCss + "body{background:#fff;color:#000}.toolbar{display:none}.panel{overflow:visible;border-color:#ccc}.stat{border-color:#ccc}details{display:block}.hide-sm{display:table-cell}.thumbs figcaption{display:block}}\n";
+        "@media print{" + RootCss + "body{background:#fff;color:#000}.toolbar{display:none}.panel{overflow:visible;border-color:#ccc}.stat{border-color:#ccc}details{display:block}th.hide-sm,td.hide-sm{display:table-cell}col.hide-sm{display:table-column}.thumbs figcaption{display:block}}\n";
 
     internal static string Esc(string s)
     {
@@ -70,7 +72,7 @@ public static partial class HtmlReport
     }
 
     /// The report's CSS (screen with dark mode, or print) — shared with the verification report.
-    internal static string Styles(bool forPrint) => RootCss + "\n" + (forPrint ? PrintCss : DarkCss) + "\n" + BaseCss;
+    internal static string Styles(bool forPrint) => RootCss + "\n" + (forPrint ? "" : DarkCss + "\n") + BaseCss + (forPrint ? PrintCss + "\n" : "");
 
     /// Screen-only bar at the top of every HTML report: print to PDF from the browser, or open the PDF the app wrote next to the
     /// HTML. The PDF is made after the HTML (and skipped when Edge is missing); there is no option to switch it off, so the link
@@ -193,8 +195,8 @@ public static partial class HtmlReport
         h.Append("<tr><th>Disk</th><th>Složka</th><th>FS</th><th>Svazek</th><th>Ověření</th><th class=\"num\">OK</th><th class=\"num\">Chyby</th></tr>\n");
         foreach (var d in r.Destinations)
         {
-            h.Append($"<tr><td>{Esc(DiskName(d.Root))}</td><td class=\"mono wrap\">{Esc(d.CardPath)}</td><td>{Esc(d.Filesystem)}</td>");
-            h.Append($"<td class=\"mono\">{Esc(d.VolumeSerial ?? "—")}</td><td>{Esc(MethodText(d.VerifyMethod))}</td>");
+            h.Append($"<tr><td class=\"nw\">{Esc(DiskName(d.Root))}</td><td class=\"mono wrap\">{Esc(d.CardPath)}</td><td class=\"nw\">{Esc(d.Filesystem)}</td>");
+            h.Append($"<td class=\"mono nw\">{Esc(d.VolumeSerial ?? "—")}</td><td class=\"nw\">{Esc(MethodText(d.VerifyMethod))}</td>");
             h.Append($"<td class=\"num ok\">{d.FilesOK}</td><td class=\"num {(d.FilesFailed > 0 ? "bad" : "muted")}\">{d.FilesFailed}</td></tr>\n");
         }
         h.Append("</table></div>\n");

@@ -87,7 +87,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | xxHash64 | C knihovna xxhash | `System.IO.Hashing.XxHash64` |
 | HW enkodér proxy | VideoToolbox | NVENC → QSV → AMF → software (zjistí se automaticky) |
 | Dekódování pro proxy | VideoToolbox (-hwaccel videotoolbox) jen pro H.264/HEVC | -hwaccel auto jen pro H.264/HEVC |
-| PDF | WebKit tisk | Edge headless `--print-to-pdf` |
+| PDF | WebKit tisk; co je širší než A4 na šířku, se před tiskem zmenší | Edge headless `--print-to-pdf`; co je širší než A4 na šířku, se před tiskem zmenší |
 | Detekce karet | `NSWorkspace` notifikace | `WM_DEVICECHANGE` |
 | Vysunutí | `unmountAndEjectDevice` | `FSCTL_LOCK/DISMOUNT_VOLUME` + `CM_Request_Device_Eject` |
 | Nastavení | `UserDefaults` (stejné schéma vč. `portNames`, `proxy.lutMode/lutBuiltin/lutFallback/extraFolder`) | `%APPDATA%\Offload\settings.json` (stejné schéma) |
