@@ -34,7 +34,26 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
   ověřeno ano/ne, kopie reportu na počítači). Zdroj dat: `history.json` + reporty `offload_report*.json` (z disků, nebo
   z lokální kopie `Offload reporty`, když disk už odešel). Uložit lokálně a volitelně na vybraný disk.
 
-- **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzi 0.7.0 (body 3–6 v 0.7.1), viz níže.
+- **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzích 0.7.0 a 0.7.1, viz níže.
+
+## 2026-10-09 — 0.7.1: ARRIRAW (body 3–6 z ostrého nasazení Mac verze)
+
+Verze **0.7.1**. Zbytek bodů z ostrého nasazení Mac verze; recenze + oprava + re-recenze (nález I-1 a drobnosti).
+
+- **3 – priorita:** ffmpeg, art-cmd, REDline a braw-decode běží nejméně s normální prioritou CPU i I/O, i když je
+  Offload spuštěný s nízkou; čtečky ověření na pozadí (plán 10) zůstávají záměrně s nízkou I/O prioritou.
+- **4 – průběh během art-cmd:** odhad z velikosti rostoucího mezisouboru ProRes LT (0–80 %), zbytek ffmpeg; staré
+  dočasné složky se nepočítají, prázdný mezisoubor je chyba.
+- **5 – rychlá analýza ARRIRAW:** art-cmd exportuje metadata jen prvního snímku (`--duration 1`, limit 120 s), počet
+  snímků z ffprobe (`.ari`: počet souborů), ffprobe na MXF s limitem 60 s, každý nástroj čte klip jednou. Když
+  zkrácený export u klipu ARRI selže (jakkoli), pustí se celý export jako dřív; když délku nejde spolehlivě zjistit,
+  zůstane neznámá (prázdná), nikdy 1 snímek.
+- **6 – ARRIRAW bez LUTu:** `--embedded-look` samotný (bez `--target-colorspace`); nástroj RAW, který skončí kódem 0
+  bez výstupu, je chyba s českou poznámkou.
+- **Zrušení:** art-cmd a REDline jdou zrušit uprostřed dekódování (ukončí se i s potomky, dočasná složka se smaže).
+- **Ruční testy** README 62–67 (skutečný art-cmd; test 66 „odmítnutí `--duration`“ před ostrým použitím).
+- Odloženo: počet snímků z hlavičky MXF (bez vzorku ARRI), řádky `[error]` art-cmd jen v logu, plný export
+  (záloha) nejde zrušit.
 
 ## 2026-10-09 — 0.7.0: zjištění z ostrého nasazení Mac verze
 
@@ -46,8 +65,7 @@ Verze **0.7.0**. Převzaté body 1, 2, 7, 8 a nové úkoly z ostrého nasazení 
   `signalstats` po snímcích 0 zelených (zelené byly jen na Intelu/VideoToolbox na Macu). Zapnout jde v Nastavení →
   Proxy „Hardwarové dekódování (experimentální)“ (`proxy.hardwareDecode`), CLI `--hw-decode`.
 - **2 – ARRIRAW:** `--desqueeze` jen u anamorfních klipů (na 4.6K Open Gate až dvojnásobná rychlost art-cmd).
-- **3–6 (priorita procesů, průběh během art-cmd, rychlá analýza ARRIRAW, ARRIRAW bez LUTu)** jsou napsané a dokončují
-  se ve větvi `windows-mac-findings-raw` — přijdou ve verzi 0.7.1.
+- **3–6** — viz 0.7.1 výše.
 - **7 – černá ve vestavěných LUTech:** tónová křivka sdílených LUTů (`shared/luts/generate.py`) má patu x²/(x+0,025):
   šum kamery (6 clon pod šedou) 7 % → 3 %, 4 clony pod šedou 13 % → 8 %, šedá dál 0,42, světla beze změny; všech 11
   `.cube` přegenerováno (platí i pro Mac). Pixel 62/255 teď 54; zbytek rozdílu proti 23 u LUTu ARRI je nejspíš jiný
