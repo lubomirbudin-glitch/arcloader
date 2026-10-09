@@ -28,6 +28,8 @@ static class TestEnvironment
         var appData = Path.Combine(HistoryRoot, "appdata-" + Environment.ProcessId);
         Directory.CreateDirectory(appData);
         Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", appData);
+        // Task 2026-10-09: the local report copies of CLI and settings-made jobs go to %TEMP%, never the real Documents.
+        Offload.Core.Outputs.LocalReports.DocumentsOverride = Path.Combine(HistoryRoot, "history-" + Environment.ProcessId, "Documents");
     }
 #pragma warning restore CA2255
 }

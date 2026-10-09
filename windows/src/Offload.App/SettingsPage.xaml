@@ -94,6 +94,17 @@
                         <CheckBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Check}" Margin="0,16,0,0" Content="Navrhovat název karty podle klipů"
                                   IsChecked="{Binding SuggestCardNames}" AutomationProperties.AutomationId="SuggestCardNames" />
                     </Grid>
+                    <!-- Automatické načtení disků (2026-10-09): per project, like everything on this page -->
+                    <TextBlock Text="PŘIPOJENÉ DISKY" Style="{StaticResource StepTitle}" Margin="0,30,0,10" />
+                    <CheckBox Style="{StaticResource Check}" Content="{x:Static core:SettingsTexts.AutoDestinationsLabel}" IsChecked="{Binding AutoAddDestinations}"
+                              AutomationProperties.AutomationId="AutoAddDestinations" />
+                    <TextBlock Text="{x:Static core:SettingsTexts.AutoDestinationsNote}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="26,4,0,0" />
+                    <CheckBox Style="{StaticResource Check}" Content="{x:Static core:SettingsTexts.AutoCardsLabel}" IsChecked="{Binding AutoAddCards}" Margin="0,14,0,0"
+                              AutomationProperties.AutomationId="AutoAddCards" />
+                    <TextBlock Text="{x:Static core:SettingsTexts.AutoCardsNote}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="26,4,0,0" />
+                    <Button Style="{StaticResource SecondaryButton}" Content="{Binding ForgetRemovedText}" Command="{Binding ForgetRemovedDisksCommand}" HorizontalAlignment="Left"
+                            Margin="0,14,0,0" Visibility="{Binding ForgetRemovedText, Converter={StaticResource NullToCollapsed}}"
+                            AutomationProperties.AutomationId="ForgetRemovedDisks" />
                 </StackPanel>
 
                 <!-- ── Ověření ── -->
@@ -370,6 +381,19 @@
                     <CheckBox Style="{StaticResource Check}" Content="Seznam klipů CSV" IsChecked="{Binding ClipListCsv}" Margin="0,0,0,10" AutomationProperties.AutomationId="ClipListCsv" />
                     <CheckBox Style="{StaticResource Check}" Content="Seznam klipů pro Avid (ALE)" IsChecked="{Binding ClipListAle}" Margin="0,0,0,10" AutomationProperties.AutomationId="ClipListAle" />
                     <CheckBox Style="{StaticResource Check}" Content="Denní report po každé kartě" IsChecked="{Binding DayReportAfterEachCard}" AutomationProperties.AutomationId="DayReportAfterEachCard" />
+                    <!-- task 2026-10-09: a copy of every card's report on this computer -->
+                    <TextBlock Text="KOPIE NA TOMTO POČÍTAČI" Style="{StaticResource StepTitle}" Margin="0,30,0,10" />
+                    <CheckBox Style="{StaticResource Check}" Content="{x:Static core:SettingsTexts.LocalReportLabel}" IsChecked="{Binding LocalReportCopy}"
+                              AutomationProperties.AutomationId="LocalReportCopy" />
+                    <TextBlock Text="{x:Static core:SettingsTexts.LocalReportNote}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="26,4,0,0" />
+                    <DockPanel Margin="26,12,0,0" IsEnabled="{Binding LocalReportCopy}">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Výchozí" Command="{Binding DefaultLocalReportFolderCommand}" Margin="8,0,0,0"
+                                Visibility="{Binding LocalReportFolderCustom, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="LocalReportFolderDefault" />
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Změnit…" Command="{Binding ChooseLocalReportFolderCommand}" Margin="12,0,0,0"
+                                AutomationProperties.AutomationId="LocalReportFolderChoose" />
+                        <TextBlock Text="{Binding LocalReportFolderText}" Style="{StaticResource TextMono}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding LocalReportFolderText}" AutomationProperties.AutomationId="LocalReportFolder" />
+                    </DockPanel>
                     <TextBlock Text="DENNÍ REPORT" Style="{StaticResource StepTitle}" Margin="0,30,0,10" />
                     <TextBlock Text="Vytvoří znovu denní report vybrané složky dne na cíli a otevře ho." Style="{StaticResource TextMuted}" />
                     <Button Style="{StaticResource SecondaryButton}" Content="Denní report…" Command="{Binding DayReportCommand}" HorizontalAlignment="Left" Margin="0,12,0,0"

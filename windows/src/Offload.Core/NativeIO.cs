@@ -212,6 +212,14 @@ public static unsafe class NativeIO
         return Win32.GetVolumeInformation(root, name, 261, out _, out _, out _, null, 0) ? new string(name) : null;
     }
 
+    /// The volume says it is read-only (FILE_READ_ONLY_VOLUME: a write-protected card or disk). Unknown = false.
+    public static bool IsReadOnlyVolume(string path)
+    {
+        const uint FileReadOnlyVolume = 0x00080000;
+        var root = VolumeRoot(path);
+        return root != null && Win32.GetVolumeInformation(root, null, 0, out _, out _, out var flags, null, 0) && (flags & FileReadOnlyVolume) != 0;
+    }
+
     /// A network volume — a UNC path or a mapped drive (R8: never verified from the proxy's reads).
     public static bool IsRemote(string path)
     {

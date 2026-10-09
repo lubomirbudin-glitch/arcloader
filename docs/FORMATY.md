@@ -344,9 +344,14 @@ Pravidla (Windows od 0.3.0):
 - `hash` (`"xxh64"` | `"both"`, výchozí `"xxh64"`, Windows od 0.3.0): kontrolní součty kopie; `both` = xxh64 + MD5. Jiná
   hodnota (z novější verze) se zachová a čte jako `xxh64`.
 - `outputs` (Windows od 0.3.0): `dayReport` (bool, `true`) — denní report po každé úloze; `clipListCsv` (bool, `true`),
-  `clipListAle` (bool, `false`) — seznamy klipů. Neznámé klíče sekce se zachovají.
+  `clipListAle` (bool, `false`) — seznamy klipů; `localReport` (bool, `true`, úkol 2026-10-09) — kopie reportu karty na
+  tomto počítači; `localReportFolder` (string | `null` = `<Dokumenty>\Offload reporty`). Neznámé klíče sekce se zachovají.
+- Kopie reportu na počítači (Windows, úkol 2026-10-09): `<složka>\<datum>\<karta>\_REPORT\…` a `…\ascmhl\…` jako na
+  cíli (bez médií: bez `_REPORT\neshoda_NNNN\`, klipů a proxy), denní report do `<složka>\<datum>\_REPORT\`. Ve složce
+  karty je skrytý soubor `.offload-origin` (`<started UTC>|<cardName>|<source>` z `offload_report.json`): podle něj se jiná
+  karta stejného jména téhož dne uloží do `<karta>_2`, `_3` … (pravidlo jako na cíli); složka bez něj se nikdy nepoužije.
 - Projekty (Windows od 0.4.0): klíče profilu na horní úrovni (`destRoots`, `verify`, `analyzeClips`, `hash`, `naming`,
-  `outputs`, `notify`, `proxy`) jsou profil „Bez projektu“; `projects` je pole pojmenovaných profilů stejného tvaru
+  `outputs`, `notify`, `proxy`, `autoDrives`) jsou profil „Bez projektu“; `projects` je pole pojmenovaných profilů stejného tvaru
   s klíčem `name` (oříznutý, 1–60 znaků, jedinečný bez ohledu na velikost písmen, „Bez projektu“ vyhrazené);
   `activeProject` je jméno nebo `null` (jméno neexistujícího projektu se při čtení změní na `null`; zachová se jen
   jméno projektu uloženého beze změny — položka, kterou tato verze nečte — a platí „Bez projektu“; `activeProject`
@@ -354,6 +359,11 @@ Pravidla (Windows od 0.3.0):
   zůstanou v souboru beze změny a při uložení se zapíšou zpět za čitelné projekty (nic se neztratí ani nenásobí).
   `projects`, které není pole, se zachová beze změny, dokud se v aplikaci neuloží projekt. Společné zůstávají `tools`,
   `portNames` a `updates`.
+- `autoDrives` (Windows, úkol 2026-10-09, součást projektu): `destinations` (bool, `true`) — připojené externí disky USB
+  přidávat jako cíle; `cards` (bool, `true`) — karty ve čtečkách po vložení zaškrtnout; `added` (pole `{ "root", "disk" }`)
+  — cíle, které aplikace přidala sama (po odpojení disku je zase odebere); `removed` (pole textů) — disky, které uživatel
+  z cílů odebral, a proto se samy znovu nepřidají. Disk = `"<sériové číslo svazku hex 8>:<kapacita v bajtech>"`,
+  např. `"1A2B3C4D:2000398934016"`. Neznámé klíče sekce se zachovají.
 - `notify` (Windows od 0.4.0, součást projektu): `windows` (bool, `true`) — oznámení Windows; `ntfy` { `enabled` (bool,
   `false`), `server` (string, `https://ntfy.sh`), `topic` (string, `""`; písmena bez diakritiky, číslice, `-` a `_`,
   nejvýš 64 znaků) } — bez přihlašovacího tokenu.

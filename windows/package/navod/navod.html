@@ -471,7 +471,9 @@ to napíše. Start kontroluje jen ty LUTy a složky pro proxy, které se v úloh
 
 <h3>1 · Karty</h3>
 <ul>
-  <li>Karta vložená do čtečky se <b>objeví sama a je zaškrtnutá</b>. Dokud žádná není, krok ukazuje přerušovaný rámeček
+  <li>Karta vložená do čtečky se <b>objeví sama a je zaškrtnutá</b> (karta se strukturou kamery, nebo neprázdná karta ve
+    čtečce — např. ze zvukového rekordéru; vypíná se v Nastavení → Struktura složek → <b class="ui">Automaticky označovat
+    karty ve čtečkách jako zdroje</b>). Dokud žádná není, krok ukazuje přerušovaný rámeček
     <span class="q">„Vložte kartu do čtečky“</span> (během offloadu <span class="q">„Vložte další kartu“</span>).</li>
   <li>Dlaždice karty ukazuje název, <b>kameru</b> (např. <span class="q">„ALEXA 35 · LogC4“</span> — zjistí se z prvního klipu
     karty, jen čtením, nejvýš 5 s; když ji Offload nepozná, štítek chybí) a řádek <span class="q">„24 klipů · 1,70 GB ·
@@ -512,6 +514,15 @@ to napíše. Start kontroluje jen ty LUTy a složky pro proxy, které se v úloh
 <ul>
   <li><b class="ui">+ Přidat disk</b> vybere cílovou složku (kořen, pod který se zakládají složky s datem). Cílů může být
     libovolně; seznam si aplikace pamatuje (patří k projektu).</li>
+  <li><b>Připojený externí disk USB se přidá sám</b> (kořen disku, např. <code>G:\</code>) a po odpojení z cílů zase zmizí.
+    Jako cíl se nikdy nepřidá karta nebo SSD z kamery (struktura kamery přímo v kořeni disku: DCIM, PRIVATE, CLIP, CONTENTS,
+    ARRI, RED…, nebo klipy přímo v kořeni jako na SSD z Blackmagicu či Atomosu), čtečka karet ani interní
+    nebo systémový disk (SATA, NVMe — i disk za Thunderboltem, ten přidejte ručně). Záložní disk s klipy ve složkách se
+    přidá, stejně jako každý disk se zálohou z Offloadu. Disk, který křížkem odeberete, si
+    aplikace zapamatuje (podle sériového čísla a kapacity) a sama ho už nepřidá; <b class="ui">+ Přidat disk</b> nebo
+    <b class="ui">Zapomenout odebrané disky</b> v Nastavení to vrátí. Plný disk (méně než 1 GB volna) nebo disk jen pro čtení
+    se nepřidá — pod cíli je oranžově <span class="txt-warn">Disk BACKUP (G:) je plný — jako cíl se nepřidal.</span>
+    Během kontrol před spuštěním a v ukázkovém režimu se nic nepřidává.</li>
   <li>Dlaždice cíle má číslo v kolečku (v reportu z něj je <b>D1</b>, <b>D2</b>…), název, <span class="q">„7,20 TB volných z
     8 TB · NTFS · NVMe“</span> a pruh místa: šedě obsazeno, modře kolik zaberou vybrané karty (žlutě, když po offloadu zbude
     málo místa, červeně, když se nevejdou — věta pod pruhem řekne proč). Celou cestu ukáže bublina po najetí myší na
@@ -582,13 +593,16 @@ v liště stránky; tlačítko <b class="ui">Uložit jako nový projekt…</b> z
 <table>
   <thead><tr><th class="w25">Sekce</th><th>Co v ní je</th></tr></thead>
   <tr><td><b class="ui">Struktura složek</b></td><td>cesta <code>&lt;cíl&gt;\&lt;datum&gt;\&lt;název karty&gt;\</code>, <b class="ui">Vlastní datum</b>,
-      <b class="ui">Navrhovat název karty podle klipů</b> (kapitola 5)</td></tr>
+      <b class="ui">Navrhovat název karty podle klipů</b> (kapitola 5); <b>Připojené disky</b>: <b class="ui">Automaticky přidávat
+      připojené disky jako cíle</b>, <b class="ui">Automaticky označovat karty ve čtečkách jako zdroje</b> (obojí zapnuto,
+      patří k projektu) a <b class="ui">Zapomenout odebrané disky</b> (kapitola 3)</td></tr>
   <tr><td><b class="ui">Ověření</b></td><td>ověření zpětným čtením, <b class="ui">Ověřit primární disk během proxy</b> a
       <b class="ui">Primární je první cíl</b>, kontrolní součet (MD5), <b class="ui">Ověřit zálohu…</b> a
       <b class="ui">Ukládat report ověření</b> (kapitoly 1, 5 a 8)</td></tr>
   <tr><td><b class="ui">Analýza a náhledy</b></td><td>analýza klipů a tři snímky v reportu (kapitola 5)</td></tr>
   <tr><td><b class="ui">Proxy</b></td><td>vše o proxy, LUTech a náhled burn-inu (kapitola 6)</td></tr>
-  <tr><td><b class="ui">Report</b></td><td>seznamy klipů CSV a ALE, denní report po každé kartě, <b class="ui">Denní report…</b> (kapitoly 5 a 7)</td></tr>
+  <tr><td><b class="ui">Report</b></td><td>seznamy klipů CSV a ALE, denní report po každé kartě, <b class="ui">Denní report…</b>,
+      <b class="ui">Kopie reportu i na tomto počítači</b> a její složka (kapitoly 5 a 7)</td></tr>
   <tr><td><b class="ui">Oznámení</b></td><td>souhrn a <b class="ui">Upravit oznámení…</b> (kapitola 8)</td></tr>
   <tr><td><b class="ui">Dekodéry RAW</b></td><td>nástroje ffmpeg, ffprobe, braw-decode, REDline, art-cmd a převod BRAW Film Gen 4 → Gen 5
       (níže a kapitola 6); platí pro všechny projekty</td></tr>
@@ -605,7 +619,8 @@ ně zatím nejde vyrobit.“</span></p>
 <h2 class="ch"><span class="n">4</span>Krok za krokem: první offload</h2>
 
 <ol class="steps">
-  <li><b>Připojte cílové disky</b> a v kroku <b class="ui">2 · Cíle</b> je přidejte tlačítkem <b class="ui">+ Přidat disk</b>.
+  <li><b>Připojte cílové disky.</b> Externí disky USB se v kroku <b class="ui">2 · Cíle</b> objeví samy; jiné (síťová složka,
+    interní disk) přidejte tlačítkem <b class="ui">+ Přidat disk</b>.
     Doporučené jsou dva nezávislé disky. Stačí to udělat jednou — cíle si aplikace pamatuje.</li>
   <li><b>Vložte kartu do čtečky.</b> Objeví se v kroku <b class="ui">1 · Karty</b> a je zaškrtnutá. Karet může být víc
     najednou; zkopírují se jedna po druhé. Kartu, kterou aplikace nenabídla, přidejte tlačítkem <b class="ui">Ze složky…</b>.</li>
@@ -899,6 +914,12 @@ a poznámku, co chybí.</p>
 <!-- ============ 7 ============ -->
 <section class="chapter" id="ch7">
 <h2 class="ch"><span class="n">7</span>Report</h2>
+<p><b>Kopie na tomto počítači:</b> disky s materiálem se odevzdávají dál, proto se report každé karty (<code>_REPORT</code>
+a <code>ascmhl</code>, nikdy klipy ani proxy) zkopíruje i do <code>Dokumenty\Offload reporty\&lt;datum&gt;\&lt;karta&gt;\</code>
+a obnoví se při každém přepisu reportu (analýza, proxy, ověření, doplnění, oprava, denní report do
+<code>…\&lt;datum&gt;\_REPORT\</code>). Jiná karta stejného jména téhož dne dostane <code>_2</code> jako na cíli. Vypíná se
+a složka se mění v Nastavení → Report (patří k projektu), v příkazové řádce <code>--no-local-report</code>. Když se kopie
+nepovede, úloha doběhne normálně a na její kartě je jen šedá poznámka.</p>
 
 <p>Report se zapisuje do složky <code>_REPORT</code> ve složce karty <b>na každém cíli</b>. Hlavní je HTML report
 <code>&lt;karta&gt;_report.html</code>; vedle je stejný report jako PDF <code>&lt;karta&gt;_report.pdf</code> (A4 na šířku,

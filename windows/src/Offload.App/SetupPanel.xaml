@@ -253,6 +253,9 @@
                     </DockPanel>
                     <TextBlock Text="Přidejte dva disky — každá karta se zapíše na oba zároveň." Style="{StaticResource TextMuted}" Margin="0,10,0,0"
                                Visibility="{Binding HasNoDestinations, Converter={StaticResource BoolToVisible}}" />
+                    <!-- a connected disk that was not added by itself: full or read-only -->
+                    <TextBlock Text="{Binding AutoDriveHint}" Style="{StaticResource TextWarn}" TextWrapping="Wrap" Margin="0,10,0,0"
+                               Visibility="{Binding AutoDriveHint, Converter={StaticResource NullToCollapsed}}" AutomationProperties.AutomationId="AutoDriveHint" />
                     <!-- full tiles -->
                     <ItemsControl ItemsSource="{Binding Destinations}" Margin="0,10,0,0" Visibility="{Binding IsCompact, Converter={StaticResource BoolToCollapsed}}">
                         <ItemsControl.ItemTemplate>

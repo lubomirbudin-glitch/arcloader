@@ -70,6 +70,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
 | **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ⏳ naplánováno | ✅ 0.6.0 |
 | **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ⏳ naplánováno | ✅ 0.6.0 |
+| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
+| **Automatické načtení disků** (externí USB disk → cíl, karta ve čtečce → zaškrtnutá; odebraný disk si pamatuje, `autoDrives`) | ⏳ naplánováno | ✅ GUI (čeká ruční test se skutečným diskem a čtečkou) |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
 

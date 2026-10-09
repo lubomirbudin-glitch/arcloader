@@ -1,5 +1,6 @@
 using Offload.Core;
 using Offload.Core.Desktop;
+using Offload.Core.Outputs;
 using Offload.Core.Verification;
 
 namespace Offload.App;
@@ -35,7 +36,8 @@ public sealed partial class MainViewModel
             }
             foreach (var card in cards.Reverse())   // the first card ends up on top
             {
-                var item = new VerifyItemViewModel(this, new VerifyJob(card, SaveVerifyReport, m => AppLog.Write($"{card}: {m}")));
+                var item = new VerifyItemViewModel(this, new VerifyJob(card, SaveVerifyReport, m => AppLog.Write($"{card}: {m}"),
+                    LocalReports.RootFor(Settings.Outputs)));
                 Jobs.Insert(0, item);
                 queue.Enqueue(item.Job);
             }

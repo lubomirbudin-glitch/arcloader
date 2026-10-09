@@ -24,6 +24,7 @@ public static class JobConfigs
             Outputs = SettingsStore.Clone(p.Outputs),
             Project = Projects.ActiveName(s),
             Notify = SettingsStore.Clone(p.Notify),
+            LocalReports = Outputs.LocalReports.RootFor(p.Outputs),
         };
     }
 
@@ -59,6 +60,7 @@ public static class JobConfigs
             Notify = SettingsStore.Clone(original.Notify),
             RecordHistory = original.RecordHistory,
             HistoryFolder = original.HistoryFolder,
+            LocalReports = original.LocalReports,   // the repair rewrites the report: the local copy follows
         };
 
     /// Spec 2.2: only the new files, into the card folders of the earlier backup — with the profile of the project that
@@ -79,6 +81,7 @@ public static class JobConfigs
             Outputs = SettingsStore.Clone(p.Outputs),
             Project = entry.Project,   // the engine prefers the earlier report's (M4); this is the fallback
             Notify = SettingsStore.Clone(p.Notify),   // the entry's project's topic, or Bez projektu (I2, P1, P2) — never the active one
+            LocalReports = Outputs.LocalReports.RootFor(p.Outputs),
         };
     }
 }
