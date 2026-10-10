@@ -29,7 +29,8 @@ public sealed partial class OffloadEngine
 
     public bool IsCancelled => cts.IsCancellationRequested;
 
-    /// "Pozastavit": the copy and the read-back stop before their next block; the job's stage 2 waits at the same gate.
+    /// "Pozastavit": the copy and the read-back stop before their next file (the one in progress is finished); the job's
+    /// stage 2 waits at the same gate between clips.
     public PauseGate Pauses { get; } = new();
 
     /// Waits while paused; false when the job was cancelled meanwhile (stage 2 uses it before every clip).
@@ -298,8 +299,8 @@ public sealed partial class OffloadEngine
         {
             return new ProgressSnapshot(phase, plan?.Scan.TotalBytes ?? 0, plan?.Scan.Files.Count ?? 0, fileIndex, currentFile,
                 Interlocked.Read(ref readBytes), writers.Select(w => w.Written).ToArray(), writers.Select(w => w.Verified).ToArray(), errorCount,
-                Pauses.IsPaused, Pauses.IsHolding && writers.All(w => w.IsIdle) && (recorder?.IsIdle ?? true), planned,
-                writers.Select(w => w.VerifyPlanned).ToArray());
+                Pauses.IsPaused, Pauses.IsStanding && writers.All(w => w.IsIdle) && (recorder?.IsIdle ?? true), planned,
+                writers.Select(w => w.VerifyPlanned).ToArray(), writers.Select(w => w.VerifyingFile).ToArray());
         }
     }
 

@@ -33,6 +33,8 @@ public sealed class OffloadOptions
     /// Tests only: called on destination `index`'s thread before every block it writes; an exception it throws is a write
     /// error there (a disk pulled out).
     internal Action<int>? BeforeDestWrite { get; set; }
+    /// Tests: called before every block the read-back of stage 1 reads, with the destination's index.
+    internal Action<int>? BeforeReadBackBlock { get; set; }
     /// Tests only: creates the source hash of an algorithm ("xxh64", "md5") instead of HashAlgo.Create.
     internal Func<string, Verification.IFileHash>? HashFactory { get; set; }
     /// Tests only: the free bytes of the volume of a path, instead of NativeIO.AvailableBytes.
@@ -119,12 +121,14 @@ public sealed class OffloadPlan
 
 public enum CopyPhase { Copy, Flush, Verify, Report, Done }
 
-/// `Paused`: Pozastavit was pressed (PauseGate); `PauseHeld`: the copy or the read-back really waits now.
-/// `PlannedBytes`: what each destination gets written (null = TotalBytes each).
+/// `Paused`: Pozastavit was pressed (PauseGate); `PauseHeld`: the copy or the read-back really stands now (until then it
+/// finishes the file it is on). `PlannedBytes`: what each destination gets written (null = TotalBytes each).
+/// `VerifyingFiles`: per destination, the file its read-back reads now (relative), null when none.
 public sealed record ProgressSnapshot(
     CopyPhase Phase, long TotalBytes, int TotalFiles, int FileIndex, string CurrentFile,
     long ReadBytes, long[] WrittenBytes, long[] VerifiedBytes, int Errors,
-    bool Paused = false, bool PauseHeld = false, long[]? PlannedBytes = null, long[]? VerifyPlannedBytes = null)
+    bool Paused = false, bool PauseHeld = false, long[]? PlannedBytes = null, long[]? VerifyPlannedBytes = null,
+    string?[]? VerifyingFiles = null)
 {
     /// What destination `d` really reads back: the files written in this run (a repair trusts the others). Known once the
     /// read-back starts; before that, what the destination gets written.

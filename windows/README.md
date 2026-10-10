@@ -504,6 +504,30 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
       nese: XML vedle klipu (`CONTENTS\CLIPS001\…\*.XML`), `ffprobe -show_format -show_streams` (tagy MXF) — kde je snímací
       rychlost, poslat vzorek; podle něj doplnit čtení do `ProxyRenderer.Probe` (jako Sony `M01.XML`).
 
+- [ ] 72. **Pozastavit během velkého souboru (kopie):** karta s klipem 20+ GB na dva disky → Pozastavit uprostřed
+      souboru → karta úlohy „Pozastavuji (dokončuji soubor A001C001.mxf…)“, rychlosti dál běží, soubor se dokopíruje na
+      **oba** disky → „Pozastaveno — Pokračovat naváže dalším souborem.“, rychlosti „—“; v cílových složkách žádný
+      `.offload-part`, soubor je na místě v plné velikosti a v `_REPORT\offload-manifest.jsonl` (i malé soubory —
+      při zastavení se vyprázdní cache disků). Pokračovat → kopie pokračuje dalším souborem (čtení karty neopakuje hotový
+      soubor), report: `copyPausedSeconds` ≈ doba, kdy úloha **stála** (ne od stisku tlačítka). Pozastavit, vyměnit
+      kartu za jinou (stejná kamera) a Pokračovat ještě během „Pozastavuji“ → úloha selže s hláškou o vyměněné kartě,
+      z jiné karty se nic nezkopíruje.
+- [ ] 73. **Pozastavit během ověření:** klasické ověření (Nastavení → ověřovat zpětným čtením, nebo bez proxy) →
+      Pozastavit během čtení velkého souboru → „Pozastavuji (dokončuji soubor …)“, soubor se dočte na všech discích, pak
+      „Pozastaveno“; Pokračovat → ověří zbytek, `verifyPausedSeconds` v reportu. S Verify-in-Proxy (proxy zapnuté):
+      Pozastavit během proxy → klip se dorenderuje, čtení na pozadí sekundárního disku dočte svůj soubor, pak
+      „Pozastaveno“; 5 minut pauzy → žádné „disk přestal odpovídat“, po Pokračovat vše ověřené. Sekundární disk během
+      „Pozastavuji“ odpojit tak, aby visel (nebo zablokovat) → po doběhnutí rozpracovaného klipu a limitu hlídače jeho soubory selžou a úloha se zastaví; disk jen
+      vytížený renderem (pomalé čtení, ale čte) během „Pozastavuji“ nikdy neselže.
+- [ ] 74. **Pozastavit během analýzy a proxy:** „Pozastavuji (dokončuji klip A001C003…)“ / „(dokončuji proxy klipu
+      A001C003…)“ → klip doběhne (proxy kompletní, přehratelná), pak „Pozastaveno — Pokračovat naváže dalším klipem.“;
+      Pokračovat → další klip, hotový se neopakuje.
+- [ ] 75. **Zrušit během „Pozastavuji“:** Pozastavit uprostřed souboru 100+ GB a hned Zrušit → úloha skončí do pár
+      vteřin jako Zrušeno (nečeká na dokopírování souboru), žádný `.offload-part`; totéž v „Pozastaveno“ a při zavření
+      aplikace. Výjimka: přijde-li Zrušit ve chvíli, kdy se před „Pozastaveno“ vyprazdňuje cache cílových disků, počká
+      na dokončení tohoto vyprázdnění (obvykle vteřiny; jako vyprázdnění na konci kopie, které proběhne i po Zrušit). Doplnění a Zkopírovat znovu: Pozastavit → soubor se dokopíruje, pak stojí; vysunout kartu jde až po kopii
+      (jako bez pauzy).
+
 Souhrnný report z vybraných záloh (úkol 2026-10-09):
 
 - [ ] 76. **Souhrnný report v aplikaci:** Historie karet → zaškrtnout 3 karty ze dvou dnů a dvou disků → „Souhrnný report

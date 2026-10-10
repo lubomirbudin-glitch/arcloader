@@ -69,10 +69,11 @@ public sealed class JobProgress
             stage2Start = now;
             pausedBeforeStage2 = s.PausedTotal;
         }
-        if (s.Paused)
+        if (s.PauseHeld)
         {
             // Nothing moves: no rate and no ETA, the brake forgets its window; after Pokračovat the rates are measured
-            // from the moment the job runs again, never over the pause.
+            // from the moment the job runs again, never over the pause. Until it stands (Pozastavuji: the file or clip in
+            // progress still finishes) it works and is measured as ever.
             ReadRate = 0;
             DestRates = new double[DestRates.Length];
             Eta = null;
@@ -137,17 +138,18 @@ public sealed class JobProgress
 
     public string StatusText => PauseLabel ?? (Status.Phase == JobPhase.Done && Status.CopySucceeded == false ? "Chyba" : Status.Phase.Label());
 
-    /// "Pozastaveno" once the job stands, "Pozastavuje se" until then; null while it runs.
-    string? PauseLabel => !Status.Paused ? null : Status.PauseHeld ? "Pozastaveno" : "Pozastavuje se";
+    /// "Pozastaveno" once the job stands, "Pozastavuji" until then; null while it runs.
+    string? PauseLabel => !Status.Paused ? null : Status.PauseHeld ? "Pozastaveno" : "Pozastavuji";
 
-    /// What the card says while paused, or null: stage 2 finishes the clip it is on first.
+    /// What the card says while paused, or null (task 2026-10-09): the file or clip in progress finishes first —
+    /// "Pozastavuji (dokončuji soubor A001C003.mov…)" — then "Pozastaveno"; Pokračovat goes on with the next one.
     public string? PauseText => Status switch
     {
         { Paused: false } => null,
-        { PauseHeld: true } => "Pozastaveno — Pokračovat spustí úlohu od místa, kde stojí.",
-        { Phase: JobPhase.Proxies, ClipName: { Length: > 0 } clip } => $"Pozastaví se po proxy klipu {clip}…",
-        { Phase: JobPhase.Analyzing, ClipName: { Length: > 0 } clip } => $"Pozastaví se po klipu {clip}…",
-        _ => "Pozastavuje se…",
+        { PauseHeld: true, Phase: JobPhase.Analyzing or JobPhase.Proxies } => "Pozastaveno — Pokračovat naváže dalším klipem.",
+        { PauseHeld: true } => "Pozastaveno — Pokračovat naváže dalším souborem.",
+        { PauseStep: { Length: > 0 } step } => $"Pozastavuji (dokončuji {step}…)",
+        _ => "Pozastavuji…",
     };
 
     /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound or flash).

@@ -12,7 +12,7 @@ public sealed partial class OffloadEngine
         var files = plan.Scan.Files;
         var started = DateTime.UtcNow;
         var pausedBefore = Pauses.PausedTotal;
-        long holdsChecked = Pauses.Holds;
+        long requestsChecked = Pauses.Requests;
         var cardPaths = plan.CardPaths;
         foreach (var path in cardPaths)
         {
@@ -34,6 +34,10 @@ public sealed partial class OffloadEngine
         // Created before the try and disposed last: writer queues may still hold chunks that point into the pool's native buffers.
         BufferPool? pool = null;
         var hashers = new List<SourceHasher>();
+        // Pozastavit (task 2026-10-09): the copy is one worker of the pause gate — it stops only between files, once every
+        // destination has the file it was on; the read-back's threads join it below.
+        PauseGate.Worker? copying = null;
+        var readingBack = new List<PauseGate.Worker>();
         var unrecorded = new System.Collections.Concurrent.ConcurrentQueue<(int File, DestWriter[] Targets)>();
         // Fix round 1 (M-a): records of files not flushed on their own — written once FlushDevice emptied the drive's cache.
         var afterFlush = new List<(DestWriter Writer, ManifestRecord Record)>();
@@ -45,6 +49,7 @@ public sealed partial class OffloadEngine
             // xxh64 (with XXH3-128 and the block hashes, plan 10), and MD5 on its own thread (spec 3.5).
             hashers = SourceHasher.For(plan.Hashes, files.Count, Options.HashFactory, Options.ChunkSize);
             var sourceErrors = new string?[files.Count];
+            copying = Pauses.Work();
 
             // Copy: the card is read exactly once; every block fans out to the hasher and all destinations.
             for (int i = 0; i < files.Count; i++)
@@ -66,16 +71,18 @@ public sealed partial class OffloadEngine
                 if (!cardChanged)
                 {
                     Options.BeforeFileCopy?.Invoke(i);
-                    if (!Pauses.WaitWhilePaused(cts.Token))
+                    if (!HoldBetweenFiles(copying, ws, afterFlush))
                     {
                         sourceErrors[i] = "cancelled";
                         continue;
                     }
-                    // Ruling I1: a pause held the copy since the last file — the card is identified again before
-                    // anything more is read from it; another card (or none) means nothing more of it is copied.
-                    if (Pauses.Holds != holdsChecked)
+                    // Ruling I1: Pozastavit was pressed since the last file — whether the copy stood or was resumed while
+                    // it still finished its file (review I-1: the card read was over, the card may have been swapped) —
+                    // the card is identified again before anything more is read from it; another card (or none) means
+                    // nothing more of it is copied.
+                    if (Pauses.Requests != requestsChecked)
                     {
-                        holdsChecked = Pauses.Holds;
+                        requestsChecked = Pauses.Requests;
                         cardChanged = !StillSameCard();
                     }
                 }
@@ -115,6 +122,7 @@ public sealed partial class OffloadEngine
             foreach (var h in hashers) h.Wait();
             foreach (var w in ws) w.Wait();
             recorder?.Wait();
+            copying.Dispose();   // past the last file: a pause pressed now stands at the read-back's first file (or in stage 2)
             var hashes = SourceHasher.Combine(hashers, files.Count);
             var blocks = (ulong[]?[])hashers[0].Blocks.Clone();
             // R6: a file the earlier run copied completely is not read again — its hashes are the manifest's.
@@ -156,8 +164,15 @@ public sealed partial class OffloadEngine
             if (Options.Verify && !IsCancelled && !defer)
             {
                 SetPhase(CopyPhase.Verify);
+                // Every destination's thread joins the pause gate before any starts: the job never looks standing while
+                // one of them has yet to begin. Each stops only between files (the file it reads is read to its end).
+                readingBack.AddRange(ws.Select(_ => Pauses.Work()));
                 // A repair compares every copy — kept or new — with what the backup recorded (ruling C1).
-                OnEachDestination(ws, w => w.Verify(files, recorded, plan.Hashes, cts.Token, Pauses));
+                OnEachDestination(ws, w =>
+                {
+                    using var worker = readingBack[w.Index];
+                    w.Verify(files, recorded, plan.Hashes, cts.Token, worker);
+                });
             }
             // A kept copy this repair did not get to read again (cancelled) is untouched: its earlier read-back stands.
             for (int i = 0; plan.ReadBackBefore is { } before && i < files.Count; i++)
@@ -204,6 +219,8 @@ public sealed partial class OffloadEngine
                 recorder = null;
             }
             r?.Dispose();   // runs what it still has first — before the writers it waits for are gone
+            copying?.Dispose();
+            foreach (var worker in readingBack) worker.Dispose();
             foreach (var w in ws) w.Dispose();
             foreach (var h in hashers) h.Dispose();
             pool?.Dispose();
@@ -266,11 +283,16 @@ public sealed partial class OffloadEngine
     }
 
     /// After FlushDevice: the records that waited for it, on every destination whose flush went through; none where it
-    /// failed — that data may never have reached the disk (a resume reads those files again).
+    /// failed — that data may never have reached the disk (a resume reads those files again). The records written are
+    /// taken off the list (the flush at a pause, review M-4, and the one at the end never record a file twice).
     static void AppendAfterFlush(List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
     {
         List<(DestWriter Writer, ManifestRecord Record)> all;
-        lock (afterFlush) all = [.. afterFlush];
+        lock (afterFlush)
+        {
+            all = afterFlush.Where(x => x.Writer.DeviceFlushed).ToList();
+            afterFlush.RemoveAll(x => x.Writer.DeviceFlushed);
+        }
         foreach (var group in all.GroupBy(x => x.Writer).Where(g => g.Key.DeviceFlushed))
         {
             try { ManifestFile.Append(group.Key.CardPath, group.Select(x => x.Record).ToList()); }
@@ -318,6 +340,54 @@ public sealed partial class OffloadEngine
         return recorded;
     }
 
+    /// Pozastavit, before the next file (task 2026-10-09): the file just read from the card is finished on EVERY destination
+    /// first — the writers empty their queues, the recorder writes its manifest record — and only then the copy waits at
+    /// the gate: no `.offload-part` is open while the job stands, a resume after a crash finds the file complete and
+    /// recorded. A cancel ends the wait at once (also a writer that never drains, a hung disk). False = cancelled.
+    /// Review M-1: one loop, no race — the copy is the only producer, so once it sees the destinations drained nothing
+    /// new reaches them before it waits; a pause asked for after it looked is caught before the next file.
+    /// Review M-4: before it stands the drives' write caches are emptied (FlushDevice) and the records that waited for
+    /// that are written — "Pozastaveno" is a durable checkpoint: everything copied so far is on the disks and recorded.
+    bool HoldBetweenFiles(PauseGate.Worker worker, DestWriter[] ws, List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
+    {
+        bool flushed = false;
+        while (!IsCancelled)
+        {
+            if (!Pauses.IsPaused) return true;
+            if (!Drained(ws))
+            {
+                cts.Token.WaitHandle.WaitOne(10);
+                continue;
+            }
+            if (!flushed)
+            {
+                flushed = true;
+                FlushAtStop(ws, afterFlush);
+                continue;   // Pokračovat may have come meanwhile
+            }
+            return worker.WaitWhilePaused(cts.Token);
+        }
+        return false;
+    }
+
+    /// Best effort, as the flush at the end of the copy: a destination whose flush fails keeps its records waiting.
+    void FlushAtStop(DestWriter[] ws, List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
+    {
+        try
+        {
+            OnEachDestination(ws, w => w.FlushDevice());
+            AppendAfterFlush(afterFlush);
+        }
+        catch (Exception e) when (e is OffloadError or IOException or IOError or UnauthorizedAccessException) { }
+    }
+
+    bool Drained(DestWriter[] ws)
+    {
+        SerialWorker? r;
+        lock (gate) r = recorder;
+        return ws.All(w => w.IsIdle) && (r?.IsIdle ?? true);
+    }
+
     /// Ruling I1: the card in the drive is the copied one (no check without SameCard). A different, unreadable (null) or
     /// failing answer is asked again IdentifyRetries times 250 ms apart, like a card read — only then the card changed.
     bool StillSameCard()
@@ -362,8 +432,9 @@ public sealed partial class OffloadEngine
 
         using (reader)
         {
-            // A pause waits here, between blocks and before taking a buffer: the writers drain what they hold and idle.
-            while (!IsCancelled && Pauses.WaitWhilePaused(cts.Token))
+            // Pozastavit never stops a file midway (task 2026-10-09): it is read to its end, the pause waits before the
+            // next file (HoldBetweenFiles). A cancel stops it between blocks.
+            while (!IsCancelled)
             {
                 var buf = pool.Take();
                 int n;

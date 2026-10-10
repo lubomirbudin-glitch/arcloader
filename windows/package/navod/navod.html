@@ -720,9 +720,9 @@ Verze 0.2.0 nové volby 0.3.0 (kontrolní součet, seznamy klipů, denní report
 <h3>Jak kopie probíhá</h3>
 <ul>
   <li>Karta se čte jednou, data jdou současně na všechny cíle. Pomalejší disk může chvíli zaostávat, aniž by brzdil čtení karty.</li>
-  <li>Kopii i ověření lze <b class="ui">Pozastavit</b> a pak <b class="ui">Pokračovat</b> (kapitola 8). Zastaví se mezi bloky
-    dat (16 MB) — rozpracovaný soubor zůstane otevřený a po obnovení pokračuje. Doba pauzy se do rychlostí v reportu
-    nepočítá.</li>
+  <li>Kopii i ověření lze <b class="ui">Pozastavit</b> a pak <b class="ui">Pokračovat</b> (kapitola 8). Rozpracovaný soubor
+    se nejdřív dokopíruje na všechny cíle (nebo dočte při ověření), teprve pak úloha stojí; Pokračovat naváže dalším
+    souborem. Doba, kdy úloha stála, se do rychlostí v reportu nepočítá.</li>
   <li>Čte i zapisuje se mimo systémovou paměť (cache) a po zápisu se vyprázdní i cache disku, takže ověření čte data
     opravdu z disku. Svazky, které to neumějí (některé síťové), přejdou na běžný zápis a report to u cíle uvede:
     <span class="q">„Cíl 1: svazek nepodporuje přímý zápis, použita systémová cache.“</span></li>
@@ -1084,22 +1084,35 @@ s kopií další karty. Každá úloha si při spuštění uloží nastavení, s
 </table>
 
 <h3>Pozastavení</h3>
-<p><b class="ui">Pozastavit</b> na běžící kartě úlohu zastaví v nejbližším bezpečném místě a tlačítko se změní na
-<b class="ui">Pokračovat</b>. Nic se tím neruší ani nemaže:</p>
+<p><b class="ui">Pozastavit</b> na běžící kartě nechá <b>doběhnout rozpracovaný krok</b> — soubor nebo klip — a teprve
+pak úlohu zastaví; tlačítko se změní na <b class="ui">Pokračovat</b>, které plynule naváže dalším souborem nebo klipem
+(nic hotového se neopakuje, úloha se nespouští znovu). Nic se tím neruší ani nemaže:</p>
 <ul>
-  <li><b>Kopie a ověření</b> se zastaví mezi bloky dat (16 MB): disky dopíšou to, co už mají, a stojí; rozpracované
-    soubory <code>.offload-part</code> zůstanou otevřené. Karta úlohy ukáže nejdřív <span class="q">„Pozastavuje se…“</span>,
-    pak <span class="q">„Pozastaveno — Pokračovat spustí úlohu od místa, kde stojí.“</span>; rychlosti ukazují „—“ a odhad
-    času zmizí.</li>
-  <li><b>Analýza klipů a proxy</b> se zastaví <b>po</b> rozpracovaném klipu (<span class="q">„Pozastaví se po proxy klipu
-    A003…“</span>) — ffmpeg se nikdy neuspává uprostřed práce. Stejně tak PDF a denní report doběhnou a pauza přijde až
-    před ně.</li>
-  <li>Doba pauzy se do rychlostí a časů v reportu ani do „Celkem“ na kartě nepočítá; po <b class="ui">Pokračovat</b> se
-    rychlost měří znovu.</li>
+  <li><b>Kopie</b> dokopíruje rozpracovaný soubor na <b>všechny</b> cíle najednou (karta se čte jen jednou), <b>ověření</b>
+    dočte soubor, který právě čte (i čtení na pozadí u Verify-in-Proxy). Během toho karta úlohy ukazuje
+    <span class="q">„Pozastavuji (dokončuji soubor A001C003.mxf…)“</span> a rychlosti běží dál — u velkého souboru (ARRIRAW
+    100+ GB) to může trvat několik minut. Pak <span class="q">„Pozastaveno — Pokračovat naváže dalším souborem.“</span>,
+    rychlosti „—“ a odhad času zmizí. Než se kopie zastaví, Offload vyprázdní zápisovou cache cílových disků a zapíše
+    záznamy hotových souborů: všechno zkopírované do té chvíle je opravdu na discích a po případném pádu nebo vypnutí
+    počítače se nekopíruje znovu. Během pauzy není otevřený žádný napůl zapsaný soubor <code>.offload-part</code>
+    (u <b class="ui">Zkopírovat znovu</b> čekají už hotové kopie pod skrytým jménem do konce kopie; když počítač mezitím
+    vypadne, další oprava je přepíše).</li>
+  <li><b>Analýza klipů a proxy</b> dokončí rozpracovaný klip (<span class="q">„Pozastavuji (dokončuji proxy klipu
+    A003…)“</span>) — ffmpeg se nikdy neuspává ani nepřerušuje uprostřed práce. Stejně tak PDF a denní report doběhnou a
+    pauza přijde až před ně.</li>
+  <li>Do rychlostí a časů v reportu ani do „Celkem“ na kartě se nepočítá jen doba, kdy úloha opravdu <b>stála</b>; čas
+    dokončování souboru je práce. Po <b class="ui">Pokračovat</b> se rychlost měří znovu.</li>
+  <li>Hlídač zaseknutého disku během pauzy nezasáhne: stojící úloha nic nečte a soubor, který se ještě dokončuje, se čte
+    dál. Když se ale některý disk při dokončování ověřování na pozadí opravdu zasekne, Offload ho po limitu vzdá (jeho
+    soubory selžou s poznámkou o neodpovídajícím disku, nikdy zeleně) a úloha se zastaví — nezůstane viset ve stavu
+    „Pozastavuji“.</li>
+  <li>Když během „Pozastavuji“ nebo pauzy vyměníte kartu a dáte <b class="ui">Pokračovat</b>, Offload před dalším
+    souborem vždy znovu zjistí, která karta je ve čtečce (i když úloha ještě nestála).</li>
   <li>Během pauzy počítač nepřejde do spánku (otevřené soubory na USB disku by spánek mohl poškodit). Pozastavená úloha
     blokuje frontu — další karta čeká.</li>
-  <li><b class="ui">Zrušit</b> i zavření aplikace během pauzy úlohu ukončí hned, jako bez pauzy (rozpracované soubory se
-    smažou).</li>
+  <li><b class="ui">Zrušit</b> i zavření aplikace během pauzy — i ve stavu „Pozastavuji“ — úlohu ukončí hned, jako bez
+    pauzy: na dokončení souboru nečeká a rozpracované soubory se smažou. Jen když Offload zrovna vyprazdňuje zápisovou
+    cache cílových disků (těsně před „Pozastaveno“, i na konci kopie), počká, než disky dopíšou — obvykle pár vteřin.</li>
   <li>Když během pauzy odpojíte cílový disk, po <b class="ui">Pokračovat</b> soubory na tom disku selžou (ostatní cíle
     pokračují) a karta úlohy zežloutne — pak pomůže <b class="ui">Zkopírovat znovu</b>.</li>
   <li>Když během pauzy vyměníte nebo vytáhnete kartu, Offload po <b class="ui">Pokračovat</b> nezkopíruje nic dalšího
