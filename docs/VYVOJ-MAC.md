@@ -84,6 +84,21 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
       ji smaže; kontrola odpojení těsně před startem; ostrý offload se složkou → řádky v reportu;
     - úkol 25: ikona v Docku, ⌘⇥ a Finderu; 11 LUTů v *Proxy › LUT*.
 
+## 2026-10-10 — English UI and reports (user decision)
+
+Rozhodnutí uživatele 2026-10-10: Mac verze je **jen anglicky**, bez české volby. Anglicky jsou hlášky kontrol
+(`Msg`, `PreflightCode` beze změny), texty karet úloh a fronty (`Texts`, `JobProgress`, fáze úlohy, vysunutí karty),
+poznámky u klipů (proxy, dekodéry RAW, důvody LUTů), hardware (role „Card“ / „Destination 1“, doporučení, řetěz
+připojení, porty), problémy ASC MHL, CLI („Error: …“, `offload ports`, stavový řádek „bottleneck: D1“) a HTML/PDF
+report (`lang="en"`, datum „Oct 10, 2026 14:05:12“, 24h). TXT report byl anglicky už dřív. Velikost ve větě:
+`formatBytesShort` („3.2 GB“, dřív `formatBytesCs` „3,2 GB“). Klíče JSON, názvy souborů a struktura (FORMATY.md)
+se nemění; texty v JSON (`proxyNote`, `probeError`, `lut.reason`, `lut.name` „no LUT“) jsou anglicky. Report s českým
+důvodem „vypnuto v nastavení“ (starší Mac / Windows) se v HTML pořád pozná jako vypnutý LUT; uložený test hardwaru
+s rolí „Karta“ se pořád pozná jako karta. Slovník pro GUI a další úkoly: [`mac/docs/en-glossary.md`](../mac/docs/en-glossary.md).
+GUI (`Sources/OffloadApp`) přechází na angličtinu zvlášť (nový vzhled); pro něj jsou v OffloadKit konstanty
+`RoleLink.card`, `RoleLink.destination(n)` a `ChainView.bottleneckPrefix` (dřívější GUI barvilo řádek podle „Úzké hrdlo“). Testy hlídají anglické texty stejně přísně
+(přesné řetězce, stejné kódy).
+
 ## 2026-10-10 — dorovnání 2 (plány 6–10), průběh
 
 Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md)
