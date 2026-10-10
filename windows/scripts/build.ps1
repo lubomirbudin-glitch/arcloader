@@ -63,15 +63,15 @@ foreach ($t in 'ffmpeg.exe', 'ffprobe.exe') {
     }
 }
 # Instructions for whoever unpacks the zip.
-Copy-Item (Join-Path $root 'package\CTI-ME.txt') $out
-# User manual (Czech PDF, printed from package\navod\navod.html by package\navod\render.ps1).
-Copy-Item (Join-Path $root 'package\Offload-navod.pdf') $out
+Copy-Item (Join-Path $root 'package\READ-ME.txt') $out
+# User manual (PDF, printed from package\manual\manual.html by package\manual\render.ps1).
+Copy-Item (Join-Path $root 'package\Offload-manual.pdf') $out
 # Built-in LUTs (shared with the Mac version).
 $luts = Join-Path (Split-Path -Parent $root) 'shared\luts'
 New-Item -ItemType Directory -Force (Join-Path $out 'luts') | Out-Null
 Copy-Item (Join-Path $luts '*.cube'), (Join-Path $luts 'luts.json') (Join-Path $out 'luts')
 New-Item -ItemType Directory -Force (Join-Path $out 'licence') | Out-Null
-Copy-Item (Join-Path $luts 'README.md') (Join-Path $out 'licence\LUTy-README.md')
+Copy-Item (Join-Path $luts 'README.md') (Join-Path $out 'licence\LUTs-README.md')
 $zip = Join-Path $root "build\Offload-win-x64-$version.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path $out -DestinationPath $zip

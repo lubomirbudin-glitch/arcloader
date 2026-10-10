@@ -1,0 +1,50 @@
+Offload for Windows — portable version (no installation)
+========================================================
+
+Full manual: Offload-manual.pdf
+
+Starting
+--------
+1. Unpack the whole ZIP into an ordinary folder (e.g. Documents\Offload). Do not run it straight from the archive.
+2. Run Offload.exe.
+3. On the first start Windows may show a blue window "Windows protected your PC"
+   (the app is not digitally signed). Click "More info" → "Run anyway".
+   The first start takes a few seconds longer (libraries are unpacked); later starts do not.
+
+Requirements
+------------
+- Windows 10 or 11, 64-bit. Nothing else needs installing — .NET, ffmpeg and ffprobe are bundled.
+- Card copying, checksums, the report (HTML and PDF), thumbnails and proxies work right away.
+- Proxies on the graphics card: tested with NVIDIA; otherwise they are encoded on the CPU (slower, but it works).
+
+Optional add-ons
+----------------
+- Blackmagic RAW (.braw): needs the Blackmagic RAW library — installing the free
+  "Blackmagic RAW Player" is enough, or have DaVinci Resolve.
+  Download: https://www.blackmagicdesign.com/products/blackmagicraw
+  Without it, BRAW clips are only copied and verified, without proxies and thumbnails.
+- RED (.R3D): needs REDline from the REDCINE-X PRO package (free).
+  Download: https://www.reddigitalcinema.com/download/redcine-x-pro-win
+- ARRIRAW (.ari, .mxf): needs ARRI Reference Tool (art-cmd, free).
+  Download: https://www.arri.com/en/learn/camera-systems/tools/arri-reference-tool
+- Without the RED and ARRI tools, their clips are only copied and verified.
+- ffmpeg and ffprobe are in the package (bin\). If they are missing: https://www.gyan.dev/ffmpeg/builds/
+The app has a "Download…" link too: Settings → RAW decoders, next to the tool that is missing.
+
+What is in the folder
+---------------------
+Offload.exe            the app
+Offload-manual.pdf     user manual
+bin\offload.exe        command line (offload --help)
+bin\braw-decode.exe    Blackmagic RAW decoder (the Blackmagic library is not bundled)
+bin\ffmpeg.exe,
+bin\ffprobe.exe        FFmpeg (GPL v3 licence, see licence\ffmpeg)
+luts\                  built-in Log → Rec.709 LUTs for proxies
+licence\               licences of the bundled programs
+
+Settings and log
+----------------
+The app's settings and log are in %APPDATA%\Offload. Deleting the Offload folder uninstalls the app;
+the settings stay in %APPDATA%\Offload until you delete them.
+
+Offload never writes to the source card.
