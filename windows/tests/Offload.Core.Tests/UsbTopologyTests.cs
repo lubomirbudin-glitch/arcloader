@@ -37,7 +37,7 @@ public class UsbTopologyTests
         Assert.Equal("port 2 USB-C", typeC.DefaultLabel);
         var usb2Only = c.Single(x => x.Usb2Port == 3);
         Assert.False(usb2Only.SupportsUsb3);
-        Assert.Equal("port 3 jen USB 2.0", usb2Only.DefaultLabel);
+        Assert.Equal("port 3 USB 2.0 only", usb2Only.DefaultLabel);
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class UsbTopologyTests
         var c = Build(hub);
         Assert.Equal(2, c.Count);
         Assert.Equal(0, c.Single(x => x.Usb2Port == 1).Usb3Port);
-        Assert.Equal("port 20 USB 3 (interní)", c.Single(x => x.Usb3Port == 20).DefaultLabel);
+        Assert.Equal("port 20 USB 3 (internal)", c.Single(x => x.Usb3Port == 20).DefaultLabel);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class UsbTopologyTests
         var c = Build(Root(onPort3: Dev("hub", UsbLinkSpeed.High, UsbLinkSpeed.High, ext)));
         Assert.Equal(c.Count, c.Select(x => x.Label).Distinct().Count());
         Assert.Equal("port 3 › 1", c.Single(x => x.Id == "EXT#1").Label);
-        Assert.Equal("port 3 › 2 jen USB 2.0", c.Single(x => x.Id == "EXT#2").DefaultLabel);
+        Assert.Equal("port 3 › 2 USB 2.0 only", c.Single(x => x.Id == "EXT#2").DefaultLabel);
         Assert.Equal("port 1", c.Single(x => x.Id == "ROOT#1").Label);
     }
 
@@ -157,8 +157,8 @@ public class UsbTopologyTests
         // The reader runs at USB 2.0 behind a USB 3 socket: advice says cable, never "move to <the same port>".
         var link = new DriveLink(@"F:\", StorageBus.Usb, "reader", new UsbLink("PCI\\HC", "Intel xHCI", "HS#2", 2, 2, UsbLinkSpeed.High,
             UsbLinkSpeed.Super, DriveLinks.ConnectorOf(Raw(2, 0b011, 2), UsbLinkSpeed.High, _ => null).Usb3, false));
-        var w = Assert.Single(Advisor.Advise([new RoleLink("Karta", link)], c), a => a.Kind == AdviceKind.Warning);
-        Assert.Contains("kabel", w.Text);
+        var w = Assert.Single(Advisor.Advise([new RoleLink("Card", link)], c), a => a.Kind == AdviceKind.Warning);
+        Assert.Contains("cable", w.Text);
         Assert.DoesNotContain("port 1 › 2", w.Text);
         Assert.Equal("reader — USB 2.0 (480 Mb/s), port 1 › 2", link.Describe(c));
     }

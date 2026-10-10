@@ -92,7 +92,7 @@ public class ContentCheckTests
         Assert.True(r.IsWarn);
         Assert.Equal("audio", r.Kind);
         Assert.Equal("01:00:01:05", r.Timecode);
-        Assert.Equal("poškozený zvuk", ContentResult.KindText(r.Kind));
+        Assert.Equal("corrupted audio", ContentResult.KindText(r.Kind));
     }
 
     [Fact]
@@ -110,10 +110,10 @@ public class ContentCheckTests
     [Fact]
     public void KindTexts_Czech()
     {
-        Assert.Equal("poškozená data", ContentResult.KindText("decode"));
-        Assert.Equal("chybné časové značky", ContentResult.KindText("timestamps"));
-        Assert.Equal("snímky navíc", ContentResult.KindText("frames"));
-        Assert.Equal("klip končí předčasně", ContentResult.KindText("end"));
+        Assert.Equal("corrupted data", ContentResult.KindText("decode"));
+        Assert.Equal("bad timestamps", ContentResult.KindText("timestamps"));
+        Assert.Equal("extra frames", ContentResult.KindText("frames"));
+        Assert.Equal("clip ends early", ContentResult.KindText("end"));
         Assert.Equal("vada obsahu", ContentResult.KindText(null));
     }
 
@@ -334,7 +334,7 @@ public class ContentCheckTests
 
         var e = Assert.ThrowsAny<Exception>(() => r.Render(VideoClip("a.mov"), card, info, null, Path.Combine(card, "_PROXY", "a.mov"), _ => { }, () => false, content: watch));
 
-        Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku); proxy nevznikla", e.Message);
+        Assert.Equal("ffmpeg stalled (1 s without a new frame); no proxy was made", e.Message);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
         Assert.Equal("decode", watch.Verdict(info).Kind);   // what it said is still known (the job keeps no verdict for a failed proxy)
     }

@@ -136,20 +136,20 @@ public sealed class JobProgress
         _ => 0,
     };
 
-    public string StatusText => PauseLabel ?? (Status.Phase == JobPhase.Done && Status.CopySucceeded == false ? "Chyba" : Status.Phase.Label());
+    public string StatusText => PauseLabel ?? (Status.Phase == JobPhase.Done && Status.CopySucceeded == false ? "Error" : Status.Phase.Label());
 
-    /// "Pozastaveno" once the job stands, "Pozastavuji" until then; null while it runs.
-    string? PauseLabel => !Status.Paused ? null : Status.PauseHeld ? "Pozastaveno" : "Pozastavuji";
+    /// "Paused" once the job stands, "Pausing" until then; null while it runs.
+    string? PauseLabel => !Status.Paused ? null : Status.PauseHeld ? "Paused" : "Pausing";
 
     /// What the card says while paused, or null (task 2026-10-09): the file or clip in progress finishes first —
-    /// "Pozastavuji (dokončuji soubor A001C003.mov…)" — then "Pozastaveno"; Pokračovat goes on with the next one.
+    /// "Pausing (finishing file A001C003.mov…)" — then "Paused"; Resume goes on with the next one.
     public string? PauseText => Status switch
     {
         { Paused: false } => null,
-        { PauseHeld: true, Phase: JobPhase.Analyzing or JobPhase.Proxies } => "Pozastaveno — Pokračovat naváže dalším klipem.",
-        { PauseHeld: true } => "Pozastaveno — Pokračovat naváže dalším souborem.",
-        { PauseStep: { Length: > 0 } step } => $"Pozastavuji (dokončuji {step}…)",
-        _ => "Pozastavuji…",
+        { PauseHeld: true, Phase: JobPhase.Analyzing or JobPhase.Proxies } => "Paused — Resume continues with the next clip.",
+        { PauseHeld: true } => "Paused — Resume continues with the next file.",
+        { PauseStep: { Length: > 0 } step } => $"Pausing (finishing {step}…)",
+        _ => "Pausing…",
     };
 
     /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound or flash).
@@ -158,7 +158,7 @@ public sealed class JobProgress
     public CardTone Tone => Status.Phase switch
     {
         // Ruling I2 (plan 10): the success tone only when every copy is verified everywhere (SafeToFormat) — copied alone
-        // ("Lze vyjmout") is not green.
+        // ("Safe to eject") is not green.
         JobPhase.Done => Status.CopySucceeded == false ? CardTone.Error : Status.SafeToFormat ? CardTone.Ok : CardTone.Warning,
         JobPhase.Failed => CardTone.Error,
         JobPhase.Cancelled => CardTone.Warning,
@@ -181,16 +181,16 @@ public sealed class JobProgress
         get
         {
             var s = Status;
-            var eta = Eta is double t ? " · zbývá " + EtaText(t) : "";
+            var eta = Eta is double t ? " · " + EtaText(t) + " left" : "";
             string Dests() => string.Join(" · ", DestRates.Select((r, i) => $"D{i + 1} {Mb(r)}"));
             return s.Phase switch
             {
-                JobPhase.Copying => $"Karta {Mb(ReadRate)} · {Dests()}{eta} · {Path.GetFileName(s.Copy?.CurrentFile ?? "")}",
+                JobPhase.Copying => $"Card {Mb(ReadRate)} · {Dests()}{eta} · {Path.GetFileName(s.Copy?.CurrentFile ?? "")}",
                 JobPhase.Verifying => Dests() + eta,
-                JobPhase.Analyzing => $"Klip {s.ClipIndex + 1}/{s.ClipCount} · {s.ClipName}",
+                JobPhase.Analyzing => $"Clip {s.ClipIndex + 1}/{s.ClipCount} · {s.ClipName}",
                 JobPhase.Proxies =>
                     $"Proxy {s.ClipIndex + 1}/{s.ClipCount} · {s.ClipName} · {(s.ClipFraction * 100).ToString("0", CultureInfo.InvariantCulture)} %",
-                JobPhase.Finishing => $"Ověřeno {Format.BytesCs3(s.VerifiedBytes)} / {Format.BytesCs3(s.VerifyTotal)}",
+                JobPhase.Finishing => $"Verified {Format.Bytes3(s.VerifiedBytes)} / {Format.Bytes3(s.VerifyTotal)}",
                 _ => s.Phase.Label() + "…",
             };
         }
@@ -198,16 +198,16 @@ public sealed class JobProgress
 
     public static string SummaryText(OffloadReport r)
     {
-        var parts = new List<string> { "kopie " + Format.Rate(r.TotalBytes, r.CopySeconds) };
-        if (r.Verified) parts.Add("ověření " + Format.Rate(r.TotalBytes, r.VerifySeconds));
+        var parts = new List<string> { "copy " + Format.Rate(r.TotalBytes, r.CopySeconds) };
+        if (r.Verified) parts.Add("verification " + Format.Rate(r.TotalBytes, r.VerifySeconds));
         if (r.Clips.Count > 0) parts.Add(Texts.Clips(r.Clips.Count));
         if (r.Proxy?.Enabled == true)
         {
             int Count(ProxyStatus st) => r.Clips.Count(c => c.ProxyStatus == st);
-            var proxy = $"proxy {Count(ProxyStatus.Done)}";
-            if (Count(ProxyStatus.Failed) > 0) proxy += $", {Count(ProxyStatus.Failed)} chyba";
-            if (Count(ProxyStatus.Unsupported) > 0) proxy += $", {Count(ProxyStatus.Unsupported)} nepodporováno";
-            if (r.Clips.Count(c => c.OriginalLighter) is int lighter and > 0) proxy += $", {lighter} bez proxy (lehčí originál)";
+            var proxy = $"proxies {Count(ProxyStatus.Done)}";
+            if (Count(ProxyStatus.Failed) > 0) proxy += $", {Count(ProxyStatus.Failed)} failed";
+            if (Count(ProxyStatus.Unsupported) > 0) proxy += $", {Count(ProxyStatus.Unsupported)} unsupported";
+            if (r.Clips.Count(c => c.OriginalLighter) is int lighter and > 0) proxy += $", {lighter} without proxy (lighter original)";
             parts.Add(proxy);
         }
         return string.Join(" · ", parts);

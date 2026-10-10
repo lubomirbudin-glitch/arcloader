@@ -63,10 +63,10 @@ public class HashingTests
     [Fact]
     public void Choices_Labels_Wire()
     {
-        Assert.Equal(["xxHash64 (rychlý)", "xxHash64 + MD5"], Desktop.HashChoice.All.Select(c => c.Label));
+        Assert.Equal(["xxHash64 (fast)", "xxHash64 + MD5"], Desktop.HashChoice.All.Select(c => c.Label));
         Assert.Equal(HashKind.Both, Desktop.HashChoice.Of(HashKind.Md5).Kind);
-        Assert.Equal("Ověřit kopie zpětným čtením (xxHash64 + MD5)", Desktop.Texts.VerifyLabel(HashKind.Both));
-        Assert.Equal("Ověřit kopie zpětným čtením (xxHash64)", Desktop.Texts.VerifyLabel(HashKind.Xxh64));
+        Assert.Equal("Verify copies by reading back (xxHash64 + MD5)", Desktop.Texts.VerifyLabel(HashKind.Both));
+        Assert.Equal("Verify copies by reading back (xxHash64)", Desktop.Texts.VerifyLabel(HashKind.Xxh64));
         Assert.Equal(("xxh64", "both"), (HashKinds.Wire(HashKind.Xxh64), HashKinds.Wire(HashKind.Md5)));
         Assert.True(HashKinds.TryParseWire("both", out var both) && both == HashKind.Both);
         Assert.False(HashKinds.TryParseWire("md5", out _));   // R16: never MD5 alone

@@ -9,11 +9,11 @@ public class HtmlReportTests
     {
         var html = HtmlReport.Render(Reports.Sample(Card));
         Assert.StartsWith("<!doctype html>", html);
-        Assert.Contains("<span class=\"badge ok\">OVĚŘENO</span>", html);
+        Assert.Contains("<span class=\"badge ok\">VERIFIED</span>", html);
         Assert.Contains("CLIP/A&amp;B.mov", html);
         Assert.DoesNotContain("CLIP/A&B.mov", html);
-        Assert.Contains("<td class=\"ok\">ověřeno</td>", html);
-        Assert.Contains("<details><summary>Všechny soubory (2)</summary>", html);
+        Assert.Contains("<td class=\"ok\">verified</td>", html);
+        Assert.Contains("<details><summary>All files (2)</summary>", html);
         Assert.Contains("prefers-color-scheme:dark", html);
         Assert.Contains("offload 0.8.0-win", html);
     }
@@ -22,24 +22,24 @@ public class HtmlReportTests
     public void Failed_ListsErrorsPerDestination()
     {
         var html = HtmlReport.Render(Reports.Sample(Card, destError: "boom"));
-        Assert.Contains("<span class=\"badge bad\">CHYBA</span>", html);
-        Assert.Contains("Chyby (1)", html);
-        Assert.Contains("cíl 1: boom", html);
+        Assert.Contains("<span class=\"badge bad\">ERROR</span>", html);
+        Assert.Contains("Errors (1)", html);
+        Assert.Contains("destination 1: boom", html);
     }
 
-    // Spec 2.6/6.2 task 9: the file errors the JSON keeps in English (shared with the Mac) read in Czech in the HTML.
+    // Spec 2.6/6.2 task 9: the file errors the JSON keeps terse (shared with the Mac) read in plain words in the HTML.
     [Theory]
-    [InlineData("size mismatch: 4000 != 5000", "jiná velikost: 4000 != 5000")]
-    [InlineData("HASH MISMATCH: dest 0123456789abcdef != source fedcba9876543210", "nesouhlasí kontrolní součet (cíl 0123456789abcdef, karta fedcba9876543210)")]
-    [InlineData("MD5 MISMATCH: dest 900150983cd24fb0d6963f7d28e17f72 != source -", "nesouhlasí MD5 (cíl 900150983cd24fb0d6963f7d28e17f72, karta -)")]
-    [InlineData("verify: The device is not ready.", "chyba při ověření: The device is not ready.")]
-    [InlineData("write failed", "zápis selhal")]
-    [InlineData("source: cancelled", "karta: zrušeno")]
-    [InlineData("source: source size changed during copy (10 != 20)", "karta: soubor na kartě se během kopie změnil (10 != 20)")]
-    [InlineData("source: read E:\\a.mov: The request could not be performed (after 3 retries)", "karta: read E:\\a.mov: The request could not be performed (po 3 opakováních)")]
-    [InlineData("md5 hash failed: out of memory", "výpočet MD5 selhal: out of memory")]
-    [InlineData("xxh64 hash failed: boom", "výpočet xxHash64 selhal: boom")]
-    [InlineData("source: md5 hash failed: boom", "karta: výpočet MD5 selhal: boom")]
+    [InlineData("size mismatch: 4000 != 5000", "size mismatch: 4000 != 5000")]
+    [InlineData("HASH MISMATCH: dest 0123456789abcdef != source fedcba9876543210", "checksum mismatch (destination 0123456789abcdef, card fedcba9876543210)")]
+    [InlineData("MD5 MISMATCH: dest 900150983cd24fb0d6963f7d28e17f72 != source -", "MD5 mismatch (destination 900150983cd24fb0d6963f7d28e17f72, card -)")]
+    [InlineData("verify: The device is not ready.", "verification error: The device is not ready.")]
+    [InlineData("write failed", "write failed")]
+    [InlineData("source: cancelled", "card: cancelled")]
+    [InlineData("source: source size changed during copy (10 != 20)", "card: the file on the card changed during the copy (10 != 20)")]
+    [InlineData("source: read E:\\a.mov: The request could not be performed (after 3 retries)", "card: read E:\\a.mov: The request could not be performed (after 3 retries)")]
+    [InlineData("md5 hash failed: out of memory", "MD5 calculation failed: out of memory")]
+    [InlineData("xxh64 hash failed: boom", "xxHash64 calculation failed: boom")]
+    [InlineData("source: md5 hash failed: boom", "card: MD5 calculation failed: boom")]
     [InlineData("disk full (Mac)", "disk full (Mac)")]
     public void ErrorText_Czech(string error, string czech) => Assert.Equal(czech, HtmlReport.ErrorText(error));
 
@@ -47,17 +47,17 @@ public class HtmlReportTests
     public void Failed_ErrorsInCzech()
     {
         var html = HtmlReport.Render(Reports.Sample(Card, destError: "HASH MISMATCH: dest 0000000000000001 != source fedcba9876543210"));
-        Assert.Contains("cíl 1: nesouhlasí kontrolní součet (cíl 0000000000000001, karta fedcba9876543210)", html);
+        Assert.Contains("destination 1: checksum mismatch (destination 0000000000000001, card fedcba9876543210)", html);
         Assert.DoesNotContain("HASH MISMATCH", html);
     }
 
     [Fact]
     public void NotVerified_IsWarning() =>
-        Assert.Contains("ZKOPÍROVÁNO — NEOVĚŘENO", HtmlReport.Render(Reports.Sample(Card, verified: false)));
+        Assert.Contains("COPIED — NOT VERIFIED", HtmlReport.Render(Reports.Sample(Card, verified: false)));
 
     [Fact]
     public void Buffered_ShowsWarning() =>
-        Assert.Contains("svazek nepodporuje přímý zápis", HtmlReport.Render(Reports.Sample(Card, unbuffered: false)));
+        Assert.Contains("the volume does not support direct writes", HtmlReport.Render(Reports.Sample(Card, unbuffered: false)));
 
     [Fact]
     public void Print_ExpandsFileListAndUsesLightColours()
@@ -76,10 +76,10 @@ public class HtmlReportTests
     {
         var html = HtmlReport.Render(Reports.Sample(Card));
         Assert.Contains("<div class=\"toolbar\">", html);
-        Assert.Contains("<button type=\"button\" onclick=\"window.print()\">Uložit jako PDF</button>", html);
-        Assert.Contains("v tisku zvolte „Uložit jako PDF“", html);
+        Assert.Contains("<button type=\"button\" onclick=\"window.print()\">Save as PDF</button>", html);
+        Assert.Contains("in the print dialog choose \u201cSave as PDF\u201d", html);
         Assert.Contains("<a href=\"A001_report.pdf\"", html);
-        Assert.Contains(">Otevřít PDF report</a>", html);
+        Assert.Contains(">Open PDF report</a>", html);
         Assert.Matches(@"@media print\{.*\.toolbar\{display:none\}", html);
     }
 
@@ -160,19 +160,19 @@ public class HtmlReportTests
         });
         r.Proxy = new ProxySettings { Enabled = true, FrameAspect = 1.66 };
         var html = HtmlReport.Render(r);
-        Assert.Contains("<h2>Klipy</h2>", html);
+        Assert.Contains("<h2>Clips</h2>", html);
         Assert.Contains("<div class=\"thumbs\"><figure><img class=\"thumb\" src=\"data:image/jpeg;base64,AQID\" alt=\"\"><figcaption>01:00:00:00</figcaption></figure>", html);
         Assert.Contains("base64,BAUG\" alt=\"\"><figcaption>01:00:06:00</figcaption>", html);
         Assert.Contains("base64,BwgJ\" alt=\"\"><figcaption>01:00:11:24</figcaption></figure></div>", html);
         Assert.Contains("3840×2160", html);
-        Assert.Contains("<td class=\"st ok\">hotovo</td>", html);
+        Assert.Contains("<td class=\"st ok\">done</td>", html);
         Assert.Contains("2 ch", html);
-        Assert.Contains("Proxy: H.264, 1080p, výřez 1.66, LUT: automaticky podle kamery", html);
+        Assert.Contains("Proxies: H.264, 1080p, crop 1.66, LUT: automatic by camera", html);
         r.ProxyEncoder = "h264_nvenc";
-        Assert.Contains("Proxy: H.264 (h264_nvenc), 1080p, výřez 1.66, LUT: automaticky podle kamery", HtmlReport.Render(r));
-        Assert.DoesNotContain("také ve složce", HtmlReport.Render(r));
+        Assert.Contains("Proxies: H.264 (h264_nvenc), 1080p, crop 1.66, LUT: automatic by camera", HtmlReport.Render(r));
+        Assert.DoesNotContain("also in the folder", HtmlReport.Render(r));
         r.Proxy.ExtraFolder = @"E:\Proxy & co";
-        Assert.Contains("<span class=\"mono\">_PROXY/</span> · také ve složce <span class=\"mono\">E:\\Proxy &amp; co</span></p>", HtmlReport.Render(r));
+        Assert.Contains("<span class=\"mono\">_PROXY/</span> · also in the folder <span class=\"mono\">E:\\Proxy &amp; co</span></p>", HtmlReport.Render(r));
     }
 
     // Mac findings 2026-10-09 (ARRI 4.6K report): in print the narrow-screen columns come back as columns — a <col> made a
@@ -219,7 +219,7 @@ public class HtmlReportTests
             ProxyPath = "_PROXY/idle cam/A&B.mov",
         });
         var html = HtmlReport.Render(r);
-        Assert.Contains("<td class=\"st ok\"><a href=\"../_PROXY/idle%20cam/A%26B.mov\" title=\"_PROXY/idle cam/A&amp;B.mov\">hotovo</a></td>", html);
+        Assert.Contains("<td class=\"st ok\"><a href=\"../_PROXY/idle%20cam/A%26B.mov\" title=\"_PROXY/idle cam/A&amp;B.mov\">done</a></td>", html);
     }
 
     [Fact]

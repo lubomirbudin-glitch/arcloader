@@ -47,7 +47,7 @@ public class AppendRefusalJobTests
         File.AppendAllText(c1, "x");
         File.SetLastWriteTimeUtc(c1, t);
         var expected = PlannerMessage(card, paths);
-        Assert.Contains("1 soubor se neshoduje se zálohou", expected);
+        Assert.Contains("1 file does not match the backup", expected);
         AssertRefused(Job(card, paths, dir.Sub("h")), paths, expected);
     }
 
@@ -59,7 +59,7 @@ public class AppendRefusalJobTests
         AppendFixtures.NewClip(card);
         AppendFixtures.NewClip(paths[0], size: 999, seed: 9);   // the new clip's name already on d1, in no report
         var expected = PlannerMessage(card, paths);
-        Assert.Contains("žádný report nezná", expected);
+        Assert.Contains("no report knows", expected);
         AssertRefused(Job(card, paths, dir.Sub("h")), paths, expected);
     }
 
@@ -81,7 +81,7 @@ public class AppendRefusalJobTests
         foreach (var p in paths) File.WriteAllText(Path.Combine(p, "_REPORT", "A001_report_0002.html"), "<html/>");
         AppendFixtures.NewClip(card);
         var expected = PlannerMessage(card, paths);
-        Assert.Contains("nesouhlasí reporty s ASC MHL", expected);
+        Assert.Contains("do not match the ASC MHL", expected);
         AssertRefused(Job(card, paths, dir.Sub("h")), paths, expected);
     }
 

@@ -29,7 +29,7 @@ public class SummaryReportReviewTests
         var under = dir.Sub("x", "B001", "CLIP", "deep");
 
         foreach (var target in new[] { Path.GetDirectoryName(empty)!, empty, Path.GetDirectoryName(manifest)!, part, Path.GetDirectoryName(part)!, mhl, under })
-            Assert.Contains("ve složce zálohy karty", Refused(target));
+            Assert.Contains("inside the backup folder of a card", Refused(target));
         SummaryReport.CheckTarget(day);              // the day folder itself holds no card's files
         SummaryReport.CheckTarget(dir.Sub("picked"));
     }
@@ -43,17 +43,17 @@ public class SummaryReportReviewTests
         Directory.CreateDirectory(Path.Combine(camera, "DCIM"));
         var into = dir.Sub("camera", "export");
         using (SummaryReport.OverrideVolume(_ => new SummaryVolume(camera, DriveType.Fixed, false)))
-            Assert.Contains("karta z kamery", Refused(into));
+            Assert.Contains("looks like a camera card", Refused(into));
 
         var plain = dir.Sub("plain");
         using (SummaryReport.OverrideVolume(_ => new SummaryVolume(plain, DriveType.Removable, false)))
-            Assert.Contains("výměnném", Refused(plain));
+            Assert.Contains("removable media", Refused(plain));
         using (SummaryReport.OverrideVolume(_ => new SummaryVolume(plain, DriveType.Fixed, true)))
-            Assert.Contains("jen pro čtení", Refused(plain));
+            Assert.Contains("read-only", Refused(plain));
         using (SummaryReport.OverrideVolume(_ => new SummaryVolume(plain, DriveType.Fixed, false)))
         {
             SummaryReport.CheckTarget(plain);
-            Assert.Contains("na kartě", Refused(dir.Sub("plain", "sub"), [plain]));
+            Assert.Contains("is on the card", Refused(dir.Sub("plain", "sub"), [plain]));
         }
 
         // A backup disk: camera folders below its dated backups never make it a card.
@@ -75,7 +75,7 @@ public class SummaryReportReviewTests
 
         var saved = SummaryReport.Save(Model(dir, d1), dir.Sub("local"), camera, null, new DateTime(2026, 10, 10, 9, 0, 0));
 
-        Assert.Contains("karta z kamery", saved.ExtraError);
+        Assert.Contains("looks like a camera card", saved.ExtraError);
         Assert.Empty(Directory.GetFiles(camera, "*", SearchOption.AllDirectories));
     }
 
@@ -182,7 +182,7 @@ public class SummaryReportReviewTests
         var none = Assert.Single(SummaryReport.Load([SummaryInput.Of(entry)], [dir.Sub("empty")]).Cards);
         Assert.Equal(SummarySource.None, none.Source);
         Assert.Equal(7, none.Files);   // history
-        Assert.Contains(SummaryReport.Notes(new SummaryModel { Cards = [none] }), n => n.Text.Contains("nejde přečíst"));
+        Assert.Contains(SummaryReport.Notes(new SummaryModel { Cards = [none] }), n => n.Text.Contains("cannot read", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

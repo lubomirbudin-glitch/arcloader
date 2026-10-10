@@ -119,11 +119,12 @@ public class ProjectsTests
     }
 
     [Theory]
-    [InlineData("", "Název nesmí být prázdný.")]
-    [InlineData("   ", "Název nesmí být prázdný.")]
-    [InlineData("bez PROJEKTU", "„Bez projektu“ je vyhrazený název.")]
-    [InlineData("film x", "Projekt s tímto názvem už existuje.")]
-    [InlineData(" Film X ", "Projekt s tímto názvem už existuje.")]
+    [InlineData("", "The name must not be empty.")]
+    [InlineData("   ", "The name must not be empty.")]
+    [InlineData("no PROJECT", "\"no PROJECT\" is a reserved name.")]
+    [InlineData("bez PROJEKTU", "\"bez PROJEKTU\" is a reserved name.")]   // the old Czech name stays reserved
+    [InlineData("film x", "A project with this name already exists.")]
+    [InlineData(" Film X ", "A project with this name already exists.")]
     public void Names_Refused_InCzech(string name, string message)
     {
         var s = new AppSettings();
@@ -137,11 +138,11 @@ public class ProjectsTests
     {
         var s = new AppSettings();
         Projects.SaveAs(s, new string('x', 60));
-        Assert.Equal("Název může mít nejvýš 60 znaků.", Assert.Throws<ArgumentException>(() => Projects.SaveAs(s, new string('y', 61))).Message);
+        Assert.Equal("The name can have at most 60 characters.", Assert.Throws<ArgumentException>(() => Projects.SaveAs(s, new string('y', 61))).Message);
         Projects.SaveAs(s, "B");
-        Assert.Equal("Projekt s tímto názvem už existuje.", Assert.Throws<ArgumentException>(() => Projects.Rename(s, "B", new string('x', 60))).Message);
-        Assert.Equal("Projekt „Nic“ neexistuje. Projekty: " + new string('x', 60) + ", B.", Assert.Throws<ArgumentException>(() => Projects.Activate(s, "Nic")).Message);
-        Assert.Equal("Projekt „Nic“ neexistuje. Žádný projekt není uložený.", Projects.Unknown("Nic", new AppSettings()));
+        Assert.Equal("A project with this name already exists.", Assert.Throws<ArgumentException>(() => Projects.Rename(s, "B", new string('x', 60))).Message);
+        Assert.Equal("Project \"Nic\" does not exist. Projects: " + new string('x', 60) + ", B.", Assert.Throws<ArgumentException>(() => Projects.Activate(s, "Nic")).Message);
+        Assert.Equal("Project \"Nic\" does not exist. No project is saved.", Projects.Unknown("Nic", new AppSettings()));
     }
 
     // Review focus 2: a hand-edited file — the same name twice (the last wins), an invalid entry, missing sections,
@@ -363,6 +364,6 @@ public class ProjectsTests
     {
         Assert.Equal("Offload", Projects.WindowTitle(null));
         Assert.Equal("Offload — Film X", Projects.WindowTitle("Film X"));
-        Assert.Equal("Smazat projekt Film X? Nastavení projektu se ztratí, zálohy na discích zůstanou.", Projects.DeleteQuestion("Film X"));
+        Assert.Equal("Delete project Film X? The project's settings will be lost; the backups on the disks stay.", Projects.DeleteQuestion("Film X"));
     }
 }

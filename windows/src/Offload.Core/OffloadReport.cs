@@ -80,7 +80,7 @@ public sealed partial class OffloadReport
     [JsonPropertyName("proxyEncoder")] public string? ProxyEncoder { get; set; }
     /// The ASC MHL generation this report belongs to: absent (= 1) for the full copy, 2, 3 … for appends (spec 2.2).
     [JsonPropertyName("generation")] public int? Generation { get; set; }
-    /// The project the card was copied in (spec 4.1); absent for "Bez projektu" and in older reports. The Mac ignores it.
+    /// The project the card was copied in (spec 4.1); absent for "No project" and in older reports. The Mac ignores it.
     [JsonPropertyName("project")] public string? Project { get; set; }
     /// Seconds the copy / the read-back stood paused (Pozastavit, Windows from 0.5.0); absent when never paused. The speeds
     /// leave the pause out; the Mac ignores the keys (its speeds then include it).
@@ -90,7 +90,7 @@ public sealed partial class OffloadReport
     /// gone once verified. A report saying so has no ASC MHL generation yet (OffloadReport.Commit). Absent otherwise.
     [JsonPropertyName("verifyPending")] public bool? VerifyPending { get; set; }
     /// Plan 10 fix round 1 (M-a): the verification results were written into this card folder, but not into every other
-    /// destination of the copy (a commit failed there) — this folder is not the whole truth: never "ověřeno" until a
+    /// destination of the copy (a commit failed there) — this folder is not the whole truth: never "verified" until a
     /// resume writes the generation again. Absent otherwise. The Mac ignores it.
     [JsonPropertyName("verifyIncomplete")] public bool? VerifyIncomplete { get; set; }
     /// Spec 9: seconds from the start until every file was verified on every destination (pauses left out); absent when
@@ -98,7 +98,7 @@ public sealed partial class OffloadReport
     [JsonPropertyName("safeToFormatSeconds")] public double? SafeToFormatSeconds { get; set; }
     /// Spec 10 (Czech): unstable reads, a block wrong on several destinations, what the card gave for it again.
     [JsonPropertyName("verifyNotes")] public List<string>? VerifyNotes { get; set; }
-    /// "repair" for "Zkopírovat znovu" (Windows from 0.5.0); absent for a full copy and an append. The Mac ignores it.
+    /// "repair" for "Copy again" (Windows from 0.5.0); absent for a full copy and an append. The Mac ignores it.
     [JsonPropertyName("kind")] public string? Kind { get; set; }
     /// Repair: the non-matching copies moved aside (`_REPORT/neshoda_NNNN/…`); absent when none was.
     [JsonPropertyName("setAside")] public IReadOnlyList<SetAsideCopy>? SetAside { get; set; }

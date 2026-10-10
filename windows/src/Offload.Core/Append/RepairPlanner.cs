@@ -2,7 +2,7 @@ using Offload.Core.History;
 
 namespace Offload.Core.Append;
 
-/// What a repair copies ("Zkopírovat znovu", UI návrh 4): the files whose newest record failed, each only onto the
+/// What a repair copies ("Copy again", UI návrh 4): the files whose newest record failed, each only onto the
 /// destinations where it failed, as ASC MHL generation `Generation` in the same card folders. A destination that holds
 /// a good copy of such a file gets nothing written — its copy is only read back in the same generation, so every card
 /// folder keeps the same generations (R7, plan 6 ruling I1).
@@ -74,12 +74,12 @@ public static class RepairPlanner
         // What to do, from the reports on the destinations (never from memory), on the newest record of each path: a
         // copy that failed is copied again there; a good copy that was never read back (a copy made without
         // verification, a repair or an append cancelled during its read-back) is read back — fix round 2, item B:
-        // otherwise such a copy would stay unverified for ever behind "Nic k opravě".
+        // otherwise such a copy would stay unverified for ever behind "Nothing to repair".
         var todo = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int d = 0; d < paths.Count; d++)
             foreach (var (path, rec) in records[d].Files)
                 if (rec.File.SourceError != null || !Good(rec, paths[d], d) || !CardRecord.ReadBack(rec, paths[d], records[d].VolumeSerial)) todo.Add(path);
-        // The card is scanned before "Nic k opravě" (batch 10–12 review): a file shot after the backup is in no report,
+        // The card is scanned before "Nothing to repair" (batch 10–12 review): a file shot after the backup is in no report,
         // and with nothing to repair it must still keep the card from "kartu lze vysunout".
         var scan = Scanner.Scan(source, ct);
         int notInBackup = scan.Files.Count(f => !records.Any(r => r.Files.ContainsKey(f.RelPath)));
@@ -126,7 +126,7 @@ public static class RepairPlanner
                 }
                 if (recorded.File.Size != card.Size || !FileTimes.Close(recorded.File.Modified, card.ModifiedUtc, cardLocalTime))
                 {
-                    conflicts.Add(AppendPlanner.Conflict(card, "záloha", recorded.File.Size, recorded.File.Modified));
+                    conflicts.Add(AppendPlanner.Conflict(card, "backup", recorded.File.Size, recorded.File.Modified));
                     continue;
                 }
                 if (taken.Contains(DestWriter.PartName(path))) conflicts.Add(Msg.AppendPartNameTaken(path, DestWriter.PartName(path)));

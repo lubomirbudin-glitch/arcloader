@@ -186,11 +186,11 @@ public class ResumeRulingsTests
     {
         var e = new HistoryEntry { Id = "x", CardName = "A001", Unfinished = true, Finished = T, Destinations = [new() { Root = @"D:\Zaloha", CardPath = @"D:\Zaloha\2026-10-08\A001" }] };
         var summary = HistoryView.Summary([e]);
-        Assert.Contains("1 nedokončená", summary);
-        Assert.DoesNotContain("vše ověřeno", summary);
+        Assert.Contains("1 unfinished", summary);
+        Assert.DoesNotContain("all verified", summary);
         Assert.DoesNotContain("s chybami", summary);
         Assert.Equal(HistoryTone.Warning, HistoryView.Row(e).Tone);
-        Assert.Contains("Dokončit přerušenou zálohu", Msg.RepairUnfinished);
+        Assert.Contains("Finish interrupted backup", Msg.RepairUnfinished);
     }
 
     static readonly CardVolume Vol = new("card1", "1A2B3C4D", 256_060_514_304, "A001", "exFAT");
@@ -222,7 +222,7 @@ public class ResumeRulingsTests
         Assert.Equal(HistoryMatchKind.Identical, identical.History!.Kind);
         Assert.True(identical.AppendReachable);
         Assert.True(AppendRules.Offer(identical));
-        Assert.Equal("Dokončit přerušenou zálohu (dokončí ověření)", AppendRules.CheckboxText(identical.History!));
+        Assert.Equal("Finish interrupted backup (finishes the verification)", AppendRules.CheckboxText(identical.History!));
         Assert.False(BackedUpPrompt.ShouldAsk(identical));
         // A finished backup with nothing new: not reachable, no tick, as before.
         e.Unfinished = false;
@@ -233,7 +233,7 @@ public class ResumeRulingsTests
     }
 
     // I5 end to end: the app dies during stage 2 (verify-in-proxy) — history says "nedokončeno", the card re-inserted
-    // (nothing new) offers "Dokončit přerušenou zálohu", a repair refuses and points to it; the resume verifies and
+    // (nothing new) offers "Finish interrupted backup", a repair refuses and points to it; the resume verifies and
     // commits the generation: green, the entry finished.
     [FfmpegFact]
     public void CrashDuringStageTwo_DokoncitOffered_ResumeGoesGreen()
@@ -248,7 +248,7 @@ public class ResumeRulingsTests
         var store = new HistoryStore(Path.Combine(dir.Path, "history"));
         var entry = Assert.Single(store.Load());
         Assert.True(entry.Unfinished);
-        Assert.Equal(("! nedokončeno", HistoryTone.Warning), (HistoryView.Row(entry).Status, HistoryView.Row(entry).Tone));
+        Assert.Equal(("! unfinished", HistoryTone.Warning), (HistoryView.Row(entry).Status, HistoryView.Row(entry).Tone));
         job.Abandon();   // the app ended here: no stage 2, no commit
         var paths = job.Plan!.CardPaths;
         Assert.All(paths, p => Assert.True(Pending(p)));
@@ -258,10 +258,10 @@ public class ResumeRulingsTests
         Assert.Equal(HistoryMatchKind.Identical, match.Kind);
         Assert.True(insight.AppendReachable);
         Assert.True(AppendRules.Offer(insight));
-        Assert.StartsWith("Dokončit přerušenou zálohu", AppendRules.CheckboxText(match));
+        Assert.StartsWith("Finish interrupted backup", AppendRules.CheckboxText(match));
         Assert.False(BackedUpPrompt.ShouldAsk(insight));
         var refused = Assert.Throws<OffloadError>(() => RepairPlanner.Plan(card, paths));
-        Assert.Contains("Dokončit přerušenou zálohu", refused.Message);
+        Assert.Contains("Finish interrupted backup", refused.Message);
 
         var config = VerifyInProxyRulingsTests.Config(card, [], dir);
         config.AppendInto = [.. entry.Destinations.Select(d => d.CardPath)];
@@ -286,7 +286,7 @@ public class ResumeRulingsTests
     }
 
     // I1 + I5: the results could not be written into the second folder (the first has its generation): the entry stays
-    // "nedokončeno"; "Dokončit přerušenou zálohu" finishes it — one generation 1 in each chain, green.
+    // "nedokončeno"; "Finish interrupted backup" finishes it — one generation 1 in each chain, green.
     [FfmpegFact]
     public void CommitFailedInOneFolder_FinishedByTheResume()
     {
@@ -361,7 +361,7 @@ public class ResumeRulingsTests
         Assert.Empty(read);
         Assert.True(resume.Plan!.Resuming);
         Assert.True(resume.Status().SafeToFormat);
-        Assert.Null(resume.Status().Note);   // not "Nic nového"
+        Assert.Null(resume.Status().Note);   // not "Nothing new"
         Assert.All(paths, p =>
         {
             Assert.False(Pending(p));

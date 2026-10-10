@@ -39,9 +39,9 @@ public class LighterSourceTests
     [Fact]
     public void Lighter_H264AndHevc_AtMostTheProxyRateAndFrame()
     {
-        Assert.Equal("bez proxy — originál je lehčí (5,2 Mb/s ≤ 10 Mb/s)", LighterSource.Note(V(), H264(5.2), P));
-        Assert.Equal("bez proxy — originál je lehčí (10 Mb/s ≤ 10 Mb/s)", LighterSource.Note(V(), H264(10), P));   // equal is lighter
-        Assert.Equal("bez proxy — originál je lehčí (1,3 Mb/s ≤ 10 Mb/s)", LighterSource.Note(V(), H264(1.3, 1280, 720, "hevc Main 10"), P));
+        Assert.Equal("no proxy — the original is lighter (5.2 Mb/s ≤ 10 Mb/s)", LighterSource.Note(V(), H264(5.2), P));
+        Assert.Equal("no proxy — the original is lighter (10 Mb/s ≤ 10 Mb/s)", LighterSource.Note(V(), H264(10), P));   // equal is lighter
+        Assert.Equal("no proxy — the original is lighter (1.3 Mb/s ≤ 10 Mb/s)", LighterSource.Note(V(), H264(1.3, 1280, 720, "hevc Main 10"), P));
         Assert.Null(LighterSource.Note(V(), H264(10.1), P));                                     // heavier
         Assert.Equal(Msg.ProxyLighter(5.2, 10), LighterSource.Note(V(), H264(5.2), P));
     }
@@ -89,7 +89,7 @@ public class LighterSourceTests
         Assert.Null(LighterSource.Note(V(), H264(1.3), prores));
         Assert.Null(LighterSource.Note(V(), H264(1.3, codec: "hevc Main"), prores));
         Assert.True(SpaceEstimator.ProxyBytes([V()], prores, _ => true, _ => H264(1.3)) > 0);
-        Assert.Equal("bez proxy — originál je lehčí (1,3 Mb/s ≤ 10 Mb/s)",
+        Assert.Equal("no proxy — the original is lighter (1.3 Mb/s ≤ 10 Mb/s)",
             LighterSource.Note(V(), H264(1.3), new ProxySettings { Enabled = true, Codec = ProxyCodec.Hevc, BitrateMbps = 10 }));
     }
 
@@ -100,8 +100,8 @@ public class LighterSourceTests
     {
         var logc = new LutUse("auto", "arri-logc4-awg4", "ARRI LogC4 → Rec.709", "ARRI");
         Assert.Null(LighterSource.Note(V(), H264(2), P, logc));
-        Assert.Null(LighterSource.Note(V(), H264(2), P, new LutUse("custom", null, "look.cube", "vlastní")));
-        Assert.NotNull(LighterSource.Note(V(), H264(2), P, new LutUse("none", null, "Bez LUT", "kamera nerozpoznána")));
+        Assert.Null(LighterSource.Note(V(), H264(2), P, new LutUse("custom", null, "look.cube", "custom")));
+        Assert.NotNull(LighterSource.Note(V(), H264(2), P, new LutUse("none", null, "no LUT", "camera not recognised")));
         Assert.NotNull(LighterSource.Note(V(), H264(2), P, null));
         Assert.Null(LighterSource.Note(V(), H264(2), new ProxySettings { Enabled = true, FrameAspect = 1.85 }));
         Assert.Null(LighterSource.Note(V(), H264(2), new ProxySettings { Enabled = true, FrameScale = 0.9 }));
@@ -146,7 +146,9 @@ public class LighterSourceTests
     {
         Assert.True(Lighter().OriginalLighter);
         Assert.False(new ClipEntry { Clip = V(), ProxyStatus = ProxyStatus.Skipped }.OriginalLighter);
-        Assert.False(new ClipEntry { Clip = V(), ProxyStatus = ProxyStatus.Skipped, ProxyNote = "Na disku není místo" }.OriginalLighter);
+        Assert.False(new ClipEntry { Clip = V(), ProxyStatus = ProxyStatus.Skipped, ProxyNote = "No space on the disk" }.OriginalLighter);
+        // A report written before 0.9.0 says it in Czech: still the lighter original, not a failure.
+        Assert.True(new ClipEntry { Clip = V(), ProxyStatus = ProxyStatus.Skipped, ProxyNote = "bez proxy — originál je lehčí (5,2 Mb/s ≤ 10 Mb/s)" }.OriginalLighter);
     }
 
     // Neutral, not a failure: "bez proxy" in grey, the reason as a grey note (not red).
@@ -156,9 +158,9 @@ public class LighterSourceTests
         var r = Reports.Sample(@"D:\2026-10-08\A001");
         r.Clips.Add(Lighter());
         var html = HtmlReport.Render(r);
-        Assert.Contains("<td class=\"st muted\">bez proxy</td>", html);
-        Assert.Contains("<div class=\"note\">bez proxy — originál je lehčí (5,2 Mb/s ≤ 10 Mb/s)</div>", html);
-        Assert.DoesNotContain("<div class=\"path err\">bez proxy", html);
+        Assert.Contains("<td class=\"st muted\">no proxy</td>", html);
+        Assert.Contains("<div class=\"note\">no proxy — the original is lighter (5.2 Mb/s ≤ 10 Mb/s)</div>", html);
+        Assert.DoesNotContain("<div class=\"path err\">no proxy", html);
     }
 
     // Job card "Proxy x / y" and the summary line: such a clip is not one the proxies still owe.
@@ -169,8 +171,8 @@ public class LighterSourceTests
         r.Proxy = new ProxySettings { Enabled = true };
         r.Clips.Add(new ClipEntry { Clip = V("a.mov"), ProxyStatus = ProxyStatus.Done });
         r.Clips.Add(Lighter());
-        Assert.Equal("1 / 1", JobCard.Summary(r, TimeSpan.FromSeconds(1)).Single(f => f.Label == "Proxy").Value);
-        Assert.EndsWith("proxy 1, 1 bez proxy (lehčí originál)", JobProgress.SummaryText(r));
+        Assert.Equal("1 / 1", JobCard.Summary(r, TimeSpan.FromSeconds(1)).Single(f => f.Label == "Proxies").Value);
+        Assert.EndsWith("proxies 1, 1 without proxy (lighter original)", JobProgress.SummaryText(r));
     }
 
     [Fact]
@@ -186,7 +188,7 @@ public class LighterSourceTests
         var day = Offload.Core.Outputs.DayReport.Load(Path.GetDirectoryName(card)!);
 
         Assert.Equal(1, day.Cards[0].ProxiesLighter);
-        Assert.Contains("<td>1 / 0 · 1 bez proxy</td>", Offload.Core.Outputs.DayReport.Html(day));
+        Assert.Contains("<td>1 / 0 · 1 no proxy</td>", Offload.Core.Outputs.DayReport.Html(day));
     }
 }
 
@@ -218,7 +220,7 @@ public class LighterSourceJobTests
         Assert.Equal((1, 0), (s.ProxiesDone, s.ProxiesFailed));
         var small = report!.Clips.Single(c => c.Clip.Name == "small");
         Assert.Equal(ProxyStatus.Skipped, small.ProxyStatus);
-        Assert.StartsWith("bez proxy — originál je lehčí (", small.ProxyNote);
+        Assert.StartsWith("no proxy — the original is lighter (", small.ProxyNote);
         Assert.EndsWith(" Mb/s ≤ 40 Mb/s)", small.ProxyNote);
         Assert.True(small.OriginalLighter);
         Assert.Null(small.ProxyPath);

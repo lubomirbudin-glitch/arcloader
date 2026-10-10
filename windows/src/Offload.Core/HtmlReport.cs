@@ -7,12 +7,11 @@ namespace Offload.Core;
 /// Self-contained HTML report (thumbnails embedded) — can be emailed or opened straight from the disk.
 public static partial class HtmlReport
 {
-    static readonly CultureInfo Cs = CultureInfo.GetCultureInfo("cs-CZ");
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     static readonly Dictionary<string, string> StateLabel = new()
     {
-        ["verified"] = "ověřeno", ["written"] = "zapsáno", ["failed"] = "CHYBA", ["pending"] = "nezpracováno",
+        ["verified"] = "verified", ["written"] = "written", ["failed"] = "ERROR", ["pending"] = "not processed",
     };
 
     const string RootCss = ":root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e3e3e0;--ok:#1f8a4c;--okbg:#e5f4ea;--bad:#c62828;--badbg:#fdeaea;--warn:#a86400;--warnbg:#fdf2dc;--accent:#3a5bd9}";
@@ -78,17 +77,19 @@ public static partial class HtmlReport
     /// HTML. The PDF is made after the HTML (and skipped when Edge is missing); there is no option to switch it off, so the link
     /// is always there and the file may be missing without Edge. Not in the PDF itself.
     internal static string Toolbar(string pdfFileName, bool forPrint) => forPrint ? "" :
-        "<div class=\"toolbar\"><button type=\"button\" onclick=\"window.print()\">Uložit jako PDF</button>" +
-        "<span class=\"hint\">v tisku zvolte „Uložit jako PDF“</span>" +
-        $"<a href=\"{Esc(Uri.EscapeDataString(pdfFileName))}\" title=\"PDF vzniká po dokončení přes Microsoft Edge; bez něj soubor nemusí existovat\">Otevřít PDF report</a></div>\n";
+        "<div class=\"toolbar\"><button type=\"button\" onclick=\"window.print()\">Save as PDF</button>" +
+        "<span class=\"hint\">in the print dialog choose \u201cSave as PDF\u201d</span>" +
+        $"<a href=\"{Esc(Uri.EscapeDataString(pdfFileName))}\" title=\"The PDF is made at the end with Microsoft Edge; without it the file may not exist\">Open PDF report</a></div>\n";
 
-    internal static string DateTimeText(DateTime d) => d.ToLocalTime().ToString("d. M. yyyy HH:mm:ss", Cs);
+    internal static string DateTimeText(DateTime d) => d.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", Inv);
     static string TimeText(DateTime d) => d.ToLocalTime().ToString("HH:mm:ss", Inv);
 
     internal static string Duration(double seconds)
     {
         int t = (int)Math.Round(seconds, MidpointRounding.AwayFromZero);
-        return t >= 3600 ? $"{t / 3600}:{t / 60 % 60:00}:{t % 60:00}" : $"{t / 60}:{t % 60:00}";
+        return t >= 3600
+            ? string.Create(Inv, $"{t / 3600}:{t / 60 % 60:00}:{t % 60:00}")
+            : string.Create(Inv, $"{t / 60}:{t % 60:00}");
     }
 
     [GeneratedRegex(@"^(?:HASH|MD5) MISMATCH: dest (?<dest>\S+) != source (?<source>\S+)$")]
@@ -108,38 +109,38 @@ public static partial class HtmlReport
     [GeneratedRegex(@"^card differs from the backup: (?<algo>xxh64|md5) (?<now>\S+) != recorded (?<recorded>\S+)$")]
     private static partial Regex CardDiffers();
 
-    /// A file error as the report JSON keeps it (English, shared with the Mac — spec 2.6) in Czech for the HTML/PDF.
+    /// A file error as the report JSON keeps it (terse, shared with the Mac — spec 2.6) in plain words for the HTML/PDF.
     /// Texts it does not know (the Mac's, the system's) stay as they are.
     public static string ErrorText(string error)
     {
-        if (error.StartsWith("source: ", StringComparison.Ordinal)) return "karta: " + ErrorText(error["source: ".Length..]);
-        if (error.StartsWith("verify: ", StringComparison.Ordinal)) return "chyba při ověření: " + ErrorText(error["verify: ".Length..]);
+        if (error.StartsWith("source: ", StringComparison.Ordinal)) return "card: " + ErrorText(error["source: ".Length..]);
+        if (error.StartsWith("verify: ", StringComparison.Ordinal)) return "verification error: " + ErrorText(error["verify: ".Length..]);
         if (error.StartsWith("set aside: ", StringComparison.Ordinal))
-            return "nesouhlasnou kopii nejde odložit, zůstala na místě: " + error["set aside: ".Length..];
+            return "cannot set the mismatching copy aside, it stayed in place: " + error["set aside: ".Length..];
         if (BlockMismatch().Match(error) is { Success: true } bm)
-            return $"nesouhlasí blok {bm.Groups["block"].Value} (cíl {bm.Groups["dest"].Value}, karta {bm.Groups["source"].Value})";
+            return $"block {bm.Groups["block"].Value} mismatch (destination {bm.Groups["dest"].Value}, card {bm.Groups["source"].Value})";
         if (Mismatch().Match(error) is { Success: true } m)
-            return $"{(error.StartsWith("MD5", StringComparison.Ordinal) ? "nesouhlasí MD5" : "nesouhlasí kontrolní součet")} (cíl {m.Groups["dest"].Value}, karta {m.Groups["source"].Value})";
+            return $"{(error.StartsWith("MD5", StringComparison.Ordinal) ? "MD5 mismatch" : "checksum mismatch")} (destination {m.Groups["dest"].Value}, card {m.Groups["source"].Value})";
         if (HashFailed().Match(error) is { Success: true } h)
-            return $"výpočet {(h.Groups["algo"].Value == "md5" ? "MD5" : "xxHash64")} selhal: " + error[h.Length..];
-        if (error.StartsWith("size mismatch: ", StringComparison.Ordinal)) return "jiná velikost: " + error["size mismatch: ".Length..];
+            return $"{(h.Groups["algo"].Value == "md5" ? "MD5" : "xxHash64")} calculation failed: " + error[h.Length..];
+        if (error.StartsWith("size mismatch: ", StringComparison.Ordinal)) return "size mismatch: " + error["size mismatch: ".Length..];
         if (error.StartsWith("source size changed during copy ", StringComparison.Ordinal))
-            return "soubor na kartě se během kopie změnil " + error["source size changed during copy ".Length..];
-        if (error == "write failed") return "zápis selhal";
-        if (error == "cancelled") return "zrušeno";
-        if (error == OffloadEngine.CardChangedWhilePaused) return "karta se během pozastavení vyměnila nebo vytáhla";
+            return "the file on the card changed during the copy " + error["source size changed during copy ".Length..];
+        if (error == "write failed") return "write failed";
+        if (error == "cancelled") return "cancelled";
+        if (error == OffloadEngine.CardChangedWhilePaused) return "the card was swapped or removed while paused";
         if (CardDiffers().Match(error) is { Success: true } c)
-            return $"karta se od zálohy liší ({c.Groups["algo"].Value} {c.Groups["now"].Value}, v záloze {c.Groups["recorded"].Value}) — nic se nepřesunulo ani nezapsalo";
-        return Retries().Replace(error, " (po ${n} opakováních)");
+            return $"the card differs from the backup ({c.Groups["algo"].Value} {c.Groups["now"].Value}, in the backup {c.Groups["recorded"].Value}) — nothing was moved or written";
+        return Retries().Replace(error, " (after ${n} retries)");
     }
 
     static (string Class, string Label) ProxyLabel(ClipEntry c) => c.ProxyStatus switch
     {
-        ProxyStatus.Done => ("ok", "hotovo"),
-        ProxyStatus.Failed => ("bad", "chyba"),
-        ProxyStatus.Unsupported => ("warn", "nepodporováno"),
-        ProxyStatus.Skipped when c.OriginalLighter => ("muted", "bez proxy"),
-        ProxyStatus.Skipped => ("muted", "přeskočeno"),
+        ProxyStatus.Done => ("ok", "done"),
+        ProxyStatus.Failed => ("bad", "error"),
+        ProxyStatus.Unsupported => ("warn", "unsupported"),
+        ProxyStatus.Skipped when c.OriginalLighter => ("muted", "no proxy"),
+        ProxyStatus.Skipped => ("muted", "skipped"),
         _ => ("muted", "—"),
     };
 
@@ -159,9 +160,9 @@ public static partial class HtmlReport
     public static string Render(OffloadReport r, bool forPrint = false)
     {
         bool ok = r.Success;
-        // Final review, item 3: verifyIncomplete — the results are not in every folder yet, never a green "OVĚŘENO".
+        // Final review, item 3: verifyIncomplete — the results are not in every folder yet, never a green "VERIFIED".
         bool incomplete = r.VerifyIncomplete == true;
-        string status = !ok ? "CHYBA" : r.VerifyPending == true ? "ZKOPÍROVÁNO — OVĚŘUJE SE" : incomplete ? "NEDOKONČENO" : (r.Verified ? "OVĚŘENO" : "ZKOPÍROVÁNO — NEOVĚŘENO");
+        string status = !ok ? "ERROR" : r.VerifyPending == true ? "COPIED — VERIFYING" : incomplete ? "UNFINISHED" : (r.Verified ? "VERIFIED" : "COPIED — NOT VERIFIED");
         string statusClass = !ok ? "bad" : (r.Verified && !incomplete ? "ok" : "warn");
         bool inProxy = r.Destinations.Any(d => d.VerifyMethod == ReportDestination.InProxy);
         var failed = r.FailedFiles;
@@ -169,30 +170,30 @@ public static partial class HtmlReport
         double totalDuration = videoClips.Sum(c => c.Info?.Duration ?? 0);
 
         var h = new StringBuilder();
-        h.Append("<!doctype html>\n<html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+        h.Append("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
         h.Append($"<title>Offload {Esc(r.CardName)} – {Esc(r.Date)}</title>\n<style>\n");
         h.Append(Styles(forPrint));
         h.Append("</style></head><body><main>\n");
         h.Append(Toolbar(OffloadReport.PdfName(r.CardName, r.Generation ?? 1), forPrint));
-        var append = r.Generation > 1 ? $" <span class=\"sub\">· {(r.IsRepair ? "oprava" : "doplnění")} (generace {r.Generation})</span>" : "";
+        var append = r.Generation > 1 ? $" <span class=\"sub\">· {(r.IsRepair ? "repair" : "append")} (generation {r.Generation})</span>" : "";
         h.Append($"<header><h1>{Esc(r.CardName)}{append}</h1><span class=\"badge {statusClass}\">{status}</span>\n");
         h.Append($"<span class=\"sub\">{DateTimeText(r.Started)} – {TimeText(r.Finished)}</span></header>\n");
         h.Append("<div class=\"stats\">\n");
-        Stat(h, r.TotalFiles.ToString(Inv), "souborů");
+        Stat(h, r.TotalFiles.ToString(Inv), "files");
         Stat(h, Format.Bytes(r.TotalBytes), "data");
-        Stat(h, videoClips.Count.ToString(Inv), "klipů" + (totalDuration > 0 ? " · stopáž " + Duration(totalDuration) : ""));
-        Stat(h, Duration(r.CopySeconds), "kopírování · " + Format.Rate(r.TotalBytes, r.CopySeconds));
-        Stat(h, r.Verified ? Duration(r.VerifySeconds) : "—", "ověření · " + (!r.Verified ? (r.VerifyPending == true ? "probíhá" : "neprovedeno")
-            : inProxy ? "během proxy" : Format.Rate(r.TotalBytes, r.VerifySeconds)));
-        if (r.SafeToFormatSeconds is double toFormat) Stat(h, Duration(toFormat), "do „lze formátovat“");
-        if (r.PausedSeconds > 0) Stat(h, Duration(r.PausedSeconds), "pozastaveno · mimo rychlosti");
+        Stat(h, videoClips.Count.ToString(Inv), "clips" + (totalDuration > 0 ? " · duration " + Duration(totalDuration) : ""));
+        Stat(h, Duration(r.CopySeconds), "copy · " + Format.Rate(r.TotalBytes, r.CopySeconds));
+        Stat(h, r.Verified ? Duration(r.VerifySeconds) : "—", "verification · " + (!r.Verified ? (r.VerifyPending == true ? "running" : "not done")
+            : inProxy ? "during proxies" : Format.Rate(r.TotalBytes, r.VerifySeconds)));
+        if (r.SafeToFormatSeconds is double toFormat) Stat(h, Duration(toFormat), "until \u201csafe to format\u201d");
+        if (r.PausedSeconds > 0) Stat(h, Duration(r.PausedSeconds), "paused · not in the speeds");
         var algorithms = r.Algorithms.ToList();
         if (r.Files.Any(f => f.Xxh128 != null) && !algorithms.Contains("xxh128")) algorithms.Add("xxh128");   // plan 10, R2
-        Stat(h, Esc(string.Join(" + ", algorithms.Select(a => a.ToUpperInvariant()))), "kontrolní součet");
+        Stat(h, Esc(string.Join(" + ", algorithms.Select(a => a.ToUpperInvariant()))), "checksum");
         h.Append("</div>\n\n");
 
-        h.Append("<h2>Cíle</h2><div class=\"panel\"><table>\n");
-        h.Append("<tr><th>Disk</th><th>Složka</th><th>FS</th><th>Svazek</th><th>Ověření</th><th class=\"num\">OK</th><th class=\"num\">Chyby</th></tr>\n");
+        h.Append("<h2>Destinations</h2><div class=\"panel\"><table>\n");
+        h.Append("<tr><th>Disk</th><th>Folder</th><th>FS</th><th>Volume</th><th>Verification</th><th class=\"num\">OK</th><th class=\"num\">Errors</th></tr>\n");
         foreach (var d in r.Destinations)
         {
             h.Append($"<tr><td class=\"nw\">{Esc(DiskName(d.Root))}</td><td class=\"mono wrap\">{Esc(d.CardPath)}</td><td class=\"nw\">{Esc(d.Filesystem)}</td>");
@@ -203,21 +204,21 @@ public static partial class HtmlReport
         for (int i = 0; i < r.Destinations.Count; i++)
         {
             if (r.Destinations[i].Unbuffered == false)
-                h.Append($"<p class=\"warn\">Cíl {i + 1}: svazek nepodporuje přímý zápis, použita systémová cache.</p>\n");
+                h.Append($"<p class=\"warn\">Destination {i + 1}: the volume does not support direct writes; the system cache was used.</p>\n");
             if (r.Destinations[i].VerifyNote is string note && r.Destinations[i].VerifyMethod != null)
-                h.Append($"<p class=\"sub\">Cíl {i + 1}: {Esc(note)}</p>\n");
+                h.Append($"<p class=\"sub\">Destination {i + 1}: {Esc(note)}</p>\n");
         }
-        h.Append($"<p class=\"sub\">Zdroj: <span class=\"mono\">{Esc(r.Source)}</span> ({Esc(r.SourceFilesystem)})</p>\n");
+        h.Append($"<p class=\"sub\">Source: <span class=\"mono\">{Esc(r.Source)}</span> ({Esc(r.SourceFilesystem)})</p>\n");
 
         if (failed.Count > 0)
         {
-            h.Append($"<h2 class=\"bad\">Chyby ({failed.Count})</h2><div class=\"panel\"><table><tr><th>Soubor</th><th>Problém</th></tr>\n");
+            h.Append($"<h2 class=\"bad\">Errors ({failed.Count})</h2><div class=\"panel\"><table><tr><th>File</th><th>Problem</th></tr>\n");
             foreach (var f in failed)
             {
                 var msgs = new List<string>();
-                if (f.SourceError != null) msgs.Add("karta: " + ErrorText(f.SourceError));
+                if (f.SourceError != null) msgs.Add("card: " + ErrorText(f.SourceError));
                 for (int i = 0; i < f.Errors.Count; i++)
-                    if (f.Errors[i] is string e) msgs.Add($"cíl {i + 1}: {ErrorText(e)}");
+                    if (f.Errors[i] is string e) msgs.Add($"destination {i + 1}: {ErrorText(e)}");
                 h.Append($"<tr><td class=\"mono\">{Esc(f.Path)}</td><td class=\"err\">{Esc(string.Join(" · ", msgs))}</td></tr>\n");
             }
             h.Append("</table></div>\n");
@@ -227,8 +228,8 @@ public static partial class HtmlReport
         if (warnings.Count > 0)
         {
             // Spec 7, 9: the decoder found a defect — the copy matches the card, the file itself may be damaged.
-            h.Append($"<h2 class=\"warn\">Vady obsahu ({warnings.Count})</h2><p class=\"sub\">Kopie souhlasí s kartou bit po bitu — vada je už v souboru z kamery. Před formátováním karty ji zkontrolujte (možná ji zachrání nástroj výrobce přímo z karty).</p>\n");
-            h.Append("<div class=\"panel\"><table><tr><th>Klip</th><th>Místo</th><th>Vada</th><th>Dekodér</th><th></th></tr>\n");
+            h.Append($"<h2 class=\"warn\">Content defects ({warnings.Count})</h2><p class=\"sub\">The copy matches the card bit for bit — the defect is already in the camera file. Check it before formatting the card (the maker's tool may still rescue it straight from the card).</p>\n");
+            h.Append("<div class=\"panel\"><table><tr><th>Clip</th><th>Where</th><th>Defect</th><th>Decoder</th><th></th></tr>\n");
             foreach (var c in warnings)
             {
                 var img = c.Content!.Jpeg is { } jpeg ? $"<img class=\"thumb\" style=\"max-width:160px\" src=\"data:image/jpeg;base64,{Convert.ToBase64String(jpeg)}\" alt=\"\">" : "";
@@ -239,17 +240,17 @@ public static partial class HtmlReport
         }
         if (r.VerifyNotes is { Count: > 0 } notes)
         {
-            h.Append($"<h2 class=\"warn\">Ověření — poznámky ({notes.Count})</h2><div class=\"panel\"><table>\n");
+            h.Append($"<h2 class=\"warn\">Verification — notes ({notes.Count})</h2><div class=\"panel\"><table>\n");
             foreach (var n in notes) h.Append($"<tr><td class=\"warn wrap\">{Esc(n)}</td></tr>\n");
             h.Append("</table></div>\n");
         }
 
         if (r.Clips.Count > 0) AppendClips(h, r);
 
-        h.Append($"<details{(forPrint ? " open" : "")}><summary>Všechny soubory ({r.Files.Count})</summary><div class=\"panel\"><table>\n");
+        h.Append($"<details{(forPrint ? " open" : "")}><summary>All files ({r.Files.Count})</summary><div class=\"panel\"><table>\n");
         bool md5 = r.Algorithms.Contains("md5");
-        h.Append($"<tr><th>Soubor</th><th class=\"num\">Velikost</th><th>xxh64</th>{(md5 ? "<th>md5</th>" : "")}");
-        for (int i = 0; i < r.Destinations.Count; i++) h.Append($"<th>Cíl {i + 1}</th>");
+        h.Append($"<tr><th>File</th><th class=\"num\">Size</th><th>xxh64</th>{(md5 ? "<th>md5</th>" : "")}");
+        for (int i = 0; i < r.Destinations.Count; i++) h.Append($"<th>Destination {i + 1}</th>");
         h.Append("</tr>\n");
         foreach (var f in r.Files)
         {
@@ -264,16 +265,16 @@ public static partial class HtmlReport
         }
         h.Append("</table></div></details>\n");
         if (r.Skipped.Count > 0)
-            h.Append($"<p class=\"sub\">Vynechané systémové soubory: {Esc(string.Join(", ", r.Skipped))}</p>\n");
-        h.Append($"<footer>{Esc(r.Tool)} {Esc(r.Version)} · ASC MHL v ascmhl/ · {DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
+            h.Append($"<p class=\"sub\">Skipped system files: {Esc(string.Join(", ", r.Skipped))}</p>\n");
+        h.Append($"<footer>{Esc(r.Tool)} {Esc(r.Version)} · ASC MHL in ascmhl/ · {DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
         return h.ToString();
     }
 
-    /// "během proxy" / "zpětné čtení" / "—" (plan 10, spec 9: the method per destination).
+    /// "during proxies" / "read back" / "—" (plan 10, spec 9: the method per destination).
     internal static string MethodText(string? method) => method switch
     {
-        ReportDestination.InProxy => "během proxy",
-        ReportDestination.ReadBack => "zpětné čtení",
+        ReportDestination.InProxy => "during proxies",
+        ReportDestination.ReadBack => "read back",
         _ => "—",
     };
 
@@ -281,19 +282,19 @@ public static partial class HtmlReport
         h.Append($"<div class=\"stat\"><b>{value}</b><span>{label}</span></div>\n");
 
     /// The FPS cell (task 2026-10-10, review F-1): a rate that differs is two lines in the narrow column — "35 fps", then
-    /// "přehrávání 24" small and muted; otherwise the one rate as before.
+    /// "playback 24" small and muted; otherwise the one rate as before.
     internal static string FpsCell(ClipInfo? i) =>
         i is { CaptureDiffers: true }
-            ? $"{Esc(ClipInfo.Label(i.CaptureFrameRate))} fps<div class=\"note\">přehrávání {Esc(i.FpsLabel)}</div>"
+            ? $"{Esc(ClipInfo.Label(i.CaptureFrameRate))} fps<div class=\"note\">playback {Esc(i.FpsLabel)}</div>"
             : Esc(i?.FpsSummary ?? "");
 
     static void AppendClips(StringBuilder h, OffloadReport r)
     {
-        h.Append("<h2>Klipy</h2><div class=\"panel\"><table class=\"clips\"><colgroup>");
+        h.Append("<h2>Clips</h2><div class=\"panel\"><table class=\"clips\"><colgroup>");
         h.Append("<col class=\"c-thumb\"><col class=\"c-clip\"><col class=\"c-codec hide-sm\"><col class=\"c-res hide-sm\">");
         h.Append("<col class=\"c-fps\"><col class=\"c-dur\"><col class=\"c-tc hide-sm\"><col class=\"c-audio hide-sm\">");
         h.Append("<col class=\"c-size\"><col class=\"c-proxy\"></colgroup>\n");
-        h.Append("<tr><th></th><th>Klip</th><th class=\"hide-sm\">Formát</th><th class=\"hide-sm\">Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Stopáž</th><th class=\"hide-sm\">TC</th><th class=\"num hide-sm\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n");
+        h.Append("<tr><th></th><th>Clip</th><th class=\"hide-sm\">Format</th><th class=\"hide-sm\">Resolution</th><th class=\"num\">FPS</th><th class=\"num\">Duration</th><th class=\"hide-sm\">TC</th><th class=\"num hide-sm\">Audio</th><th class=\"num\">Size</th><th>Proxy</th></tr>\n");
         foreach (var c in r.Clips)
         {
             var img = c.Thumbnails.Count > 0
@@ -310,11 +311,11 @@ public static partial class HtmlReport
             foreach (var n in new[] { c.ProbeError, c.OriginalLighter ? null : c.ProxyNote })
                 if (n != null && !notes.Contains(n)) notes.Add(n);
             var note = string.Join(" · ", notes);
-            var cameraProxy = c.Clip.IsCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "";
+            var cameraProxy = c.Clip.IsCameraProxy ? " <span class=\"muted\">(camera proxy)</span>" : "";
             var noteHtml = note.Length == 0 ? "" : $"<div class=\"path err\">{Esc(note)}</div>";
             if (c.OriginalLighter) noteHtml += $"<div class=\"note\">{Esc(c.ProxyNote!)}</div>";
             if (c.Lut is { Source: not "none" } lu) noteHtml += $"<div class=\"note\">LUT: {Esc(lu.Name)} ({Esc(lu.Reason)})</div>";
-            else if (c.Lut is { } ln && ln.Reason != "vypnuto v nastavení") noteHtml += $"<div class=\"note\">LUT: bez LUT ({Esc(ln.Reason)})</div>";
+            else if (c.Lut is { SwitchedOff: false } ln) noteHtml += $"<div class=\"note\">LUT: {LutUse.NoLutName} ({Esc(ln.Reason)})</div>";
             var audio = i == null ? "" : (i.AudioChannels > 0 ? $"{i.AudioChannels} ch" : "—");
             h.Append($"<tr><td>{img}</td><td class=\"clip\"><div class=\"clipname\">{Esc(c.Clip.Name)}{cameraProxy}</div>");
             h.Append($"<div class=\"path\">{Esc(c.Clip.Path)}</div>{noteHtml}</td>");
@@ -326,20 +327,20 @@ public static partial class HtmlReport
         h.Append("</table></div>\n");
         // Task 2026-10-10: a clip shot at another rate than it plays at — the length is the editing one.
         if (r.Clips.Any(c => c.Info?.CaptureDiffers == true))
-            h.Append("<p class=\"sub\">FPS: snímací rychlost z metadat prvního snímku, za ní přehrávací rychlost souboru, když se liší. Stopáž = počet snímků ÷ přehrávací fps (délka ve střižně).</p>\n");
+            h.Append("<p class=\"sub\">FPS: the capture rate from the metadata of the first frame, followed by the file's playback rate when it differs. Duration = frame count ÷ playback fps (the length in the edit).</p>\n");
         if (r.Proxy is { Enabled: true } p)
         {
             var lut = LutResolver.EffectiveMode(p) switch
             {
-                LutMode.Auto => "automaticky podle kamery",
-                LutMode.Builtin => LutCatalog.Default.Find(p.LutBuiltin)?.Name ?? p.LutBuiltin ?? "bez LUT",
+                LutMode.Auto => "automatic by camera",
+                LutMode.Builtin => LutCatalog.Default.Find(p.LutBuiltin)?.Name ?? p.LutBuiltin ?? LutUse.NoLutName,
                 LutMode.Custom when !string.IsNullOrEmpty(p.LutPath) => Path.GetFileName(p.LutPath),
-                _ => "bez LUT",
+                _ => LutUse.NoLutName,
             };
-            var frame = p.FrameLabel is string fl ? $", výřez {fl}" : "";
+            var frame = p.FrameLabel is string fl ? $", crop {fl}" : "";
             var encoder = r.ProxyEncoder is string enc ? $" ({enc})" : "";
-            var extra = p.ExtraFolder is string x ? $" · také ve složce <span class=\"mono\">{Esc(x)}</span>" : "";
-            h.Append($"<p class=\"sub\">Proxy: {Esc(p.Codec.Label() + encoder)}, {p.Height}p{frame}, LUT: {Esc(lut)} → <span class=\"mono\">{Layout.ProxyDirName}/</span>{extra}</p>\n");
+            var extra = p.ExtraFolder is string x ? $" · also in the folder <span class=\"mono\">{Esc(x)}</span>" : "";
+            h.Append($"<p class=\"sub\">Proxies: {Esc(p.Codec.Label() + encoder)}, {p.Height}p{frame}, LUT: {Esc(lut)} → <span class=\"mono\">{Layout.ProxyDirName}/</span>{extra}</p>\n");
         }
     }
 }

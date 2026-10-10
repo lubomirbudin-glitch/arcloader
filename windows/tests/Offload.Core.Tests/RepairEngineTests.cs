@@ -58,7 +58,7 @@ public class RepairEngineTests
         for (int d = 0; d < paths.Count; d++)
         {
             Assert.True(File.Exists(Path.Combine(paths[d], "_REPORT", "offload_report_0002.json")));
-            Assert.Contains("oprava (generace 2)", File.ReadAllText(Path.Combine(paths[d], "_REPORT", "A001_report_0002.html")));
+            Assert.Contains("repair (generation 2)", File.ReadAllText(Path.Combine(paths[d], "_REPORT", "A001_report_0002.html")));
             Assert.Equal(lists[d], File.ReadAllText(Path.Combine(paths[d], "_REPORT", "A001.xxh64")));   // the line is there once
             var mhl = MhlReader.Read(paths[d])!;
             Assert.Empty(mhl.ChainProblems);
@@ -68,7 +68,7 @@ public class RepairEngineTests
             Assert.Equal(["xxh64", "xxh128"], gen2.Hashes.Select(h => h.Algorithm));
             Assert.All(gen2.Hashes, h => Assert.Equal(d == 0 ? "verified" : "original", h.Action));
             Assert.Equal(f.Xxh64, gen2.Hashes[0].Value);
-            Assert.StartsWith("Offload oprava: 1 soubor znovu z ", File.ReadAllText(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_*.mhl").Single()).Split("<comment>")[1]);
+            Assert.StartsWith("Offload repair: 1 file copied again from ", File.ReadAllText(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_*.mhl").Single()).Split("<comment>")[1]);
             Assert.Empty(CardRecord.Load(paths[d]).FailedFiles);
             var verify = BackupVerifier.Verify(paths[d], chunkSize: 4096);
             Assert.True(verify.Success);
@@ -99,7 +99,7 @@ public class RepairEngineTests
         Assert.Equal(recorded, f.Xxh64);   // the record, never the card's new hash
         Assert.False(report.Success);
         Assert.Null(report.SetAside);
-        Assert.Contains("karta se od zálohy liší", File.ReadAllText(Path.Combine(paths[0], "_REPORT", "A001_report_0002.html")));
+        Assert.Contains("the card differs from the backup", File.ReadAllText(Path.Combine(paths[0], "_REPORT", "A001_report_0002.html")));
         // Nothing moved, nothing renamed into place, no temporary copy left: both card folders as they were but for
         // generation 2's own records.
         for (int d = 0; d < paths.Count; d++)
@@ -226,7 +226,7 @@ public class RepairEngineTests
         var card = dir.Sub("A001");
         TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 100_000, 1);
         var options = AppendFixtures.Options();
-        options.BeforeDestWrite = d => { if (d == 0) throw new IOException("Zařízení není připojeno."); };
+        options.BeforeDestWrite = d => { if (d == 0) throw new IOException("The device is not connected."); };
         var full = new OffloadEngine(options);
         var fullPlan = full.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-07");
         full.Run(fullPlan);
@@ -260,7 +260,7 @@ public class RepairEngineTests
         Assert.Empty(Directory.GetFiles(paths[1], "*.offload-part", SearchOption.AllDirectories));
         Assert.Null(report.SetAside);
         Assert.StartsWith("set aside: ", Assert.Single(report.Files).Errors[1]);
-        Assert.Contains("nesouhlasnou kopii nejde odložit, zůstala na místě", File.ReadAllText(Path.Combine(paths[1], "_REPORT", "A001_report_0002.html")));
+        Assert.Contains("cannot set the mismatching copy aside, it stayed in place", File.ReadAllText(Path.Combine(paths[1], "_REPORT", "A001_report_0002.html")));
     }
 
     // Ruling M16: a repair is always read back — a kept copy is recorded "verified" only after it was.

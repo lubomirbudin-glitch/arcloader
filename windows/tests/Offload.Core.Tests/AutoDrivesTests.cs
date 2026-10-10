@@ -138,9 +138,9 @@ public class AutoDrivesTests
         var plan = AutoDrives.Plan(Input([Disk(@"G:\", free: GB / 2), Disk(@"K:\", id: "EEEE0005:1", readOnly: true)]));
         Assert.Empty(plan.Add);
         Assert.Equal(2, plan.Hints.Count);
-        Assert.Contains("BACKUP (G:) je plný", plan.Hints[0]);
-        Assert.Contains("jako cíl se nepřidal", plan.Hints[0]);
-        Assert.Contains("BACKUP (K:) je jen pro čtení", plan.Hints[1]);
+        Assert.Contains("BACKUP (G:) is full", plan.Hints[0]);
+        Assert.Contains("not added as a destination", plan.Hints[0]);
+        Assert.Contains("BACKUP (K:) is read-only", plan.Hints[1]);
     }
 
     [Fact]

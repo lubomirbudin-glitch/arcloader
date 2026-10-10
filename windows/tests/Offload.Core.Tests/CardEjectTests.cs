@@ -10,13 +10,13 @@ public class CardEjectTests
     public void Folder_Network_System_AreRefused()
     {
         using var dir = new TempDir();
-        Assert.Equal("zdroj je složka, ne celá karta", CardEject.Problem(dir.Path));
-        Assert.Equal("síťová složka se nevysouvá", CardEject.Problem(@"\\server\share"));
-        Assert.Equal("systémový disk nelze vysunout", CardEject.Problem(Path.GetPathRoot(Environment.SystemDirectory)!));
+        Assert.Equal("the source is a folder, not a whole card", CardEject.Problem(dir.Path));
+        Assert.Equal("a network folder cannot be ejected", CardEject.Problem(@"\\server\share"));
+        Assert.Equal("the system disk cannot be ejected", CardEject.Problem(Path.GetPathRoot(Environment.SystemDirectory)!));
         Assert.False(CardEject.CanEject(dir.Path));
         var r = CardEject.Eject(dir.Path);
         Assert.False(r.Ok);
-        Assert.Equal("zdroj je složka, ne celá karta", r.Error);
+        Assert.Equal("the source is a folder, not a whole card", r.Error);
     }
 
     [Fact]
@@ -27,13 +27,13 @@ public class CardEjectTests
         Assert.Null(CardEject.Problem($"{free}:"));
         var r = CardEject.Eject($@"{free}:\");
         Assert.False(r.Ok);
-        Assert.Equal("karta není připojená", r.Error);
+        Assert.Equal("the card is not connected", r.Error);
     }
 
     [Fact]
     public void NullSource_IsInvalid_NotAThrow()
     {
-        Assert.Equal("neplatná cesta", CardEject.Problem(null));
+        Assert.Equal("invalid path", CardEject.Problem(null));
         Assert.False(CardEject.CanEject(null));
     }
 
@@ -43,9 +43,9 @@ public class CardEjectTests
     [InlineData(DriveType.Fixed, StorageBus.Usb, null)]
     [InlineData(DriveType.Fixed, StorageBus.Sd, null)]
     [InlineData(DriveType.Fixed, StorageBus.Mmc, null)]
-    [InlineData(DriveType.Fixed, StorageBus.Sata, "interní disk nelze vysunout")]
-    [InlineData(DriveType.Fixed, StorageBus.Nvme, "interní disk nelze vysunout")]
-    [InlineData(DriveType.Fixed, StorageBus.Unknown, "interní disk nelze vysunout")]
+    [InlineData(DriveType.Fixed, StorageBus.Sata, "an internal disk cannot be ejected")]
+    [InlineData(DriveType.Fixed, StorageBus.Nvme, "an internal disk cannot be ejected")]
+    [InlineData(DriveType.Fixed, StorageBus.Unknown, "an internal disk cannot be ejected")]
     public void BusRule(DriveType type, StorageBus bus, string? expected) =>
         Assert.Equal(expected, CardEject.BusProblem(type, bus));
 

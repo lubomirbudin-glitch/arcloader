@@ -84,9 +84,9 @@ public sealed class OffloadPlan
     public HashKind Hashes { get; init; } = HashKind.Xxh64;
     /// Spec 2.5: what each destination volume needs and has free (the CLI's --dry-run lists it).
     public IReadOnlyList<Space.SpaceLine> Space { get; init; } = [];
-    /// "Na cíli … zbude po offloadu jen … — rezerva pod 5 %…" — never blocks (R11).
+    /// "Only … will be left on destination … after the offload — less than the 5 % reserve…" — never blocks (R11).
     public IReadOnlyList<string> SpaceWarnings { get; init; } = [];
-    /// The project the job runs in (spec 4.1), null = "Bez projektu" — set by OffloadJob, written into the report.
+    /// The project the job runs in (spec 4.1), null = "No project" — set by OffloadJob, written into the report.
     public string? Project { get; set; }
     /// Repair: per file, the destinations that get a new copy — the others hold a good copy, which is only read back.
     /// Null = every destination (a full copy, an append).

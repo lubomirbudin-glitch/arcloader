@@ -1,6 +1,6 @@
 namespace Offload.Core.Desktop;
 
-/// "Zkopírovat znovu" on a job card (UI návrh 4), without a window.
+/// "Copy again" on a job card (UI návrh 4), without a window.
 public static class RepairRules
 {
     /// Offered on a job that ended (not cancelled) with files that are not on every destination — while the card it was

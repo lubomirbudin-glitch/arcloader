@@ -4,13 +4,17 @@ using System.Text.Json;
 namespace Offload.Core.Outputs;
 
 /// Task "Kopie reportu i na počítači" (2026-10-09): every card's `_REPORT` and `ascmhl` are copied to
-/// `<Dokumenty>\Offload reporty\<datum>\<karta>\` (the layout of the destination), and copied again whenever the report
+/// `<Documents>\Offload reports\<date>\<card>\` (the layout of the destination), and copied again whenever the report
 /// is rewritten — the disks with the footage are handed on, the report stays here. Reads the destinations only, never
 /// copies media (a repair's `neshoda_NNNN` copies, clips, proxies) and never writes outside the local folder. Derived
 /// files: a failure throws, the job only notes it.
 public static class LocalReports
 {
-    public const string FolderName = "Offload reporty";
+    public const string FolderName = "Offload reports";
+
+    /// The folder's name before 0.9.0 (Czech): copies there are still read (the summary report's fallback, the
+    /// `.offload-origin` markers), never written.
+    public const string OldFolderName = "Offload reporty";
 
     /// The marker in a local card folder: which backup it holds (OriginOf) — the `_2` rule tells cards apart by it.
     internal const string Marker = ".offload-origin";
@@ -21,8 +25,11 @@ public static class LocalReports
     /// The user's Documents folder (the known folder, wherever it was moved — OneDrive, another disk).
     public static string Documents => DocumentsOverride ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
-    /// `<Dokumenty>\Offload reporty`.
+    /// `<Documents>\Offload reports`.
     public static string DefaultRoot => Path.Combine(Documents, FolderName);
+
+    /// `<Documents>\Offload reporty`: where versions before 0.9.0 copied the reports — read only.
+    public static string OldDefaultRoot => Path.Combine(Documents, OldFolderName);
 
     /// The folder a job copies into, or null when the copy is switched off (`outputs.localReport`).
     public static string? RootFor(OutputSettings o) =>
@@ -180,7 +187,7 @@ public static class LocalReports
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
-        if (free == null) throw new IOException($"{dayDir}: příliš mnoho karet „{name}“");
+        if (free == null) throw new IOException($"{dayDir}: too many cards named \"{name}\"");
         Directory.CreateDirectory(free);
         var path = Path.Combine(free, Marker);
         File.WriteAllText(path, origin, Encoding.UTF8);

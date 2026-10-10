@@ -1,9 +1,9 @@
 namespace Offload.Core.Desktop;
 
-/// Which of the four rows of "3 · Po zkopírování" it is.
+/// Which of the four rows of "3 · After copy" it is.
 public enum AfterCopyKind { Verify, Analysis, Proxy, Report }
 
-/// One row of "3 · Po zkopírování": the green tick (or grey ring) and the value on the right; `Warn`: the yellow row of
+/// One row of "3 · After copy": the green tick (or grey ring) and the value on the right; `Warn`: the yellow row of
 /// switched-off verification. `Kind` says what a click opens (`Section`) and whether the tick is a switch (`HasSwitch`).
 public sealed record AfterCopyRow(string Label, string Value, bool On, bool Warn = false, AfterCopyKind Kind = AfterCopyKind.Report)
 {
@@ -11,7 +11,7 @@ public sealed record AfterCopyRow(string Label, string Value, bool On, bool Warn
     public string Section => AfterCopyRules.Section(Kind);
     public bool HasSwitch => AfterCopyRules.HasSwitch(Kind);
     /// The tooltip of the tick that is not a switch.
-    public string? SwitchTip => HasSwitch ? null : "Report se vytváří vždy";
+    public string? SwitchTip => HasSwitch ? null : "The report is always created";
 }
 
 /// The rules of the clickable rows (0.5.2), without a window.
@@ -76,50 +76,50 @@ public static class SetupTexts
     /// "LogC4 → 709" for a built-in LUT or the camera of the card (automatic), else what the mode says.
     public static string LutShort(ProxySettings p, LutCatalog? catalog, CameraLabel? camera) => LutResolver.EffectiveMode(p) switch
     {
-        LutMode.None => "bez LUTu",
-        LutMode.Custom => "vlastní LUT",
-        LutMode.Builtin => catalog?.Find(p.LutBuiltin)?.Curve is string curve ? $"{CameraLabel.ShortCurve(curve)} → 709" : "vestavěný LUT",
-        _ => camera?.Curve is string c ? $"{c} → 709" : "LUT podle kamery",
+        LutMode.None => "no LUT",
+        LutMode.Custom => "custom LUT",
+        LutMode.Builtin => catalog?.Find(p.LutBuiltin)?.Curve is string curve ? $"{CameraLabel.ShortCurve(curve)} → 709" : "built-in LUT",
+        _ => camera?.Curve is string c ? $"{c} → 709" : "LUT by camera",
     };
 
-    /// The four rows: Ověření zpětným čtením · Analýza klipů a náhledy · Proxy · Report.
+    /// The four rows: Verification by reading back · Clip analysis and thumbnails · Proxies · Report.
     public static IReadOnlyList<AfterCopyRow> AfterCopy(SettingsProfile p, LutCatalog? catalog, CameraLabel? camera)
     {
         var report = "PDF · HTML · ASC MHL" + (p.Outputs.ClipListCsv ? " · CSV" : "") + (p.Outputs.ClipListAle ? " · ALE" : "");
         return
         [
-            new("Ověření zpětným čtením", p.Verify ? HashKinds.Label(HashKinds.FromSetting(p.Hash)) : "vypnuto", p.Verify, Warn: !p.Verify, Kind: AfterCopyKind.Verify),
-            new("Analýza klipů a náhledy", p.AnalyzeClips ? "3 snímky / klip" : "vypnuto", p.AnalyzeClips, Kind: AfterCopyKind.Analysis),
-            new("Proxy", p.Proxy.Enabled ? $"{p.Proxy.Height}p · {CodecShort(p.Proxy.Codec)} · {LutShort(p.Proxy, catalog, camera)}" : "vypnuto", p.Proxy.Enabled, Kind: AfterCopyKind.Proxy),
+            new("Verification by reading back", p.Verify ? HashKinds.Label(HashKinds.FromSetting(p.Hash)) : "off", p.Verify, Warn: !p.Verify, Kind: AfterCopyKind.Verify),
+            new("Clip analysis and thumbnails", p.AnalyzeClips ? "3 frames / clip" : "off", p.AnalyzeClips, Kind: AfterCopyKind.Analysis),
+            new("Proxies", p.Proxy.Enabled ? $"{p.Proxy.Height}p · {CodecShort(p.Proxy.Codec)} · {LutShort(p.Proxy, catalog, camera)}" : "off", p.Proxy.Enabled, Kind: AfterCopyKind.Proxy),
             new("Report", report, true, Kind: AfterCopyKind.Report),
         ];
     }
 
-    /// Step 3 while a copy runs, in one line: "Ověření xxHash64 · analýza a náhledy · proxy 1080p H.264 · report PDF, HTML, MHL".
+    /// Step 3 while a copy runs, in one line: "Verification xxHash64 · analysis and thumbnails · proxies 1080p H.264 · report PDF, HTML, MHL".
     public static string AfterCopyLine(SettingsProfile p) => string.Join(" · ", new[]
     {
-        p.Verify ? $"Ověření {HashKinds.Label(HashKinds.FromSetting(p.Hash))}" : "Bez ověření",
-        p.AnalyzeClips ? "analýza a náhledy" : null,
-        p.Proxy.Enabled ? $"proxy {p.Proxy.Height}p {CodecShort(p.Proxy.Codec)}" : null,
+        p.Verify ? $"Verification {HashKinds.Label(HashKinds.FromSetting(p.Hash))}" : "No verification",
+        p.AnalyzeClips ? "analysis and thumbnails" : null,
+        p.Proxy.Enabled ? $"proxies {p.Proxy.Height}p {CodecShort(p.Proxy.Codec)}" : null,
         "report PDF, HTML, MHL",
     }.Where(x => x != null));
 
-    public const string VerifyOffWarning = "Bez ověření není jisté, že data na disku jsou v pořádku.";
+    public const string VerifyOffWarning = "Without verification there is no certainty that the data on the disk is intact.";
 
-    /// The card tile's line (obr. 1): "24 klipů · 1,70 GB · exFAT · čtečka USB 3 · 5 Gb/s". Before the card is looked at,
+    /// The card tile's line (obr. 1): "24 clips · 1.70 GB · exFAT · reader USB 3 · 5 Gb/s". Before the card is looked at,
     /// the used space of its volume stands for the size; a disk that is not a camera card says so.
     public static string CardFacts(History.CardInsight? insight, long? usedOnVolume, string? filesystem, string? connection, bool looksLikeCard)
     {
         var parts = new List<string>();
         if (insight is { Error: null } i)
         {
-            parts.Add(i.Clips.Count > 0 ? Texts.Clips(i.Clips.Count) : $"{i.FileCount} {Texts.Plural(i.FileCount, "soubor", "soubory", "souborů")}");
-            parts.Add(Format.BytesCs3(i.TotalBytes));
+            parts.Add(i.Clips.Count > 0 ? Texts.Clips(i.Clips.Count) : Texts.N(i.FileCount, "file"));
+            parts.Add(Format.Bytes3(i.TotalBytes));
         }
-        else if (usedOnVolume is long used) parts.Add(Format.BytesCs3(used));
+        else if (usedOnVolume is long used) parts.Add(Format.Bytes3(used));
         if (!string.IsNullOrEmpty(filesystem)) parts.Add(filesystem);
         if (connection != null) parts.Add(connection);
-        if (!looksLikeCard) parts.Add("nevypadá jako karta");
+        if (!looksLikeCard) parts.Add("does not look like a card");
         return string.Join(" · ", parts);
     }
 
@@ -135,49 +135,49 @@ public static class SetupTexts
         return sum;
     }
 
-    /// "1 karta → 2 disky" (bold in the bar) and " · 1,70 GB" (null while a size is not known); nothing ticked: "Vyberte kartu".
+    /// "1 card → 2 disks" (bold in the bar) and " · 1.70 GB" (null while a size is not known); nothing ticked: "Select a card".
     public static (string Counts, string? Size) StartSummary(int cards, int disks, long? bytes)
     {
-        if (cards == 0) return ("Vyberte kartu", null);
-        var counts = $"{cards} {Texts.Plural(cards, "karta", "karty", "karet")} → {disks} {Texts.Plural(disks, "disk", "disky", "disků")}";
-        return (counts, bytes is long b && b > 0 ? $" · {Format.BytesCs3(b)}" : null);
+        if (cards == 0) return ("Select a card", null);
+        var counts = $"{Texts.N(cards, "card")} → {Texts.N(disks, "disk")}";
+        return (counts, bytes is long b && b > 0 ? $" · {Format.Bytes3(b)}" : null);
     }
 
-    /// The empty step 1: "Vložte kartu do čtečky" / "Vložte další kartu" while offloads run.
+    /// The empty step 1: "Insert a card into the reader" / "Insert another card" while offloads run.
     public static (string Title, string Text) NoCard(bool jobsRunning) => jobsRunning
-        ? ("Vložte další kartu", "Objeví se tady sama a zařadí se za běžící offload.")
-        : ("Vložte kartu do čtečky", "Objeví se tady automaticky.");
+        ? ("Insert another card", "It appears here by itself and joins the queue after the running offload.")
+        : ("Insert a card into the reader", "It appears here automatically.");
 
     /// The left column shrinks (steps 2 and 3 compact) while there is no card and the queue has jobs (obr. 2, 3).
     public static bool Compact(bool hasSources, bool hasJobs) => !hasSources && hasJobs;
 
-    /// "…\2026-10-07\A035_ARRI\" (Windows separators), "…\2026-10-07\<název karty>\" without one card.
-    public static string PathPreview(string date, string? cardName) => $@"…\{date}\{cardName ?? "<název karty>"}\";
+    /// "…6-10-07\A035_ARRI\" (Windows separators), "…6-10-07\<card name>\" without one card.
+    public static string PathPreview(string date, string? cardName) => $@"…\{date}\{cardName ?? "<card name>"}\";
 
-    /// The empty queue: "Připraveno — A035_ARRI na 2 disky" with a ticked card, else "Zatím žádný offload".
+    /// The empty queue: "Ready — A035_ARRI to 2 disks" with a ticked card, else "No offload yet".
     public static (string Title, string Text) QueueEmpty(IReadOnlyList<string> cards, int disks, bool verify)
     {
-        if (cards.Count == 0 || disks == 0) return ("Zatím žádný offload", "Vyberte kartu a cíle vlevo a stiskněte Ctrl+Enter.");
-        var what = cards.Count == 1 ? cards[0] : $"{cards.Count} {Texts.Plural(cards.Count, "karta", "karty", "karet")}";
-        var where = $"{disks} {Texts.Plural(disks, "disk", "disky", "disků")}";
+        if (cards.Count == 0 || disks == 0) return ("No offload yet", "Select a card and destinations on the left and press Ctrl+Enter.");
+        var what = cards.Count == 1 ? cards[0] : Texts.N(cards.Count, "card");
+        var where = Texts.N(disks, "disk");
         var write = disks switch
         {
-            1 => "zapíše na disk",
-            2 => "zapíše na oba disky zároveň",
-            _ => $"zapíše na {Texts.Plural(disks, "", $"všechny {disks} disky", $"všech {disks} disků")} zároveň",
+            1 => "written to the disk",
+            2 => "written to both disks at once",
+            _ => $"written to all {disks} disks at once",
         };
-        var check = verify ? " a každý soubor se zpětně ověří" : "; zpětné ověření je vypnuté";
-        return ($"Připraveno — {what} na {where}",
-            $"Karta se přečte jednou, {write}{check}. Další kartu můžete vložit kdykoli — zařadí se do fronty.");
+        var check = verify ? ", and every file is verified by reading back" : "; verification by reading back is off";
+        return ($"Ready — {what} to {where}",
+            $"The card is read once and {write}{check}. You can insert another card at any time — it joins the queue.");
     }
 
-    /// The five icons of the empty queue: Karta → 2 disky naráz → Ověření → Proxy → Report (only what the profile does).
+    /// The five icons of the empty queue: Card → 2 disks at once → Verification → Proxies → Report (only what the profile does).
     public static IReadOnlyList<string> Flow(int disks, bool verify, bool analyze, bool proxy)
     {
-        var steps = new List<string> { "Karta", disks <= 1 ? "1 disk" : $"{disks} {Texts.Plural(disks, "disk", "disky", "disků")} naráz" };
-        if (verify) steps.Add("Ověření");
-        if (proxy) steps.Add("Proxy");
-        else if (analyze) steps.Add("Analýza");
+        var steps = new List<string> { "Card", disks <= 1 ? "1 disk" : $"{disks} disks at once" };
+        if (verify) steps.Add("Verification");
+        if (proxy) steps.Add("Proxies");
+        else if (analyze) steps.Add("Analysis");
         steps.Add("Report");
         return steps;
     }

@@ -130,7 +130,7 @@ internal sealed class ToolProcess : IDisposable
         if (timeout is TimeSpan limit && !p.WaitForExit((int)limit.TotalMilliseconds))
         {
             p.Kill();
-            throw new ToolError(p.Name, -1, $"neodpověděl do {limit.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s — ukončen");
+            throw new ToolError(p.Name, -1, $"did not respond within {limit.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s — terminated");
         }
         p.WaitForExit();
         if (p.ExitCode != 0) throw new ToolError(p.Name, p.ExitCode, p.StderrTail);
@@ -162,7 +162,7 @@ internal sealed class ToolProcess : IDisposable
             p.WaitForExit(5000);
             throw new ToolError(p.Name, -1, cancelled
                 ? "cancelled"
-                : $"neodpověděl do {timeout!.Value.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s — ukončen");
+                : $"did not respond within {timeout!.Value.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s — terminated");
         }
         p.WaitForExit();   // without a limit it also waits until both pipes reached their end
         lock (output) return (p.ExitCode, output.ToString());

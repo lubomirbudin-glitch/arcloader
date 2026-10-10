@@ -17,7 +17,7 @@ namespace Offload.Core.Append;
 ///   `_NNNN` reports and the MHL generation are the only guard, after its data files are copied. Such a job may also
 ///   delete a running repair's finished copy waiting under its hidden `.offload-part` name (re-review of the pause:
 ///   DestWriter.Begin deletes an orphan part before it writes one) — never silently: the repair's rename into place then
-///   fails and its file ends Failed; "Zkopírovat znovu" again.
+///   fails and its file ends Failed; "Copy again" again.
 /// - The name comes from the spelling resolved to a volume and a path on it, not from the folder's identity: a `subst`
 ///   drive, `\\localhost\D$` or an 8.3 short name of the same folder gives another name, so two
 ///   appends spelled that way are not stopped either.

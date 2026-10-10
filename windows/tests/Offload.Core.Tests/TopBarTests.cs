@@ -19,9 +19,9 @@ public class TopBarTests
     }
 
     [Fact]
-    public void ProjectLabel_NameOrBezProjektu()
+    public void ProjectLabel_NameOrNoProject()
     {
         Assert.Equal("Film X", TopBar.ProjectLabel("Film X"));
-        Assert.Equal("Bez projektu", TopBar.ProjectLabel(null));
+        Assert.Equal("No project", TopBar.ProjectLabel(null));
     }
 }

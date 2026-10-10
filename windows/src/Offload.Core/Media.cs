@@ -107,14 +107,14 @@ public sealed class ClipInfo
     [JsonIgnore]
     public bool CaptureDiffers => Offload.Core.Timecode.Fps(CaptureFrameRate) is double c && Offload.Core.Timecode.Fps(FrameRate) is double p && Math.Abs(c - p) > 0.001;
 
-    /// What a report shows for the clip's fps: "35 fps · přehrávání 24" when the rates differ, else the playback rate
+    /// What a report shows for the clip's fps: "35 fps · playback 24" when the rates differ, else the playback rate
     /// ("25"); "48 fps" when only the capture rate is known; "" when neither is.
     [JsonIgnore]
     public string FpsSummary
     {
         get
         {
-            if (CaptureDiffers) return $"{Label(CaptureFrameRate)} fps · přehrávání {FpsLabel}";
+            if (CaptureDiffers) return $"{Label(CaptureFrameRate)} fps · playback {FpsLabel}";
             if (FpsLabel.Length == 0 && Label(CaptureFrameRate) is { Length: > 0 } capture) return capture + " fps";
             return FpsLabel;
         }
@@ -158,7 +158,7 @@ public sealed class ClipInfo
         {
             if (Duration is not double d) return "";
             int s = (int)Math.Round(d, MidpointRounding.AwayFromZero);
-            return $"{s / 3600}:{s / 60 % 60:00}:{s % 60:00}";
+            return string.Create(CultureInfo.InvariantCulture, $"{s / 3600}:{s / 60 % 60:00}:{s % 60:00}");
         }
     }
 }
@@ -208,7 +208,8 @@ public sealed class ClipEntry
     /// No proxy because the original is lighter than one would be (LighterSource, 0.5.1): `skipped` with its note — not a
     /// failure, and not a proxy the job still owes.
     [JsonIgnore] public bool OriginalLighter =>
-        ProxyStatus == ProxyStatus.Skipped && ProxyNote?.StartsWith(Msg.ProxyLighterPrefix, StringComparison.Ordinal) == true;
+        ProxyStatus == ProxyStatus.Skipped && ProxyNote is { } note
+        && (note.StartsWith(Msg.ProxyLighterPrefix, StringComparison.Ordinal) || note.StartsWith(Msg.ProxyLighterPrefixOld, StringComparison.Ordinal));
     /// First, middle and last frame (JPEG + caption); embedded in the HTML/PDF report only.
     [JsonIgnore] public List<Thumbnail> Thumbnails { get; set; } = [];
     /// What the decoder said while making the proxy (plan 10, spec 7): content_ok / content_warn. Absent without a proxy

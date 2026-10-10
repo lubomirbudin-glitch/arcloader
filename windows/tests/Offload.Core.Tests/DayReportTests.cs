@@ -108,25 +108,25 @@ public class DayReportTests
         using var dir = new TempDir();
         var html = DayReport.Html(DayReport.Load(DayFixtures.Day(dir)));
 
-        Assert.Contains("<h1>Denní report — 6. 10. 2026</h1>", html);
-        Assert.Contains("VYŽADUJE POZORNOST", html);
-        Assert.Contains("<b>5</b><span>karet</span>", html);
-        Assert.Contains("<b>6</b><span>souborů</span>", html);
+        Assert.Contains("<h1>Day report — 2026-10-06</h1>", html);
+        Assert.Contains("NEEDS ATTENTION", html);
+        Assert.Contains("<b>5</b><span>cards</span>", html);
+        Assert.Contains("<b>6</b><span>files</span>", html);
         Assert.Contains($"<b>{Format.Bytes(9000)}</b><span>data</span>", html);
-        Assert.Contains("<b>6</b><span>klipů</span>", html);
-        Assert.Contains("<b>1:30</b><span>celková stopáž</span>", html);
-        Assert.Contains("<b>1 / 5</b><span>ověřené karty</span>", html);
-        Assert.Contains("<td>E001</td><td colspan=\"12\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", html);
-        Assert.Contains("<td>D001</td><td colspan=\"12\" class=\"warn\">report nejde přečíst</td>", html);
-        Assert.Contains("<td>SOUND</td><td colspan=\"12\" class=\"muted\">jiná složka (bez reportu)</td>", html);
+        Assert.Contains("<b>6</b><span>clips</span>", html);
+        Assert.Contains("<b>1:30</b><span>total duration</span>", html);
+        Assert.Contains("<b>1 / 5</b><span>verified cards</span>", html);
+        Assert.Contains("<td>E001</td><td colspan=\"12\" class=\"warn\">no report (running, or it was interrupted)</td>", html);
+        Assert.Contains("<td>D001</td><td colspan=\"12\" class=\"warn\">cannot read the report</td>", html);
+        Assert.Contains("<td>SOUND</td><td colspan=\"12\" class=\"muted\">other folder (no report)</td>", html);
         Assert.Contains("<td>1 / 1</td><td class=\"wrap\">ARRI LogC4 → Rec.709</td><td class=\"num\">—</td>", html);   // A001
-        Assert.Contains("<td class=\"warn\">NEOVĚŘENO</td>", html);   // C001
+        Assert.Contains("<td class=\"warn\">NOT VERIFIED</td>", html);   // C001
         // Fix round 1, item 6: read back, but with a failed file — not green.
-        Assert.Contains("<td class=\"warn\">ověřeno, s chybami</td><td class=\"num bad\">1</td>", html);   // B001
-        Assert.Equal(1, html.Split("<td class=\"ok\">ověřeno</td>").Length - 1);   // A001 only
+        Assert.Contains("<td class=\"warn\">verified, with errors</td><td class=\"num bad\">1</td>", html);   // B001
+        Assert.Equal(1, html.Split("<td class=\"ok\">verified</td>").Length - 1);   // A001 only
         Assert.Contains("<td class=\"num\">2</td></tr>", html);      // C001: two generations
-        Assert.Contains("1 soubor selhal: CLIP/c 02.mov", html);    // B001
-        Assert.Contains("neověřeno — kopie nebyla přečtena zpět", html);
+        Assert.Contains("1 file failed: CLIP/c 02.mov", html);    // B001
+        Assert.Contains("not verified — the copy was not read back", html);
         Assert.Contains("<tr><td>ARRI LogC4 → Rec.709</td><td class=\"num\">2</td></tr>", html);
         Assert.DoesNotContain("<tr><td>SOUND</td><td class=", html);   // ruling M13: not a problem
         Assert.Contains("<footer>offload ", html);
@@ -139,7 +139,7 @@ public class DayReportTests
         using var dir = new TempDir();
         var day = DayReport.Load(DayFixtures.Day(dir));
         var html = DayReport.Html(day);
-        Assert.Contains("onclick=\"window.print()\">Uložit jako PDF</button>", html);
+        Assert.Contains("onclick=\"window.print()\">Save as PDF</button>", html);
         Assert.Contains($"<a href=\"{DayReport.PdfName(day.Date)}\"", html);
         Assert.Contains("@page{size:A4 landscape;margin:10mm}", html);
         Assert.DoesNotContain("class=\"toolbar\"", DayReport.Html(day, forPrint: true));
@@ -156,13 +156,13 @@ public class DayReportTests
         var problems = DayReport.Problems(DayReport.Load(day));
 
         var a = Assert.Single(problems, p => p.Card == "A001");
-        Assert.StartsWith("report doplnění nejde přečíst (offload_report_0002.json: ", a.Text);
+        Assert.StartsWith("cannot read the report of an append (offload_report_0002.json: ", a.Text);
         Assert.EndsWith(")", a.Text);
         Assert.True(a.Bad);
         var d = Assert.Single(problems, p => p.Card == "D001");
-        Assert.StartsWith("report nejde přečíst (", d.Text);
+        Assert.StartsWith("cannot read the report (", d.Text);
         Assert.DoesNotContain(problems, p => p.Card == "SOUND");
-        Assert.Contains(problems, p => p.Card == "E001" && p.Text == "bez reportu (probíhá, nebo byl přerušen)");
+        Assert.Contains(problems, p => p.Card == "E001" && p.Text == "no report (running, or it was interrupted)");
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public class DayReportTests
         var root = Path.GetDirectoryName(day)!;
 
         var notADay = Assert.Throws<InvalidOperationException>(() => DayReport.Write(root, new OutputSettings()));
-        Assert.Equal($"Ve složce {root} není žádná karta s reportem — vyberte složku dne na cíli (<cíl>\\<datum>).", notADay.Message);
+        Assert.Equal($"Folder {root} has no card with a report — select a day folder on a destination (<destination>\\<date>).", notADay.Message);
         Assert.False(Directory.Exists(Path.Combine(root, "_REPORT")));
         Assert.Throws<InvalidOperationException>(() => DayReport.Write(Path.Combine(day, "E001"), new OutputSettings()));
         Assert.False(Directory.Exists(Path.Combine(day, "E001", "_REPORT")));
@@ -238,7 +238,7 @@ public class DayReportTests
         Directory.CreateDirectory(Path.Combine(card, "ascmhl"));
         var before = DayFixtures.CardFiles(card);
         var onCard = Assert.Throws<InvalidOperationException>(() => DayReport.Write(other, new OutputSettings()));
-        Assert.Equal($"Ve složce dne {other} je karta „_REPORT“ — denní report by se zapsal do ní, proto se nevytvoří.", onCard.Message);
+        Assert.Equal($"Day folder {other} has a card named \"_REPORT\" — the day report would be written into it, so it is not created.", onCard.Message);
         DayFixtures.AssertSame(before, DayFixtures.CardFiles(card));
         Assert.False(File.Exists(Path.Combine(card, "2026-10-07_day_report.html")));
     }
@@ -275,7 +275,7 @@ public class DayReportTimingTests
         var html = DayReport.Html(DayReport.Load(day));
 
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"{clock.ElapsedMilliseconds} ms");
-        Assert.Contains("<b>2000</b><span>klipů</span>", html);
+        Assert.Contains("<b>2000</b><span>clips</span>", html);
     }
 }
 

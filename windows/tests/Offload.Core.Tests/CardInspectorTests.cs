@@ -62,7 +62,7 @@ public class CardInspectorTests
         using var dir = new TempDir();
         var gone = Path.Combine(dir.Path, "gone");
         var insight = CardInspector.Inspect(gone, null, null, CancellationToken.None);
-        Assert.StartsWith("Kartu nejde přečíst: ", insight.Error);
+        Assert.StartsWith("Cannot read the card: ", insight.Error);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class CardInspectorTests
         using var dir = new TempDir();
         // A path with an illegal character makes the scan throw ArgumentException/NotSupported, not IOError.
         var insight = CardInspector.Inspect(Path.Combine(dir.Path, "a<b|c"), null, null, CancellationToken.None);
-        Assert.StartsWith("Kartu nejde přečíst: ", insight.Error);
+        Assert.StartsWith("Cannot read the card: ", insight.Error);
     }
 
     [Fact]

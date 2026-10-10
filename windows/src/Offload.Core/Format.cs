@@ -23,34 +23,38 @@ public static class Format
         double v = b;
         int i = 0;
         while (v >= 1000 && i < Units.Length - 1) { v /= 1000; i++; }
-        return i == 0 ? $"{b} B" : v.ToString("0.00", CultureInfo.InvariantCulture) + " " + Units[i];
+        return i == 0 ? $"{b.ToString(CultureInfo.InvariantCulture)} B" : v.ToString("0.00", CultureInfo.InvariantCulture) + " " + Units[i];
     }
 
-    static readonly CultureInfo Cs = CultureInfo.GetCultureInfo("cs-CZ");
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    /// A size inside a Czech sentence: "3,2 GB", "2 GB", "412 GB", "850 MB", "12 B" — decimal units like Bytes, at most
-    /// one decimal place below 10, none above.
-    public static string BytesCs(long b)
+    /// A size inside a sentence: "3.2 GB", "2 GB", "412 GB", "850 MB", "12 B" — decimal units like Bytes, at most one
+    /// decimal place below 10, none above. Invariant (a decimal point), whatever the PC's culture.
+    public static string BytesShort(long b)
     {
         double v = b;
         int i = 0;
         while (v >= 1000 && i < Units.Length - 1) { v /= 1000; i++; }
-        if (i == 0) return $"{b} B";
-        return v.ToString(v < 10 ? "0.#" : "0", Cs) + " " + Units[i];
+        if (i == 0) return $"{b.ToString(Inv)} B";
+        return v.ToString(v < 10 ? "0.#" : "0", Inv) + " " + Units[i];
     }
 
-    /// Three significant digits, as the new window shows sizes (UI návrh): "1,70 GB", "14,2 GB", "412 GB", "850 MB".
-    public static string BytesCs3(long b)
+    /// Three significant digits, as the new window shows sizes (UI návrh): "1.70 GB", "14.2 GB", "412 GB", "850 MB".
+    public static string Bytes3(long b)
     {
         double v = b;
         int i = 0;
         while (v >= 1000 && i < Units.Length - 1) { v /= 1000; i++; }
-        if (i == 0) return $"{b} B";
-        if (Math.Round(v, 2) < 10) return Math.Round(v, 2).ToString("0.00", Cs) + " " + Units[i];
-        if (Math.Round(v, 1) < 100) return Math.Round(v, 1).ToString("0.0", Cs) + " " + Units[i];
-        if (Math.Round(v) < 1000 || i == Units.Length - 1) return Math.Round(v).ToString("0", Cs) + " " + Units[i];
-        return (v / 1000).ToString("0.00", Cs) + " " + Units[i + 1];   // 999,6 MB → 1,00 GB
+        if (i == 0) return $"{b.ToString(Inv)} B";
+        if (Math.Round(v, 2) < 10) return Math.Round(v, 2).ToString("0.00", Inv) + " " + Units[i];
+        if (Math.Round(v, 1) < 100) return Math.Round(v, 1).ToString("0.0", Inv) + " " + Units[i];
+        if (Math.Round(v) < 1000 || i == Units.Length - 1) return Math.Round(v).ToString("0", Inv) + " " + Units[i];
+        return (v / 1000).ToString("0.00", Inv) + " " + Units[i + 1];   // 999.6 MB → 1.00 GB
     }
+
+    /// The old names (the app was Czech until 0.9.0); same output as BytesShort / Bytes3.
+    public static string BytesCs(long b) => BytesShort(b);
+    public static string BytesCs3(long b) => Bytes3(b);
 
     public static string Rate(long bytes, double seconds) =>
         seconds > 0 ? (bytes / seconds / 1_000_000).ToString("0", CultureInfo.InvariantCulture) + " MB/s" : "-";

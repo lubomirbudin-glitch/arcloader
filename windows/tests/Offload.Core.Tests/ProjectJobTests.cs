@@ -130,7 +130,7 @@ public class ProjectJobTests
         Assert.Equal("A005", CardNaming.Placeholder(true, plain, h, "2026-10-06", "2026-10-06", "EOS").Name);
         Assert.Equal("A002", CardNaming.Placeholder(true, plain, h, "2026-10-06", "2026-10-06", "EOS", project: "FILM X").Name);
         Assert.Equal("B008", CardNaming.Placeholder(true, plain, h, "2026-10-06", "2026-10-06", "EOS", project: "Reklama Y").Name);
-        Assert.Equal("EOS", CardNaming.Placeholder(true, plain, h, "2026-10-06", "2026-10-06", "EOS", project: "Nový").Name);
+        Assert.Equal("EOS", CardNaming.Placeholder(true, plain, h, "2026-10-06", "2026-10-06", "EOS", project: "New").Name);
         var r = CardNaming.Resolve(true, [new CardNameInput("E", null, plain, "EOS"), new CardNameInput("F", null, plain, "EOS")],
             h, "2026-10-06", "2026-10-06", "Film X");
         Assert.Equal(("A002", "A003"), (r["E"].Name, r["F"].Name));
@@ -156,11 +156,11 @@ public class ProjectJobTests
         Directory.CreateDirectory(Path.Combine(day, "A003", "ascmhl"));   // a card without a report does not count
         var model = DayReport.Load(day);
         Assert.Equal("Film X", model.Project);
-        Assert.Contains("<span class=\"sub\">Projekt: Film X</span>", DayReport.Html(model));
+        Assert.Contains("<span class=\"sub\">Project: Film X</span>", DayReport.Html(model));
 
         Report(day, "B001", null);                                          // a card of no project (or an older report)
         Assert.Null(DayReport.Load(day).Project);
-        Assert.DoesNotContain("Projekt:", DayReport.Html(DayReport.Load(day)));
+        Assert.DoesNotContain("Project:", DayReport.Html(DayReport.Load(day)));
 
         using var other = new TempDir();
         var none = other.Sub("D", "2026-10-06");

@@ -31,7 +31,7 @@ public class LutRuleOptionTests
     {
         var (rule, error) = LutRules.ParseOption(spec, Cat);
         Assert.Null(rule);
-        Assert.StartsWith($"Pravidlo LUTu „{spec}“ nejde přečíst — použijte <podle>=<hodnota>:<lut>", error);
+        Assert.StartsWith($"Cannot read the LUT rule \"{spec}\" — use <match>=<value>:<lut>", error);
     }
 
     [Fact]
@@ -39,15 +39,15 @@ public class LutRuleOptionTests
     {
         var (rule, error) = LutRules.ParseOption("camera=FX6:sony-xyz", Cat);
         Assert.Null(rule);
-        Assert.StartsWith("Neznámý LUT „sony-xyz“. Použijte auto, none, cestu k .cube nebo jedno z: ", error);
+        Assert.StartsWith("Unknown LUT \"sony-xyz\". Use auto, none, a path to a .cube or one of: ", error);
     }
 
     [Fact]
     public void EditorProblem_FirstIncompleteRow()
     {
         Assert.Null(LutRules.Problem([new LutRule { Value = "FX6", Lut = "none" }]));
-        Assert.Equal("Pravidlo 2: vyplňte hodnotu.", LutRules.Problem([new LutRule { Value = "FX6", Lut = "none" }, new LutRule { Value = " ", Lut = "none" }]));
-        Assert.Equal("Pravidlo 1: vyberte LUT.", LutRules.Problem([new LutRule { Value = "FX6" }]));
+        Assert.Equal("Rule 2: fill in the value.", LutRules.Problem([new LutRule { Value = "FX6", Lut = "none" }, new LutRule { Value = " ", Lut = "none" }]));
+        Assert.Equal("Rule 1: select a LUT.", LutRules.Problem([new LutRule { Value = "FX6" }]));
     }
 
     // Ruling I3: a rule of a newer version is shown read-only in the editor and never blocks OK — whatever it holds.
@@ -56,7 +56,7 @@ public class LutRuleOptionTests
     {
         var future = new LutRule { Match = "lens", Value = "", Lut = null };
         Assert.Null(LutRules.Problem([future, new LutRule { Value = "FX6", Lut = "none" }]));
-        Assert.Equal("Pravidlo 3: vyplňte hodnotu.", LutRules.Problem([future, new LutRule { Value = "FX6", Lut = "none" }, new LutRule { Value = "", Lut = "none" }]));
+        Assert.Equal("Rule 3: fill in the value.", LutRules.Problem([future, new LutRule { Value = "FX6", Lut = "none" }, new LutRule { Value = "", Lut = "none" }]));
         // What OK hands back keeps the rule untouched, in its place.
         var kept = LutRules.Valid([new LutRule { Value = " FX6 ", Lut = "none" }, future]);
         Assert.Equal(["FX6", ""], kept.Select(r => r.Value));
@@ -115,10 +115,10 @@ public class LutRuleOptionTests
 
         var bad = Run(null, Card(dir), "-d", dir.Sub("d2"), "--no-history", "--lut-rule", $"reel=A:{Path.Combine(dir.Path, "gone.cube")}");
         Assert.Equal(1, bad.Exit);
-        Assert.Contains("Chyba: LUT z pravidla 1 nenalezen: gone.cube", bad.Err);
+        Assert.Contains("Error: LUT of rule 1 not found: gone.cube", bad.Err);
         var wrong = Run(null, Card(dir), "-d", dir.Sub("d3"), "--no-history", "--lut-rule", "camera:FX6");
         Assert.Equal(1, wrong.Exit);
-        Assert.Contains("Chyba: Pravidlo LUTu „camera:FX6“ nejde přečíst", wrong.Err);
+        Assert.Contains("Error: Cannot read the LUT rule \"camera:FX6\"", wrong.Err);
     }
 
     // With --project the project's rules are the default; written --lut-rule options replace them.
@@ -146,7 +146,7 @@ public class LutRuleOptionTests
         var r = Run(null, Card(dir), "-d", dir.Sub("d1"), "--dry-run", "--no-history",
             "--lut-rule", "camera=FX6:none", "--lut-rule", $"reel=A:{Path.Combine(dir.Path, "gone.cube")}");
         Assert.Equal(1, r.Exit);
-        Assert.Contains("Chyba: LUT z pravidla 2 nenalezen: gone.cube", r.Err);
+        Assert.Contains("Error: LUT of rule 2 not found: gone.cube", r.Err);
     }
 
     // Fix round 1: rules work in Auto mode only; written with another LUT they are refused, not silently ignored.
@@ -158,7 +158,7 @@ public class LutRuleOptionTests
         using var dir = new TempDir();
         var r = Run(null, Card(dir), "-d", dir.Sub("d1"), "--dry-run", "--no-history", "--lut", lut, "--lut-rule", "camera=FX6:none");
         Assert.Equal(1, r.Exit);
-        Assert.Contains("Chyba: --lut-rule platí jen s --lut auto", r.Err);
+        Assert.Contains("Error: --lut-rule works only with --lut auto", r.Err);
         Assert.Equal(0, Run(null, Card(dir), "-d", dir.Sub("d2"), "--dry-run", "--no-history", "--lut", "auto", "--lut-rule", "camera=FX6:none").Exit);
     }
 
@@ -173,6 +173,6 @@ public class LutRuleOptionTests
         SettingsStore.Save(s, Path.Combine(folder, "settings.json"));
         var r = Run(folder, Card(dir), "--project", "Film X", "-d", dir.Sub("d1"), "--dry-run", "--no-history", "--lut-rule", "camera=FX6:none");
         Assert.Equal(1, r.Exit);
-        Assert.Contains("--lut-rule platí jen s --lut auto", r.Err);
+        Assert.Contains("--lut-rule works only with --lut auto", r.Err);
     }
 }

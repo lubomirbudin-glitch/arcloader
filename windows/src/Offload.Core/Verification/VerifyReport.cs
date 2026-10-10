@@ -12,46 +12,46 @@ public enum VerifyTone { Ok, Warning, Error }
 /// The Czech texts of a verification (spec 2.4) — GUI job card, CLI summary, HTML report.
 public static class VerifyTexts
 {
-    static readonly CultureInfo Cs = CultureInfo.GetCultureInfo("cs-CZ");
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    static string N(long n) => n.ToString("N0", Cs);
-    static string Files(int n) => $"{N(n)} {Texts.Plural(n, "soubor", "soubory", "souborů")}";
+    static string N(long n) => n.ToString("N0", Inv);
+    static string Files(int n) => $"{N(n)} {Texts.Plural(n, "file", "files")}";
 
-    /// "ASC MHL, 2 generace, xxHash64" / "seznam součtů, xxHash64 + MD5".
+    /// "ASC MHL, 2 generations, xxHash64" / "checksum list, xxHash64 + MD5".
     public static string Basis(VerifyResult r)
     {
         var algos = string.Join(" + ", r.HashAlgorithms.Select(HashAlgo.Label));
-        if (r.Basis == BackupVerifier.PendingBasis) return "záznam nedokončené generace ještě není zapsaný";
+        if (r.Basis == BackupVerifier.PendingBasis) return "the record of the unfinished generation is not written yet";
         return r.Basis == "ascmhl"
-            ? $"ASC MHL, {r.Generations} {Texts.Plural(r.Generations, "generace", "generace", "generací")}, {algos}"
-            : $"seznam součtů, {algos}";
+            ? $"ASC MHL, {Texts.N(r.Generations, "generation")}, {algos}"
+            : $"checksum list, {algos}";
     }
 
     /// Plan 10 (M-c): what an unfinished newest generation (VerifyResult.Unfinished) means and what to do.
     public const string UnfinishedText =
-        "Záloha není dokončená: nejnovější generace se ověřovala s proxy a ověření neskončilo (nebo jeho výsledek není zapsaný na všech cílech). Kartu zatím neformátujte — vložte ji znovu a zvolte „Dokončit přerušenou zálohu“.";
+        "The backup is not finished: the newest generation was being verified with the proxies and the verification did not end (or its result is not written on all destinations). Do not format the card yet — insert it again and choose \"Finish interrupted backup\".";
 
     /// The main line, green / red / orange (cancelled, or a generation not finished — M-c: never "all good" then).
     public static (string Text, VerifyTone Tone) Summary(VerifyResult r)
     {
         if (r.Cancelled)
-            return ($"Ověření zrušeno po {N(r.Checked)} / {N(r.TotalFiles)} {(r.TotalFiles == 1 ? "souboru" : "souborech")}", VerifyTone.Warning);
+            return ($"Verification cancelled after {N(r.Checked)} / {N(r.TotalFiles)} {(r.TotalFiles == 1 ? "file" : "files")}", VerifyTone.Warning);
         if (r.Success && r.Unfinished)
-            return (r.Ok > 0 ? $"{UnfinishedText} Soubory se zapsaným záznamem sedí ({N(r.Ok)}, {Basis(r)})." : UnfinishedText, VerifyTone.Warning);
+            return (r.Ok > 0 ? $"{UnfinishedText} The files with a written record match ({N(r.Ok)}, {Basis(r)})." : UnfinishedText, VerifyTone.Warning);
         if (r.Success)
         {
             var all = r.Ok switch
             {
-                1 => "soubor sedí",
-                >= 2 and <= 4 => $"všechny {r.Ok} soubory sedí",
-                _ => $"všech {N(r.Ok)} souborů sedí",
+                1 => "the file matches",
+                >= 2 and <= 4 => $"all {r.Ok} files match",
+                _ => $"all {N(r.Ok)} files match",
             };
-            return ($"Ověřeno: {all} ({Basis(r)}).", VerifyTone.Ok);
+            return ($"Verified: {all} ({Basis(r)}).", VerifyTone.Ok);
         }
         var text = r.Changed.Count + r.Missing.Count + r.Unreadable.Count == 0
-            ? $"Nelze ověřit: {Files(r.FailedAtCopy.Count)} {Texts.Plural(r.FailedAtCopy.Count, "selhal", "selhaly", "selhalo")} už při kopii a v záznamu není žádný platný součet — podrobnosti v reportu ověření."
-            : $"Nesedí {Files(r.Changed.Count)}, chybí {N(r.Missing.Count)}, nečitelný {N(r.Unreadable.Count)} — podrobnosti v reportu ověření.";
-        if (r.FolderGone) text += " Složka zálohy zmizela — disk se možná odpojil.";
+            ? $"Cannot verify: {Files(r.FailedAtCopy.Count)} already failed during the copy and the record has no valid checksum — details in the verification report."
+            : $"Mismatch {Files(r.Changed.Count)}, missing {N(r.Missing.Count)}, unreadable {N(r.Unreadable.Count)} — details in the verification report.";
+        if (r.FolderGone) text += " The backup folder disappeared — the disk may have been disconnected.";
         if (r.Unfinished) text += " " + UnfinishedText;
         return (text, VerifyTone.Error);
     }
@@ -61,30 +61,30 @@ public static class VerifyTexts
     {
         var lines = new List<string>();
         if (r.Extra.Count > 0)
-            lines.Add($"{Files(r.Extra.Count)} navíc (nejsou v {(r.Basis == "ascmhl" ? "MHL" : "seznamu součtů")}).");
+            lines.Add($"{Files(r.Extra.Count)} extra (not in the {(r.Basis == "ascmhl" ? "MHL" : "checksum list")}).");
         if (r.FailedAtCopy.Count > 0)
-            lines.Add($"{Files(r.FailedAtCopy.Count)} {Texts.Plural(r.FailedAtCopy.Count, "selhal", "selhaly", "selhalo")} už při kopii.");
+            lines.Add($"{Files(r.FailedAtCopy.Count)} already failed during the copy.");
         if (r.FailedSuperseded.Count > 0)
-            lines.Add($"{Files(r.FailedSuperseded.Count)} {Texts.Plural(r.FailedSuperseded.Count, "má", "mají", "má")} v nejnovější generaci záznam „selhalo při kopii“ — ověřeno proti starší platné generaci.");
+            lines.Add($"{Files(r.FailedSuperseded.Count)} {(r.FailedSuperseded.Count == 1 ? "has" : "have")} the record \"failed during the copy\" in the newest generation — verified against an older valid generation.");
         lines.AddRange(r.ChainProblems);
         return lines;
     }
 
-    /// CLI: "Ověřeno 1 234 souborů (512 GB) za 22:10 (385 MB/s) — vše v pořádku." / "… — NALEZENY PROBLÉMY: …"
+    /// CLI: "Verified 1,234 files (512 GB) in 22:10 (385 MB/s) — all OK." / "… — PROBLEMS FOUND: …"
     public static string CliSummary(VerifyResult r)
     {
         double secs = (r.Finished - r.Started).TotalSeconds;
-        var head = $"Ověřeno {Files(r.Ok + r.Changed.Count)} ({Format.BytesCs(r.BytesRead)}) za {JobProgress.EtaText(secs)} ({Format.Rate(r.BytesRead, secs)})";
+        var head = $"Verified {Files(r.Ok + r.Changed.Count)} ({Format.BytesShort(r.BytesRead)}) in {JobProgress.EtaText(secs)} ({Format.Rate(r.BytesRead, secs)})";
         if (r.Cancelled) return Summary(r).Text;
-        if (r.Success && r.Unfinished) return $"{head} — ZÁLOHA NEDOKONČENÁ: {UnfinishedText}";
+        if (r.Success && r.Unfinished) return $"{head} — BACKUP UNFINISHED: {UnfinishedText}";
         return r.Success
-            ? $"{head} — vše v pořádku."
-            : $"{head} — NALEZENY PROBLÉMY: nesedí {N(r.Changed.Count)}, chybí {N(r.Missing.Count)}, nečitelné {N(r.Unreadable.Count)}, selhalo při kopii {N(r.FailedAtCopy.Count)}, navíc {N(r.Extra.Count)}.";
+            ? $"{head} — all OK."
+            : $"{head} — PROBLEMS FOUND: mismatch {N(r.Changed.Count)}, missing {N(r.Missing.Count)}, unreadable {N(r.Unreadable.Count)}, failed during the copy {N(r.FailedAtCopy.Count)}, extra {N(r.Extra.Count)}.";
     }
 
     /// Why the report is not in the card folder (an MHL history that does not ignore _REPORT would turn it into an unlisted file).
     public static string ReportOutsideNote(string path) =>
-        $"Report ověření je uložený mimo složku karty, aby nenarušil její historii ASC MHL: {path}";
+        $"The verification report is saved outside the card folder so it does not disturb its ASC MHL history: {path}";
 }
 
 /// The verification report (spec 2.4, R8): `_REPORT\<card>_verify_<stamp>Z.html/.pdf` and `offload_verify_<stamp>Z.json`.
@@ -137,36 +137,36 @@ public static class VerifyReport
         var (summary, tone) = VerifyTexts.Summary(r);
         var (badgeClass, badge) = tone switch
         {
-            VerifyTone.Ok => ("ok", "OVĚŘENO"),
-            VerifyTone.Error => ("bad", "NALEZENY PROBLÉMY"),
-            _ when r.Cancelled => ("warn", "ZRUŠENO"),
-            _ => ("warn", "NEDOKONČENO"),
+            VerifyTone.Ok => ("ok", "VERIFIED"),
+            VerifyTone.Error => ("bad", "PROBLEMS FOUND"),
+            _ when r.Cancelled => ("warn", "CANCELLED"),
+            _ => ("warn", "UNFINISHED"),
         };
         var card = HtmlReport.Esc(CardName(r));
         var h = new StringBuilder();
-        h.Append("<!doctype html>\n<html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
-        h.Append($"<title>Ověření {card}</title>\n<style>\n{HtmlReport.Styles(forPrint)}</style></head><body><main>\n");
+        h.Append("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+        h.Append($"<title>Verification {card}</title>\n<style>\n{HtmlReport.Styles(forPrint)}</style></head><body><main>\n");
         h.Append(HtmlReport.Toolbar(PdfName(r), forPrint));
-        h.Append($"<header><h1>Ověření {card}</h1><span class=\"badge {badgeClass}\">{badge}</span>\n");
+        h.Append($"<header><h1>Verification {card}</h1><span class=\"badge {badgeClass}\">{badge}</span>\n");
         h.Append($"<span class=\"sub\">{HtmlReport.DateTimeText(r.Started)} – {HtmlReport.DateTimeText(r.Finished)}</span></header>\n");
         h.Append($"<p class=\"{badgeClass}\">{HtmlReport.Esc(summary)}</p>\n");
         foreach (var w in VerifyTexts.Warnings(r)) h.Append($"<p class=\"warn\">{HtmlReport.Esc(w)}</p>\n");
         h.Append("<div class=\"stats\">\n");
-        Stat(h, r.TotalFiles.ToString(CultureInfo.InvariantCulture), "souborů v záznamu");
+        Stat(h, r.TotalFiles.ToString(CultureInfo.InvariantCulture), "files in the record");
         Stat(h, Format.Bytes(r.TotalBytes), "data");
-        Stat(h, r.Ok.ToString(CultureInfo.InvariantCulture), "sedí");
-        Stat(h, HtmlReport.Esc(VerifyTexts.Basis(r)), "porovnáno s");
-        Stat(h, HtmlReport.Duration((r.Finished - r.Started).TotalSeconds), "ověření · " + Format.Rate(r.BytesRead, (r.Finished - r.Started).TotalSeconds));
+        Stat(h, r.Ok.ToString(CultureInfo.InvariantCulture), "match");
+        Stat(h, HtmlReport.Esc(VerifyTexts.Basis(r)), "compared with");
+        Stat(h, HtmlReport.Duration((r.Finished - r.Started).TotalSeconds), "verification · " + Format.Rate(r.BytesRead, (r.Finished - r.Started).TotalSeconds));
         h.Append("</div>\n");
-        h.Append($"<p class=\"sub\">Složka: <span class=\"mono\">{HtmlReport.Esc(r.CardPath)}</span></p>\n");
-        Section(h, "Nesedí (obsah se liší od záznamu)", "bad", r.Changed);
-        Section(h, "Chybí", "bad", r.Missing);
-        Section(h, "Nečitelné", "bad", r.Unreadable.Select(u => $"{u.Path} — {u.Error}").ToList());
-        Section(h, "Selhaly už při kopii (bez platného záznamu)", "bad", r.FailedAtCopy);
-        Section(h, "Nejnovější záznam selhal při kopii (ověřeno proti starší generaci)", "warn", r.FailedSuperseded);
-        Section(h, r.Basis == "ascmhl" ? "Navíc (nejsou v MHL)" : "Navíc (nejsou v seznamu součtů)", "warn", r.Extra);
-        Section(h, "Řetěz ASC MHL", "warn", r.ChainProblems);
-        h.Append($"<footer>offload {HtmlReport.Esc(OffloadVersion.String)} · report ověření · {HtmlReport.DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
+        h.Append($"<p class=\"sub\">Folder: <span class=\"mono\">{HtmlReport.Esc(r.CardPath)}</span></p>\n");
+        Section(h, "Mismatch (the content differs from the record)", "bad", r.Changed);
+        Section(h, "Missing", "bad", r.Missing);
+        Section(h, "Unreadable", "bad", r.Unreadable.Select(u => $"{u.Path} — {u.Error}").ToList());
+        Section(h, "Failed already during the copy (no valid record)", "bad", r.FailedAtCopy);
+        Section(h, "The newest record failed during the copy (verified against an older generation)", "warn", r.FailedSuperseded);
+        Section(h, r.Basis == "ascmhl" ? "Extra (not in the MHL)" : "Extra (not in the checksum list)", "warn", r.Extra);
+        Section(h, "ASC MHL chain", "warn", r.ChainProblems);
+        h.Append($"<footer>offload {HtmlReport.Esc(OffloadVersion.String)} · verification report · {HtmlReport.DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
         return h.ToString();
     }
 

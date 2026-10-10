@@ -147,13 +147,13 @@ public static class BackupVerifier
             if (!File.Exists(path))
             {
                 // A card folder that vanished (disk pulled) makes every remaining file unreadable, not missing.
-                if (!Directory.Exists(cardPath)) result.Unreadable.Add(new UnreadableFile(e.Path, "složka zálohy zmizela"));
+                if (!Directory.Exists(cardPath)) result.Unreadable.Add(new UnreadableFile(e.Path, "the backup folder disappeared"));
                 else result.Missing.Add(e.Path);
                 continue;
             }
             if (e.Hashes.Count == 0)
             {
-                result.Unreadable.Add(new UnreadableFile(e.Path, "záznam nemá žádný podporovaný kontrolní součet"));
+                result.Unreadable.Add(new UnreadableFile(e.Path, "the record has no supported checksum"));
                 continue;
             }
             try

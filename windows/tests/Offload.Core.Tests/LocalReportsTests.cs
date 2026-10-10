@@ -202,7 +202,7 @@ public class LocalReportsTests
     [Fact]
     public void Root_DefaultInDocuments_CustomFolder_Off()
     {
-        Assert.Equal(Path.Combine(LocalReports.Documents, "Offload reporty"), LocalReports.RootFor(new OutputSettings()));
+        Assert.Equal(Path.Combine(LocalReports.Documents, "Offload reports"), LocalReports.RootFor(new OutputSettings()));
         Assert.Equal(@"X:\Reporty", LocalReports.RootFor(new OutputSettings { LocalReportFolder = @"X:\Reporty" }));
         Assert.Null(LocalReports.RootFor(new OutputSettings { LocalReport = false }));
         // The test assembly never writes into the real Documents (TestEnvironment).
@@ -284,7 +284,7 @@ public class LocalReportsTests
         Assert.True(s.SafeToEject);
         Assert.True(s.SafeToFormat);
         Assert.Null(s.Warning);
-        Assert.StartsWith("Kopie reportu na tento počítač se nepovedla", s.LocalReportNote);
+        Assert.StartsWith("Could not copy the report to this computer", s.LocalReportNote);
         Assert.Null(job.LocalReport);
     }
 

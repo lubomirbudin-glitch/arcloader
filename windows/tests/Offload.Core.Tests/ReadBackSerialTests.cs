@@ -44,8 +44,8 @@ public class ReadBackSerialTests
         engine.Run(engine.Prepare(card, [root], null, "2026-10-08"));
 
         var day = DayReport.Load(Path.Combine(root, "2026-10-08"));
-        Assert.Contains("OVĚŘUJE SE", DayReport.Html(day));
-        Assert.Contains(DayReport.Problems(day), p => p.Text.StartsWith("ověření s proxy ještě běží", StringComparison.Ordinal));
+        Assert.Contains("VERIFYING", DayReport.Html(day));
+        Assert.Contains(DayReport.Problems(day), p => p.Text.StartsWith("the verification with the proxies is still running", StringComparison.Ordinal));
         Assert.Equal(0, day.VerifiedCards);
     }
 }

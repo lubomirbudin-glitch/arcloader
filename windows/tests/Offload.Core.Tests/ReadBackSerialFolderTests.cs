@@ -43,7 +43,7 @@ public class ReadBackSerialFolderTests
         Assert.Equal(0, DayReport.Load(Path.GetDirectoryName(p)!).VerifiedCards);
     }
 
-    // A verify-in-proxy job: its day report says "OVĚŘUJE SE" (and the problem line) while stage 2 runs — never
+    // A verify-in-proxy job: its day report says "VERIFYING" (and the problem line) while stage 2 runs — never
     // "ověřeno" — and "ověřeno" once the verification results are written.
     [FfmpegFact]
     public void DayReport_WhileVerifying_ThenVerified()
@@ -58,16 +58,16 @@ public class ReadBackSerialFolderTests
 
         var during = DayReport.Load(Path.Combine(root, "2026-10-08"));
         Assert.Equal(0, during.VerifiedCards);
-        Assert.Contains("OVĚŘUJE SE", DayReport.Html(during));
-        Assert.DoesNotContain("<td class=\"ok\">ověřeno</td>", DayReport.Html(during));
-        Assert.Contains(DayReport.Problems(during), x => x.Text.StartsWith("ověření s proxy ještě běží", StringComparison.Ordinal));
+        Assert.Contains("VERIFYING", DayReport.Html(during));
+        Assert.DoesNotContain("<td class=\"ok\">verified</td>", DayReport.Html(during));
+        Assert.Contains(DayReport.Problems(during), x => x.Text.StartsWith("the verification with the proxies is still running", StringComparison.Ordinal));
 
         job.RunPost();
 
         var after = DayReport.Load(Path.Combine(root, "2026-10-08"));
         Assert.Equal(1, after.VerifiedCards);
-        Assert.DoesNotContain("OVĚŘUJE SE", DayReport.Html(after));
-        Assert.Contains("<td class=\"ok\">ověřeno</td>", DayReport.Html(after));
-        Assert.DoesNotContain(DayReport.Problems(after), x => x.Text.StartsWith("ověření s proxy", StringComparison.Ordinal));
+        Assert.DoesNotContain("VERIFYING", DayReport.Html(after));
+        Assert.Contains("<td class=\"ok\">verified</td>", DayReport.Html(after));
+        Assert.DoesNotContain(DayReport.Problems(after), x => x.Text.StartsWith("the verification with the proxies", StringComparison.Ordinal));
     }
 }

@@ -37,9 +37,9 @@ public class VerifyJobTests
         Assert.True(copyFinished);
         Assert.Equal(VerifyJobState.Done, s.State);
         Assert.True(s.Result!.Success);
-        Assert.Equal("Ověřeno", VerifyJobView.StatusText(s));
+        Assert.Equal("Verified", VerifyJobView.StatusText(s));
         Assert.Equal(CardTone.Ok, VerifyJobView.Tone(s));
-        Assert.Equal("Ověření A001", VerifyJobView.Title(job));
+        Assert.Equal("Verification A001", VerifyJobView.Title(job));
         Assert.StartsWith(Path.Combine(card, "_REPORT", "A001_verify_"), s.ReportPath);
         Assert.True(File.Exists(s.ReportPath));
         Assert.Null(VerifyJobView.ReportNote(s));   // inside the card: no note
@@ -62,7 +62,7 @@ public class VerifyJobTests
         Assert.False(s.ReportPath!.StartsWith(card + Path.DirectorySeparatorChar));
         Assert.True(File.Exists(s.ReportPath));
         Assert.Equal(VerifyTexts.ReportOutsideNote(s.ReportPath), VerifyJobView.ReportNote(s));
-        Assert.Contains("mimo složku karty", VerifyJobView.ReportNote(s));
+        Assert.Contains("outside the card folder", VerifyJobView.ReportNote(s));
     }
 
     // A report that cannot be written is a Czech warning on the card, not a silent nothing.
@@ -82,7 +82,7 @@ public class VerifyJobTests
         Assert.Equal(VerifyJobState.Done, s.State);
         Assert.True(s.Result!.Success);
         Assert.Null(s.ReportPath);
-        Assert.StartsWith("Report se nepodařilo zapsat:", s.ReportError);
+        Assert.StartsWith("Could not write the report:", s.ReportError);
         Assert.Contains(logged, l => l.StartsWith("verify report:"));
     }
 
@@ -113,7 +113,7 @@ public class VerifyJobTests
         var job = new VerifyJob(card, writeReport: false);
         job.RunCopy();
         var s = job.Status();
-        Assert.Equal("Problémy", VerifyJobView.StatusText(s));
+        Assert.Equal("Problems", VerifyJobView.StatusText(s));
         Assert.Equal(CardTone.Error, VerifyJobView.Tone(s));
         Assert.Null(s.ReportPath);
         Assert.Null(VerifyJobView.ReportNote(s));
@@ -139,14 +139,14 @@ public class VerifyJobTests
         job.RunCopy();
         var s = job.Status();
         Assert.Equal(VerifyJobState.Failed, s.State);
-        Assert.Contains("není ASC MHL ani seznam součtů", s.Error);
+        Assert.Contains("has no ASC MHL and no checksum list", s.Error);
     }
 
     [Fact]
     public void Detail_Text()
     {
-        Assert.Equal("Ověřuji 120 / 1 234 souborů · 45 GB / 512 GB · 380 MB/s",
+        Assert.Equal("Verifying 120 / 1,234 files · 45 GB / 512 GB · 380 MB/s",
             VerifyJobView.Detail(new VerifyProgress(119, 1234, 45_000_000_000, 512_000_000_000, "x"), 380_000_000).Replace(' ', ' '));
-        Assert.Equal("Ověřuji…", VerifyJobView.Detail(null, 0));
+        Assert.Equal("Verifying…", VerifyJobView.Detail(null, 0));
     }
 }

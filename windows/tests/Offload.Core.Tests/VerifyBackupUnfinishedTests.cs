@@ -7,7 +7,7 @@ namespace Offload.Core.Tests;
 
 /// Plan 10, carried M-c: "Ověřit zálohu" on a backup whose newest generation is unfinished (verifyPending: the app ended
 /// while verifying with the proxies; verifyIncomplete: the results are not written on every destination) never says
-/// "vše v pořádku" — a warning in Czech that points to „Dokončit přerušenou zálohu“, in the GUI, the CLI and its report.
+/// "all OK" — a warning in Czech that points to „Dokončit přerušenou zálohu“, in the GUI, the CLI and its report.
 [Collection("Console")]
 public class VerifyBackupUnfinishedTests
 {
@@ -50,17 +50,17 @@ public class VerifyBackupUnfinishedTests
         Assert.True(r.Unfinished);
         var (text, tone) = VerifyTexts.Summary(r);
         Assert.Equal(VerifyTone.Warning, tone);
-        Assert.Contains("Dokončit přerušenou zálohu", text);
-        Assert.DoesNotContain("vše v pořádku", VerifyTexts.CliSummary(r));
-        Assert.Contains("Dokončit přerušenou zálohu", VerifyTexts.CliSummary(r));
+        Assert.Contains("Finish interrupted backup", text);
+        Assert.DoesNotContain("all OK", VerifyTexts.CliSummary(r));
+        Assert.Contains("Finish interrupted backup", VerifyTexts.CliSummary(r));
         var html = VerifyReport.Html(r);
-        Assert.Contains("NEDOKONČENO", html);
-        Assert.DoesNotContain(">OVĚŘENO<", html);
+        Assert.Contains("UNFINISHED", html);
+        Assert.DoesNotContain(">VERIFIED<", html);
         var done = new VerifyJobStatus(VerifyJobState.Done, null, r, null, null);
-        Assert.Equal(("Nedokončeno", CardTone.Warning), (VerifyJobView.StatusText(done), VerifyJobView.Tone(done)));
+        Assert.Equal(("Unfinished", CardTone.Warning), (VerifyJobView.StatusText(done), VerifyJobView.Tone(done)));
         var (exit, output) = Cli(folder);
         Assert.Equal(1, exit);   // not a backup the card may be formatted after
-        Assert.DoesNotContain("vše v pořádku", output);
+        Assert.DoesNotContain("all OK", output);
     }
 
     [Theory]
@@ -73,7 +73,7 @@ public class VerifyBackupUnfinishedTests
         var good = BackupVerifier.Verify(folder, chunkSize: 4096);
         Assert.False(good.Unfinished);
         Assert.Equal(VerifyTone.Ok, VerifyTexts.Summary(good).Tone);
-        Assert.EndsWith("vše v pořádku.", VerifyTexts.CliSummary(good));
+        Assert.EndsWith("all OK.", VerifyTexts.CliSummary(good));
         Assert.Equal(0, Cli(folder).Exit);
 
         Flag(folder, flag);

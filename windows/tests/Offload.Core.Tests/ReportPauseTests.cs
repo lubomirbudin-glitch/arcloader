@@ -29,7 +29,7 @@ public class ReportPauseTests
         Assert.Equal((30.0, 4.0), (again.CopyPausedSeconds!.Value, again.VerifyPausedSeconds!.Value));
         Assert.Contains("Copy:        10.0 s  100 MB/s\n", r.Summary);
         Assert.Contains("Paused:      34.0 s (not in the speeds)\n", r.Summary);
-        Assert.Contains("pozastaveno · mimo rychlosti", HtmlReport.Render(r));
+        Assert.Contains("paused · not in the speeds", HtmlReport.Render(r));
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class ReportPauseTests
     [Fact]
     public void CardChangedWhilePaused_CzechInHtml()
     {
-        Assert.Equal("karta se během pozastavení vyměnila nebo vytáhla", HtmlReport.ErrorText(OffloadEngine.CardChangedWhilePaused));
+        Assert.Equal("the card was swapped or removed while paused", HtmlReport.ErrorText(OffloadEngine.CardChangedWhilePaused));
         Assert.Equal("card changed while paused", OffloadEngine.CardChangedWhilePaused);
     }
 }

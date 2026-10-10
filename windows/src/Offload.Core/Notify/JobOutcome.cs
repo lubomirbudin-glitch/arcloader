@@ -20,7 +20,7 @@ public sealed record JobOutcome(OutcomeKind Kind, string Title, string Message, 
         _ => ["white_check_mark"],
     };
 
-    /// "Kartu lze vyjmout" is a Windows notification only (spec 4.3), not sent to the phone.
+    /// "Safe to eject" is a Windows notification only (spec 4.3), not sent to the phone.
     public bool ForPhone => Kind != OutcomeKind.Ejectable;
 }
 
@@ -36,57 +36,57 @@ public static class JobOutcomes
         {
             var note = status.Note ?? Msg.NothingNew;
             return status.Warning != null || !status.SafeToFormat
-                ? Attention(card, $"{note} {FirstLine(status.Warning ?? "Záloha není celá ověřená.")}", $"{note} Vyžaduje pozornost — podrobnosti v aplikaci.")
-                : new JobOutcome(OutcomeKind.Done, $"Offload: {card} hotovo", note, note == Msg.NothingNew ? note : "Hotovo.");
+                ? Attention(card, $"{note} {FirstLine(status.Warning ?? "The backup is not fully verified.")}", $"{note} Needs attention — details in the app.")
+                : new JobOutcome(OutcomeKind.Done, $"Offload: {card} done", note, note == Msg.NothingNew ? note : "Done.");
         }
         if (report == null)
-            return Error(card, status.Error ?? "Kopie se nepodařila.", "Chyba před kopírováním — karta NENÍ zálohovaná.");
+            return Error(card, status.Error ?? "The copy failed.", "Error before copying — the card is NOT backed up.");
         if (!report.Success)
         {
-            var failed = $"{report.FailedFiles.Count} {Texts.Plural(report.FailedFiles.Count, "soubor selhal", "soubory selhaly", "souborů selhalo")} — karta NENÍ zálohovaná.";
+            var failed = $"{Texts.N(report.FailedFiles.Count, "file")} failed — the card is NOT backed up.";
             return Error(card, failed, failed);
         }
-        if (!report.Verified) return Attention(card, "Kopie je hotová, ale NEOVĚŘENÁ.", "Kopie je hotová, ale NEOVĚŘENÁ.");
-        // Final review, item 5: "ověřená" only when the card may be formatted (every copy verified and the results in
-        // every folder) — else the copy is only "hotová".
-        var copy = status.SafeToFormat ? "Kopie je ověřená" : "Kopie je hotová";
+        if (!report.Verified) return Attention(card, "The copy is done but NOT VERIFIED.", "The copy is done but NOT VERIFIED.");
+        // Final review, item 5: "verified" only when the card may be formatted (every copy verified and the results in
+        // every folder) — else the copy is only "done".
+        var copy = status.SafeToFormat ? "The copy is verified" : "The copy is done";
         if (status.ProxiesFailed > 0)
         {
-            var proxies = $"{copy}, ale {status.ProxiesFailed} {Texts.Plural(status.ProxiesFailed, "proxy selhala", "proxy selhaly", "proxy selhalo")}.";
+            var proxies = $"{copy}, but {Texts.N(status.ProxiesFailed, "proxy", "proxies")} failed.";
             return Attention(card, proxies, proxies);
         }
         if (status.Phase == JobPhase.Failed)
-            return Attention(card, $"{copy}, ale zpracování po kopii selhalo.", $"{copy}, ale zpracování po kopii selhalo.");
+            return Attention(card, $"{copy}, but the processing after the copy failed.", $"{copy}, but the processing after the copy failed.");
         if (status.Warning != null)
-            return Attention(card, $"{copy}, ale: {FirstLine(status.Warning)}", $"{copy}, ale vyžaduje pozornost — podrobnosti v aplikaci.");
-        // R5, ruling I2 (plan 10): "hotovo" only when every copy is verified (the whole backup for an append or a repair).
+            return Attention(card, $"{copy}, but: {FirstLine(status.Warning)}", $"{copy}, but needs attention — details in the app.");
+        // R5, ruling I2 (plan 10): "done" only when every copy is verified (the whole backup for an append or a repair).
         if (!status.SafeToFormat)
-            return Attention(card, "Kopie je hotová, ale kartu zatím neformátujte — není celá ověřená.", "Kopie je hotová, ale není celá ověřená.");
+            return Attention(card, "The copy is done, but do not format the card yet — it is not fully verified.", "The copy is done but not fully verified.");
         int disks = report.Destinations.Count;
-        var done = $"Ověřeno na {disks} {Texts.Plural(disks, "disku", "discích", "discích")} — kartu lze formátovat." + (status.ProxiesDone > 0 ? $" Proxy: {status.ProxiesDone} hotovo." : "");
-        return new JobOutcome(OutcomeKind.Done, $"Offload: {card} hotovo", done, done);
+        var done = $"Verified on {Texts.N(disks, "disk")} — the card is safe to format." + (status.ProxiesDone > 0 ? $" Proxies: {status.ProxiesDone} done." : "");
+        return new JobOutcome(OutcomeKind.Done, $"Offload: {card} done", done, done);
     }
 
-    /// At the end of stage 1 when everything is copied (R5 "Lze vyjmout") and stage 2 still runs (Windows only); else
+    /// At the end of stage 1 when everything is copied (R5 "Safe to eject") and stage 2 still runs (Windows only); else
     /// null. With verify-in-proxy (plan 10) the copies are verified only with the proxies: formatting waits.
     public static JobOutcome? CopyDone(string card, JobStatus status, bool proxies) =>
         status.SafeToEject && !status.Phase.IsFinished()
-            ? new JobOutcome(OutcomeKind.Ejectable, $"Offload: {card} — kartu lze vyjmout",
-                status.SafeToFormat ? (proxies ? "Proxy se ještě renderují." : "Klipy se ještě zpracovávají.")
-                    : "Ověřuje se s proxy — formátovat až po dokončení.", "")
+            ? new JobOutcome(OutcomeKind.Ejectable, $"Offload: {card} — safe to eject",
+                status.SafeToFormat ? (proxies ? "Proxies are still rendering." : "Clips are still being processed.")
+                    : "Verifying with the proxies — format only after it finishes.", "")
             : null;
 
     /// Ruling I2 (plan 10): the success chime (and nothing less) — every copy verified everywhere (SafeToFormat) and
     /// nothing to look at: a warning, also a note of the verification (e.g. read through the Windows cache, ruling C2),
-    /// is an orange line and "vyžaduje pozornost", as Final says it — never the success sound.
+    /// is an orange line and "needs attention", as Final says it — never the success sound.
     public static bool Chime(JobStatus status) =>
         status.SafeToFormat && status.Warning == null && status.Phase is not (JobPhase.Cancelled or JobPhase.Failed);
 
     static JobOutcome Attention(string card, string message, string phone) =>
-        new(OutcomeKind.Attention, $"Offload: {card} — vyžaduje pozornost", message, phone);
+        new(OutcomeKind.Attention, $"Offload: {card} — needs attention", message, phone);
 
     static JobOutcome Error(string card, string message, string phone) =>
-        new(OutcomeKind.Error, $"Offload: {card} — CHYBA", message, phone);
+        new(OutcomeKind.Error, $"Offload: {card} — ERROR", message, phone);
 
     static string FirstLine(string text) => text.Split('\n')[0].Trim();
 }

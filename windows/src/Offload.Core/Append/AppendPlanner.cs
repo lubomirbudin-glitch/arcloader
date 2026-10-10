@@ -41,12 +41,12 @@ public sealed class AppendPlan
 /// written); throws OffloadError.Preflight before anything is written when an append is not safe.
 public static class AppendPlanner
 {
-    static readonly CultureInfo Cs = CultureInfo.GetCultureInfo("cs-CZ");
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     /// "D:" for "D:\Zaloha\2026-10-06\A001", the share for a UNC path.
     public static string Disk(string cardPath) => (Path.GetPathRoot(cardPath) ?? cardPath).TrimEnd('\\');
 
-    static string When(DateTime utc) => utc.ToLocalTime().ToString("d. M. H:mm", Cs);
+    static string When(DateTime utc) => utc.ToLocalTime().ToString("MM-dd HH:mm", Inv);
 
     public static AppendPlan Plan(string source, IReadOnlyList<string> cardPaths, CancellationToken ct = default) =>
         Plan(source, cardPaths, ct, sourceFilesystem: null);
@@ -97,7 +97,7 @@ public static class AppendPlanner
         if (generations.Distinct().Count() > 1)
         {
             var details = string.Join(", ", paths.Select((p, i) =>
-                i == 0 ? $"{Disk(p)} má {generations[i]} {Generace(generations[i])} MHL" : $"{Disk(p)} {generations[i]}"));
+                i == 0 ? $"{Disk(p)} has {Desktop.Texts.N(generations[i], "MHL generation")}" : $"{Disk(p)} {generations[i]}"));
             throw OffloadError.Preflight(PreflightCode.AppendDiverged, Msg.AppendDiverged(details));
         }
         // Ruling I1: the numbered reports and the chain must agree, or the next number could hit an earlier append's
@@ -184,7 +184,7 @@ public static class AppendPlanner
             }
             else if (goodInRecord > 0 && goodInRecord < paths.Count && present < paths.Count)
                 throw OffloadError.Preflight(PreflightCode.AppendDiverged,
-                    Msg.AppendDiverged($"{f.RelPath} je jen na {string.Join(", ", paths.Where(p => File.Exists(Layout.Join(p, f.RelPath))).Select(Disk))}"));
+                    Msg.AppendDiverged($"{f.RelPath} is only on {string.Join(", ", paths.Where(p => File.Exists(Layout.Join(p, f.RelPath))).Select(Disk))}"));
         }
         // Ruling I3 (fix round 1, item 2): not one file of the card is in the backup — another card, never mixed into it.
         if (scan.Files.Count > 0 && known == 0) throw OffloadError.Preflight(PreflightCode.AppendOtherCard, Msg.AppendOtherCard);
@@ -252,18 +252,16 @@ public static class AppendPlanner
         return (roots, date!, name!);
     }
 
-    static string Generace(int n) => Desktop.Texts.Plural(n, "generaci", "generace", "generací");
-
     static IEnumerable<string> Ancestors(string rel)
     {
         for (int i = rel.IndexOf('/'); i >= 0; i = rel.IndexOf('/', i + 1)) yield return rel[..i];
     }
 
-    /// "CLIP/A001C003.mov (karta 1,2 GB · 6. 10. 9:14, D: 1,1 GB · 6. 10. 9:10)"
+    /// "CLIP/A001C003.mov: different size or date (card 1.2 GB · 10-06 09:14, D: 1.1 GB · 10-06 09:10)"
     internal static string Conflict(SourceFile card, string disk, long size, DateTime modifiedUtc)
     {
         // A difference smaller than the rounding ("100 KB" on both sides) shows the exact bytes instead.
-        var (a, b) = Format.BytesCs(card.Size) == Format.BytesCs(size) && card.Size != size ? ($"{card.Size} B", $"{size} B") : (Format.BytesCs(card.Size), Format.BytesCs(size));
-        return $"{card.RelPath}: jiná velikost nebo datum (karta {a} · {When(card.ModifiedUtc)}, {disk} {b} · {When(modifiedUtc)})";
+        var (a, b) = Format.BytesShort(card.Size) == Format.BytesShort(size) && card.Size != size ? ($"{card.Size.ToString(Inv)} B", $"{size.ToString(Inv)} B") : (Format.BytesShort(card.Size), Format.BytesShort(size));
+        return $"{card.RelPath}: different size or date (card {a} · {When(card.ModifiedUtc)}, {disk} {b} · {When(modifiedUtc)})";
     }
 }

@@ -2,16 +2,16 @@ using Offload.Core.History;
 
 namespace Offload.Core.Desktop;
 
-/// One card row for the name resolution: `Typed` is what the user wrote in "Název složky" (may be empty).
+/// One card row for the name resolution: `Typed` is what the user wrote in "Folder name" (may be empty).
 public sealed record CardNameInput(string Key, string? Typed, CardInsight? Insight, string Fallback);
 
-/// What the empty "Název složky" field shows (spec 2.3) — and what Start uses when nothing is typed.
+/// What the empty "Folder name" field shows (spec 2.3) — and what Start uses when nothing is typed.
 public static class CardNaming
 {
     /// The clips' reel first; a card history does not know gets "next in line" for the date folder; otherwise
     /// `fallback` (the volume label or folder name). `Hint`: the grey line under the field, or null.
     /// `taken`: names already typed or suggested for other cards — "next in line" goes past them. `project`: the active
-    /// project (null = "Bez projektu") — "next in line" counts the cards of that project only (spec 2.3, 4.1).
+    /// project (null = "No project") — "next in line" counts the cards of that project only (spec 2.3, 4.1).
     public static (string Name, string? Hint) Placeholder(bool suggestFromClips, CardInsight? insight,
         IReadOnlyList<HistoryEntry>? history, string date, string today, string fallback, IEnumerable<string>? taken = null,
         string? project = null)

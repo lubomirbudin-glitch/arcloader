@@ -53,7 +53,7 @@ public class CliOutputsTests
 
         var bad = Run(CopyCommand.Create(), card, "-d", dir.Sub("d2"), "--no-history", "--hash", "md5");
         Assert.Equal(1, bad.Exit);
-        Assert.Contains("Chyba: Neznámý kontrolní součet „md5“ — použijte xxh64 nebo both (xxh64 + MD5).", bad.Err);
+        Assert.Contains("Error: Unknown checksum \"md5\" — use xxh64 or both (xxh64 + MD5).", bad.Err);
     }
 
     // Spec 3.3: CSV by default, `--no-clip-list` leaves it out, `--ale` adds the Avid list.
@@ -86,6 +86,6 @@ public class CliOutputsTests
         Assert.Contains("xxh64 in RAM", md5.Out);
         var bad = Run(BenchCommand.Create(), "--hash", "sha1");
         Assert.Equal(1, bad.Exit);
-        Assert.Contains("Neznámý kontrolní součet „sha1“", bad.Err);
+        Assert.Contains("Unknown checksum \"sha1\"", bad.Err);
     }
 }
