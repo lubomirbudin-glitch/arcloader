@@ -105,7 +105,10 @@ try {
     # 1) Archive release windows-v<version>.
     $versionTag = "windows-v$version"
     $title = "Offload pro Windows $version" + $(if ($Channel -eq 'dev') { ' (vývojová)' } else { '' })
-    if (Test-Release $versionTag) {
+    $released = (Test-Release $versionTag) -and -not [bool]((& gh release view $versionTag --repo $Repo --json isPrerelease | ConvertFrom-Json).isPrerelease)
+    if ($Channel -eq 'dev' -and $released) {
+        Write-Host "$versionTag is already a stable release - archive left as it is"
+    } elseif (Test-Release $versionTag) {
         Invoke-Gh release upload $versionTag $zip --repo $Repo --clobber
         $flags = @('--title', $title, '--notes-file', $notesFile, '--latest=false')
         if ($Channel -eq 'stable') { $flags += '--prerelease=false' }
