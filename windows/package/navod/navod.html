@@ -594,8 +594,9 @@ offload“</span>. Každá spuštěná karta dostane vlastní kartu úlohy, nejn
 <b class="ui">Denní report…</b> a řádek pro každou dnes zálohovanou kartu (<span class="q">„A034_ARRI · 256 GB · 18:12 ·
 ✓ 2 kopie ověřeny“</span>, oranžově <span class="q">„! neověřeno“</span>, červeně <span class="q">„✕ s chybami (3 soubory)“</span>).
 Záložka <b class="ui">Historie karet</b> ukáže totéž pro všechny dny (<span class="q">„Dnes“</span>, <span class="q">„Včera“</span>,
-<span class="q">„4. 10. 2026“</span>; nejvýš 300 posledních karet). Obojí je z historie offloadů v tomto počítači. Podrobně
-o kartách úloh v kapitole 8.</p>
+<span class="q">„4. 10. 2026“</span>; nejvýš 300 posledních karet). Obojí je z historie offloadů v tomto počítači. Zaškrtnutím
+karet (i z různých dnů a disků) a odkazem <b class="ui">Souhrnný report (3)…</b> vznikne jeden souhrnný report z nich
+(kapitola 7); <b class="ui">Zrušit výběr</b> zaškrtnutí zruší. Podrobně o kartách úloh v kapitole 8.</p>
 
 <h3>Nastavení</h3>
 <p>Stránka <b class="ui">Nastavení</b> se otevře místo obou sloupců (fronta dál běží); <b class="ui">‹ Zpět</b>,
@@ -1017,6 +1018,21 @@ a <b>LUTy</b>. Vedle je seznam klipů celého dne <code>&lt;datum&gt;_clips.csv<
 Vypíná se volbou <b class="ui">Denní report po každé kartě</b> (Nastavení → Report). Ručně: <b class="ui">Denní report…</b>
 (pod frontou u DNES, v záložce Historie karet nebo v Nastavení → Report) a vyberte složku dne na cíli (nebo složku karty v ní) — report se vytvoří a otevře. Dvě úlohy, které skončí zároveň,
 se vystřídají; každý cíl má report podle toho, co je na něm.</p>
+<h3>Souhrnný report z vybraných záloh</h3>
+<p>V záložce <b class="ui">Historie karet</b> (nebo u DNES) zaškrtněte karty, které do přehledu patří — třeba všechny karty
+natáčení z několika dnů a disků — a klikněte na <b class="ui">Souhrnný report (N)…</b>. Offload se zeptá, jestli report uložit
+i na vybraný disk (třeba ten, který jde do střižny); na tomto počítači se uloží vždy, do
+<code>Dokumenty\Offload reporty\souhrn\&lt;datum&gt;_&lt;čas&gt;_souhrn.html</code> a <code>.pdf</code> (složka kopie reportu
+z Nastavení → Report), a HTML se otevře. Existující soubor se nikdy nepřepíše — nový dostane <code>_2</code>, <code>_3</code>…;
+do složky karty se zálohou ani na kartu ve čtečce se nezapisuje.</p>
+<p>V reportu (bez náhledů, A4 na šířku): natáčecí dny; za každý den, každou kartu a celkem počet klipů a souborů, velikost,
+<b>stopáž</b> (součet délek klipů), <b>první a poslední klapka</b> — startovní timecode prvního a posledního nahraného klipu
+(pořadí podle času záznamu z kamery, a když ho klipy nemají, podle čísla klipu A001C001…; u ALEXY je to TC denní doby, tedy
+skutečný čas), kamery a stav ověření; nakonec <b>Kde je co zálohované</b> — každý disk karty s cestou, jestli je připojený,
+jestli je ověřený a jestli je kopie reportu na tomto počítači. Údaje se čtou z reportů na discích (i doplnění a opravy);
+disk, který už odešel, nahradí kopie reportu na tomto počítači. Když není ani ta, karta v souhrnu zůstane s poznámkou
+<span class="q">„report není k dispozici“</span> a s počtem souborů a velikostí z historie. Z příkazové řádky:
+<code>offload summary-report &lt;složky karet nebo dne&gt; [-o &lt;složka&gt;]</code>.</p>
 <p>Ve složce <code>ascmhl</code> vedle je ASC MHL (verze 2) se součty všech souborů — lze ji ověřit nástroji třetích stran
 (<code>ascmhl</code>, Silverstack, ShotPut). Snímky z reportu jsou jen v HTML a PDF, ne v JSON.</p>
 </section>
