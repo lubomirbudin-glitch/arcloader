@@ -183,6 +183,31 @@ public static class SonyXml
             return null;
         }
     }
+
+    /// The rate the camera recorded at (task 2026-10-10), from the same sidecar: `<VideoFrame captureFps="119.88p"
+    /// formatFps="23.98p"/>` (S&Q: captureFps is the capture rate, formatFps the file's) → "120000/1001", written like
+    /// ClipInfo.FrameRate. "59.94i" counts frames, not fields (→ 29.97). Null without the XML or the attribute.
+    public static string? CaptureFrameRate(string clipFullPath)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(clipFullPath);
+            if (dir == null) return null;
+            var xml = Path.Combine(dir, Path.GetFileNameWithoutExtension(clipFullPath) + "M01.XML");
+            if (!System.IO.File.Exists(xml)) return null;
+            var frame = System.Xml.Linq.XDocument.Load(xml).Descendants().FirstOrDefault(e => e.Name.LocalName == "VideoFrame");
+            if (frame?.Attribute("captureFps")?.Value.Trim().ToLowerInvariant() is not { Length: > 0 } text) return null;
+            bool interlaced = text.EndsWith('i');
+            if (!double.TryParse(text.TrimEnd('p', 'i'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var fps)
+                || fps <= 0)
+                return null;
+            return RawBackends.Rational(interlaced ? fps / 2 : fps);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 }
 
 /// Which LUT a clip gets (spec: luts design §3). Pure rules over metadata; never throws.

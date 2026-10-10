@@ -945,7 +945,7 @@ když už je hotové, jinak HTML).</p>
 <ul>
   <li><b>Hlavička</b>: název karty, štítek stavu <span class="pill ok">OVĚŘENO</span>, <span class="pill warn">ZKOPÍROVÁNO — NEOVĚŘENO</span>
     nebo <span class="pill bad">CHYBA</span>, datum a čas začátku a konce.</li>
-  <li><b>Souhrn</b>: počet souborů, objem dat, počet klipů a jejich celková délka, doba a rychlost kopírování a ověření, kontrolní součet (XXH64, nebo XXH64 + MD5).
+  <li><b>Souhrn</b>: počet souborů, objem dat, počet klipů a jejich celková stopáž, doba a rychlost kopírování a ověření, kontrolní součet (XXH64, nebo XXH64 + MD5).
     Když byla úloha pozastavená, je tu navíc <span class="q">„pozastaveno · mimo rychlosti“</span> — doba pauzy se do časů ani rychlostí nepočítá.
     Report opravy (<b class="ui">Zkopírovat znovu</b>, kapitola 8) má v hlavičce <span class="q">„oprava (generace 2)“</span>.</li>
   <li><b>Cíle</b>: tabulka disků — disk, složka, souborový systém, počet souborů OK a chyb. Pod ní zdroj a jeho souborový systém.</li>
@@ -953,8 +953,13 @@ když už je hotové, jinak HTML).</p>
     <span class="q">„cíl 2: nesouhlasí kontrolní součet (cíl …, karta …)“</span>, <span class="q">„jiná velikost: …“</span>,
     <span class="q">„zápis selhal“</span>. V <code>offload_report.json</code> zůstávají anglicky (sdílí ho Mac verze).</li>
   <li><b>Klipy</b>: u každého klipu tři snímky, název (u proxy z kamery <span class="q">„(proxy kamery)“</span>), cesta na kartě,
-    formát a kodek, rozlišení, FPS, délka, timecode, počet zvukových kanálů, velikost a stav proxy
+    formát a kodek, rozlišení, FPS, stopáž, timecode, počet zvukových kanálů, velikost a stav proxy
     (<span class="txt-ok">hotovo</span>, <span class="txt-bad">chyba</span>, <span class="txt-warn">nepodporováno</span>, přeskočeno).
+    <b>FPS</b> je snímací rychlost z metadat prvního snímku klipu; když se liší od přehrávací rychlosti souboru (off-speed,
+    S&amp;Q), je tam obojí na dvou řádcích: <span class="q">„35 fps“</span> a pod tím menší <span class="q">„přehrávání 24“</span>. Snímací rychlost umí ARRIRAW (přes art-cmd),
+    Blackmagic RAW, RED (přes REDline; přehrávací je projektová rychlost) a Sony (soubor <code>M01.XML</code> vedle klipu).
+    Canon zatím ukazuje jen přehrávací rychlost (chybí vzorek metadat), stejně jako ostatní video (iPhone …). <b>Stopáž</b> = počet snímků ÷ přehrávací rychlost, tedy délka klipu ve střižně (u 35 fps
+    v projektu 24 delší než skutečný čas natáčení).
     Pod tabulkou řádek s nastavením proxy, např. <span class="q">„Proxy: H.264 (h264_nvenc), 1080p, výřez 1.85, LUT: automaticky
     podle kamery → _PROXY/ · také ve složce G:\Proxy“</span>.</li>
   <li><b>Všechny soubory</b>: každý soubor s velikostí, kontrolním součtem (s MD5 i sloupec md5) a stavem na každém cíli
@@ -993,15 +998,17 @@ U R3D a ARRIRAW se snímky berou z hotové proxy, takže bez proxy je tyto klipy
 
 <h3>Seznam klipů (CSV a Avid ALE)</h3>
 <p>Při každém zápisu reportu vznikne <code>&lt;karta&gt;_clips.csv</code>: jeden řádek na klip (proxy nahrané kamerou se
-neuvádějí), sloupce <code>Clip Name, File Name, Path, Card, Camera, Reel, Start TC, Duration, FPS, Resolution, Codec,
-LUT, Size (bytes), XXH64, MD5</code> (anglicky, jak je čte Resolve). Kódování UTF-8, oddělovač čárka. Do Resolve se
+neuvádějí), sloupce <code>Clip Name, File Name, Path, Card, Camera, Reel, Start TC, Duration, FPS, Capture FPS,
+Resolution, Codec, LUT, Size (bytes), XXH64, MD5</code> (anglicky, jak je čte Resolve; <code>FPS</code> je přehrávací
+rychlost, <code>Capture FPS</code> snímací). Kódování UTF-8, oddělovač čárka. Do Resolve se
 načte přes <i>File → Import Metadata To → Media Pool</i>. <b>Excel</b> s českým nastavením čeká středník: soubor
 otevřete přes <i>Data → Z textu/CSV</i> a zvolte oddělovač <i>Čárka</i>. Hodnoty začínající <code>=</code>,
 <code>+</code>, <code>-</code> nebo <code>@</code> se neupravují (úprava by rozbila import do Resolve) — Excel je může
 brát jako vzorec.</p>
 <p>Se zapnutou volbou <b class="ui">Seznam klipů pro Avid (ALE)</b> vznikne i <code>&lt;karta&gt;_clips.ale</code>
 (<i>File → Input → Import</i> v Media Composeru). ALE má jednu snímkovou frekvenci, takže karta se smíšenými fps dostane
-soubor na každou: <code>A001_clips_25.ale</code>, <code>A001_clips_23.976.ale</code>. Bez analýzy klipů mají řádky jen
+soubor na každou: <code>A001_clips_25.ale</code>, <code>A001_clips_23.976.ale</code> (podle přehrávací rychlosti; snímací
+je ve sloupci <code>Sensor_fps</code> — stejně ho jmenují ALE z kamer ARRI, v Avidu se objeví jako vlastní sloupec binu). Bez analýzy klipů mají řádky jen
 název, cestu, cívku, velikost a součty. ALE je UTF-8 <b>bez</b> BOM; starší verze Avidu mohou češtinu (diakritiku)
 přečíst špatně.</p>
 <p>Po doplnění seznamy pokrývají všechny generace karty. Jsou to odvozené soubory: přepisují se celé; seznam otevřený
@@ -1010,8 +1017,8 @@ v Excelu se nepřepíše (zapíše se jen do logu) a úloha tím neselže. Sezna
 <h3>Denní report</h3>
 <p>Po každé úloze (i doplnění a zrušené) se na každém cíli vytvoří znovu přehled celého dne
 <code>&lt;cíl&gt;\&lt;datum&gt;\_REPORT\&lt;datum&gt;_day_report.html</code> a <code>.pdf</code>: dlaždice (karty, soubory,
-data, klipy, celková délka, ověřené karty <span class="q">„7 / 8“</span>), tabulka karet (čas, soubory, data, klipy, délka,
-kamery, ověření, chyby, proxy hotovo / selhalo, LUTy, počet generací po doplnění), sekce <b>Problémy</b> (selhané soubory,
+data, klipy, celková stopáž, ověřené karty <span class="q">„7 / 8“</span>), tabulka karet (čas, soubory, data, klipy, stopáž,
+FPS klipů jako v reportu karty, kamery, ověření, chyby, proxy hotovo / selhalo, LUTy, počet generací po doplnění), sekce <b>Problémy</b> (selhané soubory,
 neověřené karty, nečitelné reporty, složka karty <span class="q">„bez reportu (probíhá, nebo byl přerušen)“</span>)
 a <b>LUTy</b>. Vedle je seznam klipů celého dne <code>&lt;datum&gt;_clips.csv</code> (a <code>.ale</code>).
 Vypíná se volbou <b class="ui">Denní report po každé kartě</b> (Nastavení → Report). Ručně: <b class="ui">Denní report…</b>

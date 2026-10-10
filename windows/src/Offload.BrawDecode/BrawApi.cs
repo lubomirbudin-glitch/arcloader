@@ -342,6 +342,9 @@ internal readonly unsafe struct BrawFrame(nint ptr)
 {
     public nint Ptr => ptr;
 
+    /// Slot 13 GetSensorRate(float*): the rate the frame was captured at; 0 when the SDK does not say.
+    public float SensorRate => Com.Get<float>(ptr, 13);
+
     /// Slot 9.
     public int SetResolutionScale(Scale scale) => ((delegate* unmanaged[Stdcall]<nint, uint, int>)Com.Slot(ptr, 9))(ptr, (uint)scale);
 

@@ -142,6 +142,22 @@ Hodnoty výčtů:
 - `clips[].info.colorScienceGenOriginal` (volitelné, Windows od 0.4.0): u BRAW Film dekódovaného s převodem Gen 4 → Gen 5
   generace, ve které byl klip natočený (`colorScienceGen` je pak účinná, `5`); chybí, když se převod nepodařil (klip se
   dekódoval tak, jak byl natočený). Mac ignoruje.
+- `clips[].info.captureFrameRate` (volitelné, string; Windows od 0.8.0, Mac ⏳ naplánováno — stejný klíč a tvar):
+  **snímací** rychlost klipu z metadat jeho **prvního snímku**, zapsaná stejně jako `frameRate` (racionální číslo jako
+  pro ffmpeg: `"35"`, `"24000/1001"`, `"120000/1001"`; celé číslo bez `/1`). `frameRate` zůstává **přehrávací** rychlost
+  souboru a `duration` = počet snímků ÷ `frameRate` (stopáž ve střižně). Zdroje: ARRIRAW `frameBasedMetadata` →
+  `Sensor State.sensorSampleRate` prvního snímku z `art-cmd export --duration 1` (ALEXA 35 natočená 35 fps: `"35"`, přitom
+  `nativePictureEssenceDescriptor.file.sampleRate` a `frameRate` = `"24"`; hodnota v tisícinách — `35000`, `23976` — se
+  vydělí 1000 a zapíše jako `"35"`, `"24000/1001"`); BRAW `sensorRate` z `braw-decode --info`
+  (Windows: `IBlackmagicRawFrame::GetSensorRate` snímku 0; nový klíč na konci řádku `--info`, `"sensorRate":48.000000`,
+  chybí, když ho SDK neřekne — sdílené klíče se nemění); RED snímací = `Record FPS` z `REDline --printMeta 1`, přehrávací = projektová
+  (`Project FPS` / `Timebase`, jinak klíč přesně `FPS` nebo `Frame Rate` — ne jiný klíč s „fps“ v názvu); bez projektové
+  se jako dřív bere record fps pro obojí; Sony `M01.XML` `<VideoFrame captureFps="119.88p"
+  formatFps="23.98p"/>` (S&Q; `i` = půlsnímky, `59.94i` → `30000/1001`). **Canon: zatím jen přehrávací rychlost (chybí vzorek
+  metadat)** — klíč se u Canonu nezapisuje. Ostatní video přes ffprobe snímací rychlost v tom, co se čte, nemá. **Zapisuje se, jen když je známá** (i když se rovná `frameRate`); chybí-li
+  (starší report, ffprobe), platí snímací = přehrávací. HTML/PDF ve sloupci FPS: dva řádky `35 fps` / `přehrávání 24`
+  (menší, šedě), když se liší, jinak jen `24`; denní report a ostatní místa `35 fps · přehrávání 24`; sloupec délky se jmenuje „Stopáž“. TXT: řádek `Frame rate:  35 fps capture, 24 playback (2 clips); 25 fps
+  (1 clip)`.
 
 Náhledy klipů (JPEG) se do JSON neukládají — jsou jen v HTML a PDF.
 
@@ -305,14 +321,17 @@ klipy nalezené v souborech, metadata prázdná.
 s čárkou, uvozovkou nebo koncem řádku v uvozovkách, uvozovky zdvojené), hlavička vždy, sloupce v tomto pořadí:
 `Clip Name`, `File Name` (hlavní soubor s příponou), `Path` (relativní, `/`), `Card` (složka karty), `Camera`, `Reel`,
 `Start TC` (jak ho dá zdroj, `;` u drop-frame; prázdné bez TC), `Duration` (`HH:MM:SS:FF` v nominálních snímcích; bez fps
-`H:MM:SS`), `FPS` (invariantně, `23.976`, `25`, `29.97`), `Resolution` (`3840x2160`), `Codec` (u RAW formát, např.
+`H:MM:SS`; počítá se z přehrávací rychlosti), `FPS` (přehrávací, invariantně, `23.976`, `25`, `29.97`), `Capture FPS` (snímací z
+`clips[].info.captureFrameRate`, Windows od 0.8.0; bez ní totéž co `FPS`; např. `35` u `FPS` `24`), `Resolution` (`3840x2160`), `Codec` (u RAW formát, např.
 `Blackmagic RAW`), `LUT` (název použitého LUTu), `Size (bytes)`, `XXH64` a `MD5` (hlavního souboru; u vícedílných klipů
 prvního dílu; MD5 prázdné bez MD5). Hodnoty začínající `=`, `+`, `-`, `@` se neupravují.
 
 **ALE** (`<karta>_clips.ale`, `<datum>_clips.ale`): UTF-8 **bez** BOM (starší verze Avidu mohou diakritiku přečíst špatně), CRLF, tabulátory (tabulátor a konec řádku uvnitř
 hodnoty → mezera). Hlavička `Heading` / `FIELD_DELIM TABS` / `VIDEO_FORMAT` (nejčastější výška: `1080`, `720`, jinak
 `CUSTOM`) / `AUDIO_FORMAT 48khz` / `FPS`, pak `Column` se sloupci `Name, Tape, Start, End, Tracks, Source File, Camera,
-LUT, Resolution, Codec, XXH64, MD5` a `Data`. `Tape` = cívka, `End` = začátek + délka (výlučně, drop-frame počítá jako
+Sensor_fps, LUT, Resolution, Codec, XXH64, MD5` a `Data`. `Sensor_fps` (Windows od 0.8.0) = snímací rychlost jako `Capture FPS`
+v CSV — Avid pro ni vlastní sloupec nemá, vlastní sloupce ALE se v binu objeví jako uživatelské; jméno je stejné jako
+v ALE z kamer ARRI, takže se sejdou v jednom sloupci. `FPS` v hlavičce a `End` počítají s přehrávací rychlostí. `Tape` = cívka, `End` = začátek + délka (výlučně, drop-frame počítá jako
 kamera), bez TC začátek `00:00:00:00`, `Tracks` = `V` + `A1…An` podle zvukových kanálů (nejvýš 8). ALE má jedno FPS:
 smíšené fps → soubor na každé, `<název>_clips_25.ale`, `<název>_clips_23.976.ale` (klip bez fps patří k nejčastějšímu;
 když fps nezná žádný klip, hlavička `FPS 25`). ALE, které se při novém zápisu už nevytváří (změnily se frekvence), se smaže — jen když ALE je zapnuté nebo už existuje. Seznam, který je vypnutý, ale už je ve složce (CSV i ALE, u ALE všechny soubory frekvencí), se při dalším zápisu přesto přepíše (odvozený soubor: jinak by ukazoval jen dřívější generace); nikdy se nemaže a nově se nevytvoří.
@@ -330,6 +349,8 @@ Pravidla (Windows od 0.3.0):
 
 - Denní report nikdy nesahá na soubory ověření v téže `_REPORT` (`*_verify_*.json/.html/.pdf`) — zapisuje jen svoje názvy
   (`_day_report.html/.pdf`, `<datum>_clips.csv`, `<datum>_clips.ale` a `<datum>_clips_<fps>.ale`; stejně jako u karty smaže ALE, které se už nevytváří). Kořen disku, složka karty ani složka bez karty s reportem se za den nepovažují (česká chyba, nic se nezapíše).
+- Tabulka karet (Windows od 0.8.0): sloupec „Stopáž“ (součet délek klipů = snímky ÷ přehrávací fps; dlaždice „celková
+  stopáž“) a „FPS“ — rychlosti klipů karty, každá jednou, jako v reportu karty (`35 fps · přehrávání 24`, `25`).
 - Jen podsložky s `_REPORT\` nebo `ascmhl\` jsou karty; ostatní (např. `SOUND`) mají řádek „jiná složka (bez reportu)“.
 - `<karta>\_REPORT` vzniká hned na začátku kopie (prázdná), aby byla rozpracovaná nebo přerušená karta vidět; denní
   report ji ukáže jako „bez reportu (probíhá, nebo byl přerušen)“. Prázdný `_REPORT` ostatní funkce (ověření, doplnění,

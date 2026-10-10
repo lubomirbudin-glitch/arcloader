@@ -183,7 +183,7 @@ internal static class Decoder
         var s = slots[0];
         var facts = new ClipFacts(
             s.Ok ? s.Width : clip.Width, s.Ok ? s.Height : clip.Height, clip.Width, clip.Height, clip.FrameRate, frames,
-            clip.TimecodeForFrame(0) ?? "", clip.CameraType ?? "", gamma, gamut, gen, gen5.Ptr != 0 ? original : null);
+            clip.TimecodeForFrame(0) ?? "", clip.CameraType ?? "", gamma, gamut, gen, gen5.Ptr != 0 ? original : null, sink.SensorRate);
         var bytes = Encoding.UTF8.GetBytes(InfoJson.Format(facts));
         return Write(stdout, bytes, bytes.Length) ? Ok : Closed(stderr);
     }
@@ -303,6 +303,11 @@ internal sealed unsafe class FrameSink(Scale scale, TextWriter stderr) : IBrawCa
 
     public int Errors => Volatile.Read(ref errors);
 
+    /// The rate frame 0 was captured at (task 2026-10-10): IBlackmagicRawFrame::GetSensorRate when frame 0 is read
+    /// (--info reads it); null before that and when the SDK says 0 (unknown).
+    public float? SensorRate => sensorRate > 0 ? sensorRate : null;
+    volatile float sensorRate;
+
     /// Called between batches only (no jobs in flight). Clears every slot's Ok (the Mac's `s.ok = false`): a slot
     /// the SDK does not fill in this batch must not pass as decoded with the previous batch's frame.
     public void Begin(FrameSlot[] batch, ulong firstFrame)
@@ -326,6 +331,7 @@ internal sealed unsafe class FrameSink(Scale scale, TextWriter stderr) : IBrawCa
         {
             nint user = job.GetUserData();
             var frame = new BrawFrame(framePtr);
+            if (result == Com.S_OK && user == 0 && framePtr != 0) sensorRate = frame.SensorRate;
             if (result == Com.S_OK) result = frame.SetResourceFormat(FourCC.ResourceFormatRgbU16);
             if (result == Com.S_OK) result = frame.SetResolutionScale(scale);
             if (result == Com.S_OK) result = frame.CreateJobDecodeAndProcessFrame(ClipAttributes, out decode);

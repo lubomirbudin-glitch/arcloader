@@ -486,6 +486,23 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
 - [ ] 67. **ARRIRAW bez LUTu:** `offload … --proxy --lut none` s klipem ALEXA 35 a ALEXA Mini → proxy v Rec.709
       (vestavěný vzhled kamery), art-cmd bez `--target-colorspace`; poškozený klip / art-cmd, který skončí kódem 0 bez
       souboru → poznámka „ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla ([error] …)“.
+- [ ] 68. **Snímací fps — ARRIRAW:** karta ALEXA 35 natočená 35 fps (projekt 24, např. A_0012_1F75) → v HTML/PDF u každého
+      klipu FPS „35 fps · přehrávání 24“, pod tabulkou vysvětlivka „Stopáž = počet snímků ÷ přehrávací fps“, stopáž =
+      snímky ÷ 24 (stejná jako v ARRI Reference Tool / Resolve); `offload_report.json` `clips[].info.captureFrameRate`
+      `"35"`, `frameRate` `"24"`; TXT `Frame rate:  35 fps capture, 24 playback (N clips)`; CSV `FPS` 24, `Capture FPS`
+      35; ALE `FPS 24` v hlavičce a sloupec `Sensor_fps` 35 (import do Avidu: sloupec se objeví v binu, `End` sedí);
+      denní report: sloupec FPS „35 fps · přehrávání 24“, dlaždice „celková stopáž“. Karta natočená 24 fps → jen „24“.
+- [ ] 69. **Snímací fps — BRAW, RED, Sony:** klip BRAW natočený off-speed (např. 48 fps v projektu 24; nejdřív
+      `braw-decode.exe --info` → klíč `"sensorRate":48.000000` na konci řádku), klip R3D s jiným record a project fps
+      (zkontrolovat, že `REDline --printMeta 1` vypisuje „Record FPS“ a „Project FPS“ / „Timebase“ — jinak upravit
+      `R3dBackend.ParseMeta`), Sony S&Q (FX3/FX6, 120 fps do 23.98p: `M01.XML` `captureFps="119.88p"`) → FPS „119.880 fps ·
+      přehrávání 23.976“ / „48 fps · přehrávání 24“. Starší report (0.7.x) bez klíče se otevře a ukáže jen přehrávací fps.
+      V HTML/PDF jsou obě rychlosti ve sloupci FPS na dvou řádcích (náhled 1000 px, 1300 px i PDF): text nepřetéká do
+      sloupce Stopáž.
+- [ ] 70. **Snímací fps — Canon (chybí vzorek):** karta Canon (C70/C300 III/R5 C, XF-AVC MXF a Cinema RAW Light .CRM)
+      natočená S&F (Slow & Fast, např. 100 fps do 25p) → zatím se ukáže jen přehrávací rychlost (25). Prohlédnout, co karta
+      nese: XML vedle klipu (`CONTENTS\CLIPS001\…\*.XML`), `ffprobe -show_format -show_streams` (tagy MXF) — kde je snímací
+      rychlost, poslat vzorek; podle něj doplnit čtení do `ProxyRenderer.Probe` (jako Sony `M01.XML`).
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
