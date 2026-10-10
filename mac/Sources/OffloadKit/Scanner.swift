@@ -12,6 +12,17 @@ public struct SourceFile {
     public var ticks: Int64 { FileTimes.ticks(mtime) }
 }
 
+extension SourceFile {
+    /// A file as a report or the history records it (the date to the nearest microsecond is enough there).
+    public init(relPath: String, size: Int64, modified: Date) {
+        let t = modified.timeIntervalSince1970
+        var sec = t.rounded(.down)
+        var nsec = ((t - sec) * 1e9).rounded()
+        if nsec >= 1e9 { sec += 1; nsec -= 1e9 }
+        self.init(relPath: relPath, size: size, mtime: timespec(tv_sec: Int(sec), tv_nsec: Int(nsec)))
+    }
+}
+
 public struct SourceScan {
     public let root: String
     public let files: [SourceFile]

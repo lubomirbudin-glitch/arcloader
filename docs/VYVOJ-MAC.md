@@ -129,6 +129,10 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 38 — CardRecord (všechny generace, reporty z Windows i Macu) a jediná definice „ověřeno“ (verifyPending/
+  verifyIncomplete nikdy; cizí cesty = všechny sloupce; podle sériového čísla disku, R12); BackupState;
+  `OffloadReport.isFailed` jako Windows `IsFailed` („written“ v ověřeném reportu = selhání, ne „neověřeno“ — testy plánu,
+  které to čekaly jinak, pracují s neověřeným reportem); `SourceFile(relPath:size:modified:)`
 - Úkol 37 — zámky historie, složky karty a dne přes flock v Application Support/Offload/locks (nikdy na cíli),
   složky v pevném pořadí bez čekání; `AppSupport.folder` (`OFFLOAD_SETTINGS_DIR`), `hwtest.json` tam taky; testy
   nastaví `OFFLOAD_SETTINGS_DIR` na dočasnou složku (`testSettingsDir`)

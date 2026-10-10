@@ -180,9 +180,12 @@ public struct OffloadReport: Codable {
     public var pausedSeconds: Double { (copyPausedSeconds ?? 0) + (verifyPausedSeconds ?? 0) }
     public var copySeconds: Double { max(0, copyFinished.timeIntervalSince(started) - (copyPausedSeconds ?? 0)) }
     public var verifySeconds: Double { max(0, finished.timeIntervalSince(copyFinished) - (verifyPausedSeconds ?? 0)) }
-    public var failedFiles: [FileEntry] {
-        files.filter { f in f.sourceError != nil || f.destinations.contains { !OffloadReport.isGood($0, verified: verified) } }
+    /// The card could not be read, or a destination does not hold a good copy (isGood). A cancelled verification
+    /// leaves files "written" or already "verified": both are fine then.
+    public func isFailed(_ f: FileEntry) -> Bool {
+        f.sourceError != nil || f.destinations.contains { !OffloadReport.isGood($0, verified: verified) }
     }
+    public var failedFiles: [FileEntry] { files.filter(isFailed) }
     public var success: Bool { failedFiles.isEmpty }
     /// Spec D.22.7: every file on every destination verified, and the result written everywhere.
     public var safeToFormat: Bool { success && verified && verifyPending != true && verifyIncomplete != true }
