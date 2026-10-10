@@ -8,7 +8,7 @@ public enum VerifyJobState { Waiting, Running, Done, Cancelled, Failed }
 public sealed record VerifyJobStatus(VerifyJobState State, VerifyProgress? Progress, VerifyResult? Result, string? Error, string? ReportPath, string? ReportError = null,
     string? LocalReportNote = null);
 
-/// "Ověřit zálohu…" as a queue item (spec 2.4): it runs in the copy queue, one after another with the copies — both
+/// "Verify backup…" as a queue item (spec 2.4): it runs in the copy queue, one after another with the copies — both
 /// load the same disks. `RunCopy` verifies (and writes the report), returns false: there is no stage 2.
 /// `localReports` (task 2026-10-09): a written verification report is copied to this computer with the card's report.
 public sealed class VerifyJob(string cardPath, bool writeReport, Action<string>? log = null, string? localReports = null) : IQueuedJob
@@ -28,7 +28,7 @@ public sealed class VerifyJob(string cardPath, bool writeReport, Action<string>?
     {
         lock (gate)
         {
-            // Cancelled while still queued: it never runs (JobQueue skips it), so say so instead of "Čeká" forever.
+            // Cancelled while still queued: it never runs (JobQueue skips it), so say so instead of "Waiting" forever.
             return status.State == VerifyJobState.Waiting && IsCancelled ? status with { State = VerifyJobState.Cancelled } : status;
         }
     }
@@ -100,17 +100,17 @@ public sealed class VerifyJob(string cardPath, bool writeReport, Action<string>?
 /// What a verification card in the queue shows (spec 2.4 UX).
 public static class VerifyJobView
 {
-    static readonly CultureInfo Cs = CultureInfo.GetCultureInfo("cs-CZ");
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    public static string Title(VerifyJob job) => $"Ověření {job.CardName}";
+    public static string Title(VerifyJob job) => $"Verification {job.CardName}";
 
     public static string StatusText(VerifyJobStatus s) => s.State switch
     {
-        VerifyJobState.Waiting => "Čeká",
-        VerifyJobState.Running => "Ověřování",
-        VerifyJobState.Done => s.Result is { Success: true } r ? (r.Unfinished ? "Nedokončeno" : "Ověřeno") : "Problémy",
-        VerifyJobState.Cancelled => "Zrušeno",
-        _ => "Chyba",
+        VerifyJobState.Waiting => "Waiting",
+        VerifyJobState.Running => "Verifying",
+        VerifyJobState.Done => s.Result is { Success: true } r ? (r.Unfinished ? "Unfinished" : "Verified") : "Problems",
+        VerifyJobState.Cancelled => "Cancelled",
+        _ => "Error",
     };
 
     public static CardTone Tone(VerifyJobStatus s) => s.State switch
@@ -123,15 +123,15 @@ public static class VerifyJobView
         _ => CardTone.Error,
     };
 
-    /// "Ověřuji 120 / 1 234 souborů · 45 GB / 512 GB · 380 MB/s"
+    /// "Verifying 120 / 1,234 files · 45 GB / 512 GB · 380 MB/s"
     public static string Detail(VerifyProgress? p, double bytesPerSecond)
     {
-        if (p == null) return "Ověřuji…";
+        if (p == null) return "Verifying…";
         var rate = (bytesPerSecond / 1_000_000).ToString("0", CultureInfo.InvariantCulture);
-        return $"Ověřuji {(p.FileIndex + 1).ToString("N0", Cs)} / {p.FileCount.ToString("N0", Cs)} souborů · {Format.BytesCs(p.Bytes)} / {Format.BytesCs(p.TotalBytes)} · {rate} MB/s";
+        return $"Verifying {(p.FileIndex + 1).ToString("N0", Inv)} / {p.FileCount.ToString("N0", Inv)} files · {Format.BytesShort(p.Bytes)} / {Format.BytesShort(p.TotalBytes)} · {rate} MB/s";
     }
 
-    /// The Czech note when the report went outside the card folder (ruling V2); null otherwise.
+    /// The note when the report went outside the card folder (ruling V2); null otherwise.
     public static string? ReportNote(VerifyJobStatus s)
     {
         var outside = s is { ReportPath: { } path, Result.ReportInsideCard: false } ? VerifyTexts.ReportOutsideNote(path) : null;

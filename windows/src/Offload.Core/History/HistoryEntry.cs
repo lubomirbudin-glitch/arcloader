@@ -24,7 +24,7 @@ public sealed class HistoryGeneration
 {
     public const string Full = "full";
     public const string Append = "append";
-    /// "Zkopírovat znovu": the files that failed, copied again where they failed (Windows from 0.5.0).
+    /// "Copy again": the files that failed, copied again where they failed (Windows from 0.5.0).
     public const string Repair = "repair";
 
     [JsonPropertyName("seq")] public int Seq { get; set; }
@@ -61,7 +61,7 @@ public sealed class HistoryEntry
     [JsonPropertyName("generations")] public List<HistoryGeneration> Generations { get; set; } = [];
     [JsonPropertyName("reels")] public List<string> Reels { get; set; } = [];
     /// R6 (plan 10): a full copy that started and has not ended yet — written when the copy starts, so a copy the app
-    /// never finished (it crashed, the PC went off) is known: its card offers "Dokončit přerušenou zálohu" (an append
+    /// never finished (it crashed, the PC went off) is known: its card offers "Finish interrupted backup" (an append
     /// that resumes it). Its file list is empty until the copy ends. Absent when false.
     [JsonPropertyName("unfinished"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool Unfinished { get; set; }
 }

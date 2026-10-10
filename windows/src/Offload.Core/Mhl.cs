@@ -32,14 +32,14 @@ public static class Mhl
         int generation = report.Generation ?? 1;
         // Fix round 1: generation 1 starts a chain — never over one that is there (a commit retried, another copy).
         if (generation == 1 && File.Exists(Path.Combine(dir, ChainName)))
-            throw new IOException($"ASC MHL v {cardPath} už má řetěz — generace 1 se nezapsala.");
+            throw new IOException($"The ASC MHL in {cardPath} already has a chain — generation 1 was not written.");
         // An append keeps the chain and the ignore list of the earlier generations (spec 2.2) — and goes right after them.
         var earlier = generation > 1 ? MhlReader.Read(cardPath) : null;
         if (generation > 1)
         {
             int last = earlier is { Chain.Count: > 0 } ? earlier.Chain.Max(c => c.Seq) : 0;
             if (last != generation - 1)
-                throw new IOException($"ASC MHL v {cardPath} se během doplnění změnil (poslední generace {last}, doplnění píše {generation}) — generace se nezapsala.");
+                throw new IOException($"The ASC MHL in {cardPath} changed during the append (last generation {last}, the append writes {generation}) — the generation was not written.");
         }
         var stamp = IsoDate(now);
         var folder = Path.GetFileName(cardPath.TrimEnd('\\'));
@@ -48,11 +48,11 @@ public static class Mhl
         int copied = report.Files.Count(f => f.Xxh64 != null && f.Rewritten?.Any(w => w) == true);
         var comment = report.IsRepair ? Msg.MhlRepairComment(copied, listed - copied, report.Source)
             : generation > 1
-            ? $"Offload doplnění: {listed} {Texts.Plural(listed, "nový soubor", "nové soubory", "nových souborů")} z {report.Source}"
+            ? $"Offload append: {Texts.N(listed, "new file")} from {report.Source}"
             : $"Offload of {report.CardName} from {report.Source}";
         // Plan 10 (spec 9): how this destination was verified. `<process>` stays "transfer" — the ASC MHL v2 schema allows
         // only in-place / transfer / flatten there — so the method goes into the generation's comment.
-        if (report.Destinations[d].VerifyMethod is string method) comment += $" · ověření: {method}";
+        if (report.Destinations[d].VerifyMethod is string method) comment += $" · verification: {method}";
         IEnumerable<string> ignore = earlier?.Generations.FirstOrDefault() is { } first
             ? first.Ignore
             : IgnorePatterns.Concat(report.Skipped.Select(s => s.Split('/')[^1]));
@@ -148,13 +148,13 @@ public static class Mhl
         if (chain.FirstOrDefault(c => c.Seq == generation) is not { } entry) return false;
         var file = Path.Combine(dir, entry.Path);
         if (entry.Path.IndexOfAny(['/', '\\']) >= 0 || !File.Exists(file) || C4(File.ReadAllBytes(file)) != entry.C4)
-            throw new IOException($"ASC MHL v {cardPath} má generaci {generation}, ale její soubor chybí nebo byl změněn — generace se nezapsala znovu.");
+            throw new IOException($"The ASC MHL in {cardPath} has generation {generation}, but its file is missing or was changed — the generation was not written again.");
         var have = MhlReader.ParseGeneration(file, generation).Files
             .Select(f => (f.Path, Hash: f.Hashes.FirstOrDefault(h => h.Algorithm == "xxh64")))
             .Select(x => $"{x.Path}|{x.Hash?.Value}|{x.Hash?.Action}").Order(StringComparer.Ordinal);
         var want = Entries(report, d).Select(e => $"{e.File.Path}|{e.File.Xxh64}|{e.Action}").Order(StringComparer.Ordinal);
         if (!have.SequenceEqual(want, StringComparer.Ordinal))
-            throw new IOException($"ASC MHL v {cardPath} už má jinou generaci {generation} — generace se nezapsala znovu.");
+            throw new IOException($"The ASC MHL in {cardPath} already has a different generation {generation} — the generation was not written again.");
         return true;
     }
 

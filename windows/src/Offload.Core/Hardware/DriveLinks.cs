@@ -25,15 +25,15 @@ public static class StorageBuses
     {
         StorageBus.Nvme => "NVMe",
         StorageBus.Sata => "SATA",
-        StorageBus.Sd or StorageBus.Mmc => "SD čtečka",
-        StorageBus.Virtual => "virtuální disk",
-        StorageBus.Network => "síťový disk",
-        StorageBus.Usb => "USB (port nezjištěn)",
+        StorageBus.Sd or StorageBus.Mmc => "SD reader",
+        StorageBus.Virtual => "virtual disk",
+        StorageBus.Network => "network disk",
+        StorageBus.Usb => "USB (port unknown)",
         StorageBus.Scsi => "SCSI",
         StorageBus.Sas => "SAS",
         StorageBus.Raid => "RAID",
-        StorageBus.Other => "jiné připojení",
-        _ => "neznámé připojení",
+        StorageBus.Other => "other connection",
+        _ => "unknown connection",
     };
 }
 

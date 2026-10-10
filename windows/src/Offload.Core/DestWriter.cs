@@ -350,7 +350,7 @@ internal sealed class DestWriter : IDisposable
     public void Wait() => worker.Wait();
 
     volatile string? verifying;
-    /// The file the read-back reads now (relative), null when none — what "Pozastavuji (dokončuji …)" names.
+    /// The file the read-back reads now (relative), null when none — what "Pausing (finishing …)" names.
     public string? VerifyingFile => verifying;
 
     long verifyPlanned = -1;

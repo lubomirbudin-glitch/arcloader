@@ -2,7 +2,7 @@ using Offload.Core.History;
 
 namespace Offload.Core.Desktop;
 
-/// The life of the card inspections in the Karty list (spec 2.1 "Vlákna"), without a window: one inspection per
+/// The life of the card inspections in the Cards list (spec 2.1 "Vlákna"), without a window: one inspection per
 /// source at a time, a request while it runs makes it run once more afterwards, a source that disappears or now holds
 /// another card (`Identity`, as `Volumes.NamesToDrop` decides) cancels it and its result is thrown away. UI thread only.
 public sealed class CardInspections
@@ -79,7 +79,7 @@ public sealed class CardInspections
     public CardInsight? Result(string path, string? identity) =>
         results.TryGetValue(path, out var r) && Same(r.Identity, identity) ? r.Insight : null;
 
-    /// The history line of a card row (spec 2.1 table): "Zjišťuji…" until history is loaded and the first look is
+    /// The history line of a card row (spec 2.1 table): "Checking…" until history is loaded and the first look is
     /// done, then the match (nothing for an unknown card or one that could not be read).
     public static (string? Text, HistoryTone Tone) RowText(bool historyLoaded, bool running, CardInsight? insight)
     {

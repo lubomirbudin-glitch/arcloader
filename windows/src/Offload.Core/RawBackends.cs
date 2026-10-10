@@ -88,7 +88,7 @@ internal static class RawBackends
     /// A RAW tool that ended with exit code 0 but wrote no output (art-cmd does that when it refuses an argument): never a
     /// silent "no proxy" — the clip's note says so in Czech, the tool's own words (`log`, LogTail) go with it and to the log.
     public static RawDecoderException NoOutput(string format, string tool, string log) =>
-        new($"{format}: {tool} skončil bez chyby, ale nic nezapsal — proxy nevznikla" + (log.Length > 0 ? $" ({log})" : ""),
+        new($"{format}: {tool} ended without an error but wrote nothing — no proxy was made" + (log.Length > 0 ? $" ({log})" : ""),
             new ToolError(tool, 0, "no output file" + (log.Length > 0 ? ": " + log : "")));
 }
 
@@ -119,7 +119,7 @@ internal sealed record BrawInfo(
 internal sealed class BrawBackend : IRawBackend
 {
     public ClipFormat Format => ClipFormat.Braw;
-    public string MissingHint => "Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)"
+    public string MissingHint => "Blackmagic RAW: braw-decode or the Blackmagic RAW library (SDK, Player or DaVinci Resolve) is missing"
         + ToolDownloads.Hint(ToolDownloads.BlackmagicRaw);
 
     /// How long `braw-decode --info` may take: opening a clip is quick; a hung SDK must never hang the job (the clip
@@ -205,7 +205,7 @@ internal sealed class BrawBackend : IRawBackend
                 if (!_gen5Rejected)
                 {
                     _gen5Rejected = true;
-                    Log?.Invoke("Blackmagic RAW: braw-decode nezná --gen5 (starší verze) — Film Gen 4 se dekóduje bez převodu na Gen 5");
+                    Log?.Invoke("Blackmagic RAW: braw-decode does not know --gen5 (an older version) — Film Gen 4 is decoded without conversion to Gen 5");
                 }
                 output = ToolProcess.Run(tools.BrawDecoder!, ["--info", .. Args("--scale", scale, path)], timeout: _infoTimeout);
             }
@@ -225,9 +225,9 @@ internal sealed class BrawBackend : IRawBackend
         var dll = (tools.BrawDecoder is string exe ? _findLibrary(Path.GetDirectoryName(exe) ?? "") : null) ?? BrawLibrary.DllName;
         var note = e.Status switch
         {
-            3 => $"Blackmagic RAW: knihovnu {dll} nelze použít — nainstalujte aktuální Blackmagic RAW Player",
-            4 => $"Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna {dll} starší než kamera (nainstalujte aktuální Blackmagic RAW Player)",
-            5 => $"Blackmagic RAW: snímek klipu se nepodařilo dekódovat ({LastLine(e.Detail)})",
+            3 => $"Blackmagic RAW: cannot use the library {dll} — install the current Blackmagic RAW Player",
+            4 => $"Blackmagic RAW: cannot open the clip — it is damaged, or the library {dll} is older than the camera (install the current Blackmagic RAW Player)",
+            5 => $"Blackmagic RAW: could not decode a frame of the clip ({LastLine(e.Detail)})",
             _ => null,
         };
         return note == null ? e : new RawDecoderException(note, e);
@@ -635,7 +635,7 @@ internal sealed class ArriBackend : IRawBackend
 internal sealed class CanonRawBackend : IRawBackend
 {
     public ClipFormat Format => ClipFormat.CanonRaw;
-    public string MissingHint => "Canon Cinema RAW Light: pro Windows neexistuje dekodér pro příkazovou řádku — zkopírováno a ověřeno, proxy přeskočeno";
+    public string MissingHint => "Canon Cinema RAW Light: there is no command-line decoder for Windows — copied and verified, proxy skipped";
     public bool IsAvailable(ExternalTools tools) => false;
     public ClipInfo Probe(string path, ExternalTools tools, string workDir) => throw new ToolError("Canon RAW", -1, MissingHint);
     public FrameSource Source(string path, ClipInfo info, ProxySettings settings, RawLook look, ExternalTools tools, string workDir, double? singleFrameAt,

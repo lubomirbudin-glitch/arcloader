@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace Offload.Core.Desktop;
 
 /// What the Start button waits for before it decides (spec 2.5, the Task 7–8 review): the inspections of the selected
-/// cards — without them a card history knows would be copied again in full with no "Karty už jsou zálohované" prompt —
+/// cards — without them a card history knows would be copied again in full with no "Cards already backed up" prompt —
 /// and the fresh free space of the destinations. Always bounded: a card or a disk that does not answer never blocks the start.
 public static class StartWait
 {
@@ -13,20 +13,20 @@ public static class StartWait
         selected.Where(p => !hasInsight(p) && (!historyLoaded || inspectionRunning(p))).ToList();
 
     public static string InspectionStatus(int cards) =>
-        cards == 1 ? "Prověřuji kartu, než začnu kopírovat…" : $"Prověřuji karty ({cards}), než začnu kopírovat…";
+        cards == 1 ? "Checking the card before the copy starts…" : $"Checking the cards ({cards}) before the copy starts…";
 
-    /// Ruling S1: the inspection wait ran out. The question about the cards still being looked at (default Ne).
+    /// Ruling S1: the inspection wait ran out. The question about the cards still being looked at (default No).
     public static string UnansweredQuestion(IReadOnlyList<string> cardNames) =>
         cardNames.Count == 1
-            ? $"Karta {cardNames[0]} se ještě prověřuje — nevím, jestli už je zálohovaná. Spustit přesto celou kopii?"
-            : $"Karty {string.Join(", ", cardNames)} se ještě prověřují — nevím, jestli už jsou zálohované. Spustit přesto celou kopii?";
+            ? $"Card {cardNames[0]} is still being checked — it is not known yet whether it is backed up. Start a full copy anyway?"
+            : $"Cards {string.Join(", ", cardNames)} are still being checked — it is not known yet whether they are backed up. Start a full copy anyway?";
 
-    /// Whether Start goes on after the inspection wait: always when it finished; otherwise only when the user says Ano
-    /// to the question about the cards still pending. `ask` returns true for Ano.
+    /// Whether Start goes on after the inspection wait: always when it finished; otherwise only when the user says Yes
+    /// to the question about the cards still pending. `ask` returns true for Yes.
     public static bool ContinueAfterWait(bool looked, IReadOnlyList<string> pendingNames, Func<string, bool> ask) =>
         looked || pendingNames.Count == 0 || ask(UnansweredQuestion(pendingNames));
 
-    public const string FreeSpaceStatus = "Zjišťuji volné místo na cílech…";
+    public const string FreeSpaceStatus = "Checking free space on the destinations…";
 
     /// Polls `pending` until it reports 0 (true) or `timeout` passes (false — the caller goes on with what is known).
     /// `progress` gets the pending count each round (the status text). Awaited: the UI thread is never blocked.

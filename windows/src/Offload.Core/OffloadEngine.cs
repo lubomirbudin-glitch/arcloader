@@ -29,7 +29,7 @@ public sealed partial class OffloadEngine
 
     public bool IsCancelled => cts.IsCancellationRequested;
 
-    /// "Pozastavit": the copy and the read-back stop before their next file (the one in progress is finished); the job's
+    /// "Pause": the copy and the read-back stop before their next file (the one in progress is finished); the job's
     /// stage 2 waits at the same gate between clips.
     public PauseGate Pauses { get; } = new();
 
@@ -146,7 +146,7 @@ public sealed partial class OffloadEngine
         return size > 0 && size % 4096 == 0 && size <= 256 << 20 ? size : null;
     }
 
-    /// A repair ("Zkopírovat znovu", UI návrh 4): the checks of an append (options, source, the earlier backup and its
+    /// A repair ("Copy again", UI návrh 4): the checks of an append (options, source, the earlier backup and its
     /// destinations), then what RepairPlanner finds — the card compared with the backup by size, time and hash before
     /// anything is written. `RepairNothing` when every file is good everywhere. Cancel() stops it too.
     public RepairPlan PlanRepair(string source, IReadOnlyList<string> cardPaths, CancellationToken ct = default)

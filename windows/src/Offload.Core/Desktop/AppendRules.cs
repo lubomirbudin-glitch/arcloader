@@ -2,27 +2,27 @@ using Offload.Core.History;
 
 namespace Offload.Core.Desktop;
 
-/// "Doplnit jen nové klipy" in the Karty list (spec 2.2 UX), without a window.
+/// "Append (new clips only)" in the Cards list (spec 2.2 UX), without a window.
 public static class AppendRules
 {
     /// Offered only for a card volume whose history match found new files (and nothing changed) and whose earlier card
     /// folders can be reached. Never for Changed, another card or no history, and never for a manual folder: that is
     /// matched by its shape alone, which is too weak a proof that it is the same card (plan author's ruling).
-    /// Ruling I5 (plan 10): a backup the app never finished ("nedokončeno") is offered also with nothing new on the card —
-    /// "Dokončit přerušenou zálohu" completes its copy or its verification (R6).
+    /// Ruling I5 (plan 10): a backup the app never finished ("unfinished") is offered also with nothing new on the card —
+    /// "Finish interrupted backup" completes its copy or its verification (R6).
     public static bool Offer(CardInsight? insight) =>
         insight is { Error: null, Volume: not null, AppendReachable: true, History: { } m }
         && m.Entry.Destinations.Count > 0
         && (m.Kind == HistoryMatchKind.NewFiles || m is { Kind: HistoryMatchKind.Identical, Entry.Unfinished: true });
 
-    /// "Doplnit jen nové klipy do dřívější zálohy (12 souborů · 3,2 GB)"; R6: "Dokončit přerušenou zálohu (…)" for a copy
+    /// "Append new clips only to the earlier backup (12 files · 3.2 GB)"; R6: "Finish interrupted backup (…)" for a copy
     /// the app never finished (what is on the disks already is not copied again).
     public static string CheckboxText(HistoryMatch m) => m.Entry.Unfinished
-        ? m.New.Count == 0 ? "Dokončit přerušenou zálohu (dokončí ověření)"
-            : $"Dokončit přerušenou zálohu ({m.New.Count} {Texts.Plural(m.New.Count, "soubor", "soubory", "souborů")} · {Format.BytesCs(m.NewBytes)})"
-        : $"Doplnit jen nové klipy do dřívější zálohy ({m.New.Count} {Texts.Plural(m.New.Count, "soubor", "soubory", "souborů")} · {Format.BytesCs(m.NewBytes)})";
+        ? m.New.Count == 0 ? "Finish interrupted backup (finishes the verification)"
+            : $"Finish interrupted backup ({Texts.N(m.New.Count, "file")} · {Format.BytesShort(m.NewBytes)})"
+        : $"Append new clips only to the earlier backup ({Texts.N(m.New.Count, "file")} · {Format.BytesShort(m.NewBytes)})";
 
-    /// "Složka: 2026-10-06\A001 na 2 cílech" — taken from the backup's own card folders (the name may be "A001_2").
+    /// "Folder: 2026-10-06\A001 on 2 destinations" — taken from the backup's own card folders (the name may be "A001_2").
     public static string FolderText(HistoryEntry e)
     {
         var first = e.Destinations.FirstOrDefault()?.CardPath ?? "";
@@ -30,11 +30,11 @@ public static class AppendRules
         var folder = Path.GetFileName(trimmed);
         var date = Path.GetFileName(Path.GetDirectoryName(trimmed) ?? "");
         int n = e.Destinations.Count;
-        return $@"Složka: {date}\{folder} na {n} {Texts.Plural(n, "cíli", "cílech", "cílech")}";
+        return $@"Folder: {date}\{folder} on {Texts.N(n, "destination")}";
     }
 
-    /// The job card title: "A001 · doplnění".
-    public static string Title(string cardName) => $"{cardName} · doplnění";
+    /// The job card title: "A001 · append".
+    public static string Title(string cardName) => $"{cardName} · append";
 
     /// The Cíle section matters only for full copies: a selection of appends alone goes to the destinations in history.
     public static bool NeedsDestinations(int fullCopies) => fullCopies > 0;
@@ -44,8 +44,8 @@ public static class AppendRules
 
     /// The profile an append runs with (ruling I2): that of the project the earlier backup was made in — verify, stage 2,
     /// outputs and, from task 9, notifications follow the card, not the project shown now (its ntfy topic may be another
-    /// client's). No project = "Bez projektu" (the top level, always there). A project deleted or renamed since: also
-    /// "Bez projektu" — never the project shown now — with `Gone` = true (the job card says so, GoneNote; the job still
+    /// client's). No project = "No project" (the top level, always there). A project deleted or renamed since: also
+    /// "No project" — never the project shown now — with `Gone` = true (the job card says so, GoneNote; the job still
     /// records the entry's project).
     public static (SettingsProfile Profile, bool Gone) ProfileFor(AppSettings s, string? entryProject)
     {
@@ -54,7 +54,7 @@ public static class AppendRules
     }
 
     /// The job card's note for an append whose project is gone.
-    public static string GoneNote(string project) => $"Projekt {project} už neexistuje — doplnění běží s nastavením {Projects.NoProject}";
+    public static string GoneNote(string project) => $"Project {project} no longer exists — the append runs with the settings of {Projects.NoProject}";
 
     /// The LUTs and proxy folders a Start really uses, each once (any case), checked off the UI thread before it starts:
     /// the profile shown — only when a full copy is selected (appends do not use it) — and the profile of every append
@@ -90,7 +90,7 @@ public static class AppendRules
 
 public enum StartCheckKind { Lut, ProxyFolder }
 
-/// A file or folder a Start uses (AppendRules.StartChecks): `Project` is the profile's name ("Bez projektu" for the top
+/// A file or folder a Start uses (AppendRules.StartChecks): `Project` is the profile's name ("No project" for the top
 /// level); `Shown` = of the profile shown now; `Rule` = the number of the LUT rule whose own .cube it is (null: the custom
 /// LUT or a folder).
 public sealed record StartCheck(StartCheckKind Kind, string Path, string Project, bool Shown, int? Rule = null)
@@ -98,7 +98,7 @@ public sealed record StartCheck(StartCheckKind Kind, string Path, string Project
     /// Why the Start is refused when it is missing — for another project's file (the shown one has its red text).
     public string Problem => Kind == StartCheckKind.Lut
         ? Rule is int n
-            ? $"LUT z pravidla {n} projektu {Project} nenalezen: {System.IO.Path.GetFileName(Path)} — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte."
-            : $"LUT projektu {Project} nenalezen: {System.IO.Path.GetFileName(Path)} — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte."
-        : $"Složka pro proxy projektu {Project} není dostupná: {Path} — doplnění karty se nespustí.";
+            ? $"LUT of rule {n} of project {Project} not found: {System.IO.Path.GetFileName(Path)} — the card's append will not start. Select another LUT in the project, or remove it."
+            : $"LUT of project {Project} not found: {System.IO.Path.GetFileName(Path)} — the card's append will not start. Select another LUT in the project, or remove it."
+        : $"The proxy folder of project {Project} is not available: {Path} — the card's append will not start.";
 }

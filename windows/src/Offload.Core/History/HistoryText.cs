@@ -8,12 +8,12 @@ public enum HistoryTone { Neutral, Ok, Warning, Error }
 /// The history line under a card (spec 2.1 table) and in the CLI.
 public static class HistoryText
 {
-    public const string Inspecting = "Zjišťuji, jestli už je karta zálohovaná…";
+    public const string Inspecting = "Checking whether the card is already backed up…";
 
-    static readonly CultureInfo Cs = CultureInfo.GetCultureInfo("cs-CZ");
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    /// "6. 10. 2026 8:15" in local time.
-    public static string When(DateTime finishedUtc) => finishedUtc.ToLocalTime().ToString("d. M. yyyy H:mm", Cs);
+    /// "2026-10-06 08:15" in local time.
+    public static string When(DateTime finishedUtc) => finishedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", Inv);
 
     /// "Zaloha (D:)": the destination folder's name and its drive letter; a drive root alone is "D:", a share folder
     /// only its name.
@@ -27,11 +27,11 @@ public static class HistoryText
         return letter != null ? $"{name} ({letter})" : name;
     }
 
-    static string Files(int n) => $"{n} {Texts.Plural(n, "soubor", "soubory", "souborů")}";
+    static string Files(int n) => Texts.N(n, "file");
 
     /// A card emptied in the camera after the backup (everything on it was backed up, then deleted).
     public static (string Text, HistoryTone Tone) Emptied(HistoryMatch m) =>
-        ($"Karta je prázdná — dřív zálohováno {When(m.Entry.Finished)} na {string.Join(", ", m.Entry.Destinations.Select(d => DiskName(d.Root)))}", HistoryTone.Neutral);
+        ($"The card is empty — backed up earlier on {When(m.Entry.Finished)} to {string.Join(", ", m.Entry.Destinations.Select(d => DiskName(d.Root)))}", HistoryTone.Neutral);
 
     /// `fullPaths`: the CLI names the destinations by their full root ("D:\Zaloha"), the GUI by DiskName.
     public static (string Text, HistoryTone Tone) Line(HistoryMatch m, bool fullPaths = false)
@@ -39,17 +39,17 @@ public static class HistoryText
         var e = m.Entry;
         var disks = string.Join(", ", e.Destinations.Select(d => fullPaths ? d.Root : DiskName(d.Root)));
         // R6: a copy the app never finished — it can be resumed (Dokončit přerušenou zálohu).
-        if (e.Unfinished) return ($"Nedokončená záloha {When(e.Finished)} na {disks} — kopie se přerušila, lze ji dokončit", HistoryTone.Warning);
-        var head = $"Zálohováno {When(e.Finished)} na {disks}";
+        if (e.Unfinished) return ($"Unfinished backup on {When(e.Finished)} to {disks} — the copy was interrupted; it can be finished", HistoryTone.Warning);
+        var head = $"Backed up on {When(e.Finished)} to {disks}";
         if (m.Kind == HistoryMatchKind.Changed)
-            return ($"{head}, ale karta se od té doby změnila ({Files(m.Changed.Count)} jinak) — doplnit nejde, jen celá kopie", HistoryTone.Warning);
-        var (state, tone) = !e.Success ? ($" — s chybami ({Files(e.FailedFiles ?? 0)})", HistoryTone.Error)
-            : !e.Verified ? (" — NEOVĚŘENO (lze vyjmout, neformátovat)", HistoryTone.Warning)
-            : (" — ověřeno, lze formátovat", HistoryTone.Ok);
+            return ($"{head}, but the card has changed since ({Files(m.Changed.Count)} differ{(m.Changed.Count == 1 ? "s" : "")}) — cannot append, only a full copy", HistoryTone.Warning);
+        var (state, tone) = !e.Success ? ($" — with errors ({Files(e.FailedFiles ?? 0)})", HistoryTone.Error)
+            : !e.Verified ? (" — NOT VERIFIED (safe to eject, do not format)", HistoryTone.Warning)
+            : (" — verified, safe to format", HistoryTone.Ok);
         var text = head + state;
         if (m.Kind == HistoryMatchKind.NewFiles)
         {
-            text += $" · nové soubory: {m.New.Count} ({Format.BytesCs(m.NewBytes)})";
+            text += $" · new files: {m.New.Count} ({Format.BytesShort(m.NewBytes)})";
             if (tone == HistoryTone.Ok) tone = HistoryTone.Warning;
         }
         return (text, tone);

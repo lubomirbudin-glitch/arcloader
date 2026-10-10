@@ -7,11 +7,23 @@ public enum AdviceKind { Warning, Info, Tip }
 
 public sealed record Advice(AdviceKind Kind, string Text);
 
-/// A drive in its role for this offload ("Karta", "Cíl 1" …).
-public sealed record RoleLink(string Role, DriveLink Link)
+/// A drive in its role for this offload ("Card", "Destination 1" …; before 0.9.0 "Karta", "Cíl 1"). `Card`: whether it is
+/// a card — set explicitly by HwTest (saved in hwtest.json as "card"); null (an older file, a caller that does not say)
+/// falls back to the role's text, which also knows the old Czech "Karta".
+public sealed record RoleLink(string Role, DriveLink Link,
+    [property: JsonPropertyName("card"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Card = null)
 {
     [JsonIgnore]
-    public bool IsCard => Role.StartsWith("Karta", StringComparison.Ordinal);
+    public bool IsCard => Card ?? IsCardRole(Role);
+
+    public const string CardRole = "Card";
+
+    public static string DestinationRole(int number) => $"Destination {number}";
+
+    /// Only for a role without the explicit flag: "Card", "Card 2" — and the Czech "Karta" of hwtest.json files written
+    /// before 0.9.0.
+    public static bool IsCardRole(string role) =>
+        role.StartsWith(CardRole, StringComparison.Ordinal) || role.StartsWith("Karta", StringComparison.Ordinal);
 }
 
 public static class Advisor
@@ -23,7 +35,7 @@ public static class Advisor
         string Who(RoleLink r) => $"{r.Role} {r.Link.Product}".Trim();
         var freeFastPorts = connectors.Where(c => c.UserVisible && c.SupportsUsb3 == true && c.Device == null).ToList();
         var freeFast = freeFastPorts.Select(c => PortLabels.WithKind(c, portNames)).ToList();
-        // Bare names: the sentence already says "jen USB 2.0". Ports of unknown kind are in neither list.
+        // Bare names: the sentence already says "USB 2.0 only". Ports of unknown kind are in neither list.
         var slowOnly = connectors.Where(c => c.UserVisible && c.SupportsUsb3 == false).Select(c => PortLabels.Name(c, portNames)).ToList();
 
         foreach (var r in drives)
@@ -35,9 +47,9 @@ public static class Advisor
             var port = PortLabels.Of(u, connectors, portNames);
             var text = u.ConnectorUsb3 switch
             {
-                false => $"{Who(r)}: umí {UsbSpeeds.Label(u.Capable)}, ale je v portu jen USB 2.0 ({port}) — přepoj do USB 3 portu{where}.",
-                true => $"{Who(r)}: umí {UsbSpeeds.Label(u.Capable)}, ale linka běží jako {UsbSpeeds.Label(u.Link)} — pravděpodobně kabel jen pro USB 2.0 nebo špatný kontakt; zkus jiný kabel nebo port.",
-                null => $"{Who(r)}: umí {UsbSpeeds.Label(u.Capable)}, ale linka běží jako {UsbSpeeds.Label(u.Link)} ({port}) — zkus jiný kabel nebo USB 3 port{where}.",
+                false => $"{Who(r)}: capable of {UsbSpeeds.Label(u.Capable)}, but plugged into a USB 2.0-only port ({port}) — move it to a USB 3 port{where}.",
+                true => $"{Who(r)}: capable of {UsbSpeeds.Label(u.Capable)}, but the link runs as {UsbSpeeds.Label(u.Link)} — probably a USB 2.0-only cable or a bad contact; try another cable or port.",
+                null => $"{Who(r)}: capable of {UsbSpeeds.Label(u.Capable)}, but the link runs as {UsbSpeeds.Label(u.Link)} ({port}) — try another cable or a USB 3 port{where}.",
             };
             advice.Add(new Advice(AdviceKind.Warning, text));
         }
@@ -47,7 +59,7 @@ public static class Advisor
         foreach (var group in usbDrives.GroupBy(r => r.Link.Usb!.ControllerId, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() >= 2))
         {
             var name = group.First().Link.Usb!.ControllerName;
-            advice.Add(new Advice(AdviceKind.Info, $"{string.Join(", ", group.Select(r => r.Role))} jdou přes jeden řadič ({name}) — dělí se o jeho kapacitu."));
+            advice.Add(new Advice(AdviceKind.Info, $"{string.Join(", ", group.Select(r => r.Role))} go through one controller ({name}) — they share its bandwidth."));
             // Reader and disks on one controller while another controller has a free fast socket: split them.
             if (group.Any(r => r.IsCard) && group.Any(r => !r.IsCard))
             {
@@ -55,7 +67,7 @@ public static class Advisor
                     .Select(c => PortLabels.WithKind(c, portNames)).ToList();
                 if (other.Count > 0)
                     advice.Add(new Advice(AdviceKind.Tip,
-                        $"Čtečku a cílové disky rozděl na různé řadiče — volné rychlé porty na jiném řadiči: {string.Join(", ", other)}."));
+                        $"Put the reader and the destination disks on different controllers — free fast ports on another controller: {string.Join(", ", other)}."));
             }
         }
 
@@ -71,7 +83,7 @@ public static class Advisor
         {
             var who = string.Join(", ", roles);
             if (reported.Add(who))
-                advice.Add(new Advice(AdviceKind.Info, $"{who} jdou přes jeden hub ({hub.Name}) — dělí se o jeho linku."));
+                advice.Add(new Advice(AdviceKind.Info, $"{who} go through one hub ({hub.Name}) — they share its link."));
         }
 
         if (measuredMBps != null && measuredMBps.Count > 0)
@@ -81,7 +93,7 @@ public static class Advisor
             {
                 var slowest = measured.MinBy(r => measuredMBps[r.Role])!;
                 advice.Add(new Advice(AdviceKind.Info,
-                    $"Odhad rychlosti offloadu s tímto zapojením: {Mb(measuredMBps[slowest.Role])} MB/s (brzdí {Who(slowest)})."));
+                    $"Estimated offload speed with this setup: {Mb(measuredMBps[slowest.Role])} MB/s (bottleneck: {Who(slowest)})."));
             }
             foreach (var r in measured)
             {
@@ -89,12 +101,12 @@ public static class Advisor
                 double ceiling = UsbSpeeds.PracticalMBps(u.Link);
                 if (measuredMBps[r.Role] < ceiling / 2)
                     advice.Add(new Advice(AdviceKind.Info,
-                        $"{Who(r)}: linka zvládne ~{Mb(ceiling)} MB/s, disk sám dává {Mb(measuredMBps[r.Role])} MB/s — brzdí disk, ne port."));
+                        $"{Who(r)}: the link can do ~{Mb(ceiling)} MB/s, the disk itself gives {Mb(measuredMBps[r.Role])} MB/s — the bottleneck is the disk, not the port."));
             }
         }
 
-        if (freeFast.Count > 0) advice.Add(new Advice(AdviceKind.Tip, $"Volné rychlé porty: {string.Join(", ", freeFast)}."));
-        if (slowOnly.Count > 0) advice.Add(new Advice(AdviceKind.Tip, $"Porty jen USB 2.0 — na offload je nepoužívej (hodí se pro klávesnici, myš): {string.Join(", ", slowOnly)}."));
+        if (freeFast.Count > 0) advice.Add(new Advice(AdviceKind.Tip, $"Free fast ports: {string.Join(", ", freeFast)}."));
+        if (slowOnly.Count > 0) advice.Add(new Advice(AdviceKind.Tip, $"USB 2.0-only ports — do not use them for offloads (fine for a keyboard or a mouse): {string.Join(", ", slowOnly)}."));
         return advice.OrderBy(a => a.Kind).ToList();
     }
 

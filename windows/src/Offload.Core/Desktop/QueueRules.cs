@@ -23,9 +23,9 @@ public static class CardIdentity
 /// Decisions of the queue panel that need no window (final review of plan 4).
 public static class QueueRules
 {
-    public const string OtherCardText = "karta v mechanice není ta, která se kopírovala";
-    public const string InUseText = "z karty ještě kopíruje jiná úloha — vysuňte ji, až její kopie doběhne";
-    public const string MeasuringText = "Probíhá měření rychlosti — počkejte nebo ho zastavte";
+    public const string OtherCardText = "the card in the drive is not the one that was copied";
+    public const string InUseText = "another job is still copying from the card — eject it when that copy finishes";
+    public const string MeasuringText = "A speed measurement is running — wait or stop it";
 
     /// Why Start is disabled for a reason the setup itself does not show, or null. A speed measurement writes 1 GB
     /// to the destinations and reads the cards: no offload may start under it (the measurement in turn waits for copies).
@@ -35,7 +35,7 @@ public static class QueueRules
     /// `current` = the card in the drive now (both `CardIdentity`), `cardInUse` = `CardInUse` for the other jobs.
     public static string? EjectProblem(string? copied, string? current, bool cardInUse)
     {
-        if (current == null) return "karta není připojená";
+        if (current == null) return "the card is not connected";
         if (copied == null || !string.Equals(copied, current, StringComparison.OrdinalIgnoreCase)) return OtherCardText;
         return cardInUse ? InUseText : null;
     }
@@ -62,7 +62,7 @@ public static class QueueRules
 
     /// A job card still needs the app (closing waits for it): not finished, an eject in flight, or — ruling I2 — its
     /// day report is still being made on the post thread until the queue reports the job finished.
-    /// "Vymazat dokončené" therefore removes a card only when it is finished and not still needed (fix round 1, item 3).
+    /// "Clear finished" therefore removes a card only when it is finished and not still needed (fix round 1, item 3).
     public static bool StillNeeded(JobPhase phase, bool ejecting, bool dayReportPending, bool leftQueue) =>
         !phase.IsFinished() || ejecting || (dayReportPending && !leftQueue);
 

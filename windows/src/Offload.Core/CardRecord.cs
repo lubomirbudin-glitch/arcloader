@@ -174,7 +174,7 @@ public sealed partial class CardRecord
         return false;
     }
 
-    /// A report whose lists are there: a hand-edited null would otherwise surface later as a crash, not as "nejde přečíst".
+    /// A report whose lists are there: a hand-edited null would otherwise surface later as a crash, not as "cannot read".
     /// A missing or null "clips" (a report without analysis, an older Mac) is an empty list — Load then finds the clips
     /// in the files; a null clip entry is dropped — the files are the record of the copy, the clips only describe them.
     static OffloadReport Read(string path)
@@ -183,7 +183,7 @@ public sealed partial class CardRecord
         if (r == null || r.Files == null || r.Destinations == null
             || r.Files.Any(f => f == null || f.Path == null || f.Destinations == null)
             || r.Destinations.Any(d => d == null || d.CardPath == null))
-            throw new InvalidOperationException("chybí seznam souborů nebo cílů");
+            throw new InvalidOperationException("the list of files or destinations is missing");
         r.Clips = (r.Clips ?? []).Where(c => c?.Clip?.Path != null && c.Clip.Name != null && c.Clip.Segments != null).ToList();
         return r;
     }

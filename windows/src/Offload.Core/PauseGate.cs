@@ -1,6 +1,6 @@
 namespace Offload.Core;
 
-/// "Pozastavit" (UI návrh 9; task 2026-10-09 for 0.8.0): the job's workers finish the step they are on — the file being
+/// "Pause" (UI návrh 9; task 2026-10-09 for 0.8.0): the job's workers finish the step they are on — the file being
 /// copied (on every destination together) or read back, the clip being analysed or rendered — and then wait here until
 /// Pokračovat or a cancel. Nothing is ever stopped inside a file, a clip, a report, a day report or an ffmpeg run: no
 /// `.offload-part` is open and no lock (history, day, ASC MHL) is held by a waiting worker; only an append's or a
@@ -8,7 +8,7 @@ namespace Offload.Core;
 ///
 /// A worker that does pausable work joins with Work() and waits with its Worker: the job STANDS ("Pozastaveno") only when
 /// it is paused, someone waits here and no joined worker is still busy with its step — until then it is still finishing
-/// ("Pozastavuji (dokončuji …)"). `PausedTotal` counts only the time the job stood: the report subtracts it from its
+/// ("Pausing (finishing …)"). `PausedTotal` counts only the time the job stood: the report subtracts it from its
 /// times, so the minutes a long file still took after Pozastavit stay in the speeds.
 public sealed class PauseGate
 {

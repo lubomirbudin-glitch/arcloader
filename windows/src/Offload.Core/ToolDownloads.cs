@@ -13,6 +13,6 @@ public static class ToolDownloads
     /// ARRI Reference Tool (ART), which includes art-cmd.
     public const string ArtCmd = "https://www.arri.com/en/learn/camera-systems/tools/arri-reference-tool";
 
-    /// " — ke stažení: <url>" for the end of a Czech note.
-    public static string Hint(string url) => $" — ke stažení: {url}";
+    /// " — download: <url>" for the end of a note.
+    public static string Hint(string url) => $" — download: {url}";
 }

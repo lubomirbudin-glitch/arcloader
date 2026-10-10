@@ -39,7 +39,7 @@ public sealed class LutCatalog(string? folder, IReadOnlyList<BuiltinLut> luts)
     /// — like ~/Library/Application Support/Offload/luts on the Mac.
     public static string UserFolder => System.IO.Path.Combine(Desktop.AppData.Folder, "luts");
 
-    public const string UserFileSuffix = " (vlastní soubor)";
+    public const string UserFileSuffix = " (custom file)";
 
     /// The user's own file for a camera log wins over the built-in approximation — e.g. ARRI's official Rec.709 LUT saved
     /// as %APPDATA%\Offload\luts\arri-logc4-awg4.cube (vendor LUTs may not be shipped with the app, but anyone may use
@@ -141,7 +141,19 @@ public sealed record LutUse(
     [JsonIgnore] public string? File { get; init; }
     [JsonIgnore] public bool IsBuiltin => Id != null;
 
-    public static LutUse None(string reason) => new("none", null, "bez LUT", reason);
+    public static LutUse None(string reason) => new("none", null, NoLutName, reason);
+
+    /// The name of "no LUT" in the report.
+    public const string NoLutName = "no LUT";
+
+    /// Why a clip has no LUT when LUTs are switched off in the settings — the report leaves that reason out.
+    public const string OffInSettings = "off in the settings";
+
+    /// The same reason as Offload wrote it before 0.9.0 (Czech), in old reports.
+    public const string OffInSettingsOld = "vypnuto v nastaven\u00ed";
+
+    /// The LUTs were switched off on purpose: no note about the missing LUT is needed.
+    [JsonIgnore] public bool SwitchedOff => Reason is OffInSettings or OffInSettingsOld;
 }
 
 /// Sony XAVC sidecar "<clip>M01.XML" (NonRealTimeMeta): the gamma and primaries the camera recorded in.
@@ -221,30 +233,33 @@ public static class LutResolver
         switch (EffectiveMode(s))
         {
             case LutMode.None:
-                return LutUse.None("vypnuto v nastavení");
+                return LutUse.None(LutUse.OffInSettings);
             case LutMode.Custom:
                 return !string.IsNullOrEmpty(s.LutPath) && s.LutPath is string path
-                    ? new LutUse("custom", null, System.IO.Path.GetFileName(path), "vlastní LUT") { File = path }
-                    : LutUse.None("vlastní LUT není vybraný");
+                    ? new LutUse("custom", null, System.IO.Path.GetFileName(path), "custom LUT") { File = path }
+                    : LutUse.None("no custom LUT selected");
             case LutMode.Builtin:
-                return Builtin(cat, s.LutBuiltin, "builtin", "vybraný v nastavení") ?? LutUse.None("vestavěný LUT nenalezen");
+                return Builtin(cat, s.LutBuiltin, "builtin", "selected in the settings") ?? LutUse.None(BuiltinNotFound);
         }
         // R18: own rules first, only here in Auto mode.
         if (s.LutRules.Count > 0 && LutRules.Match(s.LutRules, clip, info, info?.Reel ?? ReelResolver.Resolve(clip, info, cardName), cardName) is { } rule)
             return LutRules.Use(rule.Number, rule.Rule, cat);
-        if (cat.Luts.Count == 0) return LutUse.None("vestavěné LUTy chybí");
+        if (cat.Luts.Count == 0) return LutUse.None("built-in LUTs are missing");
         var (id, reason) = Detect(clip, info, clipFullPath, s.BrawGen4ToGen5);
         if (id == "") return LutUse.None(reason);                     // recognised, but not log footage
-        if (id != null) return Builtin(cat, id, "auto", reason) ?? LutUse.None("vestavěný LUT nenalezen");
-        return Builtin(cat, s.LutFallback, "fallback", "kamera nerozpoznána — záložní LUT") ?? LutUse.None("kamera nerozpoznána");
+        if (id != null) return Builtin(cat, id, "auto", reason) ?? LutUse.None(BuiltinNotFound);
+        return Builtin(cat, s.LutFallback, "fallback", "camera not recognised — fallback LUT") ?? LutUse.None(CameraUnknown);
     }
+
+    const string BuiltinNotFound = "built-in LUT not found";
+    const string CameraUnknown = "camera not recognised";
 
     static LutUse? Builtin(LutCatalog cat, string? id, string source, string reason) =>
         cat.Find(id) is { } lut ? new LutUse(source, lut.Id, lut.Name, WithUserFile(reason, lut)) { File = lut.Path } : null;
 
     /// The report says when the user's own file replaced the built-in LUT, and which one.
     internal static string WithUserFile(string reason, BuiltinLut lut) =>
-        lut.UserFile ? $"{reason}; soubor {lut.Path}" : reason;
+        lut.UserFile ? $"{reason}; file {lut.Path}" : reason;
 
     /// BRAW decodes in the gamma the clip was shot in: only "Blackmagic Design Film" Gen 5 matches the built-in LUT.
     /// Video / Extended Video / Custom / HDR gammas are display-ready already; an older decoder without the gamma
@@ -253,15 +268,15 @@ public static class LutResolver
     static (string? Id, string Reason) Braw(ClipInfo? info, bool gen5Wanted)
     {
         var gamma = info?.Gamma;
-        if (string.IsNullOrEmpty(gamma)) return ("bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)");
+        if (string.IsNullOrEmpty(gamma)) return ("bmd-film-gen5", "Blackmagic RAW (gamma not stated — assuming Film Gen 5)");
         var label = info!.ColorScienceGen is int gen ? $"{gamma} Gen {gen}" : gamma;
         if (!gamma.Equals("Blackmagic Design Film", StringComparison.OrdinalIgnoreCase))
-            return ("", $"Blackmagic RAW: {label} (není log)");
+            return ("", $"Blackmagic RAW: {label} (not log)");
         // Decoded by braw-decode --gen5 (spec 4.2): recorded in an older generation, now Gen 5 — the Gen 5 LUT fits.
         if (info.ColorScienceGenOriginal is int original && original < 5 && info.ColorScienceGen is int effective && effective >= 5)
-            return ("bmd-film-gen5", $"Blackmagic RAW: Film Gen {original} → Gen {effective} (převod SDK)");
+            return ("bmd-film-gen5", $"Blackmagic RAW: Film Gen {original} → Gen {effective} (SDK conversion)");
         if (info.ColorScienceGen is int g && g < 5)
-            return ("", $"Blackmagic RAW: {label} (bez vestavěného LUTu){(gen5Wanted ? " — převod na Gen 5 se nepodařil" : "")}");
+            return ("", $"Blackmagic RAW: {label} (no built-in LUT){(gen5Wanted ? " — the conversion to Gen 5 failed" : "")}");
         return ("bmd-film-gen5", $"Blackmagic RAW: {label}");
     }
 
@@ -286,13 +301,13 @@ public static class LutResolver
                 return (cine ? "sony-slog3-sgamut3cine" : "sony-slog3-sgamut3", $"Sony XML: {gamma} / {primaries}".TrimEnd(' ', '/'));
             }
             // S-Log2 / S-Log is log too, there is just no built-in LUT for it; the rest (rec709, hlg, s-cinetone) is not log.
-            if (g.StartsWith("s-log", StringComparison.Ordinal)) return ("", $"Sony XML: {gamma} (bez vestavěného LUTu)");
-            if (g.Length > 0) return ("", $"Sony XML: {gamma} (není log)");
+            if (g.StartsWith("s-log", StringComparison.Ordinal)) return ("", $"Sony XML: {gamma} (no built-in LUT)");
+            if (g.Length > 0) return ("", $"Sony XML: {gamma} (not log)");
         }
         var camera = (info?.Camera ?? "").ToUpperInvariant();
         if (camera.Contains("ALEXA") || camera.Contains("AMIRA"))
-            return ArriBackend.IsAlexa35(camera) ? ("arri-logc4-awg4", "ARRI kamera (předpoklad LogC4)") : ("arri-logc3-awg3", "ARRI kamera (předpoklad LogC3)");
-        return (null, "kamera nerozpoznána");
+            return ArriBackend.IsAlexa35(camera) ? ("arri-logc4-awg4", "ARRI camera (assuming LogC4)") : ("arri-logc3-awg3", "ARRI camera (assuming LogC3)");
+        return (null, CameraUnknown);
     }
 }
 

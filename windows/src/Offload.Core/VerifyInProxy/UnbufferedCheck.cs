@@ -37,7 +37,7 @@ public static class UnbufferedCheck
                 NativeIO.Write(w, buffer.Span, 0, probe);
                 // Fix round 1 (M-c): where the probe really landed — a junction or symlink on the way to a share is a
                 // network destination (R8); a path that cannot be told is not trusted either.
-                if (finalPath(w) is not string real) return Msg.ClassicCacheCheckFailed("skutečnou cestu sondy nejde zjistit");
+                if (finalPath(w) is not string real) return Msg.ClassicCacheCheckFailed("cannot find the real path of the probe");
                 if (NativeIO.IsRemote(real)) return Msg.ClassicNetwork;
                 // The handle kept NO_BUFFERING | WRITE_THROUGH (fix round 1, M-b).
                 if (!NativeIO.WritesPastTheCache(w)) return Msg.ClassicCacheCheck;

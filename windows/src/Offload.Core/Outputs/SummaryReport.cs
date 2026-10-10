@@ -143,22 +143,22 @@ public sealed record SummaryFiles(string Html, string? Pdf, string? ExtraHtml, s
 /// Task "Souhrnný report z vybraných záloh" (2026-10-09): one HTML + PDF (no thumbnails) from backups picked in the card
 /// history — cards of different days and disks. Read from the cards' reports on the destinations (every generation),
 /// else from their copy on this computer (LocalReports), else only what history.json says — never an error. Reads only;
-/// writes nothing but `<Offload reporty>\souhrn\` and, when the user picks one, a folder on a disk (never over a file).
+/// writes nothing but `<Offload reports>\summary\` and, when the user picks one, a folder on a disk (never over a file).
 public static class SummaryReport
 {
-    static readonly CultureInfo Cs = CultureInfo.GetCultureInfo("cs-CZ");
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    public const string FolderName = "souhrn";
+    public const string FolderName = "summary";
 
     /// Where the summary is saved on this computer: the folder of the local report copies (setting
-    /// `outputs.localReportFolder`, default `<Dokumenty>\Offload reporty`) — also when that copy is switched off.
+    /// `outputs.localReportFolder`, default `<Documents>\Offload reports`) — also when that copy is switched off.
     public static string LocalRoot(OutputSettings o) =>
         string.IsNullOrWhiteSpace(o.LocalReportFolder) ? LocalReports.DefaultRoot : o.LocalReportFolder.Trim();
 
-    /// Every folder the local report copies may be in: the default one and each profile's (projects may have their own).
+    /// Every folder the local report copies may be in: the default one, the default of versions before 0.9.0
+    /// (`Offload reporty`, still read) and each profile's (projects may have their own).
     public static IReadOnlyList<string> LocalRoots(AppSettings s) =>
-        new[] { LocalReports.DefaultRoot }.Concat(new SettingsProfile[] { s }.Concat(s.Projects).Select(p => LocalRoot(p.Outputs)))
+        new[] { LocalReports.DefaultRoot, LocalReports.OldDefaultRoot }.Concat(new SettingsProfile[] { s }.Concat(s.Projects).Select(p => LocalRoot(p.Outputs)))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     static bool HasReport(string folder)
@@ -168,7 +168,7 @@ public static class SummaryReport
     }
 
     /// The command line's arguments: history ids, card folders, or date folders (every card in them). Throws
-    /// ArgumentException (Czech) on anything else.
+    /// ArgumentException on anything else.
     public static IReadOnlyList<SummaryInput> Inputs(IEnumerable<string> args, IReadOnlyList<HistoryEntry> history)
     {
         var list = new List<SummaryInput>();
@@ -336,8 +336,8 @@ public static class SummaryReport
         {
             bool on = connected.Contains(c.CardPath, StringComparer.OrdinalIgnoreCase);
             if (on) return new SummaryCopy(c.Root, c.CardPath, true, LoadAt(c.CardPath).Verified, "");
-            if (record is { Generations.Count: > 0 }) return new SummaryCopy(c.Root, c.CardPath, false, VerifiedAt(record, c.CardPath), "podle reportu");
-            return new SummaryCopy(c.Root, c.CardPath, false, entry is { Unfinished: false } e ? e.Verified : null, entry != null ? "podle historie" : "");
+            if (record is { Generations.Count: > 0 }) return new SummaryCopy(c.Root, c.CardPath, false, VerifiedAt(record, c.CardPath), "per the report");
+            return new SummaryCopy(c.Root, c.CardPath, false, entry is { Unfinished: false } e ? e.Verified : null, entry != null ? "per the history" : "");
         }).ToList();
         var name = readFrom != null && source == SummarySource.Destination ? Path.GetFileName(readFrom) : folderName;
         if (string.IsNullOrEmpty(date)) date = record?.Generations.FirstOrDefault()?.Report.Date ?? "";
@@ -436,17 +436,17 @@ public static class SummaryReport
 
     // MARK: HTML
 
-    /// "6. 10. 2026" for "2026-10-06"; the text itself when it is not a date.
+    /// "2026-10-06" for "2026-10-06" (checked as a date); the text itself when it is not a date.
     static string DateText(string date) =>
-        DateTime.TryParseExact(date, "yyyy-MM-dd", Inv, DateTimeStyles.None, out var d) ? d.ToString("d. M. yyyy", Cs) : date;
+        DateTime.TryParseExact(date, "yyyy-MM-dd", Inv, DateTimeStyles.None, out var d) ? d.ToString("yyyy-MM-dd", Inv) : date;
 
     static string Stat(string value, string label) => $"<div class=\"stat\"><b>{value}</b><span>{label}</span></div>\n";
 
     static string ClapCell(SummaryClap? c, bool withDate)
     {
         if (c == null) return "<td class=\"muted\">—</td>";
-        var tc = c.Timecode is string t ? HtmlReport.Esc(t) : "<span class=\"muted\">bez TC</span>";
-        var note = (withDate ? DateText(c.Date) + " · " : "") + c.Clip + (c.TimeOfDay ? " · TC denní doby" : c.Timecode != null ? " · TC" : "");
+        var tc = c.Timecode is string t ? HtmlReport.Esc(t) : "<span class=\"muted\">no TC</span>";
+        var note = (withDate ? DateText(c.Date) + " · " : "") + c.Clip + (c.TimeOfDay ? " · time-of-day TC" : c.Timecode != null ? " · TC" : "");
         return $"<td class=\"nw\"><span class=\"mono\">{tc}</span><div class=\"note\">{HtmlReport.Esc(note)}</div></td>";
     }
 
@@ -454,20 +454,20 @@ public static class SummaryReport
     {
         if (!c.HasReport)
         {
-            if (c.Entry is not { } e) return ("warn", "neznámý");
-            return e.Unfinished ? ("warn", "nedokončeno (historie)") : !e.Success ? ("bad", "s chybami (historie)")
-                : !e.Verified ? ("warn", "neověřeno (historie)") : ("ok", "ověřeno (historie)");
+            if (c.Entry is not { } e) return ("warn", "unknown");
+            return e.Unfinished ? ("warn", "unfinished (history)") : !e.Success ? ("bad", "with errors (history)")
+                : !e.Verified ? ("warn", "not verified (history)") : ("ok", "verified (history)");
         }
         var r = c.Record!;
-        return r.VerifyPending ? ("warn", "OVĚŘUJE SE") : r.Incomplete ? ("warn", "NEDOKONČENO") : !c.Verified ? ("warn", "NEOVĚŘENO")
-            : r.FailedFiles.Count > 0 ? ("warn", "ověřeno, s chybami") : ("ok", "ověřeno");
+        return r.VerifyPending ? ("warn", "VERIFYING") : r.Incomplete ? ("warn", "UNFINISHED") : !c.Verified ? ("warn", "NOT VERIFIED")
+            : r.FailedFiles.Count > 0 ? ("warn", "verified, with errors") : ("ok", "verified");
     }
 
     static string SourceText(SummaryCard c) => c.Source switch
     {
-        SummarySource.Destination => "z disku",
-        SummarySource.LocalCopy => "kopie reportu na počítači",
-        _ => "report není k dispozici",
+        SummarySource.Destination => "from the disk",
+        SummarySource.LocalCopy => "report copy on this computer",
+        _ => "report not available",
     };
 
     static string Cameras(IReadOnlyList<string> cameras) => cameras.Count == 0 ? "—" : string.Join(", ", cameras);
@@ -482,40 +482,40 @@ public static class SummaryReport
         var total = model.Total;
         var days = model.Days;
         var h = new StringBuilder();
-        h.Append("<!doctype html>\n<html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
-        h.Append($"<title>Souhrnný report</title>\n<style>\n{HtmlReport.Styles(forPrint)}</style></head><body><main>\n");
+        h.Append("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+        h.Append($"<title>Summary report</title>\n<style>\n{HtmlReport.Styles(forPrint)}</style></head><body><main>\n");
         // Without a PDF next to it (Edge missing, printing failed): no link to a file that is not there (S-10).
         h.Append(pdfName != null || forPrint ? HtmlReport.Toolbar(pdfName ?? "", forPrint)
-            : "<div class=\"toolbar\"><button type=\"button\" onclick=\"window.print()\">Uložit jako PDF</button>"
-              + "<span class=\"hint\">v tisku zvolte „Uložit jako PDF“</span></div>\n");
+            : "<div class=\"toolbar\"><button type=\"button\" onclick=\"window.print()\">Save as PDF</button>"
+              + "<span class=\"hint\">in the print dialog choose \u201cSave as PDF\u201d</span></div>\n");
         int cards = total.Cards.Count;
-        var (badge, badgeClass) = cards > 0 && total.VerifiedCards == cards ? ("VŠE OVĚŘENO", "ok") : ("VYŽADUJE POZORNOST", "warn");
+        var (badge, badgeClass) = cards > 0 && total.VerifiedCards == cards ? ("ALL VERIFIED", "ok") : ("NEEDS ATTENTION", "warn");
         var dayList = days.Count == 0 ? "" : days.Count == 1 ? DateText(days[0].Date) : $"{DateText(days[0].Date)} – {DateText(days[^1].Date)}";
-        h.Append($"<header><h1>Souhrnný report{(dayList.Length > 0 ? " — " + E(dayList) : "")}</h1><span class=\"badge {badgeClass}\">{badge}</span>\n");
-        h.Append($"<span class=\"sub\">Natáčecí {Texts.Plural(days.Count, "den", "dny", "dnů")}: {E(string.Join(", ", days.Select(d => DateText(d.Date))))}</span>");
+        h.Append($"<header><h1>Summary report{(dayList.Length > 0 ? " — " + E(dayList) : "")}</h1><span class=\"badge {badgeClass}\">{badge}</span>\n");
+        h.Append($"<span class=\"sub\">Shooting {Texts.Plural(days.Count, "day", "days")}: {E(string.Join(", ", days.Select(d => DateText(d.Date))))}</span>");
         var projects = total.Cards.Select(c => c.Record?.Project ?? c.Entry?.Project).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (projects.Count > 0) h.Append($"<span class=\"sub\">{(projects.Count == 1 ? "Projekt" : "Projekty")}: {E(string.Join(", ", projects!))}</span>");
+        if (projects.Count > 0) h.Append($"<span class=\"sub\">{(projects.Count == 1 ? "Project" : "Projects")}: {E(string.Join(", ", projects!))}</span>");
         h.Append("</header>\n");
 
         h.Append("<div class=\"stats\">\n");
-        h.Append(Stat(cards.ToString(Inv), Texts.Plural(cards, "karta", "karty", "karet")));
-        h.Append(Stat(days.Count.ToString(Inv), "natáčecí " + Texts.Plural(days.Count, "den", "dny", "dnů")));
-        h.Append(Stat(total.ClipCount.ToString(Inv), "klipů"));
-        h.Append(Stat(total.Files.ToString(Inv), "souborů"));
+        h.Append(Stat(cards.ToString(Inv), Texts.Plural(cards, "card", "cards")));
+        h.Append(Stat(days.Count.ToString(Inv), "shooting " + Texts.Plural(days.Count, "day", "days")));
+        h.Append(Stat(total.ClipCount.ToString(Inv), "clips"));
+        h.Append(Stat(total.Files.ToString(Inv), "files"));
         h.Append(Stat(Format.Bytes(total.Bytes), "data"));
-        h.Append(Stat(HtmlReport.Duration(total.Seconds), "stopáž"));
-        h.Append(Stat($"{total.VerifiedCards} / {cards}", "ověřené karty"));
+        h.Append(Stat(HtmlReport.Duration(total.Seconds), "duration"));
+        h.Append(Stat($"{total.VerifiedCards} / {cards}", "verified cards"));
         h.Append("</div>\n");
         if (total.WithoutReport > 0)
-            h.Append($"<p class=\"sub warn\">{total.WithoutReport} {Texts.Plural(total.WithoutReport, "karta nemá", "karty nemají", "karet nemá")} report k dispozici: "
-                + "soubory a velikost podle historie, klipy a stopáž bez nich.</p>\n");
+            h.Append($"<p class=\"sub warn\">{Texts.N(total.WithoutReport, "card has", "cards have")} no report available: "
+                + "files and size per the history, clips and duration without them.</p>\n");
 
-        const string Head = "<th class=\"num\">Klipy</th><th class=\"num\">Soubory</th><th class=\"num\">Data</th><th class=\"num\">Stopáž</th><th>První klapka</th><th>Poslední klapka</th><th>Kamery</th>";
+        const string Head = "<th class=\"num\">Clips</th><th class=\"num\">Files</th><th class=\"num\">Data</th><th class=\"num\">Duration</th><th>First slate</th><th>Last slate</th><th>Cameras</th>";
         string Numbers(int clips, int files, long bytes, double seconds) =>
             $"<td class=\"num\">{clips}</td><td class=\"num\">{files}</td><td class=\"num nw\">{Format.Bytes(bytes)}</td><td class=\"num\">{Seconds(seconds)}</td>";
 
-        h.Append("\n<h2>Natáčecí dny</h2><div class=\"panel\"><table>\n");
-        h.Append($"<tr><th>Den</th><th class=\"num\">Karty</th>{Head}</tr>\n");
+        h.Append("\n<h2>Shooting days</h2><div class=\"panel\"><table>\n");
+        h.Append($"<tr><th>Day</th><th class=\"num\">Cards</th>{Head}</tr>\n");
         foreach (var d in days)
         {
             h.Append($"<tr><td class=\"nw\">{E(DateText(d.Date))}</td><td class=\"num\">{d.Cards.Count}</td>{Numbers(d.ClipCount, d.Files, d.Bytes, d.Seconds)}");
@@ -523,8 +523,8 @@ public static class SummaryReport
         }
         h.Append("</table></div>\n");
 
-        h.Append("\n<h2>Karty</h2><div class=\"panel\"><table>\n");
-        h.Append($"<tr><th>Karta</th><th>Den</th>{Head}<th>Ověření</th><th>Údaje</th></tr>\n");
+        h.Append("\n<h2>Cards</h2><div class=\"panel\"><table>\n");
+        h.Append($"<tr><th>Card</th><th>Day</th>{Head}<th>Verification</th><th>Data from</th></tr>\n");
         foreach (var c in model.Cards)
         {
             var (vClass, vText) = State(c);
@@ -534,15 +534,15 @@ public static class SummaryReport
             h.Append($"<td class=\"wrap\">{E(Cameras(c.Cameras))}</td><td class=\"{vClass}\">{vText}</td>");
             h.Append($"<td class=\"{(c.Source == SummarySource.None ? "warn" : c.Source == SummarySource.LocalCopy ? "muted" : "")}\">{SourceText(c)}</td></tr>\n");
         }
-        h.Append($"<tr><td class=\"nw\"><b>Celkem</b></td><td class=\"nw\">{days.Count} {Texts.Plural(days.Count, "den", "dny", "dnů")}</td>{Numbers(total.ClipCount, total.Files, total.Bytes, total.Seconds)}");
+        h.Append($"<tr><td class=\"nw\"><b>Total</b></td><td class=\"nw\">{Texts.N(days.Count, "day")}</td>{Numbers(total.ClipCount, total.Files, total.Bytes, total.Seconds)}");
         h.Append($"{ClapCell(total.First, days.Count > 1)}{ClapCell(total.Last, days.Count > 1)}<td class=\"wrap\">{E(Cameras(total.Cameras))}</td>");
-        h.Append($"<td>{total.VerifiedCards} / {cards} ověřeno</td><td></td></tr>\n");
+        h.Append($"<td>{total.VerifiedCards} / {cards} verified</td><td></td></tr>\n");
         h.Append("</table></div>\n");
-        h.Append("<p class=\"sub\">Klapka = začátek prvního a posledního nahraného klipu (pořadí podle času záznamu z metadat kamery, "
-            + "jinak podle čísla klipu); čas = startovní timecode klipu, u ALEXY TC denní doby. Stopáž = součet délek klipů.</p>\n");
+        h.Append("<p class=\"sub\">Slate = the start of the first and the last recorded clip (ordered by the record time from the camera metadata, "
+            + "otherwise by the clip number); time = the clip's start timecode, time-of-day TC on an ALEXA. Duration = the sum of the clip lengths.</p>\n");
 
-        h.Append("\n<h2>Kde je co zálohované</h2><div class=\"panel\"><table>\n");
-        h.Append("<tr><th>Karta</th><th>Disk</th><th>Cesta</th><th>Disk připojen</th><th>Ověřeno</th><th>Kopie reportu na počítači</th></tr>\n");
+        h.Append("\n<h2>Where everything is backed up</h2><div class=\"panel\"><table>\n");
+        h.Append("<tr><th>Card</th><th>Disk</th><th>Path</th><th>Disk connected</th><th>Verified</th><th>Report copy on this computer</th></tr>\n");
         foreach (var c in model.Cards)
         {
             List<SummaryCopy?> rows = c.Copies.Count == 0 ? [null] : [.. c.Copies];
@@ -553,13 +553,13 @@ public static class SummaryReport
                 if (i == 0) h.Append($"<td{span}><b>{E(c.Name)}</b><div class=\"note\">{E(DateText(c.Date))}</div></td>");
                 if (rows[i] is { } copy)
                 {
-                    var (vc, vt) = copy.Verified switch { true => ("ok", "ano"), false => ("warn", "ne"), _ => ("muted", "nezjištěno") };
+                    var (vc, vt) = copy.Verified switch { true => ("ok", "yes"), false => ("warn", "no"), _ => ("muted", "unknown") };
                     if (copy.Basis.Length > 0) vt += $" <span class=\"note\">({copy.Basis})</span>";
                     h.Append($"<td class=\"mono\">{E(copy.Root)}</td><td class=\"mono\">{E(copy.CardPath)}</td>");
-                    h.Append($"<td class=\"{(copy.Connected ? "ok" : "muted")}\">{(copy.Connected ? "ano" : "nepřipojen")}</td><td class=\"{vc}\">{vt}</td>");
+                    h.Append($"<td class=\"{(copy.Connected ? "ok" : "muted")}\">{(copy.Connected ? "yes" : "not connected")}</td><td class=\"{vc}\">{vt}</td>");
                 }
-                else h.Append("<td colspan=\"4\" class=\"muted\">cíle zálohy nejsou známé</td>");
-                if (i == 0) h.Append($"<td{span} class=\"mono\">{(c.LocalCopy is string l ? E(l) : "<span class=\"muted\">není</span>")}</td>");
+                else h.Append("<td colspan=\"4\" class=\"muted\">the backup's destinations are not known</td>");
+                if (i == 0) h.Append($"<td{span} class=\"mono\">{(c.LocalCopy is string l ? E(l) : "<span class=\"muted\">none</span>")}</td>");
                 h.Append("</tr>\n");
             }
         }
@@ -568,12 +568,12 @@ public static class SummaryReport
         var notes = Notes(model);
         if (notes.Count > 0)
         {
-            h.Append($"\n<h2 class=\"warn\">Upozornění ({notes.Count})</h2><div class=\"panel\"><table>\n");
+            h.Append($"\n<h2 class=\"warn\">Warnings ({notes.Count})</h2><div class=\"panel\"><table>\n");
             foreach (var (card, text, bad) in notes)
                 h.Append($"<tr><td>{E(card)}</td><td class=\"{(bad ? "err" : "warn wrap")}\">{E(text)}</td></tr>\n");
             h.Append("</table></div>\n");
         }
-        h.Append($"<footer>offload {E(OffloadVersion.String)} · souhrnný report · {HtmlReport.DateTimeText(createdLocal ?? DateTime.Now)}</footer></main></body></html>\n");
+        h.Append($"<footer>offload {E(OffloadVersion.String)} · summary report · {HtmlReport.DateTimeText(createdLocal ?? DateTime.Now)}</footer></main></body></html>\n");
         return h.ToString();
     }
 
@@ -585,18 +585,18 @@ public static class SummaryReport
         {
             var name = $"{c.Name} ({DateText(c.Date)})";
             if (c.Source == SummarySource.None)
-                list.Add((name, "report není k dispozici — disk se zálohou není připojený a kopie reportu na počítači chybí; "
-                    + (c.Entry != null ? "soubory, velikost a ověření podle historie" : "údaje chybí"), false));
+                list.Add((name, "report not available — the backup disk is not connected and there is no report copy on this computer; "
+                    + (c.Entry != null ? "files, size and verification per the history" : "no data"), false));
             else if (c.Source == SummarySource.LocalCopy)
-                list.Add((name, "disk se zálohou není připojený — údaje z kopie reportu na počítači", false));
+                list.Add((name, "the backup disk is not connected — data from the report copy on this computer", false));
             if (c.Record is not { } r) continue;
             foreach (var text in DayReport.UnreadableTexts(r)) list.Add((name, text, true));
             if (r.Generations.Count == 0) continue;
             var failed = r.FailedFiles;
             if (failed.Count > 0)
-                list.Add((name, $"{failed.Count} {Texts.Plural(failed.Count, "soubor selhal", "soubory selhaly", "souborů selhalo")}: "
+                list.Add((name, $"{Texts.N(failed.Count, "file")} failed: "
                     + string.Join(", ", failed.Take(5)) + (failed.Count > 5 ? ", …" : ""), true));
-            if (!c.Verified && !r.VerifyPending) list.Add((name, "neověřeno na všech discích — kartu neformátujte, dokud záloha není ověřená", false));
+            if (!c.Verified && !r.VerifyPending) list.Add((name, "not verified on all disks — do not format the card until the backup is verified", false));
         }
         return list;
     }
@@ -604,7 +604,7 @@ public static class SummaryReport
     // MARK: Saving
 
     /// `<datum>_<čas>_souhrn` of `now`.
-    public static string BaseName(DateTime nowLocal) => nowLocal.ToString("yyyy-MM-dd'_'HHmmss", Inv) + "_souhrn";
+    public static string BaseName(DateTime nowLocal) => nowLocal.ToString("yyyy-MM-dd'_'HHmmss", Inv) + "_summary";
 
     /// `name`, `name_2`, `name_3` … — the first whose HTML and PDF are both free in `dir`.
     static string FreeName(string dir, string name)
@@ -678,7 +678,7 @@ public static class SummaryReport
             throw new InvalidOperationException(Msg.SummaryTargetCameraCard(full));
     }
 
-    /// Writes the summary into `<localRoot>\souhrn\<datum>_<čas>_souhrn.html/.pdf` and, with `extraFolder`, the same into
+    /// Writes the summary into `<localRoot>\summary\<date>_<time>_summary.html/.pdf` and, with `extraFolder`, the same into
     /// that folder (CheckTarget first); nothing is ever overwritten (`_2`, `_3` …). The PDF is best effort (logged) and
     /// printed first, so an HTML links to its PDF only when there is one (S-10). A failure on the picked disk is returned
     /// (ExtraError), the local copy stays. Throws when the local HTML cannot be written.

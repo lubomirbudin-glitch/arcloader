@@ -85,25 +85,25 @@ public static class CameraHints
 /// How a disk is connected, in a word or two (UI návrh, nová věc 6): from the HW diagnostics (`DriveLinks`).
 public static class ConnectionLabel
 {
-    /// "čtečka USB 3 · 5 Gb/s", "USB 2.0", "NVMe", "SATA", "SD čtečka", "síť" — or null when unknown. Thunderbolt is not
+    /// "reader USB 3 · 5 Gb/s", "USB 2.0", "NVMe", "SATA", "SD reader", "network" — or null when unknown. Thunderbolt is not
     /// told apart by Windows: a disk behind it shows by its bus (NVMe, USB).
     public static string? Short(DriveLink link, bool card)
     {
         string? bus = link.Usb is { } u ? Usb(u.Link) : link.Bus switch
         {
-            StorageBus.Sd or StorageBus.Mmc => card ? "SD čtečka" : "SD",
+            StorageBus.Sd or StorageBus.Mmc => card ? "SD reader" : "SD",
             StorageBus.Nvme => "NVMe",
             StorageBus.Sata => "SATA",
-            StorageBus.Network => "síť",
+            StorageBus.Network => "network",
             StorageBus.Raid => "RAID",
             StorageBus.Sas => "SAS",
             StorageBus.Scsi => "SCSI",
-            StorageBus.Virtual => "virtuální disk",
+            StorageBus.Virtual => "virtual disk",
             StorageBus.Usb => "USB",
             _ => null,
         };
         if (bus == null) return null;
-        return card && link.Bus == StorageBus.Usb ? $"čtečka {bus}" : bus;
+        return card && link.Bus == StorageBus.Usb ? $"reader {bus}" : bus;
     }
 
     static string? Usb(UsbLinkSpeed s) => s switch
@@ -119,17 +119,17 @@ public static class ConnectionLabel
 /// The destination tile (UI návrh obr. 1): its free-space line and the space bar.
 public static class DestinationTile
 {
-    /// "7,20 TB volných z 8 TB · NTFS · NVMe".
+    /// "7.20 TB free of 8 TB · NTFS · NVMe".
     public static string FreeText(long free, long? total, string filesystem, string? connection)
     {
-        var parts = new List<string> { total is long t && t > 0 ? $"{Format.BytesCs3(free)} volných z {Format.BytesCs(t)}" : $"{Format.BytesCs3(free)} volno" };
+        var parts = new List<string> { total is long t && t > 0 ? $"{Format.Bytes3(free)} free of {Format.BytesShort(t)}" : $"{Format.Bytes3(free)} free" };
         if (filesystem.Length > 0) parts.Add(filesystem);
         if (connection != null) parts.Add(connection);
         return string.Join(" · ", parts);
     }
 
-    /// The compact list while a copy runs: "7,20 TB volno".
-    public static string CompactFree(long free) => $"{Format.BytesCs3(free)} volno";
+    /// The compact list while a copy runs: "7.20 TB free".
+    public static string CompactFree(long free) => $"{Format.Bytes3(free)} free";
 
     /// The bar: grey = used, blue = what the cards ticked now need there (with proxies and the report); yellow / red with
     /// the space warning / problem. Shares of the capacity, the need cut to what is free.

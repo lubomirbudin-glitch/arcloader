@@ -12,6 +12,6 @@ public static class TopBar
     public static HardwareDot Dot(HwTestResult? last) =>
         last == null ? HardwareDot.None : last.Advice.Any(a => a.Kind == AdviceKind.Warning) ? HardwareDot.Warning : HardwareDot.Ok;
 
-    /// What the switcher shows after "Projekt": the active project, or "Bez projektu".
+    /// What the switcher shows after "Projekt": the active project, or "No project".
     public static string ProjectLabel(string? activeProject) => activeProject ?? Projects.NoProject;
 }

@@ -6,7 +6,7 @@ namespace Offload.Core.Desktop;
 /// copy: a later edit or a project switch never changes a queued or running job.
 public static class JobConfigs
 {
-    /// A full copy with the profile shown now, recorded under the active project (null = "Bez projektu").
+    /// A full copy with the profile shown now, recorded under the active project (null = "No project").
     public static JobConfig Full(AppSettings s, string source, string? cardName, string date)
     {
         var p = s.Active;
@@ -31,12 +31,12 @@ public static class JobConfigs
     /// Plan 10: the profile's primary destination — the first one, or null = the fastest measured during the copy.
     public static int? Primary(SettingsProfile p) => p.VerifyPrimary == SettingsProfile.PrimaryFirst ? 0 : null;
 
-    /// "Zkopírovat znovu" (UI návrh 4) after `finished` ended with failed files: see the overload — with the identity of
+    /// "Copy again" (UI návrh 4) after `finished` ended with failed files: see the overload — with the identity of
     /// the card it copied (ruling I1).
     public static JobConfig Repair(OffloadJob finished) =>
         Repair(finished.Config, finished.Plan ?? throw new InvalidOperationException("The job has no plan: nothing to repair."), finished.SourceIdentity);
 
-    /// "Zkopírovat znovu" (UI návrh 4) after `original` ended with failed files: only those, only where they failed, into
+    /// "Copy again" (UI návrh 4) after `original` ended with failed files: only those, only where they failed, into
     /// the same card folders — with the job's own copy of the settings (its project, outputs and notifications; a switch
     /// of project since changes nothing). Always verified; no clip analysis or proxies (the clips were analysed with the
     /// backup). `cardIdentity`: the card that was copied (`OffloadJob.SourceIdentity`) — another card is refused.
