@@ -2,7 +2,15 @@ import XCTest
 @testable import OffloadKit
 
 /// Hash types ASC MHL may carry (R9), vectors as Windows `HashAlgoTests`; MD5 in one read with xxh64 (spec 3.5).
+/// (Stream A's registry tests, kept on the plan's API — task 32: `HashAlgo.make/equal`, `HashKinds`, `hashFile(kinds:)`.)
 final class HashAlgoTests: XCTestCase {
+    /// The whole of `data` through one running hash of the registry.
+    private func of(_ name: String, _ data: Data) -> String? {
+        guard let h = HashAlgo.make(name) else { return nil }
+        data.withUnsafeBytes { if let p = $0.baseAddress { h.update(p, data.count) } }
+        return h.value()
+    }
+
     func testVectors() {
         let cases: [(String, String, String)] = [
             ("xxh64", "", "ef46db3751d8e999"),
@@ -18,44 +26,42 @@ final class HashAlgoTests: XCTestCase {
             ("c4", "abc", "c45S4rnaTNWonxss1u8LzsaJdEph1AJhWUF4sh2waXKMsutyfAxg4ybUeuXVWS9HdNcEypmeXn8FZGonD4w1rj9DZp"),
         ]
         for (algo, input, expected) in cases {
-            XCTAssertEqual(HashAlgo.of(algo, Data(input.utf8)), expected, "\(algo)(\(input))")
+            XCTAssertEqual(of(algo, Data(input.utf8)), expected, "\(algo)(\(input))")
         }
-        XCTAssertNil(HashAlgo.create("sha256"))
+        XCTAssertNil(HashAlgo.make("sha256"))
     }
 
     func testBlockByBlockEqualsAtOnce() {
         var data = Data(count: 100_000)
         for i in data.indices { data[i] = UInt8(truncatingIfNeeded: i &* 31 &+ 7) }
-        for algo in HashAlgo.names {
-            let h = HashAlgo.create(algo)!
+        for algo in HashAlgo.known {
+            let h = HashAlgo.make(algo)!
             var i = 0
             while i < data.count {
                 let n = min(4096, data.count - i)
                 data.withUnsafeBytes { h.update($0.baseAddress! + i, n) }
                 i += n
             }
-            XCTAssertEqual(h.finish(), HashAlgo.of(algo, data), algo)
+            XCTAssertEqual(h.value(), of(algo, data), algo)
         }
     }
 
-    func testSameHexAnyCaseC4Exact() {
-        XCTAssertTrue(HashAlgo.same("xxh64", "44BC2CF5AD770999", "44bc2cf5ad770999"))
-        XCTAssertFalse(HashAlgo.same("c4", "c45S4", "C45s4"))
+    func testEqualHexAnyCaseC4Exact() {
+        XCTAssertTrue(HashAlgo.equal("xxh64", "44BC2CF5AD770999", "44bc2cf5ad770999"))
+        XCTAssertFalse(HashAlgo.equal("c4", "c45S4", "C45s4"))
         XCTAssertEqual(HashAlgo.label("xxh64"), "xxHash64")
         XCTAssertEqual(HashAlgo.label("md5"), "MD5")
     }
 
     func testHashKindsXxh64Always() {
-        XCTAssertEqual(HashKinds.normalize(.md5), .both)
-        XCTAssertEqual(HashKinds.names(.md5), ["xxh64", "md5"])
-        XCTAssertEqual(HashKinds.names(.xxh64), ["xxh64"])
-        XCTAssertEqual(HashKinds.fromNames(["xxh64", "md5"]), .both)
-        XCTAssertEqual(HashKinds.fromNames(nil), .xxh64)
-        XCTAssertEqual(HashKinds.wire(.md5), "both")
-        XCTAssertEqual(HashKinds.parseWire("both"), .both)
-        XCTAssertNil(HashKinds.parseWire("md5"))   // R16: never MD5 alone
+        XCTAssertEqual(HashKinds.md5, .both)
+        XCTAssertEqual(HashKinds.md5.names, ["xxh64", "md5"])
+        XCTAssertEqual(HashKinds.xxh64.names, ["xxh64"])
+        XCTAssertEqual(HashKinds(rawValue: 0), .xxh64, "R16: xxh64 is never left out")
+        XCTAssertEqual(HashKinds.from(names: ["xxh64", "md5"]), .both)
+        XCTAssertEqual(HashKinds.from(names: nil), .xxh64)
         XCTAssertEqual(HashKinds.fromSetting("future"), .xxh64)
-        XCTAssertEqual(HashKinds.label(.both), "xxHash64 + MD5")
+        XCTAssertEqual(HashKinds.fromSetting("md5"), .xxh64, "R16: the setting has no MD5 alone")
     }
 
     func testFileBothHashesInOneRead() throws {
@@ -64,29 +70,31 @@ final class HashAlgoTests: XCTestCase {
         try Data("abc".utf8).write(to: URL(fileURLWithPath: path))
         let buf = IO.allocateAligned(4096)
         defer { free(buf) }
-        let (h, size) = try hashFile(path, kinds: .both, chunkSize: 4096, buffer: buf)
+        let (h, size) = try hashFile(path, chunkSize: 4096, buffer: buf, kinds: .both)
         XCTAssertEqual(h.md5Hex, "900150983cd24fb0d6963f7d28e17f72")
         XCTAssertEqual(h.xxh64, 0x44bc2cf5ad770999)
+        XCTAssertEqual(h.xxh128, "06b05ab6733a618578af5f94892f3950")
         XCTAssertEqual(size, 3)
-        XCTAssertNil(try hashFile(path, kinds: .xxh64, chunkSize: 4096, buffer: buf).hashes.md5)
+        XCTAssertNil(try hashFile(path, chunkSize: 4096, buffer: buf, kinds: .xxh64).hashes.md5)
 
         let big = dir.path + "/big"
         let data = TestFS.writeRandom(big, size: 3 * 4096 + 1, seed: 7)
         var progress = 0
-        let (hb, read) = try hashFile(big, kinds: .md5, chunkSize: 4096, buffer: buf, progress: { progress += $0 })
-        XCTAssertEqual(hb.md5Hex, HashAlgo.of("md5", data))
-        XCTAssertEqual(hb.xxh64Hex, HashAlgo.of("xxh64", data))   // R16: MD5 alone still brings xxh64
+        let (hb, read) = try hashFile(big, chunkSize: 4096, buffer: buf, kinds: .md5, progress: { progress += $0 })
+        XCTAssertEqual(hb.md5Hex, of("md5", data))
+        XCTAssertEqual(hb.xxh64Hex, of("xxh64", data))   // R16: MD5 alone still brings xxh64
+        XCTAssertEqual(hb.xxh128, of("xxh128", data))
         XCTAssertEqual(read, Int64(data.count))
         XCTAssertEqual(progress, data.count)
     }
 
-    func testCzechBytesAndCount() {
-        XCTAssertEqual(Msg.bytes(3_200_000_000), "3,2 GB")
-        XCTAssertEqual(Msg.bytes(2_000_000_000), "2 GB")
-        XCTAssertEqual(Msg.bytes(412_000_000_000), "412 GB")
-        XCTAssertEqual(Msg.bytes(12), "12 B")
-        XCTAssertEqual(Msg.count(1234), "1\u{00A0}234")
-        XCTAssertEqual(Msg.noSpace("Zaloha", SpaceNeed(card: 380_000_000_000, proxy: 30_000_000_000, report: 2_000_000_000), 398_000_000_000),
+    func testCzechBytesAndNoSpace() {
+        XCTAssertEqual(formatBytesCs(3_200_000_000), "3,2 GB")
+        XCTAssertEqual(formatBytesCs(2_000_000_000), "2 GB")
+        XCTAssertEqual(formatBytesCs(412_000_000_000), "412 GB")
+        XCTAssertEqual(formatBytesCs(12), "12 B")
+        let need = SpaceNeed(card: 380_000_000_000, proxy: 30_000_000_000, report: 2_000_000_000)
+        XCTAssertEqual(Msg.noSpace("Zaloha", total: need.total, parts: need.partsText("karty"), free: 398_000_000_000),
                        "Na cíli Zaloha není dost místa: potřeba 412 GB (karty 380 GB, proxy ~30 GB, report 2 GB), volno 398 GB.")
     }
 }

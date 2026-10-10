@@ -24,7 +24,7 @@ public enum Bench {
             stat(path, &st)
             targets = [(path, Int64(st.st_size))]
         }
-        guard !targets.isEmpty else { throw OffloadError.preflight("No files to read in \(path)") }
+        guard !targets.isEmpty else { throw OffloadError.preflight(Msg.noFilesToRead(path), code: .noFilesToRead) }
 
         var lines: [Line] = []
         for bs in blockSizes {

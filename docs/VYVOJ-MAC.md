@@ -108,6 +108,32 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
       ji smaže; kontrola odpojení těsně před startem; ostrý offload se složkou → řádky v reportu;
     - úkol 25: ikona v Docku, ⌘⇥ a Finderu; 11 LUTů v *Proxy › LUT*.
 
+## 2026-10-10 — dorovnání 2 (plány 6–10), průběh
+
+Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md)
+(úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
+slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
+
+- Úkol 36 — svazek: sériové číslo FS z boot sektoru (exFAT/FAT/NTFS, jako Windows), záložně uuid:, kapacita,
+  volumeSerial, klíč složky pro zámky, časy FAT s tolerancí celých hodin, .NET ticks; ověřeno: obrazy exFAT, FAT16
+  a FAT32 pod dočasnou složkou — sériové číslo = bajty boot sektoru, kapacita = `diskutil` „Volume Total Space“;
+  skutečné disky `/dev/rdisk*` jsou `root:operator` (bez sudo nečitelné → `uuid:`); srovnání s Windows čeká;
+  cesty přes realpath (ne `resolvingSymlinksInPath`, ta ořízne `/private`), kořen svazku se odřízne jen jako skutečná
+  předpona (systémový disk: statfs hlásí `/System/Volumes/Data`)
+- Úkol 35 — nastavení zachová neznámé klíče a nečitelné sekce (projekty a pravidla z novější verze nezmizí); klíče
+  naming, hash, outputs; v sekcích proxy/tools/naming/outputs se zachovají jen klíče, které tahle verze nezná —
+  vymazaná volitelná hodnota (cesta k LUTu, nástroji) se ze starého JSON nevrátí, `portNames` se neslučuje
+- Úkol 34 — hlášky kontrol a CLI česky (`Msg` v `Messages.swift`, `PreflightCode`, `OffloadError.code`), „Chyba: “,
+  `formatBytesCs`; chyby parseru swift-argument-parser zůstávají anglicky; nahrazuje `Msg.swift` proudu A (texty
+  stejné, `verifyHint` podle plánu = Windows, `Msg.bytes` → `formatBytesCs`, `Msg.count` bez použití vypuštěno)
+- Úkol 33 — report čte i zapisuje sdílené klíče Windows 0.2–0.6 (generace, oprava, projekt, MD5, xxh128, ověření
+  během proxy, pauza, odložené kopie); Mac nikdy nepíše unbuffered ani proxyEncoder; zápis souboru „jen nový“
+  (renamex_np RENAME_EXCL, `FileExists`); report s verifyPending/verifyIncomplete nikdy není „lze formátovat“
+  (`safeToEject` reportu → `safeToFormat`); `IO.writeFileNew`/`IO.renameNoReplace` proudu A nahrazeny verzí plánu
+- Úkol 32 — hash jádro: XXH3-128 (kanonický hex), XXH3-64 bloků, MD5 přes CryptoKit, registr hashů ASC MHL (xxh64, md5,
+  sha1, xxh3, xxh128, c4); nahrazuje registr proudu A (`HashKind`, `HashAlgo.create`, MD5/SHA-1 přes zastaralé CommonCrypto),
+  jeho testovací vektory zůstaly; `hashFile` počítá vždy xxh64 i xxh128 (`MultiHasher`)
+
 ## 2026-10-09 — build „Offload C“ (0.2.0C): rychlá analýza ARRIRAW, report i na Macu, disky do cílů samy
 
 - **Analýza ARRIRAW za sekundy:** `art-cmd export` jen z prvního snímku (`--start 0 --duration 1`, limit 180 s) — celý

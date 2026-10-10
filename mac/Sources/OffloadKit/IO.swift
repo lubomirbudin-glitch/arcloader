@@ -97,37 +97,6 @@ enum IO {
         guard rename(tmp, path) == 0 else { throw IOError("rename", path) }
     }
 
-    /// Like `writeFileDurably`, but never replaces: a file already at `path` throws (EEXIST) and is left as it was.
-    /// An append's `_NNNN` reports and its MHL generation are created this way (spec 2.2).
-    static func writeFileNew(_ path: String, _ data: Data) throws {
-        if FileManager.default.fileExists(atPath: path) { throw IOError("create", path, EEXIST) }
-        let tmp = (path as NSString).deletingLastPathComponent + "/." + (path as NSString).lastPathComponent + ".tmp"
-        let fd = try openWrite(tmp)
-        do {
-            if !data.isEmpty {
-                try data.withUnsafeBytes { try pwrite(fd, $0.baseAddress!, data.count, 0, path: tmp) }
-            }
-            try fullSync(fd, path: tmp)
-            close(fd)
-            try renameNoReplace(tmp, path)
-        } catch {
-            close(fd)
-            unlink(tmp)
-            throw error
-        }
-    }
-
-    /// rename(2) that never replaces (EEXIST when `to` exists): `renamex_np(RENAME_EXCL)` where the filesystem has it
-    /// (APFS, HFS+); where not (ENOTSUP/EINVAL — exFAT and FAT through fskit on macOS 26, SMB), a check right before
-    /// a plain rename.
-    static func renameNoReplace(_ from: String, _ to: String) throws {
-        if renamex_np(from, to, UInt32(RENAME_EXCL)) == 0 { return }
-        let e = errno
-        guard e == ENOTSUP || e == EINVAL else { throw IOError("rename", to, e) }
-        if FileManager.default.fileExists(atPath: to) { throw IOError("rename", to, EEXIST) }
-        guard rename(from, to) == 0 else { throw IOError("rename", to) }
-    }
-
     static func setModificationTime(_ fd: Int32, _ mtime: timespec) {
         var times = [timespec(tv_sec: 0, tv_nsec: Int(UTIME_OMIT)), mtime]
         _ = futimens(fd, &times)
@@ -180,7 +149,55 @@ public func formatBytes(_ b: Int64) -> String {
     return i == 0 ? "\(b) B" : String(format: "%.2f %@", v, units[i])
 }
 
+/// A size inside a Czech sentence: "3,2 GB", "2 GB", "412 GB", "850 MB", "12 B".
+public func formatBytesCs(_ b: Int64) -> String {
+    let units = ["B", "KB", "MB", "GB", "TB"]
+    var v = Double(b)
+    var i = 0
+    while v >= 1000 && i < units.count - 1 { v /= 1000; i += 1 }
+    if i == 0 { return "\(b) B" }
+    let f = NumberFormatter()
+    f.locale = Locale(identifier: "cs_CZ")
+    f.minimumFractionDigits = 0
+    f.maximumFractionDigits = v < 10 ? 1 : 0
+    f.usesGroupingSeparator = false
+    return (f.string(from: NSNumber(value: v)) ?? "\(v)") + " " + units[i]
+}
+
 public func formatRate(_ bytes: Int64, _ seconds: Double) -> String {
     guard seconds > 0 else { return "-" }
     return String(format: "%.0f MB/s", Double(bytes) / seconds / 1_000_000)
+}
+
+/// A file that must be created new is already there (an earlier generation's report, another job).
+public struct FileExists: Error, CustomStringConvertible {
+    public let path: String
+    public var description: String { "file exists: \(path)" }
+}
+
+extension IO {
+    /// Writes `data` as a new file: complete under a temporary name (F_FULLFSYNC), then renamed into place without
+    /// replacing anything (spec D.23.9). Throws FileExists when `path` is taken; the temporary file is removed.
+    static func writeFileNew(_ path: String, _ data: Data) throws {
+        if FileManager.default.fileExists(atPath: path) { throw FileExists(path: path) }
+        let tmp = (path as NSString).deletingLastPathComponent + "/." + (path as NSString).lastPathComponent + ".new.tmp"
+        let fd = try openWrite(tmp)
+        do {
+            if !data.isEmpty { try data.withUnsafeBytes { try pwrite(fd, $0.baseAddress!, data.count, 0, path: tmp) } }
+            try fullSync(fd, path: tmp)
+            close(fd)
+        } catch {
+            close(fd); unlink(tmp)
+            throw error
+        }
+        do {
+            try ProxyCopy.renameNoReplace(tmp, path)
+        } catch is ProxyCopy.Taken {
+            unlink(tmp)
+            throw FileExists(path: path)
+        } catch {
+            unlink(tmp)
+            throw error
+        }
+    }
 }

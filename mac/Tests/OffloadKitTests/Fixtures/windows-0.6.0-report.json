@@ -1,0 +1,38 @@
+{
+  "cardName": "A001",
+  "clips": [],
+  "copyFinished": "2026-10-08T08:00:10Z",
+  "copyPausedSeconds": 12.5,
+  "date": "2026-10-08",
+  "destinations": [
+    {"cardPath": "D:\\Zaloha\\2026-10-08\\A001", "filesFailed": 0, "filesOK": 1, "filesystem": "NTFS",
+     "root": "D:\\Zaloha", "unbuffered": true, "verifyMethod": "verify-in-proxy", "volumeSerial": "1A2B-3C4D"},
+    {"cardPath": "E:\\B\\2026-10-08\\A001", "filesFailed": 0, "filesOK": 1, "filesystem": "exFAT",
+     "root": "E:\\B", "verifyMethod": "read-back", "verifyNote": "síťový disk", "volumeSerial": "5E6F-7A8B"}
+  ],
+  "files": [
+    {"destinations": ["verified", "verified"], "errors": [null, null], "md5": "900150983cd24fb0d6963f7d28e17f72",
+     "modified": "2026-10-08T07:59:00Z", "path": "CLIP/A001C002.mov", "rewritten": [true, false], "size": 3,
+     "xxh128": "06b05ab6733a618578af5f94892f3950", "xxh64": "44bc2cf5ad770999"}
+  ],
+  "finished": "2026-10-08T08:01:00Z",
+  "generation": 2,
+  "hashAlgorithm": "xxh64",
+  "hashAlgorithms": ["xxh64", "md5"],
+  "kind": "repair",
+  "project": "Film X",
+  "proxyEncoder": "h264_nvenc",
+  "safeToFormatSeconds": 48.5,
+  "setAside": [{"destination": 0, "movedTo": "_REPORT/neshoda_0002/CLIP/A001C002.mov", "path": "CLIP/A001C002.mov"}],
+  "skipped": [],
+  "source": "F:\\",
+  "sourceFilesystem": "exFAT",
+  "started": "2026-10-08T08:00:00Z",
+  "tool": "offload",
+  "totalBytes": 3,
+  "totalFiles": 1,
+  "verified": true,
+  "verifyNotes": ["blok 3 souboru CLIP/A001C002.mov se při opakovaném čtení lišil"],
+  "verifyPausedSeconds": 0.5,
+  "version": "0.6.0-win"
+}
