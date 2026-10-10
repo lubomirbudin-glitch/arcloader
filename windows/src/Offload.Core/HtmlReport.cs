@@ -37,7 +37,7 @@ public static partial class HtmlReport
         ".stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stat span{color:var(--muted);font-size:12px}\n" +
         ".panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow-x:auto}\n" +
         "table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere}\n" +
-        "table.clips{table-layout:fixed}table.clips td,table.clips th{padding:8px 6px;overflow-wrap:normal}table.clips td.clip{overflow-wrap:anywhere}table.clips td.st{overflow-wrap:normal;word-break:normal;hyphens:none}table.clips td.st a{color:inherit}table.clips td.num,table.clips th.num,table.clips td.nw{white-space:nowrap}\n" +
+        "table.clips{table-layout:fixed}table.clips td,table.clips th{padding:8px 6px;overflow-wrap:normal}table.clips td.clip{overflow-wrap:anywhere}table.clips td.st{overflow-wrap:normal;word-break:normal;hyphens:none}table.clips td.st a{color:inherit}table.clips td.num,table.clips th.num,table.clips td.nw{white-space:nowrap}table.clips td.fps{white-space:normal}\n" +
         "td.nw{white-space:nowrap}table:not(.clips) th{white-space:nowrap}\n" +
         ".c-thumb{width:20%}.c-clip{width:17%}.c-codec{width:8%}.c-res{width:9%}.c-fps{width:7%}.c-dur{width:6%}.c-tc{width:9%}.c-audio{width:5%}.c-size{width:8%}.c-proxy{width:11%}\n" +
         "th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}tr{break-inside:avoid}\n" +
@@ -280,6 +280,13 @@ public static partial class HtmlReport
     static void Stat(StringBuilder h, string value, string label) =>
         h.Append($"<div class=\"stat\"><b>{value}</b><span>{label}</span></div>\n");
 
+    /// The FPS cell (task 2026-10-10, review F-1): a rate that differs is two lines in the narrow column — "35 fps", then
+    /// "přehrávání 24" small and muted; otherwise the one rate as before.
+    internal static string FpsCell(ClipInfo? i) =>
+        i is { CaptureDiffers: true }
+            ? $"{Esc(ClipInfo.Label(i.CaptureFrameRate))} fps<div class=\"note\">přehrávání {Esc(i.FpsLabel)}</div>"
+            : Esc(i?.FpsSummary ?? "");
+
     static void AppendClips(StringBuilder h, OffloadReport r)
     {
         h.Append("<h2>Klipy</h2><div class=\"panel\"><table class=\"clips\"><colgroup>");
@@ -311,7 +318,7 @@ public static partial class HtmlReport
             var audio = i == null ? "" : (i.AudioChannels > 0 ? $"{i.AudioChannels} ch" : "—");
             h.Append($"<tr><td>{img}</td><td class=\"clip\"><div class=\"clipname\">{Esc(c.Clip.Name)}{cameraProxy}</div>");
             h.Append($"<div class=\"path\">{Esc(c.Clip.Path)}</div>{noteHtml}</td>");
-            h.Append($"<td class=\"wrap hide-sm\">{Esc(string.Join(" · ", codecParts))}</td><td class=\"nw hide-sm\">{Esc(i?.ResolutionLabel ?? "")}</td><td class=\"num\">{Esc(i?.FpsSummary ?? "")}</td>");
+            h.Append($"<td class=\"wrap hide-sm\">{Esc(string.Join(" · ", codecParts))}</td><td class=\"nw hide-sm\">{Esc(i?.ResolutionLabel ?? "")}</td><td class=\"num fps\">{FpsCell(i)}</td>");
             h.Append($"<td class=\"num\">{Esc(i?.DurationLabel ?? "")}</td><td class=\"mono hide-sm\">{Esc(i?.Timecode ?? "")}</td>");
             h.Append($"<td class=\"num hide-sm\">{audio}</td>");
             h.Append($"<td class=\"num\">{Format.Bytes(c.Clip.Bytes)}</td><td class=\"st {pc}\">{ProxyCell(c, pl)}</td></tr>\n");

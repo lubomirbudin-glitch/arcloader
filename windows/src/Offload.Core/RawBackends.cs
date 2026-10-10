@@ -306,18 +306,12 @@ internal sealed class R3dBackend : IRawBackend
         // The record (sensor) rate is the capture rate (task 2026-10-10); the project rate / timebase is the playback rate
         // the length is counted in — without one (an older REDline) the record rate stands for both, as before.
         var record = Rate(Find("record fps", "record frame rate", "sensor fps", "sensor frame rate"));
-        string? Playback(params string[] needles)
-        {
-            foreach (var n in needles)
-            {
-                var hit = meta.FirstOrDefault(m => m.Key.Contains(n, StringComparison.Ordinal) && !m.Key.Contains("record", StringComparison.Ordinal)
-                    && !m.Key.Contains("sensor", StringComparison.Ordinal)).Value;
-                if (!string.IsNullOrEmpty(hit)) return hit;
-            }
-            return null;
-        }
+        // The playback (project) rate: a key that names it ("Project FPS", "Timebase"), else a key that is exactly the
+        // generic "FPS" / "Frame Rate" — never another key that merely contains "fps" (a monitor rate; review F-3).
+        string? Exact(string name) => meta.FirstOrDefault(m => m.Key == name).Value is { Length: > 0 } v ? v : null;
+        var project = Rate(Find("project fps", "project frame rate", "timebase", "playback fps")) ?? Rate(Exact("fps")) ?? Rate(Exact("frame rate"));
         if (record is double rec) c.CaptureFrameRate = RawBackends.Rational(rec);
-        if ((Rate(Playback("project fps", "timebase", "playback fps", "fps", "frame rate")) ?? record) is double fps)
+        if ((project ?? record) is double fps)
         {
             c.FrameRate = RawBackends.Rational(fps);
             if (Digits(Find("total frames", "frame count", "frames")) is int n)
@@ -430,7 +424,7 @@ internal sealed class ArriBackend : IRawBackend
         c.CaptureFrameRate = sensor?.GetValueKind() switch
         {
             JsonValueKind.String => ClipInfo.NormalizeRate(sensor.GetValue<string>()),
-            JsonValueKind.Number when sensor.GetValue<double>() is var r && r > 0 => RawBackends.Rational(r),
+            JsonValueKind.Number => ClipInfo.NormalizeRate(sensor.GetValue<double>().ToString("R", CultureInfo.InvariantCulture)),
             _ => null,
         };
         if (c.Frames is int n && Timecode.Fps(c.FrameRate) is double fps) c.Duration = n / fps;

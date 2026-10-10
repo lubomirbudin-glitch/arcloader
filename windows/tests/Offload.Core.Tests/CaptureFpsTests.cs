@@ -46,6 +46,12 @@ public class CaptureFpsTests
         Assert.Equal("120000/1001", ClipInfo.NormalizeRate("119.88"));
         Assert.Equal("48", ClipInfo.NormalizeRate("48.000"));
         Assert.Null(ClipInfo.NormalizeRate("0/0"));
+        // Review F-4: ARRI writes some rates in thousandths — a sensible rate, the exact one as a rational where it is one.
+        Assert.Equal("35", ClipInfo.NormalizeRate("35000/1000"));
+        Assert.Equal("48000/1001", ClipInfo.NormalizeRate("47952/1000"));
+        Assert.Equal("35", ClipInfo.NormalizeRate("35000"));
+        Assert.Equal("24000/1001", ClipInfo.NormalizeRate("23976"));
+        Assert.Null(ClipInfo.NormalizeRate("5000000"));
         Assert.Null(ClipInfo.NormalizeRate("abc"));
         Assert.Null(ClipInfo.NormalizeRate(null));
     }
@@ -79,6 +85,15 @@ public class CaptureFpsTests
              "frameBasedMetadata":{"frames":[{"Sensor State":{"sensorSampleRate":47.952}}]}}
             """);
         Assert.Equal(("24000/1001", "48000/1001"), (number.FrameRate, number.CaptureFrameRate));
+        // Review F-4: in thousandths (35000 → 35, 23976 → 23.976), never "35000 fps".
+        foreach (var (raw, expected) in new[] { ("35000", "35"), ("23976", "24000/1001"), ("\"35000/1000\"", "35") })
+        {
+            var milli = ArriBackend.ParseMetadata(
+                """{"clipBasedMetadata":{"nativePictureEssenceDescriptor":{"file":{"sampleRate":"24/1"}}},"frameBasedMetadata":{"frames":[{"Sensor State":{"sensorSampleRate":"""
+                + raw + "}}]}}");
+            Assert.Equal(expected, milli.CaptureFrameRate);
+        }
+        Assert.Equal("23.976 fps · přehrávání 24", new ClipInfo { FrameRate = "24", CaptureFrameRate = "24000/1001" }.FpsSummary);
         var none = ArriBackend.ParseMetadata("""{"clipBasedMetadata":{"nativePictureEssenceDescriptor":{"file":{"sampleRate":"25/1"}}}}""");
         Assert.Equal(("25", (string?)null), (none.FrameRate, none.CaptureFrameRate));
     }
@@ -99,6 +114,12 @@ public class CaptureFpsTests
         Assert.False(only.CaptureDiffers);
         var plain = R3dBackend.ParseMeta("FPS: 25.000\nTotal Frames: 25\n");
         Assert.Equal(("25", (string?)null), (plain.FrameRate, plain.CaptureFrameRate));
+        // Review F-3: a generic name counts only as itself ("FPS", "Frame Rate"), never another key that merely contains
+        // "fps" — without the project rate the record rate stays the playback rate, as before.
+        var monitor = R3dBackend.ParseMeta("Monitor FPS: 60.000\nRecord FPS: 120.000\nTotal Frames: 240\n");
+        Assert.Equal(("120", "120"), (monitor.FrameRate, monitor.CaptureFrameRate));
+        var frameRate = R3dBackend.ParseMeta("Record FPS: 48.000\nFrame Rate: 24.000\nTotal Frames: 48\n");
+        Assert.Equal(("24", "48"), (frameRate.FrameRate, frameRate.CaptureFrameRate));
     }
 
     // --- Blackmagic RAW: braw-decode --info "sensorRate" (IBlackmagicRawFrame::GetSensorRate of frame 0) ---
@@ -298,8 +319,11 @@ public class CaptureFpsTests
     public void Html_CaptureAndPlayback_DurationIsTheEditingLength()
     {
         var html = HtmlReport.Render(Report(@"D:\dst\2026-10-10\A_0012"));
-        Assert.Contains("<td class=\"num\">35 fps · přehrávání 24</td>", html);
-        Assert.Contains("<td class=\"num\">25</td>", html);
+        // Review F-1: two lines in the narrow column — the capture rate, then the playback rate small and muted; the
+        // cell may wrap (td.num never does).
+        Assert.Contains("<td class=\"num fps\">35 fps<div class=\"note\">přehrávání 24</div></td>", html);
+        Assert.Contains("<td class=\"num fps\">25</td>", html);
+        Assert.Contains("table.clips td.fps{white-space:normal}", html);
         Assert.Contains("<th class=\"num\">Stopáž</th>", html);
         Assert.DoesNotContain("<th class=\"num\">Délka</th>", html);
         Assert.Contains("Stopáž = počet snímků ÷ přehrávací fps", html);

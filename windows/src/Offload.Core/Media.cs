@@ -121,9 +121,18 @@ public sealed class ClipInfo
     public static string? NormalizeRate(string? rate)
     {
         rate = rate?.Trim();
-        if (Offload.Core.Timecode.Fps(rate) is not double fps) return null;
-        if (rate!.EndsWith("/1", StringComparison.Ordinal)) return rate[..^2].Contains('.') ? RawBackends.Rational(fps) : rate[..^2];
-        return rate.Contains('/') ? rate : RawBackends.Rational(fps);
+        if (Offload.Core.Timecode.Fps(rate) is not double raw || Plausible(raw) is not double fps) return null;
+        if (fps == raw && rate!.EndsWith("/1", StringComparison.Ordinal) && !rate[..^2].Contains('.')) return rate[..^2];
+        if (fps == raw && rate!.EndsWith("/1001", StringComparison.Ordinal)) return rate;
+        return RawBackends.Rational(fps);
+    }
+
+    /// ARRI writes some rates in thousandths of a frame per second (review F-4): above 1000 the value is divided by
+    /// 1000 (35000 → 35, 23976 → 23.976); null when even then it is no camera rate (0 or above 1000 fps).
+    internal static double? Plausible(double fps)
+    {
+        if (fps > 1000) fps /= 1000;
+        return fps > 0 && fps <= 1000 ? fps : null;
     }
 
     [JsonIgnore]

@@ -956,9 +956,9 @@ když už je hotové, jinak HTML).</p>
     formát a kodek, rozlišení, FPS, stopáž, timecode, počet zvukových kanálů, velikost a stav proxy
     (<span class="txt-ok">hotovo</span>, <span class="txt-bad">chyba</span>, <span class="txt-warn">nepodporováno</span>, přeskočeno).
     <b>FPS</b> je snímací rychlost z metadat prvního snímku klipu; když se liší od přehrávací rychlosti souboru (off-speed,
-    S&amp;Q), je tam obojí: <span class="q">„35 fps · přehrávání 24“</span>. Snímací rychlost umí ARRIRAW (přes art-cmd),
-    Blackmagic RAW, RED (přes REDline) a Sony (soubor <code>M01.XML</code> vedle klipu); u ostatního videa (Canon, iPhone …)
-    se bere přehrávací. <b>Stopáž</b> = počet snímků ÷ přehrávací rychlost, tedy délka klipu ve střižně (u 35 fps
+    S&amp;Q), je tam obojí na dvou řádcích: <span class="q">„35 fps“</span> a pod tím menší <span class="q">„přehrávání 24“</span>. Snímací rychlost umí ARRIRAW (přes art-cmd),
+    Blackmagic RAW, RED (přes REDline; přehrávací je projektová rychlost) a Sony (soubor <code>M01.XML</code> vedle klipu).
+    Canon zatím ukazuje jen přehrávací rychlost (chybí vzorek metadat), stejně jako ostatní video (iPhone …). <b>Stopáž</b> = počet snímků ÷ přehrávací rychlost, tedy délka klipu ve střižně (u 35 fps
     v projektu 24 delší než skutečný čas natáčení).
     Pod tabulkou řádek s nastavením proxy, např. <span class="q">„Proxy: H.264 (h264_nvenc), 1080p, výřez 1.85, LUT: automaticky
     podle kamery → _PROXY/ · také ve složce G:\Proxy“</span>.</li>

@@ -147,14 +147,16 @@ Hodnoty výčtů:
   pro ffmpeg: `"35"`, `"24000/1001"`, `"120000/1001"`; celé číslo bez `/1`). `frameRate` zůstává **přehrávací** rychlost
   souboru a `duration` = počet snímků ÷ `frameRate` (stopáž ve střižně). Zdroje: ARRIRAW `frameBasedMetadata` →
   `Sensor State.sensorSampleRate` prvního snímku z `art-cmd export --duration 1` (ALEXA 35 natočená 35 fps: `"35"`, přitom
-  `nativePictureEssenceDescriptor.file.sampleRate` a `frameRate` = `"24"`); BRAW `sensorRate` z `braw-decode --info`
+  `nativePictureEssenceDescriptor.file.sampleRate` a `frameRate` = `"24"`; hodnota v tisícinách — `35000`, `23976` — se
+  vydělí 1000 a zapíše jako `"35"`, `"24000/1001"`); BRAW `sensorRate` z `braw-decode --info`
   (Windows: `IBlackmagicRawFrame::GetSensorRate` snímku 0; nový klíč na konci řádku `--info`, `"sensorRate":48.000000`,
-  chybí, když ho SDK neřekne — sdílené klíče se nemění); RED `Record FPS` z `REDline --printMeta 1` (přehrávací je pak
-  `Project FPS` / `Timebase`; bez nich se jako dřív bere record fps pro obojí); Sony `M01.XML` `<VideoFrame captureFps="119.88p"
-  formatFps="23.98p"/>` (S&Q; `i` = půlsnímky, `59.94i` → `30000/1001`). Canon (XF-AVC, Cinema RAW Light) a ostatní video
-  přes ffprobe snímací rychlost neuvádějí. **Zapisuje se, jen když je známá** (i když se rovná `frameRate`); chybí-li
-  (starší report, ffprobe), platí snímací = přehrávací. HTML/PDF ve sloupci FPS: `35 fps · přehrávání 24`, když se liší,
-  jinak jen `24`; sloupec délky se jmenuje „Stopáž“. TXT: řádek `Frame rate:  35 fps capture, 24 playback (2 clips); 25 fps
+  chybí, když ho SDK neřekne — sdílené klíče se nemění); RED snímací = `Record FPS` z `REDline --printMeta 1`, přehrávací = projektová
+  (`Project FPS` / `Timebase`, jinak klíč přesně `FPS` nebo `Frame Rate` — ne jiný klíč s „fps“ v názvu); bez projektové
+  se jako dřív bere record fps pro obojí; Sony `M01.XML` `<VideoFrame captureFps="119.88p"
+  formatFps="23.98p"/>` (S&Q; `i` = půlsnímky, `59.94i` → `30000/1001`). **Canon: zatím jen přehrávací rychlost (chybí vzorek
+  metadat)** — klíč se u Canonu nezapisuje. Ostatní video přes ffprobe snímací rychlost v tom, co se čte, nemá. **Zapisuje se, jen když je známá** (i když se rovná `frameRate`); chybí-li
+  (starší report, ffprobe), platí snímací = přehrávací. HTML/PDF ve sloupci FPS: dva řádky `35 fps` / `přehrávání 24`
+  (menší, šedě), když se liší, jinak jen `24`; denní report a ostatní místa `35 fps · přehrávání 24`; sloupec délky se jmenuje „Stopáž“. TXT: řádek `Frame rate:  35 fps capture, 24 playback (2 clips); 25 fps
   (1 clip)`.
 
 Náhledy klipů (JPEG) se do JSON neukládají — jsou jen v HTML a PDF.

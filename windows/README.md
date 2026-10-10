@@ -486,6 +486,12 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
       (zkontrolovat, že `REDline --printMeta 1` vypisuje „Record FPS“ a „Project FPS“ / „Timebase“ — jinak upravit
       `R3dBackend.ParseMeta`), Sony S&Q (FX3/FX6, 120 fps do 23.98p: `M01.XML` `captureFps="119.88p"`) → FPS „119.880 fps ·
       přehrávání 23.976“ / „48 fps · přehrávání 24“. Starší report (0.7.x) bez klíče se otevře a ukáže jen přehrávací fps.
+      V HTML/PDF jsou obě rychlosti ve sloupci FPS na dvou řádcích (náhled 1000 px, 1300 px i PDF): text nepřetéká do
+      sloupce Stopáž.
+- [ ] 70. **Snímací fps — Canon (chybí vzorek):** karta Canon (C70/C300 III/R5 C, XF-AVC MXF a Cinema RAW Light .CRM)
+      natočená S&F (Slow & Fast, např. 100 fps do 25p) → zatím se ukáže jen přehrávací rychlost (25). Prohlédnout, co karta
+      nese: XML vedle klipu (`CONTENTS\CLIPS001\…\*.XML`), `ffprobe -show_format -show_streams` (tagy MXF) — kde je snímací
+      rychlost, poslat vzorek; podle něj doplnit čtení do `ProxyRenderer.Probe` (jako Sony `M01.XML`).
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 

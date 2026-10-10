@@ -128,7 +128,6 @@ public sealed partial class OffloadReport
     [JsonIgnore] public bool Success => FailedFiles.Count == 0;
     /// Every file is on every destination and was verified there (spec 2 safe_to_format for this generation).
     [JsonIgnore] public bool SafeToFormat => Success && Verified;
-    /// Spec 7: the clips whose decoder reported a defect (content_warn) — the copy matches the card, the file may not.
     /// The clips' frame rates for the TXT report (task 2026-10-10): "35 fps capture, 24 playback (2 clips); 25 fps (1 clip)"
     /// — the capture rate first when it differs from the playback rate; camera proxies and clips without a known rate are
     /// left out; null when no clip has one.
@@ -146,6 +145,7 @@ public sealed partial class OffloadReport
         }
     }
 
+    /// Spec 7: the clips whose decoder reported a defect (content_warn) — the copy matches the card, the file may not.
     [JsonIgnore] public IReadOnlyList<ClipEntry> ContentWarnings => Clips.Where(c => c.Content?.IsWarn == true).ToList();
 
     public static OffloadReport Build(OffloadPlan plan, IReadOnlyList<FileHashes> hashes, IReadOnlyList<string?> sourceErrors,
