@@ -50,7 +50,7 @@ zvyšují poslední číslo, 1.0.0 po ostrém testu s kartou.
 Kontrola aktualizací v aplikaci (Nastavení → Aplikace → Aktualizace…) čte manifest z adresy, kterou tam zadáte (`https://…`,
 `\\NAS\Offload\offload-update.json`, místní cesta); nejvýš jednou za 24 h, 5 s po startu, nic nestahuje ani nespouští,
 čte nejvýš 64 KB. Tlačítko *Otevřít* otevře jen adresu `https://…` nebo existující složku / zip (v Průzkumníku); cokoli
-jiného se jen zobrazí. Prázdná adresa = vypnuto (výchozí). Repozitář je soukromý, proto se nečte GitHub.
+jiného se jen zobrazí. Prázdná adresa = vypnuto (výchozí). Kontrola nečte GitHub (balíčky se tam nezveřejňují).
 
 ### Podepisování
 
