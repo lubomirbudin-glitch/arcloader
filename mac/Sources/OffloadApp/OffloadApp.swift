@@ -25,7 +25,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// Starts the app — or, in a debug build with `--ui-snapshots <folder>`, renders the main views offscreen to PNG files
+/// (dark and light, 1360 and 1000 px) and exits without opening a window.
 @main
+enum Launcher {
+    static func main() {
+#if DEBUG
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--ui-snapshots"), i + 1 < args.count {
+            MainActor.assumeIsolated { Snapshots.run(to: args[i + 1]) }
+            return
+        }
+#endif
+        OffloadApp.main()
+    }
+}
+
 struct OffloadApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var model = AppModel()

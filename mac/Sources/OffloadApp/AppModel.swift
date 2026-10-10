@@ -149,10 +149,14 @@ final class AppModel: ObservableObject {
     private let destQueue = DispatchQueue(label: "app.dest", qos: .utility)
     private var timers: [Timer] = []
     private var observers: [NSObjectProtocol] = []
+    /// Snapshot rendering: no disks, no timers, nothing saved.
+    let isPreview: Bool
 
-    init() {
-        settings = SettingsStore.decode(UserDefaults.standard.data(forKey: SettingsStore.defaultsKey))
+    init(preview: Bool = false) {
+        isPreview = preview
+        settings = preview ? AppSettings() : SettingsStore.decode(UserDefaults.standard.data(forKey: SettingsStore.defaultsKey))
         tools = settings.tools.resolved()
+        guard !preview else { return }
         refreshVolumes()
         refreshDestinations()
         let nc = NSWorkspace.shared.notificationCenter
@@ -174,6 +178,7 @@ final class AppModel: ObservableObject {
     }
 
     private func save() {
+        guard !isPreview else { return }
         if let data = SettingsStore.encode(settings) { UserDefaults.standard.set(data, forKey: SettingsStore.defaultsKey) }
         let t = settings.tools.resolved()
         if t != tools { tools = t }
@@ -229,6 +234,7 @@ final class AppModel: ObservableObject {
     // MARK: Volumes and destinations (always off the main thread)
 
     func refreshVolumes() {
+        guard !isPreview else { return }
         let roots = settings.destRoots
         probeQueue.async { [weak self] in
             let found = Volumes.scan(destRoots: roots)
@@ -258,6 +264,7 @@ final class AppModel: ObservableObject {
     /// Free space / filesystem / existence of every destination, whether the custom LUT and the proxy folder exist —
     /// every 5 s, after a change and from the refresh button. Never on the main thread.
     func refreshDestinations() {
+        guard !isPreview else { return }
         if probing {
             probeAgain = true   // runs once the check in flight returns (it may hang on a network disk)
             return
@@ -439,7 +446,7 @@ final class AppModel: ObservableObject {
     /// The custom LUT and the proxy folder are checked once more right before the start (they may sit on a disk that
     /// just went away) — off the main thread, at most 5 s each; meanwhile the start button is disabled.
     func start() {
-        guard canStart else { return }
+        guard canStart, !isPreview else { return }
         let lut = ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips)
         let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
         guard lut != nil || folder != nil else { return startJobs() }
@@ -632,4 +639,12 @@ final class AppModel: ObservableObject {
         guard terminating, !hasBusyJobs else { return }
         NSApp.terminate(nil)
     }
+
+#if DEBUG
+    /// Snapshot rendering: what the disk probes would have found.
+    func previewState(volumes: [VolumeItem], destinations: [String: DestinationStatus]) {
+        self.volumes = volumes
+        destStatus = destinations
+    }
+#endif
 }
