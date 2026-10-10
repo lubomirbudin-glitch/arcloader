@@ -80,6 +80,11 @@ public sealed class ClipInfo
     /// when unknown — then a "serial" rule never matches.
     [JsonPropertyName("cameraSerial"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CameraSerial { get; set; }
 
+    /// When the camera recorded the clip (UTC), from its metadata: ffprobe `creation_time` (QuickTime, MXF, MP4). Report key
+    /// `clips[].info.recorded`, absent when unknown (RAW decoders, older reports) — the summary report then orders the
+    /// clips by their number (task 2026-10-09).
+    [JsonPropertyName("recorded"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DateTime? Recorded { get; set; }
+
     [JsonIgnore]
     public string FpsLabel
     {
