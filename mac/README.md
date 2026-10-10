@@ -2,6 +2,10 @@
 
 Kopírování paměťových karet z kamery na více disků najednou, s ověřením, reportem a volitelnými proxy s LUT. macOS 13+.
 
+**Jazyk:** aplikace, hlášky, CLI, poznámky u klipů i reporty (HTML/PDF/TXT) jsou od 2026-10-10 **jen anglicky**
+(rozhodnutí uživatele; Windows verze zůstává česky). Termíny: [`docs/en-glossary.md`](docs/en-glossary.md) (česky → anglicky).
+Tento README a vývojové dokumenty zůstávají česky.
+
 Toto je Mac verze projektu; všechny příkazy níže se spouštějí ze složky `mac/`. Windows verze je v
 [`../windows/`](../windows/), rozdíly v [`../docs/ROZDILY.md`](../docs/ROZDILY.md), historie Mac verze v
 [`../docs/VYVOJ-MAC.md`](../docs/VYVOJ-MAC.md) — každá změna Mac verze tam přidá záznam ve stejném commitu.
@@ -15,7 +19,7 @@ plán po úkolech: [`docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](d
 1. **Kopie** – karta se čte **jen jednou** (velké bloky, bez page cache), každý blok jde paralelně na všechny cíle
    a zároveň do xxHash64. Rychlost = nejpomalejší článek (karta nebo nejpomalejší disk).
 2. **Ověření** – po `F_FULLFSYNC` se každý soubor přečte z každého disku zpět (bez cache) a porovná se zdrojovým hashem.
-   Teprve potom aplikace hlásí „kartu lze vysunout“.
+   Teprve potom aplikace hlásí „Safe to eject“.
 3. **Report** – `<root>/<YYYY-MM-DD>/<karta>/_REPORT/`: HTML (náhledy, metadata, TC), JSON, TXT, seznam xxh64;
    `ascmhl/` = ASC MHL v2 (ověřitelné `ascmhl` / Silverstack / ShotPut …).
 4. **Proxy (volitelné)** – po ověření, čte se z disku (karta už není potřeba): scale → LUT (.cube) → burn-in název + TC
@@ -78,12 +82,12 @@ swift test                    # XCTest (Tests/OffloadKitTests); ffmpeg testy se 
 
 ## Hardware (USB porty)
 
-- Aplikace: menu **Nástroje › Prověřit USB porty…** (⌘U) nebo tlačítko v sekci *Hardware* — kde jsou karta a disky
+- Aplikace (názvy v GUI jsou anglicky, viz slovník): menu **Nástroje › Prověřit USB porty…** (⌘U) nebo tlačítko v sekci *Hardware* — kde jsou karta a disky
   připojené, rychlost linky, doporučení zapojení, volitelné měření (z karty se jen čte, na cíl se zapíše a smaže 1 GB),
   vlastní názvy portů. Při startu se nic nespouští.
 - Během kopie karta úlohy ukazuje řetěz připojení s rychlostí, % linky a úzkým hrdlem.
 - CLI: `offload ports [--measure] [--card /Volumes/A001] [--dest /Volumes/RAID]`; `offload copy` ukáže připojení
-  a ve stavovém řádku „brzdí: D1“.
+  a ve stavovém řádku „bottleneck: D1“.
 - Omezení: zařízení 10 Gb/s běžící na 5 Gb/s se nepozná (macOS neprozradí schopnost bez BOS deskriptoru);
   fyzickou polohu portu macOS nezná — porty si pojmenujte.
 
@@ -98,7 +102,7 @@ swift test                    # XCTest (Tests/OffloadKitTests); ffmpeg testy se 
   `<složka>/<datum>/<karta>/` (při shodě jména `_2`, `_3`…, nic se nepřepíše); nedostupná složka zablokuje start.
 - Proxy jsou BT.709 v legálním rozsahu a tak i označené, náhledy JPEG BT.601 (JFIF). VideoToolbox dekóduje jen H.264/HEVC;
   render proxy bez pokroku 60 s (nový snímek nebo data z dekodéru RAW; do prvního pokroku 180 s) se ukončí — po hardwarovém
-  dekódování se jednou zkusí znovu softwarově, jinak proxy selže s poznámkou „ffmpeg se zasekl (60 s bez nového snímku);
-  proxy nevznikla“ (po neúspěšném opakování „… i bez hardwarového dekódování; proxy nevznikla“).
+  dekódování se jednou zkusí znovu softwarově, jinak proxy selže s poznámkou „ffmpeg stalled (60 s without a new frame);
+  proxy not created“ (po neúspěšném opakování „…, also with software decoding; proxy not created“).
 - Python k sestavení netřeba: `.cube` i ikona jsou v repu. Jen kdo mění `shared/luts/generate.py` nebo
   `shared/icon/make_icon.py`, potřebuje Python (návod v `shared/luts/README.md` a `shared/icon/README.md`).

@@ -48,9 +48,9 @@ final class FFmpegWatchTests: XCTestCase {
     }
 
     func testStallNotesAreTheWindowsTexts() {
-        XCTAssertEqual(ProxyRenderer.stallNote(60, retriedInSoftware: false), "ffmpeg se zasekl (60 s bez nového snímku)")
+        XCTAssertEqual(ProxyRenderer.stallNote(60, retriedInSoftware: false), "ffmpeg stalled (60 s without a new frame)")
         XCTAssertEqual(ProxyRenderer.stallNote(60, retriedInSoftware: true),
-                       "ffmpeg se zasekl (60 s bez nového snímku) i bez hardwarového dekódování; proxy nevznikla")
+                       "ffmpeg stalled (60 s without a new frame), also with software decoding; proxy not created")
         XCTAssertEqual(ProxyRenderer.defaultStallTimeout, 60)
         XCTAssertEqual(ProxyRenderer.killWait, 10)
     }
@@ -143,7 +143,7 @@ final class FFmpegWatchTests: XCTestCase {
         XCTAssertTrue(calls[0].contains("-hwaccel videotoolbox"), calls[0])
         XCTAssertFalse(calls[1].contains("-hwaccel"), calls[1])
         XCTAssertEqual(TestFS.files(in: dir.path + "/card/_PROXY"), ["a.mov"])   // no .part left behind
-        XCTAssertTrue(log.lines.contains { $0.contains("with hardware decoding: ffmpeg se zasekl") && $0.contains("retrying in software") }, "\(log.lines)")
+        XCTAssertTrue(log.lines.contains { $0.contains("with hardware decoding: ffmpeg stalled") && $0.contains("retrying in software") }, "\(log.lines)")
         XCTAssertTrue(log.lines.contains("proxy a: software decoding succeeded"), "\(log.lines)")
     }
 
@@ -153,7 +153,7 @@ final class FFmpegWatchTests: XCTestCase {
         let fake = fakeFFmpeg(dir, hw: .stall, sw: .stall)
         let log = Lines()
         XCTAssertThrowsError(try render(renderer(fake, log: log), dir)) { e in
-            XCTAssertEqual("\(e)", "ffmpeg se zasekl (1 s bez nového snímku) i bez hardwarového dekódování; proxy nevznikla")
+            XCTAssertEqual("\(e)", "ffmpeg stalled (1 s without a new frame), also with software decoding; proxy not created")
         }
         XCTAssertEqual(fake.invocations.count, 2)
         XCTAssertEqual(TestFS.files(in: dir.path + "/card/_PROXY"), [])
@@ -164,7 +164,7 @@ final class FFmpegWatchTests: XCTestCase {
         let dir = tempDir()
         let fake = fakeFFmpeg(dir, hw: .stall, sw: .fail)
         XCTAssertThrowsError(try render(renderer(fake), dir)) { e in
-            XCTAssertTrue("\(e)".hasPrefix("ffmpeg se zasekl (1 s bez nového snímku); bez hardwarového dekódování selhal: ffmpeg failed (exit 1)"), "\(e)")
+            XCTAssertTrue("\(e)".hasPrefix("ffmpeg stalled (1 s without a new frame); software decoding failed: ffmpeg failed (exit 1)"), "\(e)")
         }
         XCTAssertEqual(fake.invocations.count, 2)
     }
@@ -175,7 +175,7 @@ final class FFmpegWatchTests: XCTestCase {
         XCTAssertThrowsError(try render(renderer(fake), dir)) { e in
             let note = "\(e)"
             XCTAssertTrue(note.hasPrefix("ffmpeg failed (exit 1)"), note)
-            XCTAssertTrue(note.contains("; s hardwarovým dekódováním předtím: ffmpeg failed (exit 1)"), note)
+            XCTAssertTrue(note.contains("; earlier with hardware decoding: ffmpeg failed (exit 1)"), note)
         }
         XCTAssertEqual(fake.invocations.count, 2)
     }
@@ -185,7 +185,7 @@ final class FFmpegWatchTests: XCTestCase {
         let dir = tempDir()
         let fake = fakeFFmpeg(dir, hw: .ok, sw: .stall)
         XCTAssertThrowsError(try render(renderer(fake), dir, codec: "ffv1")) { e in
-            XCTAssertEqual("\(e)", "ffmpeg se zasekl (1 s bez nového snímku); proxy nevznikla")
+            XCTAssertEqual("\(e)", "ffmpeg stalled (1 s without a new frame); proxy not created")
         }
         XCTAssertEqual(fake.invocations.count, 1)
     }
@@ -271,7 +271,7 @@ final class FFmpegWatchTests: XCTestCase {
         let t0 = Date()
         XCTAssertThrowsError(try r.runFFmpeg(consumer, [], feeder: feeder, duration: nil, progress: nil, isCancelled: { false },
                                              stallAfter: 1)) { e in
-            XCTAssertEqual("\(e)", "ffmpeg se zasekl (1 s bez nového snímku)")
+            XCTAssertEqual("\(e)", "ffmpeg stalled (1 s without a new frame)")
         }
         XCTAssertTrue((2.8...20).contains(Date().timeIntervalSince(t0)), "\(Date().timeIntervalSince(t0))")
     }

@@ -72,19 +72,19 @@ public enum MHLReader {
             for c in chain {
                 let path = dir + "/" + c.path
                 if c.path.contains("/") || c.path.contains("\\") || !FileManager.default.fileExists(atPath: path) {
-                    problems.append("V řetězu ASC MHL je generace \(gen(c.seq)), ale její soubor chybí: \(c.path)")
+                    problems.append("The ASC MHL chain lists generation \(gen(c.seq)), but its file is missing: \(c.path)")
                     continue
                 }
                 if let data = FileManager.default.contents(atPath: path), MHL.c4(data) != c.c4 {
-                    problems.append("ASC MHL generace \(gen(c.seq)) neodpovídá řetězu (soubor MHL byl změněn).")
+                    problems.append("ASC MHL generation \(gen(c.seq)) does not match the chain (the MHL file was changed).")
                 }
                 order.append((c.seq, c.path))
             }
             for extra in mhlFiles.sorted() where !chain.contains(where: { $0.path.caseInsensitiveCompare(extra) == .orderedSame }) {
-                problems.append("Soubor ASC MHL není v řetězu: \(extra)")
+                problems.append("ASC MHL file not in the chain: \(extra)")
             }
         } else if !mhlFiles.isEmpty {
-            problems.append("Chybí \(MHL.chainName) — generace se čtou podle čísla v názvu souboru.")
+            problems.append("\(MHL.chainName) is missing — generations are read by the number in the file name.")
             order = mhlFiles.map { f in (leadingNumber(f) ?? Int.max, f) }
                 .sorted { $0.seq != $1.seq ? $0.seq < $1.seq : $0.file < $1.file }
         }
@@ -94,7 +94,7 @@ public enum MHLReader {
             do {
                 generations.append(try parseGeneration(dir + "/" + file, seq: seq))
             } catch {
-                problems.append("ASC MHL generaci \(gen(seq)) nejde přečíst: \(describe(error))")
+                problems.append("Cannot read ASC MHL generation \(gen(seq)): \(describe(error))")
             }
         }
         if generations.isEmpty && problems.isEmpty { return nil }
@@ -149,7 +149,7 @@ public enum MHLReader {
             return entries.enumerated().sorted { $0.element.seq != $1.element.seq ? $0.element.seq < $1.element.seq : $0.offset < $1.offset }
                 .map(\.element)
         } catch {
-            problems.append("\(MHL.chainName) nejde přečíst: \(describe(error))")
+            problems.append("Cannot read \(MHL.chainName): \(describe(error))")
             return nil
         }
     }
@@ -238,5 +238,5 @@ public enum MHLReader {
 struct MHLFormatError: Error, CustomStringConvertible {
     let what: String
     init(_ what: String) { self.what = what }
-    var description: String { "neplatná hodnota \(what)" }
+    var description: String { "invalid value \(what)" }
 }

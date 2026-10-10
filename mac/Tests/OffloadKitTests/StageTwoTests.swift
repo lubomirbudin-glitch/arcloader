@@ -79,7 +79,7 @@ final class StageTwoTests: XCTestCase {
         let clip = try XCTUnwrap(job.report?.clips.first)
         XCTAssertEqual(clip.proxyStatus, .done)
         XCTAssertEqual(clip.proxyPath, "_PROXY/C0001.mov")
-        XCTAssertTrue(clip.proxyNote?.hasPrefix("kopie na \(paths[1]) selhala: ") == true, clip.proxyNote ?? "nil")
+        XCTAssertTrue(clip.proxyNote?.hasPrefix("copy to \(paths[1]) failed: ") == true, clip.proxyNote ?? "nil")
         XCTAssertTrue(log.contains { $0.contains("C0001") && $0.contains(paths[1]) })
         XCTAssertTrue(FileManager.default.fileExists(atPath: paths[0] + "/_PROXY/C0001.mov"))
         XCTAssertEqual(TestFS.files(in: paths[1] + "/_PROXY").filter { $0.hasSuffix(".part") }, [])

@@ -22,7 +22,7 @@ final class BrawFeederTests: XCTestCase {
         let t0 = Date()
         XCTAssertThrowsError(try renderer(dir, decoder: fake.path).thumbnails(BrawTest.brawClip, cardPath: dir.sub("card"),
                                                                           info: BrawTest.clipInfo(frames: 1))) { e in
-            XCTAssertEqual("\(e)", "dekodér nebo ffmpeg se zasekl (1 s bez nového snímku)")
+            XCTAssertEqual("\(e)", "decoder or ffmpeg stalled (1 s without a new frame)")
         }
         XCTAssertLessThan(Date().timeIntervalSince(t0), 30)
     }
@@ -37,11 +37,11 @@ final class BrawFeederTests: XCTestCase {
         let t0 = Date()
         XCTAssertThrowsError(try renderer(dir, decoder: fake.path, log: log).thumbnails(BrawTest.brawClip, cardPath: dir.sub("card"),
                                                                                     info: info)) { e in
-            XCTAssertTrue("\(e)".hasPrefix("dekodér nebo ffmpeg se zasekl"), "\(e)")
+            XCTAssertTrue("\(e)".hasPrefix("decoder or ffmpeg stalled"), "\(e)")
         }
         XCTAssertEqual(BrawTest.calls(fake.calls).filter { $0 != "--info" }.count, 1)
         XCTAssertLessThan(Date().timeIntervalSince(t0), 60)
-        XCTAssertTrue(log.lines.contains("thumbnails A001: dekodér nebo ffmpeg se zasekl (1 s bez nového snímku); the remaining frames are skipped"),
+        XCTAssertTrue(log.lines.contains("thumbnails A001: decoder or ffmpeg stalled (1 s without a new frame); the remaining frames are skipped"),
                       "\(log.lines)")
     }
 
@@ -53,10 +53,10 @@ final class BrawFeederTests: XCTestCase {
         let info = BrawTest.clipInfo(frames: 100)
         XCTAssertThrowsError(try renderer(dir, decoder: fake.path, log: log, infoTimeout: 1)
             .thumbnails(BrawTest.brawClip, cardPath: dir.sub("card"), info: info)) { e in
-            XCTAssertEqual("\(e)", "braw-decode failed (exit -1): neodpověděl do 1 s — ukončen")
+            XCTAssertEqual("\(e)", "braw-decode failed (exit -1): no response within 1 s — stopped")
         }
         XCTAssertEqual(BrawTest.calls(fake.calls), ["--info"])
-        XCTAssertTrue(log.lines.contains("thumbnails A001: braw-decode failed (exit -1): neodpověděl do 1 s — ukončen; the remaining frames are skipped"),
+        XCTAssertTrue(log.lines.contains("thumbnails A001: braw-decode failed (exit -1): no response within 1 s — stopped; the remaining frames are skipped"),
                       "\(log.lines)")
     }
 
@@ -69,7 +69,7 @@ final class BrawFeederTests: XCTestCase {
         XCTAssertThrowsError(try renderer(dir, decoder: fake.path, log: log).thumbnails(BrawTest.brawClip, cardPath: dir.sub("card"),
                                                                                     info: BrawTest.clipInfo(frames: 1))) { e in
             XCTAssertTrue(e is RawDecoderError, "\(e)")
-            XCTAssertTrue("\(e)".hasPrefix("Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna \(lib)"), "\(e)")
+            XCTAssertTrue("\(e)".hasPrefix("Blackmagic RAW: cannot open the clip — it is damaged, or the library \(lib)"), "\(e)")
         }
         XCTAssertTrue(log.lines.contains("braw-decode failed (exit 4): \(line)"), "\(log.lines)")
     }

@@ -35,8 +35,8 @@ public enum HwTest {
     public static var defaultPath: String { ExternalTools.supportDir + "/hwtest.json" }
 
     static func roles(cards: [String], destinations: [String], rolesByDrive: Bool = false) -> [(role: String, root: String)] {
-        var list: [(role: String, root: String)] = cards.enumerated().map { (cards.count == 1 ? "Karta" : "Karta \($0.offset + 1)", $0.element) }
-        list += destinations.enumerated().map { (rolesByDrive ? volumeName($0.element) : "Cíl \($0.offset + 1)", $0.element) }
+        var list: [(role: String, root: String)] = cards.enumerated().map { (cards.count == 1 ? RoleLink.card : "\(RoleLink.card) \($0.offset + 1)", $0.element) }
+        list += destinations.enumerated().map { (rolesByDrive ? volumeName($0.element) : RoleLink.destination($0.offset + 1), $0.element) }
         return list
     }
 
@@ -48,7 +48,7 @@ public enum HwTest {
         return PortLabels.volumeLabel(path)
     }
 
-    static func isCard(_ role: String) -> Bool { role.hasPrefix("Karta") }
+    static func isCard(_ role: String) -> Bool { RoleLink.isCardRole(role) }
 
     /// Whether two paths are on the same volume (unknown → false). A path that does not exist yet counts on the volume
     /// of its nearest existing folder — where it would be created (a new folder on the card is the card).
@@ -132,7 +132,7 @@ public enum HwTest {
         for d in drives where !d.isCard {
             if let card = cards.first(where: { sameVolume($0.link.root, d.link.root) }) {
                 advice.append(Advice(kind: .warning,
-                                     text: "\(d.role) je na stejném svazku jako \(card.role) — na kartu se nezapisuje, zápis se neměří; zvol jiný cílový disk."))
+                                     text: "\(d.role) is on the same volume as \(card.role) — nothing is written to a card, so writing is not measured; pick another destination drive."))
             }
         }
         var pace: [String: Double] = [:]

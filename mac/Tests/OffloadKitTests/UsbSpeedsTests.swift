@@ -30,8 +30,8 @@ final class UsbSpeedsTests: XCTestCase {
     func testLabelsAndCeilings() {
         XCTAssertEqual(UsbSpeeds.label(.high), "USB 2.0 (480 Mb/s)")
         XCTAssertEqual(UsbSpeeds.label(.superSpeed), "USB 3 (5 Gb/s)")
-        XCTAssertEqual(UsbSpeeds.label(.superPlus), "USB 3 (10 Gb/s a víc)")
-        XCTAssertEqual(UsbSpeeds.label(.unknown), "neznámá")
+        XCTAssertEqual(UsbSpeeds.label(.superPlus), "USB 3 (10 Gb/s or more)")
+        XCTAssertEqual(UsbSpeeds.label(.unknown), "unknown")
         XCTAssertEqual(UsbSpeeds.practicalMBps(.high), 40)
         XCTAssertEqual(UsbSpeeds.practicalMBps(.superSpeed), 450)
         XCTAssertEqual(UsbSpeeds.practicalMBps(.superPlus), 1000)

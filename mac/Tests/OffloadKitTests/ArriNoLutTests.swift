@@ -93,7 +93,7 @@ final class ArriNoLutTests: XCTestCase {
 
     // An empty LUT path is "no LUT" everywhere: no log from the RAW decoder, nothing copied, no start blocked.
     func testEmptyLutPathIsNoLut() throws {
-        let empty = LutUse(source: "custom", id: nil, name: "", reason: "vlastní LUT", file: "")
+        let empty = LutUse(source: "custom", id: nil, name: "", reason: "custom LUT", file: "")
         XCTAssertEqual(ProxyRenderer.lookFor(empty, info: arriInfo()), RawLook(log: false, arriColorSpace: nil))
         var s = settings()
         s.lutMode = .custom
@@ -116,9 +116,9 @@ final class ArriNoLutTests: XCTestCase {
         let clip = arriClip(card)
         let builtin = try XCTUnwrap(TestMedia.luts.find("arri-logc4-awg4"))
         let cases: [(String, LutMode, String?, LutUse?, Bool)] = [
-            ("none", .off, nil, .off("vypnuto v nastavení"), false),
+            ("none", .off, nil, .off("off in settings"), false),
             ("nil", .off, nil, nil, false),
-            ("empty path", .custom, "", LutUse(source: "custom", id: nil, name: "", reason: "vlastní LUT", file: ""), false),
+            ("empty path", .custom, "", LutUse(source: "custom", id: nil, name: "", reason: "custom LUT", file: ""), false),
             ("builtin", .auto, nil, LutUse(source: "auto", id: builtin.id, name: builtin.name, reason: "r", file: builtin.path), true),
             ("custom", .custom, cube, TestMedia.customLut(cube), true),
         ]

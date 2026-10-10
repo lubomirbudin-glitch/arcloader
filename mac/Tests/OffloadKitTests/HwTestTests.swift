@@ -4,14 +4,14 @@ import XCTest
 final class HwTestTests: XCTestCase {
     func testRolesCardsThenDestinations() {
         let r = HwTest.roles(cards: ["/Volumes/E"], destinations: ["/Volumes/D/a", "/Volumes/F"])
-        XCTAssertEqual(r.map(\.role), ["Karta", "Cíl 1", "Cíl 2"])
+        XCTAssertEqual(r.map(\.role), ["Card", "Destination 1", "Destination 2"])
         XCTAssertEqual(r.map(\.root), ["/Volumes/E", "/Volumes/D/a", "/Volumes/F"])
-        XCTAssertEqual(HwTest.roles(cards: ["/Volumes/E", "/Volumes/G"], destinations: []).map(\.role), ["Karta 1", "Karta 2"])
+        XCTAssertEqual(HwTest.roles(cards: ["/Volumes/E", "/Volumes/G"], destinations: []).map(\.role), ["Card 1", "Card 2"])
     }
 
     func testRolesByDriveUseTheVolumeName() {
         let r = HwTest.roles(cards: ["/Volumes/G"], destinations: ["/Volumes/offload-test-E", "/Volumes/offload-test-D"], rolesByDrive: true)
-        XCTAssertEqual(r.map(\.role), ["Karta", "offload-test-E", "offload-test-D"])
+        XCTAssertEqual(r.map(\.role), ["Card", "offload-test-E", "offload-test-D"])
     }
 
     func testQuickTestNoMeasurementNothingWritten() {
@@ -33,7 +33,7 @@ final class HwTestTests: XCTestCase {
         XCTAssertGreaterThan(m.readMBps ?? 0, 0)
         XCTAssertNil(m.writeMBps)
         XCTAssertEqual(TestFS.files(in: card), ["clip.bin"])
-        XCTAssertTrue(r.advice.contains { $0.text.hasPrefix("Odhad rychlosti offloadu") })
+        XCTAssertTrue(r.advice.contains { $0.text.hasPrefix("Estimated offload speed") })
     }
 
     func testMeasureWritesDestinationAndCleansUp() throws {
@@ -55,13 +55,13 @@ final class HwTestTests: XCTestCase {
         XCTAssertTrue(HwTest.sameVolume(card, dest))
         let r = HwTest.run(cards: [card], destinations: [dest], measure: true, bytesPerDevice: 8 << 20)
         let m = Dictionary(uniqueKeysWithValues: r.measurements.map { ($0.role, $0) })
-        XCTAssertGreaterThan(m["Karta"]?.readMBps ?? 0, 0)
-        XCTAssertNil(m["Cíl 1"]?.readMBps)
-        XCTAssertNil(m["Cíl 1"]?.writeMBps)
+        XCTAssertGreaterThan(m["Card"]?.readMBps ?? 0, 0)
+        XCTAssertNil(m["Destination 1"]?.readMBps)
+        XCTAssertNil(m["Destination 1"]?.writeMBps)
         XCTAssertEqual(TestFS.files(in: dest), [])
-        let warnings = r.advice.filter { $0.kind == .warning && $0.text.contains("stejném svazku") }
+        let warnings = r.advice.filter { $0.kind == .warning && $0.text.contains("same volume") }
         XCTAssertEqual(warnings.count, 1)
-        XCTAssertTrue(warnings[0].text.hasPrefix("Cíl 1 je na stejném svazku jako Karta"))
+        XCTAssertTrue(warnings[0].text.hasPrefix("Destination 1 is on the same volume as Card"))
         XCTAssertEqual(r.advice.first?.kind, .warning)
     }
 
@@ -75,7 +75,7 @@ final class HwTestTests: XCTestCase {
         XCTAssertTrue(HwTest.sameVolume(dest, card))
         XCTAssertFalse(HwTest.sameVolume(card, "relative/missing"))
         let r = HwTest.run(cards: [card], destinations: [dest], measure: false)
-        XCTAssertEqual(r.advice.filter { $0.kind == .warning && $0.text.hasPrefix("Cíl 1 je na stejném svazku jako Karta") }.count, 1)
+        XCTAssertEqual(r.advice.filter { $0.kind == .warning && $0.text.hasPrefix("Destination 1 is on the same volume as Card") }.count, 1)
         XCTAssertFalse(FileManager.default.fileExists(atPath: card + "/new"))
     }
 
@@ -118,11 +118,11 @@ final class HwTestTests: XCTestCase {
         let inner = UsbHub(instanceId: "loc:14110000", name: "Hub",
                            ports: [UsbPort(number: 1, supportsUsb3: true, userVisible: true, typeC: false, companionPort: 0, device: nil)])
         let dev = UsbDevice(instanceId: "loc:14100000", vid: 0x1234, pid: 0x5678, name: "Disk", link: .superSpeed, capable: .superPlus, hub: inner)
-        var conn = UsbConnector(id: "C#1", hubInstanceId: "C", controllerId: "C", controllerName: "USB řadič XHC1", number: 1,
+        var conn = UsbConnector(id: "C#1", hubInstanceId: "C", controllerId: "C", controllerName: "USB controller XHC1", number: 1,
                                 usb2Port: 1, usb3Port: 2, supportsUsb3: true, typeC: true, userVisible: true, device: dev, label: "port 1")
         conn.altIds = ["C#2"]
         let link = DriveLink(root: "/Volumes/E", bus: .usb, product: "SSD",
-                             usb: UsbLink(controllerId: "C", controllerName: "USB řadič XHC1", connectorId: "C#1", connectorPort: 1, port: 2,
+                             usb: UsbLink(controllerId: "C", controllerName: "USB controller XHC1", connectorId: "C#1", connectorPort: 1, port: 2,
                                           link: .superSpeed, capable: .superPlus, connectorUsb3: nil, uasp: true,
                                           hubs: [UsbHubRef(instanceId: "loc:14100000", name: "Dock")]))
         let time = Date(timeIntervalSince1970: 1_791_201_600)
@@ -133,6 +133,9 @@ final class HwTestTests: XCTestCase {
         let back = try XCTUnwrap(HwTest.load(path))
         XCTAssertEqual(back.time, time)
         XCTAssertEqual(back.drives, r.drives)
+        XCTAssertTrue(back.drives[0].isCard)   // a test saved before the Mac went English ("Karta") is still a card
+        XCTAssertTrue(RoleLink(role: "Card 2", link: link).isCard)
+        XCTAssertFalse(RoleLink(role: RoleLink.destination(1), link: link).isCard)
         XCTAssertEqual(back.connectors, r.connectors)
         XCTAssertTrue(back.connectors[0].has("C#2"))
         XCTAssertEqual(back.measurements, r.measurements)

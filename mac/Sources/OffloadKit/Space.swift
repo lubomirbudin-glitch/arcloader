@@ -14,12 +14,12 @@ public struct SpaceNeed: Equatable {
 
     public static let none = SpaceNeed(card: 0, proxy: 0, report: 0)
 
-    /// "karty 380 GB, proxy ~30 GB, report 2 GB" — the parts in Msg.noSpace ("karty") and Msg.spaceLine ("karta").
+    /// "cards 380 GB, proxy ~30 GB, report 2 GB" — the parts in Msg.noSpace ("cards") and Msg.spaceLine ("card").
     func partsText(_ cards: String) -> String {
         var p: [String] = []
-        if card > 0 { p.append("\(cards) \(formatBytesCs(card))") }
-        if proxy > 0 { p.append("proxy ~\(formatBytesCs(proxy))") }
-        if report > 0 { p.append("report \(formatBytesCs(report))") }
+        if card > 0 { p.append("\(cards) \(formatBytesShort(card))") }
+        if proxy > 0 { p.append("proxy ~\(formatBytesShort(proxy))") }
+        if report > 0 { p.append("report \(formatBytesShort(report))") }
         return p.joined(separator: ", ")
     }
     public var total: Int64 { card + proxy + report }
@@ -30,7 +30,7 @@ public struct SpaceNeed: Equatable {
 }
 
 /// What a job needs besides the card itself, per destination (spec 2.5): proxies (on the first destination, on all with
-/// "Kopírovat proxy na všechny cíle"), the report everywhere, the proxies once more in the proxy folder.
+/// "Copy proxies to all destinations"), the report everywhere, the proxies once more in the proxy folder.
 public struct SpaceExtra: Equatable {
     public var proxy: Int64
     public var report: Int64
@@ -206,7 +206,7 @@ public enum SpacePlanner {
             let need = group.map(\.need).reduce(SpaceNeed.none, +)
             let label = labels(group)
             if need.total > f {
-                problems.append(SpaceProblem(severity: .blocking, label: label, need: need, free: f, text: Msg.noSpace(label, total: need.total, parts: need.partsText("karty"), free: f)))
+                problems.append(SpaceProblem(severity: .blocking, label: label, need: need, free: f, text: Msg.noSpace(label, total: need.total, parts: need.partsText("cards"), free: f)))
             } else if (f - need.total) * 20 < need.total {
                 problems.append(SpaceProblem(severity: .warning, label: label, need: need, free: f, text: Msg.lowSpace(label, left: f - need.total)))
             }

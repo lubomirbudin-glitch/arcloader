@@ -44,7 +44,7 @@ public enum ProxyCopy {
     /// (`_2` … `_1000`) are tried; then it gives up with an error.
     public static func toExtraFolder(_ source: String, extraFolder: String, date: String, cardName: String,
                                      fileName: String, maxAttempts: Int = 1000) -> (path: String?, error: String?) {
-        guard ProxyPreflight.isDirectory(extraFolder) else { return (nil, "složka není dostupná") }
+        guard ProxyPreflight.isDirectory(extraFolder) else { return (nil, "folder is not available") }
         let dir = URL(fileURLWithPath: extraFolder).appendingPathComponent(date).appendingPathComponent(cardName).path
         let stem = (fileName as NSString).deletingPathExtension
         let ext = (fileName as NSString).pathExtension
@@ -60,7 +60,7 @@ public enum ProxyCopy {
                     // Taken between the check and the rename: try the next number.
                 }
             }
-            return (nil, "žádné volné jméno (\(name(1)) … \(name(max(1, maxAttempts))))")
+            return (nil, "no free name (\(name(1)) … \(name(max(1, maxAttempts))))")
         } catch let e as IOError {
             return (nil, e.description)
         } catch {

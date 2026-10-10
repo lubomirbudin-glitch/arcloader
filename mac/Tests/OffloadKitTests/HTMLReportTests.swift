@@ -11,6 +11,31 @@ final class HTMLReportTests: XCTestCase {
         return r
     }
 
+    func testEnglishLabelsAndDate() throws {
+        let ok = HTMLReport.render(Reports.sample())
+        XCTAssertTrue(ok.contains("<html lang=\"en\">"))
+        XCTAssertTrue(ok.contains("<span class=\"badge ok\">VERIFIED</span>"))
+        XCTAssertTrue(ok.contains("<b>2</b><span>files</span>"))
+        XCTAssertTrue(ok.contains("<h2>Destinations</h2>"))
+        XCTAssertTrue(ok.contains("<summary>All files (2)</summary>"))
+        XCTAssertTrue(ok.contains("<th>Destination 1</th>"))
+        XCTAssertTrue(ok.contains("<td class=\"ok\">verified</td>"))
+        XCTAssertTrue(ok.contains("Skipped system files: .DS_Store"))
+        XCTAssertNotNil(ok.range(of: #"<span class="sub">[A-Z][a-z]{2} \d{1,2}, 2026 \d{2}:\d{2}:\d{2} – \d{2}:\d{2}:\d{2}</span>"#,
+                                 options: .regularExpression))
+        let t = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-10-10T14:05:12Z"))
+        let utc = TimeZone(identifier: "UTC")!
+        let shift = TimeInterval(-TimeZone.current.secondsFromGMT(for: t) + utc.secondsFromGMT(for: t))
+        XCTAssertEqual(HTMLReport.dateTime(t.addingTimeInterval(shift)), "Oct 10, 2026 14:05:12")
+        XCTAssertTrue(HTMLReport.render(Reports.sample(verified: false)).contains(">COPIED — NOT VERIFIED</span>"))
+        let bad = HTMLReport.render(Reports.sample(destError: "HASH MISMATCH"))
+        XCTAssertTrue(bad.contains(">FAILED</span>"))
+        XCTAssertTrue(bad.contains("<h2 class=\"bad\">Errors (1)</h2>"))
+        XCTAssertTrue(bad.contains("destination 1: HASH MISMATCH"))
+        let czech = CharacterSet(charactersIn: "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ")
+        XCTAssertNil(bad.rangeOfCharacter(from: czech))
+    }
+
     func testThreeThumbnailsWithCaptions() {
         let jpeg = Data([0xFF, 0xD8, 0xFF])
         let html = HTMLReport.render(report(thumbnails: [

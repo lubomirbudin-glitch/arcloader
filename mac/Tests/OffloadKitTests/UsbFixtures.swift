@@ -19,7 +19,7 @@ extension XCTestCase {
         ])
     }
 
-    func build(_ hub: UsbHub) -> [UsbConnector] { Connectors.build(hub, controllerId: "HC", controllerName: "USB řadič XHC1") }
+    func build(_ hub: UsbHub) -> [UsbConnector] { Connectors.build(hub, controllerId: "HC", controllerName: "USB controller XHC1") }
 
     // Windows final review 5: an external USB 3 hub is two hub devices — merged by port number; nothing vanishes.
     func dualHalfHub() -> [UsbConnector] {

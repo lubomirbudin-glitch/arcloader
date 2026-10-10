@@ -11,8 +11,8 @@ struct Offload: ParsableCommand {
         subcommands: [Copy.self, Verify.self, Bench.self, Ports.self, Luts.self],
         defaultSubcommand: Copy.self)
 
-    /// Errors of a command print as "Chyba: …" (Czech, as Windows). Parser errors (unknown option, a value that is
-    /// not a number …) and --help stay as swift-argument-parser prints them — the library is not localised.
+    /// Errors of a command print as "Error: …" (the Mac is English; Windows prints them in Czech). Parser errors
+    /// (unknown option, a value that is not a number …) and --help stay as swift-argument-parser prints them.
     static func main() {
         var command: ParsableCommand
         do {
@@ -81,7 +81,7 @@ struct Copy: ParsableCommand {
     @Option(help: "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.")
     var frameAspect: Double?
 
-    @Option(help: "Frame lines size in % of the image (90 = 10 % overscan).")
+    @Option(help: "Frame lines size in % of the image (90 = 10% overscan).")
     var frameScale: Double = 100
 
     @Option(help: "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.")
@@ -155,11 +155,11 @@ struct Copy: ParsableCommand {
             print("  ffmpeg: \(tools.ffmpeg ?? "NOT FOUND")")
         }
         // Connection chain: informational only — resolving it never fails the copy.
-        var chain = [RoleLink(role: "Karta", link: DriveLinks.resolve(plan.source))]
-        chain += plan.destRoots.enumerated().map { RoleLink(role: "Cíl \($0.offset + 1)", link: DriveLinks.resolve($0.element)) }
+        var chain = [RoleLink(role: RoleLink.card, link: DriveLinks.resolve(plan.source))]
+        chain += plan.destRoots.enumerated().map { RoleLink(role: RoleLink.destination($0.offset + 1), link: DriveLinks.resolve($0.element)) }
         let connectors = UsbScanner.scan().connectors
-        // Status-line names first ("card", "D1"), so "brzdí: D1" there reads against this list.
-        print("  Připojení:")
+        // Status-line names first ("card", "D1"), so "bottleneck: D1" there reads against this list.
+        print("  Connections:")
         for (i, l) in chain.enumerated() { print("    \(ProgressDisplay.shortName(i)) = \(l.role): \(l.link.describe(connectors))") }
         for a in Advisor.advise(chain, connectors: connectors) where a.kind == .warning { print("  ! \(a.text)") }
         fflush(stdout)
@@ -295,7 +295,7 @@ struct Ports: ParsableCommand {
         var dests = dest.map(abs)
         for d in dests {
             if let c = cards.first(where: { HwTest.sameVolume($0, d) }) {
-                fputs(Msg.cliError + "cíl \(d) je na stejném svazku jako karta \(c) — na kartu se nikdy nezapisuje\n", stderr)
+                fputs(Msg.cliError + "destination \(d) is on the same volume as card \(c) — nothing is ever written to a card\n", stderr)
                 throw ExitCode(1)
             }
         }
@@ -315,7 +315,7 @@ struct Ports: ParsableCommand {
         sigint.setEventHandler {
             // Stops the measurement at once; the process stays until the temporary file is deleted.
             guard !flag.isCancelled else { return }
-            fputs("\nPřerušeno — zastavuji měření a mažu dočasný soubor…\n", stderr)
+            fputs("\nInterrupted — stopping the measurement and deleting the temporary file…\n", stderr)
             flag.cancel()
         }
         sigint.resume()
@@ -323,23 +323,23 @@ struct Ports: ParsableCommand {
                                 rolesByDrive: byDrive, isCancelled: { flag.isCancelled })
         printResult(result)
         if flag.isCancelled {
-            print("\nMěření přerušeno — výsledek se neukládá.")
+            print("\nMeasurement interrupted — the result is not saved.")
             throw ExitCode(1)
         }
         do {
             try HwTest.save(result, to: HwTest.defaultPath)
         } catch {
-            fputs("Varování: výsledek testu nešlo uložit: \(error)\n", stderr)
+            fputs("Warning: could not save the test result: \(error)\n", stderr)
         }
     }
 
     private func printResult(_ r: HwTestResult) {
         func pad(_ s: String, _ n: Int) -> String { s.count >= n ? s : s + String(repeating: " ", count: n - s.count) }
-        print("Připojení:")
+        print("Connections:")
         for d in r.drives {
             // Listed by volume: the role is the volume name — no second column repeating it.
             let name = d.link.root == "/" ? "/" : (d.link.root as NSString).lastPathComponent
-            let whereText = d.role == name ? pad(d.role, 8) : pad(d.role, 8) + " " + pad(d.link.root, 14)
+            let whereText = d.role == name ? pad(d.role, 13) : pad(d.role, 13) + " " + pad(d.link.root, 14)
             print("  \(whereText) \(d.link.describe(r.connectors))")
         }
         var groups: [(id: String, name: String, ports: [UsbConnector])] = []
@@ -351,14 +351,14 @@ struct Ports: ParsableCommand {
             }
         }
         for g in groups {
-            print("\nUSB porty (\(g.name)):")
+            print("\nUSB ports (\(g.name)):")
             for c in g.ports { print("  \(PortLabels.listRow(c, drives: r.drives))") }
         }
         if !r.measurements.isEmpty {
-            print("\nMěření:")
-            for m in r.measurements { print("  \(pad(m.role, 8)) \(pad(m.root, 14)) čtení \(mb(m.readMBps))  zápis \(mb(m.writeMBps))") }
+            print("\nMeasurement:")
+            for m in r.measurements { print("  \(pad(m.role, 13)) \(pad(m.root, 14)) read \(mb(m.readMBps))  write \(mb(m.writeMBps))") }
         }
-        print("\nDoporučení:")
+        print("\nAdvice:")
         for a in r.advice { print("  \(a.kind == .warning ? "!" : a.kind == .info ? "i" : "·") \(a.text)") }
     }
 
@@ -394,7 +394,7 @@ final class ProgressDisplay {
     private var lastVerified: [Int64] = []
     private var lastPhase = ""
 
-    /// chain: the drives in the order card, D1, D2 … (for the "linka plná" check).
+    /// chain: the drives in the order card, D1, D2 … (for the "link full" check).
     init(job: OffloadJob, chain: [RoleLink]? = nil) {
         self.job = job
         brakes = BrakeMeter(chunkBytes: Int64(job.config.chunkMB) << 20, bufferCount: job.config.buffers,
@@ -418,7 +418,7 @@ final class ProgressDisplay {
     /// Which element sets the pace — decided from the backlog (BrakeMeter), not from the rates on this line.
     private func brake(_ s: ProgressSnapshot) -> String {
         guard let b = brakes.add(seconds: Date().timeIntervalSince(started), readBytes: s.readBytes, writtenBytes: s.writtenBytes) else { return "" }
-        return "brzdí: \(ProgressDisplay.shortName(b.element))\(b.linkFull ? " (linka plná)" : "")  "
+        return "bottleneck: \(ProgressDisplay.shortName(b.element))\(b.linkFull ? " (link full)" : "")  "
     }
 
     private func tick() {
