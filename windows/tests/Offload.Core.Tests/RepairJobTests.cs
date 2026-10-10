@@ -558,7 +558,7 @@ public class RepairJobTests
     [Fact]
     public void Title_AndSameBackup()
     {
-        Assert.Equal("A001 · oprava", RepairRules.Title("A001"));
+        Assert.Equal("A001 · repair", RepairRules.Title("A001"));
         Assert.True(RepairRules.SameBackup([@"D:\A\2026-10-07\A001\"], [@"F:\B\2026-10-07\A001", @"d:\a\2026-10-07\a001"]));
         Assert.False(RepairRules.SameBackup([@"D:\A\2026-10-07\A001"], [@"D:\A\2026-10-07\A001_2"]));
     }

@@ -14,8 +14,8 @@ public static class RepairRules
     public static bool RepairedLater(IReadOnlyList<string> cardPaths, IEnumerable<(IReadOnlyList<string>? RepairInto, JobPhase Phase, OffloadReport? Report)> laterJobs) =>
         laterJobs.Any(j => j.RepairInto is { } into && j.Phase == JobPhase.Done && j.Report is { Success: true } && SameBackup(into, cardPaths));
 
-    /// The job card's title: "A001 · oprava".
-    public static string Title(string cardName) => $"{cardName} · oprava";
+    /// The job card's title: "A001 · repair".
+    public static string Title(string cardName) => $"{cardName} · repair";
 
     /// Two jobs work on the same backup: any card folder in common (any case, trailing slash).
     public static bool SameBackup(IReadOnlyList<string> a, IReadOnlyList<string> b) =>

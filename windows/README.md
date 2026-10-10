@@ -79,11 +79,11 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Sign -TimestampUrl h
 ```
 
 - `signtool.exe` se hledá v proměnné `SIGNTOOL`, pak v `PATH`, pak v nejnovějším `Windows Kits\10\bin\10.*\x64\`
-  (Windows SDK, komponenta *Signing Tools for Desktop Apps*). Chybí-li, build hned na začátku skončí: „signtool nenalezen —
-  nainstalujte Windows SDK (Signing Tools for Desktop Apps), nebo nastavte SIGNTOOL.“ Stejně hned skončí neexistující
+  (Windows SDK, komponenta *Signing Tools for Desktop Apps*). Chybí-li, build hned na začátku skončí: „signtool not found —
+  install the Windows SDK (Signing Tools for Desktop Apps), or set SIGNTOOL.“ Stejně hned skončí neexistující
   otisk, prošlý certifikát, certifikát bez soukromého klíče nebo ne pro podepisování kódu, chybějící
   `OFFLOAD_SIGN_PFX_PASSWORD`. Je-li zadán otisk i `OFFLOAD_SIGN_PFX`, použije se otisk (a skript to řekne).
-- Časové razítko (výchozí `http://timestamp.digicert.com`): 3 pokusy po 5 s, pak „Časové razítko se nepodařilo získat z …“.
+- Časové razítko (výchozí `http://timestamp.digicert.com`): 3 pokusy po 5 s, pak „Could not get a timestamp from …“.
 - Heslo se nikdy nevypisuje (v chybách je `***`). Pozor: `signtool /p` je vidět v seznamu procesů — na sdíleném počítači
   raději certifikát v úložišti nebo na tokenu.
 - Bez `-Sign` se build nemění.

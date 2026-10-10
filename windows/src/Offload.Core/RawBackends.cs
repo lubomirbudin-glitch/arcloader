@@ -272,7 +272,7 @@ internal sealed class BrawBackend : IRawBackend
 internal sealed class R3dBackend : IRawBackend
 {
     public ClipFormat Format => ClipFormat.R3d;
-    public string MissingHint => "RED R3D: nainstalujte REDCINE-X PRO (REDline)" + ToolDownloads.Hint(ToolDownloads.Redline);
+    public string MissingHint => "RED R3D: install REDCINE-X PRO (REDline)" + ToolDownloads.Hint(ToolDownloads.Redline);
     public bool IsAvailable(ExternalTools tools) => tools.Redline != null;
 
     /// `--printMeta 1` prints "Key: value" lines; the key names differ between versions, so match loosely.
@@ -364,7 +364,7 @@ internal sealed class R3dBackend : IRawBackend
 internal sealed class ArriBackend : IRawBackend
 {
     public ClipFormat Format => ClipFormat.Arriraw;
-    public string MissingHint => "ARRIRAW: nainstalujte ARRI Reference Tool (art-cmd)" + ToolDownloads.Hint(ToolDownloads.ArtCmd);
+    public string MissingHint => "ARRIRAW: install ARRI Reference Tool (art-cmd)" + ToolDownloads.Hint(ToolDownloads.ArtCmd);
     public bool IsAvailable(ExternalTools tools) => tools.ArtCmd != null;
 
     /// `art-cmd export` writes the clip's metadata as JSON: metadata sets per clip, plus one entry per frame.
