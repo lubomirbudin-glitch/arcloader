@@ -90,6 +90,12 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 36 — svazek: sériové číslo FS z boot sektoru (exFAT/FAT/NTFS, jako Windows), záložně uuid:, kapacita,
+  volumeSerial, klíč složky pro zámky, časy FAT s tolerancí celých hodin, .NET ticks; ověřeno: obrazy exFAT, FAT16
+  a FAT32 pod dočasnou složkou — sériové číslo = bajty boot sektoru, kapacita = `diskutil` „Volume Total Space“;
+  skutečné disky `/dev/rdisk*` jsou `root:operator` (bez sudo nečitelné → `uuid:`); srovnání s Windows čeká;
+  cesty přes realpath (ne `resolvingSymlinksInPath`, ta ořízne `/private`), kořen svazku se odřízne jen jako skutečná
+  předpona (systémový disk: statfs hlásí `/System/Volumes/Data`)
 - Úkol 35 — nastavení zachová neznámé klíče a nečitelné sekce (projekty a pravidla z novější verze nezmizí); klíče
   naming, hash, outputs; v sekcích proxy/tools/naming/outputs se zachovají jen klíče, které tahle verze nezná —
   vymazaná volitelná hodnota (cesta k LUTu, nástroji) se ze starého JSON nevrátí, `portNames` se neslučuje

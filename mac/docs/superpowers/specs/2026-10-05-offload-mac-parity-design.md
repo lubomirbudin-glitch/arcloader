@@ -1245,8 +1245,8 @@ dotazem na uživatele; neschválený vzhled = úkoly se přeskočí a všechny f
 
 | # | Co | Předpoklad | Jak ověřit |
 |---|---|---|---|
-| 1 | Čtení boot sektoru karty bez sudo | uzel `/dev/rdiskNsM` vyměnitelné karty smí přihlášený uživatel číst (u obrazů `hdiutil` ano) | úkol 36 krok 3: `ls -l /dev/rdisk*` u skutečné karty ve čtečce (USB, SD slot, Thunderbolt CFexpress); když ne, platí `uuid:` a ROZDILY to řekne |
-| 2 | `fsSerial` a kapacita jako Windows | boot sektor = `vol E:`; `f_blocks × f_bsize` = `TotalNumberOfBytes` | táž karta na Windows a Macu (úkol 36 krok 3) |
+| 1 | Čtení boot sektoru karty bez sudo | uzel `/dev/rdiskNsM` vyměnitelné karty smí přihlášený uživatel číst (u obrazů `hdiutil` ano) | úkol 36 krok 3: `ls -l /dev/rdisk*` u skutečné karty ve čtečce (USB, SD slot, Thunderbolt CFexpress); když ne, platí `uuid:` a ROZDILY to řekne **Výsledek 2026-10-10 (úkol 36):** obrazy `hdiutil` patří uživateli (`crw-r----- probudin staff`) a čtou se; skutečné externí disky mají `crw-r----- root operator` a uživatel ve skupině `operator` není → bez sudo nejde, platí `uuid:` (ROZDILY). Karta ve čtečce zatím nevyzkoušená (stejné vlastnictví čekáme). |
+| 2 | `fsSerial` a kapacita jako Windows | boot sektor = `vol E:`; `f_blocks × f_bsize` = `TotalNumberOfBytes` | táž karta na Windows a Macu (úkol 36 krok 3) **Výsledek 2026-10-10:** na obrazech exFAT, FAT16 a FAT32 souhlasí sériové číslo s bajty boot sektoru (0x64 / 0x27 / 0x43, LE) a kapacita s „Volume Total Space“ z `diskutil`; srovnání s Windows `vol`/`fsutil` čeká (bez Windows stroje). |
 | 3 | `mincore` vidí stránky UBC souboru, který proces nemá namapovaný | ano (stránky jsou v objektu VM souboru) | `CacheProbeTests.testResidentPagesAreDetected`; když selže, Mac verify-in-proxy nepoužije (bezpečně) |
 | 4 | Zápis s `F_NOCACHE` nezůstane v cache na APFS, exFAT, HFS+, SMB, Thunderbolt RAID | ano, kromě sítě | `CacheProbeTests` s `OFFLOAD_TEST_DEST` na každém (úkol 65 krok 3) |
 | 5 | ffmpeg přes tap: počet čtení a rychlost | ≤ 1,05 × soubor s `-short_seek_size 65536`, ≤ 5 % pomalejší | úkol 68 krok 3; MOV `moov` na konci, MP4, MXF |

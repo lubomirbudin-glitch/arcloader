@@ -5,6 +5,11 @@ public struct SourceFile {
     public let relPath: String
     public let size: Int64
     public let mtime: timespec
+
+    /// The modification time as a date (UTC).
+    public var modifiedUtc: Date { Date(timeIntervalSince1970: Double(mtime.tv_sec) + Double(mtime.tv_nsec) / 1e9) }
+    /// .NET ticks of `mtime`, exactly from the timespec (history `mtimeTicksUtc`, card fingerprint).
+    public var ticks: Int64 { FileTimes.ticks(mtime) }
 }
 
 public struct SourceScan {

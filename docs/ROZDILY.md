@@ -211,7 +211,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Historie karet** (zatím jen Windows, pro Mac naplánováno): `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,
   „Místní soubory“) — řádek „Zálohováno … — ověřeno“ u karty, dotaz „Karty už jsou zálohované“ před celou kopií, CLI
   vypíše řádek před plánem (bez dotazu); `--no-history` historii vypne. Karta se pozná podle sériového čísla souborového
-  systému + kapacity, ne podle GUID svazku — Mac musí vyjít na stejné `fsSerial` (u FAT/exFAT ověřit).
+  systému + kapacity, ne podle GUID svazku. Mac čte sériové číslo z boot sektoru (`Volume.swift`) jen tam, kde smí
+  číst `/dev/rdiskN` (obrazy disků); skutečné disky a karty mají uzel `root:operator`, takže Mac bez sudo použije
+  `uuid:<UUID svazku>` — historie přenesená z Windows kartu na Macu nespáruje (Mac pozná kartu jen ze své historie).
+  Totéž `destinations[].volumeSerial` v reportu: Mac píše `1A2B-3C4D` jen po přečtení boot sektoru, jinak `uuid:…`.
 - **Doplnění** (zatím jen Windows): generace ASC MHL N a `offload_report_NNNN.*` (FORMATY.md). Mac `verify` čte jen
   `<karta>.xxh64`, který doplnění rozšíří — doplněnou zálohu tedy ověří i Mac. Doplnění drží zámek složky karty (viz
   níže) a odmítne kartu, na které není žádný soubor dřívější zálohy, i zálohu s nedokončeným dřívějším doplněním.
