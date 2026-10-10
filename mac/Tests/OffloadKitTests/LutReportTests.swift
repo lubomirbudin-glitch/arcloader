@@ -39,7 +39,7 @@ final class LutReportTests: XCTestCase {
         p.enabled = true
         p.frameAspect = 1.66
         p.lutMode = .auto
-        XCTAssertTrue(HTMLReport.render(report(lut: nil, proxy: p)).contains("Proxy: H.264, 1080p, výřez 1.66, LUT: automaticky podle kamery"))
+        XCTAssertTrue(HTMLReport.render(report(lut: nil, proxy: p)).contains("Proxy: H.264, 1080p, frame lines 1.66, LUT: auto by camera"))
         p.lutMode = .builtin
         p.lutBuiltin = "dji-dlog-dgamut"
         // The name comes from LutCatalog.shared — empty under xctest, so the id shows (the app shows the name).
@@ -49,7 +49,7 @@ final class LutReportTests: XCTestCase {
         p.lutPath = "/Users/x/show.cube"
         XCTAssertTrue(HTMLReport.render(report(lut: nil, proxy: p)).contains("LUT: show.cube"))
         p.lutMode = .off
-        XCTAssertTrue(HTMLReport.render(report(lut: nil, proxy: p)).contains("LUT: bez LUT"))
+        XCTAssertTrue(HTMLReport.render(report(lut: nil, proxy: p)).contains("LUT: no LUT"))
     }
 
     private func options() -> OffloadOptions {

@@ -146,11 +146,11 @@ final class ProxyFolderTests: XCTestCase {
         var p = ProxySettings()
         p.enabled = true
         r.proxy = p
-        XCTAssertFalse(HTMLReport.render(r).contains("také ve složce"))
+        XCTAssertFalse(HTMLReport.render(r).contains("also in folder"))
         p.extraFolder = "/Volumes/Proxy & co"
         r.proxy = p
         XCTAssertTrue(HTMLReport.render(r).contains(
-            "<span class=\"mono\">_PROXY/</span> · také ve složce <span class=\"mono\">/Volumes/Proxy &amp; co</span></p>"))
+            "<span class=\"mono\">_PROXY/</span> · also in folder <span class=\"mono\">/Volumes/Proxy &amp; co</span></p>"))
     }
 
     // MARK: Whole job (ffmpeg)

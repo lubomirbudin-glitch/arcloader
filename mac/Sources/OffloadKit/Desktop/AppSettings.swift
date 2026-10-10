@@ -1,6 +1,6 @@
 import Foundation
 
-/// "Název karty z klipů" (Windows plan 6): suggest the card name from the clip names.
+/// "Card name from clips" (Windows plan 6: "Název karty z klipů"): suggest the card name from the clip names.
 public struct NamingSettings: Codable, Equatable {
     public var suggestFromClips = true
     public init() {}

@@ -30,7 +30,7 @@ public struct SpaceNeed: Equatable {
 }
 
 /// What a job needs besides the card itself, per destination (spec 2.5): proxies (on the first destination, on all with
-/// "Kopírovat proxy na všechny cíle"), the report everywhere, the proxies once more in the proxy folder.
+/// "Copy proxies to all destinations"), the report everywhere, the proxies once more in the proxy folder.
 public struct SpaceExtra: Equatable {
     public var proxy: Int64
     public var report: Int64
