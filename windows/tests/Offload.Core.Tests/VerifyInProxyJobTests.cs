@@ -286,6 +286,32 @@ public class VerifyInProxyJobTests
         Assert.True(job.Status().SafeToFormat);
     }
 
+    // Task 2026-10-09: Pozastavit during the proxy that verifies the primary's copy (mode A) while the secondary is read
+    // in the background: the render and the files being read finish, then the job stands; Pokračovat ends verified.
+    [FfmpegFact]
+    public async Task PausedDuringTheProxy_ClipFinishes_ThenStands_Verified()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        var job = new OffloadJob(Config(card, [dir.Sub("d1"), dir.Sub("d2")], dir), Options());
+        Assert.True(job.RunCopy());
+        var post = TestThreads.Start(() => job.RunPost());
+        Assert.True(SpinWait.SpinUntil(() => job.Status().Phase == JobPhase.Proxies, TimeSpan.FromSeconds(60)));
+        job.Pause();
+
+        Assert.True(SpinWait.SpinUntil(() => job.Status().PauseHeld, TimeSpan.FromSeconds(60)));
+        Assert.Equal(1, job.Status().ProxiesDone);   // the clip being rendered finished
+        Thread.Sleep(500);
+        Assert.False(post.IsCompleted);
+        job.Resume();
+        await post.WaitAsync(TimeSpan.FromSeconds(120));
+
+        var done = job.Status();
+        Assert.True(done.SafeToFormat);
+        Assert.True(done.PausedTotal >= TimeSpan.FromMilliseconds(500));
+        Assert.Equal(ProxyStatus.Done, Assert.Single(job.Report!.Clips).ProxyStatus);
+    }
+
     // Pozastavit in stage 2: the verification threads stand at the gate too — the job says "Pozastaveno" only then.
     [FfmpegFact]
     public async Task PausedInStageTwo_HoldsThenFinishesVerified()

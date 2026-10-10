@@ -104,11 +104,14 @@ public sealed record JobStatus
     public string? Error { get; init; }
     /// Information for the job card, e.g. "Nic nového — záloha je úplná."
     public string? Note { get; init; }
-    /// Pozastavit was pressed and not resumed (only while the job runs): it stops at its next safe point.
+    /// Pozastavit was pressed and not resumed (only while the job runs): it finishes the file or clip it is on, then stands.
     public bool Paused { get; init; }
-    /// The job really stands now — a worker waits at the gate ("Pozastaveno"; before that "Pozastavuje se…").
+    /// The job really stands now — every worker waits at the gate or is done ("Pozastaveno"; before that "Pozastavuji").
     public bool PauseHeld { get; init; }
-    /// How long the job has stood paused so far (from Pozastavit to Pokračovat).
+    /// Paused but not standing yet: what it still finishes, in Czech ("soubor A001C003.mov", "proxy klipu A001C003",
+    /// "soubory a.mov, b.wav") — "Pozastavuji (dokončuji …)"; null when unknown or not pausing.
+    public string? PauseStep { get; init; }
+    /// How long the job has stood paused so far (from the end of the step it finished to Pokračovat).
     public TimeSpan PausedTotal { get; init; }
     /// Warnings that do not fail the job (orange), one per line — e.g. unverified files of the earlier backup.
     public string? Warning { get; init; }
@@ -143,6 +146,8 @@ public sealed class OffloadJob
     AppendPlan? appendPlan;
     /// Plan 10: the verification running with the proxies (stage 2), null otherwise; the paused time when the copy ended.
     volatile VerifySession? session;
+    /// Stage 2's thread as a worker of the pause gate (it waits between clips), null outside stage 2.
+    volatile PauseGate.Worker? postWorker;
     TimeSpan pausedAtCopyEnd;
     /// Ruling I4: the card folders' lock a job whose reports say verifyPending holds until FinishVerification has written
     /// the verification results (taken in stage 1, let go in stage 2 — AppendLock.AcquireHeld).
@@ -251,10 +256,11 @@ public sealed class OffloadJob
     /// A DemoScenario preview: it never runs (`Offload.exe --demo`).
     public bool IsPreview => preview != null;
 
-    /// "Pozastavit" (UI návrh 9): stage 1 stops before its next block of the card or of the read-back, stage 2 before
-    /// its next clip and before the PDF and the day report — never in the middle of a block, a clip, a report or a lock
-    /// it would hold (an append's or a repair's folder lock stays held through stage 1). Cancel while paused ends the
-    /// job as a cancel does.
+    /// "Pozastavit" (UI návrh 9, task 2026-10-09): the step in progress finishes — the file being copied (on every
+    /// destination) or read back, the clip being analysed or rendered — then the job stands: stage 1 before its next
+    /// file, stage 2 before its next clip and before the PDF and the day report — never in the middle of a file, a clip,
+    /// a report or a lock it would hold (an append's or a repair's folder lock stays held through stage 1). Pokračovat
+    /// goes on with the next file or clip. Cancel while pausing or paused ends the job as a cancel does.
     public void Pause() => Engine.Pauses.Pause();
 
     public void Resume() => Engine.Pauses.Resume();
@@ -297,10 +303,41 @@ public sealed class OffloadJob
         var pauses = Engine.Pauses;
         bool running = s.Phase != JobPhase.Waiting && !s.Phase.IsFinished();
         // Stage 1 stands only when the destinations are idle too (the engine's snapshot says so — fix round 1); stage 2 only
-        // when no verification thread is mid-block (plan 10).
-        bool held = stage1 ? s.Copy!.PauseHeld : pauses.IsHolding && session?.Reading != true;
-        return s with { Paused = running && pauses.IsPaused, PauseHeld = running && held, PausedTotal = pauses.PausedTotal };
+        // when the clip and every verification thread's file are finished (plan 10, task 2026-10-09).
+        bool held = stage1 ? s.Copy!.PauseHeld : pauses.IsStanding && session?.Reading != true;
+        bool paused = running && pauses.IsPaused;
+        string? step = paused && !held ? Finishing(s, postWorker?.IsHolding == true, session?.CurrentFiles ?? []) : null;
+        return s with { Paused = paused, PauseHeld = running && held, PausedTotal = pauses.PausedTotal, PauseStep = step };
     }
+
+    /// Paused, not standing yet: what the job still finishes (Czech, for "Pozastavuji (dokončuji …)") — the file the copy
+    /// is on, the files the read-backs read, the clip stage 2 analyses or renders (`clipDone`: its thread waits already),
+    /// else the files the verification of stage 2 reads; null when none is known.
+    internal static string? Finishing(JobStatus s, bool clipDone, IReadOnlyList<string> verifying)
+    {
+        static string? Files(IEnumerable<string?> rel)
+        {
+            var names = rel.OfType<string>().Where(r => r.Length > 0).Select(Path.GetFileName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            return names.Count switch
+            {
+                0 => null,
+                1 => "soubor " + names[0],
+                _ => "soubory " + string.Join(", ", names),
+            };
+        }
+        return s.Phase switch
+        {
+            JobPhase.Copying => Files([s.Copy?.CurrentFile]),
+            JobPhase.Verifying => Files(s.Copy?.VerifyingFiles ?? []),
+            JobPhase.Analyzing when !clipDone && s.ClipName is { Length: > 0 } clip => "klip " + clip,
+            JobPhase.Proxies when !clipDone && s.ClipName is { Length: > 0 } clip => "proxy klipu " + clip,
+            JobPhase.Analyzing or JobPhase.Proxies or JobPhase.Finishing => Files(verifying),
+            _ => null,
+        };
+    }
+
+    /// Stage 2, between clips (and before the PDF): waits while paused; false when the job was cancelled meanwhile.
+    bool WaitBetweenSteps() => postWorker is { } w ? w.WaitWhilePaused(Engine.Cancellation) : Engine.WaitWhilePaused();
 
     void Update(Func<JobStatus, JobStatus> change)
     {
@@ -893,6 +930,20 @@ public sealed class OffloadJob
         }
         if (Plan is not { } plan || Report is not { } report) return;
         using var awake = KeepAwake();
+        // Stage 2 joins the pause gate: Pozastavit lets the clip in progress finish, then the job stands before the next.
+        using var pausing = postWorker = Engine.Pauses.Work();
+        try
+        {
+            RunStage2(plan, report, log);
+        }
+        finally
+        {
+            postWorker = null;
+        }
+    }
+
+    void RunStage2(OffloadPlan plan, OffloadReport report, Action<string>? log)
+    {
         VerifySession? verifying = null;
         OffloadReport final = report;
         Exception? failed = null;
@@ -924,7 +975,7 @@ public sealed class OffloadJob
         Report = final;
         if (failed == null)
         {
-            Engine.WaitWhilePaused();   // before the PDF and the day report (a cancel meanwhile still writes them)
+            WaitBetweenSteps();   // before the PDF and the day report (a cancel meanwhile still writes them)
             Update(s => s with { Phase = JobPhase.Reporting });
             WritePdfReports(final, plan, log);
             RegenerateDayReports(plan, log);
@@ -974,7 +1025,7 @@ public sealed class OffloadJob
         try
         {
             if (s != null) Update(st => st with { Phase = JobPhase.Finishing });
-            try { s?.Finish(); }
+            try { s?.Finish(postWorker); }
             catch (Exception e) { log?.Invoke($"verification: {e.Message}"); }
             IReadOnlyList<string> notes = s?.Notes ?? [];
             var paused = Engine.Pauses.PausedTotal - pausedAtCopyEnd;
@@ -1128,7 +1179,7 @@ public sealed class OffloadJob
         {
             // A pause waits between clips: the clip being probed or rendered finishes first (no ffmpeg is suspended, so
             // its stall watchdog never sees the pause).
-            if (IsCancelled || !Engine.WaitWhilePaused()) break;
+            if (IsCancelled || !WaitBetweenSteps()) break;
             var clip = entries[i].Clip;
             int index = i;
             Update(s => s with { ClipIndex = index, ClipName = clip.Name, ClipFraction = 0 });
@@ -1199,7 +1250,7 @@ public sealed class OffloadJob
         else if (plan.Mode != PlanMode.Full) usedNames.UnionWith(ProxyPaths.Existing(cardPaths));
         for (int i = 0; i < entries.Count; i++)
         {
-            if (IsCancelled || !Engine.WaitWhilePaused()) break;
+            if (IsCancelled || !WaitBetweenSteps()) break;
             var clip = entries[i].Clip;  // may have been reclassified during analysis (MXF → ARRIRAW)
             int index = i;
             Update(s => s with { ClipIndex = index, ClipName = clip.Name, ClipFraction = 0 });

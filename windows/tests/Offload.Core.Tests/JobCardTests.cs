@@ -54,7 +54,7 @@ public class JobCardTests
         Assert.Equal(["RAID_A", "SHUTTLE_B"], JobCard.Rows(p, Disks).Select(r => r.Name));
         Assert.Equal([0.5, 0.25], JobCard.Rows(p, Disks).Select(r => r.Share));
 
-        p.Update(new JobStatus { Phase = JobPhase.Copying, Paused = true, Copy = Snap(CopyPhase.Copy, 10, [10, 10], [0, 0], paused: true) }, T0.AddSeconds(2));
+        p.Update(new JobStatus { Phase = JobPhase.Copying, Paused = true, PauseHeld = true, Copy = Snap(CopyPhase.Copy, 10, [10, 10], [0, 0], paused: true) }, T0.AddSeconds(2));
         Assert.All(JobCard.Rows(p, Disks), r => Assert.Equal("—", r.RateText));
 
         // A repair: RAID_A only reads its good copy back — nothing to write there.
