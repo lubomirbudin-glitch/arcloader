@@ -111,11 +111,11 @@ public class BrawCoreTests
 
     [Theory]
     [InlineData(3, "braw-decode: CreateCodec failed (0x80004005; library C:\\BM\\BlackmagicRawAPI.dll)",
-        "Blackmagic RAW: knihovnu C:\\BM\\BlackmagicRawAPI.dll nelze použít — nainstalujte aktuální Blackmagic RAW Player")]
+        "Blackmagic RAW: cannot use the library C:\\BM\\BlackmagicRawAPI.dll — install the current Blackmagic RAW Player")]
     [InlineData(4, "braw-decode: cannot open D:\\A001.braw (0x80004005; library C:\\BM\\BlackmagicRawAPI.dll)",
-        "Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna C:\\BM\\BlackmagicRawAPI.dll starší než kamera (nainstalujte aktuální Blackmagic RAW Player)")]
+        "Blackmagic RAW: cannot open the clip — it is damaged, or the library C:\\BM\\BlackmagicRawAPI.dll is older than the camera (install the current Blackmagic RAW Player)")]
     [InlineData(5, "braw-decode: frame 0 failed",
-        "Blackmagic RAW: snímek klipu se nepodařilo dekódovat (frame 0 failed)")]
+        "Blackmagic RAW: could not decode a frame of the clip (frame 0 failed)")]
     public void Info_DecoderExitCode_BecomesCzechNote(int code, string line, string note)
     {
         using var dir = new TempDir();
@@ -144,7 +144,7 @@ public class BrawCoreTests
         using var dir = new TempDir();
         var tools = new ExternalTools { BrawDecoder = FailingDecoder(dir.Path, 3, "braw-decode: BlackmagicRawAPI.dll not found", failInfo: true), NoSearch = true };
         var e = Assert.Throws<RawDecoderException>(() => new BrawBackend(_ => null).Probe(Path.Combine(dir.Path, "A001.braw"), tools, dir.Path));
-        Assert.Equal("Blackmagic RAW: knihovnu BlackmagicRawAPI.dll nelze použít — nainstalujte aktuální Blackmagic RAW Player", e.Message);
+        Assert.Equal("Blackmagic RAW: cannot use the library BlackmagicRawAPI.dll — install the current Blackmagic RAW Player", e.Message);
     }
 
     static ProxySettings FakeSettings => new() { Enabled = true, Height = 180, Codec = ProxyCodec.ProresProxy, BurnFilename = false, BurnTimecode = false, Audio = false };
@@ -164,7 +164,7 @@ public class BrawCoreTests
         var log = new List<string>();
         using var r = new ProxyRenderer(FakeSettings, tools) { Backends = [new BrawBackend(_ => Library)], Log = l => { lock (log) log.Add(l); } };
         var e = Assert.Throws<RawDecoderException>(() => r.Thumbnails(BrawClip, card, OneFrame, null));
-        Assert.StartsWith("Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna C:\\BM\\BlackmagicRawAPI.dll", e.Message);
+        Assert.StartsWith("Blackmagic RAW: cannot open the clip — it is damaged, or the library C:\\BM\\BlackmagicRawAPI.dll", e.Message);
         lock (log) Assert.Contains($"braw-decode failed (exit 4): {line}", log);
     }
 
@@ -179,7 +179,7 @@ public class BrawCoreTests
         var log = new List<string>();
         using var r = new ProxyRenderer(FakeSettings, tools) { Backends = [new BrawBackend(_ => Library)], Log = l => { lock (log) log.Add(l); } };
         var e = Assert.Throws<RawDecoderException>(() => r.Probe(BrawClip, card));
-        Assert.StartsWith("Blackmagic RAW: klip nelze otevřít", e.Message);
+        Assert.StartsWith("Blackmagic RAW: cannot open the clip", e.Message);
         lock (log) Assert.Contains($"braw-decode failed (exit 4): {line}", log);
     }
 }

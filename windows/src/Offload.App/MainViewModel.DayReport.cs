@@ -5,7 +5,7 @@ using Offload.Core.Outputs;
 
 namespace Offload.App;
 
-/// Nástroje → Denní report… (spec 3.2): a day folder on a destination (or a card folder in it) → the day report is made
+/// Tools → Day report… (spec 3.2): a day folder on a destination (or a card folder in it) → the day report is made
 /// again off the UI thread and its HTML opened.
 public sealed partial class MainViewModel
 {
@@ -18,7 +18,7 @@ public sealed partial class MainViewModel
     async void PickAndMakeDayReport()
     {
         if (!Allowed(DemoCommand.DayReport)) return;
-        if (Dialogs.PickFolder("Vyberte složku dne na cíli") is not string folder) return;
+        if (Dialogs.PickFolder("Choose a day folder on a destination") is not string folder) return;
         makingDayReport = true;
         var all = SettingsStore.Clone(AllSettings);   // a snapshot for the background thread
         try

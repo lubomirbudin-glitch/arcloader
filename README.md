@@ -1,13 +1,15 @@
 # Offload
 
 **Bezpečné stahování kamerových karet na více disků najednou — s ověřením, reportem, ASC MHL a proxy s LUTem.**
-Pro Windows a macOS.
+Pro Windows a macOS. **Aplikace pro Windows, její reporty i uživatelský návod jsou v angličtině** (dokumentace repozitáře je česky;
+Mac verze zatím česky, přechod na angličtinu je naplánován).
 
 > *English summary:* Offload copies camera cards to several drives at once. The card is read once and written to every
 > destination. Every copy is verified by checksum (xxHash64 / XXH128, optionally MD5), and the job produces a report
 > (HTML, PDF, JSON, TXT), ASC MHL v2 and, optionally, proxies with LUTs and burn-ins. It is aimed at DITs, data
 > wranglers and camera assistants. The Windows (C#/.NET 10, WPF) and macOS (Swift, SwiftUI) versions write identical
-> output, so either one verifies the other's backups. The UI and docs are in Czech. **Source available for viewing
+> output, so either one verifies the other's backups. The Windows app, its reports and its manual are in English; the repository docs are in Czech
+> (the Mac app is still Czech, switching it to English is planned). **Source available for viewing
 > only — all rights reserved** (see [LICENSE](LICENSE)).
 
 ---
@@ -51,8 +53,8 @@ okamžik, kdy je bezpečné kartu naformátovat.
 - **Ověření.** Každý soubor na každém disku se zpětně přečte bez cache a porovná se s kontrolním součtem ze
   zdroje. Windows verze umí i **Verify-in-Proxy**: primární disk se ověří čtením, které stejně probíhá kvůli proxy,
   a ostatní disky se ověřují na pozadí.
-- **Dva stavy karty.** **„Lze vyjmout“** znamená, že je všechno zkopírované. **„Lze formátovat“** znamená, že je
-  všechno ověřené na všech discích. Až druhý stav je zelený, zazní zvuk a přijde oznámení.
+- **Dva stavy karty.** **"Safe to eject"** (lze vyjmout) znamená, že je všechno zkopírované. **"Safe to format"** (lze formátovat)
+  znamená, že je všechno ověřené na všech discích. Až druhý stav je zelený, zazní zvuk a přijde oznámení.
 - **Report** v HTML, PDF, JSON a TXT obsahuje:
   - souhrn, cíle a rychlosti;
   - **3 náhledy z každého klipu**, metadata kamery, timecode, objektiv, audio a velikost;
@@ -71,15 +73,15 @@ okamžik, kdy je bezpečné kartu naformátovat.
 - **Historie karet** (Windows):
   - aplikace pozná kartu, která už je zálohovaná;
   - umí **doplnit jen nové klipy** jako další generaci ASC MHL;
-  - **Zkopírovat znovu** opraví jen nesouhlasné soubory;
-  - **Ověřit zálohu** ověří kdykoli později.
+  - **Copy again** (zkopírovat znovu) opraví jen nesouhlasné soubory;
+  - **Verify backup** (ověřit zálohu) ověří kdykoli později.
 - **Hardware:**
   - test USB portů s doporučením, kam co zapojit;
-  - během kopie ukazuje řetěz připojení a úzké hrdlo („brzdí: D1“).
+  - během kopie ukazuje řetěz připojení a úzké hrdlo ("bottleneck: D1").
 - **Pohodlí:**
   - automatické načtení disků a karet a fronta úloh;
-  - kopie každého reportu i do počítače (`Dokumenty\Offload reporty`);
-  - jen ve Windows: projekty a předvolby, Pozastavit / Pokračovat, přesná kontrola volného místa předem a oznámení
+  - kopie každého reportu i do počítače (`Documents\Offload reports`);
+  - jen ve Windows: projekty a předvolby, Pause / Resume (pozastavit / pokračovat), přesná kontrola volného místa předem a oznámení
     ve Windows i na telefon (ntfy).
 
 Obě verze mají i **příkazovou řádku**, takže se dají použít ve skriptech. Mac umí `offload copy | verify | bench | ports | luts`,
@@ -159,8 +161,8 @@ ve [windows/README.md](windows/README.md).
 
 **Požadavky:** Windows 10 nebo 11 (x64). Nic se neinstaluje, balíček je přenosný.
 
-**Spuštění z balíčku:** stáhněte [stabilní verzi](https://github.com/lubomirbudin-glitch/offload/releases/download/stable/Offload-Windows.zip), rozbalte ji kamkoli a spusťte `Offload\Offload.exe`. Návod pro
-uživatele je přiložený jako `Offload-navod.pdf` a krátký úvod jako `CTI-ME.txt`.
+**Spuštění z balíčku:** stáhněte [stabilní verzi](https://github.com/lubomirbudin-glitch/offload/releases/download/stable/Offload-Windows.zip), rozbalte ji kamkoli a spusťte `Offload\Offload.exe`. Anglický návod pro
+uživatele je přiložený jako `Offload-manual.pdf` a krátký úvod jako `READ-ME.txt`.
 
 **Sestavení ze zdrojů** (.NET 10 SDK):
 
@@ -205,7 +207,7 @@ windows/
     src/Offload.Cli/        příkazová řádka — bin\offload.exe
     src/Offload.BrawDecode/ dekodér Blackmagic RAW — bin\braw-decode.exe
     tests/                  automatické testy (xUnit)
-    package/                návod (HTML → PDF), CTI-ME.txt
+    package/                manual (anglický návod, HTML → PDF), READ-ME.txt
     scripts/                sestavení balíčku, vydání, podpis
     docs/superpowers/       návrhy (specs) a plány po úkolech
 mac/
@@ -226,7 +228,7 @@ mac/
 | [docs/VYVOJ-WINDOWS.md](docs/VYVOJ-WINDOWS.md) | co se ve Windows verzi změnilo, kdy a proč; naplánované úkoly |
 | [docs/VYVOJ-MAC.md](docs/VYVOJ-MAC.md) | totéž pro Mac verzi |
 | [windows/README.md](windows/README.md) | Windows: stav, sestavení, vydání, podpis, CLI, ruční testy |
-| [windows/package/navod/navod.html](windows/package/navod/navod.html) | uživatelský návod (zdroj PDF v balíčku) |
+| [windows/package/manual/manual.html](windows/package/manual/manual.html) | uživatelský návod, anglicky (zdroj `Offload-manual.pdf` v balíčku) |
 | [mac/README.md](mac/README.md) | Mac: jak to funguje, formáty, sestavení |
 | [shared/luts/README.md](shared/luts/README.md) | jak vznikají vestavěné LUTy |
 | [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) | komponenty třetích stran a jejich licence |
@@ -236,7 +238,7 @@ mac/
 - Každá změna jedné verze přidá záznam do jejího `docs/VYVOJ-*.md` ve stejném commitu.
 - Když se tím verze rozejdou ve funkci nebo chování, upraví se i `docs/ROZDILY.md`.
 - Změna formátu na disku znamená změnu v obou verzích a v `docs/FORMATY.md`.
-- Texty v aplikaci jsou česky. Na kartu se nikdy nezapisuje a existující soubory na cíli se nepřepisují.
+- Texty ve Windows aplikaci, v reportech a v návodu jsou anglicky (pojmy: [docs/ui-text-glossary.md](docs/ui-text-glossary.md)); Mac verze zatím česky. Na kartu se nikdy nezapisuje a existující soubory na cíli se nepřepisují.
 
 ## Licence
 

@@ -99,8 +99,8 @@ public class SummaryReportTests
         Assert.False(copy.Connected);
         Assert.True(copy.Verified);   // what the report says about that disk
         var html = SummaryReport.Html(model);
-        Assert.Contains("kopie reportu na počítači", html);
-        Assert.Contains("nepřipojen", html);
+        Assert.Contains("report copy on this computer", html);
+        Assert.Contains("not connected", html);
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class SummaryReportTests
         Assert.Null(card.First);
         Assert.False(Assert.Single(card.Copies).Connected);
         var html = SummaryReport.Html(model);
-        Assert.Contains("report není k dispozici", html);
+        Assert.Contains("report not available", html);
         Assert.Contains("A001", html);
     }
 
@@ -194,7 +194,7 @@ public class SummaryReportTests
         Assert.False(model.Cards.Single(c => c.Name == "B001").First!.TimeOfDay);
         var html = SummaryReport.Html(model);
         Assert.Contains("14:02:11:05", html);
-        Assert.Contains("TC denní doby", html);
+        Assert.Contains("time-of-day TC", html);
     }
 
     [Fact]
@@ -232,7 +232,7 @@ public class SummaryReportTests
         Assert.Equal(2, model.Total.VerifiedCards);
         var html = SummaryReport.Html(model);
         Assert.Contains("3:45", html);   // 225 s
-        Assert.Contains("Celkem", html);
+        Assert.Contains("Total", html);
     }
 
     [Fact]
@@ -259,7 +259,7 @@ public class SummaryReportTests
         var inputs = SummaryReport.Inputs([Path.Combine(root, "2026-10-06")], []);
         Assert.Equal(2, inputs.Count);
         var e = Assert.Throws<ArgumentException>(() => SummaryReport.Inputs([dir.Sub("empty")], []));
-        Assert.Contains("není složka karty", e.Message);
+        Assert.Contains("is not a card folder", e.Message);
         Assert.Throws<ArgumentException>(() => SummaryReport.Inputs(["20990101T000000Z-deadbeef"], []));
     }
 
@@ -280,21 +280,21 @@ public class SummaryReportTests
         var model = SummaryReport.Load([SummaryInput.Of(d1)], [dir.Sub("local")]);
         var picked = dir.Sub("picked");
         var now = new DateTime(2026, 10, 10, 14, 32, 5);
-        System.IO.File.WriteAllText(Path.Combine(picked, "2026-10-10_143205_souhrn.html"), "the user's own");
+        System.IO.File.WriteAllText(Path.Combine(picked, "2026-10-10_143205_summary.html"), "the user's own");
 
         var saved = SummaryReport.Save(model, dir.Sub("local"), picked, null, now);
 
-        Assert.Equal(Path.Combine(dir.Path, "local", "souhrn", "2026-10-10_143205_souhrn.html"), saved.Html);
-        Assert.Contains("Souhrnný report", System.IO.File.ReadAllText(saved.Html));
-        Assert.Equal(Path.Combine(picked, "2026-10-10_143205_souhrn_2.html"), saved.ExtraHtml);
+        Assert.Equal(Path.Combine(dir.Path, "local", "summary", "2026-10-10_143205_summary.html"), saved.Html);
+        Assert.Contains("Summary report", System.IO.File.ReadAllText(saved.Html));
+        Assert.Equal(Path.Combine(picked, "2026-10-10_143205_summary_2.html"), saved.ExtraHtml);
         Assert.Null(saved.ExtraError);
-        Assert.Equal("the user's own", System.IO.File.ReadAllText(Path.Combine(picked, "2026-10-10_143205_souhrn.html")));
+        Assert.Equal("the user's own", System.IO.File.ReadAllText(Path.Combine(picked, "2026-10-10_143205_summary.html")));
         // Review S-10: no PDF was printed (tests skip Edge) — the copy on the disk has no link to a file that is not there.
         Assert.Null(saved.ExtraPdf);
-        Assert.DoesNotContain("Otevřít PDF report", System.IO.File.ReadAllText(saved.ExtraHtml!));
+        Assert.DoesNotContain("Open PDF report", System.IO.File.ReadAllText(saved.ExtraHtml!));
 
         var again = SummaryReport.Save(model, dir.Sub("local"), null, null, now);   // the same second: a suffix, never over
-        Assert.Equal(Path.Combine(dir.Path, "local", "souhrn", "2026-10-10_143205_souhrn_2.html"), again.Html);
+        Assert.Equal(Path.Combine(dir.Path, "local", "summary", "2026-10-10_143205_summary_2.html"), again.Html);
         DayFixtures.AssertSame(before, Tree(dir.Sub("d1")));
     }
 
@@ -311,7 +311,7 @@ public class SummaryReportTests
 
         Assert.True(System.IO.File.Exists(saved.Html));
         Assert.Null(saved.ExtraHtml);
-        Assert.Contains("ve složce zálohy karty", saved.ExtraError);
+        Assert.Contains("inside the backup folder of a card", saved.ExtraError);
         DayFixtures.AssertSame(before, Tree(d1));
     }
 
@@ -378,15 +378,15 @@ public class CliSummaryReportTests
 
         Assert.True(ok.Exit == 0, ok.Out + ok.Err);
         var lines = ok.Out.Trim().Split('\n').Select(l => l.Trim()).ToList();
-        var html = lines[0]["Souhrnný report: ".Length..];
-        Assert.StartsWith(Path.Combine(LocalReports.DefaultRoot, "souhrn") + Path.DirectorySeparatorChar, html);
-        Assert.EndsWith("_souhrn.html", html);
+        var html = lines[0]["Summary report: ".Length..];
+        Assert.StartsWith(Path.Combine(LocalReports.DefaultRoot, "summary") + Path.DirectorySeparatorChar, html);
+        Assert.EndsWith("_summary.html", html);
         Assert.Contains("B001", System.IO.File.ReadAllText(html));
-        Assert.Single(Directory.GetFiles(picked, "*_souhrn.html"));
-        Assert.Contains(lines, l => l.StartsWith("Souhrnný report i na vybraném disku: " + picked, StringComparison.Ordinal));
+        Assert.Single(Directory.GetFiles(picked, "*_summary.html"));
+        Assert.Contains(lines, l => l.StartsWith("Summary report also on the selected disk: " + picked, StringComparison.Ordinal));
 
         var bad = Run(dir.Sub("settings"), Path.Combine(dir.Path, "nope"));
         Assert.Equal(1, bad.Exit);
-        Assert.Contains("Chyba: „" + Path.Combine(dir.Path, "nope") + "“ není složka karty ani id zálohy", bad.Err);
+        Assert.Contains("Error: \"" + Path.Combine(dir.Path, "nope") + "\" is neither a card folder nor a backup id", bad.Err);
     }
 }

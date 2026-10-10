@@ -85,19 +85,19 @@ public static partial class MhlReader
                 var path = Path.Combine(dir, c.Path);
                 if (c.Path.IndexOfAny(['/', '\\']) >= 0 || !File.Exists(path))
                 {
-                    problems.Add($"V řetězu ASC MHL je generace {Gen(c.Seq)}, ale její soubor chybí: {c.Path}");
+                    problems.Add($"The ASC MHL chain has generation {Gen(c.Seq)}, but its file is missing: {c.Path}");
                     continue;
                 }
                 if (Mhl.C4(ReadShared(path)) != c.C4)
-                    problems.Add($"ASC MHL generace {Gen(c.Seq)} neodpovídá řetězu (soubor MHL byl změněn).");
+                    problems.Add($"ASC MHL generation {Gen(c.Seq)} does not match the chain (the MHL file was changed).");
                 order.Add((c.Seq, c.Path));
             }
             foreach (var extra in mhlFiles.Where(f => !chain.Any(c => string.Equals(c.Path, f, StringComparison.OrdinalIgnoreCase))))
-                problems.Add($"Soubor ASC MHL není v řetězu: {extra}");
+                problems.Add($"An ASC MHL file is not in the chain: {extra}");
         }
         else if (mhlFiles.Count > 0)
         {
-            problems.Add($"Chybí {ChainFileName} — generace se čtou podle čísla v názvu souboru.");
+            problems.Add($"{ChainFileName} is missing — the generations are read by the number in the file name.");
             order.AddRange(mhlFiles
                 .Select(f => (Seq: LeadingNumber().Match(f) is { Success: true } m ? int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) : int.MaxValue, File: f))
                 .OrderBy(x => x.Seq).ThenBy(x => x.File, StringComparer.Ordinal));
@@ -112,7 +112,7 @@ public static partial class MhlReader
             }
             catch (Exception e) when (e is XmlException or IOException or UnauthorizedAccessException or FormatException)
             {
-                problems.Add($"ASC MHL generaci {Gen(seq)} nejde přečíst: {e.Message}");
+                problems.Add($"Cannot read ASC MHL generation {Gen(seq)}: {e.Message}");
             }
         }
         if (generations.Count == 0 && problems.Count == 0) return null;
@@ -161,7 +161,7 @@ public static partial class MhlReader
         }
         catch (Exception e) when (e is XmlException or IOException or UnauthorizedAccessException or FormatException or OverflowException)
         {
-            problems?.Add($"{ChainFileName} nejde přečíst: {e.Message}");
+            problems?.Add($"Cannot read {ChainFileName}: {e.Message}");
             return null;
         }
     }

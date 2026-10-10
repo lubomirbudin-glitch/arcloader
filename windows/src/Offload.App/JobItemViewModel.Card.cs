@@ -23,7 +23,7 @@ public sealed class PhaseStepViewModel : ObservableObject
     }
 }
 
-/// One row of the speed table, updated in place every tick; the tooltip is the old chain line (product, port, % linky).
+/// One row of the speed table, updated in place every tick; the tooltip is the old chain line (product, port, % of the link).
 public sealed class TransferRowViewModel : ObservableObject
 {
     public string Name { get; private set; } = "";
@@ -55,8 +55,8 @@ public sealed class ThumbViewModel(string clip, string? more = null) : Observabl
     }
 }
 
-/// The new parts of the job card (UI návrh, nové věci 1–4 and 9): phase indicator, speed table, file line, pause,
-/// remaining time, the brake sentence, the summary fields, thumbnails, the failed files and "Zkopírovat znovu".
+/// The new parts of the job card (UI design, new items 1–4 and 9): phase indicator, speed table, file line, pause,
+/// remaining time, the brake sentence, the summary fields, thumbnails, the failed files and "Copy again".
 public sealed partial class JobItemViewModel
 {
     IReadOnlyList<ChainElement>? chain;
@@ -123,21 +123,21 @@ public sealed partial class JobItemViewModel
     }
 
     // ── Running ────────────────────────────────────────────────────────────────────────────────────────────────
-    /// "zbývá ~0:02 kopie · ~6:00 celkem" (the whole job only when the session's speeds are known).
+    /// "~0:02 copy left · ~6:00 total" (the whole job only when the session's speeds are known).
     public string? RemainingText => JobCard.Remaining(Phase, progress.Eta, owner.RemainingTotal(this, progress.Eta));
 
     public string FileCaption => JobCard.FileLine(progress.Status).Caption;
     public string FileValue => JobCard.FileLine(progress.Status).Value;
 
-    /// "Pozastavuji (dokončuji proxy klipu A003…)" / "Pozastaveno — …", or null.
+    /// "Pausing (finishing the proxy of clip A003…)" / "Paused — …", or null.
     public string? PauseText => progress.PauseText;
     public bool CanPause => IsRunning && !IsPaused && !Job.IsCancelled;
 
-    /// "Nejpomalejší článek: čtečka karty (…). Disky by zvládly víc." while copying.
+    /// "Slowest link: card reader (…). The disks could do more." while copying.
     public string? BrakeText => Phase == JobPhase.Copying && chain is { } c ? JobCard.BrakeSentence(progress.Brake, c, DestNames) : null;
 
     // ── Done ───────────────────────────────────────────────────────────────────────────────────────────────────
-    /// Kopie · Ověření · Proxy · Celkem.
+    /// Copy · Verification · Proxies · Total.
     public IReadOnlyList<SummaryField> SummaryFields => IsFinished && Job.Report is { } r ? JobCard.Summary(r, progress.Elapsed) : [];
     public bool HasThumbs => Thumbs.Count > 0;
     public bool HasProxies => Job.Report?.Proxy?.Enabled == true && progress.Status.ProxiesDone > 0;
@@ -183,6 +183,6 @@ public sealed partial class JobItemViewModel
     public string? MoreFailed => Job.Report is { Success: false } r ? JobCard.MoreFiles(r.FailedFiles.Count, ShownFailed) : null;
     public int DiskCount => DestNames.Count;
 
-    /// "Zkopírovat znovu": only the failed files, only where they failed (a repair job, RepairRules).
+    /// "Copy again": only the failed files, only where they failed (a repair job, RepairRules).
     public bool CanRepair => RepairRules.Offer(Phase, Job.Report, owner.SourcePresent(this), owner.RepairPending(this), owner.RepairedLater(this));
 }

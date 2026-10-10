@@ -109,7 +109,7 @@ public class AppendTicksTests
     [Fact]
     public void GoneMessage_Czech()
     {
-        Assert.Equal("Karta A001 se změnila — doplnit už nejde. Zkontrolujte ji a spusťte znovu.", AppendTicks.GoneMessage(["A001"]));
-        Assert.StartsWith("Karty A001, A002 se změnily", AppendTicks.GoneMessage(["A001", "A002"]));
+        Assert.Equal("Card A001 has changed — it can no longer be appended. Check it and start again.", AppendTicks.GoneMessage(["A001"]));
+        Assert.StartsWith("Cards A001, A002 have changed", AppendTicks.GoneMessage(["A001", "A002"]));
     }
 }

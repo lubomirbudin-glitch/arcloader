@@ -152,7 +152,7 @@ public class ReleaseScriptTests
         using var dir = new TempDir();
         var r = Ps("Get-OffloadSignSetup -CertThumbprint 'ABCD' | Out-Null", new() { ["SIGNTOOL"] = Path.Combine(dir.Path, "none.exe") });
         Assert.Equal(1, r.Code);
-        Assert.Contains("ERROR: signtool nenalezen — nainstalujte Windows SDK (Signing Tools for Desktop Apps), nebo nastavte SIGNTOOL.", r.Out);
+        Assert.Contains("ERROR: signtool not found — install the Windows SDK (Signing Tools for Desktop Apps), or set SIGNTOOL.", r.Out);
     }
 
     [Fact]
@@ -162,17 +162,17 @@ public class ReleaseScriptTests
         var signtool = FakeSigntool(dir.Path);
         var store = EmptyStore(dir.Path);
         var none = Ps("Get-OffloadSignSetup | Out-Null", new() { ["SIGNTOOL"] = signtool });
-        Assert.Contains("ERROR: Není zadaný certifikát: použijte -CertThumbprint <otisk>, nebo nastavte OFFLOAD_SIGN_PFX a OFFLOAD_SIGN_PFX_PASSWORD.", none.Out);
+        Assert.Contains("ERROR: No certificate given: use -CertThumbprint <thumbprint>, or set OFFLOAD_SIGN_PFX and OFFLOAD_SIGN_PFX_PASSWORD.", none.Out);
         var thumb = new string('0', 40);
         var unknown = Ps($"Get-OffloadSignSetup -CertThumbprint '{thumb}' -StoreRoots '{store}' | Out-Null", new() { ["SIGNTOOL"] = signtool });
-        Assert.Contains($@"ERROR: Certifikát s otiskem {thumb} nenalezen v CurrentUser\My ani LocalMachine\My.", unknown.Out);
+        Assert.Contains($@"ERROR: Certificate with thumbprint {thumb} not found in CurrentUser\My or LocalMachine\My.", unknown.Out);
         var noPassword = Ps("Get-OffloadSignSetup | Out-Null", new() { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = Pfx(dir.Path, "tajne-heslo-1") });
-        Assert.Contains("ERROR: Chybí OFFLOAD_SIGN_PFX_PASSWORD.", noPassword.Out);
+        Assert.Contains("ERROR: OFFLOAD_SIGN_PFX_PASSWORD is missing.", noPassword.Out);
         var expired = Ps("Get-OffloadSignSetup | Out-Null", new() { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = Pfx(dir.Path, "tajne-heslo-1", expired: true), ["OFFLOAD_SIGN_PFX_PASSWORD"] = "tajne-heslo-1" });
-        Assert.Contains("vypršel", expired.Out);
+        Assert.Contains("expired on", expired.Out);
         Assert.DoesNotContain("tajne-heslo-1", expired.Out);
         var wrong = Ps("Get-OffloadSignSetup | Out-Null", new() { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = Pfx(dir.Path, "tajne-heslo-1"), ["OFFLOAD_SIGN_PFX_PASSWORD"] = "spatne-heslo-9" });
-        Assert.Contains("nejde otevřít", wrong.Out);
+        Assert.Contains("Cannot open certificate", wrong.Out);
         Assert.DoesNotContain("spatne-heslo-9", wrong.Out);
     }
 
@@ -186,20 +186,20 @@ public class ReleaseScriptTests
         {
             var r = Ps($"Get-OffloadSignSetup -CertThumbprint '{bad}' -StoreRoots '{EmptyStore(dir.Path)}' | Out-Null", env);
             Assert.Equal(1, r.Code);
-            Assert.Contains("ERROR: Otisk certifikátu musí mít 40 hexadecimálních znaků", r.Out);
+            Assert.Contains("ERROR: The certificate thumbprint must have 40 hexadecimal characters", r.Out);
         }
         // spaces (as copied from the certificate dialog) are fine
         var ok = Ps($"Get-OffloadSignSetup -CertThumbprint '{string.Join(" ", Enumerable.Repeat("0000", 10))}' -StoreRoots '{EmptyStore(dir.Path)}' | Out-Null", env);
-        Assert.Contains($@"ERROR: Certifikát s otiskem {new string('0', 40)} nenalezen", ok.Out);
+        Assert.Contains($@"ERROR: Certificate with thumbprint {new string('0', 40)} not found", ok.Out);
     }
 
     // The manual names the versioned zip.
     [Fact]
     public void Manual_NamesTheVersionedZip()
     {
-        var html = File.ReadAllText(Path.Combine(WindowsDir, "package", "navod", "navod.html"));
+        var html = File.ReadAllText(Path.Combine(WindowsDir, "package", "manual", "manual.html"));
         Assert.DoesNotContain("Offload-win-x64.zip", html);
-        Assert.Contains("Offload-win-x64-&lt;verze&gt;.zip", html);
+        Assert.Contains("Offload-win-x64-&lt;version&gt;.zip", html);
     }
 
     // M8: a certificate that could not sign (no private key, not for code signing) is refused before the build.
@@ -209,10 +209,10 @@ public class ReleaseScriptTests
         using var dir = new TempDir();
         var env = (string pfx) => new Dictionary<string, string?> { ["SIGNTOOL"] = FakeSigntool(dir.Path), ["OFFLOAD_SIGN_PFX"] = pfx, ["OFFLOAD_SIGN_PFX_PASSWORD"] = "h5" };
         var noKey = Ps("Get-OffloadSignSetup | Out-Null", env(Pfx(dir.Path, "h5", withKey: false)));
-        Assert.Contains("ERROR: Certifikát", noKey.Out);
-        Assert.Contains("nemá soukromý klíč", noKey.Out);
+        Assert.Contains("ERROR: Certificate", noKey.Out);
+        Assert.Contains("has no private key", noKey.Out);
         var wrongPurpose = Ps("Get-OffloadSignSetup | Out-Null", env(Pfx(dir.Path, "h5", eku: "1.3.6.1.5.5.7.3.1")));   // server authentication
-        Assert.Contains("není určen k podepisování kódu", wrongPurpose.Out);
+        Assert.Contains("is not meant for code signing", wrongPurpose.Out);
         var good = Ps("Get-OffloadSignSetup | Out-Null", env(Pfx(dir.Path, "h5", eku: CodeSigning)));
         Assert.True(good.Code == 0, good.Out);
         var noEku = Ps("Get-OffloadSignSetup | Out-Null", env(Pfx(dir.Path, "h5")));   // no EKU = any purpose
@@ -232,7 +232,7 @@ public class ReleaseScriptTests
             new() { ["SIGNTOOL"] = FakeSigntool(dir.Path), ["OFFLOAD_SIGN_PFX"] = pfx, ["OFFLOAD_SIGN_PFX_PASSWORD"] = "h6" });
         Assert.True(r.Code == 0, r.Out);
         Assert.Contains($"/sha1 {thumb}", r.Out);
-        Assert.Contains("OFFLOAD_SIGN_PFX se nepoužije", r.Out);
+        Assert.Contains("OFFLOAD_SIGN_PFX is not used", r.Out);
     }
 
     // Spec 4.5: sign (SHA-256, RFC 3161 timestamp, description) then verify; the password is never printed.
@@ -248,7 +248,7 @@ public class ReleaseScriptTests
         var r = Ps($"$s = Get-OffloadSignSetup; Invoke-OffloadSign -Setup $s -Files @('{a}', '{b}') -TimestampUrl 'http://ts.example' -RetryDelaySeconds 0",
             new() { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = pfx, ["OFFLOAD_SIGN_PFX_PASSWORD"] = "tajne-heslo-2" });
         Assert.True(r.Code == 0, r.Out);
-        Assert.Contains($"podepsáno: {a}", r.Out);
+        Assert.Contains($"signed: {a}", r.Out);
         Assert.DoesNotContain("tajne-heslo-2", r.Out);
         var calls = File.ReadAllLines(Path.Combine(dir.Path, "calls.txt"));
         Assert.Equal(2, calls.Length);
@@ -268,7 +268,7 @@ public class ReleaseScriptTests
         var r = Ps($"$s = Get-OffloadSignSetup; Invoke-OffloadSign -Setup $s -Files @('{a}') -TimestampUrl 'http://ts.invalid' -RetryDelaySeconds 0",
             new() { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = Pfx(dir.Path, "heslo-3"), ["OFFLOAD_SIGN_PFX_PASSWORD"] = "heslo-3" });
         Assert.Equal(1, r.Code);
-        Assert.Contains("ERROR: Časové razítko se nepodařilo získat z http://ts.invalid.", r.Out);
+        Assert.Contains("ERROR: Could not get a timestamp from http://ts.invalid.", r.Out);
         Assert.Equal(3, File.ReadAllLines(Path.Combine(dir.Path, "calls.txt")).Length);
         Assert.DoesNotContain("heslo-3", r.Out);
     }
@@ -286,7 +286,7 @@ public class ReleaseScriptTests
                    $"Invoke-OffloadSign -Setup $s -Files @('{a}') -TimestampUrl 'http://ts.flaky' -RetryDelaySeconds 0",
             new() { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = Pfx(dir.Path, "h7"), ["OFFLOAD_SIGN_PFX_PASSWORD"] = "h7" });
         Assert.True(r.Code == 0, r.Out);
-        Assert.Contains("podepsáno:", r.Out);
+        Assert.Contains("signed:", r.Out);
         Assert.Equal(3, File.ReadAllLines(Path.Combine(dir.Path, "calls.txt")).Length);   // sign (failed), sign, verify
     }
 
@@ -299,8 +299,8 @@ public class ReleaseScriptTests
         var env = new Dictionary<string, string?> { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = Pfx(dir.Path, "h4"), ["OFFLOAD_SIGN_PFX_PASSWORD"] = "h4" };
         var a = Exe(dir.Path, "Offload.exe");
         var r = Ps($"$s = Get-OffloadSignSetup; Invoke-OffloadSign -Setup $s -Files @('{a}') -RetryDelaySeconds 0", env);
-        Assert.Contains("ERROR: Podpis nejde ověřit: SignTool Error: No signature found.", r.Out);
+        Assert.Contains("ERROR: Cannot verify the signature: SignTool Error: No signature found.", r.Out);
         var missing = Ps($"$s = Get-OffloadSignSetup; Invoke-OffloadSign -Setup $s -Files @('{Path.Combine(dir.Path, "gone.exe")}') -RetryDelaySeconds 0", env);
-        Assert.Contains("ERROR: Soubor k podpisu nenalezen:", missing.Out);
+        Assert.Contains("ERROR: File to sign not found:", missing.Out);
     }
 }

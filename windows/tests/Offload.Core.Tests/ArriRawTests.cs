@@ -189,7 +189,7 @@ public class ArriRawTests
         File.WriteAllText(cube, "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n");
         using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Real"));
         Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1, Camera = "ALEXA 35" },
-            lut: new LutUse("custom", null, "look.cube", "vlastní LUT") { File = cube });
+            lut: new LutUse("custom", null, "look.cube", "custom LUT") { File = cube });
         var process = Assert.Single(Calls(dir.Path));
         Assert.Contains("--target-colorspace", process);
         Assert.DoesNotContain("--embedded-look", process);
@@ -203,7 +203,7 @@ public class ArriRawTests
         var log = new List<string>();
         using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Nothing")) { Log = l => { lock (log) log.Add(l); } };
         var e = Assert.ThrowsAny<Exception>(() => Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1 }));
-        Assert.Equal("ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla ([info] processing)", e.Message);
+        Assert.Equal("ARRIRAW: art-cmd ended without an error but wrote nothing — no proxy was made ([info] processing)", e.Message);
         lock (log) Assert.Contains("art-cmd failed (exit 0): no output file: [info] processing", log);
         Assert.False(File.Exists(Path.Combine(card, "_PROXY", "A001C001.mov")));
         Assert.False(File.Exists(Path.Combine(dir.Path, "ffmpeg.txt")));   // ffmpeg never ran
@@ -232,7 +232,7 @@ public class ArriRawTests
         var clip = new Clip { Name = "A001", Path = "A001.R3D", Format = ClipFormat.R3d, Segments = ["A001.R3D"], Bytes = 1 };
         var e = Assert.ThrowsAny<Exception>(() => r.Render(clip, card, new ClipInfo { Height = 2160, Duration = 1, FrameRate = "24" }, null,
             Path.Combine(card, "_PROXY", "A001.mov"), _ => { }, () => false));
-        Assert.Equal("RED R3D: REDline skončil bez chyby, ale nic nezapsal — proxy nevznikla (Loading clip | Done)", e.Message);
+        Assert.Equal("RED R3D: REDline ended without an error but wrote nothing — no proxy was made (Loading clip | Done)", e.Message);
     }
 
     [Fact]
@@ -322,7 +322,7 @@ public class ArriRawTests
         var card = dir.Sub("card");
         using var r = new ProxyRenderer(Settings, Tools(dir.Path, process: "Empty"));
         var e = Assert.ThrowsAny<Exception>(() => Render(r, card, new ClipInfo { Codec = "ARRIRAW", Width = 4608, Height = 3164, FrameRate = "24", Frames = 24, Duration = 1 }));
-        Assert.StartsWith("ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla", e.Message);
+        Assert.StartsWith("ARRIRAW: art-cmd ended without an error but wrote nothing — no proxy was made", e.Message);
         Assert.False(File.Exists(Path.Combine(dir.Path, "ffmpeg.txt")));   // ffmpeg never ran
         Assert.Empty(Directory.GetDirectories(r.WorkDir, "ari-*"));
     }
@@ -537,7 +537,7 @@ public class ArriRawTests
         Assert.Equal(ClipFormat.Video, a.Clip.Format);
         Assert.Null(a.Info.Width);
         Assert.Single(Calls(dir.Path));
-        Assert.Equal("kodek nepodporován ffmpegem a art-cmd (ARRIRAW) ho nepřečetl: [error] clip cannot be read — zkopírováno a ověřeno, bez proxy", a.UndecodableNote);
+        Assert.Equal("codec not supported by ffmpeg, and art-cmd (ARRIRAW) could not read it: [error] clip cannot be read — copied and verified, no proxy", a.UndecodableNote);
         lock (log)
         {
             Assert.DoesNotContain(log, l => l.Contains("every frame"));
@@ -638,8 +638,8 @@ public class ArriRawTests
 
         Assert.Equal(ClipFormat.Video, a.Clip.Format);
         Assert.Single(Calls(dir.Path));
-        Assert.Equal("kodek nepodporován ffmpegem a art-cmd (ARRIRAW) ho nepřečetl: neodpověděl do 1 s — ukončen — zkopírováno a ověřeno, bez proxy", a.UndecodableNote);
-        lock (log) Assert.Contains(log, l => l.Contains("A001C001") && l.Contains("neodpověděl do 1 s"));
+        Assert.Equal("codec not supported by ffmpeg, and art-cmd (ARRIRAW) could not read it: did not respond within 1 s — terminated — copied and verified, no proxy", a.UndecodableNote);
+        lock (log) Assert.Contains(log, l => l.Contains("A001C001") && l.Contains("did not respond within 1 s"));
     }
 
     [Fact]
@@ -649,7 +649,7 @@ public class ArriRawTests
         var (card, tools) = AnalysisSetup(dir, OneFrameMeta, ffprobeHangs: true, artCmd: false);
         using var r = new ProxyRenderer(Settings, tools) { MxfProbeTimeout = TimeSpan.FromSeconds(1) };
         var e = Assert.Throws<ToolError>(() => r.Analyze(Mxf, card));
-        Assert.Contains("neodpověděl do 1 s", e.Message);
+        Assert.Contains("did not respond within 1 s", e.Message);
     }
 
     [Fact]
@@ -711,7 +711,7 @@ public class ArriRawTests
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var e = Assert.Throws<ToolError>(() => ToolProcess.RunCombined(cmd, [], dir.Path, TimeSpan.FromSeconds(1)));
         Assert.Equal(-1, e.Status);
-        Assert.Contains("neodpověděl do 1 s", e.Message);
+        Assert.Contains("did not respond within 1 s", e.Message);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(20), $"took {sw.Elapsed}");
     }
 }

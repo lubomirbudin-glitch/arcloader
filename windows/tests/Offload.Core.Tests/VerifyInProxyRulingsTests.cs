@@ -112,7 +112,7 @@ public class VerifyInProxyRulingsTests
 
         var busy = Assert.Throws<OffloadError>(() => AppendLock.Acquire(paths));
         Assert.Equal(PreflightCode.AppendBusy, busy.Code);
-        Assert.StartsWith("S touto zálohou právě pracuje jiná úloha", busy.Message);
+        Assert.StartsWith("Another job is working with this backup right now", busy.Message);
         TestMedia.MakeClip(Path.Combine(card, "CLIP", "A001C002.mov"), seconds: 1, width: 640, height: 360);
         var appendConfig = Config(card, [], dir);
         appendConfig.AppendInto = paths;
@@ -164,7 +164,7 @@ public class VerifyInProxyRulingsTests
         var during = Entry(dir);
         Assert.False(during.Verified);
         Assert.NotEqual(HistoryTone.Ok, HistoryView.Row(during).Tone);
-        Assert.DoesNotContain("vše ověřeno", HistoryView.Summary([during]));
+        Assert.DoesNotContain("all verified", HistoryView.Summary([during]));
         Assert.False(job.Status().SafeToFormat);
         Assert.NotEqual(CardTone.Ok, Tone(job.Status()));
 

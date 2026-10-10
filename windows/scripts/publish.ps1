@@ -55,7 +55,7 @@ function Get-VersionNotes([string]$From, [string]$To) {
         $inRange = if ($From) { $v -gt [version]$From -and $v -le [version]$To } else { $v -eq [version]$To }
         if ($inRange) { $s.TrimEnd() -replace '^## ', '### ' }
     }
-    if (-not $picked) { return "Podrobnosti v [docs/VYVOJ-WINDOWS.md](https://github.com/$Repo/blob/main/docs/VYVOJ-WINDOWS.md)." }
+    if (-not $picked) { return "Details in [docs/VYVOJ-WINDOWS.md](https://github.com/$Repo/blob/main/docs/VYVOJ-WINDOWS.md) (in Czech)." }
     # Repository-relative links in the log must work from the release page too.
     return (($picked -join "`n`n") -replace '\]\((?!https?://|#)([^)]+)\)', "](https://github.com/$Repo/blob/main/docs/`$1)")
 }
@@ -67,31 +67,31 @@ $devZip = "$base/download/dev/Offload-Windows-dev.zip"
 $notesBody = Get-VersionNotes -From $Since -To $version
 
 $intro = if ($Channel -eq 'stable') {
-    "**Stabilní verze** — poslední vydaná verze Offloadu pro Windows, všechny automatické testy prošly.`n`n" +
-    "### ⬇️ Stáhnout: [Offload-Windows.zip]($stableZip)"
+    "**Stable version** — the latest released version of Offload for Windows; all automated tests passed.`n`n" +
+    "### ⬇️ Download: [Offload-Windows.zip]($stableZip)"
 } else {
-    "**Vývojová verze** — nejnovější build z vývoje. Všechny automatické testy prošly, ale může obsahovat nedokončené " +
-    "nebo ručně neověřené změny. Na place používejte [stabilní verzi]($base/tag/stable).`n`n" +
-    "### ⬇️ Stáhnout: [Offload-Windows-dev.zip]($devZip)"
+    "**Development version** — the newest development build. All automated tests passed, but it may contain unfinished " +
+    "or not yet manually tested changes. On set, use the [stable version]($base/tag/stable).`n`n" +
+    "### ⬇️ Download: [Offload-Windows-dev.zip]($devZip)"
 }
 $notes = @"
 $intro
 
-Verze **$version** · commit [$short](https://github.com/$Repo/commit/$commit)
+Version **$version** · commit [$short](https://github.com/$Repo/commit/$commit)
 
-**Jak spustit:** Windows 10/11 x64. Rozbalte ZIP kamkoli a spusťte ``Offload\Offload.exe`` — nic se neinstaluje.
-Uživatelský návod je v balíčku (``Offload-navod.pdf``), krátký úvod v ``CTI-ME.txt``. Windows může u nepodepsaného
-programu ukázat SmartScreen: *Další informace → Přesto spustit*.
+**How to run:** Windows 10/11 x64. Unpack the ZIP anywhere and run ``Offload\Offload.exe`` — nothing is installed.
+The user manual is in the package (``Offload-manual.pdf``), a short intro in ``READ-ME.txt``. For an unsigned program
+Windows may show SmartScreen: *More info → Run anyway*.
 
-**Dekodéry RAW** (nejsou v balíčku, licence výrobců to nedovolují; bez nich se klipy zkopírují a ověří, jen bez proxy):
+**RAW decoders** (not in the package, the makers' licences do not allow it; without them clips are copied and verified, just without proxies):
 [Blackmagic RAW](https://www.blackmagicdesign.com/products/blackmagicraw) ·
 [REDCINE-X PRO (REDline)](https://www.reddigitalcinema.com/downloads) ·
 [ARRI Reference Tool (art-cmd)](https://www.arri.com/en/learn/camera-systems/tools/arri-reference-tool)
 
-Stabilní verze: [$base/tag/stable]($base/tag/stable) · vývojová verze: [$base/tag/dev]($base/tag/dev) ·
-všechny verze: [$base]($base) · zdrojový kód (jen k nahlédnutí, všechna práva vyhrazena): https://github.com/$Repo
+Stable version: [$base/tag/stable]($base/tag/stable) · development version: [$base/tag/dev]($base/tag/dev) ·
+all versions: [$base]($base) · source code (view only, all rights reserved): https://github.com/$Repo
 
-## Co je nového
+## Changes (development log, Czech)
 
 $notesBody
 "@
@@ -104,7 +104,7 @@ try {
 
     # 1) Archive release windows-v<version>.
     $versionTag = "windows-v$version"
-    $title = "Offload pro Windows $version" + $(if ($Channel -eq 'dev') { ' (vývojová)' } else { '' })
+    $title = "Offload for Windows $version" + $(if ($Channel -eq 'dev') { ' (development)' } else { '' })
     $released = (Test-Release $versionTag) -and -not [bool]((& gh release view $versionTag --repo $Repo --json isPrerelease | ConvertFrom-Json).isPrerelease)
     if ($Channel -eq 'dev' -and $released) {
         Write-Host "$versionTag is already a stable release - archive left as it is"
@@ -130,13 +130,13 @@ try {
     Copy-Item $zip $asset
     $assets = @($asset)
     if ($Channel -eq 'stable') {
-        # The update check (Nastavení → Aplikace → Aktualizace…) can read this manifest:
+        # The update check (Settings → App → Updates…) can read this manifest:
         # https://github.com/<repo>/releases/download/stable/offload-update.json
         $manifest = Join-Path $tmp 'offload-update.json'
-        Write-UpdateManifest -Path $manifest -Version $version -Url "$base/tag/stable" -Notes "Offload pro Windows $version"
+        Write-UpdateManifest -Path $manifest -Version $version -Url "$base/tag/stable" -Notes "Offload for Windows $version"
         $assets += $manifest
     }
-    $channelTitle = if ($Channel -eq 'stable') { "Offload pro Windows — stabilní verze ($version)" } else { "Offload pro Windows — vývojová verze ($version)" }
+    $channelTitle = if ($Channel -eq 'stable') { "Offload for Windows — stable version ($version)" } else { "Offload for Windows — development version ($version)" }
     if (Test-Release $Channel) {
         Invoke-Gh release upload $Channel @assets --repo $Repo --clobber
         $flags = @('--title', $channelTitle, '--notes-file', $notesFile)

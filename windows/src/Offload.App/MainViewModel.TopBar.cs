@@ -8,7 +8,7 @@ public sealed record FlowStep(string Label, string Icon, bool First);
 /// One project in the switcher's list: its name, whether it is shown now, and the command that switches to it.
 public sealed record ProjectItem(string Name, bool IsActive, RelayCommand Select);
 
-/// The top bar (UI návrh): the project switcher in the place of the preset switcher, the queue pill, the Hardware dot.
+/// The top bar (UI design): the project switcher in the place of the preset switcher, the queue pill, the Hardware dot.
 public sealed partial class MainViewModel
 {
     bool projectMenuOpen;
@@ -16,10 +16,10 @@ public sealed partial class MainViewModel
     int queueBadge;
     IReadOnlyList<ProjectItem> projectItems = [];
 
-    /// "Bez projektu" first, then the projects in the order they were saved; the active one ticked.
+    /// "No project" first, then the projects in the order they were saved; the active one ticked.
     public IReadOnlyList<ProjectItem> ProjectItems => projectItems;
 
-    /// What the switcher shows after "Projekt".
+    /// What the switcher shows after "Project".
     public string ProjectLabel => TopBar.ProjectLabel(ActiveProjectName);
 
     public bool ProjectMenuOpen
@@ -39,16 +39,16 @@ public sealed partial class MainViewModel
         RaiseMany(nameof(ProjectItems), nameof(ProjectLabel));
     }
 
-    /// "Běží 1 offload · 1 ve frontě" — null hides the pill.
+    /// "1 offload running · 1 in queue" — null hides the pill.
     public string? QueuePill => queuePill;
 
-    /// The unfinished jobs, next to the "Fronta" tab (0 = no number).
+    /// The unfinished jobs, next to the "Queue" tab (0 = no number).
     public int QueueBadge => queueBadge;
 
     /// Green / yellow / none after the last USB check.
     public HardwareDot HardwareDot => TopBar.Dot(lastHwTest);
 
-    public string HardwareTooltip => $"Prověřit USB porty… (Ctrl+U) — {HardwareSummary}";
+    public string HardwareTooltip => $"Test USB ports… (Ctrl+U) — {HardwareSummary}";
 
     /// Every tick: the pill and the tab's number follow the queue (raised only when they changed).
     void RefreshQueueSummary()

@@ -5,7 +5,7 @@ namespace Offload.Core.Desktop;
 /// `Offload.exe --demo <stav>` (off by default): the window filled with the states of docs/ui-navrh/screeny, for the
 /// visual check against the design — nothing is scanned, inspected, copied or written. pripraveno = obr. 1, probiha =
 /// obr. 2, hotovo = obr. 3, nastaveni = obr. 4; overuje (plan 10, R5) = both verdicts: a card copied and verifying with
-/// its proxies ("Lze vyjmout"), one with a content defect and the green one ("Lze formátovat").
+/// its proxies ("Safe to eject"), one with a content defect and the green one ("Safe to format").
 public enum DemoState { Ready, Running, Finished, Settings, Verifying }
 
 /// A card of the demo: where it "is" (a folder path that need not exist), its look and how it is connected.
@@ -17,11 +17,11 @@ public static class DemoScenario
 {
     public static DemoState? Parse(string? value) => value?.Trim().ToLowerInvariant() switch
     {
-        "pripraveno" => DemoState.Ready,
-        "probiha" => DemoState.Running,
-        "hotovo" => DemoState.Finished,
-        "nastaveni" => DemoState.Settings,
-        "overuje" => DemoState.Verifying,
+        "ready" or "pripraveno" => DemoState.Ready,
+        "running" or "probiha" => DemoState.Running,
+        "done" or "hotovo" => DemoState.Finished,
+        "settings" or "nastaveni" => DemoState.Settings,
+        "verifying" or "overuje" => DemoState.Verifying,
         _ => null,
     };
 
@@ -40,9 +40,9 @@ public static class DemoScenario
         {
             Source = System.IO.Path.Combine(folder, "A035_ARRI"), TotalBytes = 1_700_000_000, FileCount = 24, Filesystem = "exFAT",
             Clips = Clips("A035", 24), Camera = new CameraLabel("ALEXA 35", "LogC4"),
-        }, "čtečka USB 3 · 5 Gb/s", "exFAT", 128_000_000_000, 126_300_000_000);
+        }, "reader USB 3 · 5 Gb/s", "exFAT", 128_000_000_000, 126_300_000_000);
 
-    /// The card backed up yesterday with two new clips (obr. 1): "Už zálohováno 6. 10. 21:40 · 2 nové klipy" + Doplnit.
+    /// The card backed up yesterday with two new clips (obr. 1): "Backed up on 2026-10-06 21:40 · 2 new clips" + Append.
     public static DemoCard BackedUp(string folder, IReadOnlyList<string> destRoots)
     {
         var entry = new HistoryEntry
@@ -63,7 +63,7 @@ public static class DemoScenario
             Volume = new CardVolume(null, "1A2B3C4D", 256_000_000_000, "B012_FX6", "exFAT"), AppendReachable = true,
             History = new HistoryMatch(entry, HistoryMatchKind.NewFiles, fresh, 14_200_000_000, [], 0),
             Camera = new CameraLabel("ILME-FX6V", "S-Log3"),
-        }, "čtečka USB 3 · 5 Gb/s", "exFAT", 256_000_000_000, 123_800_000_000);
+        }, "reader USB 3 · 5 Gb/s", "exFAT", 256_000_000_000, 123_800_000_000);
     }
 
     /// DNES (obr. 1): three cards of today, each on two disks and verified.
@@ -76,7 +76,7 @@ public static class DemoScenario
 
     static HistoryEntry Entry(string card, long bytes, DateTime finishedLocal, IReadOnlyList<string> roots) => new()
     {
-        Id = $"{finishedLocal.ToUniversalTime():yyyyMMdd'T'HHmmss'Z'}-{card.Length:x8}", CardName = card, Bytes = bytes, Files = 20, Success = true, Verified = true,
+        Id = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{finishedLocal.ToUniversalTime():yyyyMMdd'T'HHmmss'Z'}-{card.Length:x8}"), CardName = card, Bytes = bytes, Files = 20, Success = true, Verified = true,
         Finished = finishedLocal.ToUniversalTime(), Date = finishedLocal.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         Destinations = roots.Select(r => new HistoryDestination { Root = r, CardPath = System.IO.Path.Combine(r, card) }).ToList(),
     };
@@ -150,7 +150,7 @@ public static class DemoScenario
         }, report);
     }
 
-    /// Plan 10 (R5): A036_ARRI copied to both disks, its proxies render and verify the primary — "Lze vyjmout", formatting
+    /// Plan 10 (R5): A036_ARRI copied to both disks, its proxies render and verify the primary — "Safe to eject", formatting
     /// waits (clip 10 of 24 at 40 %).
     public static OffloadJob Verifying(string source, IReadOnlyList<string> roots)
     {
@@ -165,7 +165,7 @@ public static class DemoScenario
     }
 
     /// Plan 10 (spec 7): A037_ARRI verified everywhere, but the decoder found damaged data in one clip — yellow until the
-    /// user has looked ("Lze formátovat po kontrole vad", the label with its timecode, Náhled, the confirmation).
+    /// user has looked ("Safe to format after checking defects", the label with its timecode, Náhled, the confirmation).
     public static OffloadJob ContentDefect(string source, IReadOnlyList<string> roots, Func<int, byte[]>? picture)
     {
         var clips = Clips("A037", 12);

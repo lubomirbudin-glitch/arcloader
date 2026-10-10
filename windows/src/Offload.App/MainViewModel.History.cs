@@ -4,13 +4,13 @@ using Offload.Core.History;
 
 namespace Offload.App;
 
-/// Spec 2.1: under every card the line "Zálohováno …" from history.json. history.json is read off the UI thread at start
+/// Spec 2.1: under every card the line "Backed up …" from history.json. history.json is read off the UI thread at start
 /// and after every finished copy; each source is looked at (scan + fingerprint + match) by its own Task.
 public sealed partial class MainViewModel
 {
     readonly CardInspections inspections = new();
     HistoryStore historyStore = null!;
-    // Null until loaded: the rows say "Zjišťuji…" meanwhile.
+    // Null until loaded: the rows say "Checking…" meanwhile.
     IReadOnlyList<HistoryEntry>? history;
     bool historyLoading, historyReload;
 
@@ -45,7 +45,7 @@ public sealed partial class MainViewModel
                 AppLog.Write($"history load: {t.Exception?.GetBaseException().Message}");
                 history ??= [];
             }
-            RaiseMany(nameof(Today), nameof(HistoryDays));   // the right column's DNES and the history tab
+            RaiseMany(nameof(Today), nameof(HistoryDays));   // the right column's TODAY and the history tab
             InspectAll();
             if (historyReload)
             {
@@ -86,7 +86,7 @@ public sealed partial class MainViewModel
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    /// Minor M11: once the look is published, one clip names the camera (UI návrh 6) — off the UI thread, reading only,
+    /// Minor M11: once the look is published, one clip names the camera (UI design 6) — off the UI thread, reading only,
     /// bounded to 5 s (CameraHints.ProbeTimeout for ffprobe, the same as a cancel before it starts); the label is kept
     /// only while that look is still the card's (CardInspections.SetCamera).
     void ProbeCamera(string path, CardInsight looked)
@@ -112,14 +112,14 @@ public sealed partial class MainViewModel
 
     string queueTab = "queue";
 
-    /// "queue" (Fronta) or "history" (Historie karet).
+    /// "queue" (Queue) or "history" (Card history).
     public string QueueTab
     {
         get => queueTab;
         set => Set(ref queueTab, value ?? "queue");
     }
 
-    /// DNES under the queue (UI návrh 7): the cards finished today, from history.json as loaded; null hides it.
+    /// TODAY under the queue (UI design 7): the cards finished today, from history.json as loaded; null hides it.
     public HistoryDayItem? Today => history is { } h && HistoryView.Today(h, DateTime.Now) is { } day ? DayItem(day) : null;
 
     /// The history tab: every day with a card, newest first; a card can be ticked for the summary report.

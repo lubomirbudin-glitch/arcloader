@@ -19,7 +19,7 @@ sealed class ProgressDisplay : IDisposable
     readonly BrakeMeter? brakes;
     readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
 
-    /// chain: the drives in the order card, D1, D2 … (for the "linka plná" check); optional.
+    /// chain: the drives in the order card, D1, D2 … (for the "link full" check); optional.
     public ProgressDisplay(OffloadJob job, IReadOnlyList<RoleLink>? chain = null)
     {
         this.job = job;
@@ -53,7 +53,7 @@ sealed class ProgressDisplay : IDisposable
         try
         {
             if (brakes?.Add(clock.Elapsed.TotalSeconds, s.ReadBytes, s.WrittenBytes) is not { } b) return "";
-            return $"brzdí: {ShortName(b.Element)}{(b.LinkFull ? " (linka plná)" : "")}  ";
+            return $"bottleneck: {ShortName(b.Element)}{(b.LinkFull ? " (link full)" : "")}  ";
         }
         catch (Exception)
         {
@@ -92,11 +92,11 @@ sealed class ProgressDisplay : IDisposable
                         var dests = string.Join("  ", s.WrittenBytes.Select((b, i) => $"D{i + 1} {Rate(b, lastWritten[i])}"));
                         // The brake goes before the file name: a narrow console cuts the end of the line.
                         line = $"copy {s.FileIndex + 1}/{s.TotalFiles}  {Format.Bytes(s.ReadBytes)} / {Format.Bytes(s.TotalBytes)}  "
-                             + $"{pct,3:0}%  card {Rate(s.ReadBytes, lastRead)} MB/s  {dests} MB/s  {Brake(s)}{Path.GetFileName(s.CurrentFile)}";
+                             + string.Create(CultureInfo.InvariantCulture, $"{pct,3:0}%  card {Rate(s.ReadBytes, lastRead)} MB/s  {dests} MB/s  {Brake(s)}{Path.GetFileName(s.CurrentFile)}");
                         break;
                     case JobPhase.Verifying:
                         line = "verify  " + string.Join("  ", s.VerifiedBytes.Select((b, i) =>
-                            $"D{i + 1} {b * 100.0 / Math.Max(s.TotalBytes, 1),3:0}% {Rate(b, lastVerified[i])} MB/s"));
+                            string.Create(CultureInfo.InvariantCulture, $"D{i + 1} {b * 100.0 / Math.Max(s.TotalBytes, 1),3:0}% {Rate(b, lastVerified[i])} MB/s")));
                         break;
                     default:
                         line = st.Phase.ToString().ToLowerInvariant() + "…";
@@ -109,7 +109,7 @@ sealed class ProgressDisplay : IDisposable
             }
             else if (st.Phase is JobPhase.Analyzing or JobPhase.Proxies)
             {
-                line = $"{st.Phase.ToString().ToLowerInvariant()} {st.ClipIndex + 1}/{st.ClipCount}  {st.ClipFraction * 100,3:0}%  {st.ClipName}";
+                line = string.Create(CultureInfo.InvariantCulture, $"{st.Phase.ToString().ToLowerInvariant()} {st.ClipIndex + 1}/{st.ClipCount}  {st.ClipFraction * 100,3:0}%  {st.ClipName}");
                 // R5 (plan 10): "can be removed" once copied; formatting only after the verification.
                 if (st.SafeToFormat) line += "  (card safe to format)";
                 else if (st.SafeToEject) line += "  (card can be removed — verifying, do not format)";

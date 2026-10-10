@@ -21,7 +21,7 @@ public class JobTests
         Assert.True(s.SafeToEject);
         Assert.True(s.CopySucceeded);
         Assert.Equal(100_000, s.Copy!.ReadBytes);
-        Assert.Equal("Hotovo", s.Phase.Label());
+        Assert.Equal("Done", s.Phase.Label());
     }
 
     // Fix round 1: the production constructor (GUI, CLI) hands JobConfig.Hashes to the engine — the copy hashes what the
@@ -44,7 +44,7 @@ public class JobTests
         Assert.Null(job.Run());
         var s = job.Status();
         Assert.Equal(JobPhase.Failed, s.Phase);
-        Assert.Contains("Zdroj nenalezen", s.Error);
+        Assert.Contains("Source not found", s.Error);
         Assert.True(s.Phase.IsFinished());
     }
 

@@ -46,7 +46,7 @@ public class CardFactsTests
     public void Hints_UnknownOrUnreadable_NoLabel()
     {
         var clip = Insight(Video("C0001.MP4"));
-        Assert.Null(CameraHints.Probe(clip, new ExternalTools(), Cat, CancellationToken.None, _ => throw new ToolError("ffprobe", -1, "neodpověděl do 5 s — ukončen")));
+        Assert.Null(CameraHints.Probe(clip, new ExternalTools(), Cat, CancellationToken.None, _ => throw new ToolError("ffprobe", -1, "did not respond within 5 s — terminated")));
         Assert.Null(CameraHints.Probe(clip, new ExternalTools(), Cat, CancellationToken.None, _ => new ClipInfo()));
         Assert.Null(CameraHints.Probe(Insight(), new ExternalTools(), Cat, CancellationToken.None, _ => new ClipInfo { Camera = "X" }));
         Assert.Null(CameraHints.Probe(new CardInsight { Source = @"E:\", Error = "x", Clips = [Video("a.mov")] }, new ExternalTools(), Cat, CancellationToken.None,
@@ -60,21 +60,21 @@ public class CardFactsTests
     [Fact]
     public void Connection_InAWordOrTwo()
     {
-        Assert.Equal("čtečka USB 3 · 5 Gb/s", ConnectionLabel.Short(Usb(UsbLinkSpeed.Super), card: true));
+        Assert.Equal("reader USB 3 · 5 Gb/s", ConnectionLabel.Short(Usb(UsbLinkSpeed.Super), card: true));
         Assert.Equal("USB 3 · 10 Gb/s", ConnectionLabel.Short(Usb(UsbLinkSpeed.SuperPlus), card: false));
         Assert.Equal("USB 2.0", ConnectionLabel.Short(Usb(UsbLinkSpeed.High), card: false));
-        Assert.Equal("SD čtečka", ConnectionLabel.Short(new DriveLink("E:\\", StorageBus.Sd, "", null), card: true));
+        Assert.Equal("SD reader", ConnectionLabel.Short(new DriveLink("E:\\", StorageBus.Sd, "", null), card: true));
         Assert.Equal("NVMe", ConnectionLabel.Short(new DriveLink("D:\\", StorageBus.Nvme, "", null), card: false));
-        Assert.Equal("síť", ConnectionLabel.Short(new DriveLink("Z:\\", StorageBus.Network, "", null), card: false));
+        Assert.Equal("network", ConnectionLabel.Short(new DriveLink("Z:\\", StorageBus.Network, "", null), card: false));
         Assert.Null(ConnectionLabel.Short(new DriveLink("D:\\", StorageBus.Unknown, "", null), card: false));
     }
 
     [Fact]
     public void DestinationTile_TextsAndBar()
     {
-        Assert.Equal("7,20 TB volných z 8 TB · NTFS · NVMe", DestinationTile.FreeText(7_200_000_000_000, 8_000_000_000_000, "NTFS", "NVMe"));
-        Assert.Equal("1,92 TB volno · exFAT", DestinationTile.FreeText(1_920_000_000_000, null, "exFAT", null));
-        Assert.Equal("7,20 TB volno", DestinationTile.CompactFree(7_200_000_000_000));
+        Assert.Equal("7.20 TB free of 8 TB · NTFS · NVMe", DestinationTile.FreeText(7_200_000_000_000, 8_000_000_000_000, "NTFS", "NVMe"));
+        Assert.Equal("1.92 TB free · exFAT", DestinationTile.FreeText(1_920_000_000_000, null, "exFAT", null));
+        Assert.Equal("7.20 TB free", DestinationTile.CompactFree(7_200_000_000_000));
         static (double, double) Bar(long total, long free, long need) =>
             DestinationTile.Bar(total, free, need) is var b ? (Math.Round(b.Used, 3), Math.Round(b.Need, 3)) : default;
         Assert.Equal((0.1, 0.02), Bar(8_000_000_000_000, 7_200_000_000_000, 160_000_000_000));

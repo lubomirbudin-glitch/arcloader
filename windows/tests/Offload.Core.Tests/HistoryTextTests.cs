@@ -15,32 +15,32 @@ public class HistoryTextTests
     }
 
     [Fact]
-    public void Verified() => Assert.Equal(("Zálohováno 6. 10. 2026 8:15 na Zaloha (D:), Zaloha (F:) — ověřeno, lze formátovat", HistoryTone.Ok),
+    public void Verified() => Assert.Equal(("Backed up on 2026-10-06 08:15 to Zaloha (D:), Zaloha (F:) — verified, safe to format", HistoryTone.Ok),
         HistoryText.Line(Match(HistoryMatchKind.Identical)));
 
     [Fact]
-    public void NewFiles() => Assert.Equal(("Zálohováno 6. 10. 2026 8:15 na Zaloha (D:), Zaloha (F:) — ověřeno, lze formátovat · nové soubory: 12 (3,2 GB)", HistoryTone.Warning),
+    public void NewFiles() => Assert.Equal(("Backed up on 2026-10-06 08:15 to Zaloha (D:), Zaloha (F:) — verified, safe to format · new files: 12 (3.2 GB)", HistoryTone.Warning),
         HistoryText.Line(Match(HistoryMatchKind.NewFiles, newFiles: 12, newBytes: 3_200_000_000)));
 
     [Fact]
-    public void NotVerified() => Assert.Equal(("Zálohováno 6. 10. 2026 8:15 na Zaloha (D:), Zaloha (F:) — NEOVĚŘENO (lze vyjmout, neformátovat)", HistoryTone.Warning),
+    public void NotVerified() => Assert.Equal(("Backed up on 2026-10-06 08:15 to Zaloha (D:), Zaloha (F:) — NOT VERIFIED (safe to eject, do not format)", HistoryTone.Warning),
         HistoryText.Line(Match(HistoryMatchKind.Identical, verified: false)));
 
     [Fact]
-    public void WithErrors() => Assert.Equal(("Zálohováno 6. 10. 2026 8:15 na Zaloha (D:), Zaloha (F:) — s chybami (3 soubory)", HistoryTone.Error),
+    public void WithErrors() => Assert.Equal(("Backed up on 2026-10-06 08:15 to Zaloha (D:), Zaloha (F:) — with errors (3 files)", HistoryTone.Error),
         HistoryText.Line(Match(HistoryMatchKind.Identical, success: false)));
 
     [Fact]
     public void Changed() => Assert.Equal(
-        ("Zálohováno 6. 10. 2026 8:15 na Zaloha (D:), Zaloha (F:), ale karta se od té doby změnila (4 soubory jinak) — doplnit nejde, jen celá kopie", HistoryTone.Warning),
+        ("Backed up on 2026-10-06 08:15 to Zaloha (D:), Zaloha (F:), but the card has changed since (4 files differ) — cannot append, only a full copy", HistoryTone.Warning),
         HistoryText.Line(Match(HistoryMatchKind.Changed, changed: 4)));
 
     [Fact]
-    public void NotCompared_IsThePlainLine() => Assert.Equal("Zálohováno 6. 10. 2026 8:15 na Zaloha (D:), Zaloha (F:) — ověřeno, lze formátovat",
+    public void NotCompared_IsThePlainLine() => Assert.Equal("Backed up on 2026-10-06 08:15 to Zaloha (D:), Zaloha (F:) — verified, safe to format",
         HistoryText.Line(Match(HistoryMatchKind.NotCompared)).Text);
 
     [Fact]
-    public void Cli_FullPaths() => Assert.Equal(@"Zálohováno 6. 10. 2026 8:15 na D:\Zaloha, F:\Zaloha — ověřeno, lze formátovat",
+    public void Cli_FullPaths() => Assert.Equal(@"Backed up on 2026-10-06 08:15 to D:\Zaloha, F:\Zaloha — verified, safe to format",
         HistoryText.Line(Match(HistoryMatchKind.Identical), fullPaths: true).Text);
 
     [Theory]

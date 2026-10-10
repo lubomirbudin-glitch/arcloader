@@ -3,7 +3,7 @@ namespace Offload.Core.Tests;
 public class ProxyRendererTests
 {
     static ExternalTools Tools => new ExternalTools().Resolved();
-    static LutUse CustomLut(string path) => new("custom", null, "look.cube", "vlastní LUT") { File = path };
+    static LutUse CustomLut(string path) => new("custom", null, "look.cube", "custom LUT") { File = path };
     static Clip VideoClip(string rel) => new() { Name = Path.GetFileNameWithoutExtension(rel), Path = rel, Format = ClipFormat.Video, Segments = [rel], Bytes = 1 };
 
     [Fact]
@@ -38,10 +38,10 @@ public class ProxyRendererTests
         using var missing = new ProxyRenderer(new ProxySettings { LutMode = LutMode.Custom, LutPath = gone }, Tools);
         using var found = new ProxyRenderer(new ProxySettings { LutMode = LutMode.Custom, LutPath = present }, Tools);
 
-        Assert.Equal("LUT nenalezen: gone.cube — proxy bez LUTu", missing.LutNote(CustomLut(gone)));
+        Assert.Equal("LUT not found: gone.cube — proxy without a LUT", missing.LutNote(CustomLut(gone)));
         Assert.Null(found.LutNote(CustomLut(present)));
         Assert.Null(missing.LutNote(null));
-        Assert.Null(missing.LutNote(LutUse.None("vypnuto v nastavení")));
+        Assert.Null(missing.LutNote(LutUse.None(LutUse.OffInSettings)));
         Assert.Null(missing.LutNote(new LutUse("auto", "sony-slog3-sgamut3cine", "S-Log3", "x") { File = gone }));   // built-in
     }
 
@@ -58,13 +58,13 @@ public class ProxyRendererTests
     public void UnsupportedReason()
     {
         using var none = new ProxyRenderer(new ProxySettings(), new ExternalTools { NoSearch = true }.Resolved());
-        Assert.Equal("ffmpeg nenalezen", none.UnsupportedReason(VideoClip("a.mov")));
+        Assert.Equal("ffmpeg not found", none.UnsupportedReason(VideoClip("a.mov")));
         var ff = new ExternalTools { Ffmpeg = @"C:\Windows\System32\cmd.exe", NoSearch = true }.Resolved();
         using var some = new ProxyRenderer(new ProxySettings(), ff);
         Assert.Null(some.UnsupportedReason(VideoClip("a.mov")));
         Assert.StartsWith("RED R3D", some.UnsupportedReason(new Clip { Name = "r", Path = "r.R3D", Format = ClipFormat.R3d, Segments = ["r.R3D"] }));
         Assert.StartsWith("Canon", some.UnsupportedReason(new Clip { Name = "c", Path = "c.CRM", Format = ClipFormat.CanonRaw, Segments = ["c.CRM"] }));
-        Assert.Equal("neznámý formát", some.UnsupportedReason(new Clip { Name = "u", Path = "u", Format = ClipFormat.Unknown, Segments = ["u"] }));
+        Assert.Equal("unknown format", some.UnsupportedReason(new Clip { Name = "u", Path = "u", Format = ClipFormat.Unknown, Segments = ["u"] }));
     }
 
     // Review focus 3

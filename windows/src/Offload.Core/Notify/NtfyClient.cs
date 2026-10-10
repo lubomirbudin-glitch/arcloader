@@ -26,15 +26,15 @@ public static partial class NtfyClient
 
     /// Why `topic` cannot be used (Czech), or null. ntfy accepts letters without diacritics, digits, "-" and "_".
     public static string? TopicProblem(string? topic) =>
-        string.IsNullOrWhiteSpace(topic) ? "Téma není vyplněné."
+        string.IsNullOrWhiteSpace(topic) ? "The topic is empty."
         : TopicPattern().IsMatch(topic.Trim()) ? null
-        : "Téma smí mít jen písmena bez diakritiky, číslice, - a _ (nejvýš 64 znaků).";
+        : "The topic may contain only letters without accents, digits, - and _ (at most 64 characters).";
 
     /// Why `server` cannot be used (Czech), or null: an http(s) address.
     public static string? ServerProblem(string? server) =>
         Uri.TryCreate(server?.Trim(), UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp) && u.Host.Length > 0
             ? null
-            : $"Adresa serveru „{server}“ není http(s) adresa.";
+            : $"The server address \"{server}\" is not an http(s) address.";
 
     /// Why the ntfy settings cannot be kept (the dialog's OK), or null: switched on, they need a server and a topic.
     public static string? SettingsProblem(NtfySettings s) => s.Enabled ? ServerProblem(s.Server) ?? TopicProblem(s.Topic) : null;
@@ -78,11 +78,11 @@ public static partial class NtfyClient
             using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
             return response.IsSuccessStatusCode
                 ? new(true, null)
-                : new(false, $"Server odpověděl {(int)response.StatusCode} {UpdateChecker.Clean(response.ReasonPhrase ?? "")}".TrimEnd() + ".");
+                : new(false, $"The server answered {(int)response.StatusCode} {UpdateChecker.Clean(response.ReasonPhrase ?? "")}".TrimEnd() + ".");
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new(false, $"Server neodpověděl do {limit.TotalSeconds:0.#} s.");
+            return new(false, $"The server did not answer within {limit.TotalSeconds.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} s.");
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException or InvalidOperationException or UriFormatException)
         {
@@ -106,7 +106,7 @@ public static partial class NtfyClient
         }
     }
 
-    /// "Poslat zkušební oznámení".
+    /// "Send test notification".
     public static Task<NtfyResult> SendTestAsync(NtfySettings settings, TimeSpan? timeout = null) =>
-        SendAsync(settings.Server, settings.Topic, "Offload: zkušební oznámení", "Oznámení z Offloadu fungují.", 3, ["white_check_mark"], timeout);
+        SendAsync(settings.Server, settings.Topic, "Offload: test notification", "Notifications from Offload work.", 3, ["white_check_mark"], timeout);
 }

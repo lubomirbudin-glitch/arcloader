@@ -3,7 +3,7 @@ using Offload.Core.Notify;
 
 namespace Offload.App;
 
-/// Nástroje → Oznámení… (spec 4.3). Edits a copy; OK hands it back only when ntfy (if on) has a usable server and topic.
+/// Tools → Notifications… (spec 4.3). Edits a copy; OK hands it back only when ntfy (if on) has a usable server and topic.
 public partial class NotifyWindow : Window
 {
     readonly NotifyOptionsViewModel vm;
@@ -31,7 +31,7 @@ public partial class NotifyWindow : Window
     }
 }
 
-/// The dialog's state. "Poslat zkušební oznámení" runs off the UI thread (await) — the window never waits on the network.
+/// The dialog's state. "Send a test notification" runs off the UI thread (await) — the window never waits on the network.
 public sealed class NotifyOptionsViewModel : ObservableObject
 {
     readonly NotifySettings s;
@@ -41,7 +41,7 @@ public sealed class NotifyOptionsViewModel : ObservableObject
     public NotifyOptionsViewModel(NotifySettings copy, string? project)
     {
         s = copy;
-        ProfileText = project == null ? "Platí bez projektu." : $"Platí pro projekt {project}.";
+        ProfileText = project == null ? "Applies without a project." : $"Applies to project {project}.";
         TestCommand = new RelayCommand(Test, () => !testing);
     }
 
@@ -71,16 +71,16 @@ public sealed class NotifyOptionsViewModel : ObservableObject
         if (testing) return;
         testing = true;
         System.Windows.Input.CommandManager.InvalidateRequerySuggested();   // the button is disabled at once: no double send
-        TestResult = "Odesílám…";
+        TestResult = "Sending…";
         try
         {
             var test = new NtfySettings { Enabled = true, Server = string.IsNullOrWhiteSpace(s.Ntfy.Server) ? NtfySettings.DefaultServer : s.Ntfy.Server.Trim(), Topic = s.Ntfy.Topic.Trim() };
             var r = await Task.Run(() => NtfyClient.SendTestAsync(test));   // M1: nothing of the send runs on the UI thread
-            TestResult = r.Ok ? "Odesláno." : $"Nepodařilo se: {r.Error}";
+            TestResult = r.Ok ? "Sent." : $"Failed: {r.Error}";
         }
         catch (Exception e)
         {
-            TestResult = $"Nepodařilo se: {e.Message}";
+            TestResult = $"Failed: {e.Message}";
         }
         finally
         {

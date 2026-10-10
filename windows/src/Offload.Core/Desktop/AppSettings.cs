@@ -17,13 +17,13 @@ public sealed class NamingSettings
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
-/// What a project holds (spec 4.1, R17): the top level of settings.json is the profile "Bez projektu", every entry of
+/// What a project holds (spec 4.1, R17): the top level of settings.json is the profile "No project", every entry of
 /// `projects` is a named profile of the same shape. Tools, port names and the update check stay global (AppSettings).
 public class SettingsProfile
 {
     [JsonPropertyName("destRoots")] public List<string> DestRoots { get; set; } = [];
     [JsonPropertyName("verify")] public bool Verify { get; set; } = true;
-    /// Plan 10 (R11): "Ověřit primární disk během proxy" — on by default; off = the read-back right after the copy.
+    /// Plan 10 (R11): "Verify the primary disk during proxies" — on by default; off = the read-back right after the copy.
     [JsonPropertyName("verifyInProxy")] public bool VerifyInProxy { get; set; } = true;
     /// Plan 10 (spec 6): which destination the proxies read and verify — "fastest" (measured during the copy, default) or
     /// "first" (the first in the order of the destinations). A value this version does not know is "fastest".
@@ -60,7 +60,7 @@ public sealed class ProjectSettings : SettingsProfile
 
 /// The app's settings — the Mac `AppSettings` keys (destRoots, verify, analyzeClips, proxy, tools);
 /// `portNames` is Windows only: the user's names for USB sockets (`UsbConnector.Id` → name).
-/// The profile keys at the top level are "Bez projektu"; `projects` and `activeProject` hold the named ones (R17).
+/// The profile keys at the top level are "No project"; `projects` and `activeProject` hold the named ones (R17).
 public sealed class AppSettings : SettingsProfile
 {
     [JsonPropertyName("tools")] public ExternalTools Tools { get; set; } = new();
@@ -83,7 +83,7 @@ public sealed class AppSettings : SettingsProfile
 
     /// The named profiles (spec 4.1), in the order they were created.
     [JsonPropertyName("projects")] public List<ProjectSettings> Projects { get; set; } = [];
-    /// The project in use, or null = "Bez projektu" (the top-level keys).
+    /// The project in use, or null = "No project" (the top-level keys).
     [JsonPropertyName("activeProject")] public string? ActiveProject { get; set; }
 
     /// Entries of `projects` this version cannot use (not an object, or an invalid name — e.g. a longer one a newer version
@@ -253,9 +253,9 @@ public static class SettingsStore
         s.Projects = (s.Projects ?? []).Where(p => p != null).ToList();
         NormalizeProfile(s, catalog);
         foreach (var p in s.Projects) NormalizeProfile(p, catalog);
-        // An active project that is not there (deleted by hand, renamed): "Bez projektu"; otherwise its exact name.
+        // An active project that is not there (deleted by hand, renamed): "No project"; otherwise its exact name.
         // One that names a project kept raw (a newer version's) stays as written, so a save does not null it; the live
-        // profile (Active) is "Bez projektu" meanwhile.
+        // profile (Active) is "No project" meanwhile.
         if (Projects.Find(s, s.ActiveProject) is { } live) s.ActiveProject = live.Name;
         else if (!NamesUnreadable(s, s.ActiveProject)) s.ActiveProject = null;
         return s;
@@ -359,10 +359,10 @@ public static class ProxyPreflight
     /// The first file that is not there, or null. Touches the disk.
     public static LutFile? FirstMissing(IReadOnlyList<LutFile> files) => files.FirstOrDefault(f => !File.Exists(f.Path));
 
-    /// The red text for a missing file: "LUT z pravidla 2 nenalezen: show.cube" (spec 4.2) or the custom LUT's.
+    /// The red text for a missing file: "LUT of rule 2 not found: show.cube" (spec 4.2) or the custom LUT's.
     public static string? MissingText(LutFile? missing) => missing == null ? null
         : missing.Rule is int n ? Msg.RuleLutNotFound(n, Path.GetFileName(missing.Path))
-        : $"LUT nenalezen: {Path.GetFileName(missing.Path)} — vyberte jiný nebo ho odeberte.";
+        : $"LUT not found: {Path.GetFileName(missing.Path)} — select another one or remove it.";
 
     /// The custom .cube that must exist before a start (only in custom mode — built-in LUTs ship with the app).
     public static string? LutInUse(ProxySettings p, bool analyzeClips) =>
@@ -375,7 +375,7 @@ public static class ProxyPreflight
     /// The same from an answer checked off the UI thread: `lutExists` null = not checked yet (does not block).
     public static string? Blocking(ProxySettings p, bool analyzeClips, bool? lutExists) =>
         LutInUse(p, analyzeClips) is string lut && lutExists == false
-            ? $"LUT nenalezen: {Path.GetFileName(lut)} — vyberte jiný nebo ho odeberte."
+            ? $"LUT not found: {Path.GetFileName(lut)} — select another one or remove it."
             : null;
 
     /// The extra proxy folder the next start copies into (only when proxies are rendered), or null.
@@ -387,11 +387,11 @@ public static class ProxyPreflight
 
     /// The same from an answer checked off the UI thread: `folderExists` null = not checked yet (does not block).
     public static string? ExtraFolderBlocking(ProxySettings p, bool? folderExists) =>
-        ExtraFolderInUse(p) is string f && folderExists == false ? $"Složka pro proxy není dostupná: {f}" : null;
+        ExtraFolderInUse(p) is string f && folderExists == false ? $"The proxy folder is not available: {f}" : null;
 
     /// A warning that does not block (copy and verification still run), or null.
     public static string? Warning(ProxySettings p, bool analyzeClips, ExternalTools resolved) =>
         (p.Enabled || analyzeClips) && (resolved.Ffmpeg == null || resolved.Ffprobe == null)
-            ? "ffmpeg/ffprobe nenalezen — náhledy a proxy se přeskočí, kopie a ověření proběhnou." + ToolDownloads.Hint(ToolDownloads.Ffmpeg)
+            ? "ffmpeg/ffprobe not found — thumbnails and proxies are skipped; the copy and the verification run." + ToolDownloads.Hint(ToolDownloads.Ffmpeg)
             : null;
 }

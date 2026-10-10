@@ -21,7 +21,7 @@ public sealed record CardInsight
     public bool AppendReachable { get; init; }
     /// The folder name the clips suggest (spec 2.3), or null.
     public NameSuggestion? Name { get; init; }
-    /// "Na kartě je víc cívek: A001, A002" when the clips disagree.
+    /// "The card has more than one reel: A001, A002" when the clips disagree.
     public string? NameNote { get; init; }
     /// "ALEXA 35 · LogC4" from one clip (CameraHints, UI návrh 6); null when unknown or not looked at. It comes from a
     /// follow-up step (`insight with { Camera = … }`), so the inspection itself is published without waiting for ffprobe (M11).

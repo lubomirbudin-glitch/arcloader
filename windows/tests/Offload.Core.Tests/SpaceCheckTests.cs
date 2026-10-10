@@ -107,7 +107,7 @@ public class StartWaitTests
         var seen = new List<string>();
         bool ok = await StartWait.UntilAsync(() => left--, n => seen.Add(StartWait.InspectionStatus(n)), TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(5));
         Assert.True(ok);
-        Assert.Equal(["Prověřuji karty (3), než začnu kopírovat…", "Prověřuji karty (2), než začnu kopírovat…", "Prověřuji kartu, než začnu kopírovat…"], seen);
+        Assert.Equal(["Checking the cards (3) before the copy starts…", "Checking the cards (2) before the copy starts…", "Checking the card before the copy starts…"], seen);
     }
 
     [Fact]
@@ -133,9 +133,9 @@ public class StartWaitTests
     {
         string? asked = null;
         Assert.False(StartWait.ContinueAfterWait(false, ["A001"], q => { asked = q; return false; }));
-        Assert.Equal("Karta A001 se ještě prověřuje — nevím, jestli už je zálohovaná. Spustit přesto celou kopii?", asked);
+        Assert.Equal("Card A001 is still being checked — it is not known yet whether it is backed up. Start a full copy anyway?", asked);
         Assert.True(StartWait.ContinueAfterWait(false, ["A001", "A002"], q => { asked = q; return true; }));
-        Assert.Equal("Karty A001, A002 se ještě prověřují — nevím, jestli už jsou zálohované. Spustit přesto celou kopii?", asked);
+        Assert.Equal("Cards A001, A002 are still being checked — it is not known yet whether they are backed up. Start a full copy anyway?", asked);
         asked = null;
         Assert.True(StartWait.ContinueAfterWait(true, [], q => { asked = q; return false; }));   // finished in time: no question
         Assert.Null(asked);

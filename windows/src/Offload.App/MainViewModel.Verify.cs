@@ -5,14 +5,14 @@ using Offload.Core.Verification;
 
 namespace Offload.App;
 
-/// Nástroje → Ověřit zálohu… (spec 2.4): a card folder or a whole day; each card is one item in the copy queue.
+/// Tools → Verify backup… (spec 2.4): a card folder or a whole day; each card is one item in the copy queue.
 public sealed partial class MainViewModel
 {
     bool saveVerifyReport = true;
 
     public RelayCommand VerifyBackupCommand { get; private set; } = null!;
 
-    /// "Ukládat report ověření" (menu, on by default): the HTML/PDF/JSON go into the card's _REPORT folder.
+    /// "Save a verification report" (menu, on by default): the HTML/PDF/JSON go into the card's _REPORT folder.
     public bool SaveVerifyReport
     {
         get => saveVerifyReport;
@@ -24,7 +24,7 @@ public sealed partial class MainViewModel
     async void PickAndVerify()
     {
         if (!Allowed(DemoCommand.VerifyBackup)) return;
-        if (Dialogs.PickFolder("Vyberte složku karty na cíli (nebo celý den)") is not string folder) return;
+        if (Dialogs.PickFolder("Choose a card folder on a destination (or a whole day)") is not string folder) return;
         try
         {
             var cards = await Task.Run(() => VerifyTargets.Resolve(folder));   // the folder may be on a slow or network disk
@@ -46,7 +46,7 @@ public sealed partial class MainViewModel
         catch (Exception e)
         {
             AppLog.Write($"verify: {e}");
-            ShowMessage($"Ověření se nepodařilo spustit: {e.Message}");
+            ShowMessage($"Could not start the verification: {e.Message}");
         }
     }
 }

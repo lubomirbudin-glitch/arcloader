@@ -110,7 +110,7 @@ public sealed class VerifySession : IDisposable
         public int ActiveHeld;
         public Thread? Thread;
         /// Its membership of the pause gate (a background reader; the fill-in pauses on the stage-2 thread) and the file
-        /// it reads now (relative) — what "Pozastavuji (dokončuji …)" names.
+        /// it reads now (relative) — what "Pausing (finishing …)" names.
         public PauseGate.Worker? Pausing;
         public volatile string? Current;
     }

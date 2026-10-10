@@ -60,7 +60,7 @@ public class JobConfigsTests
     {
         // Fix round 1, item 1: never the project shown now (its settings and ntfy topic may be another client's).
         var s = Settings("Reklama Y");
-        var (profile, gone) = AppendRules.ProfileFor(s, "Smazaný film");
+        var (profile, gone) = AppendRules.ProfileFor(s, "Deleted film");
         Assert.Same(s, profile);
         Assert.True(gone);
     }
@@ -78,7 +78,7 @@ public class JobConfigsTests
     [Fact]
     public void GoneNote_ForTheJobCard()
     {
-        Assert.Equal("Projekt Film X už neexistuje — doplnění běží s nastavením Bez projektu", AppendRules.GoneNote("Film X"));
+        Assert.Equal("Project Film X no longer exists — the append runs with the settings of No project", AppendRules.GoneNote("Film X"));
     }
 
     // A card backed up in "Bez projektu" (or before projects existed) is appended with "Bez projektu", whose profile is
@@ -114,9 +114,9 @@ public class JobConfigsTests
     public void Append_ProjectGone_BezProjektuSettings_TheEntrysNameStillRecorded()
     {
         var s = Settings("Reklama Y");
-        var c = JobConfigs.Append(s, @"K:\", Entry("Smazaný film"));
+        var c = JobConfigs.Append(s, @"K:\", Entry("Deleted film"));
 
-        Assert.Equal("Smazaný film", c.Project);
+        Assert.Equal("Deleted film", c.Project);
         Assert.Equal((ProxyCodec.H264, 1080), (c.Proxy.Codec, c.Proxy.Height));   // not Reklama's HEVC 540
         Assert.True(c.Verify);
         Assert.False(c.Outputs.ClipListAle);
@@ -144,7 +144,7 @@ public class JobConfigsTests
 
         Assert.Equal("film-x", JobConfigs.Append(s, @"K:\", Entry("Film X")).Notify.Ntfy.Topic);
         Assert.Equal("bez-projektu", JobConfigs.Append(s, @"K:\", Entry(null)).Notify.Ntfy.Topic);
-        Assert.Equal("bez-projektu", JobConfigs.Append(s, @"K:\", Entry("Smazaný film")).Notify.Ntfy.Topic);
+        Assert.Equal("bez-projektu", JobConfigs.Append(s, @"K:\", Entry("Deleted film")).Notify.Ntfy.Topic);
         Assert.Equal("reklama-y", JobConfigs.Full(s, @"K:\", null, "2026-10-06").Notify.Ntfy.Topic);
 
         // the job's own copy: a later edit of the profile does not reach it
@@ -202,7 +202,7 @@ public class JobConfigsTests
     public void Full_ActiveProjectNamesNoReadableProject_BezProjektu()
     {
         var s = Settings(null);
-        s.ActiveProject = "Projekt z novější verze";
+        s.ActiveProject = "Project of a newer version";
         var c = JobConfigs.Full(s, @"K:\", null, "2026-10-07");
 
         Assert.Null(c.Project);
@@ -237,7 +237,7 @@ public class JobConfigsTests
             case "toNoProject": Projects.Activate(s, null); break;
             case "rename": Projects.Rename(s, "Film X", "Film Z"); break;
             case "delete": Projects.Delete(s, "Film X"); break;
-            case "saveAs": Projects.SaveAs(s, "Film X kopie"); break;
+            case "saveAs": Projects.SaveAs(s, "Film X copy"); break;
         }
         Assert.True(stamp.ChangedIn(s));
     }
@@ -248,7 +248,7 @@ public class JobConfigsTests
         var s = Settings(null);
         var stamp = ProfileStamp.Of(s);
         Assert.False(stamp.ChangedIn(s));
-        Projects.SaveAs(s, "Nový");
+        Projects.SaveAs(s, "New");
         Assert.True(stamp.ChangedIn(s));
     }
 
@@ -296,9 +296,9 @@ public class JobConfigsTests
 
         var lut = Assert.Single(checks, c => c.Kind == StartCheckKind.Lut);
         Assert.Equal(new StartCheck(StartCheckKind.Lut, @"C:\Luty\x.cube", "Film X", Shown: false), lut);
-        Assert.Equal("LUT projektu Film X nenalezen: x.cube — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte.", lut.Problem);
+        Assert.Equal("LUT of project Film X not found: x.cube — the card's append will not start. Select another LUT in the project, or remove it.", lut.Problem);
         var folder = Assert.Single(checks, c => c.Kind == StartCheckKind.ProxyFolder);
-        Assert.Equal(@"Složka pro proxy projektu Film X není dostupná: Q:\Film proxy — doplnění karty se nespustí.", folder.Problem);
+        Assert.Equal(@"The proxy folder of project Film X is not available: Q:\Film proxy — the card's append will not start.", folder.Problem);
     }
 
     // The shown profile used by an append (append-only Start) is checked as the shown one: its red text says why.
@@ -336,9 +336,9 @@ public class JobConfigsTests
         s.Projects[1].Proxy.LutPath = @"C:\Luty\reklama.cube";
         s.Projects[1].AnalyzeClips = false;   // neither proxies nor thumbnails: no LUT is used
 
-        var checks = AppendRules.StartChecks(s, fullCopies: 0, [Entry("Smazaný"), Entry("Reklama Y")]);
+        var checks = AppendRules.StartChecks(s, fullCopies: 0, [Entry("Deleted"), Entry("Reklama Y")]);
 
-        Assert.Equal([new StartCheck(StartCheckKind.Lut, @"C:\Luty\bez.cube", "Bez projektu", Shown: false)], checks);
+        Assert.Equal([new StartCheck(StartCheckKind.Lut, @"C:\Luty\bez.cube", "No project", Shown: false)], checks);
     }
 
     // Task 5: a rule's own .cube is a start check too, naming the rule and the project; only rules that apply.
@@ -362,7 +362,7 @@ public class JobConfigsTests
             [new StartCheck(StartCheckKind.Lut, @"C:\Luty\show.cube", "Reklama Y", Shown: true, Rule: 3),
              new StartCheck(StartCheckKind.Lut, @"C:\Luty\film.cube", "Film X", Shown: false, Rule: 1)],
             checks);
-        Assert.Equal("LUT z pravidla 1 projektu Film X nenalezen: film.cube — doplnění karty se nespustí. Vyberte v projektu jiný LUT, nebo ho odeberte.", checks[1].Problem);
+        Assert.Equal("LUT of rule 1 of project Film X not found: film.cube — the card's append will not start. Select another LUT in the project, or remove it.", checks[1].Problem);
         // Auto mode only: rules do not count while another LUT mode is chosen.
         film.Proxy.LutMode = LutMode.None;
         Assert.Single(AppendRules.StartChecks(s, fullCopies: 1, [Entry("Film X")]));

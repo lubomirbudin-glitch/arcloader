@@ -4,7 +4,7 @@ using Offload.Core.Verification;
 
 namespace Offload.App;
 
-/// A verification in the queue (spec 2.4): progress, the result in Czech, the report and Explorer buttons.
+/// A verification in the queue (spec 2.4): progress, the result, the report and Explorer buttons.
 public sealed class VerifyItemViewModel : QueueItem
 {
     readonly MainViewModel owner;

@@ -69,7 +69,7 @@ public class AppendEngineTests
             var report = Path.Combine(paths[d], "_REPORT");
             foreach (var name in new[] { "offload_report_0002.json", "offload_report_0002.txt", "A001_report_0002.html" })
                 Assert.True(File.Exists(Path.Combine(report, name)), name);
-            Assert.Contains("doplnění (generace 2)", File.ReadAllText(Path.Combine(report, "A001_report_0002.html")));
+            Assert.Contains("append (generation 2)", File.ReadAllText(Path.Combine(report, "A001_report_0002.html")));
             var json = OffloadReport.FromJson(File.ReadAllText(Path.Combine(report, "offload_report_0002.json")));
             Assert.Equal((2, 1), (json.Generation, json.Files.Count));
             var list = File.ReadAllText(Path.Combine(report, "A001.xxh64"));
@@ -88,7 +88,7 @@ public class AppendEngineTests
             var gen2 = XDocument.Load(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_A001_*.mhl").Single());
             XNamespace ns = "urn:ASC:MHL:v2.0";
             Assert.Equal("transfer", gen2.Descendants(ns + "process").Single().Value);
-            Assert.StartsWith("Offload doplnění: 1 nový soubor z ", gen2.Descendants(ns + "comment").Single().Value);
+            Assert.StartsWith("Offload append: 1 new file from ", gen2.Descendants(ns + "comment").Single().Value);
 
             var verify = BackupVerifier.Verify(paths[d], chunkSize: 4096);
             Assert.True(verify.Success);
@@ -117,7 +117,7 @@ public class AppendEngineTests
 
         var s = append.Status();
         Assert.Equal(JobPhase.Done, s.Phase);
-        Assert.Equal("Nic nového — záloha je úplná.", s.Note);
+        Assert.Equal("Nothing new — the backup is complete.", s.Note);
         Assert.Null(s.Error);
         AppendFixtures.AssertSameTree(tree, full.Plan.CardPaths[0]);
     }
@@ -221,7 +221,7 @@ public class AppendEngineTests
         append.Run();
 
         Assert.Equal(JobPhase.Failed, append.Status().Phase);
-        Assert.StartsWith("Doplnění zastaveno — nic se nezkopírovalo.", append.Status().Error);
+        Assert.StartsWith("Append stopped — nothing was copied.", append.Status().Error);
         for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
         Assert.Empty(new HistoryStore(history).Load());
     }
@@ -245,7 +245,7 @@ public class AppendEngineTests
 
         Assert.Equal(JobPhase.Failed, append.Status().Phase);
         var disk = AppendPlanner.Disk(paths[0]);
-        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify); doplnit nejde.",
+        Assert.Equal($"The backups on the destinations differ ({disk} has 1 MHL generation, {disk} 2) — check them with Verify backup (top bar of the window; on the command line offload verify); cannot append.",
             append.Status().Error);
         for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
     }
@@ -274,7 +274,7 @@ public class AppendEngineTests
         append.Run();
 
         Assert.Equal(JobPhase.Failed, append.Status().Phase);
-        Assert.StartsWith($"V {paths[0]} nesouhlasí reporty s ASC MHL (poslední report je generace 2, poslední generace MHL 1)", append.Status().Error);
+        Assert.StartsWith($"The reports in {paths[0]} do not match the ASC MHL (the last report is generation 2, the last MHL generation 1)", append.Status().Error);
         for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
     }
 
@@ -313,7 +313,7 @@ public class AppendEngineTests
         append.Run();
 
         Assert.Equal(JobPhase.Done, append.Status().Phase);
-        Assert.Equal("2 soubory z dřívější zálohy nebyly ověřeny — doporučeno Ověřit zálohu.", append.Status().Warning);
+        Assert.Equal("2 files of the earlier backup were not verified — Verify backup is recommended.", append.Status().Warning);
         // Plan 9 fix round 1, item 1 (as ruling I2 for a repair): the new files are verified, the card is not — R5 (plan
         // 10): every file is on the disk, so "Lze vyjmout", but never "Lze formátovat".
         Assert.True(append.Report!.SafeToFormat);
@@ -412,7 +412,7 @@ public class AppendEngineTests
         append.Run();
 
         Assert.Equal((JobPhase.Done, Msg.NothingNew), (append.Status().Phase, append.Status().Note));
-        Assert.Equal("1 soubor z dřívější zálohy nebyl ověřen — doporučeno Ověřit zálohu.", append.Status().Warning);
+        Assert.Equal("1 file of the earlier backup was not verified — Verify backup is recommended.", append.Status().Warning);
     }
 
     [Fact]
@@ -584,7 +584,7 @@ public class AppendEngineTests
             var failed = Job(card, [], history, appendInto: paths);
             failed.Run();
             Assert.Equal(JobPhase.Failed, failed.Status().Phase);
-            Assert.StartsWith("Report se nepodařilo zapsat: ", failed.Status().Error);
+            Assert.StartsWith("Could not write the report: ", failed.Status().Error);
         }
         Assert.Equal(earlier, File.ReadAllBytes(list));
         Assert.Equal([1, 2], MhlReader.Read(paths[0])!.Chain.Select(c => c.Seq));
@@ -751,7 +751,7 @@ public class AppendEngineTests
         Assert.Equal(first, File.ReadAllBytes(Path.Combine(cardPath, "_PROXY", "CLIP1", "C0001.mov")));
         Assert.Equal(["_PROXY/CLIP2/C0001.mov", "_PROXY/CLIP3/C0002_2.mov"], report!.Clips.Select(c => c.ProxyPath));
         Assert.Null(report.Clips[0].ProxyNote);
-        Assert.Equal("Proxy přejmenována na C0002_2 (shoda jmen) — přelinkujte ji ručně.", report.Clips[1].ProxyNote);
+        Assert.Equal("Proxy renamed to C0002_2 (name clash) — relink it by hand.", report.Clips[1].ProxyNote);
         Assert.Equal(100, new FileInfo(Path.Combine(cardPath, "_PROXY", "CLIP3", "C0002.mov")).Length);
         Assert.True(File.Exists(Path.Combine(cardPath, "_REPORT", "A001_report_0002.html")));
     }
@@ -784,7 +784,7 @@ public class AppendEngineTests
         Assert.Equal(JobPhase.Done, append.Status().Phase);
         Assert.Equal(first, File.ReadAllBytes(Path.Combine(cardPath, "_PROXY", "C0001.mov")));
         Assert.Equal("_PROXY/C0001_2.mov", Assert.Single(report!.Clips).ProxyPath);
-        Assert.Equal("Proxy přejmenována na C0001_2 (shoda jmen) — přelinkujte ji ručně.", report.Clips[0].ProxyNote);
+        Assert.Equal("Proxy renamed to C0001_2 (name clash) — relink it by hand.", report.Clips[0].ProxyNote);
         Assert.False(Directory.Exists(Path.Combine(cardPath, "_PROXY", "CLIP2")));
     }
 }

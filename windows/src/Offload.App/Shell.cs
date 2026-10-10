@@ -14,7 +14,7 @@ static class Shell
         }
         catch (Exception e)
         {
-            return $"Nejde otevřít {path}: {e.Message}";
+            return $"Cannot open {path}: {e.Message}";
         }
     }
 
@@ -29,7 +29,7 @@ static class Shell
         }
         catch (Exception e)
         {
-            return $"Nejde otevřít Průzkumník: {e.Message}";
+            return $"Cannot open File Explorer: {e.Message}";
         }
     }
 
@@ -45,7 +45,7 @@ static class Shell
         }
         catch (Exception e)
         {
-            return $"Nejde otevřít Průzkumník: {e.Message}";
+            return $"Cannot open File Explorer: {e.Message}";
         }
     }
 }

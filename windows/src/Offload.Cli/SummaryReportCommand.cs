@@ -7,7 +7,7 @@ using Offload.Core.Outputs;
 namespace Offload.Cli;
 
 /// `offload summary-report <card folders | date folders | history ids…> [-o <folder>]` (task 2026-10-09): one summary
-/// report (HTML + PDF) of the backups, saved into `<Offload reporty>\souhrn\` and, with -o, into that folder too (never
+/// report (HTML + PDF) of the backups, saved into `<Offload reports>\summary\` and, with -o, into that folder too (never
 /// over a file). Reads the backups only. Exit 0; 1 when nothing could be made or the copy into -o failed.
 static class SummaryReportCommand
 {
@@ -15,11 +15,11 @@ static class SummaryReportCommand
     {
         var backups = new Argument<string[]>("backups")
         {
-            Description = "Card folders (on a destination, or their copy in Documents\\Offload reporty), date folders (every card in them), or history ids.",
+            Description = "Card folders (on a destination, or their copy in Documents\\Offload reports), date folders (every card in them), or history ids.",
             Arity = ArgumentArity.OneOrMore,
         };
         var output = new Option<string?>("--output", "-o") { Description = "Also save the summary into this folder (a suffix _2, _3 … instead of overwriting)." };
-        var cmd = new Command("summary-report", "One summary report (HTML + PDF) from several backups: shooting days, clips, files, size, running time, first and last clapper, cameras, verification, where each card is backed up. Always saved into <Offload reporty>\\souhrn.");
+        var cmd = new Command("summary-report", "One summary report (HTML + PDF) from several backups: shooting days, clips, files, size, duration, first and last slate, cameras, verification, where each card is backed up. Always saved into <Offload reports>\\summary.");
         cmd.Arguments.Add(backups);
         cmd.Options.Add(output);
         cmd.SetAction(r =>

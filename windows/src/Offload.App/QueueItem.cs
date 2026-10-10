@@ -5,7 +5,7 @@ using Offload.Core.Desktop;
 
 namespace Offload.App;
 
-/// One card in the Fronta panel: an offload (JobItemViewModel) or a verification (VerifyItemViewModel).
+/// One card in the Queue panel: an offload (JobItemViewModel) or a verification (VerifyItemViewModel).
 public abstract class QueueItem : ObservableObject
 {
     /// What the JobQueue runs.
@@ -13,7 +13,7 @@ public abstract class QueueItem : ObservableObject
     /// As a copy phase — a running verification counts as Verifying (no speed measurement meanwhile).
     public abstract JobPhase Phase { get; }
     public abstract bool IsFinished { get; }
-    /// Pozastaveno (the top bar's pill counts it apart); only an offload can be paused.
+    /// Paused (the top bar's pill counts it apart); only an offload can be paused.
     public virtual bool IsPaused => false;
     public virtual bool IsPauseHeld => false;
     /// Failed or with problems: the error sound and flash.

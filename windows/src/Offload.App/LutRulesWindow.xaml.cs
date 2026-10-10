@@ -3,7 +3,7 @@ using Offload.Core;
 
 namespace Offload.App;
 
-/// "Vlastní pravidla LUTů" (spec 4.2). OK takes the rules only when every row is complete (Problem says what is missing).
+/// "Custom LUT rules" (spec 4.2). OK takes the rules only when every row is complete (Problem says what is missing).
 public partial class LutRulesWindow : Window
 {
     readonly LutRulesViewModel vm;

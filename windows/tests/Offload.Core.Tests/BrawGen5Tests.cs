@@ -223,9 +223,9 @@ public class BrawGen5Tests
         var clip = new Clip { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
         var s = new ProxySettings { Enabled = true, LutMode = LutMode.Auto };
         var converted = LutResolver.Resolve(clip, new ClipInfo { Gamma = "Blackmagic Design Film", ColorScienceGen = 5, ColorScienceGenOriginal = 4 }, @"X:\A001.braw", s, cat);
-        Assert.Equal(("auto", "bmd-film-gen5", "Blackmagic RAW: Film Gen 4 → Gen 5 (převod SDK)"), (converted.Source, converted.Id, converted.Reason));
+        Assert.Equal(("auto", "bmd-film-gen5", "Blackmagic RAW: Film Gen 4 → Gen 5 (SDK conversion)"), (converted.Source, converted.Id, converted.Reason));
         var plain = LutResolver.Resolve(clip, new ClipInfo { Gamma = "Blackmagic Design Film", ColorScienceGen = 4 }, @"X:\A001.braw", s, cat);
-        Assert.Equal(("none", "Blackmagic RAW: Blackmagic Design Film Gen 4 (bez vestavěného LUTu)"), (plain.Source, plain.Reason));
+        Assert.Equal(("none", "Blackmagic RAW: Blackmagic Design Film Gen 4 (no built-in LUT)"), (plain.Source, plain.Reason));
     }
 
     // M11 (a): the conversion was switched on but the clip still reads Gen 4 without the original (the SDK refused,
@@ -237,7 +237,7 @@ public class BrawGen5Tests
         var clip = new Clip { Name = "A001", Path = "A001.braw", Format = ClipFormat.Braw, Segments = ["A001.braw"], Bytes = 1 };
         var on = new ProxySettings { Enabled = true, LutMode = LutMode.Auto, BrawGen4ToGen5 = true };
         var failed = LutResolver.Resolve(clip, new ClipInfo { Gamma = "Blackmagic Design Film", ColorScienceGen = 4 }, @"X:\A001.braw", on, cat);
-        Assert.Equal(("none", "Blackmagic RAW: Blackmagic Design Film Gen 4 (bez vestavěného LUTu) — převod na Gen 5 se nepodařil"), (failed.Source, failed.Reason));
+        Assert.Equal(("none", "Blackmagic RAW: Blackmagic Design Film Gen 4 (no built-in LUT) — the conversion to Gen 5 failed"), (failed.Source, failed.Reason));
         // A Gen 5 clip with the switch on: nothing to convert, nothing to say.
         var gen5 = LutResolver.Resolve(clip, new ClipInfo { Gamma = "Blackmagic Design Film", ColorScienceGen = 5 }, @"X:\A001.braw", on, cat);
         Assert.Equal(("auto", "Blackmagic RAW: Blackmagic Design Film Gen 5"), (gen5.Source, gen5.Reason));
@@ -316,7 +316,7 @@ public class BrawGen5Tests
         Assert.Equal(4, lines.Length);
         Assert.StartsWith("--info --gen5 --scale eighth ", lines[0]);
         Assert.All(lines[1..], l => Assert.DoesNotContain("--gen5", l));
-        Assert.Equal(["Blackmagic RAW: braw-decode nezná --gen5 (starší verze) — Film Gen 4 se dekóduje bez převodu na Gen 5"], logs);
+        Assert.Equal(["Blackmagic RAW: braw-decode does not know --gen5 (an older version) — Film Gen 4 is decoded without conversion to Gen 5"], logs);
     }
 
     // Fix round 1: only a usage error (exit 2) means "older decoder". A real failure under --gen5 (exit 4: the clip
@@ -340,12 +340,12 @@ public class BrawGen5Tests
         var b = new BrawBackend(_ => "x", gen5: true) { Log = logs.Add };
 
         var e = Assert.Throws<RawDecoderException>(() => b.Probe(Path.Combine(dir.Sub("card"), "A001.braw"), tools, dir.Path));
-        Assert.StartsWith("Blackmagic RAW: klip nelze otevřít — ", e.Message);
+        Assert.StartsWith("Blackmagic RAW: cannot open the clip — ", e.Message);
         Assert.Equal(4, e.DecoderError.Status);
         var lines = File.ReadAllLines(Path.Combine(dir.Path, "args.txt"));
         Assert.Single(lines);
         Assert.StartsWith("--info --gen5 ", lines[0]);
-        Assert.DoesNotContain(logs, l => l.Contains("nezná --gen5", StringComparison.Ordinal));
+        Assert.DoesNotContain(logs, l => l.Contains("does not know --gen5", StringComparison.Ordinal));
     }
 
     // The renderer hands its log to the Gen 5 backend it makes (the warning above reaches the job's log).
@@ -358,7 +358,7 @@ public class BrawGen5Tests
         var logs = new List<string>();
         using var r = new ProxyRenderer(new ProxySettings { BrawGen4ToGen5 = true }, tools) { Log = logs.Add };
         Assert.Equal(4, r.Probe(clip, dir.Sub("card")).ColorScienceGen);
-        Assert.Single(logs, l => l.Contains("nezná --gen5", StringComparison.Ordinal));
+        Assert.Single(logs, l => l.Contains("does not know --gen5", StringComparison.Ordinal));
     }
 
     [Fact]

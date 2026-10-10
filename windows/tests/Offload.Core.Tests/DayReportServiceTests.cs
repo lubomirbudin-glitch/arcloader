@@ -90,7 +90,7 @@ public class DayReportServiceTests
         Assert.Equal(JobPhase.Cancelled, job.Status().Phase);
         var html = File.ReadAllText(Assert.Single(job.DayReports));
         Assert.Contains("<td>A001</td>", html);
-        Assert.Contains("1 soubor selhal: CLIP/A001C002.mov", html);
+        Assert.Contains("1 file failed: CLIP/A001C002.mov", html);
     }
 
     // Ruling M9: stage 1 failed (a destination went away while copying) — the day report is still made, best effort.
@@ -111,10 +111,10 @@ public class DayReportServiceTests
         var html = File.ReadAllText(Assert.Single(failed.DayReports));
         Assert.Contains("<td>A001</td>", html);
         // Fix round 1, item 2: the failed card is a card (its _REPORT is made with the folder) — it needs attention.
-        Assert.Contains("<td>B001</td><td colspan=\"12\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", html);
-        Assert.Contains("<tr><td>B001</td><td class=\"warn wrap\">bez reportu (probíhá, nebo byl přerušen)</td></tr>", html);   // Problems
-        Assert.Contains("VYŽADUJE POZORNOST", html);
-        Assert.Contains("<b>1 / 2</b><span>ověřené karty</span>", html);
+        Assert.Contains("<td>B001</td><td colspan=\"12\" class=\"warn\">no report (running, or it was interrupted)</td>", html);
+        Assert.Contains("<tr><td>B001</td><td class=\"warn wrap\">no report (running, or it was interrupted)</td></tr>", html);   // Problems
+        Assert.Contains("NEEDS ATTENTION", html);
+        Assert.Contains("<b>1 / 2</b><span>verified cards</span>", html);
     }
 
     // Fix round 1, item 2: the card folder gets its `_REPORT` when it is made; plan 6 reads an empty one as "no report" —
@@ -164,9 +164,9 @@ public class DayReportServiceTests
         job.Run();
 
         Assert.NotNull(during);
-        Assert.Contains("<td>B001</td><td colspan=\"12\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", during);
-        Assert.Contains("<b>1 / 2</b><span>ověřené karty</span>", during);
-        Assert.Contains("<b>2 / 2</b><span>ověřené karty</span>", File.ReadAllText(Assert.Single(job.DayReports)));
+        Assert.Contains("<td>B001</td><td colspan=\"12\" class=\"warn\">no report (running, or it was interrupted)</td>", during);
+        Assert.Contains("<b>1 / 2</b><span>verified cards</span>", during);
+        Assert.Contains("<b>2 / 2</b><span>verified cards</span>", File.ReadAllText(Assert.Single(job.DayReports)));
     }
 
     // Fix round 1, item 4: a cancelled job (closing the app cancels every job) waits for a busy day at most 5 s, then
@@ -296,7 +296,7 @@ public class DayReportServiceTests
         Assert.True(inside.Wait(TimeSpan.FromSeconds(30)));
 
         var busy = Assert.Throws<TimeoutException>(() => DayReportService.RegenerateDay(day, new OutputSettings(), wait: TimeSpan.FromMilliseconds(200)));
-        Assert.Equal($"Denní report ve složce {day} právě vytváří jiná úloha — zkuste to za chvíli.", busy.Message);
+        Assert.Equal($"Another job is creating the day report in {day} right now — try again in a moment.", busy.Message);
 
         var waiting = Task.Run(() => DayReportService.RegenerateDay(day, new OutputSettings(), wait: TimeSpan.FromSeconds(30)));
         Thread.Sleep(200);
@@ -412,7 +412,7 @@ public class DayReportServiceTests
 
         var root = Path.GetDirectoryName(day)!;
         var notADay = Assert.Throws<InvalidOperationException>(() => DayReportService.RegenerateDay(root, new OutputSettings()));
-        Assert.Equal($"Ve složce {root} není žádná karta s reportem — vyberte složku dne na cíli (<cíl>\\<datum>).", notADay.Message);
+        Assert.Equal($"Folder {root} has no card with a report — select a day folder on a destination (<destination>\\<date>).", notADay.Message);
         Assert.False(Directory.Exists(Path.Combine(root, "_REPORT")));
         Assert.Throws<DirectoryNotFoundException>(() => DayReportService.RegenerateDay(Path.Combine(root, "nope"), new OutputSettings()));
 
@@ -457,13 +457,13 @@ public class CliDayReportTests
         var ok = Run(DayReportCommand.Create(), Path.Combine(day, "A001"), "--ale");
 
         Assert.Equal(0, ok.Exit);
-        Assert.Equal($"Denní report: {Path.Combine(day, "_REPORT", "2026-10-06_day_report.html")}", ok.Out.Trim());
+        Assert.Equal($"Day report: {Path.Combine(day, "_REPORT", "2026-10-06_day_report.html")}", ok.Out.Trim());
         Assert.True(File.Exists(Path.Combine(day, "_REPORT", "2026-10-06_clips.ale")));
 
         var missing = Path.Combine(dir.Path, "nope");
         var bad = Run(DayReportCommand.Create(), missing);
         Assert.Equal(1, bad.Exit);
-        Assert.Contains($"Chyba: Složka dne nenalezena: {missing}", bad.Err);
+        Assert.Contains($"Error: Day folder not found: {missing}", bad.Err);
     }
 
     // Fix round 1, item 1 (reproduced): `day-report D:\` with the current folder inside a day wrote the day files there
@@ -499,9 +499,9 @@ public class CliDayReportTests
 
         Assert.Equal((0, 0), (on.Exit, off.Exit));
         var reportLine = on.Out.IndexOf("Report: ", StringComparison.Ordinal);
-        var dayLine = on.Out.IndexOf($"Denní report: {Path.Combine(d1, "2026-10-07", "_REPORT", "2026-10-07_day_report.html")}", StringComparison.Ordinal);
+        var dayLine = on.Out.IndexOf($"Day report: {Path.Combine(d1, "2026-10-07", "_REPORT", "2026-10-07_day_report.html")}", StringComparison.Ordinal);
         Assert.True(reportLine >= 0 && dayLine > reportLine, on.Out);   // ruling I2: the CLI output order is kept
-        Assert.DoesNotContain("Denní report", off.Out);
+        Assert.DoesNotContain("Day report", off.Out);
         Assert.False(Directory.Exists(Path.Combine(d2, "2026-10-07", "_REPORT")));
     }
 
@@ -518,7 +518,7 @@ public class CliDayReportTests
         var snapshot = Offload.Core.Desktop.SettingsStore.Clone(all);
 
         Assert.False(DayReportService.OutputsForProject("film x", snapshot).DayReport);          // the day's project
-        Assert.True(DayReportService.OutputsForProject("Zmizel", snapshot).DayReport);            // gone: the active (Bez projektu)
+        Assert.True(DayReportService.OutputsForProject("Zmizel", snapshot).DayReport);            // gone: the active (No project)
         Assert.True(DayReportService.OutputsForProject((string?)null, snapshot).DayReport);       // mixed or none
         Offload.Core.Desktop.Projects.Activate(snapshot, "Film X");
         Assert.False(DayReportService.OutputsForProject((string?)null, snapshot).DayReport);

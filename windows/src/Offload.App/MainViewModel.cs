@@ -38,7 +38,7 @@ public sealed partial class MainViewModel : ObservableObject
     public StartupOptions Options { get; }
     /// The whole settings.json: the global keys (tools, port names) and every project.
     public AppSettings AllSettings { get; }
-    /// The profile the window shows and edits: the active project, else "Bez projektu" (spec 4.1). Every change goes
+    /// The profile the window shows and edits: the active project, else "No project" (spec 4.1). Every change goes
     /// into it; a started job keeps its own copy.
     public SettingsProfile Settings => AllSettings.Active;
 

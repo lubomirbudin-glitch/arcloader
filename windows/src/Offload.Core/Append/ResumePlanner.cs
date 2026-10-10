@@ -102,7 +102,7 @@ public static class ResumePlanner
     static bool Pending(string cardPath, int generation) => Read(cardPath, generation)?.VerifyPending == true;
 
     /// Pending, or its results were written here but not into every folder (verifyIncomplete, fix round 1 M-a): the
-    /// generation is still open at this folder's committed one — "Dokončit" finishes it (final review, item 2).
+    /// generation is still open at this folder's committed one — "Finish" finishes it (final review, item 2).
     static bool Unsettled(string cardPath, int generation) =>
         Read(cardPath, generation) is { } r && (r.VerifyPending == true || r.VerifyIncomplete == true);
 

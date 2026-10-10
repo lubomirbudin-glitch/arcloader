@@ -132,7 +132,7 @@ public class DeferredVerifyTests
         Assert.True(report.SafeToFormat);
         Assert.True(report.SafeToFormatSeconds >= 0);
         var mhl = File.ReadAllText(Directory.GetFiles(Path.Combine(plan.CardPaths[0], "ascmhl"), "*.mhl").Single());
-        Assert.Contains("· ověření: read-back</comment>", mhl);
+        Assert.Contains("· verification: read-back</comment>", mhl);
         Assert.Contains("<process>transfer</process>", mhl);
     }
 }

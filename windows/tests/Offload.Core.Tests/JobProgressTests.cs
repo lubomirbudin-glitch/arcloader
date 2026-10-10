@@ -50,7 +50,7 @@ public class JobProgressTests
         p.Update(St(JobPhase.Verifying, Snap(0, [0, 0], [200_000_000, 100_000_000])), T0.AddSeconds(1.5));
         Assert.Equal(100e6, p.ReadRate, 1);
         Assert.Equal(9.0, p.Eta!.Value, 3);
-        Assert.Equal("D1 200 MB/s · D2 100 MB/s · zbývá 0:09", p.DetailText);
+        Assert.Equal("D1 200 MB/s · D2 100 MB/s · 0:09 left", p.DetailText);
     }
 
     [Fact]
@@ -72,14 +72,14 @@ public class JobProgressTests
     [Fact]
     public void DetailTexts()
     {
-        Assert.Equal("Karta 80 MB/s · D1 80 MB/s · D2 50 MB/s · zbývá 0:10 · A001.MOV", Copying().DetailText);
+        Assert.Equal("Card 80 MB/s · D1 80 MB/s · D2 50 MB/s · 0:10 left · A001.MOV", Copying().DetailText);
         var p = new JobProgress(T0);
         p.Update(new JobStatus { Phase = JobPhase.Proxies, ClipIndex = 2, ClipCount = 5, ClipName = "A003", ClipFraction = 0.426 }, T0);
         Assert.Equal("Proxy 3/5 · A003 · 43 %", p.DetailText);
         p.Update(new JobStatus { Phase = JobPhase.Analyzing, ClipIndex = 0, ClipCount = 3, ClipName = "A001" }, T0);
-        Assert.Equal("Klip 1/3 · A001", p.DetailText);
+        Assert.Equal("Clip 1/3 · A001", p.DetailText);
         p.Update(new JobStatus { Phase = JobPhase.Flushing }, T0);
-        Assert.Equal("Zápis cache disků…", p.DetailText);
+        Assert.Equal("Flushing disk caches…", p.DetailText);
     }
 
     [Theory]
@@ -90,12 +90,12 @@ public class JobProgressTests
     public void EtaText(double seconds, string text) => Assert.Equal(text, JobProgress.EtaText(seconds));
 
     [Theory]
-    [InlineData(JobPhase.Done, false, "Chyba", CardTone.Error)]
-    [InlineData(JobPhase.Done, true, "Hotovo", CardTone.Ok)]
-    [InlineData(JobPhase.Failed, null, "Chyba", CardTone.Error)]
-    [InlineData(JobPhase.Cancelled, null, "Zrušeno", CardTone.Warning)]
-    [InlineData(JobPhase.Copying, null, "Kopírování", CardTone.Active)]
-    [InlineData(JobPhase.Waiting, null, "Čeká", CardTone.Waiting)]
+    [InlineData(JobPhase.Done, false, "Error", CardTone.Error)]
+    [InlineData(JobPhase.Done, true, "Done", CardTone.Ok)]
+    [InlineData(JobPhase.Failed, null, "Error", CardTone.Error)]
+    [InlineData(JobPhase.Cancelled, null, "Cancelled", CardTone.Warning)]
+    [InlineData(JobPhase.Copying, null, "Copying", CardTone.Active)]
+    [InlineData(JobPhase.Waiting, null, "Waiting", CardTone.Waiting)]
     public void StatusText_AndTone(JobPhase phase, bool? copySucceeded, string text, CardTone tone)
     {
         var p = new JobProgress(T0);
@@ -152,26 +152,26 @@ public class JobProgressTests
             ],
             Proxy = new ProxySettings { Enabled = true },
         };
-        Assert.Equal("kopie 100 MB/s · ověření 200 MB/s · 3 klipy · proxy 1, 1 chyba, 1 nepodporováno", JobProgress.SummaryText(report));
+        Assert.Equal("copy 100 MB/s · verification 200 MB/s · 3 clips · proxies 1, 1 failed, 1 unsupported", JobProgress.SummaryText(report));
     }
 
     [Fact]
-    public void Texts_CzechPlurals()
+    public void Texts_EnglishPlurals()
     {
-        Assert.Equal("Vyberte kartu", Texts.Cards(0));
-        Assert.Equal("1 karta", Texts.Cards(1));
-        Assert.Equal("3 karty", Texts.Cards(3));
-        Assert.Equal("5 karet", Texts.Cards(5));
-        Assert.Equal("0 cílů", Texts.Destinations(0));
-        Assert.Equal("1 cíl", Texts.Destinations(1));
-        Assert.Equal("2 cíle", Texts.Destinations(2));
-        Assert.Equal("1 soubor · 1.00 KB", Texts.Files(1, 1000));
-        Assert.Equal("12 souborů · 2.50 GB", Texts.Files(12, 2_500_000_000));
+        Assert.Equal("Select a card", Texts.Cards(0));
+        Assert.Equal("1 card", Texts.Cards(1));
+        Assert.Equal("3 cards", Texts.Cards(3));
+        Assert.Equal("5 cards", Texts.Cards(5));
+        Assert.Equal("0 destinations", Texts.Destinations(0));
+        Assert.Equal("1 destination", Texts.Destinations(1));
+        Assert.Equal("2 destinations", Texts.Destinations(2));
+        Assert.Equal("1 file · 1.00 KB", Texts.Files(1, 1000));
+        Assert.Equal("12 files · 2.50 GB", Texts.Files(12, 2_500_000_000));
         // R5 (plan 10): copied — "lze vyjmout"; verified — "lze vyjmout i formátovat".
-        Assert.Equal("Všechny soubory jsou na 1 disku — kartu lze vyjmout. Formátovat až po ověření.", Texts.SafeToEject(1));
-        Assert.Equal("Všechny soubory jsou na 2 discích a ověřené — kartu lze vyjmout i formátovat.", Texts.SafeToFormat(2));
-        Assert.Equal("bez varování", Texts.Warnings(0));
-        Assert.Equal("2 varování", Texts.Warnings(2));
+        Assert.Equal("All files are on 1 disk — the card is safe to eject. Format it only after verification.", Texts.SafeToEject(1));
+        Assert.Equal("All files are on 2 disks and verified — the card is safe to eject and format.", Texts.SafeToFormat(2));
+        Assert.Equal("no warnings", Texts.Warnings(0));
+        Assert.Equal("2 warnings", Texts.Warnings(2));
     }
 
     // Review focus 5

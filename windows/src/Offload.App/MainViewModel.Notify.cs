@@ -6,14 +6,14 @@ namespace Offload.App;
 
 /// Spec 4.3: at the end of a job a Windows notification (when the window is not in front) and, when switched on, an
 /// ntfy push — both from the job's own copy of the settings (the project it was started in). The sound and the
-/// taskbar flash stay as they were. Nástroje → Oznámení… edits the active profile's `notify`.
+/// taskbar flash stay as they were. Tools → Notifications… edits the active profile's `notify`.
 public sealed partial class MainViewModel
 {
     /// Shows a Windows notification (set by the window; it knows whether it is in front).
     public Action<JobOutcome>? ShowNotification { get; set; }
     /// The main window is in front: no Windows notification.
     public Func<bool>? WindowInFront { get; set; }
-    /// Opens Nástroje → Oznámení… with a copy of the active profile's settings; returns the edited copy or null.
+    /// Opens Tools → Notifications… with a copy of the active profile's settings; returns the edited copy or null.
     public Func<NotifySettings, NotifySettings?>? EditNotifyDialog { get; set; }
 
     public RelayCommand NotifySettingsCommand { get; private set; } = null!;
@@ -29,7 +29,7 @@ public sealed partial class MainViewModel
         Raise(nameof(NotifySummary));
     }
 
-    /// End of stage 1, stage 2 still running and the card copied everywhere: "kartu lze vyjmout" (Windows only).
+    /// End of stage 1, stage 2 still running and the card copied everywhere: "safe to eject the card" (Windows only).
     void NotifyCopyDone(JobItemViewModel item)
     {
         if (closing || !Allowed(DemoCommand.Notify) || !item.Job.Config.Notify.Windows) return;

@@ -29,11 +29,11 @@ public class AdvisorTests
     [Fact]
     public void Advice_CapableDeviceOnUsb2OnlyPort()
     {
-        var a = Advisor.Advise([Usb("Cíl 1", "WD Elements", UsbLinkSpeed.High, UsbLinkSpeed.Super, false, 9)], Ports);
+        var a = Advisor.Advise([Usb("Destination 1", "WD Elements", UsbLinkSpeed.High, UsbLinkSpeed.Super, false, 9)], Ports);
         var w = Assert.Single(a, x => x.Kind == AdviceKind.Warning);
-        Assert.Contains("Cíl 1 WD Elements", w.Text);
-        Assert.Contains("umí USB 3 (5 Gb/s)", w.Text);
-        Assert.Contains("jen USB 2.0 (port 9)", w.Text);
+        Assert.Contains("Destination 1 WD Elements", w.Text);
+        Assert.Contains("capable of USB 3 (5 Gb/s)", w.Text);
+        Assert.Contains("USB 2.0-only port (port 9)", w.Text);
         Assert.Contains("port 5 USB 3", w.Text);
         Assert.Contains("port 11 USB-C", w.Text);
     }
@@ -42,28 +42,28 @@ public class AdvisorTests
     [Fact]
     public void Advice_WarningUsesSocketLabelAndNames()
     {
-        var names = new Dictionary<string, string> { ["ROOT#9"] = "zadní dole" };
-        var a = Advisor.Advise([Usb("Cíl 1", "WD", UsbLinkSpeed.High, UsbLinkSpeed.Super, false, 9)], Ports, portNames: names);
-        Assert.Contains("jen USB 2.0 (zadní dole)", Assert.Single(a, x => x.Kind == AdviceKind.Warning).Text);
+        var names = new Dictionary<string, string> { ["ROOT#9"] = "rear bottom" };
+        var a = Advisor.Advise([Usb("Destination 1", "WD", UsbLinkSpeed.High, UsbLinkSpeed.Super, false, 9)], Ports, portNames: names);
+        Assert.Contains("USB 2.0-only port (rear bottom)", Assert.Single(a, x => x.Kind == AdviceKind.Warning).Text);
     }
 
     // Review focus 2
     [Fact]
     public void Advice_CapableDeviceSlowLinkOnUsb3Connector()
     {
-        var a = Advisor.Advise([Usb("Karta", "SanDisk reader", UsbLinkSpeed.High, UsbLinkSpeed.Super, true, 5)], Ports);
+        var a = Advisor.Advise([Usb("Card", "SanDisk reader", UsbLinkSpeed.High, UsbLinkSpeed.Super, true, 5)], Ports);
         var w = Assert.Single(a, x => x.Kind == AdviceKind.Warning);
-        Assert.Contains("kabel", w.Text);
-        Assert.DoesNotContain("jen USB 2.0", w.Text);
+        Assert.Contains("cable", w.Text);
+        Assert.DoesNotContain("USB 2.0-only port", w.Text);
     }
 
     // Final review 8: unknown socket kind → no "jen USB 2.0" claim.
     [Fact]
     public void Advice_UnknownSocketKind_NoUsb2Claim()
     {
-        var a = Advisor.Advise([Usb("Cíl 1", "SSD", UsbLinkSpeed.High, UsbLinkSpeed.Super, null, 5)], Ports);
+        var a = Advisor.Advise([Usb("Destination 1", "SSD", UsbLinkSpeed.High, UsbLinkSpeed.Super, null, 5)], Ports);
         var w = Assert.Single(a, x => x.Kind == AdviceKind.Warning);
-        Assert.DoesNotContain("jen USB 2.0", w.Text);
+        Assert.DoesNotContain("USB 2.0-only port", w.Text);
         Assert.Contains("USB 3 port", w.Text);
         Assert.DoesNotContain("port 5 USB 3", w.Text);   // never "move to the socket you are in"
     }
@@ -74,11 +74,11 @@ public class AdvisorTests
     {
         var a = Advisor.Advise(
         [
-            Usb("Karta", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 5),
-            Usb("Cíl 1", "SSD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11),
+            Usb("Card", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 5),
+            Usb("Destination 1", "SSD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11),
         ], Ports);
-        Assert.Contains(a, x => x.Kind == AdviceKind.Info && x.Text.Contains("Karta, Cíl 1") && x.Text.Contains("jeden řadič"));
-        Assert.DoesNotContain(a, x => x.Text.Contains("různé řadiče"));   // no other controller here
+        Assert.Contains(a, x => x.Kind == AdviceKind.Info && x.Text.Contains("Card, Destination 1") && x.Text.Contains("one controller"));
+        Assert.DoesNotContain(a, x => x.Text.Contains("different controllers"));   // no other controller here
     }
 
     // Final review 4: two controllers with the same name are two controllers.
@@ -88,10 +88,10 @@ public class AdvisorTests
         const string Amd = "AMD USB 3.10 eXtensible Host Controller - 1.10 (Microsoft)";
         var a = Advisor.Advise(
         [
-            Usb("Karta", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 5, Amd, "PCI\\AMD_1"),
-            Usb("Cíl 1", "SSD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11, Amd, "PCI\\AMD_2"),
+            Usb("Card", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 5, Amd, "PCI\\AMD_1"),
+            Usb("Destination 1", "SSD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11, Amd, "PCI\\AMD_2"),
         ], Ports);
-        Assert.DoesNotContain(a, x => x.Text.Contains("jeden řadič"));
+        Assert.DoesNotContain(a, x => x.Text.Contains("one controller"));
     }
 
     // Final review 7: reader and disks on one controller, another controller has a free fast socket → split them.
@@ -101,10 +101,10 @@ public class AdvisorTests
         var ports = Ports.Append(Port(3, 4, false, true, controllerId: "PCI\\ASMEDIA", label: "ASMedia xHCI · port 3")).ToArray();
         var a = Advisor.Advise(
         [
-            Usb("Karta", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 5),
-            Usb("Cíl 1", "SSD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11),
+            Usb("Card", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 5),
+            Usb("Destination 1", "SSD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11),
         ], ports);
-        var tip = Assert.Single(a, x => x.Text.Contains("různé řadiče"));
+        var tip = Assert.Single(a, x => x.Text.Contains("different controllers"));
         Assert.Equal(AdviceKind.Tip, tip.Kind);
         Assert.Contains("ASMedia xHCI · port 3 USB 3", tip.Text);
         Assert.DoesNotContain("port 5", tip.Text);
@@ -117,23 +117,23 @@ public class AdvisorTests
         var dock = new UsbHubRef("USB\\DOCK", "USB3.0 Hub");
         var a = Advisor.Advise(
         [
-            Usb("Karta", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 1, hubs: [dock]),
-            Usb("Cíl 1", "SSD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 2, hubs: [new UsbHubRef("USB\\INNER", "Hub"), dock]),
-            Usb("Cíl 2", "HDD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11),
+            Usb("Card", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 1, hubs: [dock]),
+            Usb("Destination 1", "SSD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 2, hubs: [new UsbHubRef("USB\\INNER", "Hub"), dock]),
+            Usb("Destination 2", "HDD", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11),
         ], Ports);
-        var info = Assert.Single(a, x => x.Text.Contains("jeden hub"));
+        var info = Assert.Single(a, x => x.Text.Contains("one hub"));
         Assert.Equal(AdviceKind.Info, info.Kind);
-        Assert.Equal("Karta, Cíl 1 jdou přes jeden hub (USB3.0 Hub) — dělí se o jeho linku.", info.Text);
+        Assert.Equal("Card, Destination 1 go through one hub (USB3.0 Hub) — they share its link.", info.Text);
     }
 
     [Fact]
     public void Advice_PortListsAndNames()
     {
-        var names = new Dictionary<string, string> { ["ROOT#5"] = "přední levý" };
+        var names = new Dictionary<string, string> { ["ROOT#5"] = "front left" };
         var a = Advisor.Advise([], Ports, portNames: names);
-        Assert.Contains(a, x => x.Kind == AdviceKind.Tip && x.Text.StartsWith("Volné rychlé porty: ") && x.Text.Contains("přední levý") && x.Text.Contains("port 11 USB-C"));
+        Assert.Contains(a, x => x.Kind == AdviceKind.Tip && x.Text.StartsWith("Free fast ports: ") && x.Text.Contains("front left") && x.Text.Contains("port 11 USB-C"));
         // Final review 9: the "jen USB 2.0" sentence lists bare names.
-        Assert.Contains(a, x => x.Kind == AdviceKind.Tip && x.Text.EndsWith("myš): port 9."));
+        Assert.Contains(a, x => x.Kind == AdviceKind.Tip && x.Text.EndsWith("mouse): port 9."));
     }
 
     [Fact]
@@ -141,18 +141,18 @@ public class AdvisorTests
     {
         var a = Advisor.Advise(
         [
-            Usb("Karta", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 5),
-            Usb("Cíl 1", "WD Elements", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11),
-            new RoleLink("Cíl 2", new DriveLink("D:\\", StorageBus.Sata, "ST1000LM035", null)),
-        ], Ports, new Dictionary<string, double> { ["Karta"] = 300, ["Cíl 1"] = 26, ["Cíl 2"] = 98 });
-        Assert.Contains(a, x => x.Kind == AdviceKind.Info && x.Text == "Odhad rychlosti offloadu s tímto zapojením: 26 MB/s (brzdí Cíl 1 WD Elements).");
-        Assert.Contains(a, x => x.Text.Contains("Cíl 1 WD Elements") && x.Text.Contains("brzdí disk, ne port"));
+            Usb("Card", "reader", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 5),
+            Usb("Destination 1", "WD Elements", UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, 11),
+            new RoleLink("Destination 2", new DriveLink("D:\\", StorageBus.Sata, "ST1000LM035", null)),
+        ], Ports, new Dictionary<string, double> { ["Card"] = 300, ["Destination 1"] = 26, ["Destination 2"] = 98 });
+        Assert.Contains(a, x => x.Kind == AdviceKind.Info && x.Text == "Estimated offload speed with this setup: 26 MB/s (bottleneck: Destination 1 WD Elements).");
+        Assert.Contains(a, x => x.Text.Contains("Destination 1 WD Elements") && x.Text.Contains("the bottleneck is the disk, not the port"));
     }
 
     [Fact]
     public void Advice_OrderWarningsFirst()
     {
-        var a = Advisor.Advise([Usb("Cíl 1", "WD", UsbLinkSpeed.High, UsbLinkSpeed.Super, false, 9)], Ports);
+        var a = Advisor.Advise([Usb("Destination 1", "WD", UsbLinkSpeed.High, UsbLinkSpeed.Super, false, 9)], Ports);
         Assert.Equal(AdviceKind.Warning, a[0].Kind);
         Assert.Equal(a.OrderBy(x => x.Kind).Select(x => x.Kind), a.Select(x => x.Kind));
     }

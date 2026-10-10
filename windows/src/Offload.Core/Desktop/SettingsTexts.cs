@@ -2,35 +2,35 @@ using Offload.Core.Notify;
 
 namespace Offload.Core.Desktop;
 
-/// One built-in LUT in "LUT podle kamery": "ARRI · LogC4", "LogC4 / AWG4 → Rec.709" and "použito" for the one chosen.
+/// One built-in LUT in "LUT by camera": "ARRI · LogC4", "LogC4 / AWG4 → Rec.709" and "in use" for the one chosen.
 public sealed record LutRow(string Id, string Title, string Detail, string? Marker);
 
 /// The settings page (UI návrh obr. 4), without a window.
 public static class SettingsTexts
 {
-    /// Plan 10 (R11), Nastavení → Ověření.
-    public const string VerifyInProxyLabel = "Ověřit primární disk během proxy";
+    /// Plan 10 (R11), Settings → Verification.
+    public const string VerifyInProxyLabel = "Verify the primary disk during proxies";
     public const string VerifyInProxyNote =
-        "Primární disk se ověří při čtení pro proxy, ostatní souběžně na pozadí — bez druhého čtení navíc. Kartu lze vyjmout po kopii, formátovat až po ověření všech disků. Bez proxy se ověřuje zpětným čtením.";
-    public const string VerifyPrimaryFirstLabel = "Primární je první cíl (jinak nejrychlejší disk změřený při kopii)";
+        "The primary disk is verified while it is read for the proxies, the others at the same time in the background — no extra second read. The card is safe to eject after the copy and safe to format once all disks are verified. Without proxies, verification reads back.";
+    public const string VerifyPrimaryFirstLabel = "The primary is the first destination (otherwise the fastest disk measured during the copy)";
 
-    /// Automatické načtení disků (2026-10-09), Nastavení → Struktura složek.
-    public const string AutoDestinationsLabel = "Automaticky přidávat připojené disky jako cíle";
+    /// Disks loaded automatically (2026-10-09), Settings → Folder structure.
+    public const string AutoDestinationsLabel = "Automatically add connected disks as destinations";
     public const string AutoDestinationsNote =
-        "Jen externí disky USB — karta, čtečka karet ani interní disk se jako cíl nikdy nepřidá. Odebraný disk se znovu sám nepřidá; přidaný disk po odpojení z cílů zase zmizí. Plný disk nebo disk jen pro čtení se nepřidá.";
-    public const string AutoCardsLabel = "Automaticky označovat karty ve čtečkách jako zdroje";
-    public const string AutoCardsNote = "Karta se strukturou kamery nebo neprázdná karta ve čtečce se po vložení sama zaškrtne v Kartách.";
+        "External USB disks only — a card, a card reader or an internal disk is never added as a destination. A disk you removed is not added again by itself; an added disk disappears from the destinations when it is disconnected. A full or read-only disk is not added.";
+    public const string AutoCardsLabel = "Automatically select cards in readers as sources";
+    public const string AutoCardsNote = "A card with a camera folder structure, or a non-empty card in a reader, is ticked in Cards by itself when inserted.";
 
-    /// "Zapomenout odebrané disky (2)".
-    public static string ForgetRemovedLabel(int count) => $"Zapomenout odebrané disky ({count})";
+    /// "Forget removed disks (2)".
+    public static string ForgetRemovedLabel(int count) => $"Forget removed disks ({count})";
 
-    /// Kopie reportu i na počítači (2026-10-09), Nastavení → Report.
-    public const string LocalReportLabel = "Kopie reportu i na tomto počítači";
+    /// A copy of the report on this computer too (2026-10-09), Settings → Report.
+    public const string LocalReportLabel = "Copy of the report on this computer too";
     public const string LocalReportNote =
-        "Po každé kartě se _REPORT a ascmhl zkopírují do <složka>\\<datum>\\<karta>\\ a obnoví se při každém přepisu reportu (analýza, proxy, ověření, doplnění, oprava, denní report) — disky s materiálem se odevzdávají dál, report zůstane tady. Média se nikdy nekopírují; když se kopie nepovede, úloha běží dál.";
+        "After every card, _REPORT and ascmhl are copied to <folder>\\<date>\\<card>\\ and refreshed whenever the report is rewritten (analysis, proxies, verification, append, repair, day report) — the media disks get handed on, the report stays here. Media are never copied; if the copy fails, the job carries on.";
 
-    /// "≈ 75 MB / minutu" under the bitrate (video only; the audio adds little).
-    public static string BitrateHint(int mbps) => $"≈ {mbps * 60 / 8} MB / minutu";
+    /// "≈ 75 MB / minute" under the bitrate (video only; the audio adds little).
+    public static string BitrateHint(int mbps) => $"≈ {mbps * 60 / 8} MB / minute";
 
     static string Maker(string maker) => maker.StartsWith("Blackmagic", StringComparison.Ordinal) ? "Blackmagic" : maker;
 
@@ -44,15 +44,15 @@ public static class SettingsTexts
                 break;
             }
         bool used = LutResolver.EffectiveMode(p) == LutMode.Builtin && p.LutBuiltin == l.Id;
-        return new LutRow(l.Id, $"{Maker(l.Maker)} · {CameraLabel.ShortCurve(l.Curve)}", name, used ? "použito" : null);
+        return new LutRow(l.Id, $"{Maker(l.Maker)} · {CameraLabel.ShortCurve(l.Curve)}", name, used ? "in use" : null);
     }
 
-    /// "Windows: zapnuto · telefon (ntfy): vypnuto" / "… telefon (ntfy): film-x-tajne".
+    /// "Windows: on · phone (ntfy): off" / "… phone (ntfy): film-x-secret".
     public static string NotifySummary(NotifySettings n) =>
-        $"Windows: {(n.Windows ? "zapnuto" : "vypnuto")} · telefon (ntfy): {(n.Ntfy.Enabled && n.Ntfy.Topic.Length > 0 ? n.Ntfy.Topic : "vypnuto")}";
+        $"Windows: {(n.Windows ? "on" : "off")} · phone (ntfy): {(n.Ntfy.Enabled && n.Ntfy.Topic.Length > 0 ? n.Ntfy.Topic : "off")}";
 
-    /// "Výřez" in the burn-in preview: "celý obraz", or "1.85 · 90 %".
-    public static string FrameText(ProxySettings p) => p.FrameLabel ?? "celý obraz";
+    /// "Crop" in the burn-in preview: "full frame", or "1.85 · 90 %".
+    public static string FrameText(ProxySettings p) => p.FrameLabel ?? "full frame";
 
     /// Where the crop's frame lines sit in a 16:9 picture (fractions of its width and height); null = no crop.
     public static (double X, double Y, double W, double H)? Frame(ProxySettings p) =>

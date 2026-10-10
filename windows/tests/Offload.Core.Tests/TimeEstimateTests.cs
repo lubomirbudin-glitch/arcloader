@@ -41,8 +41,8 @@ public class TimeEstimateTests
         // 2 GB: 20 s copy + 10 s read-back + 120 s clip × 0.5
         Assert.Equal(TimeSpan.FromSeconds(90), m.Estimate(2_000_000_000, [TwoMinutes], verifyOn: true, analyze: true, Proxy));
         Assert.Equal(TimeSpan.FromSeconds(20), m.Estimate(2_000_000_000, [], verifyOn: false, analyze: false, Off));
-        Assert.Equal("odhad ~1:30 vč. proxy", RateMemory.StartText(TimeSpan.FromSeconds(90), proxies: true));
-        Assert.Equal("odhad ~0:20", RateMemory.StartText(TimeSpan.FromSeconds(20), proxies: false));
+        Assert.Equal("estimate ~1:30 incl. proxies", RateMemory.StartText(TimeSpan.FromSeconds(90), proxies: true));
+        Assert.Equal("estimate ~0:20", RateMemory.StartText(TimeSpan.FromSeconds(20), proxies: false));
     }
 
     // Proxies of another height, or analysis only, cost differently: not known = no estimate.

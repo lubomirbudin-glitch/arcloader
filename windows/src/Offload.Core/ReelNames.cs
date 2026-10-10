@@ -61,12 +61,12 @@ public static partial class ReelSuggestion
         return reels.Count switch
         {
             0 => (null, null, reels),
-            1 => (new NameSuggestion(reels[0], $"podle názvů klipů ({named[0].Prefix}…)"), null, reels),
-            _ => (null, $"Na kartě je víc cívek: {string.Join(", ", reels)}", reels),
+            1 => (new NameSuggestion(reels[0], $"from the clip names ({named[0].Prefix}…)"), null, reels),
+            _ => (null, $"The card has more than one reel: {string.Join(", ", reels)}", reels),
         };
     }
 
-    /// "Next in line": history entries of the same date folder and project (null = "Bez projektu"; a name in any case)
+    /// "Next in line": history entries of the same date folder and project (null = "No project"; a name in any case)
     /// named like "A001"; exactly one camera letter → the next number ("A001" → "A002"). Several letters → null (which
     /// camera is this card?).
     public static NameSuggestion? Next(IEnumerable<HistoryEntry> history, string date, string? project, string today, IEnumerable<string>? taken = null)
@@ -79,7 +79,7 @@ public static partial class ReelSuggestion
         var all = names.Concat((taken ?? []).Select(t => t.ToUpperInvariant()).Where(t => ReelFolder().IsMatch(t) && t[0] == letter));
         int max = all.Max(n => int.Parse(n[1..], NumberStyles.None, CultureInfo.InvariantCulture));
         if (max >= 999) return null;
-        var when = date == today ? "dnes" : date;
-        return new NameSuggestion($"{letter}{max + 1:000}", $"další v řadě po {letter}{max:000} ({when})");
+        var when = date == today ? "today" : date;
+        return new NameSuggestion($"{letter}{max + 1:000}", $"next after {letter}{max:000} ({when})");
     }
 }

@@ -15,7 +15,7 @@ public static partial class PortLabels
         return c.Label;
     }
 
-    /// Name plus what the socket can do: "port 6 USB 3", "port 3 jen USB 2.0", "port 4" (unknown).
+    /// Name plus what the socket can do: "port 6 USB 3", "port 3 USB 2.0 only", "port 4" (unknown).
     public static string WithKind(UsbConnector c, IReadOnlyDictionary<string, string>? names = null) =>
         c.Kind.Length > 0 ? $"{Name(c, names)} {c.Kind}" : Name(c, names);
 
@@ -26,11 +26,11 @@ public static partial class PortLabels
     public static string Of(UsbLink u, IReadOnlyList<UsbConnector>? connectors, IReadOnlyDictionary<string, string>? names = null) =>
         Find(connectors, u.ConnectorId) is { } c ? Name(c, names) : $"port {u.ConnectorPort}";
 
-    /// One row of the port list: "port 6 USB 3  Elements 25A2 — USB 3 (5 Gb/s)  ← E: (Cíl 1)".
+    /// One row of the port list: "port 6 USB 3  Elements 25A2 — USB 3 (5 Gb/s)  ← E: (Destination 1)".
     public static string ListRow(UsbConnector c, IReadOnlyList<RoleLink> drives, IReadOnlyDictionary<string, string>? names = null,
         int labelWidth = 24)
     {
-        var device = c.Device is { } dev ? $"{dev.Name} — {UsbSpeeds.Label(dev.Link)}" : "volný";
+        var device = c.Device is { } dev ? $"{dev.Name} — {UsbSpeeds.Label(dev.Link)}" : "free";
         var here = drives.Where(d => d.Link.Usb is { } u && c.Has(u.ConnectorId))
             .Select(d =>
             {

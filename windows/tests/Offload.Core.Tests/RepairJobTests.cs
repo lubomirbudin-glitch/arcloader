@@ -95,7 +95,7 @@ public class RepairJobTests
         }
 
         Assert.Equal(JobPhase.Failed, repair.Status().Phase);
-        Assert.Contains("právě pracuje jiná úloha", repair.Status().Error);
+        Assert.Contains("Another job is working with this backup right now", repair.Status().Error);
         for (int d = 0; d < trees.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
     }
 
@@ -144,8 +144,8 @@ public class RepairJobTests
             var repair = Repair(failed);
             repair.Run();
             Assert.Equal(JobPhase.Failed, repair.Status().Phase);
-            Assert.StartsWith("Oprava zastavena — nic se nezkopírovalo.", repair.Status().Error);
-            Assert.Contains($"na kartě je jiný obsah než při záloze (xxh64 {changed}", repair.Status().Error);
+            Assert.StartsWith("Repair stopped — nothing was copied.", repair.Status().Error);
+            Assert.Contains($"the card has different content than at the backup (xxh64 {changed}", repair.Status().Error);
         }
 
         for (int d = 0; d < paths.Count; d++) Assert.Empty(RepairFixtures.AssertUntouchedExcept(before[d], paths[d]));
@@ -219,9 +219,9 @@ public class RepairJobTests
         Assert.Equal(JobPhase.Done, s.Phase);
         Assert.True(repair.Report!.SafeToFormat);
         Assert.False(s.SafeToEject);
-        Assert.Equal("Na kartě je 1 soubor, který záloha nemá — kartu nevysouvejte, zálohu doplňte.", s.Warning);
-        Assert.Equal("Na kartě jsou 3 soubory, které záloha nemá — kartu nevysouvejte, zálohu doplňte.", Msg.CardFilesNotInBackup(3));
-        Assert.Equal("Na kartě je 5 souborů, které záloha nemá — kartu nevysouvejte, zálohu doplňte.", Msg.CardFilesNotInBackup(5));
+        Assert.Equal("The card has 1 file that the backup does not have — do not eject the card; append to the backup.", s.Warning);
+        Assert.Equal("The card has 3 files that the backup does not have — do not eject the card; append to the backup.", Msg.CardFilesNotInBackup(3));
+        Assert.Equal("The card has 5 files that the backup does not have — do not eject the card; append to the backup.", Msg.CardFilesNotInBackup(5));
         Assert.Equal(OutcomeKind.Attention, JobOutcomes.Final("A001", s, repair.Report)!.Kind);
     }
 
@@ -255,8 +255,8 @@ public class RepairJobTests
         Assert.All(repair.DayReports, p =>
         {
             var html = File.ReadAllText(p);
-            Assert.Contains("<td class=\"ok\">ověřeno</td>", html);
-            Assert.DoesNotContain("NEOVĚŘENO", html);
+            Assert.Contains("<td class=\"ok\">verified</td>", html);
+            Assert.DoesNotContain("NOT VERIFIED", html);
         });
     }
 
@@ -315,13 +315,13 @@ public class RepairJobTests
 
         var again = new OffloadJob(JobConfigs.Repair(failed), AppendFixtures.Options())
         {
-            Identify = _ => null, ReadBackupState = _ => throw new IOException("Zařízení není připojeno."),
+            Identify = _ => null, ReadBackupState = _ => throw new IOException("The device is not connected."),
         };
         again.Run();
 
         var s = again.Status();
         Assert.Equal((JobPhase.Done, Msg.RepairNothing), (s.Phase, s.Note));
-        Assert.Equal(Msg.BackupStateUnreadable("Zařízení není připojeno."), s.Warning);
+        Assert.Equal(Msg.BackupStateUnreadable("The device is not connected."), s.Warning);
         Assert.False(s.SafeToEject);
     }
 
@@ -381,7 +381,7 @@ public class RepairJobTests
         }
         var entry = Assert.Single(new HistoryStore(history).Load());
         Assert.True(entry.Success && entry.Verified);
-        Assert.All(repair.DayReports, p => Assert.Contains("<td class=\"ok\">ověřeno</td>", File.ReadAllText(p)));
+        Assert.All(repair.DayReports, p => Assert.Contains("<td class=\"ok\">verified</td>", File.ReadAllText(p)));
     }
 
     // Fix round 2, item C (from plan 6): an append cancelled during its read-back is not in history, but its copies are
@@ -413,7 +413,7 @@ public class RepairJobTests
         Assert.False(append.Status().SafeToFormat);   // but the cancelled append's file was never read back
         Assert.False(Assert.Single(new HistoryStore(history).Load()).Verified);
         Assert.All(paths, p => Assert.False(CardRecord.Load(p).Verified));
-        Assert.All(append.DayReports, p => Assert.Contains("NEOVĚŘENO", File.ReadAllText(p)));
+        Assert.All(append.DayReports, p => Assert.Contains("NOT VERIFIED", File.ReadAllText(p)));
 
         var repair = new OffloadJob(JobConfigs.Repair(append), AppendFixtures.Options()) { Identify = _ => null };
         repair.Run();
@@ -422,7 +422,7 @@ public class RepairJobTests
         Assert.Equal(["CLIP/A001C002.mov"], repair.Report!.Files.Select(f => f.Path));
         Assert.True(Assert.Single(new HistoryStore(history).Load()).Verified);
         Assert.All(paths, p => Assert.True(CardRecord.Load(p).Verified));
-        Assert.All(repair.DayReports, p => Assert.DoesNotContain("NEOVĚŘENO", File.ReadAllText(p)));
+        Assert.All(repair.DayReports, p => Assert.DoesNotContain("NOT VERIFIED", File.ReadAllText(p)));
     }
 
     static OffloadJob Job(string card, IReadOnlyList<string> dests, string history, IReadOnlyList<string>? appendInto = null,
@@ -481,7 +481,7 @@ public class RepairJobTests
         var options = AppendFixtures.Options();
         options.Verify = false;
         int thrown = 0;
-        options.BeforeDestWrite = d => { if (d == 0 && Interlocked.Exchange(ref thrown, 1) == 0) throw new IOException("Zařízení není připojeno."); };
+        options.BeforeDestWrite = d => { if (d == 0 && Interlocked.Exchange(ref thrown, 1) == 0) throw new IOException("The device is not connected."); };
         var job = new OffloadJob(new JobConfig(card, [dir.Sub("d1"), dir.Sub("d2")])
         {
             Date = "2026-10-07", Verify = false, AnalyzeClips = false, HistoryFolder = history,
@@ -558,7 +558,7 @@ public class RepairJobTests
     [Fact]
     public void Title_AndSameBackup()
     {
-        Assert.Equal("A001 · oprava", RepairRules.Title("A001"));
+        Assert.Equal("A001 · repair", RepairRules.Title("A001"));
         Assert.True(RepairRules.SameBackup([@"D:\A\2026-10-07\A001\"], [@"F:\B\2026-10-07\A001", @"d:\a\2026-10-07\a001"]));
         Assert.False(RepairRules.SameBackup([@"D:\A\2026-10-07\A001"], [@"D:\A\2026-10-07\A001_2"]));
     }

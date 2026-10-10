@@ -252,10 +252,10 @@ public class ResumeTests
     {
         var e = new HistoryEntry { Id = "x", CardName = "A001", Unfinished = true, Finished = T, Destinations = [new() { Root = @"D:\Zaloha", CardPath = @"D:\Zaloha\2026-10-08\A001" }] };
         var m = new HistoryMatch(e, HistoryMatchKind.NewFiles, [new SourceFile("a", 10, T)], 1_000_000, [], 0);
-        Assert.Equal(("Nedokončená záloha 8. 10. 2026 " + T.ToLocalTime().ToString("H:mm") + " na Zaloha (D:) — kopie se přerušila, lze ji dokončit", HistoryTone.Warning),
+        Assert.Equal(("Unfinished backup on 2026-10-08 " + T.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) + " to Zaloha (D:) — the copy was interrupted; it can be finished", HistoryTone.Warning),
             HistoryText.Line(m));
-        Assert.StartsWith("Dokončit přerušenou zálohu (1 soubor · ", AppendRules.CheckboxText(m));
+        Assert.StartsWith("Finish interrupted backup (1 file · ", AppendRules.CheckboxText(m));
         Assert.False(BackedUpPrompt.ShouldAsk(new CardInsight { Source = "E:\\", History = m }));
-        Assert.Equal(("! nedokončeno", HistoryTone.Warning), (HistoryView.Row(e).Status, HistoryView.Row(e).Tone));
+        Assert.Equal(("! unfinished", HistoryTone.Warning), (HistoryView.Row(e).Status, HistoryView.Row(e).Tone));
     }
 }

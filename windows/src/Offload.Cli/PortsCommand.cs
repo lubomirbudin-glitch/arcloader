@@ -23,7 +23,7 @@ static class PortsCommand
                 // Stops the measurement at once; the process must stay until the temporary file is deleted.
                 e.Cancel = true;
                 if (cancel.IsCancellationRequested) return;
-                Console.Error.WriteLine("\nPřerušeno — zastavuji měření a mažu dočasný soubor…");
+                Console.Error.WriteLine("\nInterrupted — stopping the measurement and deleting the temporary file…");
                 cancel.Cancel();
             };
             Console.CancelKeyPress += onCtrlC;
@@ -33,7 +33,7 @@ static class PortsCommand
                 var dests = (r.GetValue(dest) ?? []).Select(CliPath.Full).ToList();
                 foreach (var d in dests)
                     if (cards.FirstOrDefault(c => HwTest.SameVolume(c, d)) is string c)
-                        throw new ArgumentException($"cíl {d} je na stejném svazku jako karta {c} — na kartu se nikdy nezapisuje");
+                        throw new ArgumentException($"destination {d} is on the same volume as card {c} — nothing is ever written to a card");
                 bool byDrive = false;
                 if (cards.Count == 0 && dests.Count == 0)
                 {
@@ -50,7 +50,7 @@ static class PortsCommand
                 if (cancel.IsCancellationRequested)
                 {
                     Console.WriteLine();
-                    Console.WriteLine("Měření přerušeno — výsledek se neukládá.");
+                    Console.WriteLine("Measurement interrupted — the result is not saved.");
                     return 1;
                 }
                 try
@@ -59,7 +59,7 @@ static class PortsCommand
                 }
                 catch (Exception e)
                 {
-                    Console.Error.WriteLine($"Varování: výsledek testu nešlo uložit: {e.Message}");
+                    Console.Error.WriteLine($"Warning: the test result could not be saved: {e.Message}");
                 }
                 return 0;
             }
@@ -78,7 +78,7 @@ static class PortsCommand
 
     static void Print(HwTestResult r)
     {
-        Console.WriteLine("Připojení:");
+        Console.WriteLine("Connections:");
         foreach (var d in r.Drives)
         {
             // Without roles the role is the drive letter: no second column repeating it.
@@ -89,18 +89,18 @@ static class PortsCommand
         foreach (var group in r.Connectors.Where(c => c.UserVisible).GroupBy(c => c.ControllerId))
         {
             Console.WriteLine();
-            Console.WriteLine($"USB porty ({group.First().ControllerName}):");
+            Console.WriteLine($"USB ports ({group.First().ControllerName}):");
             foreach (var c in group) Console.WriteLine($"  {PortLabels.ListRow(c, r.Drives)}");
         }
         if (r.Measurements.Count > 0)
         {
             Console.WriteLine();
-            Console.WriteLine("Měření:");
+            Console.WriteLine("Measurement:");
             foreach (var m in r.Measurements)
-                Console.WriteLine($"  {m.Role,-8} {m.Root,-6} čtení {Mb(m.ReadMBps)}  zápis {Mb(m.WriteMBps)}");
+                Console.WriteLine($"  {m.Role,-8} {m.Root,-6} read {Mb(m.ReadMBps)}  write {Mb(m.WriteMBps)}");
         }
         Console.WriteLine();
-        Console.WriteLine("Doporučení:");
+        Console.WriteLine("Advice:");
         foreach (var a in r.Advice) Console.WriteLine($"  {(a.Kind == AdviceKind.Warning ? "!" : a.Kind == AdviceKind.Info ? "i" : "·")} {a.Text}");
     }
 

@@ -26,12 +26,12 @@ public class DemoScenarioTests
     public void Ready_TheCardsOfScreen1()
     {
         var ready = DemoScenario.Ready(@"C:\demo");
-        Assert.Equal("24 klipů · 1,70 GB · exFAT · čtečka USB 3 · 5 Gb/s",
+        Assert.Equal("24 clips · 1.70 GB · exFAT · reader USB 3 · 5 Gb/s",
             SetupTexts.CardFacts(ready.Insight, ready.Total - ready.Free, ready.Format, ready.Connection, looksLikeCard: true));
         Assert.Equal("ALEXA 35 · LogC4", ready.Insight.Camera!.Text);
         var backedUp = DemoScenario.BackedUp(@"C:\demo", Roots);
         Assert.True(AppendRules.Offer(backedUp.Insight));
-        Assert.Equal("3 karty · 412 GB · vše ověřeno", HistoryView.Today(DemoScenario.Today(Roots, DateTime.Now), DateTime.Now)!.Summary);
+        Assert.Equal("3 cards · 412 GB · all verified", HistoryView.Today(DemoScenario.Today(Roots, DateTime.Now), DateTime.Now)!.Summary);
     }
 
     // Plan 10 (R5): `--demo overuje` shows both verdicts for the screenshots — a card copied and verifying with its
@@ -44,23 +44,23 @@ public class DemoScenarioTests
         var s = verifying.Status();
         Assert.Equal(JobCardKind.Running, JobCard.Headline("A036_ARRI", s, null, Disks).Kind);
         var (eject, format) = JobCard.Chips(s);
-        Assert.Equal(("Lze vyjmout", ChipTone.Neutral, "Ověřuje se…", ChipTone.Neutral), (eject.Text, eject.Tone, format.Text, format.Tone));
-        Assert.Equal(["1 · Kopírování", "2 · Proxy", "3 · Ověření", "4 · Report"], JobCard.Steps(s, verifying.Config, 0.4).Select(x => x.Text));
+        Assert.Equal(("Safe to eject", ChipTone.Neutral, "Verifying…", ChipTone.Neutral), (eject.Text, eject.Tone, format.Text, format.Tone));
+        Assert.Equal(["1 · Copying", "2 · Proxies", "3 · Verification", "4 · Report"], JobCard.Steps(s, verifying.Config, 0.4).Select(x => x.Text));
         Assert.Equal(("Proxy 10 / 24", "A036C010_261007_R2KQ · 40 %"), JobCard.FileLine(s));
         Assert.False(verifying.RunCopy());   // a preview never runs
 
         var defect = DemoScenario.ContentDefect(@"C:\demo\A037_ARRI", Roots, _ => [0xFF, 0xD8]);
         var h = JobCard.Headline("A037_ARRI", defect.Status(), defect.Report, Disks);
-        Assert.Equal((JobCardKind.Problem, "A037_ARRI — před formátováním zkontrolujte vady obsahu"), (h.Kind, h.Title));
-        Assert.Equal(("Lze vyjmout", "Lze formátovat po kontrole vad", ChipTone.Warning),
+        Assert.Equal((JobCardKind.Problem, "A037_ARRI — check the content defects before formatting"), (h.Kind, h.Title));
+        Assert.Equal(("Safe to eject", "Safe to format after checking defects", ChipTone.Warning),
             (JobCard.Chips(defect.Status()).Eject.Text, JobCard.Chips(defect.Status()).Format.Text, JobCard.Chips(defect.Status()).Format.Tone));
-        Assert.Equal(("A037C007", "01:00:12:05 · poškozená data", true), JobCard.ContentLines(defect.Report!).Single() is var l ? (l.Clip, l.Label, l.HasPicture) : default);
+        Assert.Equal(("A037C007", "01:00:12:05 · corrupted data", true), JobCard.ContentLines(defect.Report!).Single() is var l ? (l.Clip, l.Label, l.HasPicture) : default);
         Assert.True(JobCard.NeedsContentConfirm(defect.Status(), confirmed: false));
-        Assert.Equal((JobCardKind.Done, "A037_ARRI — kartu lze formátovat"),
+        Assert.Equal((JobCardKind.Done, "A037_ARRI — safe to format"),
             JobCard.Headline("A037_ARRI", defect.Status(), defect.Report, Disks, contentConfirmed: true) is var c ? (c.Kind, c.Title) : default);
 
         var done = DemoScenario.Done(@"C:\demo\A035_ARRI", Roots, null);
-        Assert.Equal(("Lze vyjmout", ChipTone.Ok, "Lze formátovat", ChipTone.Ok),
+        Assert.Equal(("Safe to eject", ChipTone.Ok, "Safe to format", ChipTone.Ok),
             JobCard.Chips(done.Status()) is var (e2, f2) ? (e2.Text, e2.Tone, f2.Text, f2.Tone) : default);
     }
 
@@ -77,22 +77,22 @@ public class DemoScenarioTests
         Assert.Equal(JobCardKind.Running, JobCard.Headline("A035_ARRI", p.Status, null, Disks).Kind);
         Assert.Equal(0.38, p.PhaseProgress, 2);
         var rows = JobCard.Rows(p, Disks);
-        Assert.Equal(["Čtení karty", "RAID_A", "SHUTTLE_B"], rows.Select(r => r.Name));
+        Assert.Equal(["Card read", "RAID_A", "SHUTTLE_B"], rows.Select(r => r.Name));
         Assert.Equal("661 MB/s", rows[0].RateText);
-        Assert.Equal("1 · Kopírování", JobCard.Steps(p.Status, job.Config, p.PhaseProgress)[0].Text);
-        Assert.Equal("Soubor 10 / 24", JobCard.FileLine(p.Status).Caption);
+        Assert.Equal("1 · Copying", JobCard.Steps(p.Status, job.Config, p.PhaseProgress)[0].Text);
+        Assert.Equal("File 10 / 24", JobCard.FileLine(p.Status).Caption);
         Assert.False(job.RunCopy());   // a preview never runs
 
         job.Pause();   // the screenshot of a paused card: Pozastavit holds at once
         p.Update(job.Status(), T0.AddSeconds(2.5));
-        Assert.Equal("Pozastaveno", p.StatusText);
+        Assert.Equal("Paused", p.StatusText);
         Assert.Equal("—", JobCard.Rows(p, Disks)[0].RateText);
         job.Resume();
         Assert.False(job.Status().Paused);
 
         var (waiting, facts) = DemoScenario.WaitingAppend(@"C:\demo\B012_FX6", Roots);
         Assert.Equal(JobPhase.Waiting, waiting.Status().Phase);
-        Assert.Equal("2 nové klipy · 14,2 GB · stejné cíle", JobCard.Sub(facts));
+        Assert.Equal("2 new clips · 14.2 GB · same destinations", JobCard.Sub(facts));
         job.Cancel();
         Assert.Equal(JobPhase.Cancelled, job.Status().Phase);   // closing the demo window ends it
     }
@@ -102,13 +102,13 @@ public class DemoScenarioTests
     {
         var done = DemoScenario.Done(@"C:\demo\A035_ARRI", Roots, _ => [0xFF, 0xD8]);
         var h = JobCard.Headline("A035_ARRI", done.Status(), done.Report, Disks);
-        Assert.Equal((JobCardKind.Done, "A035_ARRI — kartu lze formátovat", "Všech 24 souborů je na 2 discích a ověřených (xxHash64)."), (h.Kind, h.Title, h.Sub));
+        Assert.Equal((JobCardKind.Done, "A035_ARRI — safe to format", "All 24 files are on 2 disks and verified (xxHash64)."), (h.Kind, h.Title, h.Sub));
         Assert.Equal(["602 MB/s", "799 MB/s", "24 / 24", "6 min 12 s"], JobCard.Summary(done.Report!, null).Select(f => f.Value));
         Assert.Equal(5, JobCard.Thumbs(done.Report!).Thumbs.Count);
 
         var bad = DemoScenario.Mismatch(@"C:\demo\B012_FX6", Roots);
         h = JobCard.Headline("B012_FX6", bad.Status(), bad.Report, Disks);
-        Assert.Equal((JobCardKind.Problem, "B012_FX6 — kartu zatím nevysunujte", "1 soubor na disku SHUTTLE_B nesouhlasí s kartou. Na RAID_A je vše v pořádku."),
+        Assert.Equal((JobCardKind.Problem, "B012_FX6 — do not eject the card yet", "1 file on disk SHUTTLE_B does not match the card. Everything is fine on RAID_A."),
             (h.Kind, h.Title, h.Sub));
         var row = Assert.Single(JobCard.FailedRows(bad.Report!, Disks));
         Assert.Equal((@"XDROOT\Clip\B012C015_261007_9QW1.MXF", "RAID_A ✓", "SHUTTLE_B ✕ hash"), (row.Path, row.Disks[0].Text, row.Disks[1].Text));

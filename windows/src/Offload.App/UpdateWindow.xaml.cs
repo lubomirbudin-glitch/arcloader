@@ -3,8 +3,8 @@ using Offload.Core;
 
 namespace Offload.App;
 
-/// Nástroje → Aktualizace… and the "Nová verze" link (spec 4.4): the manifest source, "Zkontrolovat teď" (off the UI
-/// thread), the new version's notes and "Otevřít".
+/// Tools → Updates… and the "New version" link (spec 4.4): the manifest source, "Check now" (off the UI
+/// thread), the new version's notes and "Open".
 public partial class UpdateWindow : Window
 {
     readonly MainViewModel vm;
@@ -14,7 +14,7 @@ public partial class UpdateWindow : Window
         InitializeComponent();
         this.vm = vm;
         DataContext = vm;
-        Current.Text = $"Tato verze: {OffloadVersion.String}";
+        Current.Text = $"This version: {OffloadVersion.String}";
     }
 
     public static void Show(Window owner, MainViewModel vm) => new UpdateWindow(vm) { Owner = owner }.ShowDialog();
@@ -23,7 +23,7 @@ public partial class UpdateWindow : Window
     {
         Manifest.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateSource();   // the address as typed
         CheckButton.IsEnabled = false;
-        Result.Text = "Zjišťuji…";
+        Result.Text = "Checking…";
         try
         {
             Result.Text = await vm.CheckUpdatesAsync(force: true) ?? "";

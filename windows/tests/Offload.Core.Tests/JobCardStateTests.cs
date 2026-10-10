@@ -24,16 +24,16 @@ public class JobCardStateTests
     public void GoodReport_ButBackupNotSafe_StaysYellow_WithTheWhy()
     {
         var r = Report(true, null, F("verified", "verified"));
-        var notSafe = new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = false }.WithWarning("2 soubory z dřívější zálohy nebyly ověřeny.");
+        var notSafe = new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = false }.WithWarning("2 files of the earlier backup were not verified.");
         var h = JobCard.Headline("A001", notSafe, r, Disks);
-        Assert.Equal((JobCardKind.Problem, "A001 — kartu zatím nevysunujte", "2 soubory z dřívější zálohy nebyly ověřeny."), (h.Kind, h.Title, h.Sub));
+        Assert.Equal((JobCardKind.Problem, "A001 — do not eject the card yet", "2 files of the earlier backup were not verified."), (h.Kind, h.Title, h.Sub));
         // R5 (plan 10): everything copied, not everything verified — the card may come out, but not be formatted.
         h = JobCard.Headline("A001", notSafe with { SafeToEject = true }, r, Disks);
-        Assert.Equal((JobCardKind.Problem, "A001 — lze vyjmout, formátovat zatím ne"), (h.Kind, h.Title));
+        Assert.Equal((JobCardKind.Problem, "A001 — safe to eject, do not format yet"), (h.Kind, h.Title));
         h = JobCard.Headline("A001", notSafe, r, Disks, new BackupState(0, 2));
-        Assert.Equal("2 soubory dřívější zálohy nebylo ověřeno.", h.Sub);
+        Assert.Equal("2 files of the earlier backup were not verified.", h.Sub);
         h = JobCard.Headline("A001", notSafe, r, Disks, new BackupState(1, 0));
-        Assert.Equal("V záloze 1 soubor stále nesouhlasí.", h.Sub);
+        Assert.Equal("1 file in the backup still does not match.", h.Sub);
     }
 
     [Fact]
@@ -41,17 +41,17 @@ public class JobCardStateTests
     {
         var r = Report(true, OffloadReport.RepairKind, F("verified", "verified"));
         var h = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = true, SafeToFormat = true }, r, Disks, new BackupState(0, 0));
-        Assert.Equal((JobCardKind.Done, "Všechny soubory zálohy jsou teď na všech discích a ověřené."), (h.Kind, h.Sub));
+        Assert.Equal((JobCardKind.Done, "All files of the backup are now on all disks and verified."), (h.Kind, h.Sub));
         var still = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Done, CopySucceeded = false }, Report(true, OffloadReport.RepairKind, F("verified", "failed", "boom")), Disks, new BackupState(1, 0));
-        Assert.Equal((JobCardKind.Problem, "V záloze 1 soubor stále nesouhlasí."), (still.Kind, still.Sub));
+        Assert.Equal((JobCardKind.Problem, "1 file in the backup still does not match."), (still.Kind, still.Sub));
     }
 
     [Fact]
     public void Waiting_BehindAPausedJob()
     {
-        Assert.Equal("Čeká ve frontě", JobCard.Headline("A", new JobStatus(), null, Disks).Sub);
+        Assert.Equal("Waiting in the queue", JobCard.Headline("A", new JobStatus(), null, Disks).Sub);
         var h = JobCard.Headline("A", new JobStatus(), null, Disks, blockedByPaused: true);
-        Assert.Equal((JobCardKind.Waiting, "čeká na pozastavenou úlohu"), (h.Kind, h.Sub));
+        Assert.Equal((JobCardKind.Waiting, "waiting for a paused job"), (h.Kind, h.Sub));
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class JobCardStateTests
     {
         // Unverified report: "written" is a good copy; verified report: it is not.
         var unverified = Report(false, null, F("written", "failed", "boom"));
-        Assert.Equal(["RAID_A ✓", "SHUTTLE_B ✕ zápis"], JobCard.FailedRows(unverified, Disks)[0].Disks.Select(d => d.Text));
+        Assert.Equal(["RAID_A ✓", "SHUTTLE_B ✕ write"], JobCard.FailedRows(unverified, Disks)[0].Disks.Select(d => d.Text));
         Assert.True(unverified.IsGood("written"));
         Assert.False(Report(true).IsGood("written"));
     }
@@ -67,12 +67,12 @@ public class JobCardStateTests
     [Fact]
     public void NothingNew_OnAnUnverifiedBackup_IsNotGreen()
     {
-        var unsafeDone = new JobStatus { Phase = JobPhase.Done, SafeToEject = false, Note = "Nic nového." }.WithWarning("3 soubory dřívější zálohy nebyly ověřeny.");
+        var unsafeDone = new JobStatus { Phase = JobPhase.Done, SafeToEject = false, Note = "Nothing new." }.WithWarning("3 files of the earlier backup were not verified.");
         var h = JobCard.Headline("A001", unsafeDone, null, Disks);
-        Assert.Equal((JobCardKind.Problem, "A001 — kartu zatím neformátujte", "3 soubory dřívější zálohy nebyly ověřeny."), (h.Kind, h.Title, h.Sub));
-        Assert.Equal("2 soubory dřívější zálohy nebylo ověřeno.", JobCard.Headline("A001", unsafeDone, null, Disks, new BackupState(0, 2)).Sub);
+        Assert.Equal((JobCardKind.Problem, "A001 — do not format the card yet", "3 files of the earlier backup were not verified."), (h.Kind, h.Title, h.Sub));
+        Assert.Equal("2 files of the earlier backup were not verified.", JobCard.Headline("A001", unsafeDone, null, Disks, new BackupState(0, 2)).Sub);
         // The really complete backup stays green.
-        Assert.Equal((JobCardKind.Done, "A001 — záloha je úplná"),
+        Assert.Equal((JobCardKind.Done, "A001 — the backup is complete"),
             (JobCard.Headline("A001", unsafeDone with { SafeToEject = true, SafeToFormat = true }, null, Disks).Kind, JobCard.Headline("A001", unsafeDone with { SafeToEject = true, SafeToFormat = true }, null, Disks).Title));
     }
 
@@ -80,10 +80,10 @@ public class JobCardStateTests
     public void Stage2Failed_AfterAGoodCopy_KeepsTheCopySafeWording_AndSaysTheProcessingFailed()
     {
         var r = Report(true, null, F("verified", "verified"));
-        var h = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Failed, CopySucceeded = true, SafeToEject = true, SafeToFormat = true, Error = "ffmpeg spadl" }, r, Disks);
-        Assert.Equal((JobCardKind.Done, "A001 — kartu lze formátovat"), (h.Kind, h.Title));
-        Assert.Contains("Zpracování po kopii ale selhalo: ffmpeg spadl", h.Sub);
-        Assert.StartsWith("Soubor je na 2 discích", h.Sub);
+        var h = JobCard.Headline("A001", new JobStatus { Phase = JobPhase.Failed, CopySucceeded = true, SafeToEject = true, SafeToFormat = true, Error = "ffmpeg crashed" }, r, Disks);
+        Assert.Equal((JobCardKind.Done, "A001 — safe to format"), (h.Kind, h.Title));
+        Assert.Contains("But the processing after the copy failed: ffmpeg crashed", h.Sub);
+        Assert.StartsWith("The file is on 2 disks", h.Sub);
     }
 
     [Fact]

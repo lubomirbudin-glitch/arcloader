@@ -103,7 +103,7 @@ public class MhlReaderTests
 
         var h = MhlReader.Read(card)!;
 
-        Assert.Equal(["ASC MHL generace 0002 neodpovídá řetězu (soubor MHL byl změněn)."], h.ChainProblems);
+        Assert.Equal(["ASC MHL generation 0002 does not match the chain (the MHL file was changed)."], h.ChainProblems);
         Assert.Equal(2, h.Generations.Count);   // still read: the files are verified anyway
     }
 
@@ -117,7 +117,7 @@ public class MhlReaderTests
 
         var h = MhlReader.Read(card)!;
 
-        Assert.Equal(["Chybí ascmhl_chain.xml — generace se čtou podle čísla v názvu souboru."], h.ChainProblems);
+        Assert.Equal(["ascmhl_chain.xml is missing — the generations are read by the number in the file name."], h.ChainProblems);
         Assert.Equal([1, 2], h.Generations.Select(g => g.Seq));
         Assert.Empty(h.Chain);
     }
@@ -135,8 +135,8 @@ public class MhlReaderTests
 
         var problems = MhlReader.Read(card)!.ChainProblems;
 
-        Assert.Contains($"V řetězu ASC MHL je generace 0002, ale její soubor chybí: {g2}", problems);
-        Assert.Contains(problems, p => p.StartsWith("Soubor ASC MHL není v řetězu: 0003_", StringComparison.Ordinal));
+        Assert.Contains($"The ASC MHL chain has generation 0002, but its file is missing: {g2}", problems);
+        Assert.Contains(problems, p => p.StartsWith("An ASC MHL file is not in the chain: 0003_", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class MhlReaderTests
         File.WriteAllText(Path.Combine(card, "ascmhl", "0001_A001_x.mhl"), "<hashlist");
         var h = MhlReader.Read(card)!;
         Assert.Empty(h.Generations);
-        Assert.Contains(h.ChainProblems, p => p.StartsWith("ASC MHL generaci 0001 nejde přečíst", StringComparison.Ordinal));
+        Assert.Contains(h.ChainProblems, p => p.StartsWith("Cannot read ASC MHL generation 0001", StringComparison.Ordinal));
     }
 
     [Fact]

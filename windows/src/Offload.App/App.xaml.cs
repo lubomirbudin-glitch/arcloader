@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Windows;
+using System.Windows.Markup;
 using Offload.Core.Desktop;
 
 namespace Offload.App;
@@ -15,6 +17,7 @@ public partial class App : Application
         base.OnStartup(e);
         var options = StartupOptions.Parse(e.Args);
         if (options.Demo != null) AppData.UseDemoFolder();   // ruling I3: before anything reads or writes a file (the log too)
+        UseEnglish();
         // A bug in the UI must never take running offloads down: log it, tell the user, keep going.
         DispatcherUnhandledException += (_, ex) =>
         {
@@ -53,11 +56,39 @@ public partial class App : Application
         }
     }
 
+    /// The app is English only, whatever the PC's language: every element's Language is en-US (bindings, built-in
+    /// controls), and the UI thread's culture is en-US with ISO dates (2026-10-10) and 24-hour times — the DatePicker of
+    /// a custom date folder takes its format and its month names from it. Background threads keep the PC's culture:
+    /// whatever the App and Core format for display already uses InvariantCulture.
+    static void UseEnglish()
+    {
+        var english = (CultureInfo)CultureInfo.GetCultureInfo("en-US").Clone();
+        english.DateTimeFormat.ShortDatePattern = "yyyy-MM-dd";
+        english.DateTimeFormat.LongDatePattern = "yyyy-MM-dd";
+        english.DateTimeFormat.ShortTimePattern = "HH:mm";
+        english.DateTimeFormat.LongTimePattern = "HH:mm:ss";
+        CultureInfo.CurrentCulture = english;
+        CultureInfo.CurrentUICulture = english;
+        CultureInfo.DefaultThreadCurrentUICulture = english;
+        // As the default value (not xml:lang on each window): a DatePicker takes CultureInfo.CurrentCulture only while its
+        // Language is the default one — an explicit xml:lang="en-US" would bring back the US M/d/yyyy dates. WPF's own
+        // default is en-US already; this only makes it independent of that. Never fatal: the texts are English anyway.
+        try
+        {
+            FrameworkElement.LanguageProperty.OverrideMetadata(typeof(FrameworkElement),
+                new FrameworkPropertyMetadata(XmlLanguage.GetLanguage("en-US")));
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+        {
+            AppLog.Write($"language: {e.Message}");
+        }
+    }
+
     void Fail(Exception ex)
     {
         try
         {
-            MessageBox.Show($"Offload se nepodařilo spustit: {ex.Message}\n\nPodrobnosti: {AppLog.Path}", "Offload",
+            MessageBox.Show($"Offload could not start: {ex.Message}\n\nDetails: {AppLog.Path}", "Offload",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch (Exception boxEx)
@@ -76,7 +107,7 @@ public partial class App : Application
         lastShown = DateTime.UtcNow;
         try
         {
-            var text = $"Neočekávaná chyba aplikace: {message}\n\nPodrobnosti: {AppLog.Path}";
+            var text = $"Unexpected application error: {message}\n\nDetails: {AppLog.Path}";
             if (MainWindow is { IsLoaded: true } owner)
                 MessageBox.Show(owner, text, "Offload", MessageBoxButton.OK, MessageBoxImage.Error);
             else

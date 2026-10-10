@@ -15,7 +15,7 @@ sealed class StageTwoOptions
     readonly Option<string[]> lutRule = new("--lut-rule") { Description = "Own LUT rule before the camera detection (with --lut auto), repeat in priority order: <camera|serial|reel|folder>=<value>:<lut id|none|path.cube>, e.g. camera=FX6:sony-slog3-sgamut3cine.", DefaultValueFactory = _ => [] };
     readonly Option<int> proxyHeight = new("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
     readonly Option<double?> frameAspect = new("--frame-aspect") { Description = "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.", CustomParser = a => CliParse.Parse(a) };
-    readonly Option<double> frameScale = new("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10 % overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
+    readonly Option<double> frameScale = new("--frame-scale") { Description = "Frame lines size in % of the image (90 = 10% overscan).", DefaultValueFactory = _ => 100, CustomParser = a => CliParse.Parse(a) ?? 100 };
     readonly Option<string> proxyCodec = new("--proxy-codec") { Description = "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.", DefaultValueFactory = _ => "h264" };
     readonly Option<int> proxyBitrate = new("--proxy-bitrate") { Description = "Proxy bitrate (Mb/s) for H.264/HEVC.", DefaultValueFactory = _ => 10 };
     readonly Option<bool> proxyAlways = new("--proxy-always") { Description = "Render a proxy also when the original is lighter (H.264/HEVC no bigger than the proxy and at most its bitrate; by default such a clip gets no H.264/HEVC proxy — a ProRes proxy is always rendered; only when no LUT and no frame-lines crop is used)." };
@@ -28,7 +28,7 @@ sealed class StageTwoOptions
     readonly Option<bool> noDayReport = new("--no-day-report") { Description = "Do not make the day report (<date>\\_REPORT\\<date>_day_report.html) again after the copy." };
     readonly Option<bool> classicVerify = new("--classic-verify") { Description = "Read every destination back right after the copy (as before 0.6.0) instead of verifying the primary one while the proxies are made." };
     readonly Option<int?> primary = new("--primary") { Description = "Destination (1, 2 …, in the order of --dest) the proxies read and verify; default: the fastest one measured during the copy." };
-    readonly Option<bool> noLocalReport = new("--no-local-report") { Description = "Do not copy the card's report (_REPORT, ascmhl) to Documents\\Offload reporty\\<date>\\<card name>\\ on this computer." };
+    readonly Option<bool> noLocalReport = new("--no-local-report") { Description = "Do not copy the card's report (_REPORT, ascmhl) to Documents\\Offload reports\\<date>\\<card name>\\ on this computer." };
 
     public void AddTo(Command cmd)
     {
@@ -36,7 +36,7 @@ sealed class StageTwoOptions
             cmd.Options.Add(o);
     }
 
-    /// Sets AnalyzeClips, Outputs and Proxy; throws ArgumentException with a Czech message on a bad value. `project`
+    /// Sets AnalyzeClips, Outputs and Proxy; throws ArgumentException with a message on a bad value. `project`
     /// (--project): its values are the defaults and only the options written on the command line replace them (spec 4.1).
     public void Apply(ParseResult r, JobConfig config, SettingsProfile? project = null)
     {
@@ -97,7 +97,7 @@ sealed class StageTwoOptions
         if (Given(noDayReport)) outputs.DayReport = !r.GetValue(noDayReport);
         if (Given(noLocalReport)) outputs.LocalReport = !r.GetValue(noLocalReport);
         config.Outputs = outputs;
-        // Task 2026-10-09: the report on this computer too (the project's folder, else Documents\\Offload reporty).
+        // Task 2026-10-09: the report on this computer too (the project's folder, else Documents\\Offload reports).
         config.LocalReports = LocalReports.RootFor(outputs);
         config.AnalyzeClips = Given(noAnalyze) ? !r.GetValue(noAnalyze) : project!.AnalyzeClips;
         // Plan 10 (R11): verify-in-proxy unless --classic-verify (or the project switched it off); --primary picks the disk.

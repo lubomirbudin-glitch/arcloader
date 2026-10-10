@@ -32,13 +32,13 @@ public class VerifyVerdictRulingTests
         var r = Verified();   // even a report that says verified: the job's verdict decides (I1)
 
         var h = JobCard.Headline("A001", s, r, Disks);
-        Assert.Equal((JobCardKind.Problem, "A001 — lze vyjmout, formátovat zatím ne"), (h.Kind, h.Title));
+        Assert.Equal((JobCardKind.Problem, "A001 — safe to eject, do not format yet"), (h.Kind, h.Title));
         Assert.NotEqual(OutcomeKind.Done, JobOutcomes.Final("A001", s, r)!.Kind);
         Assert.False(JobOutcomes.Chime(s));
         Assert.NotEqual(CardTone.Ok, Tone(s));
         Assert.Equal(1, CopyCommand.ExitCode(new JobConfig("E:\\", ["D:\\Zaloha"]), s, r));
-        Assert.DoesNotContain("a ověřené", Texts.SafeToEject(2));
-        Assert.Contains("Formátovat až po ověření", Texts.SafeToEject(2));
+        Assert.DoesNotContain("and verified", Texts.SafeToEject(2));
+        Assert.Contains("Format it only after verification", Texts.SafeToEject(2));
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public class VerifyVerdictRulingTests
         Assert.True(JobOutcomes.Chime(s));
         Assert.Equal(CardTone.Ok, Tone(s));
         Assert.Equal(0, CopyCommand.ExitCode(new JobConfig("E:\\", ["D:\\Zaloha"]), s, r));
-        Assert.Equal("Všechny soubory jsou na 2 discích a ověřené — kartu lze vyjmout i formátovat.", Texts.SafeToFormat(2));
+        Assert.Equal("All files are on 2 disks and verified — the card is safe to eject and format.", Texts.SafeToFormat(2));
     }
 
     // The decision for ruling C2 + T11 (documented in the report): a destination verified through the Windows cache is
@@ -66,7 +66,7 @@ public class VerifyVerdictRulingTests
         Assert.Equal(JobCardKind.Done, JobCard.Headline("A001", s, r, Disks).Kind);
         var o = JobOutcomes.Final("A001", s, r)!;
         Assert.Equal(OutcomeKind.Attention, o.Kind);
-        Assert.Contains("Ověřeno čtením přes cache Windows", o.Message);
+        Assert.Contains("Verified by reading through the Windows cache", o.Message);
         Assert.False(JobOutcomes.Chime(s));
     }
 
@@ -74,8 +74,8 @@ public class VerifyVerdictRulingTests
     public void CopyDone_WhileVerifying_SaysFormattingWaits()
     {
         var o = JobOutcomes.CopyDone("A001", Status(eject: true, format: false, phase: JobPhase.Analyzing), proxies: true)!;
-        Assert.Equal("Ověřuje se s proxy — formátovat až po dokončení.", o.Message);
-        Assert.Equal("Proxy se ještě renderují.", JobOutcomes.CopyDone("A001", Status(eject: true, format: true, phase: JobPhase.Proxies), proxies: true)!.Message);
+        Assert.Equal("Verifying with the proxies — format only after it finishes.", o.Message);
+        Assert.Equal("Proxies are still rendering.", JobOutcomes.CopyDone("A001", Status(eject: true, format: true, phase: JobPhase.Proxies), proxies: true)!.Message);
         Assert.Null(JobOutcomes.CopyDone("A001", Status(eject: false, format: false, phase: JobPhase.Proxies), proxies: true));
     }
 
@@ -84,8 +84,8 @@ public class VerifyVerdictRulingTests
     {
         var h = JobCard.Headline("A001", Status(eject: true, format: false, phase: JobPhase.Cancelled), Verified(), Disks);
         Assert.Equal(JobCardKind.Cancelled, h.Kind);
-        Assert.DoesNotContain("a ověřená", h.Sub);
-        Assert.Contains("neformátujte", h.Sub);
+        Assert.DoesNotContain("and verified", h.Sub);
+        Assert.Contains("do not format", h.Sub);
     }
 
     // "Nic nového" — green only when the backup is complete (no warning) — and --no-verify: every file copied is exit 0.

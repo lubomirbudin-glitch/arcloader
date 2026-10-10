@@ -83,8 +83,8 @@ public class AppendPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.AppendConflict, e.Code);
-        Assert.StartsWith("Doplnění zastaveno — nic se nezkopírovalo. 1 soubor se neshoduje se zálohou:\n  CLIP/A001C001.mov: jiná velikost nebo datum (karta ", e.Message);
-        Assert.EndsWith("\nUdělejte celou kopii (vznikne A001_2).", e.Message);
+        Assert.StartsWith("Append stopped — nothing was copied. 1 file does not match the backup:\n  CLIP/A001C001.mov: different size or date (card ", e.Message);
+        Assert.EndsWith("\nMake a full copy (it creates A001_2).", e.Message);
     }
 
     // A difference below the rounding must not read "100 KB, 100 KB".
@@ -96,7 +96,7 @@ public class AppendPlannerTests
         var c1 = Path.Combine(card, "CLIP", "A001C001.mov");
         File.AppendAllText(c1, "xx");
         var e = Refused(card, paths);
-        Assert.Contains("(karta 100002 B · ", e.Message);
+        Assert.Contains("(card 100002 B · ", e.Message);
         Assert.Contains(", " + AppendPlanner.Disk(paths[0]) + " 100000 B · ", e.Message);
     }
 
@@ -140,7 +140,7 @@ public class AppendPlannerTests
         Assert.Equal(["CLIP/A001C003.mov"], plan.NewFiles.Select(f => f.RelPath));
         var e = Refused(card, paths, "exFAT", _ => "NTFS");
         Assert.Equal(PreflightCode.AppendConflict, e.Code);
-        Assert.StartsWith("Doplnění zastaveno — nic se nezkopírovalo. 2 soubory se neshodují se zálohou:\n  CLIP/A001C001.mov: jiná velikost nebo datum (karta ", e.Message);   // both clips, on d2 only
+        Assert.StartsWith("Append stopped — nothing was copied. 2 files do not match the backup:\n  CLIP/A001C001.mov: different size or date (card ", e.Message);   // both clips, on d2 only
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class AppendPlannerTests
         File.Delete(Layout.Join(paths[1], "CLIP/A001C002.mov"));
         var e = Refused(card, paths);
         Assert.Equal(PreflightCode.AppendMissingFile, e.Code);
-        Assert.Equal($"Na {AppendPlanner.Disk(paths[1])} chybí soubor z dřívější zálohy: CLIP/A001C002.mov — zkontrolujte zálohu přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify)", e.Message);
+        Assert.Equal($"A file of the earlier backup is missing on {AppendPlanner.Disk(paths[1])}: CLIP/A001C002.mov — check the backup with Verify backup (top bar of the window; on the command line offload verify)", e.Message);
     }
 
     static void MarkFailed(string cardPath, string rel)
@@ -171,7 +171,7 @@ public class AppendPlannerTests
         MarkFailed(paths[0], "CLIP/A001C002.mov");
         var e = Refused(card, paths);
         Assert.Equal(PreflightCode.AppendFailedFile, e.Code);
-        Assert.Equal($"CLIP/A001C002.mov se při dřívější záloze na {AppendPlanner.Disk(paths[0])} nezkopíroval správně — doplnit nejde, udělejte celou kopii.", e.Message);
+        Assert.Equal($"CLIP/A001C002.mov was not copied correctly to {AppendPlanner.Disk(paths[0])} in the earlier backup — cannot append; make a full copy.", e.Message);
     }
 
     // A cancelled append leaves "failed" records of files it never wrote: they are simply copied now.
@@ -202,7 +202,7 @@ public class AppendPlannerTests
 
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
         var disk = AppendPlanner.Disk(paths[0]);
-        Assert.Equal($"Zálohy na cílech se liší ({disk} má 1 generaci MHL, {disk} 2) — zkontrolujte je přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify); doplnit nejde.", e.Message);
+        Assert.Equal($"The backups on the destinations differ ({disk} has 1 MHL generation, {disk} 2) — check them with Verify backup (top bar of the window; on the command line offload verify); cannot append.", e.Message);
     }
 
     // Ruling I1: an append whose reports landed but whose MHL generation did not — the next one must not reuse 0002.
@@ -222,8 +222,8 @@ public class AppendPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
-        Assert.Equal($"V {paths[0]} nesouhlasí reporty s ASC MHL (poslední report je generace 2, poslední generace MHL 1) — dřívější doplnění se nedokončilo. "
-            + "Zkontrolujte zálohu přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify) a složku opravte ručně; doplnit nejde.", e.Message);
+        Assert.Equal($"The reports in {paths[0]} do not match the ASC MHL (the last report is generation 2, the last MHL generation 1) — an earlier append did not finish. "
+            + "Check the backup with Verify backup (top bar of the window; on the command line offload verify) and fix the folder by hand; cannot append.", e.Message);
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public class AppendPlannerTests
         }
         var e = Refused(card, paths);
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
-        Assert.Contains("(poslední report je generace 1, poslední generace MHL 2)", e.Message);
+        Assert.Contains("(the last report is generation 1, the last MHL generation 2)", e.Message);
     }
 
     [Fact]
@@ -261,7 +261,7 @@ public class AppendPlannerTests
         File.WriteAllText(Path.Combine(paths[0], "_REPORT", "offload_report_0002.json"), "{broken");
         var e = Refused(card, paths);
         Assert.Equal(PreflightCode.AppendNoReport, e.Code);
-        Assert.StartsWith($"Report dřívější zálohy v {paths[0]} nejde přečíst (offload_report_0002.json: ", e.Message);
+        Assert.StartsWith($"Cannot read the report of the earlier backup in {paths[0]} (offload_report_0002.json: ", e.Message);
     }
 
     [Fact]
@@ -276,9 +276,9 @@ public class AppendPlannerTests
 
         // Fix round 2, item 8: its own line (a crashed append leaves exactly this), not "jiná velikost nebo datum".
         Assert.Equal(PreflightCode.AppendConflict, e.Code);
-        Assert.Equal("Doplnění zastaveno — nic se nezkopírovalo. 1 soubor se neshoduje se zálohou:\n"
-                     + $"  na {AppendPlanner.Disk(paths[0])} je soubor CLIP/A001C003.mov, který žádný report nezná (nedokončené doplnění?)\n"
-                     + "Udělejte celou kopii (vznikne A001_2).", e.Message);
+        Assert.Equal("Append stopped — nothing was copied. 1 file does not match the backup:\n"
+                     + $"  {AppendPlanner.Disk(paths[0])} has a file CLIP/A001C003.mov that no report knows (an unfinished append?)\n"
+                     + "Make a full copy (it creates A001_2).", e.Message);
     }
 
     // The folders of one backup must be <root>\<date>\<card> with the same date and name: the copy goes to exactly those.
@@ -291,7 +291,7 @@ public class AppendPlannerTests
         Directory.Move(paths[1], other);
         var e = Refused(card, [paths[0], other]);
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
-        Assert.Equal($"Složky dřívější zálohy se jmenují různě ({paths[0]}, {other}) — doplnit jde jen do složek se stejným datem a názvem karty.", e.Message);
+        Assert.Equal($"The folders of the earlier backup have different names ({paths[0]}, {other}) — you can only append to folders with the same date and card name.", e.Message);
     }
 
     // Fix round 1, item 2 (ruling I3): another card in the reader (swapped between the prompt and Start, or a wrong
@@ -309,7 +309,7 @@ public class AppendPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.AppendOtherCard, e.Code);
-        Assert.Equal("Na kartě není žádný soubor z dřívější zálohy — jde o jinou kartu? Udělejte celou kopii.", e.Message);
+        Assert.Equal("No file of the earlier backup is on the card — is it a different card? Make a full copy.", e.Message);
         for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(backups[d], paths[d]);
     }
 
@@ -331,13 +331,13 @@ public class AppendPlannerTests
         var e = Refused(card, plan.CardPaths);
 
         Assert.Equal(PreflightCode.AppendConflict, e.Code);
-        Assert.Contains("CLIP/A001C003.mov (dočasné jméno kopie CLIP/.A001C003.mov.offload-part je jiný soubor zálohy nebo karty)", e.Message);
+        Assert.Contains("CLIP/A001C003.mov (the temporary copy name CLIP/.A001C003.mov.offload-part is another file of the backup or the card)", e.Message);
 
         // Both new: one would be copied over the other.
         File.Delete(Path.Combine(card, "CLIP", "A001C003.mov"));
         AppendFixtures.NewClip(card, "A001C004.mov", seed: 4);
         AppendFixtures.NewClip(card, ".A001C004.mov.offload-part", seed: 5);
-        Assert.Contains("CLIP/A001C004.mov (dočasné jméno kopie CLIP/.A001C004.mov.offload-part", Refused(card, plan.CardPaths).Message);
+        Assert.Contains("CLIP/A001C004.mov (the temporary copy name CLIP/.A001C004.mov.offload-part", Refused(card, plan.CardPaths).Message);
     }
 
     // Fix round 1, item 5: a changed generation, or a generation file outside the chain, is a damaged history.
@@ -353,7 +353,7 @@ public class AppendPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.AppendMhlDamaged, e.Code);
-        Assert.Equal($"Historie ASC MHL v {paths[1]} je poškozená — zkontrolujte ji přes Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify); doplnit nejde.", e.Message);
+        Assert.Equal($"The ASC MHL history in {paths[1]} is damaged — check it with Verify backup (top bar of the window; on the command line offload verify); cannot append.", e.Message);
 
         File.WriteAllText(gen1, File.ReadAllText(gen1)[..^1]);
         Assert.Single(AppendPlanner.Plan(card, paths).NewFiles);   // repaired: fine again
@@ -379,7 +379,7 @@ public class AppendPlannerTests
         {
             var e = Refused(card, paths);
             Assert.Equal(PreflightCode.AppendNoReport, e.Code);
-            Assert.StartsWith($"Report dřívější zálohy v {paths[0]} nejde přečíst (", e.Message);
+            Assert.StartsWith($"Cannot read the report of the earlier backup in {paths[0]} (", e.Message);
         }
         finally
         {
@@ -425,13 +425,13 @@ public class AppendPlannerTests
         var (card, paths) = AppendFixtures.CopiedCard(dir);
         var gone = Path.Combine(dir.Path, "gone", "2026-10-06", "A001");
         Assert.Equal(PreflightCode.AppendUnavailable, Refused(card, [paths[0], gone]).Code);
-        Assert.Equal($"Dřívější záloha není dostupná: {gone} — připojte disk, nebo udělejte celou kopii.", Refused(card, [gone]).Message);
+        Assert.Equal($"The earlier backup is not available: {gone} — connect the disk, or make a full copy.", Refused(card, [gone]).Message);
 
         Directory.Delete(Path.Combine(paths[1], "ascmhl"), recursive: true);
-        Assert.Equal($"V {paths[1]} chybí ASC MHL (ascmhl\\ascmhl_chain.xml) — doplnit nejde.", Refused(card, paths).Message);
+        Assert.Equal($"ASC MHL is missing in {paths[1]} (ascmhl\\ascmhl_chain.xml) — cannot append.", Refused(card, paths).Message);
 
         File.Delete(Path.Combine(paths[0], "_REPORT", "offload_report.json"));
-        Assert.Equal($"V {paths[0]} chybí report dřívější zálohy (_REPORT\\offload_report.json) — doplnit nejde.", Refused(card, paths).Message);
+        Assert.Equal($"The report of the earlier backup is missing in {paths[0]} (_REPORT\\offload_report.json) — cannot append.", Refused(card, paths).Message);
     }
 
     // Spec 2.2 "záloha udělaná na Macu": a report without the Windows-only keys, a Mac card path.

@@ -407,7 +407,7 @@ public class EnginePauseTests
         var engine = new OffloadEngine(options);
         bool gone = false;
         options.BeforeFileCopy = i => { if (i == 1) engine.Pauses.Pause(); };
-        options.BeforeDestWrite = d => { if (d == 1 && Volatile.Read(ref gone)) throw new IOException("Zařízení není připojeno."); };
+        options.BeforeDestWrite = d => { if (d == 1 && Volatile.Read(ref gone)) throw new IOException("The device is not connected."); };
         var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-07");
 
         var run = TestThreads.Start(() => engine.Run(plan));
@@ -423,7 +423,7 @@ public class EnginePauseTests
         {
             Assert.Equal("verified", f.Destinations[0]);
             Assert.Equal("failed", f.Destinations[1]);
-            Assert.Contains("Zařízení není připojeno.", f.Errors[1]);
+            Assert.Contains("The device is not connected.", f.Errors[1]);
         }
         Assert.Empty(Directory.GetFiles(plan.DestRoots[1], "*.offload-part", SearchOption.AllDirectories));
     }
@@ -500,7 +500,7 @@ public class EnginePauseTests
         var card = Card(dir);
         int reads = 0;
         var job = PausingJob(dir, card,
-            () => Volatile.Read(ref reads) != 2 ? "card-A" : throws ? throw new IOException("Zařízení není připraveno.") : null,
+            () => Volatile.Read(ref reads) != 2 ? "card-A" : throws ? throw new IOException("The device is not ready.") : null,
             () => Interlocked.Increment(ref reads));
 
         var copy = TestThreads.Start(() => job.RunCopy());
@@ -578,7 +578,7 @@ public class EnginePauseTests
         var copy = TestThreads.Start(() => job.RunCopy());
         Assert.True(Until(() => job.Engine.Snapshot() is { Paused: true, ReadBytes: 3 * Chunk + 5 }));
         Thread.Sleep(200);
-        Assert.False(job.Engine.Snapshot().PauseHeld);         // still "Pozastavuji": disk 2 writes file 0
+        Assert.False(job.Engine.Snapshot().PauseHeld);         // still "Pausing": disk 2 writes file 0
         Volatile.Write(ref identity, "card-B");
         options.BeforeDestWrite = null;
         job.Engine.Pauses.Resume();

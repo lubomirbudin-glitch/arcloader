@@ -74,7 +74,7 @@ public sealed record AutoDrivePlan(IReadOnlyList<AutoDestination> Add, IReadOnly
 /// say so before anything else; only an external USB disk with a known identity is ever added as a destination.
 public static class AutoDrives
 {
-    /// Less free space than this: "plný" — not added, a hint instead.
+    /// Less free space than this: "full" — not added, a hint instead.
     public const long FullBelow = 1L << 30;
 
     static readonly string[] ReaderWords =
@@ -170,9 +170,9 @@ public static class AutoDrives
 /// The automatic choice in settings.json (per profile, plan 8): `autoDrives`.
 public sealed class AutoDriveSettings
 {
-    /// "Automaticky přidávat připojené disky jako cíle".
+    /// "Automatically add connected disks as destinations".
     [JsonPropertyName("destinations")] public bool Destinations { get; set; } = true;
-    /// "Automaticky označovat karty ve čtečkách jako zdroje".
+    /// "Automatically select cards in readers as sources".
     [JsonPropertyName("cards")] public bool Cards { get; set; } = true;
     /// The destinations the app added by itself (dropped again when their disk goes).
     [JsonPropertyName("added")] public List<AutoDestination> Added { get; set; } = [];

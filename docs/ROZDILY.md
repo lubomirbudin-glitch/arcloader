@@ -16,7 +16,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.2.0C | 0.8.0-win (ve vývoji) |
+| Verze | 0.2.0C | 0.9.0-win (ve vývoji) |
+| Jazyk aplikace | česky (anglicky ⏳ naplánováno) | anglicky (od 0.9.0) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 

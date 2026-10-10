@@ -59,6 +59,6 @@ public class VerifySettingsTests
         // Above the number of destinations: refused (the CLI prints it and exits 1), no silent fallback to the fastest.
         var high = Assert.Throws<ArgumentException>(() => Apply("--primary", "3"));
         Assert.Equal(Msg.PrimaryTooHigh(3, 2), high.Message);
-        Assert.Contains("jen 2", high.Message);
+        Assert.Contains("only 2 destinations", high.Message);
     }
 }

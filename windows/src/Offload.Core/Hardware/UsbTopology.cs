@@ -21,7 +21,7 @@ public sealed record UsbConnector(string Id, string HubInstanceId, string Contro
 
     public bool Has(string connectorId) => Id == connectorId || AltIds.Contains(connectorId);
 
-    /// "USB 3", "USB-C", "jen USB 2.0", "" (unknown) + " (interní)".
+    /// "USB 3", "USB-C", "USB 2.0 only", "" (unknown) + " (internal)".
     public string Kind
     {
         get
@@ -29,10 +29,10 @@ public sealed record UsbConnector(string Id, string HubInstanceId, string Contro
             var speed = SupportsUsb3 switch
             {
                 true => TypeC ? "USB-C" : "USB 3",
-                false => TypeC ? "USB-C jen USB 2.0" : "jen USB 2.0",
+                false => TypeC ? "USB-C USB 2.0 only" : "USB 2.0 only",
                 null => TypeC ? "USB-C" : "",
             };
-            var kind = UserVisible ? speed : (speed + " (interní)").Trim();
+            var kind = UserVisible ? speed : (speed + " (internal)").Trim();
             return kind;
         }
     }

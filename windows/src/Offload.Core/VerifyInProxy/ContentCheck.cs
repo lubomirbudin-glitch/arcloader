@@ -5,7 +5,7 @@ namespace Offload.Core.VerifyInProxy;
 
 /// Spec 7 (content_ok / content_warn), report key `clips[].content`: what the decoder said while it made the proxy. A
 /// warning is about the file itself (the copy matches the card bit for bit): it never fails the copy and never blocks
-/// "Lze formátovat", but formatting needs an explicit confirmation (spec 7). Absent for a clip without a proxy.
+/// "Safe to format", but formatting needs an explicit confirmation (spec 7). Absent for a clip without a proxy.
 public sealed class ContentResult
 {
     public const string Ok = "ok";
@@ -30,14 +30,14 @@ public sealed class ContentResult
 
     [JsonIgnore] public bool IsWarn => State == Warn;
 
-    /// "poškozená data", "poškozený zvuk", "chybné časové značky", "snímky navíc", "klip končí předčasně".
+    /// "corrupted data", "corrupted audio", "bad timestamps", "extra frames", "clip ends early".
     public static string KindText(string? kind) => kind switch
     {
-        "decode" => "poškozená data",
-        "audio" => "poškozený zvuk",
-        "timestamps" => "chybné časové značky",
-        "frames" => "snímky navíc",
-        "end" => "klip končí předčasně",
+        "decode" => "corrupted data",
+        "audio" => "corrupted audio",
+        "timestamps" => "bad timestamps",
+        "frames" => "extra frames",
+        "end" => "clip ends early",
         _ => "vada obsahu",
     };
 }

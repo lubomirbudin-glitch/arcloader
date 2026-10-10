@@ -135,7 +135,7 @@ public static class LutRules
 
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Regex> GlobCache = new();
 
-    /// The first rule the editor cannot save, in Czech ("Pravidlo 2: vyplňte hodnotu."), or null. A rule of a newer
+    /// The first rule the editor cannot save, ("Rule 2: fill in the value."), or null. A rule of a newer
     /// version (read-only in the editor, ruling I3) is not looked at, but it keeps its number.
     public static string? Problem(IReadOnlyList<LutRule> rules)
     {
@@ -143,8 +143,8 @@ public static class LutRules
         {
             var r = rules[i];
             if (IsFuture(r)) continue;
-            if (string.IsNullOrWhiteSpace(r.Value)) return $"Pravidlo {i + 1}: vyplňte hodnotu.";
-            if (string.IsNullOrWhiteSpace(r.Lut) == string.IsNullOrWhiteSpace(r.LutPath)) return $"Pravidlo {i + 1}: vyberte LUT.";
+            if (string.IsNullOrWhiteSpace(r.Value)) return $"Rule {i + 1}: fill in the value.";
+            if (string.IsNullOrWhiteSpace(r.Lut) == string.IsNullOrWhiteSpace(r.LutPath)) return $"Rule {i + 1}: select a LUT.";
         }
         return null;
     }
@@ -169,13 +169,13 @@ public static class LutRules
             : (null, Msg.UnknownLut(lut, string.Join(", ", cat.Luts.Select(l => l.Id))));
     }
 
-    /// How the report gives the reason: "pravidlo 2: kamera obsahuje „FX6“".
-    public static string Describe(int number, LutRule r) => $"pravidlo {number}: " + r.Match switch
+    /// How the report gives the reason: "rule 2: camera contains \"FX6\"".
+    public static string Describe(int number, LutRule r) => $"rule {number}: " + r.Match switch
     {
-        LutRule.Camera => $"kamera obsahuje „{r.Value.Trim()}“",
-        LutRule.Serial => $"sériové číslo kamery „{r.Value.Trim()}“",
-        LutRule.Reel => $"cívka začíná „{r.Value.Trim()}“",
-        _ => $"složka odpovídá „{r.Value.Trim()}“",
+        LutRule.Camera => $"camera contains \"{r.Value.Trim()}\"",
+        LutRule.Serial => $"camera serial number \"{r.Value.Trim()}\"",
+        LutRule.Reel => $"reel starts with \"{r.Value.Trim()}\"",
+        _ => $"folder matches \"{r.Value.Trim()}\"",
     };
 
     /// The LUT of a matching rule: an own .cube (source "rule"), a built-in one (source "rule"), or none — "none" keeps
@@ -187,6 +187,6 @@ public static class LutRules
         if (string.Equals(r.Lut, "none", StringComparison.OrdinalIgnoreCase)) return LutUse.None(reason);
         return cat.Find(r.Lut) is { } lut
             ? new LutUse("rule", lut.Id, lut.Name, LutResolver.WithUserFile(reason, lut)) { File = lut.Path }
-            : LutUse.None($"{reason} — vestavěný LUT nenalezen");
+            : LutUse.None($"{reason} — built-in LUT not found");
     }
 }

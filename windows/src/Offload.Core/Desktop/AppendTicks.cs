@@ -6,7 +6,7 @@ namespace Offload.Core.Desktop;
 /// ticked is no longer possible (the card changed, was swapped or lost its history) — never a silent full copy instead.
 public enum StartKind { Full, Append, AppendGone }
 
-/// The ticks of "Doplnit jen nové klipy" in the Karty list. A tick belongs to the history entry the user saw
+/// The ticks of "Append (new clips only)" in the Cards list. A tick belongs to the history entry the user saw
 /// (`EntryId`): it counts only while that same entry still offers the append, and it never comes back by itself.
 /// UI thread only; memory only.
 public sealed class AppendTicks
@@ -62,8 +62,8 @@ public sealed class AppendTicks
         return Chosen(path, insight) ? (StartKind.Append, null) : (StartKind.Full, null);
     }
 
-    /// "Karta A001 se změnila — doplnit už nejde. Zkontrolujte ji a spusťte znovu."
+    /// "Card A001 has changed — it can no longer be appended. Check it and start again."
     public static string GoneMessage(IReadOnlyList<string> names) => names.Count == 1
-        ? $"Karta {names[0]} se změnila — doplnit už nejde. Zkontrolujte ji a spusťte znovu."
-        : $"Karty {string.Join(", ", names)} se změnily — doplnit už nejde. Zkontrolujte je a spusťte znovu.";
+        ? $"Card {names[0]} has changed — it can no longer be appended. Check it and start again."
+        : $"Cards {string.Join(", ", names)} have changed — they can no longer be appended. Check them and start again.";
 }

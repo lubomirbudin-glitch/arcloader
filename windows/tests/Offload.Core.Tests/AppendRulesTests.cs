@@ -64,9 +64,9 @@ public class AppendRulesTests
     public void Texts_OfSpec22()
     {
         var m = With(HistoryMatchKind.NewFiles).History!;
-        Assert.Equal("Doplnit jen nové klipy do dřívější zálohy (12 souborů · 3,2 GB)", AppendRules.CheckboxText(m));
-        Assert.Equal(@"Složka: 2026-10-06\A001_2 na 2 cílech", AppendRules.FolderText(m.Entry));
-        Assert.Equal("A001 · doplnění", AppendRules.Title("A001"));
+        Assert.Equal("Append new clips only to the earlier backup (12 files · 3.2 GB)", AppendRules.CheckboxText(m));
+        Assert.Equal(@"Folder: 2026-10-06\A001_2 on 2 destinations", AppendRules.FolderText(m.Entry));
+        Assert.Equal("A001 · append", AppendRules.Title("A001"));
         Assert.False(AppendRules.NeedsDestinations(0));
         Assert.True(AppendRules.NeedsDestinations(1));
     }

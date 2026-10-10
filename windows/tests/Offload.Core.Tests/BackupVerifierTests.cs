@@ -84,7 +84,7 @@ public class BackupVerifierTests
 
         Assert.False(r.Success);   // a file nobody could verify is never "all fine"
         Assert.Equal(["CLIP/b.mov"], r.FailedAtCopy);
-        Assert.Equal("1 soubor selhal už při kopii.", Assert.Single(VerifyTexts.Warnings(r)));
+        Assert.Equal("1 file already failed during the copy.", Assert.Single(VerifyTexts.Warnings(r)));
     }
 
     // R9: a Silverstack/ShotPut style MHL with md5 + sha1 + xxh128, two generations.
@@ -105,7 +105,7 @@ public class BackupVerifierTests
         Assert.Equal(2, r.Ok);
         Assert.Equal(2, r.Generations);
         Assert.Equal(["md5", "sha1", "xxh128", "c4"], r.HashAlgorithms);
-        Assert.Equal("Ověřeno: všechny 2 soubory sedí (ASC MHL, 2 generace, MD5 + SHA-1 + xxHash128 + C4).", VerifyTexts.Summary(r).Text);
+        Assert.Equal("Verified: all 2 files match (ASC MHL, 2 generations, MD5 + SHA-1 + xxHash128 + C4).", VerifyTexts.Summary(r).Text);
     }
 
     [Theory]
@@ -128,7 +128,7 @@ public class BackupVerifierTests
 
         Assert.True(r.Success);
         Assert.Equal(("hashList", 2), (r.Basis, r.Ok));
-        Assert.Equal("Ověřeno: všechny 2 soubory sedí (seznam součtů, xxHash64).", VerifyTexts.Summary(r).Text);
+        Assert.Equal("Verified: all 2 files match (checksum list, xxHash64).", VerifyTexts.Summary(r).Text);
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public class BackupVerifierTests
         Assert.False(r.Success);
         Assert.Equal(1, r.Checked);
         Assert.Empty(r.Extra);   // not looked for after a cancel
-        Assert.Equal(("Ověření zrušeno po 1 / 3 souborech", VerifyTone.Warning), VerifyTexts.Summary(r));
+        Assert.Equal(("Verification cancelled after 1 / 3 files", VerifyTone.Warning), VerifyTexts.Summary(r));
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public class BackupVerifierTests
         File.AppendAllText(mhl, "<!-- x -->");
         var r = BackupVerifier.Verify(card, chunkSize: 4096);
         Assert.True(r.Success);
-        Assert.Contains("ASC MHL generace 0001 neodpovídá řetězu (soubor MHL byl změněn).", VerifyTexts.Warnings(r));
+        Assert.Contains("ASC MHL generation 0001 does not match the chain (the MHL file was changed).", VerifyTexts.Warnings(r));
     }
 
     [Theory]

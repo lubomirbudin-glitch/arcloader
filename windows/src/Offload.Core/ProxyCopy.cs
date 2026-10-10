@@ -35,7 +35,7 @@ public static class ProxyCopy
     {
         try
         {
-            if (!Directory.Exists(extraFolder)) return (null, "složka není dostupná");
+            if (!Directory.Exists(extraFolder)) return (null, "the folder is not available");
             var dir = Layout.CardPath(extraFolder, date, cardName);
             fileName = fileName.Replace('\\', '/');
             if (fileName.LastIndexOf('/') is int slash and >= 0)
@@ -60,7 +60,7 @@ public static class ProxyCopy
                     // Taken between the check and the rename: try the next number.
                 }
             }
-            return (null, $"žádné volné jméno ({Name(1)} … {Name(maxAttempts)})");
+            return (null, $"no free name ({Name(1)} … {Name(maxAttempts)})");
         }
         catch (Exception e)
         {

@@ -12,8 +12,8 @@ static class CopyCommand
     public static Command Create()
     {
         var source = new Argument<string>("source") { Description = "Card drive or source folder." };
-        // Not Required: the parser's "Option '--dest' is required." has no Czech translation — the engine says
-        // "Není zadaný žádný cíl." instead.
+        // Not Required: a copy without --dest may take the destinations of --project; the engine itself refuses a job
+        // with no destination (Msg).
         var dest = new Option<string[]>("--dest", "-d") { Description = "Destination root (repeat for each disk).", DefaultValueFactory = _ => [] };
         var name = new Option<string?>("--name") { Description = "Card folder name (default: volume label); auto = the reel in the clip names (A001C003… → A001), else the volume label." };
         var date = new Option<string?>("--date") { Description = "Date folder (default: today, YYYY-MM-DD)." };
@@ -87,9 +87,9 @@ static class CopyCommand
     internal static Func<JobConfig, OffloadJob> JobFactory { get; set; } = c => new OffloadJob(c);
 
     /// Plans, prints the plan and runs the job (copy or append). Exit 0 = copied (and verified unless --no-verify) or,
-    /// for an append, nothing new; 1 = anything else (a refusal of the engine prints as "Chyba: " + its Czech text).
+    /// for an append, nothing new; 1 = anything else (a refusal of the engine prints as Msg.CliError + its text).
     ///
-    /// An append's printed plan is labelled "plán (může se ještě upřesnit)": the run plans again under the card-folder
+    /// An append's printed plan is labelled "plan (may still change)": the run plans again under the card-folder
     /// lock, so what runs may differ (another append finished, a disk went away). The plan is not repeated right before
     /// the run — the run's own planning is the only one that counts; the report and the status lines tell what happened.
     internal static int RunJob(JobConfig config, bool dryRun)
@@ -122,8 +122,8 @@ static class CopyCommand
         {
             Console.WriteLine(PlanLine(plan));
             foreach (var p in plan.CardPaths) Console.WriteLine($"  → {p}");
-            if (plan.UnverifiedEarlier > 0) Console.WriteLine("Varování: " + Msg.UnverifiedEarlier(plan.UnverifiedEarlier));
-            foreach (var warning in plan.SpaceWarnings) Console.WriteLine("Varování: " + warning);   // R11: never blocks
+            if (plan.UnverifiedEarlier > 0) Console.WriteLine("Warning: " + Msg.UnverifiedEarlier(plan.UnverifiedEarlier));
+            foreach (var warning in plan.SpaceWarnings) Console.WriteLine("Warning: " + warning);   // R11: never blocks
             if (dryRun)
                 foreach (var line in plan.Space) Console.WriteLine(Msg.SpaceLine(line.Label, line.Need, line.Free));
             if (ProxyPreflight.ExtraFolderInUse(config.Proxy) is string extra)
@@ -133,11 +133,11 @@ static class CopyCommand
             // Connection chain: informational only, must never fail a copy.
             try
             {
-                var links = new List<RoleLink> { new("Karta", DriveLinks.Resolve(plan.Source)) };
-                links.AddRange(plan.DestRoots.Select((d, i) => new RoleLink($"Cíl {i + 1}", DriveLinks.Resolve(d))));
+                var links = new List<RoleLink> { new("Card", DriveLinks.Resolve(plan.Source)) };
+                links.AddRange(plan.DestRoots.Select((d, i) => new RoleLink($"Destination {i + 1}", DriveLinks.Resolve(d))));
                 var connectors = UsbScanner.Scan().Connectors;
-                // Status-line names first ("card", "D1"), so "brzdí: D1" there reads against this list.
-                var lines = new List<string> { "  Připojení:" };
+                // Status-line names first ("card", "D1"), so "bottleneck: D1" there reads against this list.
+                var lines = new List<string> { "  Connections:" };
                 lines.AddRange(links.Select((l, i) => $"    {ProgressDisplay.ShortName(i)} = {l.Role}: {l.Link.Describe(connectors)}"));
                 lines.AddRange(Advisor.Advise(links, connectors)
                     .Where(a => a.Kind == AdviceKind.Warning).Select(a => $"  ! {a.Text}"));
@@ -182,14 +182,14 @@ static class CopyCommand
         if (job.LocalReport is string local) Console.WriteLine(Msg.LocalReportWritten(local));
         if (status.LocalReportNote != null) Console.WriteLine(status.LocalReportNote);
         if (status.Note != null) Console.WriteLine(status.Note);
-        if (status.Warning != null) Console.WriteLine("Varování: " + status.Warning);
+        if (status.Warning != null) Console.WriteLine("Warning: " + status.Warning);
         if (status.Error != null) Console.WriteLine(Msg.CliError + status.Error);
         Ntfy(config, plan, status, report);
         return ExitCode(config, status, report);
     }
 
     /// 0 = the card is backed up: R5 / ruling I1 (plan 10) — every copy verified everywhere and the results written into
-    /// every card folder (JobStatus.SafeToFormat), the whole backup so for an append. "Nic nového" ends Done without a
+    /// every card folder (JobStatus.SafeToFormat), the whole backup so for an append. "Nothing new" ends Done without a
     /// report: success when the backup is complete. With verification switched off (--no-verify) nothing can be
     /// verified: every file copied is success, as before plan 10.
     internal static int ExitCode(JobConfig config, JobStatus status, OffloadReport? report)
@@ -206,16 +206,16 @@ static class CopyCommand
         string card;
         try { card = plan?.CardName ?? config.CardName ?? Layout.DefaultCardName(config.Source); }
         catch (Exception e) when (e is IOException or ArgumentException or NotSupportedException or UnauthorizedAccessException) { card = ""; }
-        if (string.IsNullOrWhiteSpace(card)) card = "karta";
+        if (string.IsNullOrWhiteSpace(card)) card = "card";
         // The wait itself is bounded (the proxy lookup may ignore the client's token).
         var send = Task.Run(() => NtfyClient.SendOutcomeAsync(config.Notify.Ntfy, JobOutcomes.Final(card, status, report), m => Console.Error.WriteLine(m)));
-        if (!send.Wait(NtfyClient.DefaultTimeout + TimeSpan.FromSeconds(1))) Console.Error.WriteLine("ntfy: nečekám déle");
+        if (!send.Wait(NtfyClient.DefaultTimeout + TimeSpan.FromSeconds(1))) Console.Error.WriteLine("ntfy: not waiting any longer");
     }
 
-    /// "Card A001: 3 files, 1 GB" for a full copy; an append (Czech, with plural forms): "Doplnění karty A001
-    /// (generace 2), plán (může se ještě upřesnit): 2 soubory · 50 KB".
+    /// "Card A001: 3 files, 1 GB" for a full copy; an append (with plural forms): "Append to card A001
+    /// (generation 2), plan (may still change): 2 files · 50 KB".
     internal static string PlanLine(OffloadPlan plan) => plan.Mode == PlanMode.Append
-        ? $"Doplnění karty {plan.CardName} (generace {plan.Generation}), plán (může se ještě upřesnit): {Texts.Files(plan.Scan.Files.Count, plan.Scan.TotalBytes)}"
+        ? $"Append to card {plan.CardName} (generation {plan.Generation}), plan (may still change): {Texts.Files(plan.Scan.Files.Count, plan.Scan.TotalBytes)}"
         : $"Card {plan.CardName}: {plan.Scan.Files.Count} files, {Format.Bytes(plan.Scan.TotalBytes)}";
 
     /// The card against history (spec 2.1 CLI) and its clip names (2.3). Never fails the copy: any problem only means

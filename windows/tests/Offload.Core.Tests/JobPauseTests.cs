@@ -108,7 +108,7 @@ public class JobPauseTests
         Assert.True(Until(() => job.Status().PauseHeld));
         var held = job.Status();
         Assert.Equal((JobPhase.Analyzing, 0), (held.Phase, held.ClipIndex));
-        Assert.Equal((true, false, "klip A001C001"), (pausing!.Paused, pausing.PauseHeld, pausing.PauseStep));
+        Assert.Equal((true, false, "clip A001C001"), (pausing!.Paused, pausing.PauseHeld, pausing.PauseStep));
         Assert.Null(held.PauseStep);
         Thread.Sleep(300);
         Assert.Single(probes);

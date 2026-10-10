@@ -22,12 +22,12 @@ public class LutRulesTests
         var clip = VideoClip("XDROOT/Clip/C0001.MP4");
         (string Match, string Value, string Reason)[] cases =
         [
-            ("camera", "fx6", "pravidlo 1: kamera obsahuje „fx6“"),
-            ("serial", " 0123456 ", "pravidlo 1: sériové číslo kamery „0123456“"),
-            ("reel", "A", "pravidlo 1: cívka začíná „A“"),
-            ("reel", "a00", "pravidlo 1: cívka začíná „a00“"),
-            ("folder", "a001/xdroot/*", "pravidlo 1: složka odpovídá „a001/xdroot/*“"),
-            ("folder", "A00?/*/Clip", "pravidlo 1: složka odpovídá „A00?/*/Clip“"),
+            ("camera", "fx6", "rule 1: camera contains \"fx6\""),
+            ("serial", " 0123456 ", "rule 1: camera serial number \"0123456\""),
+            ("reel", "A", "rule 1: reel starts with \"A\""),
+            ("reel", "a00", "rule 1: reel starts with \"a00\""),
+            ("folder", "a001/xdroot/*", "rule 1: folder matches \"a001/xdroot/*\""),
+            ("folder", "A00?/*/Clip", "rule 1: folder matches \"A00?/*/Clip\""),
         ];
         foreach (var (match, value, reason) in cases)
         {
@@ -54,7 +54,7 @@ public class LutRulesTests
         var info = new ClipInfo { Camera = "ARRI ALEXA 35", Reel = "A001" };
         var s = Auto(Rule("camera", "Sony", "sony-slog3-sgamut3"), Rule("reel", "A", "none"), Rule("camera", "ALEXA", "arri-logc3-awg3"));
         var use = LutResolver.Resolve(VideoClip(), info, @"X:\none\C0001.MP4", s, Cat, "A001");
-        Assert.Equal(("none", null, "pravidlo 2: cívka začíná „A“"), (use.Source, use.Id, use.Reason));
+        Assert.Equal(("none", null, "rule 2: reel starts with \"A\""), (use.Source, use.Id, use.Reason));
         Assert.Null(use.File);
     }
 
@@ -88,14 +88,14 @@ public class LutRulesTests
     {
         var s = Auto(Rule("serial", "123", "none"), Rule("reel", "B0", "arri-logc4-awg4"));
         var use = LutResolver.Resolve(VideoClip("XDROOT/Clip/C0001.MP4"), new ClipInfo(), @"X:\none\C0001.MP4", s, Cat, "B007");
-        Assert.Equal(("rule", "pravidlo 2: cívka začíná „B0“"), (use.Source, use.Reason));
+        Assert.Equal(("rule", "rule 2: reel starts with \"B0\""), (use.Source, use.Reason));
     }
 
     [Fact]
     public void BuiltinMissingFromTheCatalog_NoLut_Said()
     {
         var use = LutResolver.Resolve(VideoClip(), new ClipInfo { Camera = "FX6" }, @"X:\none\C0001.MP4", Auto(Rule("camera", "FX6", "gone-id")), Cat, "A001");
-        Assert.Equal(("none", "pravidlo 1: kamera obsahuje „FX6“ — vestavěný LUT nenalezen"), (use.Source, use.Reason));
+        Assert.Equal(("none", "rule 1: camera contains \"FX6\" — built-in LUT not found"), (use.Source, use.Reason));
     }
 
     // Spec 4.2: an invalid rule (no value, both or neither LUT) is dropped when the settings are read. Ruling I3: a rule
@@ -160,7 +160,7 @@ public class LutRulesTests
         var info = new ClipInfo { Camera = "Sony FX6", Reel = "A001" };
         var s = Auto(Rule("lens", "FX6", "none"), Rule("camera", "FX6", "arri-logc4-awg4"));
         var use = LutResolver.Resolve(VideoClip(), info, @"X:\none\C0001.MP4", s, Cat, "A001");
-        Assert.Equal(("rule", "pravidlo 2: kamera obsahuje „FX6“"), (use.Source, use.Reason));
+        Assert.Equal(("rule", "rule 2: camera contains \"FX6\""), (use.Source, use.Reason));
         Assert.False(LutRules.IsValid(s.LutRules[0]));
         Assert.True(LutRules.IsFuture(s.LutRules[0]));
         Assert.False(LutRules.IsFuture(s.LutRules[1]));
@@ -183,7 +183,7 @@ public class LutRulesTests
         Assert.Equal(3, s.Proxy.LutRules.Count);
         Assert.Equal(("camera", "FX6"), (s.Proxy.LutRules[2].Match, s.Proxy.LutRules[2].Value));
         var use = LutResolver.Resolve(VideoClip(), new ClipInfo { Camera = "FX6" }, @"X:\none\C0001.MP4", s.Proxy, Cat, "A001");
-        Assert.Equal("pravidlo 3: kamera obsahuje „FX6“", use.Reason);
+        Assert.Equal("rule 3: camera contains \"FX6\"", use.Reason);
 
         s.Proxy.Height = 1080;
         SettingsStore.Save(s, path);
@@ -224,7 +224,7 @@ public class LutRulesTests
         TestMedia.IdentityLut(there);
         var s = Auto(Rule("camera", "FX6", path: there), Rule("reel", "A", "none"), Rule("folder", "*", path: Path.Combine(dir.Path, "show.cube")));
         Assert.Equal([new LutFile(there, 1), new LutFile(Path.Combine(dir.Path, "show.cube"), 3)], ProxyPreflight.LutFilesInUse(s, analyzeClips: false));
-        Assert.Equal("LUT z pravidla 3 nenalezen: show.cube", ProxyPreflight.Blocking(s, analyzeClips: false));
+        Assert.Equal("LUT of rule 3 not found: show.cube", ProxyPreflight.Blocking(s, analyzeClips: false));
 
         s.Enabled = false;
         Assert.Null(ProxyPreflight.Blocking(s, analyzeClips: false));       // nothing uses a LUT
@@ -233,7 +233,7 @@ public class LutRulesTests
         Assert.Empty(ProxyPreflight.LutFilesInUse(s, analyzeClips: true));
         s.LutMode = LutMode.Custom;
         s.LutPath = Path.Combine(dir.Path, "gone.cube");
-        Assert.Equal("LUT nenalezen: gone.cube — vyberte jiný nebo ho odeberte.", ProxyPreflight.Blocking(s, analyzeClips: true));
+        Assert.Equal("LUT not found: gone.cube — select another one or remove it.", ProxyPreflight.Blocking(s, analyzeClips: true));
     }
 
     [Fact]
@@ -293,8 +293,8 @@ public class LutRulesTests
 
         Assert.Equal(JobPhase.Done, job.Status().Phase);
         var luts = report!.Clips.ToDictionary(c => c.Clip.Name, c => c.Lut!);
-        Assert.Equal(("rule", "pravidlo 1: složka odpovídá „A001/B“"), (luts["A001C001"].Source, luts["A001C001"].Reason));
-        Assert.Equal(("none", "pravidlo 2: cívka začíná „B“"), (luts["B002C001"].Source, luts["B002C001"].Reason));
+        Assert.Equal(("rule", "rule 1: folder matches \"A001/B\""), (luts["A001C001"].Source, luts["A001C001"].Reason));
+        Assert.Equal(("none", "rule 2: reel starts with \"B\""), (luts["B002C001"].Source, luts["B002C001"].Reason));
         Assert.NotEqual("rule", luts["C0001"].Source);
         Assert.Contains("\"source\": \"rule\"", File.ReadAllText(Path.Combine(job.Plan!.CardPaths[0], "_REPORT", "offload_report.json")));
     }
@@ -337,8 +337,8 @@ public class LutRulesTests
         var logs = new List<string>();
         using var r = new ProxyRenderer(new ProxySettings(), new ExternalTools { NoSearch = true }) { Log = logs.Add };
 
-        Assert.Equal("LUT nenalezen: gone.cube — proxy bez LUTu", r.LutNote(new LutUse("rule", null, "gone.cube", "x") { File = gone }));
-        Assert.Equal("LUT nenalezen: gone.cube — proxy bez LUTu", r.LutNote(new LutUse("rule", null, "gone.cube", "x") { File = gone }));
+        Assert.Equal("LUT not found: gone.cube — proxy without a LUT", r.LutNote(new LutUse("rule", null, "gone.cube", "x") { File = gone }));
+        Assert.Equal("LUT not found: gone.cube — proxy without a LUT", r.LutNote(new LutUse("rule", null, "gone.cube", "x") { File = gone }));
         Assert.Null(r.LutNote(new LutUse("rule", null, "there.cube", "x") { File = there }));
         Assert.Null(r.LutNote(new LutUse("rule", "arri-logc4-awg4", "x", "y") { File = gone }));   // built-in
         Assert.Single(logs, l => l.Contains("gone.cube"));

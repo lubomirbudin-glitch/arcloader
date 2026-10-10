@@ -14,7 +14,7 @@ public class ChainViewTests
     [Fact]
     public void Build_UtilizationAndConnection()
     {
-        var c = ChainView.Build([Usb("Karta", "reader", UsbLinkSpeed.Super), Sata("Cíl 1")], [225, 98]);
+        var c = ChainView.Build([Usb("Card", "reader", UsbLinkSpeed.Super), Sata("Destination 1")], [225, 98]);
         Assert.Equal(0.5, c[0].Utilization!.Value, 2);
         Assert.Equal("USB 3 (5 Gb/s), port 5", c[0].Connection);
         Assert.Null(c[1].Utilization);

@@ -34,9 +34,9 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     /// Clip lists CSV / ALE and the day report (spec 3.2, 3.3; settings `outputs`, CLI --no-clip-list, --ale,
     /// --no-day-report).
     public OutputSettings Outputs { get; set; } = new();
-    /// The project the job was started in (spec 4.1), null = "Bez projektu": into history.json and the report.
+    /// The project the job was started in (spec 4.1), null = "No project": into history.json and the report.
     public string? Project { get; set; }
-    /// "Zkopírovat znovu" (UI návrh 4): repair the files that failed in these card folders (`<root>\<date>\<card>` of the
+    /// "Copy again" (UI návrh 4): repair the files that failed in these card folders (`<root>\<date>\<card>` of the
     /// backup), each only where it failed (RepairPlanner); DestRoots, CardName and Date are taken from them.
     public IReadOnlyList<string>? RepairInto { get; set; }
     /// Ruling I1: the card the repaired backup was copied from (CardIdentity of the finished job) — a repair refuses
@@ -45,7 +45,7 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     /// Where the end of the job is announced (spec 4.3): the copy taken when the job was started.
     public Notify.NotifySettings Notify { get; set; } = new();
     /// Plan 10 (R11): verify the primary destination from the proxies' reads and the others in the background, while
-    /// the proxies render — on when proxies and verification are; settings "Ověřit primární disk během proxy", CLI
+    /// the proxies render — on when proxies and verification are; settings "Verify the primary disk during proxies", CLI
     /// --classic-verify turns it off (the read-back of every destination right after the copy, as before 0.6.0).
     public bool VerifyInProxy { get; set; } = true;
     /// Plan 10 (spec 6): the destination the proxies read and verify (0-based, CLI --primary N); null = the fastest one
@@ -63,17 +63,17 @@ public static class JobPhaseExtensions
 {
     public static string Label(this JobPhase p) => p switch
     {
-        JobPhase.Waiting => "Čeká",
-        JobPhase.Copying => "Kopírování",
-        JobPhase.Flushing => "Zápis cache disků",
-        JobPhase.Verifying => "Ověřování",
+        JobPhase.Waiting => "Waiting",
+        JobPhase.Copying => "Copying",
+        JobPhase.Flushing => "Flushing disk caches",
+        JobPhase.Verifying => "Verifying",
         JobPhase.Reporting => "Report",
-        JobPhase.Analyzing => "Analýza klipů",
-        JobPhase.Proxies => "Render proxy",
-        JobPhase.Finishing => "Dokončení ověření",
-        JobPhase.Done => "Hotovo",
-        JobPhase.Failed => "Chyba",
-        _ => "Zrušeno",
+        JobPhase.Analyzing => "Clip analysis",
+        JobPhase.Proxies => "Rendering proxies",
+        JobPhase.Finishing => "Finishing verification",
+        JobPhase.Done => "Done",
+        JobPhase.Failed => "Error",
+        _ => "Cancelled",
     };
 
     public static bool IsFinished(this JobPhase p) => p is JobPhase.Done or JobPhase.Failed or JobPhase.Cancelled;
@@ -89,27 +89,27 @@ public sealed record JobStatus
     public double ClipFraction { get; init; }
     public int ProxiesDone { get; init; }
     public int ProxiesFailed { get; init; }
-    /// R5 "Lze vyjmout": every file is copied onto every destination (written and flushed) — the card may be taken out,
-    /// also while the verification still runs. Not "Lze formátovat", never green (ruling I2).
+    /// R5 "Safe to eject": every file is copied onto every destination (written and flushed) — the card may be taken out,
+    /// also while the verification still runs. Not "Safe to format", never green (ruling I2).
     public bool SafeToEject { get; init; }
-    /// R5 "Lze formátovat": every file verified on every destination, none failed (and the whole backup so, for an append
+    /// R5 "Safe to format": every file verified on every destination, none failed (and the whole backup so, for an append
     /// or a repair) — the one green verdict of a card (spec 2). With verify-in-proxy only at the end of stage 2.
     public bool SafeToFormat { get; init; }
     /// Spec 7: clips whose decoder reported a defect (content_warn) — formatting needs the user's confirmation.
     public int ContentWarnings { get; init; }
-    /// Plan 10 "Dokončení ověření": bytes verified so far and to verify (all destinations).
+    /// Plan 10 "Finishing verification": bytes verified so far and to verify (all destinations).
     public long VerifiedBytes { get; init; }
     public long VerifyTotal { get; init; }
     public bool? CopySucceeded { get; init; }
     public string? Error { get; init; }
-    /// Information for the job card, e.g. "Nic nového — záloha je úplná."
+    /// Information for the job card, e.g. "Nothing new — the backup is complete."
     public string? Note { get; init; }
     /// Pozastavit was pressed and not resumed (only while the job runs): it finishes the file or clip it is on, then stands.
     public bool Paused { get; init; }
     /// The job really stands now — every worker waits at the gate or is done ("Pozastaveno"; before that "Pozastavuji").
     public bool PauseHeld { get; init; }
     /// Paused but not standing yet: what it still finishes, in Czech ("soubor A001C003.mov", "proxy klipu A001C003",
-    /// "soubory a.mov, b.wav") — "Pozastavuji (dokončuji …)"; null when unknown or not pausing.
+    /// "files a.mov, b.wav") — "Pausing (finishing …)"; null when unknown or not pausing.
     public string? PauseStep { get; init; }
     /// How long the job has stood paused so far (from the end of the step it finished to Pokračovat).
     public TimeSpan PausedTotal { get; init; }
@@ -158,7 +158,7 @@ public sealed class OffloadJob
     /// Set on a worker thread, read by the app's UI thread.
     public OffloadPlan? Plan { get => planValue; private set => planValue = value; }
     public OffloadReport? Report { get => reportValue; private set => reportValue = value; }
-    /// A repair (also "Nic k opravě"): the whole backup as its reports said it after the job (BackupState, ruling I2) —
+    /// A repair (also "Nothing to repair"): the whole backup as its reports said it after the job (BackupState, ruling I2) —
     /// read on the job's thread, so the card's words need no disk on the UI thread; null for other jobs or unread.
     public BackupState? Backup { get => backupValue; private set => backupValue = value; }
     volatile BackupState? backupValue;
@@ -178,7 +178,7 @@ public sealed class OffloadJob
     /// the job stands paused (a sleep would drop the USB disks with open `.offload-part` files) — and released on
     /// cancel, at the end and on a failure (`using`); a crashed process ends its thread's request with it.
     internal Func<IDisposable> KeepAwake { get; init; } = NativeIO.KeepAwake;
-    /// The whole backup's state after "Nic k opravě" (tests replace it to make it unreadable).
+    /// The whole backup's state after "Nothing to repair" (tests replace it to make it unreadable).
     internal Func<IReadOnlyList<string>, BackupState> ReadBackupState { get; init; } = BackupState.Of;
     /// Tests: UnbufferedCheck.Problem — whether a destination may be verified from the proxies' reads (spec 8, R8).
     internal Func<string, bool, string?> CacheCheck { get; init; } = UnbufferedCheck.Problem;
@@ -256,7 +256,7 @@ public sealed class OffloadJob
     /// A DemoScenario preview: it never runs (`Offload.exe --demo`).
     public bool IsPreview => preview != null;
 
-    /// "Pozastavit" (UI návrh 9, task 2026-10-09): the step in progress finishes — the file being copied (on every
+    /// "Pause" (UI návrh 9, task 2026-10-09): the step in progress finishes — the file being copied (on every
     /// destination) or read back, the clip being analysed or rendered — then the job stands: stage 1 before its next
     /// file, stage 2 before its next clip and before the PDF and the day report — never in the middle of a file, a clip,
     /// a report or a lock it would hold (an append's or a repair's folder lock stays held through stage 1). Pokračovat
@@ -298,7 +298,7 @@ public sealed class OffloadJob
                 },
             };
         }
-        // Cancelled while still queued: it never runs, so say so instead of "Čeká" forever.
+        // Cancelled while still queued: it never runs, so say so instead of "Waiting" forever.
         if (s.Phase == JobPhase.Waiting && !wasStarted && IsCancelled) s = s with { Phase = JobPhase.Cancelled };
         var pauses = Engine.Pauses;
         bool running = s.Phase != JobPhase.Waiting && !s.Phase.IsFinished();
@@ -310,7 +310,7 @@ public sealed class OffloadJob
         return s with { Paused = paused, PauseHeld = running && held, PausedTotal = pauses.PausedTotal, PauseStep = step };
     }
 
-    /// Paused, not standing yet: what the job still finishes (Czech, for "Pozastavuji (dokončuji …)") — the file the copy
+    /// Paused, not standing yet: what the job still finishes (for "Pausing (finishing …)") — the file the copy
     /// is on, the files the read-backs read, the clip stage 2 analyses or renders (`clipDone`: its thread waits already),
     /// else the files the verification of stage 2 reads; null when none is known.
     internal static string? Finishing(JobStatus s, bool clipDone, IReadOnlyList<string> verifying)
@@ -321,16 +321,16 @@ public sealed class OffloadJob
             return names.Count switch
             {
                 0 => null,
-                1 => "soubor " + names[0],
-                _ => "soubory " + string.Join(", ", names),
+                1 => "file " + names[0],
+                _ => "files " + string.Join(", ", names),
             };
         }
         return s.Phase switch
         {
             JobPhase.Copying => Files([s.Copy?.CurrentFile]),
             JobPhase.Verifying => Files(s.Copy?.VerifyingFiles ?? []),
-            JobPhase.Analyzing when !clipDone && s.ClipName is { Length: > 0 } clip => "klip " + clip,
-            JobPhase.Proxies when !clipDone && s.ClipName is { Length: > 0 } clip => "proxy klipu " + clip,
+            JobPhase.Analyzing when !clipDone && s.ClipName is { Length: > 0 } clip => "clip " + clip,
+            JobPhase.Proxies when !clipDone && s.ClipName is { Length: > 0 } clip => "the proxy of clip " + clip,
             JobPhase.Analyzing or JobPhase.Proxies or JobPhase.Finishing => Files(verifying),
             _ => null,
         };
@@ -417,7 +417,7 @@ public sealed class OffloadJob
             // Ruling I4: the folders stay held until FinishVerification has written the verification results (stage 2,
             // or below when the copy was cancelled right after it wrote its reports).
             if (report.VerifyPending == true) (verifyLock, folders) = (folders, null);
-            // R5: "Lze formátovat" only verified everywhere; "Lze vyjmout" once everything is on every disk.
+            // R5: "Safe to format" only verified everywhere; "Safe to eject" once everything is on every disk.
             bool safe = report.SafeToFormat;
             bool allCopied = report.Success;
             BackupState? whole = null;
@@ -542,7 +542,7 @@ public sealed class OffloadJob
         catch (Exception e)
         {
             // Fix round 1 (M-e): failed before the copy wrote anything, or with nothing a resume could complete (no
-            // manifest record, no pending report) — no "nedokončeno" entry.
+            // manifest record, no pending report) — no "unfinished" entry.
             if (!writing || NothingToResume()) ForgetStart(log);
             EndPendingUnverified(log);
             if (writing && Plan is { } failedPlan) CopyLocally(failedPlan, log);   // whatever report the copy left
@@ -702,7 +702,7 @@ public sealed class OffloadJob
     }
 
     /// Fix round 1, item 2c: the backup has no generation left to complete and no report still pending — a stale
-    /// "nedokončeno" heals. Read before the history lock is taken (it reads the card folders).
+    /// "unfinished" heals. Read before the history lock is taken (it reads the card folders).
     internal static bool Settled(IReadOnlyList<string> cardPaths)
     {
         try
@@ -796,8 +796,8 @@ public sealed class OffloadJob
                 entry.Reels = ReelSuggestion.FromClips(ClipDetector.Detect(card.Files)).Reels.ToList();
                 // R6: a resumed generation — the entry as the folders say it now (its first run may have counted failures).
                 if (plan.Resuming) Apply(entry, whole, settled);
-                // Ruling I5: "nedokončeno" until the verification results are written (RecordVerified) — a backup whose
-                // app ended in stage 2 offers "Dokončit přerušenou zálohu" on its card, also with nothing new on it.
+                // Ruling I5: "unfinished" until the verification results are written (RecordVerified) — a backup whose
+                // app ended in stage 2 offers "Finish interrupted backup" on its card, also with nothing new on it.
                 entry.Unfinished = report.VerifyPending == true;
                 return WithCard(store, entry, existing, card, fingerprint, shape);
             });
@@ -836,7 +836,7 @@ public sealed class OffloadJob
 
     /// Ruling R2: whether the backup is complete and read back, as BackupState read it from the card folders — the one
     /// definition the day report (CardRecord.Verified) and the eject verdict use. `settled` (fix round 1, item 2c): no
-    /// generation is left to complete and no report is pending — a stale "nedokončeno" heals.
+    /// generation is left to complete and no report is pending — a stale "unfinished" heals.
     static void Apply(HistoryEntry entry, BackupState whole, bool settled)
     {
         entry.Success = whole.Failed == 0;
@@ -845,7 +845,7 @@ public sealed class OffloadJob
         if (settled) entry.Unfinished = false;
     }
 
-    /// "Nic k opravě": the entry of the backup learns its state from the reports — no new generation.
+    /// "Nothing to repair": the entry of the backup learns its state from the reports — no new generation.
     void RefreshFromBackup(IReadOnlyList<string> cardPaths, BackupState whole, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
@@ -860,7 +860,7 @@ public sealed class OffloadJob
             : HistoryWrite.Unchanged, log);
     }
 
-    /// "Nic nového" (minors M17): the entry of that backup learns the card as it is now — no new generation.
+    /// "Nothing new" (minors M17): the entry of that backup learns the card as it is now — no new generation.
     void RefreshHistory(AppendPlan a, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
@@ -1013,11 +1013,11 @@ public sealed class OffloadJob
     /// Plan 10, the end of the verification (spec 6): the fill-in and the background reads end, the report gets the
     /// verdicts and is committed — ASC MHL generation, reports, hash lists (OffloadReport.Commit) — into every card folder
     /// while the job still holds their lock (ruling I4, taken in stage 1), history learns it, the lock goes, and the
-    /// card's verdict "Lze formátovat" is decided. `s` null: nothing was verified (cancelled right after the copy, or the
+    /// card's verdict "Safe to format" is decided. `s` null: nothing was verified (cancelled right after the copy, or the
     /// session never started) — the copies stay "written", unverified. Never throws.
-    /// Ruling I1: "Lze formátovat" only when the results were written into EVERY folder and the folders say so — read
+    /// Ruling I1: "Safe to format" only when the results were written into EVERY folder and the folders say so — read
     /// back with BackupState (the one definition history and the day report use), never from this report alone. A
-    /// folder whose commit failed keeps its reports saying verifyPending (unverified); "Dokončit přerušenou zálohu"
+    /// folder whose commit failed keeps its reports saying verifyPending (unverified); "Finish interrupted backup"
     /// (an append, R6) finishes it.
     OffloadReport FinishVerification(VerifySession? s, OffloadPlan plan, OffloadReport report, Action<string>? log)
     {
@@ -1112,7 +1112,7 @@ public sealed class OffloadJob
         }).ToArray())];
 
     /// History learns the verification (fix round 2, item C: as the card folders' reports say it now — `whole`).
-    /// `committed`: the results were written into every folder — only then the entry is no longer "nedokončeno" (I5).
+    /// `committed`: the results were written into every folder — only then the entry is no longer "unfinished" (I5).
     void RecordVerified(OffloadPlan plan, OffloadReport report, BackupState whole, bool committed, Action<string>? log)
     {
         if (!Config.RecordHistory) return;
@@ -1202,7 +1202,7 @@ public sealed class OffloadJob
                 {
                     info.Reel = ReelResolver.Resolve(clip, info, plan.CardName);
                     entries[i].Info = info;
-                    entries[i].ProbeError = undecodable ?? "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy";
+                    entries[i].ProbeError = undecodable ?? "codec not supported by ffmpeg (e.g. Sony X-OCN) — copied and verified, no proxy";
                     continue;
                 }
                 // Spec 3.4: the camera's tag, else the clip name, else the card folder — into the report and the proxy.
@@ -1326,7 +1326,7 @@ public sealed class OffloadJob
                         try { ProxyCopy.CopyFile(Layout.Join(cardPaths[from], rel), Layout.Join(cardPaths[o], rel), replace: plan.Mode == PlanMode.Full); }
                         catch (Exception e)
                         {
-                            var note = $"kopie na {cardPaths[o]} selhala: {e.Message}";
+                            var note = $"the copy to {cardPaths[o]} failed: {e.Message}";
                             entries[i].ProxyNote = entries[i].ProxyNote is string prev ? $"{prev}; {note}" : note;
                             log?.Invoke($"proxy {clip.Name}: copy to {cardPaths[o]} failed: {e.Message}");
                         }
@@ -1341,7 +1341,7 @@ public sealed class OffloadJob
                         rel[(Layout.ProxyDirName.Length + 1)..]);   // the same folders as in _PROXY
                     if (error != null)
                     {
-                        var note = $"kopie do {extra} selhala: {error}";
+                        var note = $"the copy to {extra} failed: {error}";
                         entries[i].ProxyNote = entries[i].ProxyNote is string prev ? $"{prev}; {note}" : note;
                         log?.Invoke($"proxy {clip.Name}: copy to {extra} failed: {error}");
                     }

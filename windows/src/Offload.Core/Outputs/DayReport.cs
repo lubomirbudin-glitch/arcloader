@@ -23,7 +23,7 @@ public sealed class DayCard
     public double Seconds => VideoClips.Sum(c => c.Info?.Duration ?? 0);
     public IReadOnlyList<string> Cameras =>
         VideoClips.Select(c => c.Info?.Camera?.Trim()).Where(c => !string.IsNullOrEmpty(c)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToList()!;
-    /// The clips' frame rates as the card report shows them (task 2026-10-10): "35 fps · přehrávání 24", "25" — each once,
+    /// The clips' frame rates as the card report shows them (task 2026-10-10): "35 fps · playback 24", "25" — each once,
     /// in clip order; empty when no clip's rate is known.
     public IReadOnlyList<string> FrameRates =>
         VideoClips.Select(c => c.Info?.FpsSummary ?? "").Where(f => f.Length > 0).Distinct(StringComparer.Ordinal).ToList();
@@ -65,7 +65,6 @@ public sealed class DayModel
 /// that folder (plan 6's verify reports live there too), never anything in a card folder.
 public static class DayReport
 {
-    static readonly CultureInfo Cs = CultureInfo.GetCultureInfo("cs-CZ");
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     public static string HtmlName(string date) => $"{date}_day_report.html";
@@ -121,17 +120,19 @@ public static class DayReport
     /// The reports of a card that cannot be read, one Czech sentence each (the reason in parentheses).
     internal static IEnumerable<string> UnreadableTexts(CardRecord r)
     {
-        if (r.Error is string error) yield return $"report nejde přečíst ({error})";
-        foreach (var p in r.Problems) yield return $"report doplnění nejde přečíst ({p})";
+        if (r.Error is string error) yield return $"cannot read the report ({error})";
+        foreach (var p in r.Problems) yield return $"cannot read the report of an append ({p})";
     }
 
     /// "6. 10. 2026" for "2026-10-06"; the folder name itself when it is not a date.
     static string DateText(string date) =>
-        DateTime.TryParseExact(date, "yyyy-MM-dd", Inv, DateTimeStyles.None, out var d) ? d.ToString("d. M. yyyy", Cs) : date;
+        DateTime.TryParseExact(date, "yyyy-MM-dd", Inv, DateTimeStyles.None, out var d) ? d.ToString("yyyy-MM-dd", Inv) : date;
 
-    static string Time(DateTime utc) => utc.ToLocalTime().ToString("H:mm", Cs);
+    const string NoReport = "no report (running, or it was interrupted)";
 
-    static string Files(int n) => $"{n} {Texts.Plural(n, "soubor", "soubory", "souborů")}";
+    static string Time(DateTime utc) => utc.ToLocalTime().ToString("HH:mm", Inv);
+
+    static string Files(int n) => Texts.N(n, "file");
 
     static void Stat(StringBuilder h, string value, string label) =>
         h.Append($"<div class=\"stat\"><b>{value}</b><span>{label}</span></div>\n");
@@ -142,48 +143,48 @@ public static class DayReport
         string E(string s) => HtmlReport.Esc(s);
         var cards = day.Cards;
         var h = new StringBuilder();
-        h.Append("<!doctype html>\n<html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
-        h.Append($"<title>Denní report {E(day.Date)}</title>\n<style>\n{HtmlReport.Styles(forPrint)}</style></head><body><main>\n");
+        h.Append("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+        h.Append($"<title>Day report {E(day.Date)}</title>\n<style>\n{HtmlReport.Styles(forPrint)}</style></head><body><main>\n");
         h.Append(HtmlReport.Toolbar(PdfName(day.Date), forPrint));
         int verified = day.VerifiedCards;
-        var (badge, badgeClass) = verified == cards.Count && cards.Count > 0 ? ("VŠE OVĚŘENO", "ok") : ("VYŽADUJE POZORNOST", "warn");
-        h.Append($"<header><h1>Denní report — {E(DateText(day.Date))}</h1><span class=\"badge {badgeClass}\">{badge}</span>\n");
-        h.Append($"<span class=\"sub\">Cíl: <span class=\"mono\">{E(day.Root)}</span></span>");
-        if (day.Project is string project) h.Append($"<span class=\"sub\">Projekt: {E(project)}</span>");
+        var (badge, badgeClass) = verified == cards.Count && cards.Count > 0 ? ("ALL VERIFIED", "ok") : ("NEEDS ATTENTION", "warn");
+        h.Append($"<header><h1>Day report — {E(DateText(day.Date))}</h1><span class=\"badge {badgeClass}\">{badge}</span>\n");
+        h.Append($"<span class=\"sub\">Destination: <span class=\"mono\">{E(day.Root)}</span></span>");
+        if (day.Project is string project) h.Append($"<span class=\"sub\">Project: {E(project)}</span>");
         h.Append("</header>\n");
         h.Append("<div class=\"stats\">\n");
-        Stat(h, cards.Count.ToString(Inv), Texts.Plural(cards.Count, "karta", "karty", "karet"));
-        Stat(h, cards.Sum(c => c.Record.TotalFiles).ToString(Inv), "souborů");
+        Stat(h, cards.Count.ToString(Inv), Texts.Plural(cards.Count, "card", "cards"));
+        Stat(h, cards.Sum(c => c.Record.TotalFiles).ToString(Inv), "files");
         Stat(h, Format.Bytes(cards.Sum(c => c.Record.TotalBytes)), "data");
-        Stat(h, cards.Sum(c => c.ClipCount).ToString(Inv), "klipů");
-        Stat(h, HtmlReport.Duration(cards.Sum(c => c.Seconds)), "celková stopáž");
-        Stat(h, $"{verified} / {cards.Count}", "ověřené karty");
+        Stat(h, cards.Sum(c => c.ClipCount).ToString(Inv), "clips");
+        Stat(h, HtmlReport.Duration(cards.Sum(c => c.Seconds)), "total duration");
+        Stat(h, $"{verified} / {cards.Count}", "verified cards");
         h.Append("</div>\n\n");
 
-        h.Append("<h2>Karty</h2><div class=\"panel\"><table>\n");
-        h.Append("<tr><th>Karta</th><th>Čas</th><th class=\"num\">Soubory</th><th class=\"num\">Data</th><th class=\"num\">Klipy</th><th class=\"num\">Stopáž</th><th>FPS</th>");
-        h.Append("<th>Kamery</th><th>Ověření</th><th class=\"num\">Chyby</th><th>Proxy</th><th>LUTy</th><th class=\"num\">Doplnění</th></tr>\n");
+        h.Append("<h2>Cards</h2><div class=\"panel\"><table>\n");
+        h.Append("<tr><th>Card</th><th>Time</th><th class=\"num\">Files</th><th class=\"num\">Data</th><th class=\"num\">Clips</th><th class=\"num\">Duration</th><th>FPS</th>");
+        h.Append("<th>Cameras</th><th>Verification</th><th class=\"num\">Errors</th><th>Proxies</th><th>LUTs</th><th class=\"num\">Appends</th></tr>\n");
         foreach (var c in day.Folders)
         {
             var r = c.Record;
             if (!c.IsCard)
             {
-                h.Append($"<tr><td>{E(c.Name)}</td><td colspan=\"12\" class=\"muted\">jiná složka (bez reportu)</td></tr>\n");
+                h.Append($"<tr><td>{E(c.Name)}</td><td colspan=\"12\" class=\"muted\">other folder (no report)</td></tr>\n");
                 continue;
             }
             if (c.NoReport || r.Generations.Count == 0)
             {
-                var why = c.NoReport ? "bez reportu (probíhá, nebo byl přerušen)" : "report nejde přečíst";
+                var why = c.NoReport ? NoReport : "cannot read the report";
                 h.Append($"<tr><td>{E(c.Name)}</td><td colspan=\"12\" class=\"warn\">{why}</td></tr>\n");
                 continue;
             }
             int failed = r.FailedFiles.Count;
             // Read back, but a file failed: not green (fix round 1, item 6).
             // Plan 10: a verification with the proxies that has not ended says so (never green, never "unverified" yet).
-            var (vClass, vText) = r.VerifyPending ? ("warn", "OVĚŘUJE SE") : r.Incomplete ? ("warn", "NEDOKONČENO") : !r.Verified ? ("warn", "NEOVĚŘENO")
-                : failed > 0 ? ("warn", "ověřeno, s chybami") : ("ok", "ověřeno");
+            var (vClass, vText) = r.VerifyPending ? ("warn", "VERIFYING") : r.Incomplete ? ("warn", "UNFINISHED") : !r.Verified ? ("warn", "NOT VERIFIED")
+                : failed > 0 ? ("warn", "verified, with errors") : ("ok", "verified");
             var proxies = c.ProxiesDone + c.ProxiesFailed == 0 ? "—" : $"{c.ProxiesDone} / {c.ProxiesFailed}";
-            if (c.ProxiesLighter > 0) proxies += $" · {c.ProxiesLighter} bez proxy";
+            if (c.ProxiesLighter > 0) proxies += $" · {c.ProxiesLighter} no proxy";
             var lutNames = c.Luts.Count == 0 ? "—" : string.Join(", ", c.Luts.Keys);
             var generations = r.Generations.Count > 1 ? r.Generations.Count.ToString(Inv) : "—";
             h.Append($"<tr><td>{E(c.Name)}</td><td>{Time(r.Started!.Value)}–{Time(r.Finished!.Value)}</td>");
@@ -194,12 +195,12 @@ public static class DayReport
             h.Append($"<td>{proxies}</td><td class=\"wrap\">{E(lutNames)}</td><td class=\"num\">{generations}</td></tr>\n");
         }
         h.Append("</table></div>\n");
-        h.Append("<p class=\"sub\">Proxy: hotovo / selhalo (· bez proxy = originál je lehčí než proxy). Doplnění: počet generací ASC MHL, když karta byla doplněna.</p>\n");
+        h.Append("<p class=\"sub\">Proxies: done / failed (· no proxy = the original is lighter than a proxy). Appends: the number of ASC MHL generations when the card was appended to.</p>\n");
 
         var problems = Problems(day);
         if (problems.Count > 0)
         {
-            h.Append($"<h2 class=\"warn\">Problémy ({problems.Count})</h2><div class=\"panel\"><table>\n");
+            h.Append($"<h2 class=\"warn\">Problems ({problems.Count})</h2><div class=\"panel\"><table>\n");
             foreach (var (name, text, bad) in problems)
                 h.Append($"<tr><td>{E(name)}</td><td class=\"{(bad ? "err" : "warn wrap")}\">{E(text)}</td></tr>\n");
             h.Append("</table></div>\n");
@@ -209,11 +210,11 @@ public static class DayReport
             .OrderByDescending(x => x.Clips).ThenBy(x => x.Name, StringComparer.Ordinal).ToList();
         if (luts.Count > 0)
         {
-            h.Append("<h2>LUTy</h2><div class=\"panel\"><table>\n<tr><th>LUT</th><th class=\"num\">Klipy</th></tr>\n");
+            h.Append("<h2>LUTs</h2><div class=\"panel\"><table>\n<tr><th>LUT</th><th class=\"num\">Clips</th></tr>\n");
             foreach (var (name, clips) in luts) h.Append($"<tr><td>{E(name)}</td><td class=\"num\">{clips}</td></tr>\n");
             h.Append("</table></div>\n");
         }
-        h.Append($"<footer>offload {E(OffloadVersion.String)} · denní report · {HtmlReport.DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
+        h.Append($"<footer>offload {E(OffloadVersion.String)} · day report · {HtmlReport.DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
         return h.ToString();
     }
 
@@ -226,7 +227,7 @@ public static class DayReport
         {
             if (c.NoReport)
             {
-                list.Add((c.Name, "bez reportu (probíhá, nebo byl přerušen)", false));
+                list.Add((c.Name, NoReport, false));
                 continue;
             }
             var unreadable = UnreadableTexts(c.Record).ToList();
@@ -234,13 +235,13 @@ public static class DayReport
             if (c.Record.Generations.Count == 0) continue;
             var failed = c.Record.FailedFiles;
             if (failed.Count > 0)
-                list.Add((c.Name, $"{Files(failed.Count)} {Texts.Plural(failed.Count, "selhal", "selhaly", "selhalo")}: "
+                list.Add((c.Name, $"{Files(failed.Count)} failed: "
                     + string.Join(", ", failed.Take(5)) + (failed.Count > 5 ? ", …" : ""), true));
             if (c.Record.VerifyPending && unreadable.Count == 0)
-                list.Add((c.Name, "ověření s proxy ještě běží, nebo se přerušilo — kartu zatím neformátujte", false));
+                list.Add((c.Name, "the verification with the proxies is still running, or was interrupted — do not format the card yet", false));
             else if (c.Record.Incomplete && unreadable.Count == 0)
-                list.Add((c.Name, "výsledek ověření není zapsaný na všech cílech — kartu zatím neformátujte, zálohu dokončete (Dokončit přerušenou zálohu)", false));
-            else if (!c.Record.Verified && unreadable.Count == 0) list.Add((c.Name, "neověřeno — kopie nebyla přečtena zpět", false));
+                list.Add((c.Name, "the verification result is not written on all destinations — do not format the card yet; finish the backup (Finish interrupted backup)", false));
+            else if (!c.Record.Verified && unreadable.Count == 0) list.Add((c.Name, "not verified — the copy was not read back", false));
         }
         return list;
     }

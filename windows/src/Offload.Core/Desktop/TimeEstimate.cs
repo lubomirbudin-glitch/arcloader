@@ -2,7 +2,7 @@ using Offload.Core.Space;
 
 namespace Offload.Core.Desktop;
 
-/// "odhad ~0:08 vč. proxy" (UI návrh, nová věc 10): how long a start takes, from what the jobs of this session really took
+/// "estimate ~0:08 incl. proxies" (UI návrh, nová věc 10): how long a start takes, from what the jobs of this session really took
 /// — the copy and read-back speed of the last job big enough to measure, and the time stage 2 took per second of clip
 /// with the same stage-2 settings. Memory only (a new session starts without an estimate). When any part a start needs
 /// is not known the estimate is null and the window shows only the size: a guess would be worse than nothing.
@@ -78,7 +78,7 @@ public sealed class RateMemory
         return rest;
     }
 
-    /// The right side of the start bar: "odhad ~8:00 vč. proxy", "odhad ~2:10", or null (only the size shows).
+    /// The right side of the start bar: "estimate ~8:00 incl. proxies", "estimate ~2:10", or null (only the size shows).
     public static string? StartText(TimeSpan? estimate, bool proxies) =>
-        estimate is TimeSpan t ? $"odhad ~{JobProgress.EtaText(t.TotalSeconds)}{(proxies ? " vč. proxy" : "")}" : null;
+        estimate is TimeSpan t ? $"estimate ~{JobProgress.EtaText(t.TotalSeconds)}{(proxies ? " incl. proxies" : "")}" : null;
 }

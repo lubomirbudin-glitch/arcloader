@@ -18,20 +18,20 @@ public class BackedUpPromptTests
     public void TwoCards_SpecText()
     {
         var model = BackedUpPrompt.Build([(Match("A001"), "A001"), (Match("A002", HistoryMatchKind.NewFiles, 12), "A002")], "2026-10-06");
-        Assert.Equal("Karty už jsou zálohované", model.Title);
+        Assert.Equal("Cards already backed up", model.Title);
         Assert.Equal(
-            ["A001 — 6. 10. 2026 8:15, Zaloha (D:), Zaloha (F:), ověřeno", "A002 — 6. 10. 2026 8:15, Zaloha (D:), Zaloha (F:), ověřeno · nové soubory: 12"],
+            ["A001 — 2026-10-06 08:15, Zaloha (D:), Zaloha (F:), verified", "A002 — 2026-10-06 08:15, Zaloha (D:), Zaloha (F:), verified · new files: 12"],
             model.Lines);
-        Assert.Equal("Zkopírovat je znovu celé? Vzniknou nové složky (např. A001_2, A002_2).", model.Question);
+        Assert.Equal("Copy them again in full? New folders will be created (e.g. A001_2, A002_2).", model.Question);
     }
 
     [Fact]
     public void OneCard_Singular_OtherDay_NewDateFolder()
     {
         var model = BackedUpPrompt.Build([(Match("A001", verified: false), "A001")], "2026-10-07");
-        Assert.Equal("Karta už je zálohovaná", model.Title);
-        Assert.Equal(["A001 — 6. 10. 2026 8:15, Zaloha (D:), Zaloha (F:), NEOVĚŘENO"], model.Lines);
-        Assert.Equal(@"Zkopírovat ji znovu celou? Vznikne nová složka (např. 2026-10-07\A001).", model.Question);
+        Assert.Equal("Card already backed up", model.Title);
+        Assert.Equal(["A001 — 2026-10-06 08:15, Zaloha (D:), Zaloha (F:), NOT VERIFIED"], model.Lines);
+        Assert.Equal(@"Copy it again in full? A new folder will be created (e.g. 2026-10-07\A001).", model.Question);
     }
 
     [Fact]

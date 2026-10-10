@@ -6,7 +6,7 @@ using Offload.Core.Updates;
 namespace Offload.App;
 
 /// Spec 4.4: 5 s after the start (and at most once in 24 h) the manifest is read off the UI thread; a newer version shows
-/// as a quiet link on the right of the menu bar. Nástroje → Aktualizace… sets the manifest and checks now.
+/// as a quiet link on the right of the menu bar. Tools → Updates… sets the manifest and checks now.
 public sealed partial class MainViewModel
 {
     readonly DispatcherTimer updateTimer = new() { Interval = TimeSpan.FromSeconds(5) };
@@ -15,7 +15,7 @@ public sealed partial class MainViewModel
     bool checkingUpdates;
 
     public RelayCommand UpdatesCommand { get; private set; } = null!;
-    /// Opens the Aktualizace window (set by the main window) with this view model.
+    /// Opens the Updates window (set by the main window) with this view model.
     public Action<MainViewModel>? ShowUpdatesDialog { get; set; }
 
     void InitUpdates()
@@ -29,14 +29,14 @@ public sealed partial class MainViewModel
         if (Allowed(DemoCommand.UpdateCheck)) updateTimer.Start();
     }
 
-    /// "Nová verze 0.5.0" — null while there is none.
-    public string? NewVersionText => newVersion is { } v ? $"Nová verze {UpdateChecker.Plain(v.Version)}" : null;
+    /// "New version 0.5.0" — null while there is none.
+    public string? NewVersionText => newVersion is { } v ? $"New version {UpdateChecker.Plain(v.Version)}" : null;
     public UpdateInfo? NewVersion => newVersion;
-    /// Ruling I5 + U1: "Otevřít" only for an https address or a local folder / zip (decided by the text, no disk access);
+    /// Ruling I5 + U1: "Open" only for an https address or a local folder / zip (decided by the text, no disk access);
     /// a network path or anything else is shown as copyable text with a note.
     public bool NewVersionCanOpen => newVersionLink.Kind is UpdateLinkKind.Web or UpdateLinkKind.Folder or UpdateLinkKind.File;
     public string? NewVersionNote => newVersion is { Url: { Length: > 0 } url } && !NewVersionCanOpen
-        ? (newVersionLink.Kind == UpdateLinkKind.Network ? UpdateLinks.NetworkNote : $"Adresa v manifestu není https ani složka — zkopírujte ji a otevřete ručně: {url}") : null;
+        ? (newVersionLink.Kind == UpdateLinkKind.Network ? UpdateLinks.NetworkNote : $"The address in the manifest is neither https nor a folder — copy it and open it by hand: {url}") : null;
 
     /// The manifest source in settings.json (`updates.manifest`); empty = off.
     public string UpdateManifest
@@ -50,7 +50,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// Reads the manifest off the UI thread (the file read and HTTP have their own limits). The Czech result line, or null.
+    /// Reads the manifest off the UI thread (the file read and HTTP have their own limits). The result line, or null.
     internal async Task<string?> CheckUpdatesAsync(bool force)
     {
         if (checkingUpdates || closing || !Allowed(DemoCommand.UpdateCheck)) return null;
@@ -77,7 +77,7 @@ public sealed partial class MainViewModel
         catch (Exception e)
         {
             AppLog.Write($"update check: {e.Message}");
-            return $"Manifest nejde načíst: {e.Message}";
+            return $"Cannot read the manifest: {e.Message}";
         }
         finally
         {
@@ -85,7 +85,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// "Otevřít": only now is the disk asked (off the UI thread, 5 s at most — a dead path must not freeze anything),
+    /// "Open": only now is the disk asked (off the UI thread, 5 s at most — a dead path must not freeze anything),
     /// and the check is repeated right before launching. https in the browser, a local folder or zip in Explorer;
     /// nothing is downloaded or started by Offload.
     internal async void OpenNewVersion()
@@ -95,7 +95,7 @@ public sealed partial class MainViewModel
         if (await Task.WhenAny(work, Task.Delay(UpdateChecker.FileTimeout)) != work)
         {
             _ = work.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
-            ShowMessage("Adresa neodpovídá — otevřete ji ručně.");
+            ShowMessage("The address does not respond — open it by hand.");
             return;
         }
         var (kind, target) = await work;
@@ -106,7 +106,7 @@ public sealed partial class MainViewModel
             UpdateLinkKind.Folder => Shell.OpenFolder(target),
             UpdateLinkKind.File => Shell.Reveal(target),
             UpdateLinkKind.Network => UpdateLinks.NetworkNote,
-            _ => "Adresa už není https ani existující složka nebo zip — otevřete ji ručně.",
+            _ => "The address is no longer https or an existing folder or zip — open it by hand.",
         };
         if (error != null) ShowMessage(error);
     }

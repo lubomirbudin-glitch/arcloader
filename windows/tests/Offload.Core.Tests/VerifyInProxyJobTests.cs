@@ -146,7 +146,7 @@ public class VerifyInProxyJobTests
         job.RunPost();
 
         var notes = job.Report!.VerifyNotes!;
-        Assert.Contains(notes, n => n.StartsWith("SOUND/A001.wav: blok 1 nesouhlasí stejně na ", StringComparison.Ordinal) && n.EndsWith(Msg.CardGivesRecorded));
+        Assert.Contains(notes, n => n.StartsWith("SOUND/A001.wav: block 1 mismatches the same way on ", StringComparison.Ordinal) && n.EndsWith(Msg.CardGivesRecorded));
         Assert.Contains(notes[0], job.Status().Warning);
     }
 

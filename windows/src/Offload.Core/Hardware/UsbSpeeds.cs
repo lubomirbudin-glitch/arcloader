@@ -44,12 +44,12 @@ public static class UsbSpeeds
 
     public static string Label(UsbLinkSpeed s) => s switch
     {
-        UsbLinkSpeed.Low => "USB 1.0 (1,5 Mb/s)",
+        UsbLinkSpeed.Low => "USB 1.0 (1.5 Mb/s)",
         UsbLinkSpeed.Full => "USB 1.1 (12 Mb/s)",
         UsbLinkSpeed.High => "USB 2.0 (480 Mb/s)",
         UsbLinkSpeed.Super => "USB 3 (5 Gb/s)",
-        UsbLinkSpeed.SuperPlus => "USB 3 (10 Gb/s a víc)",
-        _ => "neznámá",
+        UsbLinkSpeed.SuperPlus => "USB 3 (10 Gb/s or more)",
+        _ => "unknown",
     };
 
     /// Realistic ceiling for a disk or card reader over this link, MB/s (protocol overhead included).

@@ -185,7 +185,7 @@ public sealed class ProxyRenderer : IDisposable
         var why = arriError is ToolError t ? t.Detail : arriError.Message;
         why = string.Join(" | ", why.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         if (why.Length > 300) why = why[..300] + "…";
-        return $"kodek nepodporován ffmpegem a art-cmd (ARRIRAW) ho nepřečetl: {why} — zkopírováno a ověřeno, bez proxy";
+        return $"codec not supported by ffmpeg, and art-cmd (ARRIRAW) could not read it: {why} — copied and verified, no proxy";
     }
 
     public ClipInfo Probe(Clip clip, string cardPath) => Probe(clip, cardPath, ffprobeTimeout: null);
@@ -398,7 +398,7 @@ public sealed class ProxyRenderer : IDisposable
             {
                 if (isCancelled()) return [];
                 // A hung decoder would hang at the next positions too (3 x the grace per clip): stop here.
-                lastError = new FfmpegStalledException("dekodér nebo " + e.Message, e);
+                lastError = new FfmpegStalledException("the decoder or " + e.Message, e);
                 Log?.Invoke($"thumbnails {clip.Name}: {lastError.Message}; the remaining frames are skipped");
                 break;
             }
@@ -472,7 +472,7 @@ public sealed class ProxyRenderer : IDisposable
         }
         catch (FfmpegStalledException e) when (!hwaccel && !isCancelled())
         {
-            throw new FfmpegStalledException(e.Message + "; proxy nevznikla", e);
+            throw new FfmpegStalledException(e.Message + "; no proxy was made", e);
         }
         catch (Exception e) when (hwaccel && e is FfmpegStalledException or ToolError && !isCancelled())
         {
@@ -492,15 +492,15 @@ public sealed class ProxyRenderer : IDisposable
             throw (first, e) switch
             {
                 (FfmpegStalledException, FfmpegStalledException) => new ProxyRetryException(StallNote(StallTimeout, retriedInSoftware: true), e),
-                (FfmpegStalledException, _) => new ProxyRetryException($"{first.Message}; bez hardwarového dekódování selhal: {e.Message}", e),
-                _ => new ProxyRetryException($"{e.Message}; s hardwarovým dekódováním předtím: {first.Message}", e),
+                (FfmpegStalledException, _) => new ProxyRetryException($"{first.Message}; without hardware decoding it failed: {e.Message}", e),
+                _ => new ProxyRetryException($"{e.Message}; with hardware decoding before: {first.Message}", e),
             };
         }
     }
 
     internal static string StallNote(TimeSpan after, bool retriedInSoftware) =>
-        $"ffmpeg se zasekl ({after.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s bez nového snímku)"
-        + (retriedInSoftware ? " i bez hardwarového dekódování; proxy nevznikla" : "");
+        $"ffmpeg stalled ({after.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s without a new frame)"
+        + (retriedInSoftware ? " also without hardware decoding; no proxy was made" : "");
 
     /// How often the size of the ARRI intermediate is looked at (IntermediateProgress); tests shorten it.
     internal TimeSpan IntermediatePoll { get; init; } = TimeSpan.FromSeconds(1);

@@ -38,12 +38,12 @@ public class DriveLinksTests
     [Fact]
     public void Network_AndBusLabels()
     {
-        Assert.Equal(@"\\nas\media — síťový disk", DriveLinks.Network(@"Z:\", @"\\nas\media").Describe());
-        Assert.Equal("Z: — síťový disk", DriveLinks.Network(@"Z:\", null).Describe());
-        Assert.Equal("neznámé připojení", new DriveLink(@"Q:\", StorageBus.Unknown, "", null).Describe());
-        Assert.Equal("SD čtečka", new DriveLink(@"G:\", StorageBus.Sd, "", null).Describe());
-        Assert.Equal("Disk — virtuální disk", new DriveLink(@"V:\", StorageBus.Virtual, "Disk", null).Describe());
-        Assert.Equal("USB (port nezjištěn)", StorageBuses.Label(StorageBus.Usb));
+        Assert.Equal(@"\\nas\media — network disk", DriveLinks.Network(@"Z:\", @"\\nas\media").Describe());
+        Assert.Equal("Z: — network disk", DriveLinks.Network(@"Z:\", null).Describe());
+        Assert.Equal("unknown connection", new DriveLink(@"Q:\", StorageBus.Unknown, "", null).Describe());
+        Assert.Equal("SD reader", new DriveLink(@"G:\", StorageBus.Sd, "", null).Describe());
+        Assert.Equal("Disk — virtual disk", new DriveLink(@"V:\", StorageBus.Virtual, "Disk", null).Describe());
+        Assert.Equal("USB (port unknown)", StorageBuses.Label(StorageBus.Usb));
         // No raw English enum names ("Usb", "Sd", "Virtual", "Unknown" …) reach the user.
         foreach (var bus in new[] { StorageBus.Usb, StorageBus.Sd, StorageBus.Mmc, StorageBus.Virtual, StorageBus.Network, StorageBus.Unknown, StorageBus.Other })
             Assert.NotEqual(bus.ToString(), StorageBuses.Label(bus), StringComparer.OrdinalIgnoreCase);
@@ -90,10 +90,10 @@ public class DriveLinksTests
         Assert.EndsWith("← E:", row);
         Assert.Equal("port 6", PortLabels.Of(link.Usb!, connectors));
         // A user's name replaces the label everywhere, whichever half the drive reports.
-        var names = new Dictionary<string, string> { ["ROOT#6"] = "přední levý" };
-        Assert.Equal("WD Elements 25A2 — USB 3 (5 Gb/s), přední levý", link.Describe(connectors, names));
-        Assert.StartsWith("přední levý USB 3", PortLabels.ListRow(connectors.Single(), [new RoleLink("Cíl 1", link)], names));
-        Assert.EndsWith("← E: (Cíl 1)", PortLabels.ListRow(connectors.Single(), [new RoleLink("Cíl 1", link)], names));
+        var names = new Dictionary<string, string> { ["ROOT#6"] = "front left" };
+        Assert.Equal("WD Elements 25A2 — USB 3 (5 Gb/s), front left", link.Describe(connectors, names));
+        Assert.StartsWith("front left USB 3", PortLabels.ListRow(connectors.Single(), [new RoleLink("Destination 1", link)], names));
+        Assert.EndsWith("← E: (Destination 1)", PortLabels.ListRow(connectors.Single(), [new RoleLink("Destination 1", link)], names));
         // Without the topology: the socket number the link carries, not the raw USB 3 port.
         Assert.Equal("WD Elements 25A2 — USB 3 (5 Gb/s), port 6", link.Describe());
     }
