@@ -202,7 +202,18 @@ public class EnginePauseTests
         var options = Options();
         var engine = new OffloadEngine(options);
         int blocks = 0;
-        options.BeforeReadBackBlock = d => { if (d == 0 && Interlocked.Increment(ref blocks) == 3) engine.Pauses.Pause(); };
+        DateTime pressed = default;
+        options.BeforeReadBackBlock = d =>
+        {
+            if (d != 0) return;
+            int b = Interlocked.Increment(ref blocks);
+            if (b == 3)
+            {
+                pressed = DateTime.UtcNow;
+                engine.Pauses.Pause();
+            }
+            else if (b > 3 && b <= 20) Thread.Sleep(40);   // the rest of the file: ≥ 0.68 s after Pozastavit
+        };
         var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-07");
 
         var run = TestThreads.Start(() => engine.Run(plan));
@@ -213,10 +224,12 @@ public class EnginePauseTests
         Assert.Contains(held.VerifiedBytes[1], new[] { 20L * Chunk, 23L * Chunk + 5 });   // the other disk: a file boundary
         Assert.All(held.VerifyingFiles!, Assert.Null);                  // nobody reads
         engine.Pauses.Resume();
+        var resumed = DateTime.UtcNow;
         var report = await run.WaitAsync(TimeSpan.FromSeconds(60));
 
         Assert.True(report.SafeToFormat);
-        Assert.True(report.VerifyPausedSeconds > 0, $"{report.VerifyPausedSeconds}");
+        // Only the time it stood (≥ the 300 ms of AssertComesToRest), never the 0.68 s of finishing the file.
+        Assert.InRange(report.VerifyPausedSeconds!.Value, 0.25, (resumed - pressed).TotalSeconds - 17 * 0.040 + 0.05);
         Assert.Null(report.CopyPausedSeconds);
     }
 
@@ -250,6 +263,66 @@ public class EnginePauseTests
 
         Assert.True(report.SafeToFormat);
         Assert.Equal(["CLIP/A001C003.mov", "CLIP/A001C004.mov"], report.Files.Select(f => f.Path));
+    }
+
+    // Review M-3: a repair of two files paused after the first — its finished copy waits (closed, complete) under its
+    // hidden `.offload-part` name until the copy ends, the bad copy stays at its place; Pokračovat repairs both.
+    [Fact]
+    public async Task PausedRepairOfTwoFiles_StandsBetweenThem_ResumeRepairsBoth()
+    {
+        using var dir = new TempDir();
+        // Both clips copied onto d1 and d2; on d2 both copies are changed before the read-back: two files to repair there.
+        var card = dir.Sub("A001");
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 100_000, 1);
+        TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C002.mov"), 60_000, 2);
+        var first = AppendFixtures.Options();
+        var copy = new OffloadEngine(first);
+        var full = copy.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-07");
+        var paths = full.CardPaths;
+        first.BeforeVerify = () =>
+        {
+            RepairFixtures.Corrupt(Layout.Join(paths[1], "CLIP/A001C001.mov"));
+            RepairFixtures.Corrupt(Layout.Join(paths[1], RepairFixtures.Bad));
+        };
+        Assert.False(copy.Run(full).Success);
+        var bad = File.ReadAllBytes(Layout.Join(paths[1], RepairFixtures.Bad));
+        var options = AppendFixtures.Options();
+        var engine = new OffloadEngine(options);
+        options.BeforeFileCopy = i => { if (i == 1) engine.Pauses.Pause(); };
+        var plan = engine.PrepareRepair(engine.PlanRepair(card, paths));
+        Assert.Equal(2, plan.Scan.Files.Count);
+
+        var run = TestThreads.Start(() => engine.Run(plan));
+        Assert.True(Until(() => engine.Snapshot().PauseHeld));
+        Assert.Equal(CopyPhase.Copy, AssertComesToRest(engine).Phase);
+        Assert.True(File.Exists(Layout.Join(paths[1], DestWriter.PartName("CLIP/A001C001.mov"))));   // held, complete
+        Assert.Equal(bad, File.ReadAllBytes(Layout.Join(paths[1], RepairFixtures.Bad)));             // not touched yet
+        engine.Pauses.Resume();
+        var report = await run.WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.True(report.SafeToFormat);
+        Assert.All(report.Files, f => Assert.Equal(["verified", "verified"], f.Destinations));
+        AssertNoPart(plan);
+    }
+
+    // Review M-3: the PC switched off while such a repair stood paused leaves its held part behind (hidden, complete). The
+    // next "Zkopírovat znovu" writes its copy over it (the part name belongs to no file of the card or the backup) and
+    // ends with no part left.
+    [Fact]
+    public void RepairAfterACrashedPausedRepair_OverwritesTheOrphanPart()
+    {
+        using var dir = new TempDir();
+        var (card, paths, _) = RepairFixtures.Mismatch(dir);
+        var orphan = Layout.Join(paths[1], DestWriter.PartName(RepairFixtures.Bad));
+        File.Copy(Path.Combine(card, "CLIP", "A001C002.mov"), orphan);
+        File.SetAttributes(orphan, FileAttributes.Hidden);
+        var engine = new OffloadEngine(AppendFixtures.Options());
+
+        var report = engine.Run(engine.PrepareRepair(engine.PlanRepair(card, paths)));
+
+        Assert.True(report.SafeToFormat, string.Join("; ", report.Files.SelectMany(f => f.Errors.OfType<string>().Append(f.SourceError ?? ""))));
+        Assert.False(File.Exists(orphan));
+        Assert.Equal(File.ReadAllBytes(Path.Combine(card, "CLIP", "A001C002.mov")), File.ReadAllBytes(Layout.Join(paths[1], RepairFixtures.Bad)));
     }
 
     // A repair ("Zkopírovat znovu"): the file being copied again finishes (and takes its place), the job stands before
@@ -462,13 +535,93 @@ public class EnginePauseTests
         Assert.False(draining.PauseHeld);                      // ... but disk 2 still has blocks to write
         Assert.False(engine.Pauses.IsHolding);                 // the copy waits for it before it stands
         Assert.True(draining.WrittenBytes[1] < draining.ReadBytes, $"{draining.WrittenBytes[1]} < {draining.ReadBytes}");
+        Assert.False(engine.Pauses.IsStanding);               // review M-1: the paused time does not run while disk 2 writes
+        Assert.Equal(TimeSpan.Zero, engine.Pauses.PausedTotal);
+        Thread.Sleep(500);
         slow.Set();
+        var drained = DateTime.UtcNow;
         Assert.True(Until(() => engine.Snapshot().PauseHeld));
         var held = engine.Snapshot();
         Assert.Equal([held.ReadBytes, held.ReadBytes], held.WrittenBytes);
+        Thread.Sleep(300);
         engine.Pauses.Resume();
+        var resumed = DateTime.UtcNow;
 
+        var report = await run.WaitAsync(TimeSpan.FromSeconds(60));
+        Assert.True(report.SafeToFormat);
+        Assert.InRange(report.CopyPausedSeconds!.Value, 0.25, (resumed - drained).TotalSeconds + 0.05);   // not the 1 s of draining
+    }
+
+    // Review I-1 (ruling I1): Pozastavit, the card read of the file is over but a slow disk still writes it ("Pozastavuji"),
+    // the card is swapped and Pokračovat pressed before the job ever stood — the card is identified again before the next
+    // file anyway: nothing more is read from the other card, the job fails in Czech.
+    [Fact]
+    public async Task CardSwappedWhilePausing_ResumedBeforeItStood_RestNotCopied_JobFails()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        string? identity = "card-A";
+        int reads = 0;
+        var options = Options();
+        using var slow = new ManualResetEventSlim(false);
+        OffloadJob? job = null;
+        options.BeforeFileCopy = i => { if (i == 1) job!.Engine.Pauses.Pause(); };   // the card read of file 0 is over
+        options.BeforeDestWrite = d => { if (d == 1) slow.Wait(TimeSpan.FromSeconds(60)); };
+        job = new OffloadJob(new JobConfig(card, [dir.Sub("d1"), dir.Sub("d2")])
+        {
+            Date = "2026-10-07", AnalyzeClips = false, HistoryFolder = dir.Sub("history"),
+        }, options)
+        {
+            Identify = _ => { Interlocked.Increment(ref reads); return Volatile.Read(ref identity); },
+        };
+
+        var copy = TestThreads.Start(() => job.RunCopy());
+        Assert.True(Until(() => job.Engine.Snapshot() is { Paused: true, ReadBytes: 3 * Chunk + 5 }));
+        Thread.Sleep(200);
+        Assert.False(job.Engine.Snapshot().PauseHeld);         // still "Pozastavuji": disk 2 writes file 0
+        Volatile.Write(ref identity, "card-B");
+        options.BeforeDestWrite = null;
+        job.Engine.Pauses.Resume();
+        slow.Set();
+        await copy.WaitAsync(TimeSpan.FromSeconds(60));
+
+        var s = job.Status();
+        Assert.Equal((JobPhase.Failed, Msg.CardChangedWhilePaused), (s.Phase, s.Error));
+        Assert.Equal(0, job.Engine.Pauses.Holds);               // the copy never waited at the gate
+        Assert.Equal(2 + OffloadEngine.IdentifyRetries, Volatile.Read(ref reads));
+        var report = job.Report!;
+        Assert.Equal(["verified", "verified"], report.Files[0].Destinations);
+        Assert.All(report.Files.Skip(1), f => Assert.Equal(OffloadEngine.CardChangedWhilePaused, f.SourceError));
+        foreach (var cardPath in job.Plan!.CardPaths)
+            foreach (var f in job.Plan.Scan.Files.Skip(1)) Assert.False(File.Exists(Layout.Join(cardPath, f.RelPath)), f.RelPath);
+    }
+
+    // Review M-4: "Pozastaveno" is a durable checkpoint — the drives' write caches are emptied when the copy stops, so
+    // the small files finished so far (not flushed one by one) are recorded in the manifest before the job stands; the
+    // end of the copy does not record them twice.
+    [Fact]
+    public async Task Standing_FlushesTheDisks_SmallFilesRecorded_OnceOnly()
+    {
+        using var dir = new TempDir();
+        var card = Card(dir);
+        var options = Options();   // FullSyncThreshold 256 MB: these small files reach the disk only with a device flush
+        var engine = new OffloadEngine(options);
+        options.BeforeFileCopy = i => { if (i == 1) engine.Pauses.Pause(); };
+        var plan = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-07");
+
+        var run = TestThreads.Start(() => engine.Run(plan));
+        Assert.True(Until(() => engine.Snapshot().PauseHeld));
+        foreach (var path in plan.CardPaths)
+            Assert.Equal(["CLIP/A001C001.mov"], ManifestFile.Files(ManifestFile.Read(path), 1).Keys);
+        engine.Pauses.Resume();
         Assert.True((await run.WaitAsync(TimeSpan.FromSeconds(60))).SafeToFormat);
+
+        foreach (var path in plan.CardPaths)
+        {
+            var records = ManifestFile.Read(path).Where(r => r.Kind == ManifestRecord.FileKind).ToList();
+            Assert.Equal(3, records.Count);
+            Assert.Single(records, r => r.Path == "CLIP/A001C001.mov");
+        }
     }
 
     // A folder source has no card identity (null when the copy started): nothing to compare, the copy goes on.

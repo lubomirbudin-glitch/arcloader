@@ -1069,15 +1069,22 @@ pak úlohu zastaví; tlačítko se změní na <b class="ui">Pokračovat</b>, kte
     dočte soubor, který právě čte (i čtení na pozadí u Verify-in-Proxy). Během toho karta úlohy ukazuje
     <span class="q">„Pozastavuji (dokončuji soubor A001C003.mxf…)“</span> a rychlosti běží dál — u velkého souboru (ARRIRAW
     100+ GB) to může trvat několik minut. Pak <span class="q">„Pozastaveno — Pokračovat naváže dalším souborem.“</span>,
-    rychlosti „—“ a odhad času zmizí. Během pauzy není otevřený žádný napůl zapsaný soubor
-    <code>.offload-part</code>.</li>
+    rychlosti „—“ a odhad času zmizí. Než se kopie zastaví, Offload vyprázdní zápisovou cache cílových disků a zapíše
+    záznamy hotových souborů: všechno zkopírované do té chvíle je opravdu na discích a po případném pádu nebo vypnutí
+    počítače se nekopíruje znovu. Během pauzy není otevřený žádný napůl zapsaný soubor <code>.offload-part</code>
+    (u <b class="ui">Zkopírovat znovu</b> čekají už hotové kopie pod skrytým jménem do konce kopie; když počítač mezitím
+    vypadne, další oprava je přepíše).</li>
   <li><b>Analýza klipů a proxy</b> dokončí rozpracovaný klip (<span class="q">„Pozastavuji (dokončuji proxy klipu
     A003…)“</span>) — ffmpeg se nikdy neuspává ani nepřerušuje uprostřed práce. Stejně tak PDF a denní report doběhnou a
     pauza přijde až před ně.</li>
   <li>Do rychlostí a časů v reportu ani do „Celkem“ na kartě se nepočítá jen doba, kdy úloha opravdu <b>stála</b>; čas
     dokončování souboru je práce. Po <b class="ui">Pokračovat</b> se rychlost měří znovu.</li>
   <li>Hlídač zaseknutého disku během pauzy nezasáhne: stojící úloha nic nečte a soubor, který se ještě dokončuje, se čte
-    dál.</li>
+    dál. Když se ale některý disk při dokončování ověřování na pozadí opravdu zasekne, Offload ho po limitu vzdá (jeho
+    soubory selžou s poznámkou o neodpovídajícím disku, nikdy zeleně) a úloha se zastaví — nezůstane viset ve stavu
+    „Pozastavuji“.</li>
+  <li>Když během „Pozastavuji“ nebo pauzy vyměníte kartu a dáte <b class="ui">Pokračovat</b>, Offload před dalším
+    souborem vždy znovu zjistí, která karta je ve čtečce (i když úloha ještě nestála).</li>
   <li>Během pauzy počítač nepřejde do spánku (otevřené soubory na USB disku by spánek mohl poškodit). Pozastavená úloha
     blokuje frontu — další karta čeká.</li>
   <li><b class="ui">Zrušit</b> i zavření aplikace během pauzy — i ve stavu „Pozastavuji“ — úlohu ukončí hned, jako bez

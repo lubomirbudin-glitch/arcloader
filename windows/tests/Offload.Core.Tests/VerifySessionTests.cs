@@ -575,6 +575,49 @@ public class VerifySessionTests
         }
     }
 
+    // Review M-2: Pozastavit while one background reader stands at the gate and another hangs inside a read on its disk:
+    // every reader is watched at once — the hung one is given up on after the stall limit (its copies fail with the
+    // hung-disk note, never green), and then the job stands instead of "Pozastavuji…" for ever. Pokračovat finishes.
+    [Fact]
+    public async Task PausedWhileAnotherDiskHangs_HungReaderGivenUp_ThenStands()
+    {
+        using var dir = new TempDir();
+        var (e, plan, report, _) = Copy(dir, ("SOUND/b.wav", 2 * Block), ("SOUND/c.wav", 2 * Block));
+        var pauses = new PauseGate();
+        using var s = new VerifySession(plan, report, e.Blocks, Block, plan.CardPaths.Select(_ => (double?)1).ToArray(), 0,
+            new string?[plan.CardPaths.Count], pauses, default, (_, _) => null)
+        {
+            VolumeOfDestination = d => "V" + d,
+            ReadStallTimeout = TimeSpan.FromSeconds(3),
+        };
+        var file = Path.GetFullPath(Layout.Join(plan.CardPaths[1], "SOUND/b.wav"));
+        var slowFile = Path.GetFullPath(Layout.Join(plan.CardPaths[0], "SOUND/b.wav"));
+        using var disk = new ManualResetEventSlim();
+        Assert.True(BlockReads.ReadHooks.TryAdd(slowFile, () => Thread.Sleep(300)));   // destination 1 still on b.wav at the press
+        Assert.True(BlockReads.ReadHooks.TryAdd(file, () =>
+        {
+            pauses.Pause();
+            disk.Wait(TimeSpan.FromSeconds(60));   // the disk of destination 2 stops answering
+        }));
+        try
+        {
+            s.StartBackground();
+            Assert.True(Eventually(() => pauses.IsStanding, TimeSpan.FromSeconds(30)));   // without Finish: watched all along
+            Assert.All(s.Results[1], r => Assert.Equal((FileState.Failed, Msg.VerifyDiskHung), (r.State, r.Error)));
+            pauses.Resume();
+            await Task.Run(() => s.Finish()).WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.All(s.Results[0], r => Assert.Equal(FileState.Verified, r.State));
+            Assert.All(s.Results[1], r => Assert.Equal(FileState.Failed, r.State));
+        }
+        finally
+        {
+            BlockReads.ReadHooks.TryRemove(file, out _);
+            BlockReads.ReadHooks.TryRemove(slowFile, out _);
+            disk.Set();
+        }
+    }
+
     // A disk unplugged during stage 2: its copies fail (repair copies them again later), the other disk is verified.
     [Fact]
     public void DiskUnplugged_ItsCopiesFail_TheOtherDiskVerified()

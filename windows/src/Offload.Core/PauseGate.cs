@@ -20,6 +20,7 @@ public sealed class PauseGate
     int holding;
     int busy;
     long holds;
+    long requests;
     bool frozen;
 
     /// `clock`: UTC now; tests pass a fake one.
@@ -46,11 +47,17 @@ public sealed class PauseGate
     /// and identifies the card again when a pause held it meanwhile.
     public long Holds => Interlocked.Read(ref holds);
 
+    /// How many times Pozastavit was pressed so far (a press while paused, or after the job ended, not counted). Review
+    /// I-1 (ruling I1): the copy identifies the card again before the next file after ANY pause — also one resumed while
+    /// it was still finishing its file, when it never waited here.
+    public long Requests => Interlocked.Read(ref requests);
+
     public void Pause()
     {
         lock (gate)
         {
             if (frozen || !open.IsSet) return;
+            Interlocked.Increment(ref requests);
             open.Reset();
             Recount();
         }
@@ -108,10 +115,12 @@ public sealed class PauseGate
     {
         if (ct.IsCancellationRequested) return false;
         if (open.IsSet) return true;
+        bool wasBusy;
         lock (gate)
         {
             holding++;
             Interlocked.Increment(ref holds);
+            wasBusy = worker?.Busy == true;
             if (worker != null) Step(worker, busyNow: false);
             Recount();
         }
@@ -129,7 +138,8 @@ public sealed class PauseGate
             lock (gate)
             {
                 holding--;
-                if (worker != null) Step(worker, busyNow: true);
+                // Back to what it was: a worker that waited here while Idle stays idle (review M-5).
+                if (worker != null) Step(worker, busyNow: wasBusy);
                 Recount();
             }
         }

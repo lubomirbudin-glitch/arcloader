@@ -12,7 +12,7 @@ public sealed partial class OffloadEngine
         var files = plan.Scan.Files;
         var started = DateTime.UtcNow;
         var pausedBefore = Pauses.PausedTotal;
-        long holdsChecked = Pauses.Holds;
+        long requestsChecked = Pauses.Requests;
         var cardPaths = plan.CardPaths;
         foreach (var path in cardPaths)
         {
@@ -71,16 +71,18 @@ public sealed partial class OffloadEngine
                 if (!cardChanged)
                 {
                     Options.BeforeFileCopy?.Invoke(i);
-                    if (!HoldBetweenFiles(copying, ws))
+                    if (!HoldBetweenFiles(copying, ws, afterFlush))
                     {
                         sourceErrors[i] = "cancelled";
                         continue;
                     }
-                    // Ruling I1: a pause held the copy since the last file — the card is identified again before
-                    // anything more is read from it; another card (or none) means nothing more of it is copied.
-                    if (Pauses.Holds != holdsChecked)
+                    // Ruling I1: Pozastavit was pressed since the last file — whether the copy stood or was resumed while
+                    // it still finished its file (review I-1: the card read was over, the card may have been swapped) —
+                    // the card is identified again before anything more is read from it; another card (or none) means
+                    // nothing more of it is copied.
+                    if (Pauses.Requests != requestsChecked)
                     {
-                        holdsChecked = Pauses.Holds;
+                        requestsChecked = Pauses.Requests;
                         cardChanged = !StillSameCard();
                     }
                 }
@@ -281,11 +283,16 @@ public sealed partial class OffloadEngine
     }
 
     /// After FlushDevice: the records that waited for it, on every destination whose flush went through; none where it
-    /// failed — that data may never have reached the disk (a resume reads those files again).
+    /// failed — that data may never have reached the disk (a resume reads those files again). The records written are
+    /// taken off the list (the flush at a pause, review M-4, and the one at the end never record a file twice).
     static void AppendAfterFlush(List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
     {
         List<(DestWriter Writer, ManifestRecord Record)> all;
-        lock (afterFlush) all = [.. afterFlush];
+        lock (afterFlush)
+        {
+            all = afterFlush.Where(x => x.Writer.DeviceFlushed).ToList();
+            afterFlush.RemoveAll(x => x.Writer.DeviceFlushed);
+        }
         foreach (var group in all.GroupBy(x => x.Writer).Where(g => g.Key.DeviceFlushed))
         {
             try { ManifestFile.Append(group.Key.CardPath, group.Select(x => x.Record).ToList()); }
@@ -337,10 +344,41 @@ public sealed partial class OffloadEngine
     /// first — the writers empty their queues, the recorder writes its manifest record — and only then the copy waits at
     /// the gate: no `.offload-part` is open while the job stands, a resume after a crash finds the file complete and
     /// recorded. A cancel ends the wait at once (also a writer that never drains, a hung disk). False = cancelled.
-    bool HoldBetweenFiles(PauseGate.Worker worker, DestWriter[] ws)
+    /// Review M-1: one loop, no race — the copy is the only producer, so once it sees the destinations drained nothing
+    /// new reaches them before it waits; a pause asked for after it looked is caught before the next file.
+    /// Review M-4: before it stands the drives' write caches are emptied (FlushDevice) and the records that waited for
+    /// that are written — "Pozastaveno" is a durable checkpoint: everything copied so far is on the disks and recorded.
+    bool HoldBetweenFiles(PauseGate.Worker worker, DestWriter[] ws, List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
     {
-        while (Pauses.IsPaused && !IsCancelled && !Drained(ws)) cts.Token.WaitHandle.WaitOne(10);
-        return !IsCancelled && worker.WaitWhilePaused(cts.Token);
+        bool flushed = false;
+        while (!IsCancelled)
+        {
+            if (!Pauses.IsPaused) return true;
+            if (!Drained(ws))
+            {
+                cts.Token.WaitHandle.WaitOne(10);
+                continue;
+            }
+            if (!flushed)
+            {
+                flushed = true;
+                FlushAtStop(ws, afterFlush);
+                continue;   // Pokračovat may have come meanwhile
+            }
+            return worker.WaitWhilePaused(cts.Token);
+        }
+        return false;
+    }
+
+    /// Best effort, as the flush at the end of the copy: a destination whose flush fails keeps its records waiting.
+    void FlushAtStop(DestWriter[] ws, List<(DestWriter Writer, ManifestRecord Record)> afterFlush)
+    {
+        try
+        {
+            OnEachDestination(ws, w => w.FlushDevice());
+            AppendAfterFlush(afterFlush);
+        }
+        catch (Exception e) when (e is OffloadError or IOException or IOError or UnauthorizedAccessException) { }
     }
 
     bool Drained(DestWriter[] ws)

@@ -478,13 +478,17 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
 - [ ] 72. **Pozastavit během velkého souboru (kopie):** karta s klipem 20+ GB na dva disky → Pozastavit uprostřed
       souboru → karta úlohy „Pozastavuji (dokončuji soubor A001C001.mxf…)“, rychlosti dál běží, soubor se dokopíruje na
       **oba** disky → „Pozastaveno — Pokračovat naváže dalším souborem.“, rychlosti „—“; v cílových složkách žádný
-      `.offload-part`, soubor je na místě v plné velikosti. Pokračovat → kopie pokračuje dalším souborem (čtení karty
-      neopakuje hotový soubor), report: `copyPausedSeconds` ≈ doba, kdy úloha **stála** (ne od stisku tlačítka).
+      `.offload-part`, soubor je na místě v plné velikosti a v `_REPORT\offload-manifest.jsonl` (i malé soubory —
+      při zastavení se vyprázdní cache disků). Pokračovat → kopie pokračuje dalším souborem (čtení karty neopakuje hotový
+      soubor), report: `copyPausedSeconds` ≈ doba, kdy úloha **stála** (ne od stisku tlačítka). Pozastavit, vyměnit
+      kartu za jinou (stejná kamera) a Pokračovat ještě během „Pozastavuji“ → úloha selže s hláškou o vyměněné kartě,
+      z jiné karty se nic nezkopíruje.
 - [ ] 73. **Pozastavit během ověření:** klasické ověření (Nastavení → ověřovat zpětným čtením, nebo bez proxy) →
       Pozastavit během čtení velkého souboru → „Pozastavuji (dokončuji soubor …)“, soubor se dočte na všech discích, pak
       „Pozastaveno“; Pokračovat → ověří zbytek, `verifyPausedSeconds` v reportu. S Verify-in-Proxy (proxy zapnuté):
       Pozastavit během proxy → klip se dorenderuje, čtení na pozadí sekundárního disku dočte svůj soubor, pak
-      „Pozastaveno“; 5 minut pauzy → žádné „disk přestal odpovídat“, po Pokračovat vše ověřené.
+      „Pozastaveno“; 5 minut pauzy → žádné „disk přestal odpovídat“, po Pokračovat vše ověřené. Sekundární disk během
+      „Pozastavuji“ odpojit tak, aby visel (nebo zablokovat) → po limitu hlídače jeho soubory selžou a úloha se zastaví.
 - [ ] 74. **Pozastavit během analýzy a proxy:** „Pozastavuji (dokončuji klip A001C003…)“ / „(dokončuji proxy klipu
       A001C003…)“ → klip doběhne (proxy kompletní, přehratelná), pak „Pozastaveno — Pokračovat naváže dalším klipem.“;
       Pokračovat → další klip, hotový se neopakuje.

@@ -75,6 +75,53 @@ public class PauseGateTests
         fast.Dispose();                                // twice changes nothing
     }
 
+    // Review I-1: every press of Pozastavit counts (the copy identifies the card again after any of them, also one
+    // resumed before the job stood); a second press while paused does not.
+    [Fact]
+    public void Requests_CountEveryPause_EvenOneNeverStood()
+    {
+        var gate = new PauseGate();
+        Assert.Equal(0, gate.Requests);
+        gate.Pause();
+        gate.Pause();
+        gate.Resume();
+        Assert.Equal(1, gate.Requests);
+        Assert.Equal(0, gate.Holds);   // nobody waited
+        gate.Pause();
+        Assert.Equal(2, gate.Requests);
+        gate.Freeze();
+        gate.Pause();
+        Assert.Equal(2, gate.Requests);
+    }
+
+    // Review M-5: a worker that waits at the gate while it is idle (waiting for the others) stays idle afterwards — the
+    // job may still stand until its Idle scope ends.
+    [Fact]
+    public async Task WaitInsideIdle_StaysIdleAfterwards()
+    {
+        var gate = new PauseGate();
+        using var worker = gate.Work();
+        using (worker.Idle())
+        {
+            gate.Pause();
+            var held = TestThreads.Start(() => worker.WaitWhilePaused(CancellationToken.None));
+            Assert.True(SpinWait.SpinUntil(() => gate.IsHolding, TimeSpan.FromSeconds(30)));
+            gate.Resume();
+            Assert.True(await held.WaitAsync(TimeSpan.FromSeconds(30)));
+            gate.Pause();
+            var other = TestThreads.Start(() => gate.WaitWhilePaused(CancellationToken.None));
+            Assert.True(SpinWait.SpinUntil(() => gate.IsStanding, TimeSpan.FromSeconds(30)));   // still idle: not busy
+            gate.Resume();
+            Assert.True(await other.WaitAsync(TimeSpan.FromSeconds(30)));
+        }
+        gate.Pause();
+        var third = TestThreads.Start(() => gate.WaitWhilePaused(CancellationToken.None));
+        Assert.True(SpinWait.SpinUntil(() => gate.IsHolding, TimeSpan.FromSeconds(30)));
+        Assert.False(gate.IsStanding);                 // busy again after the scope
+        gate.Resume();
+        Assert.True(await third.WaitAsync(TimeSpan.FromSeconds(30)));
+    }
+
     // M1: Freeze ends a standing pause and counts it; later presses change nothing.
     [Fact]
     public async Task Freeze_EndsTheStandingTime()

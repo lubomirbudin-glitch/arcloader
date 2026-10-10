@@ -298,17 +298,23 @@ public class VerifyInProxyJobTests
         var post = TestThreads.Start(() => job.RunPost());
         Assert.True(SpinWait.SpinUntil(() => job.Status().Phase == JobPhase.Proxies, TimeSpan.FromSeconds(60)));
         job.Pause();
+        var pressed = DateTime.UtcNow;
 
         Assert.True(SpinWait.SpinUntil(() => job.Status().PauseHeld, TimeSpan.FromSeconds(60)));
+        var stood = DateTime.UtcNow;
         Assert.Equal(1, job.Status().ProxiesDone);   // the clip being rendered finished
         Thread.Sleep(500);
         Assert.False(post.IsCompleted);
         job.Resume();
+        var resumed = DateTime.UtcNow;
         await post.WaitAsync(TimeSpan.FromSeconds(120));
 
         var done = job.Status();
         Assert.True(done.SafeToFormat);
-        Assert.True(done.PausedTotal >= TimeSpan.FromMilliseconds(500));
+        // Only the time it stood: at least the 500 ms, at most from the moment it was seen standing (not from the press).
+        Assert.InRange(done.PausedTotal.TotalSeconds, 0.45, (resumed - stood).TotalSeconds + 0.2);
+        Assert.True(job.Report!.VerifyPausedSeconds is not double v || v <= done.PausedTotal.TotalSeconds + 0.05,
+            $"{job.Report.VerifyPausedSeconds} > {done.PausedTotal} ({(resumed - pressed).TotalSeconds} s since the press)");
         Assert.Equal(ProxyStatus.Done, Assert.Single(job.Report!.Clips).ProxyStatus);
     }
 

@@ -114,7 +114,14 @@ internal sealed class DestWriter : IDisposable
                 blockHashes.AddRange(resume.Blocks);
                 checkpointed = resume.Blocks.Length;
             }
-            else handle = OpenPart(file.Size);
+            else
+            {
+                // A part left by a run that ended without cleaning up (a crash, the PC switched off — e.g. a repair's held
+                // copy while it stood paused, review M-3): hidden, so it could not be created over. Its name belongs to no
+                // file of the card or the backup (the planners refuse that), and it is not resumed — it goes.
+                if (File.Exists(partPath)) NativeIO.Delete(partPath);
+                handle = OpenPart(file.Size);
+            }
             File.SetAttributes(partPath, FileAttributes.Hidden);
         }
         catch (Exception e)

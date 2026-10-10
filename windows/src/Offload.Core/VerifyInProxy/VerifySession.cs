@@ -220,13 +220,40 @@ public sealed class VerifySession : IDisposable
             var t = new Thread(() => Background(reader, work)) { IsBackground = true, Name = "offload.verify." + work[0].Dest };
             reader.Thread = t;
             lock (gate) readers.Add(reader);
-            t.Start();
+            try { t.Start(); }
+            catch
+            {
+                // Never a registration left behind (review M-5): the job could not stand for the rest of its life.
+                lock (gate) reader.Abandoned = true;
+                reader.Pausing?.Dispose();
+                throw;
+            }
         }
+        if (byVolume.Count == 0) return;
+        // Review M-2: while a pause is asked for, every reader is watched at once — a disk that hangs inside a file never
+        // keeps the job "Pozastavuji…" for ever (Finish watches them all the same way).
+        new Thread(() =>
+        {
+            try { WaitFor(Readers, () => pauses.IsPaused); }
+            catch (Exception) { /* never take the process down; Finish watches them again */ }
+        }) { IsBackground = true, Name = "offload.verify.watch" }.Start();
     }
 
     string VolumeOf(int d) => VolumeOfDestination?.Invoke(d) ?? NativeIO.VolumeId(cardPaths[d]) ?? cardPaths[d];
 
     void Background(BackgroundReader reader, List<(int Dest, int File)> work)
+    {
+        try
+        {
+            BackgroundReads(reader, work);
+        }
+        finally
+        {
+            reader.Pausing?.Dispose();   // whatever happened (review M-5): never a registration left behind
+        }
+    }
+
+    void BackgroundReads(BackgroundReader reader, List<(int Dest, int File)> work)
     {
         try
         {
@@ -246,7 +273,6 @@ public sealed class VerifySession : IDisposable
             finally
             {
                 ReleaseActive(reader);
-                reader.Pausing?.Dispose();
             }
         }
         catch (Exception)
@@ -333,7 +359,7 @@ public sealed class VerifySession : IDisposable
         try
         {
             worker.Start();
-            WaitFor(reader);
+            WaitFor([reader], () => true);
         }
         finally
         {
@@ -341,34 +367,51 @@ public sealed class VerifySession : IDisposable
         }
     }
 
-    /// Waits for a reader's thread. With no block read for StallTimeout (a wait at the pause gate or for the tap, or the
-    /// job standing paused, not counting) its disk is hung — not unplugged, that would fail the read: the thread is given
-    /// up on (it stops at its next block, or stays in the read it hangs in and writes nothing), every file of its
+    /// Waits until every reader's thread has ended or was given up on, watching them all at once (review M-2). With no
+    /// block read for ReadStallTimeout (a wait at the pause gate or for the tap, or — for a reader of the pause gate — the
+    /// job standing paused, not counting) a reader's disk is hung — not unplugged, that would fail the read: the thread is
+    /// given up on (it stops at its next block, or stays in the read it hangs in and writes nothing), every file of its
     /// destinations still "written" fails with Msg.VerifyDiskHung, and the job goes on — never green (item 1 of 0.6.1,
     /// the pattern of mode B in Prepare). A pause still pending (Pozastavit pressed, the reader finishing a long file)
-    /// is reading: its blocks keep it alive, so only a disk that really stopped answering is given up on.
-    void WaitFor(BackgroundReader reader)
+    /// is reading: its blocks keep it alive, so only a disk that really stopped answering is given up on. `judging`:
+    /// false = no reader is judged now (the watch during the proxies judges only while a pause is asked for).
+    void WaitFor(IReadOnlyList<BackgroundReader> all, Func<bool> judging)
     {
-        var thread = reader.Thread!;
-        long seen = -1;
-        var still = System.Diagnostics.Stopwatch.StartNew();
-        while (!thread.Join(PollInterval))
+        var seen = all.Select(_ => -1L).ToArray();
+        var still = all.Select(_ => System.Diagnostics.Stopwatch.StartNew()).ToArray();
+        while (true)
         {
-            long now = Interlocked.Read(ref reader.Progress);
-            if (now != seen || Volatile.Read(ref reader.Waiting) != 0 || pauses.IsStanding)
+            bool waiting = false;
+            bool judge = judging();
+            for (int k = 0; k < all.Count; k++)
             {
-                seen = now;
-                still.Restart();
+                var reader = all[k];
+                if (reader.Abandoned || reader.Thread is not { IsAlive: true }) continue;
+                waiting = true;
+                long now = Interlocked.Read(ref reader.Progress);
+                if (!judge || now != seen[k] || Volatile.Read(ref reader.Waiting) != 0 || (reader.Pausing != null && pauses.IsStanding))
+                {
+                    seen[k] = now;
+                    still[k].Restart();
+                }
+                else if (still[k].Elapsed >= ReadStallTimeout) GiveUp(reader);
             }
-            else if (still.Elapsed >= ReadStallTimeout)
-            {
-                lock (gate) reader.Abandoned = true;
-                ReleaseActive(reader);
-                reader.Pausing?.Dispose();   // a thread given up on never keeps a pause from standing
-                foreach (var d in reader.Dests) FailHungDestination(d);
-                return;
-            }
+            if (!waiting) return;
+            Thread.Sleep(PollInterval);
         }
+    }
+
+    /// A reader whose disk stopped answering: given up on — once — and its destinations' unread copies failed.
+    void GiveUp(BackgroundReader reader)
+    {
+        lock (gate)
+        {
+            if (reader.Abandoned) return;
+            reader.Abandoned = true;
+        }
+        ReleaseActive(reader);
+        reader.Pausing?.Dispose();   // a thread given up on never keeps a pause from standing
+        foreach (var d in reader.Dests) FailHungDestination(d);
     }
 
     /// A destination's disk stopped answering: every file of it still "written" is failed — never green.
@@ -581,7 +624,7 @@ public sealed class VerifySession : IDisposable
             }
         }
         using (pausing?.Idle())
-            foreach (var r in Readers) WaitFor(r);
+            WaitFor(Readers, () => true);
         Annotate();
     }
 
@@ -651,7 +694,8 @@ public sealed class VerifySession : IDisposable
         }
         stop.Cancel();
         tapIdle.Set();
-        foreach (var r in Readers) WaitFor(r);
+        WaitFor(Readers, () => true);
+        foreach (var r in Readers) r.Pausing?.Dispose();
         server?.Dispose();
         stop.Dispose();
         lock (gate)
