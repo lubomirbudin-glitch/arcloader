@@ -475,6 +475,23 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
 - [ ] 67. **ARRIRAW bez LUTu:** `offload … --proxy --lut none` s klipem ALEXA 35 a ALEXA Mini → proxy v Rec.709
       (vestavěný vzhled kamery), art-cmd bez `--target-colorspace`; poškozený klip / art-cmd, který skončí kódem 0 bez
       souboru → poznámka „ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla ([error] …)“.
+- [ ] 72. **Pozastavit během velkého souboru (kopie):** karta s klipem 20+ GB na dva disky → Pozastavit uprostřed
+      souboru → karta úlohy „Pozastavuji (dokončuji soubor A001C001.mxf…)“, rychlosti dál běží, soubor se dokopíruje na
+      **oba** disky → „Pozastaveno — Pokračovat naváže dalším souborem.“, rychlosti „—“; v cílových složkách žádný
+      `.offload-part`, soubor je na místě v plné velikosti. Pokračovat → kopie pokračuje dalším souborem (čtení karty
+      neopakuje hotový soubor), report: `copyPausedSeconds` ≈ doba, kdy úloha **stála** (ne od stisku tlačítka).
+- [ ] 73. **Pozastavit během ověření:** klasické ověření (Nastavení → ověřovat zpětným čtením, nebo bez proxy) →
+      Pozastavit během čtení velkého souboru → „Pozastavuji (dokončuji soubor …)“, soubor se dočte na všech discích, pak
+      „Pozastaveno“; Pokračovat → ověří zbytek, `verifyPausedSeconds` v reportu. S Verify-in-Proxy (proxy zapnuté):
+      Pozastavit během proxy → klip se dorenderuje, čtení na pozadí sekundárního disku dočte svůj soubor, pak
+      „Pozastaveno“; 5 minut pauzy → žádné „disk přestal odpovídat“, po Pokračovat vše ověřené.
+- [ ] 74. **Pozastavit během analýzy a proxy:** „Pozastavuji (dokončuji klip A001C003…)“ / „(dokončuji proxy klipu
+      A001C003…)“ → klip doběhne (proxy kompletní, přehratelná), pak „Pozastaveno — Pokračovat naváže dalším klipem.“;
+      Pokračovat → další klip, hotový se neopakuje.
+- [ ] 75. **Zrušit během „Pozastavuji“:** Pozastavit uprostřed souboru 100+ GB a hned Zrušit → úloha skončí do pár
+      vteřin jako Zrušeno (nečeká na dokopírování souboru), žádný `.offload-part`; totéž v „Pozastaveno“ a při zavření
+      aplikace. Doplnění a Zkopírovat znovu: Pozastavit → soubor se dokopíruje, pak stojí; vysunout kartu jde až po kopii
+      (jako bez pauzy).
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
