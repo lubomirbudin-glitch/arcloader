@@ -63,6 +63,16 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
       ji smaže; kontrola odpojení těsně před startem; ostrý offload se složkou → řádky v reportu;
     - úkol 25: ikona v Docku, ⌘⇥ a Finderu; 11 LUTů v *Proxy › LUT*.
 
+## 2026-10-09 — dorovnání 2 (plány 6–10), průběh
+
+Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md)
+(úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
+slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
+
+- Úkol 32 — hash jádro: XXH3-128 (kanonický hex), XXH3-64 bloků, MD5 přes CryptoKit, registr hashů ASC MHL (xxh64, md5,
+  sha1, xxh3, xxh128, c4); nahrazuje registr proudu A (`HashKind`, `HashAlgo.create`, MD5/SHA-1 přes zastaralé CommonCrypto),
+  jeho testovací vektory zůstaly; `hashFile` počítá vždy xxh64 i xxh128 (`MultiHasher`)
+
 ## 2026-10-09 — build „Offload C“ (0.2.0C): rychlá analýza ARRIRAW, report i na Macu, disky do cílů samy
 
 - **Analýza ARRIRAW za sekundy:** `art-cmd export` jen z prvního snímku (`--start 0 --duration 1`, limit 180 s) — celý

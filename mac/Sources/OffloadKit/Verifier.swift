@@ -37,7 +37,7 @@ public enum Verifier {
                     result.bytes += Int64(n)
                     progress?(e.path, result.bytes)
                 }
-                if hex64(r.hash) == e.hash { result.ok.append(e.path) } else { result.mismatched.append(e.path) }
+                if hex64(r.hashes.xxh64!) == e.hash { result.ok.append(e.path) } else { result.mismatched.append(e.path) }
             } catch {
                 result.unreadable.append("\(e.path): \(error)")
             }

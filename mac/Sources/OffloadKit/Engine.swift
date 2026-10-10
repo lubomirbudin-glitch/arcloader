@@ -247,8 +247,8 @@ final class DestWriter {
                 let r = try hashFile(path, chunkSize: options.chunkSize, buffer: buf) { self.verified.add($0) }
                 if r.size != f.size {
                     results[i] = DestFileResult(state: .failed, error: "size mismatch: \(r.size) != \(f.size)")
-                } else if r.hash != sourceHashes[i] {
-                    results[i] = DestFileResult(state: .failed, error: "HASH MISMATCH: dest \(hex64(r.hash)) != source \(sourceHashes[i].map(hex64) ?? "-")")
+                } else if r.hashes.xxh64! != sourceHashes[i] {
+                    results[i] = DestFileResult(state: .failed, error: "HASH MISMATCH: dest \(hex64(r.hashes.xxh64!)) != source \(sourceHashes[i].map(hex64) ?? "-")")
                 } else {
                     results[i].state = .verified
                 }
