@@ -10,7 +10,7 @@ struct HardwareView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    section("Připojení") {
+                    section("Connections") {
                         ForEach(hw.drives) { d in
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
                                 Text(d.role).fontWeight(.medium).frame(width: 110, alignment: .leading)
@@ -20,14 +20,14 @@ struct HardwareView: View {
                             }
                         }
                     }
-                    section("Doporučení") {
+                    section("Advice") {
                         ForEach(hw.advice) { a in
                             Label(a.text, systemImage: icon(a.kind)).foregroundStyle(color(a.kind)).textSelection(.enabled)
                         }
                     }
-                    section("Měření") {
+                    section("Speed") {
                         HStack {
-                            Button("Změřit rychlost…") { hw.askMeasure = true }.disabled(!hw.canMeasure)
+                            Button("Measure speed…") { hw.askMeasure = true }.disabled(!hw.canMeasure)
                             Text(hw.measureHint).font(.caption).foregroundStyle(.secondary)
                         }
                         ForEach(hw.measurements) { m in
@@ -35,14 +35,14 @@ struct HardwareView: View {
                                 Text(m.role).frame(width: 110, alignment: .leading)
                                 Text(m.root).font(.caption.monospaced()).foregroundStyle(.secondary)
                                     .lineLimit(1).truncationMode(.middle).frame(width: 160, alignment: .leading).help(m.root)
-                                Text("čtení \(m.read)").monospacedDigit()
-                                Text("zápis \(m.write)").monospacedDigit()
+                                Text("read \(m.read)").monospacedDigit()
+                                Text("write \(m.write)").monospacedDigit()
                             }
                         }
                     }
-                    section("USB porty") {
-                        Toggle("Zobrazit interní porty", isOn: $hw.showInternal)
-                        Text("macOS neví, kde je port na počítači fyzicky — pojmenujte si ho (např. „přední levý“), název se pak použije všude.")
+                    section("USB ports") {
+                        Toggle("Show internal ports", isOn: $hw.showInternal)
+                        Text("macOS doesn't know where a port physically is — name it (e.g. “front left”) and the name is used everywhere.")
                             .font(.caption).foregroundStyle(.secondary)
                         ForEach(hw.portGroups) { g in
                             Text(g.controller).font(.subheadline.weight(.semibold)).padding(.top, 6)
@@ -64,18 +64,18 @@ struct HardwareView: View {
             HStack {
                 Text(hw.status).foregroundStyle(.secondary).lineLimit(2)
                 Spacer()
-                if hw.busy { Button("Zastavit") { hw.stop() }.disabled(!hw.canStop) }
-                Button("Prověřit znovu") { hw.run(measure: false) }.disabled(hw.busy)
-                Button("Zavřít") { NSApp.keyWindow?.performClose(nil) }
+                if hw.busy { Button("Stop") { hw.stop() }.disabled(!hw.canStop) }
+                Button("Check again") { hw.run(measure: false) }.disabled(hw.busy)
+                Button("Close") { NSApp.keyWindow?.performClose(nil) }
             }
             .padding(14)
         }
         .frame(minWidth: 680, minHeight: 480)
         .onAppear { hw.windowOpened() }
         .onDisappear { hw.windowClosed() }
-        .alert("Změřit rychlost?", isPresented: $hw.askMeasure) {
-            Button("Změřit") { hw.run(measure: true) }
-            Button("Zrušit", role: .cancel) {}
+        .alert("Measure speed?", isPresented: $hw.askMeasure) {
+            Button("Measure") { hw.run(measure: true) }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(hw.measureQuestion)
         }
@@ -113,9 +113,9 @@ struct PortNameField: View {
     @State private var text = ""
 
     var body: some View {
-        TextField("vlastní název", text: $text)
+        TextField("custom name", text: $text)
             .textFieldStyle(.roundedBorder)
-            .help("Vlastní název portu, např. přední levý")
+            .help("Your name for this port, e.g. front left")
             .onAppear { text = hw.portName(connector) }
             .onChange(of: text) { hw.rename(connector, $0) }
     }

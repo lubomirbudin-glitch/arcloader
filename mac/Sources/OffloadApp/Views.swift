@@ -8,18 +8,79 @@ struct ContentView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        HSplitView {
-            SetupPanel()
-                .frame(minWidth: 360, idealWidth: 400, maxWidth: 480)
-            QueuePanel()
-                .frame(minWidth: 520)
+        RootView().themed()
+    }
+}
+
+/// The top bar over the two columns — or over the settings page.
+private struct RootView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TopBar()
+            if model.settingsSection != nil {
+                LegacySettings()
+            } else {
+                HSplitView {
+                    SetupPanel()
+                        .frame(minWidth: 360, idealWidth: 400, maxWidth: 480)
+                    QueuePanel()
+                        .frame(minWidth: 520)
+                }
+            }
         }
+        .background(p.bg)
+        .ignoresSafeArea()
         .frame(minWidth: 940, minHeight: 640)
         .alert("Offload", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
             Button("OK") { model.message = nil }
         } message: {
             Text(model.message ?? "")
         }
+    }
+}
+
+/// Until the settings page: the options of the old left column.
+private struct LegacySettings: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StructureSection()
+                    ProxySection()
+                    ToolsSection()
+                }
+                .padding(18)
+                .frame(maxWidth: 560, alignment: .leading)
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("Done") { model.closeSettings() }.buttonStyle(.offload(.primary))
+            }
+            .padding(14)
+        }
+    }
+}
+
+extension JobItem {
+    var detailText: String { progress.detailText }
+    var statusText: String { progress.statusText }
+    var tone: CardTone { progress.tone }
+    var chainLines: [String] { chain.map { ChainView.lines($0, brake: progress.brake) } ?? [] }
+    var safeText: String { Texts.safeToEject(plan?.cardPaths.count ?? 0) }
+    var failedText: String? {
+        guard !isCancelled, let r = report, !r.success else { return nil }
+        return Texts.failed(r.failedFiles.count)
+    }
+    var cancelledText: String? { isCancelled && !status.safeToEject ? Texts.cancelled : nil }
+    var summaryText: String? {
+        guard isFinished, !isCancelled, let r = report else { return nil }
+        return JobProgress.summaryText(r)
     }
 }
 
@@ -37,7 +98,6 @@ struct SetupPanel: View {
                     StructureSection()
                     ProxySection()
                     ToolsSection()
-                    HardwareSection(hw: model.hardware)
                 }
                 .padding(18)
             }

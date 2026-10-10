@@ -67,9 +67,11 @@ enum Snapshots {
         let m = AppModel(preview: true)
         m.settings.destRoots = [raid, shuttle]
         m.settings.proxy.enabled = true
-        m.previewState(volumes: [], destinations: [
-            raid: DestinationStatus(free: 7_200 * gb, format: "apfs", exists: true, checking: false),
-            shuttle: DestinationStatus(free: 1_920 * gb, format: "exfat", exists: true, checking: false),
+        m.previewState(volumes: [], connections: [:], destinations: [
+            raid: DestinationStatus(free: 7_200 * gb, total: 8 * tb, format: "apfs", exists: true, checking: false,
+                                    connection: "Thunderbolt"),
+            shuttle: DestinationStatus(free: 1_920 * gb, total: 4 * tb, format: "exfat", exists: true, checking: false,
+                                       connection: "USB 3 (10 Gb/s)"),
         ])
         return m
     }
@@ -78,7 +80,8 @@ enum Snapshots {
         let m = base()
         let a = card("A035_ARRI", used: 1_700_000_000)
         let b = card("B012_FX6", used: 14_200_000_000)
-        m.previewState(volumes: [a, b], destinations: m.destStatus)
+        m.previewState(volumes: [a, b], connections: [a.path: "USB 3 (5 Gb/s)", b.path: "SD reader"],
+                       destinations: m.destStatus)
         m.selectedSources = [a.path]
         return m
     }

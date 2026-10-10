@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated { model?.shouldTerminate() ?? .terminateNow }
     }
 
-    /// "Pokračovat" after closing the window: a click on the Dock icon brings the window back.
+    /// "Keep running" after closing the window: a click on the Dock icon brings the window back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { true }
 
     /// A running hardware measurement stops and deletes its temporary file before the process exits (≤ 10 s).
@@ -51,14 +51,16 @@ struct OffloadApp: App {
                 .environmentObject(model)
                 .onAppear { delegate.model = model }
         }
-        .defaultSize(width: 1240, height: 860)
-        .windowToolbarStyle(.unifiedCompact)
+        .defaultSize(width: 1360, height: 900)
+        // The new look draws its own top bar (logo, queue pill, Hardware, Settings) where the title bar was.
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
-            CommandMenu("Nástroje") { HardwareMenuItem() }
+            CommandGroup(replacing: .appSettings) { SettingsMenuItem(model: model) }
+            CommandGroup(before: .windowList) { HardwareMenuItem() }
         }
         // One Hardware window: opening it again only brings it to the front (no second run).
-        Window("Hardware — USB porty a disky", id: "hardware") {
+        Window("Hardware — USB ports and disks", id: "hardware") {
             HardwareView(hw: model.hardware)
                 .environmentObject(model)
         }
@@ -66,13 +68,23 @@ struct OffloadApp: App {
     }
 }
 
-/// Nástroje › Prověřit USB porty… (⌘U — like Ctrl+U on Windows; free in an app without a Format menu).
-/// A View, so it can use `openWindow` (macOS 13+).
+/// Window › Hardware… (⌘U — like Ctrl+U on Windows; free in an app without a Format menu); the top bar's Hardware
+/// button opens the same window. A View, so it can use `openWindow` (macOS 13+).
 struct HardwareMenuItem: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button("Prověřit USB porty…") { openWindow(id: "hardware") }
+        Button("Hardware — USB Ports and Disks…") { openWindow(id: "hardware") }
             .keyboardShortcut("u", modifiers: .command)
+    }
+}
+
+/// Offload › Settings… (⌘,): the settings page in the main window.
+struct SettingsMenuItem: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        Button("Settings…") { model.openSettings() }
+            .keyboardShortcut(",", modifiers: .command)
     }
 }
