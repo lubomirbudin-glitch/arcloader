@@ -15,20 +15,20 @@ public class JobCardTests
     [Fact]
     public void Sizes_ThreeSignificantDigits()
     {
-        Assert.Equal("1,70 GB", Format.BytesCs3(1_700_000_000));
-        Assert.Equal("14,2 GB", Format.BytesCs3(14_200_000_000));
-        Assert.Equal("412 GB", Format.BytesCs3(412_000_000_000));
-        Assert.Equal("7,20 TB", Format.BytesCs3(7_200_000_000_000));
-        Assert.Equal("1,00 GB", Format.BytesCs3(999_600_000));
-        Assert.Equal("850 B", Format.BytesCs3(850));
+        Assert.Equal("1.70 GB", Format.Bytes3(1_700_000_000));
+        Assert.Equal("14.2 GB", Format.Bytes3(14_200_000_000));
+        Assert.Equal("412 GB", Format.Bytes3(412_000_000_000));
+        Assert.Equal("7.20 TB", Format.Bytes3(7_200_000_000_000));
+        Assert.Equal("1.00 GB", Format.Bytes3(999_600_000));
+        Assert.Equal("850 B", Format.Bytes3(850));
     }
 
     [Fact]
     public void Sub_ClipsSizeCamera_AppendSameDestinations()
     {
-        Assert.Equal("24 klipů · 1,70 GB · ALEXA 35", JobCard.Sub(new JobCardFacts(30, 24, 1_700_000_000, "ALEXA 35", false)));
-        Assert.Equal("2 nové klipy · 14,2 GB · stejné cíle", JobCard.Sub(new JobCardFacts(4, 2, 14_200_000_000, "FX6", true)));
-        Assert.Equal("3 soubory · 850 MB", JobCard.Sub(new JobCardFacts(3, 0, 850_000_000, null, false)));
+        Assert.Equal("24 clips · 1.70 GB · ALEXA 35", JobCard.Sub(new JobCardFacts(30, 24, 1_700_000_000, "ALEXA 35", false)));
+        Assert.Equal("2 new clips · 14.2 GB · same destinations", JobCard.Sub(new JobCardFacts(4, 2, 14_200_000_000, "FX6", true)));
+        Assert.Equal("3 files · 850 MB", JobCard.Sub(new JobCardFacts(3, 0, 850_000_000, null, false)));
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public class JobCardTests
 
         var rows = JobCard.Rows(p, Disks);
 
-        Assert.Equal(["Čtení karty", "RAID_A", "SHUTTLE_B"], rows.Select(r => r.Name));
+        Assert.Equal(["Card read", "RAID_A", "SHUTTLE_B"], rows.Select(r => r.Name));
         Assert.Equal([null, 1, 2], rows.Select(r => r.Number));
         Assert.Equal([0.38, 0.38, 0.37], rows.Select(r => Math.Round(r.Share, 2)));
         Assert.Equal(["380 MB/s", "380 MB/s", "370 MB/s"], rows.Select(r => r.RateText));
@@ -61,7 +61,7 @@ public class JobCardTests
         var repair = new JobProgress(T0);
         repair.Update(new JobStatus { Phase = JobPhase.Copying, Copy = Snap(CopyPhase.Copy, 30_000, [0, 30_000], [0, 0], planned: [0, 60_000]) }, T0);
         var rows = JobCard.Rows(repair, Disks);
-        Assert.Equal((1.0, "jen ověření"), (rows[1].Share, rows[1].RateText));
+        Assert.Equal((1.0, "verify only"), (rows[1].Share, rows[1].RateText));
         Assert.Equal(0.5, rows[2].Share);
         Assert.Empty(JobCard.Rows(new JobProgress(T0), Disks));
     }
@@ -78,42 +78,42 @@ public class JobCardTests
     public void Steps_FromThePhase_OnlyThePhasesThisJobDoes()
     {
         var copying = new JobStatus { Phase = JobPhase.Copying };
-        Assert.Equal("1 · Kopírování:Active:0.38 | 2 · Ověření:Pending:0 | 3 · Proxy:Pending:0 | 4 · Report:Pending:0", Steps(copying, Config()));
-        Assert.Equal("1 · Kopírování:Active:0.38 | 2 · Ověření:Pending:0 | 3 · Analýza:Pending:0 | 4 · Report:Pending:0", Steps(copying, Config(proxy: false)));
-        Assert.Equal("1 · Kopírování:Active:0.38 | 2 · Report:Pending:0", Steps(copying, Config(verify: false, analyze: false, proxy: false)));
-        Assert.Equal("1 · Kopírování:Active:0.38 | 2 · Ověření:Pending:0 | 3 · Proxy:Pending:0 | 4 · Report:Pending:0",
+        Assert.Equal("1 · Copying:Active:0.38 | 2 · Verification:Pending:0 | 3 · Proxies:Pending:0 | 4 · Report:Pending:0", Steps(copying, Config()));
+        Assert.Equal("1 · Copying:Active:0.38 | 2 · Verification:Pending:0 | 3 · Analysis:Pending:0 | 4 · Report:Pending:0", Steps(copying, Config(proxy: false)));
+        Assert.Equal("1 · Copying:Active:0.38 | 2 · Report:Pending:0", Steps(copying, Config(verify: false, analyze: false, proxy: false)));
+        Assert.Equal("1 · Copying:Active:0.38 | 2 · Verification:Pending:0 | 3 · Proxies:Pending:0 | 4 · Report:Pending:0",
             Steps(new JobStatus { Phase = JobPhase.Flushing }, Config()));
-        Assert.Equal("1 · Kopírování:Done:1 | 2 · Ověření:Active:0.38 | 3 · Proxy:Pending:0 | 4 · Report:Pending:0",
+        Assert.Equal("1 · Copying:Done:1 | 2 · Verification:Active:0.38 | 3 · Proxies:Pending:0 | 4 · Report:Pending:0",
             Steps(new JobStatus { Phase = JobPhase.Verifying }, Config()));
         // The first report at the end of stage 1 belongs to the copy, not to step 4.
-        Assert.Equal("1 · Kopírování:Done:1 | 2 · Ověření:Active:1 | 3 · Proxy:Pending:0 | 4 · Report:Pending:0",
+        Assert.Equal("1 · Copying:Done:1 | 2 · Verification:Active:1 | 3 · Proxies:Pending:0 | 4 · Report:Pending:0",
             Steps(new JobStatus { Phase = JobPhase.Reporting }, Config()));
-        Assert.Equal("1 · Kopírování:Done:1 | 2 · Ověření:Done:1 | 3 · Proxy:Active:0.38 | 4 · Report:Pending:0",
+        Assert.Equal("1 · Copying:Done:1 | 2 · Verification:Done:1 | 3 · Proxies:Active:0.38 | 4 · Report:Pending:0",
             Steps(new JobStatus { Phase = JobPhase.Analyzing, CopySucceeded = true }, Config()));
-        Assert.Equal("1 · Kopírování:Done:1 | 2 · Ověření:Done:1 | 3 · Proxy:Done:1 | 4 · Report:Active:0.38",
+        Assert.Equal("1 · Copying:Done:1 | 2 · Verification:Done:1 | 3 · Proxies:Done:1 | 4 · Report:Active:0.38",
             Steps(new JobStatus { Phase = JobPhase.Reporting, CopySucceeded = true }, Config()));
-        Assert.Equal("1 · Kopírování:Done:1 | 2 · Ověření:Done:1 | 3 · Proxy:Done:1 | 4 · Report:Done:1", Steps(new JobStatus { Phase = JobPhase.Done }, Config()));
-        Assert.Equal("1 · Kopírování:Pending:0 | 2 · Ověření:Pending:0 | 3 · Proxy:Pending:0 | 4 · Report:Pending:0", Steps(new JobStatus(), Config()));
+        Assert.Equal("1 · Copying:Done:1 | 2 · Verification:Done:1 | 3 · Proxies:Done:1 | 4 · Report:Done:1", Steps(new JobStatus { Phase = JobPhase.Done }, Config()));
+        Assert.Equal("1 · Copying:Pending:0 | 2 · Verification:Pending:0 | 3 · Proxies:Pending:0 | 4 · Report:Pending:0", Steps(new JobStatus(), Config()));
         Assert.Empty(JobCard.Steps(new JobStatus { Phase = JobPhase.Failed }, Config(), 0));
         // A repair: no stage 2.
         var repair = Config();
         repair.RepairInto = [@"D:\RAID_A\2026-10-07\A001"];
-        Assert.Equal("1 · Kopírování:Active:0.38 | 2 · Ověření:Pending:0 | 3 · Report:Pending:0", Steps(copying, repair));
+        Assert.Equal("1 · Copying:Active:0.38 | 2 · Verification:Pending:0 | 3 · Report:Pending:0", Steps(copying, repair));
     }
 
     [Fact]
     public void FileLine_And_Remaining()
     {
-        Assert.Equal(("Soubor 10 / 24", "A035C010_261007_R2KQ.mxf"),
+        Assert.Equal(("File 10 / 24", "A035C010_261007_R2KQ.mxf"),
             JobCard.FileLine(new JobStatus { Phase = JobPhase.Copying, Copy = Snap(CopyPhase.Copy, 0, [0], [0]) }));
-        Assert.Equal(("Ověřování", "500 MB / 2,00 GB"),
+        Assert.Equal(("Verifying", "500 MB / 2.00 GB"),
             JobCard.FileLine(new JobStatus { Phase = JobPhase.Verifying, Copy = Snap(CopyPhase.Verify, 0, [0, 0], [250_000_000, 250_000_000]) }));
         Assert.Equal(("Proxy 3 / 24", "A035C003 · 43 %"),
             JobCard.FileLine(new JobStatus { Phase = JobPhase.Proxies, ClipIndex = 2, ClipCount = 24, ClipName = "A035C003", ClipFraction = 0.426 }));
 
-        Assert.Equal("zbývá ~0:02 kopie · ~6:00 celkem", JobCard.Remaining(JobPhase.Copying, 2, 360));
-        Assert.Equal("zbývá ~0:09 ověření", JobCard.Remaining(JobPhase.Verifying, 9, null));
-        Assert.Equal("zbývá ~1:00 celkem", JobCard.Remaining(JobPhase.Proxies, null, 60));
+        Assert.Equal("~0:02 left for the copy · ~6:00 in total", JobCard.Remaining(JobPhase.Copying, 2, 360));
+        Assert.Equal("~0:09 left for verification", JobCard.Remaining(JobPhase.Verifying, 9, null));
+        Assert.Equal("~1:00 left in total", JobCard.Remaining(JobPhase.Proxies, null, 60));
         Assert.Null(JobCard.Remaining(JobPhase.Analyzing, null, null));
         Assert.Equal(["45 s", "6 min 12 s", "1 h 05 min"],
             new[] { 45, 372, 3900 }.Select(s => JobCard.Duration(TimeSpan.FromSeconds(s))));
@@ -146,10 +146,10 @@ public class JobCardTests
             new ClipEntry { Clip = new Clip { Name = "C002", Path = "C002.mxf", Segments = ["C002.mxf"] }, ProxyStatus = ProxyStatus.Failed },
             new ClipEntry { Clip = new Clip { Name = "S001", Path = "SUB/S001.mp4", Segments = ["SUB/S001.mp4"] }, ProxyStatus = ProxyStatus.Skipped },
         ];
-        Assert.Equal([("Kopie", "602 MB/s"), ("Ověření", "1204 MB/s"), ("Proxy", "1 / 2"), ("Celkem", "6 min 12 s")],
+        Assert.Equal([("Copy", "602 MB/s"), ("Verification", "1204 MB/s"), ("Proxies", "1 / 2"), ("Total", "6 min 12 s")],
             JobCard.Summary(r, TimeSpan.FromSeconds(372)).Select(f => (f.Label, f.Value)));
         var plain = Report(verified: false);
-        Assert.Equal([("Kopie", "602 MB/s"), ("Ověření", "vypnuto"), ("Proxy", "vypnuto"), ("Celkem", "15 s")],
+        Assert.Equal([("Copy", "602 MB/s"), ("Verification", "off"), ("Proxies", "off"), ("Total", "15 s")],
             JobCard.Summary(plain, null).Select(f => (f.Label, f.Value)));
     }
 
@@ -175,12 +175,12 @@ public class JobCardTests
         Assert.Equal(3, rows.Count);
         Assert.Equal(@"XDROOT\Clip\B012C015_261007_9QW1.MXF", rows[0].Path);
         Assert.Equal(["RAID_A ✓", "SHUTTLE_B ✕ hash"], rows[0].Disks.Select(d => d.Text));
-        Assert.Equal(["RAID_A ✓", "SHUTTLE_B ✕ zápis"], rows[1].Disks.Select(d => d.Text));
-        Assert.Equal(["RAID_A ✕ karta", "SHUTTLE_B ✕ karta"], rows[2].Disks.Select(d => d.Text));
-        Assert.Equal(["hash", "velikost", "čtení", "zrušeno", "karta", "zápis", "nezkopírováno"],
+        Assert.Equal(["RAID_A ✓", "SHUTTLE_B ✕ write"], rows[1].Disks.Select(d => d.Text));
+        Assert.Equal(["RAID_A ✕ card", "SHUTTLE_B ✕ card"], rows[2].Disks.Select(d => d.Text));
+        Assert.Equal(["hash", "size", "read", "cancelled", "card", "write", "not copied"],
             new[] { ("failed", "MD5 MISMATCH: x"), ("failed", "size mismatch: 1 != 2"), ("failed", "verify: gone"), ("failed", "source: cancelled"),
                     ("failed", "source: read failed"), ("failed", "boom"), ("pending", (string?)null) }.Select(x => JobCard.Problem(x.Item1, x.Item2)));
-        Assert.Equal("… a další 3 soubory v reportu", JobCard.MoreFiles(8, 5));
+        Assert.Equal("… and 3 more files in the report", JobCard.MoreFiles(8, 5));
         Assert.Null(JobCard.MoreFiles(5, 5));
     }
 
@@ -190,19 +190,19 @@ public class JobCardTests
         var ok = Report();
         ok = WithFiles(ok, File("a", "verified", "verified"), File("b", "verified", "verified"));
         var h = JobCard.Headline("A035_ARRI", new JobStatus { Phase = JobPhase.Done, SafeToEject = true, SafeToFormat = true, CopySucceeded = true }, ok, Disks);
-        Assert.Equal((JobCardKind.Done, "A035_ARRI — kartu lze formátovat", "Všechny 2 soubory jsou na 2 discích a ověřené (xxHash64)."), (h.Kind, h.Title, h.Sub));
+        Assert.Equal((JobCardKind.Done, "A035_ARRI — safe to format", "All 2 files are on 2 disks and verified (xxHash64)."), (h.Kind, h.Title, h.Sub));
 
         var bad = WithFiles(Report(), File("a", "verified", "verified"), File("XDROOT/Clip/B012C015.MXF", "verified", "failed", "HASH MISMATCH: 1 != 2"));
         h = JobCard.Headline("B012_FX6", new JobStatus { Phase = JobPhase.Done, CopySucceeded = false }, bad, Disks);
-        Assert.Equal((JobCardKind.Problem, "B012_FX6 — kartu zatím nevysunujte", "1 soubor na disku SHUTTLE_B nesouhlasí s kartou. Na RAID_A je vše v pořádku."),
+        Assert.Equal((JobCardKind.Problem, "B012_FX6 — do not eject the card yet", "1 file on disk SHUTTLE_B does not match the card. Everything is fine on RAID_A."),
             (h.Kind, h.Title, h.Sub));
 
         var unverified = WithFiles(Report(verified: false), File("a", "written", "written"));
         Assert.Equal(JobCardKind.Problem, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Done, CopySucceeded = true }, unverified, Disks).Kind);
-        Assert.Equal(("A — offload selhal", "Cíl nenalezen: D:\\"),
-            JobCard.Headline("A", new JobStatus { Phase = JobPhase.Failed, Error = "Cíl nenalezen: D:\\" }, null, Disks) is var f ? (f.Title, f.Sub) : default);
+        Assert.Equal(("A — offload failed", "Destination not found: D:\\"),
+            JobCard.Headline("A", new JobStatus { Phase = JobPhase.Failed, Error = "Destination not found: D:\\" }, null, Disks) is var f ? (f.Title, f.Sub) : default);
         Assert.Equal(JobCardKind.Failed, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Failed, Error = "x" }, null, Disks).Kind);
-        Assert.Equal((JobCardKind.Done, "A — záloha je úplná", Msg.NothingNew),
+        Assert.Equal((JobCardKind.Done, "A — the backup is complete", Msg.NothingNew),
             JobCard.Headline("A", new JobStatus { Phase = JobPhase.Done, Note = Msg.NothingNew, SafeToEject = true, SafeToFormat = true }, null, Disks) is var n ? (n.Kind, n.Title, n.Sub) : default);
         Assert.Equal(JobCardKind.Cancelled, JobCard.Headline("A", new JobStatus { Phase = JobPhase.Cancelled }, null, Disks).Kind);
         Assert.Equal(JobCardKind.Waiting, JobCard.Headline("A", new JobStatus(), null, Disks).Kind);
@@ -220,12 +220,12 @@ public class JobCardTests
     [Fact]
     public void Texts_Plurals()
     {
-        Assert.Equal("Soubor je na 1 disku a je ověřený (xxHash64).", JobCard.SafeText(1, 1, "xxHash64"));
-        Assert.Equal("Všech 24 souborů je na 2 discích a ověřených (xxHash64 + MD5).", JobCard.SafeText(24, 2, "xxHash64 + MD5"));
+        Assert.Equal("The file is on 1 disk and verified (xxHash64).", JobCard.SafeText(1, 1, "xxHash64"));
+        Assert.Equal("All 24 files are on 2 disks and verified (xxHash64 + MD5).", JobCard.SafeText(24, 2, "xxHash64 + MD5"));
         var two = WithFiles(Report(), File("a", "failed", "verified", "x"), File("b", "verified", "failed", "y"), File("c", "verified", "failed", "z"));
-        Assert.Equal("S kartou nesouhlasí: RAID_A 1 soubor, SHUTTLE_B 2 soubory.", JobCard.ProblemText(two, Disks));
+        Assert.Equal("Not matching the card: RAID_A 1 file, SHUTTLE_B 2 files.", JobCard.ProblemText(two, Disks));
         var card = WithFiles(Report(), File("a", "failed", "failed", "source: x", source: "x"));
-        Assert.Equal("1 soubor se nepodařilo přečíst z karty.", JobCard.ProblemText(card, Disks));
+        Assert.Equal("Could not read 1 file from the card.", JobCard.ProblemText(card, Disks));
     }
 
     [Fact]
@@ -250,12 +250,12 @@ public class JobCardTests
     public void BrakeSentence_CardOrDisk()
     {
         var chain = ChainView.Build(
-            [new RoleLink("Karta", new DriveLink("E:\\", StorageBus.Usb, "reader", new UsbLink("PCI\\HC", "x", "R#5", 5, 5, UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, false))),
-             new RoleLink("Cíl 1", new DriveLink("D:\\", StorageBus.Nvme, "SSD", null)),
-             new RoleLink("Cíl 2", new DriveLink("F:\\", StorageBus.Sata, "HDD", null))], [400, 400, 400]);
-        Assert.Equal("Nejpomalejší článek: čtečka karty (USB 3 (5 Gb/s)). Disky by zvládly víc.", JobCard.BrakeSentence(new Brake(0, 400, 0.5), chain, Disks));
-        Assert.Equal("Nejpomalejší článek: čtečka karty (USB 3 (5 Gb/s) — linka je plná). Disky by zvládly víc.", JobCard.BrakeSentence(new Brake(0, 440, 0.97), chain, Disks));
-        Assert.Equal("Nejpomalejší článek: disk SHUTTLE_B. Karta by šla číst rychleji.", JobCard.BrakeSentence(new Brake(2, 150, null), chain, Disks));
+            [new RoleLink("Card", new DriveLink("E:\\", StorageBus.Usb, "reader", new UsbLink("PCI\\HC", "x", "R#5", 5, 5, UsbLinkSpeed.Super, UsbLinkSpeed.Super, true, false))),
+             new RoleLink("Destination 1", new DriveLink("D:\\", StorageBus.Nvme, "SSD", null)),
+             new RoleLink("Destination 2", new DriveLink("F:\\", StorageBus.Sata, "HDD", null))], [400, 400, 400]);
+        Assert.Equal("Bottleneck: the card reader (USB 3 (5 Gb/s)). The disks could do more.", JobCard.BrakeSentence(new Brake(0, 400, 0.5), chain, Disks));
+        Assert.Equal("Bottleneck: the card reader (USB 3 (5 Gb/s) — the link is saturated). The disks could do more.", JobCard.BrakeSentence(new Brake(0, 440, 0.97), chain, Disks));
+        Assert.Equal("Bottleneck: disk SHUTTLE_B. The card could be read faster.", JobCard.BrakeSentence(new Brake(2, 150, null), chain, Disks));
         Assert.Null(JobCard.BrakeSentence(null, chain, Disks));
     }
 
@@ -267,12 +267,12 @@ public class JobCardTests
         // Pozastavit pressed but not yet holding: still running
         Assert.Equal((2, 0, 0), QueueSummary.Count([(JobPhase.Copying, false), (JobPhase.Copying, false)]));
         Assert.Equal((0, 0, 0), QueueSummary.Count([(JobPhase.Done, true)]));
-        Assert.Equal("Běží 1 offload · 1 ve frontě", QueueSummary.Pill(1, 0, 1));
-        Assert.Equal("Běží 2 offloady · 1 pozastavený · 3 ve frontě", QueueSummary.Pill(2, 1, 3));
-        Assert.Equal("Pozastaveno: 1 offload", QueueSummary.Pill(0, 1, 0));
+        Assert.Equal("Running 1 offload · 1 in queue", QueueSummary.Pill(1, 0, 1));
+        Assert.Equal("Running 2 offloads · 1 paused · 3 in queue", QueueSummary.Pill(2, 1, 3));
+        Assert.Equal("Paused: 1 offload", QueueSummary.Pill(0, 1, 0));
         Assert.Null(QueueSummary.Pill(0, 0, 0));
-        Assert.Equal("Zařadit do fronty", QueueSummary.StartLabel([JobPhase.Verifying, JobPhase.Done]));
-        Assert.Equal("Spustit offload", QueueSummary.StartLabel([JobPhase.Proxies, JobPhase.Done]));
+        Assert.Equal("Add to queue", QueueSummary.StartLabel([JobPhase.Verifying, JobPhase.Done]));
+        Assert.Equal("Start offload", QueueSummary.StartLabel([JobPhase.Proxies, JobPhase.Done]));
     }
 
     [Fact]
@@ -307,7 +307,7 @@ public class JobCardTests
     public void WaitingHint_OnlyBehindAPausedJob()
     {
         var waiting = new JobStatus { Phase = JobPhase.Waiting };
-        Assert.Equal("Čeká na pozastavenou úlohu.", JobCard.WaitingHint(JobCard.Headline("B012", waiting, null, Disks, blockedByPaused: true)));
+        Assert.Equal("Waiting for a paused job.", JobCard.WaitingHint(JobCard.Headline("B012", waiting, null, Disks, blockedByPaused: true)));
         Assert.Null(JobCard.WaitingHint(JobCard.Headline("B012", waiting, null, Disks)));
         Assert.Null(JobCard.WaitingHint(JobCard.Headline("B012", new JobStatus { Phase = JobPhase.Copying }, null, Disks, blockedByPaused: true)));
     }

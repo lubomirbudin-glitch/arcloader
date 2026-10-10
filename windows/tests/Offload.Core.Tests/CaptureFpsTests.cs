@@ -24,8 +24,8 @@ public class CaptureFpsTests
     }
 
     [Theory]
-    [InlineData("24", "35", "35 fps · přehrávání 24", true)]
-    [InlineData("24000/1001", "120000/1001", "119.880 fps · přehrávání 23.976", true)]
+    [InlineData("24", "35", "35 fps · playback 24", true)]
+    [InlineData("24000/1001", "120000/1001", "119.880 fps · playback 23.976", true)]
     [InlineData("25/1", "25", "25", false)]
     [InlineData("24000/1001", "23.976", "23.976", false)]   // the same rate written two ways
     [InlineData("25", null, "25", false)]                    // ffprobe only: capture = playback
@@ -74,7 +74,7 @@ public class CaptureFpsTests
         Assert.Equal("35", c.CaptureFrameRate);
         Assert.Equal(70, c.Frames);
         Assert.Equal(70 / 24.0, c.Duration);   // the editing length: frames ÷ playback rate
-        Assert.Equal("35 fps · přehrávání 24", c.FpsSummary);
+        Assert.Equal("35 fps · playback 24", c.FpsSummary);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class CaptureFpsTests
                 + raw + "}}]}}");
             Assert.Equal(expected, milli.CaptureFrameRate);
         }
-        Assert.Equal("23.976 fps · přehrávání 24", new ClipInfo { FrameRate = "24", CaptureFrameRate = "24000/1001" }.FpsSummary);
+        Assert.Equal("23.976 fps · playback 24", new ClipInfo { FrameRate = "24", CaptureFrameRate = "24000/1001" }.FpsSummary);
         var none = ArriBackend.ParseMetadata("""{"clipBasedMetadata":{"nativePictureEssenceDescriptor":{"file":{"sampleRate":"25/1"}}}}""");
         Assert.Equal(("25", (string?)null), (none.FrameRate, none.CaptureFrameRate));
     }
@@ -290,7 +290,7 @@ public class CaptureFpsTests
 
         var sony = r.Probe(V("C0001.MP4"), card);
         Assert.Equal(("24000/1001", "120000/1001"), (sony.FrameRate, sony.CaptureFrameRate));
-        Assert.Equal("119.880 fps · přehrávání 23.976", sony.FpsSummary);
+        Assert.Equal("119.880 fps · playback 23.976", sony.FpsSummary);
         var other = r.Probe(V("A001.MOV"), card);
         Assert.Equal(("24000/1001", (string?)null), (other.FrameRate, other.CaptureFrameRate));
         Assert.Equal("23.976", other.FpsSummary);
@@ -321,16 +321,16 @@ public class CaptureFpsTests
         var html = HtmlReport.Render(Report(@"D:\dst\2026-10-10\A_0012"));
         // Review F-1: two lines in the narrow column — the capture rate, then the playback rate small and muted; the
         // cell may wrap (td.num never does).
-        Assert.Contains("<td class=\"num fps\">35 fps<div class=\"note\">přehrávání 24</div></td>", html);
+        Assert.Contains("<td class=\"num fps\">35 fps<div class=\"note\">playback 24</div></td>", html);
         Assert.Contains("<td class=\"num fps\">25</td>", html);
         Assert.Contains("table.clips td.fps{white-space:normal}", html);
-        Assert.Contains("<th class=\"num\">Stopáž</th>", html);
-        Assert.DoesNotContain("<th class=\"num\">Délka</th>", html);
-        Assert.Contains("Stopáž = počet snímků ÷ přehrávací fps", html);
+        Assert.Contains("<th class=\"num\">Duration</th>", html);
+        Assert.DoesNotContain("<th class=\"num\">Length</th>", html);
+        Assert.Contains("Duration = frame count ÷ playback fps", html);
         // Without a differing clip there is nothing to explain.
         var plain = Reports.Sample(@"D:\dst\2026-10-10\A001");
         plain.Clips = [Entry("C0001", "25", "25", 50)];
-        Assert.DoesNotContain("Stopáž = počet snímků", HtmlReport.Render(plain));
+        Assert.DoesNotContain("Duration = frame count", HtmlReport.Render(plain));
     }
 
     [Fact]
@@ -367,8 +367,8 @@ public class CaptureFpsTests
         Directory.CreateDirectory(Path.Combine(card, "_REPORT"));
         File.WriteAllText(Path.Combine(card, "_REPORT", "offload_report.json"), Report(card).ToJson());
         var html = DayReport.Html(DayReport.Load(day));
-        Assert.Contains("<th class=\"num\">Stopáž</th><th>FPS</th>", html);
-        Assert.Contains("<td class=\"wrap\">35 fps · přehrávání 24, 25</td>", html);
-        Assert.Contains("<span>celková stopáž</span>", html);
+        Assert.Contains("<th class=\"num\">Duration</th><th>FPS</th>", html);
+        Assert.Contains("<td class=\"wrap\">35 fps · playback 24, 25</td>", html);
+        Assert.Contains("<span>total duration</span>", html);
     }
 }

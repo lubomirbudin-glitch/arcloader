@@ -75,7 +75,7 @@ public class ProxyCopyTests
         var (path, error) = ProxyCopy.ToExtraFolder(src, extra, "2026-10-05", "A001", "C0001.mov");
 
         Assert.Null(path);
-        Assert.Equal("složka není dostupná", error);
+        Assert.Equal("the folder is not available", error);
         Assert.False(Directory.Exists(extra));
     }
 
@@ -110,7 +110,7 @@ public class ProxyCopyTests
         var (path, error) = ProxyCopy.ToExtraFolder(src, extra, "2026-10-05", "A001", "C0001.mov", maxAttempts: 3);
 
         Assert.Null(path);
-        Assert.Equal("žádné volné jméno (C0001.mov … C0001_3.mov)", error);
+        Assert.Equal("no free name (C0001.mov … C0001_3.mov)", error);
         Assert.Empty(Directory.GetFiles(target));
     }
 

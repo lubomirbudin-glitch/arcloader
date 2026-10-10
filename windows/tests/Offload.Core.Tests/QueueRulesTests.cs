@@ -18,8 +18,8 @@ public class QueueRulesTests
     {
         Assert.Equal(QueueRules.OtherCardText, QueueRules.EjectProblem("V1|AB12", "V1|CD34", false));
         Assert.Equal(QueueRules.OtherCardText, QueueRules.EjectProblem(null, "V1|CD34", false));
-        Assert.Equal("karta není připojená", QueueRules.EjectProblem("V1|AB12", null, false));
-        Assert.Equal("karta v mechanice není ta, která se kopírovala", QueueRules.OtherCardText);
+        Assert.Equal("the card is not connected", QueueRules.EjectProblem("V1|AB12", null, false));
+        Assert.Equal("the card in the drive is not the one that was copied", QueueRules.OtherCardText);
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public class QueueRulesTests
     [Fact]
     public void Start_BlockedWhileMeasuring()
     {
-        Assert.Equal("Probíhá měření rychlosti — počkejte nebo ho zastavte", QueueRules.StartProblem(measuring: true));
+        Assert.Equal("A speed measurement is running — wait or stop it", QueueRules.StartProblem(measuring: true));
         Assert.Null(QueueRules.StartProblem(measuring: false));
     }
 

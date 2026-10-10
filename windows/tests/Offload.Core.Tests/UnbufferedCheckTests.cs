@@ -28,7 +28,7 @@ public class UnbufferedCheckTests
     public void ProbeCannotBeWritten_Classic_WithTheReason()
     {
         using var dir = new TempDir();
-        Assert.StartsWith("kontrolu čtení mimo cache nejde provést", UnbufferedCheck.Problem(Path.Combine(dir.Path, "gone"), writtenUnbuffered: true));
+        Assert.StartsWith("cannot check reads past the cache", UnbufferedCheck.Problem(Path.Combine(dir.Path, "gone"), writtenUnbuffered: true));
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class UnbufferedCheckTests
         NativeIO.TestVolumes[dir.Path] = new NativeIO.TestVolume { RefuseUnbuffered = true };
         try
         {
-            Assert.StartsWith("kontrolu čtení mimo cache nejde provést", UnbufferedCheck.Problem(card, writtenUnbuffered: true));
+            Assert.StartsWith("cannot check reads past the cache", UnbufferedCheck.Problem(card, writtenUnbuffered: true));
         }
         finally
         {

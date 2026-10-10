@@ -114,14 +114,14 @@ public class ProxyWatchdogTests
         var output = Path.Combine(card, "_PROXY", "a.mov");
         var sw = Stopwatch.StartNew();
         var e = Assert.ThrowsAny<Exception>(() => r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { }, () => false));
-        Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku) i bez hardwarového dekódování; proxy nevznikla", e.Message);
+        Assert.Equal("ffmpeg stalled (1 s without a new frame) also without hardware decoding; no proxy was made", e.Message);
         Assert.Equal(["call", "hw", "call"], Calls(dir));
         Assert.False(File.Exists(output));
         Assert.Empty(Directory.GetFiles(Path.Combine(card, "_PROXY")));
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
         lock (log)
         {
-            Assert.Contains(log, l => l.Contains("with hardware decoding: ffmpeg se zasekl") && l.Contains("retrying in software"));
+            Assert.Contains(log, l => l.Contains("with hardware decoding: ffmpeg stalled") && l.Contains("retrying in software"));
             Assert.Contains(log, l => l.Contains("software decoding failed too"));
         }
     }
@@ -148,7 +148,7 @@ public class ProxyWatchdogTests
         using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, Fake.Fail, Fake.Fail)) { StallTimeout = Stall };
         var output = Path.Combine(card, "_PROXY", "a.mov");
         var e = Assert.ThrowsAny<Exception>(() => r.Render(VideoClip("a.mov"), card, H264Info, null, output, _ => { }, () => false));
-        Assert.Equal("ffmpeg failed (exit 1): boom; s hardwarovým dekódováním předtím: ffmpeg failed (exit 1): boom 1", e.Message);
+        Assert.Equal("ffmpeg failed (exit 1): boom; with hardware decoding before: ffmpeg failed (exit 1): boom 1", e.Message);
         Assert.Equal(["call", "hw", "call"], Calls(dir));
     }
 
@@ -160,7 +160,7 @@ public class ProxyWatchdogTests
         using var r = new ProxyRenderer(FakeSettings, FakeTools(dir.Path, Fake.Ok, Fake.Stall)) { StallTimeout = Stall };
         var output = Path.Combine(card, "_PROXY", "a.mov");
         var e = Assert.ThrowsAny<Exception>(() => r.Render(VideoClip("a.mov"), card, Ffv1Info, null, output, _ => { }, () => false));
-        Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku); proxy nevznikla", e.Message);
+        Assert.Equal("ffmpeg stalled (1 s without a new frame); no proxy was made", e.Message);
         Assert.Equal(["call"], Calls(dir));
     }
 
@@ -221,7 +221,7 @@ public class ProxyWatchdogTests
         using var r = new ProxyRenderer(FakeSettings, new ExternalTools { NoSearch = true }.Resolved());
         var sw = Stopwatch.StartNew();
         var e = Assert.Throws<FfmpegStalledException>(() => r.RunFfmpeg(consumer, [], src, null, null, () => false, TimeSpan.FromSeconds(1)));
-        Assert.Equal("ffmpeg se zasekl (1 s bez nového snímku)", e.Message);
+        Assert.Equal("ffmpeg stalled (1 s without a new frame)", e.Message);
         Assert.InRange(sw.Elapsed.TotalSeconds, 2.8, 20);
     }
 
@@ -254,7 +254,7 @@ public class ProxyWatchdogTests
         var backend = new BrawBackend(_ => "BlackmagicRawAPI.dll", infoTimeout: TimeSpan.FromSeconds(2));
         var sw = Stopwatch.StartNew();
         var e = Assert.Throws<ToolError>(() => backend.Probe(Path.Combine(dir.Path, "A001.braw"), tools, dir.Path));
-        Assert.Equal("braw-decode failed (exit -1): neodpověděl do 2 s — ukončen", e.Message);
+        Assert.Equal("braw-decode failed (exit -1): did not respond within 2 s — terminated", e.Message);
         Assert.InRange(sw.Elapsed.TotalSeconds, 1.9, 30);
     }
 
@@ -275,7 +275,7 @@ public class ProxyWatchdogTests
         var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 1, Duration = 0.04 };
         var sw = Stopwatch.StartNew();
         var e = Assert.Throws<FfmpegStalledException>(() => r.Thumbnails(clip, card, info, null));
-        Assert.Equal("dekodér nebo ffmpeg se zasekl (1 s bez nového snímku)", e.Message);
+        Assert.Equal("the decoder or ffmpeg stalled (1 s without a new frame)", e.Message);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(30), $"took {sw.Elapsed}");
     }
 
@@ -296,11 +296,11 @@ public class ProxyWatchdogTests
         Assert.Equal(3, ProxyRenderer.FramePositions(info).Count);
         var sw = Stopwatch.StartNew();
         var e = Assert.Throws<FfmpegStalledException>(() => r.Thumbnails(clip, card, info, null));
-        Assert.StartsWith("dekodér nebo ffmpeg se zasekl", e.Message);
+        Assert.StartsWith("the decoder or ffmpeg stalled", e.Message);
         Assert.Single(File.ReadAllLines(attempts));
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(60), $"took {sw.Elapsed}");
         // Final fix M2: the stop is in the log (a clip with some thumbnails would otherwise not say why it lacks the rest).
-        lock (log) Assert.Contains("thumbnails A001: dekodér nebo ffmpeg se zasekl (1 s bez nového snímku); the remaining frames are skipped", log);
+        lock (log) Assert.Contains("thumbnails A001: the decoder or ffmpeg stalled (1 s without a new frame); the remaining frames are skipped", log);
     }
 
     // Final fix M1: a hung `braw-decode --info` (timeout) is not tried again at the next positions either.
@@ -324,9 +324,9 @@ public class ProxyWatchdogTests
         var info = new ClipInfo { Codec = "Blackmagic RAW", Width = 320, Height = 180, FrameRate = "25", Frames = 100, Duration = 4 };
         Assert.Equal(3, ProxyRenderer.FramePositions(info).Count);
         var e = Assert.Throws<ToolError>(() => r.Thumbnails(clip, card, info, null));
-        Assert.Equal("braw-decode failed (exit -1): neodpověděl do 1 s — ukončen", e.Message);
+        Assert.Equal("braw-decode failed (exit -1): did not respond within 1 s — terminated", e.Message);
         Assert.Single(File.ReadAllLines(attempts));
-        lock (log) Assert.Contains("thumbnails A001: braw-decode failed (exit -1): neodpověděl do 1 s — ukončen; the remaining frames are skipped", log);
+        lock (log) Assert.Contains("thumbnails A001: braw-decode failed (exit -1): did not respond within 1 s — terminated; the remaining frames are skipped", log);
     }
 
     /// A RAW decoder that writes until a write fails (its stdout was closed), then notes it in `stopped` and exits

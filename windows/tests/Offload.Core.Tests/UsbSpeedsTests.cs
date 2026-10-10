@@ -48,8 +48,8 @@ public class UsbSpeedsTests
     {
         Assert.Equal("USB 2.0 (480 Mb/s)", UsbSpeeds.Label(UsbLinkSpeed.High));
         Assert.Equal("USB 3 (5 Gb/s)", UsbSpeeds.Label(UsbLinkSpeed.Super));
-        Assert.Equal("USB 3 (10 Gb/s a víc)", UsbSpeeds.Label(UsbLinkSpeed.SuperPlus));
-        Assert.Equal("neznámá", UsbSpeeds.Label(UsbLinkSpeed.Unknown));
+        Assert.Equal("USB 3 (10 Gb/s or more)", UsbSpeeds.Label(UsbLinkSpeed.SuperPlus));
+        Assert.Equal("unknown", UsbSpeeds.Label(UsbLinkSpeed.Unknown));
         Assert.Equal(40, UsbSpeeds.PracticalMBps(UsbLinkSpeed.High));
         Assert.Equal(450, UsbSpeeds.PracticalMBps(UsbLinkSpeed.Super));
         Assert.Equal(1000, UsbSpeeds.PracticalMBps(UsbLinkSpeed.SuperPlus));

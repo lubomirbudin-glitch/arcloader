@@ -101,7 +101,7 @@ public class StageTwoTests
         Assert.Equal(JobPhase.Done, job.Status().Phase);
         var rendered = report!.Clips.Where(c => c.ProxyStatus == ProxyStatus.Done).ToList();
         Assert.Equal(2, rendered.Count);
-        Assert.All(rendered, c => Assert.Equal("LUT nenalezen: gone.cube — proxy bez LUTu", c.ProxyNote));
+        Assert.All(rendered, c => Assert.Equal("LUT not found: gone.cube — proxy without a LUT", c.ProxyNote));
     }
 
     // Final review A7: a failed copy to another destination keeps the rendered proxy.
@@ -129,7 +129,7 @@ public class StageTwoTests
         var clip = Assert.Single(job.Report!.Clips);
         Assert.Equal(ProxyStatus.Done, clip.ProxyStatus);
         Assert.Equal("_PROXY/C0001.mov", clip.ProxyPath);
-        Assert.StartsWith($"kopie na {paths[1]} selhala: ", clip.ProxyNote);
+        Assert.StartsWith($"the copy to {paths[1]} failed: ", clip.ProxyNote);
         Assert.Contains(log, l => l.Contains("C0001") && l.Contains(paths[1]));
         Assert.True(File.Exists(Path.Combine(paths[0], "_PROXY", "C0001.mov")));
         Assert.Empty(Directory.GetFiles(Path.Combine(paths[1], "_PROXY"), "*.part"));
@@ -226,7 +226,7 @@ public class StageTwoTests
         Assert.Equal(0, s.ProxiesFailed);
         var clip = Assert.Single(report!.Clips);
         Assert.Equal(ProxyStatus.Done, clip.ProxyStatus);
-        Assert.Equal($"kopie do {extra} selhala: složka není dostupná", clip.ProxyNote);
+        Assert.Equal($"the copy to {extra} failed: the folder is not available", clip.ProxyNote);
         Assert.Contains(log, l => l.Contains("C0001") && l.Contains(extra));
         Assert.False(Directory.Exists(extra));
     }
@@ -292,9 +292,9 @@ public class StageTwoTests
         Assert.Equal(JobPhase.Done, s.Phase);
         Assert.True(s.SafeToEject);
         var clip = Assert.Single(report!.Clips);
-        Assert.Contains("ffprobe nenalezen", clip.ProbeError);
+        Assert.Contains("ffprobe not found", clip.ProbeError);
         Assert.Equal(ProxyStatus.Unsupported, clip.ProxyStatus);
-        Assert.Equal("ffmpeg nenalezen", clip.ProxyNote);
+        Assert.Equal("ffmpeg not found", clip.ProxyNote);
     }
 
     // Review focus 3

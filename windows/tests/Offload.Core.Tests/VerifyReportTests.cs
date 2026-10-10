@@ -24,7 +24,7 @@ public class VerifyReportTests
         r.Missing.Add("CLIP/c.mov");
         r.Unreadable.Add(new UnreadableFile("CLIP/d.mov", "read failed"));
         r.Extra.Add("CLIP/new.mov");
-        r.ChainProblems.Add("ASC MHL generace 0002 neodpovídá řetězu (soubor MHL byl změněn).");
+        r.ChainProblems.Add("ASC MHL generation 0002 does not match the chain (the MHL file was changed).");
         return r;
     }
 
@@ -51,7 +51,7 @@ public class VerifyReportTests
     {
         var r = Sample(@"D:\Zaloha6-10-06\A001");
         var html = VerifyReport.Html(r);
-        Assert.Contains("onclick=\"window.print()\">Uložit jako PDF</button>", html);
+        Assert.Contains("onclick=\"window.print()\">Save as PDF</button>", html);
         Assert.Contains($"<a href=\"A001_verify_{VerifyReport.Stamp(r)}Z.pdf\"", html);
         Assert.DoesNotContain("class=\"toolbar\"", VerifyReport.Html(r, forPrint: true));
     }
@@ -60,11 +60,11 @@ public class VerifyReportTests
     public void Html_CzechTexts()
     {
         var html = VerifyReport.Html(Sample(@"D:\Zaloha\2026-10-06\A001"));
-        Assert.Contains("<h1>Ověření A001</h1>", html);
-        Assert.Contains("NALEZENY PROBLÉMY", html);
-        Assert.Contains("Nesedí 1 soubor, chybí 1, nečitelný 1 — podrobnosti v reportu ověření.", html);
-        Assert.Contains("1 soubor navíc (nejsou v MHL).", html);
-        Assert.Contains("Chybí (1)", html);
+        Assert.Contains("<h1>Verification A001</h1>", html);
+        Assert.Contains("PROBLEMS FOUND", html);
+        Assert.Contains("Mismatch 1 file, missing 1, unreadable 1 — details in the verification report.", html);
+        Assert.Contains("1 file extra (not in the MHL).", html);
+        Assert.Contains("Missing (1)", html);
         Assert.Contains("CLIP/d.mov — read failed", html);
     }
 
@@ -72,9 +72,9 @@ public class VerifyReportTests
     public void CliSummary_OkAndProblems()
     {
         var ok = new VerifyResult { CardPath = "x", Basis = "ascmhl", Started = DateTime.UtcNow.AddSeconds(-10), Finished = DateTime.UtcNow, Checked = 12, Ok = 12, BytesRead = 512_000_000_000 };
-        Assert.StartsWith("Ověřeno 12 souborů (512 GB) za 0:10 (", VerifyTexts.CliSummary(ok));
-        Assert.EndsWith(" — vše v pořádku.", VerifyTexts.CliSummary(ok));
-        Assert.EndsWith(" — NALEZENY PROBLÉMY: nesedí 1, chybí 1, nečitelné 1, selhalo při kopii 0, navíc 1.", VerifyTexts.CliSummary(Sample("x")));
+        Assert.StartsWith("Verified 12 files (512 GB) in 0:10 (", VerifyTexts.CliSummary(ok));
+        Assert.EndsWith(" — all OK.", VerifyTexts.CliSummary(ok));
+        Assert.EndsWith(" — PROBLEMS FOUND: mismatch 1, missing 1, unreadable 1, failed during the copy 0, extra 1.", VerifyTexts.CliSummary(Sample("x")));
     }
 
     // R8: the report goes into _REPORT, never into ascmhl\.

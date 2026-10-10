@@ -84,17 +84,17 @@ public class CardInspectionsTests
     {
         var m = new HistoryMatch(HistoryFixtures.Entry(HistoryFixtures.T0), HistoryMatchKind.Identical, [], 0, [], 5);
         var (text, tone) = CardInspections.RowText(true, false, new CardInsight { Source = @"E:\", History = m, FileCount = 0 });
-        Assert.StartsWith("Karta je prázdná", text);
-        Assert.DoesNotContain("jinak", text);
+        Assert.StartsWith("The card is empty", text);
+        Assert.DoesNotContain("differ", text);
         Assert.Equal(HistoryTone.Neutral, tone);
-        Assert.StartsWith("Zálohováno", CardInspections.RowText(true, false, new CardInsight { Source = @"E:\", History = m, FileCount = 3 }).Text);
+        Assert.StartsWith("Backed up", CardInspections.RowText(true, false, new CardInsight { Source = @"E:\", History = m, FileCount = 3 }).Text);
     }
 
     [Fact]
     public void RowText_Error_ShowsTheErrorInRed()
     {
-        var (text, tone) = CardInspections.RowText(true, false, new CardInsight { Source = @"E:\", Error = "Karta se nedá přečíst." });
-        Assert.Equal(("Karta se nedá přečíst.", HistoryTone.Error), (text, tone));
+        var (text, tone) = CardInspections.RowText(true, false, new CardInsight { Source = @"E:\", Error = "Cannot read the card." });
+        Assert.Equal(("Cannot read the card.", HistoryTone.Error), (text, tone));
     }
 
     // Minor M11: the camera label is set after the look is published, and only while that look is still the card's.

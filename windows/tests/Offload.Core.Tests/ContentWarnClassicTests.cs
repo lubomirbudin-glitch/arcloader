@@ -59,8 +59,8 @@ public class ContentWarnClassicTests
         Assert.False(JobOutcomes.Chime(s));
         var outcome = JobOutcomes.Final("A001", s, r)!;
         Assert.Equal(OutcomeKind.Attention, outcome.Kind);
-        Assert.DoesNotContain("kartu lze formátovat", outcome.Message);
-        Assert.DoesNotContain("hotovo", outcome.Title);
+        Assert.DoesNotContain("safe to format", outcome.Message);
+        Assert.DoesNotContain("done", outcome.Title);
     }
 
     [FfmpegFact]
@@ -105,6 +105,6 @@ public class ContentWarnClassicCliTests
             Console.SetError(e);
             CopyCommand.JobFactory = old;
         }
-        Assert.Contains("Varování: " + Msg.ContentWarnings(1), so.ToString());
+        Assert.Contains("Warning: " + Msg.ContentWarnings(1), so.ToString());
     }
 }

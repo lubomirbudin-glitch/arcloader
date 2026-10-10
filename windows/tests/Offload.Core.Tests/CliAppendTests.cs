@@ -41,7 +41,7 @@ public class CliAppendTests
         var r = Run(() => CopyCommand.RunJob(Config(card, paths, dir.Sub("h")), dryRun: false));
         Assert.Equal(0, r.Exit);
         Assert.Contains(Msg.NothingNew, r.Out);
-        Assert.DoesNotContain("Chyba", r.Out + r.Err);
+        Assert.DoesNotContain("Error", r.Out + r.Err);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class CliAppendTests
         AppendFixtures.NewClip(card);
         var r = Run(() => CopyCommand.RunJob(Config(card, paths, dir.Sub("h")), dryRun: false));
         Assert.Equal(0, r.Exit);
-        Assert.Contains("Doplnění karty A001 (generace 2), plán (může se ještě upřesnit): 1 soubor · ", r.Out);
+        Assert.Contains("Append to card A001 (generation 2), plan (may still change): 1 file · ", r.Out);
         Assert.DoesNotContain(" files", r.Out);
         Assert.Contains("A001_report_0002.html", r.Out);
     }
@@ -105,7 +105,7 @@ public class CliAppendTests
         var missing = Path.Combine(dir.Path, "nope", "2026-10-06", "A001");
         var r = Run(() => AppendCommand.Create().Parse([card, "--into", missing, "--no-history", "--no-analyze"]).Invoke());
         Assert.Equal(1, r.Exit);
-        Assert.Contains(Msg.CliError + "Dřívější záloha není dostupná", r.Err);
+        Assert.Contains(Msg.CliError + "The earlier backup is not available", r.Err);
     }
 
     [Fact]

@@ -87,10 +87,10 @@ public class LutResolverTests
     [Theory]
     [InlineData("Blackmagic Design Film", 5, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film Gen 5")]
     [InlineData("Blackmagic Design Film", null, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film")]
-    [InlineData("Blackmagic Design Film", 4, "none", null, "Blackmagic RAW: Blackmagic Design Film Gen 4 (bez vestavěného LUTu)")]
-    [InlineData("Blackmagic Design Video", 5, "none", null, "Blackmagic RAW: Blackmagic Design Video Gen 5 (není log)")]
-    [InlineData("Blackmagic Design Extended Video", 5, "none", null, "Blackmagic RAW: Blackmagic Design Extended Video Gen 5 (není log)")]
-    [InlineData(null, null, "auto", "bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)")]
+    [InlineData("Blackmagic Design Film", 4, "none", null, "Blackmagic RAW: Blackmagic Design Film Gen 4 (no built-in LUT)")]
+    [InlineData("Blackmagic Design Video", 5, "none", null, "Blackmagic RAW: Blackmagic Design Video Gen 5 (not log)")]
+    [InlineData("Blackmagic Design Extended Video", 5, "none", null, "Blackmagic RAW: Blackmagic Design Extended Video Gen 5 (not log)")]
+    [InlineData(null, null, "auto", "bmd-film-gen5", "Blackmagic RAW (gamma not stated — assuming Film Gen 5)")]
     public void Braw_LutFromGamma(string? gamma, int? gen, string source, string? id, string reason)
     {
         var use = LutResolver.Resolve(BrawClip, new ClipInfo { Gamma = gamma, ColorScienceGen = gen }, @"Z:\A001.braw", Auto(), Cat);
@@ -111,10 +111,10 @@ public class LutResolverTests
         var clip = VideoClip("DCIM/100CANON/MVI_0001.MP4");
         var none = LutResolver.Resolve(clip, new ClipInfo { Camera = "Canon EOS R5" }, @"Z:\x.mp4", Auto(), Cat);
         Assert.Equal("none", none.Source);
-        Assert.Equal("kamera nerozpoznána", none.Reason);
+        Assert.Equal("camera not recognised", none.Reason);
         var fb = LutResolver.Resolve(clip, new ClipInfo(), @"Z:\x.mp4", Auto("canon-clog3-cinemagamut"), Cat);
         Assert.Equal(("fallback", "canon-clog3-cinemagamut"), (fb.Source, fb.Id));
-        Assert.Equal("kamera nerozpoznána — záložní LUT", fb.Reason);
+        Assert.Equal("camera not recognised — fallback LUT", fb.Reason);
     }
 
     [Fact]
@@ -122,11 +122,11 @@ public class LutResolverTests
     {
         var clip = VideoClip();
         var b = LutResolver.Resolve(clip, null, @"Z:\x", new ProxySettings { LutMode = LutMode.Builtin, LutBuiltin = "dji-dlog-dgamut" }, Cat);
-        Assert.Equal(("builtin", "dji-dlog-dgamut", "vybraný v nastavení"), (b.Source, b.Id, b.Reason));
+        Assert.Equal(("builtin", "dji-dlog-dgamut", "selected in the settings"), (b.Source, b.Id, b.Reason));
         var c = LutResolver.Resolve(clip, null, @"Z:\x", new ProxySettings { LutMode = LutMode.Custom, LutPath = @"C:\luts\show.cube" }, Cat);
         Assert.Equal(("custom", null, "show.cube", @"C:\luts\show.cube"), (c.Source, c.Id, c.Name, c.File));
         var n = LutResolver.Resolve(clip, null, @"Z:\x", new ProxySettings { LutMode = LutMode.None }, Cat);
-        Assert.Equal(("none", "bez LUT"), (n.Source, n.Name));
+        Assert.Equal(("none", "no LUT"), (n.Source, n.Name));
         // No mode stored (older settings / code): a LutPath means custom, otherwise automatic.
         Assert.Equal("custom", LutResolver.Resolve(clip, null, @"Z:\x", new ProxySettings { LutPath = @"C:\l.cube" }, Cat).Source);
     }
@@ -139,7 +139,7 @@ public class LutResolverTests
         var clip = SonyXml(dir, "XDROOT/Clip/C0001.MP4", "s-log3-cine", "S-Gamut3Cine");
         var use = LutResolver.Resolve(VideoClip(), null, clip, Auto(), LutCatalog.Load(null));
         Assert.Equal("none", use.Source);
-        Assert.Equal("vestavěné LUTy chybí", use.Reason);
+        Assert.Equal("built-in LUTs are missing", use.Reason);
     }
 
     [Fact]
@@ -169,10 +169,10 @@ public class LutResolverTests
 
     // Final review 3: S-Log2 / S-Log is log, just without a built-in LUT — only the rest is "not log".
     [Theory]
-    [InlineData("s-log2", "Sony XML: s-log2 (bez vestavěného LUTu)")]
-    [InlineData("S-Log", "Sony XML: S-Log (bez vestavěného LUTu)")]
-    [InlineData("hlg2", "Sony XML: hlg2 (není log)")]
-    [InlineData("s-cinetone", "Sony XML: s-cinetone (není log)")]
+    [InlineData("s-log2", "Sony XML: s-log2 (no built-in LUT)")]
+    [InlineData("S-Log", "Sony XML: S-Log (no built-in LUT)")]
+    [InlineData("hlg2", "Sony XML: hlg2 (not log)")]
+    [InlineData("s-cinetone", "Sony XML: s-cinetone (not log)")]
     public void Sony_OtherGamma_NoLut(string gamma, string reason)
     {
         using var dir = new TempDir();

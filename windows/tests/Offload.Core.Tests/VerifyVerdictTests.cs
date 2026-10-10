@@ -5,7 +5,7 @@ using Offload.Core.VerifyInProxy;
 
 namespace Offload.Core.Tests;
 
-/// R5 (plan 10): "Lze vyjmout" and "Lze formátovat" — never merged — on the job card, its chips, its steps and the
+/// R5 (plan 10): "Safe to eject" and "Safe to format" — never merged — on the job card, its chips, its steps and the
 /// notifications; spec 7: content warnings wait for a confirmation.
 public class VerifyVerdictTests
 {
@@ -19,7 +19,7 @@ public class VerifyVerdictTests
     {
         var s = new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = true, SafeToFormat = false, Warning = Msg.UnverifiedEarlier(2) };
         var h = JobCard.Headline("A001", s, Report(), Disks);
-        Assert.Equal((JobCardKind.Problem, "A001 — lze vyjmout, formátovat zatím ne"), (h.Kind, h.Title));
+        Assert.Equal((JobCardKind.Problem, "A001 — safe to eject, do not format yet"), (h.Kind, h.Title));
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class VerifyVerdictTests
     {
         var s = new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = true, SafeToFormat = true };
         var h = JobCard.Headline("A001", s, Report(), Disks);
-        Assert.Equal((JobCardKind.Done, "A001 — kartu lze formátovat"), (h.Kind, h.Title));
+        Assert.Equal((JobCardKind.Done, "A001 — safe to format"), (h.Kind, h.Title));
     }
 
     // Spec 7: content warnings keep the card yellow until the user confirms them.
@@ -36,7 +36,7 @@ public class VerifyVerdictTests
     {
         var s = new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = true, SafeToFormat = true, ContentWarnings = 2 };
         var h = JobCard.Headline("A001", s, Report(), Disks);
-        Assert.Equal((JobCardKind.Problem, "A001 — před formátováním zkontrolujte vady obsahu", Msg.ContentWarnings(2)), (h.Kind, h.Title, h.Sub));
+        Assert.Equal((JobCardKind.Problem, "A001 — check the content defects before formatting", Msg.ContentWarnings(2)), (h.Kind, h.Title, h.Sub));
         Assert.Equal(JobCardKind.Done, JobCard.Headline("A001", s, Report(), Disks, contentConfirmed: true).Kind);
     }
 
@@ -44,20 +44,20 @@ public class VerifyVerdictTests
     public void Headline_CancelledAfterTheCopy_SaysEjectButNotFormat()
     {
         var s = new JobStatus { Phase = JobPhase.Cancelled, SafeToEject = true };
-        Assert.StartsWith("Kopie je hotová, ale neověřená — kartu lze vyjmout", JobCard.Headline("A001", s, Report(false), Disks).Sub);
+        Assert.StartsWith("The copy is done but not verified — the card is safe to eject", JobCard.Headline("A001", s, Report(false), Disks).Sub);
     }
 
-    // Ruling I2: green (ChipTone.Ok) only where the card may be formatted — "Lze vyjmout" alone is neutral, also while
+    // Ruling I2: green (ChipTone.Ok) only where the card may be formatted — "Safe to eject" alone is neutral, also while
     // content warnings wait for a look.
     [Theory]
-    [InlineData(JobPhase.Proxies, true, false, 0, false, "Lze vyjmout", ChipTone.Neutral, "Ověřuje se…", ChipTone.Neutral)]
-    [InlineData(JobPhase.Finishing, true, false, 0, false, "Lze vyjmout", ChipTone.Neutral, "Ověřuje se…", ChipTone.Neutral)]
-    [InlineData(JobPhase.Copying, false, false, 0, false, "Vyjmout zatím ne", ChipTone.Neutral, "Formátovat zatím ne", ChipTone.Neutral)]
-    [InlineData(JobPhase.Done, true, true, 0, false, "Lze vyjmout", ChipTone.Ok, "Lze formátovat", ChipTone.Ok)]
-    [InlineData(JobPhase.Done, true, true, 1, false, "Lze vyjmout", ChipTone.Neutral, "Lze formátovat po kontrole vad", ChipTone.Warning)]
-    [InlineData(JobPhase.Done, true, true, 1, true, "Lze vyjmout", ChipTone.Ok, "Lze formátovat", ChipTone.Ok)]
-    [InlineData(JobPhase.Done, true, false, 0, false, "Lze vyjmout", ChipTone.Neutral, "Neformátovat", ChipTone.Warning)]
-    [InlineData(JobPhase.Done, false, false, 0, false, "Nevyjímat", ChipTone.Error, "Neformátovat", ChipTone.Error)]
+    [InlineData(JobPhase.Proxies, true, false, 0, false, "Safe to eject", ChipTone.Neutral, "Verifying…", ChipTone.Neutral)]
+    [InlineData(JobPhase.Finishing, true, false, 0, false, "Safe to eject", ChipTone.Neutral, "Verifying…", ChipTone.Neutral)]
+    [InlineData(JobPhase.Copying, false, false, 0, false, "Do not eject yet", ChipTone.Neutral, "Do not format yet", ChipTone.Neutral)]
+    [InlineData(JobPhase.Done, true, true, 0, false, "Safe to eject", ChipTone.Ok, "Safe to format", ChipTone.Ok)]
+    [InlineData(JobPhase.Done, true, true, 1, false, "Safe to eject", ChipTone.Neutral, "Safe to format after checking defects", ChipTone.Warning)]
+    [InlineData(JobPhase.Done, true, true, 1, true, "Safe to eject", ChipTone.Ok, "Safe to format", ChipTone.Ok)]
+    [InlineData(JobPhase.Done, true, false, 0, false, "Safe to eject", ChipTone.Neutral, "Do not format", ChipTone.Warning)]
+    [InlineData(JobPhase.Done, false, false, 0, false, "Do not eject", ChipTone.Error, "Do not format", ChipTone.Error)]
     public void Chips_TwoVerdicts_NeverMerged(JobPhase phase, bool eject, bool format, int warnings, bool confirmed,
         string ejectText, ChipTone ejectTone, string formatText, ChipTone formatTone)
     {
@@ -70,11 +70,11 @@ public class VerifyVerdictTests
     {
         var config = new JobConfig("E:\\", ["D:\\"]) { Proxy = new ProxySettings { Enabled = true } };
         var steps = JobCard.Steps(new JobStatus { Phase = JobPhase.Finishing }, config, 0.5);
-        Assert.Equal(["1 · Kopírování", "2 · Proxy", "3 · Ověření", "4 · Report"], steps.Select(s => s.Text));
+        Assert.Equal(["1 · Copying", "2 · Proxies", "3 · Verification", "4 · Report"], steps.Select(s => s.Text));
         Assert.Equal([StepState.Done, StepState.Done, StepState.Active, StepState.Pending], steps.Select(s => s.State));
         config.VerifyInProxy = false;
-        Assert.Equal(["1 · Kopírování", "2 · Ověření", "3 · Proxy", "4 · Report"], JobCard.Steps(new JobStatus { Phase = JobPhase.Proxies }, config, 0).Select(s => s.Text));
-        Assert.Equal(("Dokončení ověření", "1,00 GB / 2,00 GB"),
+        Assert.Equal(["1 · Copying", "2 · Verification", "3 · Proxies", "4 · Report"], JobCard.Steps(new JobStatus { Phase = JobPhase.Proxies }, config, 0).Select(s => s.Text));
+        Assert.Equal(("Finishing verification", "1.00 GB / 2.00 GB"),
             JobCard.FileLine(new JobStatus { Phase = JobPhase.Finishing, VerifiedBytes = 1_000_000_000, VerifyTotal = 2_000_000_000 }));
     }
 
@@ -83,12 +83,12 @@ public class VerifyVerdictTests
     {
         var copied = new JobStatus { Phase = JobPhase.Proxies, SafeToEject = true };
         var eject = JobOutcomes.CopyDone("A001", copied, proxies: true)!;
-        Assert.Equal(("Offload: A001 — kartu lze vyjmout", "Ověřuje se s proxy — formátovat až po dokončení."), (eject.Title, eject.Message));
+        Assert.Equal(("Offload: A001 — safe to eject", "Verifying with the proxies — format only after it finishes."), (eject.Title, eject.Message));
         Assert.False(eject.ForPhone);
 
         var done = JobOutcomes.Final("A001", new JobStatus { Phase = JobPhase.Done, SafeToEject = true, SafeToFormat = true }, Report())!;
         Assert.Equal(OutcomeKind.Done, done.Kind);
-        Assert.StartsWith("Ověřeno na 1 disku — kartu lze formátovat.", done.Message);
+        Assert.StartsWith("Verified on 1 disk — the card is safe to format.", done.Message);
         var notYet = JobOutcomes.Final("A001", new JobStatus { Phase = JobPhase.Done, SafeToEject = true, SafeToFormat = false }, Report())!;
         Assert.Equal(OutcomeKind.Attention, notYet.Kind);
     }
@@ -107,9 +107,9 @@ public class VerifyVerdictTests
             Entry("A001C005", null),
             Entry("A001C006", new ContentResult { State = ContentResult.Warn, Kind = "end" }),
         ];
-        Assert.Equal([("A001C003", "01:00:02:13 · poškozená data", true), ("A001C006", "klip končí předčasně", false)],
+        Assert.Equal([("A001C003", "01:00:02:13 · corrupted data", true), ("A001C006", "clip ends early", false)],
             JobCard.ContentLines(r).Select(l => (l.Clip, l.Label, l.HasPicture)));
-        Assert.Equal("Zkontrolováno — kartu lze formátovat", JobCard.ContentConfirmText);
+        Assert.Equal("Checked — the card is safe to format", JobCard.ContentConfirmText);
 
         var s = new JobStatus { Phase = JobPhase.Done, CopySucceeded = true, SafeToEject = true, SafeToFormat = true, ContentWarnings = 2 };
         Assert.True(JobCard.NeedsContentConfirm(s, confirmed: false));
@@ -129,7 +129,7 @@ public class VerifyVerdictTests
         return Path.Combine(d ?? throw new InvalidOperationException("Directory.Build.props not found"), "src", "Offload.App", file);
     }
 
-    // Ruling I2 (carried M-b): no green button at "Lze vyjmout" — "Vysunout kartu" is green only on the green (Done) card,
+    // Ruling I2 (carried M-b): no green button at "Safe to eject" — "Vysunout kartu" is green only on the green (Done) card,
     // which is shown for SafeToFormat alone; the verdict chips are green only for ChipTone.Ok (Chips: SafeToFormat).
     [Fact]
     public void QueuePanel_GreenOnlyForFormatSafe()

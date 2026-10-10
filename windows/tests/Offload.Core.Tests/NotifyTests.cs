@@ -23,26 +23,26 @@ public class JobOutcomeTests
     public void Done_VerifiedOnDisks_WithProxies()
     {
         var o = JobOutcomes.Final("A001", Status(JobPhase.Done, proxiesDone: 24), Report())!;
-        Assert.Equal((OutcomeKind.Done, "Offload: A001 hotovo", "Ověřeno na 1 disku — kartu lze formátovat. Proxy: 24 hotovo."), (o.Kind, o.Title, o.Message));
+        Assert.Equal((OutcomeKind.Done, "Offload: A001 done", "Verified on 1 disk — the card is safe to format. Proxies: 24 done."), (o.Kind, o.Title, o.Message));
         Assert.Equal(o.Message, o.PhoneMessage);
         Assert.Equal((3, "white_check_mark"), (o.Priority, o.Tags.Single()));
-        Assert.Equal("Ověřeno na 1 disku — kartu lze formátovat.", JobOutcomes.Final("A001", Status(JobPhase.Done), Report())!.Message);
+        Assert.Equal("Verified on 1 disk — the card is safe to format.", JobOutcomes.Final("A001", Status(JobPhase.Done), Report())!.Message);
     }
 
     [Fact]
     public void Attention_Cases()
     {
         var unverified = JobOutcomes.Final("A001", Status(JobPhase.Done), Report(verified: false))!;
-        Assert.Equal((OutcomeKind.Attention, "Offload: A001 — vyžaduje pozornost", "Kopie je hotová, ale NEOVĚŘENÁ."), (unverified.Kind, unverified.Title, unverified.Message));
+        Assert.Equal((OutcomeKind.Attention, "Offload: A001 — needs attention", "The copy is done but NOT VERIFIED."), (unverified.Kind, unverified.Title, unverified.Message));
         Assert.Equal((4, "warning"), (unverified.Priority, unverified.Tags.Single()));
-        Assert.Equal("Kopie je ověřená, ale 2 proxy selhaly.", JobOutcomes.Final("A001", Status(JobPhase.Done, proxiesFailed: 2), Report())!.Message);
-        Assert.Equal("Kopie je ověřená, ale zpracování po kopii selhalo.", JobOutcomes.Final("A001", Status(JobPhase.Failed, error: "x"), Report())!.Message);
+        Assert.Equal("The copy is verified, but 2 proxies failed.", JobOutcomes.Final("A001", Status(JobPhase.Done, proxiesFailed: 2), Report())!.Message);
+        Assert.Equal("The copy is verified, but the processing after the copy failed.", JobOutcomes.Final("A001", Status(JobPhase.Failed, error: "x"), Report())!.Message);
 
         var space = Msg.ProxiesSkippedForSpace("Zaloha (D:)", 30_000_000_000, 12_000_000_000);
         var skipped = JobOutcomes.Final("A001", Status(JobPhase.Done, warning: space), Report())!;
         Assert.Equal(OutcomeKind.Attention, skipped.Kind);
-        Assert.Equal("Kopie je ověřená, ale: " + space, skipped.Message);
-        Assert.Equal("Kopie je ověřená, ale vyžaduje pozornost — podrobnosti v aplikaci.", skipped.PhoneMessage);
+        Assert.Equal("The copy is verified, but: " + space, skipped.Message);
+        Assert.Equal("The copy is verified, but needs attention — details in the app.", skipped.PhoneMessage);
     }
 
     // Final review, item 5: a report verified as read, but the card not SafeToFormat (e.g. the results not written into
@@ -57,14 +57,14 @@ public class JobOutcomeTests
             JobOutcomes.Final("A001", Status(JobPhase.Failed, error: "x", safe: false), Report())!,
             JobOutcomes.Final("A001", Status(JobPhase.Done, warning: space, safe: false), Report())!,
         };
-        Assert.Equal("Kopie je hotová, ale 2 proxy selhaly.", outcomes[0].Message);
-        Assert.Equal("Kopie je hotová, ale zpracování po kopii selhalo.", outcomes[1].Message);
-        Assert.Equal("Kopie je hotová, ale: " + space, outcomes[2].Message);
-        Assert.Equal("Kopie je hotová, ale vyžaduje pozornost — podrobnosti v aplikaci.", outcomes[2].PhoneMessage);
+        Assert.Equal("The copy is done, but 2 proxies failed.", outcomes[0].Message);
+        Assert.Equal("The copy is done, but the processing after the copy failed.", outcomes[1].Message);
+        Assert.Equal("The copy is done, but: " + space, outcomes[2].Message);
+        Assert.Equal("The copy is done, but needs attention — details in the app.", outcomes[2].PhoneMessage);
         Assert.All(outcomes, o =>
         {
             Assert.Equal(OutcomeKind.Attention, o.Kind);
-            Assert.DoesNotContain("ověřen", o.Message + o.PhoneMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("verified", (o.Message + o.PhoneMessage).Replace("NOT VERIFIED", "").Replace("not fully verified", ""), StringComparison.OrdinalIgnoreCase);
         });
     }
 
@@ -72,11 +72,11 @@ public class JobOutcomeTests
     public void Error_FailedFiles_OrBeforeTheCopy()
     {
         var failed = JobOutcomes.Final("A001", Status(JobPhase.Done), Report(destError: "write failed"))!;
-        Assert.Equal((OutcomeKind.Error, "Offload: A001 — CHYBA", "1 soubor selhal — karta NENÍ zálohovaná."), (failed.Kind, failed.Title, failed.Message));
+        Assert.Equal((OutcomeKind.Error, "Offload: A001 — ERROR", "1 file failed — the card is NOT backed up."), (failed.Kind, failed.Title, failed.Message));
         Assert.Equal((5, "rotating_light"), (failed.Priority, failed.Tags.Single()));
-        var preflight = JobOutcomes.Final("A001", Status(JobPhase.Failed, error: @"Cíl nenalezen: D:\Zaloha — je disk připojený?"), null)!;
-        Assert.Equal(@"Cíl nenalezen: D:\Zaloha — je disk připojený?", preflight.Message);   // Windows: the error itself
-        Assert.Equal("Chyba před kopírováním — karta NENÍ zálohovaná.", preflight.PhoneMessage);
+        var preflight = JobOutcomes.Final("A001", Status(JobPhase.Failed, error: @"Destination not found: D:\Backup — is the disk connected?"), null)!;
+        Assert.Equal(@"Destination not found: D:\Backup — is the disk connected?", preflight.Message);   // Windows: the error itself
+        Assert.Equal("Error before copying — the card is NOT backed up.", preflight.PhoneMessage);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class JobOutcomeTests
     public void Ejectable_OnlyWhileStageTwoRuns_WindowsOnly()
     {
         var e = JobOutcomes.CopyDone("A001", Status(JobPhase.Proxies), proxies: true)!;
-        Assert.Equal((OutcomeKind.Ejectable, "Offload: A001 — kartu lze vyjmout", "Proxy se ještě renderují."), (e.Kind, e.Title, e.Message));
+        Assert.Equal((OutcomeKind.Ejectable, "Offload: A001 — safe to eject", "Proxies are still rendering."), (e.Kind, e.Title, e.Message));
         Assert.False(e.ForPhone);
         Assert.Null(JobOutcomes.CopyDone("A001", Status(JobPhase.Done), proxies: true));
         Assert.Null(JobOutcomes.CopyDone("A001", Status(JobPhase.Analyzing, safe: false), proxies: false));
@@ -108,9 +108,9 @@ public class JobOutcomeTests
             (Status(JobPhase.Done, proxiesDone: 3), Report()),
             (Status(JobPhase.Done), Report(verified: false)),
             (Status(JobPhase.Done, warning: Msg.ProxiesSkippedForSpace("Zaloha (D:)", 1, 1)), Report()),
-            (Status(JobPhase.Done, warning: @"kopie do E:\Proxy selhala"), Report()),
+            (Status(JobPhase.Done, warning: @"the copy to E:\Proxy failed"), Report()),
             (Status(JobPhase.Done), Report(destError: @"write failed D:\x")),
-            (Status(JobPhase.Failed, error: @"Zdroj nenalezen: E:\"), null),
+            (Status(JobPhase.Failed, error: @"Source not found: E:\"), null),
             (Status(JobPhase.Done, note: Msg.NothingNew), null),
         };
         foreach (var (status, report) in statuses)
@@ -131,7 +131,7 @@ public class NtfyClientTests
     public async Task Send_JsonShape_Utf8_Priority_NoPathInUrl()
     {
         using var server = new LocalHttp();
-        var o = new JobOutcome(OutcomeKind.Attention, "Offload: A001 — vyžaduje pozornost", "x", "Kopie je ověřená, ale 2 proxy selhaly.");
+        var o = new JobOutcome(OutcomeKind.Attention, "Offload: Č001 — needs attention", "x", "The copy is verified, but 2 proxies failed.");
 
         var r = await NtfyClient.SendAsync(server.Url.TrimEnd('/'), "film-x_7", o.Title, o.PhoneMessage, o.Priority, o.Tags);
 
@@ -143,11 +143,11 @@ public class NtfyClientTests
         using var doc = JsonDocument.Parse(req.Body);
         var root = doc.RootElement;
         Assert.Equal("film-x_7", root.GetProperty("topic").GetString());
-        Assert.Equal("Offload: A001 — vyžaduje pozornost", root.GetProperty("title").GetString());
-        Assert.Equal("Kopie je ověřená, ale 2 proxy selhaly.", root.GetProperty("message").GetString());
+        Assert.Equal("Offload: Č001 — needs attention", root.GetProperty("title").GetString());
+        Assert.Equal("The copy is verified, but 2 proxies failed.", root.GetProperty("message").GetString());
         Assert.Equal(4, root.GetProperty("priority").GetInt32());
         Assert.Equal("warning", root.GetProperty("tags")[0].GetString());
-        Assert.Contains("ověřená", Encoding.UTF8.GetString(req.Body));   // raw UTF-8, not only escapes
+        Assert.Contains("Č001 —", Encoding.UTF8.GetString(req.Body));   // raw UTF-8, not only escapes (a card name may have any letters)
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class NtfyClientTests
         using var server = new LocalHttp(c => LocalHttp.Reply(c, 429, "slow down"));
         var r = await NtfyClient.SendAsync(server.Url, "t", "a", "b", 3, []);
         Assert.False(r.Ok);
-        Assert.StartsWith("Server odpověděl 429", r.Error);
+        Assert.StartsWith("The server answered 429", r.Error);
     }
 
     // Review focus 3: a server that never answers — the send gives up after its limit (10 s; here 300 ms).
@@ -167,7 +167,7 @@ public class NtfyClientTests
         var sw = Stopwatch.StartNew();
         var r = await NtfyClient.SendAsync(server.Url, "t", "a", "b", 3, [], timeout: TimeSpan.FromMilliseconds(300));
         Assert.False(r.Ok);
-        Assert.Equal("Server neodpověděl do 0.3 s.", r.Error!.Replace(',', '.'));
+        Assert.Equal("The server did not answer within 0.3 s.", r.Error);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), sw.Elapsed.ToString());
     }
 
@@ -189,11 +189,11 @@ public class NtfyClientTests
         Assert.False(string.IsNullOrWhiteSpace(r.Error));
     }
 
-    // Review focus 3: a topic with diacritics never leaves the PC (ntfy would refuse it) — said in Czech.
+    // Review focus 3: a topic with diacritics never leaves the PC (ntfy would refuse it) — said why.
     [Theory]
-    [InlineData("můj-kanál", "Téma smí mít jen písmena bez diakritiky, číslice, - a _ (nejvýš 64 znaků).")]
-    [InlineData("", "Téma není vyplněné.")]
-    [InlineData("a/b", "Téma smí mít jen písmena bez diakritiky, číslice, - a _ (nejvýš 64 znaků).")]
+    [InlineData("můj-kanál", "The topic may contain only letters without accents, digits, - and _ (at most 64 characters).")]
+    [InlineData("", "The topic is empty.")]
+    [InlineData("a/b", "The topic may contain only letters without accents, digits, - and _ (at most 64 characters).")]
     public async Task BadTopic_RefusedLocally(string topic, string error)
     {
         using var server = new LocalHttp();
@@ -222,14 +222,14 @@ public class NtfyClientTests
         using var server = new LocalHttp(_ => Task.Delay(Timeout.Infinite));
         var settings = new NtfySettings { Enabled = true, Server = server.Url, Topic = "t" };
         var log = new List<string>();
-        var outcome = new JobOutcome(OutcomeKind.Done, "Offload: A001 hotovo", "x", "Ověřeno na 2 discích.");
+        var outcome = new JobOutcome(OutcomeKind.Done, "Offload: A001 done", "x", "Verified on 2 disks.");
 
         var send = NtfyClient.SendOutcomeAsync(settings, outcome, m => { lock (log) log.Add(m); }, TimeSpan.FromMilliseconds(500));
         // No wall-clock assert: the server never answers, so the call returning with an unfinished task IS the proof that
         // the caller is not held; the result arrives later (bounded wait, never an elapsed-time check).
         Assert.False(send.IsCompleted);
         await send.WaitAsync(TimeSpan.FromSeconds(30));
-        lock (log) Assert.Equal("ntfy: Server neodpověděl do 0.5 s.", Assert.Single(log).Replace(',', '.'));
+        lock (log) Assert.Equal("ntfy: The server did not answer within 0.5 s.", Assert.Single(log));
         // Whether the request reached the listener before the 0.5 s limit cancelled it depends on the machine's load (a
         // connect or a pool thread starved for longer than the limit: the client gives up before sending anything), so
         // nothing here waits for it. "Nothing is sent" is proven on a server of its own: those calls are awaited and
@@ -266,7 +266,7 @@ public class NtfyClientTests
         var r = await NtfyClient.SendAsync(server.Url, "t", "a", "b", 3, [], timeout: TimeSpan.FromSeconds(6));
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(3), $"took {watch.Elapsed}");
         Assert.False(r.Ok);
-        Assert.StartsWith("Server odpověděl 500", r.Error);
+        Assert.StartsWith("The server answered 500", r.Error);
         Assert.True(r.Error!.Length < 600, $"reason phrase not capped: {r.Error.Length}");
     }
 }

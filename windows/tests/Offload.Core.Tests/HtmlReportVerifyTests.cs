@@ -13,7 +13,7 @@ public class HtmlReportVerifyTests
     {
         var r = Reports.Sample(Card, verified: false);
         r.VerifyPending = true;
-        r.VerifyNotes = ["Nestabilní čtení: a.mov na RAID_A (blok 3) dal při jednom čtení jiná data — při dalším souhlasil s kartou."];
+        r.VerifyNotes = ["Unstable read: a.mov on RAID_A (block 3) gave different data in one read — the next read matched the card."];
         r.Clips = [new ClipEntry
         {
             Clip = new Clip { Name = "A001C003", Path = "CLIP/A&B.mov", Segments = ["CLIP/A&B.mov"] },
@@ -22,13 +22,13 @@ public class HtmlReportVerifyTests
 
         var html = HtmlReport.Render(r);
 
-        Assert.Contains("ZKOPÍROVÁNO — OVĚŘUJE SE", html);
-        Assert.Contains("Vady obsahu (1)", html);
+        Assert.Contains("COPIED — VERIFYING", html);
+        Assert.Contains("Content defects (1)", html);
         Assert.Contains("01:00:02:13", html);
-        Assert.Contains("poškozená data", html);
+        Assert.Contains("corrupted data", html);
         Assert.Contains("data:image/jpeg;base64,/9g=", html);
-        Assert.Contains("Ověření — poznámky (1)", html);
-        Assert.Equal("nesouhlasí blok 3 (cíl 0000000000000001, karta 0000000000000002)",
+        Assert.Contains("Verification — notes (1)", html);
+        Assert.Equal("block 3 mismatch (destination 0000000000000001, card 0000000000000002)",
             HtmlReport.ErrorText("HASH MISMATCH: block 3 dest 0000000000000001 != source 0000000000000002"));
     }
 
@@ -38,13 +38,13 @@ public class HtmlReportVerifyTests
     public void Html_VerifyIncomplete_NedokoncenoWarn()
     {
         var r = Reports.Sample(Card);
-        Assert.Contains("<span class=\"badge ok\">OVĚŘENO</span>", HtmlReport.Render(r));
+        Assert.Contains("<span class=\"badge ok\">VERIFIED</span>", HtmlReport.Render(r));
         r.VerifyIncomplete = true;
 
         var html = HtmlReport.Render(r);
 
-        Assert.Contains("<span class=\"badge warn\">NEDOKONČENO</span>", html);
-        Assert.DoesNotContain(">OVĚŘENO<", html);
+        Assert.Contains("<span class=\"badge warn\">UNFINISHED</span>", html);
+        Assert.DoesNotContain(">VERIFIED<", html);
     }
 
     // Spec 9: the method and the serial per destination, the time to "Lze formátovat", in the HTML and the text report.
@@ -59,9 +59,9 @@ public class HtmlReportVerifyTests
 
         var html = HtmlReport.Render(report);
 
-        Assert.Contains("<th>Svazek</th><th>Ověření</th>", html);
-        Assert.Contains($"<td class=\"mono nw\">{report.Destinations[0].VolumeSerial}</td><td class=\"nw\">zpětné čtení</td>", html);
-        Assert.Contains("do „lze formátovat“", html);
+        Assert.Contains("<th>Volume</th><th>Verification</th>", html);
+        Assert.Contains($"<td class=\"mono nw\">{report.Destinations[0].VolumeSerial}</td><td class=\"nw\">read back</td>", html);
+        Assert.Contains("until \u201csafe to format\u201d", html);
         Assert.Contains("XXH64 + XXH128", html);
         Assert.Contains("  verify: read-back", report.Summary);
         Assert.Contains("Safe to format after: ", report.Summary);
@@ -78,11 +78,11 @@ public class HtmlReportVerifyTests
             Clip = new Clip { Name = "A001C003", Path = "CLIP/A&B.mov", Segments = ["CLIP/A&B.mov"] },
             Content = new ContentResult { State = ContentResult.Warn, Kind = "end", Timecode = "01:00:02:13" },
         }];
-        Assert.Equal("během proxy", Desktop.JobCard.Summary(r, TimeSpan.FromSeconds(10)).Single(f => f.Label == "Ověření").Value);
+        Assert.Equal("during proxies", Desktop.JobCard.Summary(r, TimeSpan.FromSeconds(10)).Single(f => f.Label == "Verification").Value);
         Assert.Contains("  verify: verify-in-proxy", r.Summary);
         Assert.Contains("Content warnings: 1 (A001C003 01:00:02:13)", r.Summary);
-        Assert.Contains("<td class=\"nw\">během proxy</td>", HtmlReport.Render(r));
+        Assert.Contains("<td class=\"nw\">during proxies</td>", HtmlReport.Render(r));
         r.Destinations[0].VerifyMethod = ReportDestination.ReadBack;
-        Assert.EndsWith("MB/s", Desktop.JobCard.Summary(r, TimeSpan.FromSeconds(10)).Single(f => f.Label == "Ověření").Value);
+        Assert.EndsWith("MB/s", Desktop.JobCard.Summary(r, TimeSpan.FromSeconds(10)).Single(f => f.Label == "Verification").Value);
     }
 }

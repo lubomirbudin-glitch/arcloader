@@ -115,7 +115,7 @@ public class SpacePlannerTests
             new Dictionary<string, long> { ["v1"] = 398 * GB });
         var p = Assert.Single(problems);
         Assert.Equal(SpaceSeverity.Blocking, p.Severity);
-        Assert.Equal("Na cíli Zaloha (D:) není dost místa: potřeba 412 GB (karty 380 GB, proxy ~30 GB, report 2 GB), volno 398 GB.", p.Text);
+        Assert.Equal("Not enough space on destination Zaloha (D:): needs 412 GB (cards 380 GB, proxies ~30 GB, report 2 GB), free 398 GB.", p.Text);
     }
 
     // Review focus 5: two destinations on one volume (--allow-same-device) + the proxy folder on it too.
@@ -138,7 +138,7 @@ public class SpacePlannerTests
         Assert.Empty(SpacePlanner.Check(need, new Dictionary<string, long> { ["v1"] = 105 * GB }));   // exactly 5 % left
         var w = Assert.Single(SpacePlanner.Check(need, new Dictionary<string, long> { ["v1"] = 104 * GB }));
         Assert.Equal(SpaceSeverity.Warning, w.Severity);
-        Assert.Equal("Na cíli Zaloha (D:) zbude po offloadu jen 4 GB — rezerva pod 5 %, odhad proxy je přibližný.", w.Text);
+        Assert.Equal("Only 4 GB will be left on destination Zaloha (D:) after the offload — less than the 5 % reserve, and the proxy estimate is approximate.", w.Text);
     }
 
     [Fact]
@@ -168,8 +168,8 @@ public class SpaceEngineTests
 
         var s = job.Status();
         Assert.Equal(JobPhase.Failed, s.Phase);
-        Assert.Contains("není dost místa", s.Error);
-        Assert.Contains("proxy ~", s.Error);
+        Assert.Contains("Not enough space", s.Error);
+        Assert.Contains("proxies ~", s.Error);
         Assert.False(Directory.Exists(Path.Combine(dir.Path, "d1", Layout.Today())));   // nothing written
     }
 
@@ -189,8 +189,9 @@ public class SpaceEngineTests
         var line = Assert.Single(plan.Space);
         var label = Offload.Core.History.HistoryText.DiskName(d1);
         Assert.Equal((label, need, need + need / 50), (line.Label, line.Need.Total, line.Free));
-        Assert.StartsWith($"Na cíli {label} zbude po offloadu jen ", Assert.Single(plan.SpaceWarnings));
-        Assert.Equal($"Místo: {label} potřeba 68 MB (karta 68 MB), volno 70 MB", Msg.SpaceLine(line.Label, line.Need, line.Free));
+        Assert.StartsWith("Only ", Assert.Single(plan.SpaceWarnings));
+        Assert.Contains($" will be left on destination {label} after the offload", Assert.Single(plan.SpaceWarnings));
+        Assert.Equal($"Space: {label} needs 68 MB (card 68 MB), free 70 MB", Msg.SpaceLine(line.Label, line.Need, line.Free));
     }
 
 
@@ -209,7 +210,7 @@ public class SpaceEngineTests
 
         var e = Assert.Throws<OffloadError>(() => Engine(total - 1).Prepare(card, dests, null, "2026-10-06", _ => extra));
         Assert.Equal(PreflightCode.NoSpace, e.Code);
-        Assert.Contains($"potřeba {Format.BytesCs(total)}", e.Message);
+        Assert.Contains($"needs {Format.BytesShort(total)}", e.Message);
 
         var plan = Engine(total).Prepare(card, dests, null, "2026-10-06", _ => extra);
         Assert.Equal(total, Assert.Single(plan.Space).Need.Total);
@@ -248,8 +249,8 @@ public class SpaceEngineTests
         var s = job.Status();
         Assert.Equal(JobPhase.Done, s.Phase);
         Assert.True(s.SafeToEject);
-        Assert.StartsWith("Proxy se nevyrenderovaly: na d1 (", s.Warning);
-        Assert.Contains(") chybí místo (potřeba ~", s.Warning);
+        Assert.StartsWith("Proxies were not rendered: not enough space on d1 (", s.Warning);
+        Assert.Contains(") (needs ~", s.Warning);
         Assert.Equal(ProxyStatus.Skipped, Assert.Single(report!.Clips).ProxyStatus);
         Assert.False(Directory.Exists(Path.Combine(job.Plan!.CardPaths[0], "_PROXY")));
     }

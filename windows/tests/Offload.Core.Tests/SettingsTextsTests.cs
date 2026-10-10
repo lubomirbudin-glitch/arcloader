@@ -14,7 +14,7 @@ public class SettingsTextsTests
         var p = new ProxySettings { LutMode = LutMode.Builtin, LutBuiltin = "arri-logc4-awg4" };
         var rows = Cat.Luts.Select(l => SettingsTexts.Row(l, p)).ToDictionary(r => r.Id);
 
-        Assert.Equal(("ARRI · LogC4", "LogC4 / AWG4 → Rec.709", "použito"),
+        Assert.Equal(("ARRI · LogC4", "LogC4 / AWG4 → Rec.709", "in use"),
             (rows["arri-logc4-awg4"].Title, rows["arri-logc4-awg4"].Detail, rows["arri-logc4-awg4"].Marker));
         Assert.Equal(("Sony · S-Log3", "S-Log3 / S-Gamut3.Cine → Rec.709", (string?)null),
             (rows["sony-slog3-sgamut3cine"].Title, rows["sony-slog3-sgamut3cine"].Detail, rows["sony-slog3-sgamut3cine"].Marker));
@@ -27,11 +27,11 @@ public class SettingsTextsTests
     [Fact]
     public void Bitrate_Frame_Notify()
     {
-        Assert.Equal("≈ 75 MB / minutu", SettingsTexts.BitrateHint(10));
-        Assert.Equal("≈ 15 MB / minutu", SettingsTexts.BitrateHint(2));
+        Assert.Equal("≈ 75 MB / minute", SettingsTexts.BitrateHint(10));
+        Assert.Equal("≈ 15 MB / minute", SettingsTexts.BitrateHint(2));
 
         Assert.Null(SettingsTexts.Frame(new ProxySettings()));
-        Assert.Equal("celý obraz", SettingsTexts.FrameText(new ProxySettings()));
+        Assert.Equal("full frame", SettingsTexts.FrameText(new ProxySettings()));
         var crop = new ProxySettings { FrameAspect = 2.39, FrameScale = 0.9 };
         var (x, y, w, h) = SettingsTexts.Frame(crop)!.Value;
         Assert.Equal(0.05, x, 2);
@@ -39,8 +39,8 @@ public class SettingsTextsTests
         Assert.Equal(1 - 2 * y, h, 2);
         Assert.Equal("2.39 · 90 %", SettingsTexts.FrameText(crop));
 
-        Assert.Equal("Windows: zapnuto · telefon (ntfy): vypnuto", SettingsTexts.NotifySummary(new NotifySettings()));
-        Assert.Equal("Windows: vypnuto · telefon (ntfy): film-x",
+        Assert.Equal("Windows: on · phone (ntfy): off", SettingsTexts.NotifySummary(new NotifySettings()));
+        Assert.Equal("Windows: off · phone (ntfy): film-x",
             SettingsTexts.NotifySummary(new NotifySettings { Windows = false, Ntfy = new NtfySettings { Enabled = true, Topic = "film-x" } }));
     }
 }

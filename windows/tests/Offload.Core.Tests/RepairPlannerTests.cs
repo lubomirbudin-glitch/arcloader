@@ -141,7 +141,7 @@ public class RepairPlannerTests
         var card = dir.Sub("A001");
         TestFs.WriteRandom(Path.Combine(card, "CLIP", "A001C001.mov"), 100_000, 1);
         var options = AppendFixtures.Options();
-        options.BeforeDestWrite = d => { if (d == 0) throw new IOException("Zařízení není připojeno."); };
+        options.BeforeDestWrite = d => { if (d == 0) throw new IOException("The device is not connected."); };
         var engine = new OffloadEngine(options);
         var full = engine.Prepare(card, [dir.Sub("d1"), dir.Sub("d2")], null, "2026-10-07");
         engine.Run(full);
@@ -188,7 +188,7 @@ public class RepairPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.RepairConflict, e.Code);
-        Assert.Contains("CLIP/A001C002.mov: jiná velikost nebo datum", e.Message);
+        Assert.Contains("CLIP/A001C002.mov: different size or date", e.Message);
         for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
     }
 
@@ -207,8 +207,8 @@ public class RepairPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.RepairConflict, e.Code);
-        Assert.Contains($"CLIP/A001C002.mov: na kartě je jiný obsah než při záloze (xxh64 {now}, v záloze {recorded})", e.Message);
-        Assert.StartsWith("Oprava zastavena — nic se nezkopírovalo.", e.Message);
+        Assert.Contains($"CLIP/A001C002.mov: the card has different content than at the backup (xxh64 {now}, in the backup {recorded})", e.Message);
+        Assert.StartsWith("Repair stopped — nothing was copied.", e.Message);
         for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
     }
 
@@ -222,7 +222,7 @@ public class RepairPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.RepairConflict, e.Code);
-        Assert.Contains("CLIP/A001C002.mov: na kartě už není", e.Message);
+        Assert.Contains("CLIP/A001C002.mov: no longer on the card", e.Message);
     }
 
     // A good copy that is gone from its disk: something changed the backup — Ověřit zálohu first, as for an append.
@@ -263,7 +263,7 @@ public class RepairPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.AppendNoMhl, e.Code);
-        Assert.EndsWith("opravit nejde.", e.Message);
+        Assert.EndsWith("cannot repair.", e.Message);
     }
 
     // Ruling C1(b): what the card must give is taken from the copies that read the whole card (full copy, append) — never

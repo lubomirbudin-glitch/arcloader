@@ -51,8 +51,8 @@ public class CliNtfyTests
         Assert.Equal(0, r.Exit);
         var body = Body(server);
         Assert.Equal("kanal-1", body.GetProperty("topic").GetString());
-        Assert.Equal("Offload: A001 hotovo", body.GetProperty("title").GetString());
-        Assert.Equal("Ověřeno na 1 disku — kartu lze formátovat.", body.GetProperty("message").GetString());
+        Assert.Equal("Offload: A001 done", body.GetProperty("title").GetString());
+        Assert.Equal("Verified on 1 disk — the card is safe to format.", body.GetProperty("message").GetString());
         Assert.Contains("ntfy: sent", r.Err);
     }
 
@@ -83,7 +83,7 @@ public class CliNtfyTests
         var r = RunAppend(folder, card, "--into", into, "--project", "Reklama Y", "--no-history", "--no-analyze");
 
         Assert.Equal(0, r.Exit);
-        Assert.Contains("Oznámení podle projektu dřívější zálohy: Film X", r.Out);
+        Assert.Contains("Notifications from the project of the earlier backup: Film X", r.Out);
         Assert.Equal(2, film.Requests.Count);
         Assert.Empty(reklama.Requests);
 
@@ -117,13 +117,13 @@ public class CliNtfyTests
     }
 
     [Fact]
-    public void BadUrl_Exit1_Czech_NothingCopied()
+    public void BadUrl_Exit1_Explained_NothingCopied()
     {
         using var dir = new TempDir();
         var d1 = dir.Sub("d1");
         var r = Run(null, Card(dir), "-d", d1, "--no-history", "--ntfy", "https://ntfy.sh/kanál");
         Assert.Equal(1, r.Exit);
-        Assert.Contains("Chyba: Adresa ntfy „https://ntfy.sh/kanál“ nejde použít", r.Err);
+        Assert.Contains("Error: Cannot use the ntfy address \"https://ntfy.sh/kanál\"", r.Err);
         Assert.Empty(Directory.GetDirectories(d1));
     }
 
@@ -136,8 +136,8 @@ public class CliNtfyTests
         var r = Run(null, Card(dir), "-d", Path.Combine(dir.Path, "missing"), "--no-history", "--ntfy", server.Url + "k");
         Assert.Equal(1, r.Exit);
         var body = Body(server);
-        Assert.Equal("Offload: A001 — CHYBA", body.GetProperty("title").GetString());
-        Assert.Equal("Chyba před kopírováním — karta NENÍ zálohovaná.", body.GetProperty("message").GetString());
+        Assert.Equal("Offload: A001 — ERROR", body.GetProperty("title").GetString());
+        Assert.Equal("Error before copying — the card is NOT backed up.", body.GetProperty("message").GetString());
         Assert.Equal(5, body.GetProperty("priority").GetInt32());
     }
 
@@ -149,7 +149,7 @@ public class CliNtfyTests
         using var server = new LocalHttp();
         var r = Run(null, Path.Combine(dir.Path, "B002"), "-d", dir.Sub("d1"), "--no-history", "--ntfy", server.Url + "k");   // no such source
         Assert.Equal(1, r.Exit);
-        Assert.Equal("Offload: B002 — CHYBA", Body(server).GetProperty("title").GetString());
+        Assert.Equal("Offload: B002 — ERROR", Body(server).GetProperty("title").GetString());
     }
 
     // --project with ntfy on sends there; --ntfy on the command line wins; without either nothing is sent.
@@ -210,8 +210,8 @@ public class CliNtfyTests
         var paths = @"E:\Karta\CLIP\A001C001.mov";
         foreach (var (status, report) in new (JobStatus, OffloadReport?)[]
         {
-            (new JobStatus { Phase = JobPhase.Failed, Error = "Cíl nenalezen: " + paths }, null),
-            (new JobStatus { Phase = JobPhase.Done, Warning = "kopie do " + paths + " selhala" }, Reports.Sample(@"D:\Zaloha\A001")),
+            (new JobStatus { Phase = JobPhase.Failed, Error = "Destination not found: " + paths }, null),
+            (new JobStatus { Phase = JobPhase.Done, Warning = "the copy to " + paths + " failed" }, Reports.Sample(@"D:\Zaloha\A001")),
             (new JobStatus { Phase = JobPhase.Done }, Reports.Sample(@"D:\Zaloha\A001", destError: paths)),
         })
             await NtfyClient.SendOutcomeAsync(settings, JobOutcomes.Final("A001", status, report), null);
@@ -244,7 +244,7 @@ public class CliNtfyTests
         Assert.Equal(1, exit);
         var req = Assert.Single(server.Requests);
         var text = System.Text.Encoding.UTF8.GetString(req.Body);
-        Assert.Contains("Offload: A001 — CHYBA", text);
+        Assert.Contains("Offload: A001 — ERROR", text);
         Assert.DoesNotContain("tajny-rodic", text);
     }
 
@@ -252,8 +252,8 @@ public class CliNtfyTests
     public void DialogCheck_ServerAndTopic_OnlyWhenOn()
     {
         Assert.Null(NtfyClient.SettingsProblem(new NtfySettings { Enabled = false, Topic = "" }));
-        Assert.Equal("Téma není vyplněné.", NtfyClient.SettingsProblem(new NtfySettings { Enabled = true }));
-        Assert.Equal("Adresa serveru „ntfy.sh“ není http(s) adresa.", NtfyClient.SettingsProblem(new NtfySettings { Enabled = true, Server = "ntfy.sh", Topic = "a" }));
+        Assert.Equal("The topic is empty.", NtfyClient.SettingsProblem(new NtfySettings { Enabled = true }));
+        Assert.Equal("The server address \"ntfy.sh\" is not an http(s) address.", NtfyClient.SettingsProblem(new NtfySettings { Enabled = true, Server = "ntfy.sh", Topic = "a" }));
         Assert.Null(NtfyClient.SettingsProblem(new NtfySettings { Enabled = true, Topic = "a_b-1" }));
     }
 

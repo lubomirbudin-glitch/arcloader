@@ -351,7 +351,7 @@ public class SettingsStoreTests
         Assert.Equal(@"Z:\luts\look.cube", ProxyPreflight.LutInUse(p, analyzeClips: false));
         Assert.Null(ProxyPreflight.Blocking(p, false, lutExists: null));    // not checked yet: Start checks once more
         Assert.Null(ProxyPreflight.Blocking(p, false, lutExists: true));
-        Assert.Equal("LUT nenalezen: look.cube — vyberte jiný nebo ho odeberte.", ProxyPreflight.Blocking(p, false, lutExists: false));
+        Assert.Equal("LUT not found: look.cube — select another one or remove it.", ProxyPreflight.Blocking(p, false, lutExists: false));
         p.Enabled = false;
         Assert.Null(ProxyPreflight.LutInUse(p, analyzeClips: false));
         Assert.Null(ProxyPreflight.Blocking(p, false, lutExists: false));
@@ -404,7 +404,7 @@ public class SettingsStoreTests
         Assert.Equal(@"Z:\Proxy", ProxyPreflight.ExtraFolderInUse(p));
         Assert.Null(ProxyPreflight.ExtraFolderBlocking(p, folderExists: null));   // not checked yet
         Assert.Null(ProxyPreflight.ExtraFolderBlocking(p, folderExists: true));
-        Assert.Equal(@"Složka pro proxy není dostupná: Z:\Proxy", ProxyPreflight.ExtraFolderBlocking(p, folderExists: false));
+        Assert.Equal(@"The proxy folder is not available: Z:\Proxy", ProxyPreflight.ExtraFolderBlocking(p, folderExists: false));
         p.Enabled = false;
         Assert.Null(ProxyPreflight.ExtraFolderInUse(p));
         Assert.Null(ProxyPreflight.ExtraFolderBlocking(p, folderExists: false));
@@ -421,7 +421,7 @@ public class SettingsStoreTests
         var p = new ProxySettings { Enabled = true, ExtraFolder = dir.Path };
         Assert.Null(ProxyPreflight.ExtraFolderBlocking(p));
         p.ExtraFolder = Path.Combine(dir.Path, "nope");
-        Assert.Equal($"Složka pro proxy není dostupná: {p.ExtraFolder}", ProxyPreflight.ExtraFolderBlocking(p));
+        Assert.Equal($"The proxy folder is not available: {p.ExtraFolder}", ProxyPreflight.ExtraFolderBlocking(p));
         p.Enabled = false;
         Assert.Null(ProxyPreflight.ExtraFolderBlocking(p));
     }

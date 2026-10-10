@@ -60,7 +60,7 @@ public class LutCatalogTests
         var arri = cat.Find("arri-logc4-awg4")!;
         Assert.Equal(own, arri.Path);
         Assert.True(arri.UserFile);
-        Assert.Equal("ARRI LogC4 / AWG4 → Rec.709 (vlastní soubor)", arri.Name);
+        Assert.Equal("ARRI LogC4 / AWG4 → Rec.709 (custom file)", arri.Name);
         foreach (var l in cat.Luts.Where(l => l.Id != "arri-logc4-awg4"))
         {
             Assert.Equal(builtin.Find(l.Id), l);
@@ -83,17 +83,17 @@ public class LutCatalogTests
 
         var auto = LutResolver.Resolve(clip, info, @"X:\A009C002_261008_R2PK.mxf", new ProxySettings { LutMode = LutMode.Auto }, cat);
         Assert.Equal(("auto", "arri-logc4-awg4", own), (auto.Source, auto.Id, auto.File));
-        Assert.EndsWith("(vlastní soubor)", auto.Name);
-        Assert.Equal($"ARRIRAW (LogC4); soubor {own}", auto.Reason);
+        Assert.EndsWith("(custom file)", auto.Name);
+        Assert.Equal($"ARRIRAW (LogC4); file {own}", auto.Reason);
         Assert.True(auto.IsBuiltin);   // same input convention as the LUT it replaces (pre-map, art-cmd LogC4)
 
         var chosen = LutResolver.Resolve(clip, info, "", new ProxySettings { LutMode = LutMode.Builtin, LutBuiltin = "arri-logc4-awg4" }, cat);
         Assert.Equal(own, chosen.File);
-        Assert.EndsWith($"; soubor {own}", chosen.Reason);
+        Assert.EndsWith($"; file {own}", chosen.Reason);
 
         var rule = LutRules.Use(1, new LutRule { Lut = "arri-logc4-awg4" }, cat);
         Assert.Equal(own, rule.File);
-        Assert.EndsWith($"; soubor {own}", rule.Reason);
-        Assert.EndsWith("(vlastní soubor)", rule.Name);
+        Assert.EndsWith($"; file {own}", rule.Reason);
+        Assert.EndsWith("(custom file)", rule.Name);
     }
 }

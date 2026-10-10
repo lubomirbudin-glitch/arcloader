@@ -43,7 +43,7 @@ public class ReelNamesTests
     public void OneReel_Suggested_WithHint()
     {
         var (s, note, reels) = ReelSuggestion.FromClips([C("A001C001_210101_R1AB"), C("A001C002_210101_R1AB"), C("README")]);
-        Assert.Equal(new NameSuggestion("A001", "podle názvů klipů (A001C001…)"), s);
+        Assert.Equal(new NameSuggestion("A001", "from the clip names (A001C001…)"), s);
         Assert.Null(note);
         Assert.Equal(["A001"], reels);
     }
@@ -53,7 +53,7 @@ public class ReelNamesTests
     {
         var (s, note, reels) = ReelSuggestion.FromClips([C("A002C001_x"), C("A001C001_x")]);
         Assert.Null(s);
-        Assert.Equal("Na kartě je víc cívek: A001, A002", note);
+        Assert.Equal("The card has more than one reel: A001, A002", note);
         Assert.Equal(["A001", "A002"], reels);
     }
 
@@ -72,7 +72,7 @@ public class ReelNamesTests
     {
         var (s, note, reels) = ReelSuggestion.FromClips([C("A001C001_x"), C("A001C002_x"), C("A001C003_x"), C("B001C001_x")]);
         Assert.Null(s);   // spec: several reels = no suggestion (not the majority)
-        Assert.Equal("Na kartě je víc cívek: A001, B001", note);
+        Assert.Equal("The card has more than one reel: A001, B001", note);
         Assert.Equal(["A001", "B001"], reels);
     }
 
@@ -88,8 +88,8 @@ public class ReelNamesTests
     [Fact]
     public void Blackmagic_And_Red_OneReel_HintShowsPrefix()
     {
-        Assert.Equal("podle názvů klipů (A001_08251530_C001…)", ReelSuggestion.FromClips([C("A001_08251530_C001")]).Suggestion!.Hint);
-        Assert.Equal("podle názvů klipů (A001_C003…)", ReelSuggestion.FromClips([C("A001_C003_0101AB")]).Suggestion!.Hint);
+        Assert.Equal("from the clip names (A001_08251530_C001…)", ReelSuggestion.FromClips([C("A001_08251530_C001")]).Suggestion!.Hint);
+        Assert.Equal("from the clip names (A001_C003…)", ReelSuggestion.FromClips([C("A001_C003_0101AB")]).Suggestion!.Hint);
     }
 
     [Fact]
@@ -115,8 +115,8 @@ public class ReelNamesTests
     public void Next_OneCameraLetter()
     {
         HistoryEntry[] h = [Copied("A001", "2026-10-06"), Copied("A002", "2026-10-06"), Copied("A001_2", "2026-10-06"), Copied("A009", "2026-10-05")];
-        Assert.Equal(new NameSuggestion("A003", "další v řadě po A002 (dnes)"), ReelSuggestion.Next(h, "2026-10-06", null, today: "2026-10-06"));
-        Assert.Equal(new NameSuggestion("A010", "další v řadě po A009 (2026-10-05)"), ReelSuggestion.Next(h, "2026-10-05", null, today: "2026-10-06"));
+        Assert.Equal(new NameSuggestion("A003", "next after A002 (today)"), ReelSuggestion.Next(h, "2026-10-06", null, today: "2026-10-06"));
+        Assert.Equal(new NameSuggestion("A010", "next after A009 (2026-10-05)"), ReelSuggestion.Next(h, "2026-10-05", null, today: "2026-10-06"));
     }
 
     [Fact]
@@ -132,17 +132,17 @@ public class ReelNamesTests
     [Fact]
     public void Placeholder_ClipsThenNextThenLabel()
     {
-        var withReel = new CardInsight { Source = @"E:\", Name = new NameSuggestion("A001", "podle názvů klipů (A001C001…)") };
+        var withReel = new CardInsight { Source = @"E:\", Name = new NameSuggestion("A001", "from the clip names (A001C001…)") };
         var plain = new CardInsight { Source = @"E:\" };
         HistoryEntry[] h = [Copied("A004", "2026-10-06")];
-        Assert.Equal(("A001", "podle názvů klipů (A001C001…)"), CardNaming.Placeholder(true, withReel, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL"));
-        Assert.Equal(("A005", "další v řadě po A004 (dnes)"), CardNaming.Placeholder(true, plain, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL"));
+        Assert.Equal(("A001", "from the clip names (A001C001…)"), CardNaming.Placeholder(true, withReel, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL"));
+        Assert.Equal(("A005", "next after A004 (today)"), CardNaming.Placeholder(true, plain, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL"));
         Assert.Equal(("EOS_DIGITAL", (string?)null), CardNaming.Placeholder(false, withReel, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL"));
         Assert.Equal(("EOS_DIGITAL", (string?)null), CardNaming.Placeholder(true, null, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL"));
         var known = plain with { History = new HistoryMatch(h[0], HistoryMatchKind.Identical, [], 0, [], 0) };
         Assert.Equal("EOS_DIGITAL", CardNaming.Placeholder(true, known, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL").Name);   // a known card is not "next"
-        var twoReels = plain with { NameNote = "Na kartě je víc cívek: A001, A002" };
-        Assert.Equal(("EOS_DIGITAL", "Na kartě je víc cívek: A001, A002"), CardNaming.Placeholder(true, twoReels, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL"));
+        var twoReels = plain with { NameNote = "The card has more than one reel: A001, A002" };
+        Assert.Equal(("EOS_DIGITAL", "The card has more than one reel: A001, A002"), CardNaming.Placeholder(true, twoReels, h, "2026-10-06", "2026-10-06", "EOS_DIGITAL"));
     }
 
     static CardNameInput In(string key, string? typed = null, CardInsight? insight = null) =>

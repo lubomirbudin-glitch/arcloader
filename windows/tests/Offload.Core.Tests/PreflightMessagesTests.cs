@@ -28,25 +28,25 @@ public class PreflightMessagesTests
         Directory.CreateDirectory(Path.Combine(offload, "_REPORT"));
         return
         [
-            (PreflightCode.ChunkSize, "Velikost bloku musí být násobek 4096 B a nejvýš 1 GiB (zadáno 1000).",
+            (PreflightCode.ChunkSize, "The block size must be a multiple of 4096 B and at most 1 GiB (given 1000).",
                 Fail(e => e.Prepare(card, [d1], null, null), new OffloadOptions { AllowSameDevice = true, AllowSourceVolume = true, ChunkSize = 1000 })),
-            (PreflightCode.BufferCount, "Počet bufferů musí být aspoň 2 (zadáno 1).",
+            (PreflightCode.BufferCount, "The buffer count must be at least 2 (given 1).",
                 Fail(e => e.Prepare(card, [d1], null, null), new OffloadOptions { AllowSameDevice = true, AllowSourceVolume = true, BufferCount = 1 })),
-            (PreflightCode.Date, "Datum musí být ve tvaru RRRR-MM-DD (zadáno „2026-1-4“).", Fail(e => e.Prepare(card, [d1], null, "2026-1-4"))),
-            (PreflightCode.SourceNotFound, $"Zdroj nenalezen: {missing}", Fail(e => e.Prepare(missing, [d1], null, null))),
-            (PreflightCode.NoDestination, "Není zadaný žádný cíl.", Fail(e => e.Prepare(card, [], null, null))),
-            (PreflightCode.DuplicateDestination, $"Cíl je zadaný dvakrát: {d1.ToUpperInvariant()}\\",
+            (PreflightCode.Date, "The date must be YYYY-MM-DD (given \"2026-1-4\").", Fail(e => e.Prepare(card, [d1], null, "2026-1-4"))),
+            (PreflightCode.SourceNotFound, $"Source not found: {missing}", Fail(e => e.Prepare(missing, [d1], null, null))),
+            (PreflightCode.NoDestination, "No destination given.", Fail(e => e.Prepare(card, [], null, null))),
+            (PreflightCode.DuplicateDestination, $"Destination given twice: {d1.ToUpperInvariant()}\\",
                 Fail(e => e.Prepare(card, [d1, d1.ToUpperInvariant() + @"\"], null, null))),
             (PreflightCode.SourceIsOffload,
-                "Zdroj vypadá jako dřívější offload (má _REPORT, _PROXY nebo ascmhl) — kopírujte původní kartu, nebo tyto složky odeberte.",
+                "The source looks like an earlier offload (it has _REPORT, _PROXY or ascmhl) — copy the original card, or remove these folders.",
                 Fail(e => e.Prepare(offload, [d1], null, null))),
-            (PreflightCode.DestinationNotFound, $"Cíl nenalezen: {nope} — je disk připojený?", Fail(e => e.Prepare(card, [nope], null, null))),
-            (PreflightCode.SameVolumeAsSource, $"Cíl {d1} je na stejném disku jako zdroj.",
+            (PreflightCode.DestinationNotFound, $"Destination not found: {nope} — is the disk connected?", Fail(e => e.Prepare(card, [nope], null, null))),
+            (PreflightCode.SameVolumeAsSource, $"Destination {d1} is on the same disk as the source.",
                 Fail(e => e.Prepare(card, [d1], null, null), new OffloadOptions { AllowSameDevice = true })),
             (PreflightCode.SharedVolume,
-                $"Dva cíle jsou na stejném disku ({dir.Sub("d2")}) — to není druhá kopie. Povolit jde volbou --allow-same-device.",
+                $"Two destinations are on the same disk ({dir.Sub("d2")}) — that is not a second copy. Allow it with --allow-same-device.",
                 Fail(e => e.Prepare(card, [d1, dir.Sub("d2")], null, null), new OffloadOptions { AllowSourceVolume = true })),
-            (PreflightCode.EmptySource, "Na zdroji nejsou žádné soubory.", Fail(e => e.Prepare(empty, [d1], null, null))),
+            (PreflightCode.EmptySource, "There are no files on the source.", Fail(e => e.Prepare(empty, [d1], null, null))),
         ];
     }
 
@@ -63,29 +63,32 @@ public class PreflightMessagesTests
     }
 
     [Fact]
-    public void NoEnglishWords()
+    public void NoCzechWords()
     {
         using var dir = new TempDir();
-        string[] english = ["not found", "cannot", "must", "Destination", "Source"];
+        string[] czech = ["nenalezen", "nejde", "musí", "Cíl", "Zdroj", "soubor", "karta"];
         foreach (var (_, _, error) in Scenarios(dir))
-            foreach (var word in english)
-                Assert.DoesNotContain(word, error.Message, StringComparison.Ordinal);
+        {
+            foreach (var word in czech)
+                Assert.DoesNotContain(word, error.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotMatch("[ěščřžýáíéůúňťďĚŠČŘŽÝÁÍÉŮÚŇŤĎ„“]", error.Message);
+        }
     }
 
     [Fact]
     public void TextsWithoutAnEasyScenario()
     {
-        Assert.Equal(@"Na cíli D:\Zaloha není dost místa: potřeba 412 GB (karty 380 GB, proxy ~30 GB, report 2 GB), volno 398 GB.",
+        Assert.Equal(@"Not enough space on destination D:\Zaloha: needs 412 GB (cards 380 GB, proxies ~30 GB, report 2 GB), free 398 GB.",
             Msg.NoSpace(@"D:\Zaloha", new Space.SpaceNeed(380_000_000_000, 30_000_000_000, 2_000_000_000), 398_000_000_000));
-        Assert.Equal(@"Na cíl nejde zapisovat: D:\Zaloha", Msg.DestinationNotWritable(@"D:\Zaloha"));
-        Assert.Equal(@"Cíl nejde přečíst: D:\Zaloha", Msg.DestinationUnreadable(@"D:\Zaloha"));
-        Assert.Equal(@"Zdroj nejde přečíst: E:\", Msg.SourceUnreadable(@"E:\"));
-        // M22: BytesCs inside the Czech sentence (decimal comma)
-        Assert.Equal("FAT32 neumí uložit soubory od 4 GB (CLIP/A001C002.mov, 4,3 GB)",
+        Assert.Equal(@"Cannot write to the destination: D:\Zaloha", Msg.DestinationNotWritable(@"D:\Zaloha"));
+        Assert.Equal(@"Cannot read the destination: D:\Zaloha", Msg.DestinationUnreadable(@"D:\Zaloha"));
+        Assert.Equal(@"Cannot read the source: E:\", Msg.SourceUnreadable(@"E:\"));
+        // M22: BytesShort inside the sentence (a decimal point, whatever the PC's culture)
+        Assert.Equal("FAT32 cannot store files of 4 GB or more (CLIP/A001C002.mov, 4.3 GB)",
             OffloadEngine.Fat32Problem("FAT32", [new("CLIP/A001C002.mov", 4L << 30, DateTime.UtcNow)]));
-        Assert.Equal("Report se nepodařilo zapsat: disk full", Msg.ReportNotWritten("disk full"));
-        Assert.Equal(@"Ve složce D:\A001 není ASC MHL ani seznam součtů — není s čím porovnat.", Msg.NoHashRecord(@"D:\A001"));
-        Assert.Equal(@"V E:\ nejsou soubory ke čtení.", Msg.NoFilesToRead(@"E:\"));
+        Assert.Equal("Could not write the report: disk full", Msg.ReportNotWritten("disk full"));
+        Assert.Equal(@"Folder D:\A001 has no ASC MHL and no checksum list — nothing to compare with.", Msg.NoHashRecord(@"D:\A001"));
+        Assert.Equal(@"No files to read in E:\.", Msg.NoFilesToRead(@"E:\"));
     }
 
     [Fact]
@@ -93,8 +96,8 @@ public class PreflightMessagesTests
     {
         var problems = Enumerable.Range(1, 22).Select(i => $"f{i}: {Msg.InvalidChar}").ToList();
         var text = Msg.BadNames(problems);
-        Assert.StartsWith("Některé názvy Windows neumí uložit:\n  f1: obsahuje znak, který Windows nepovolí\n", text);
-        Assert.EndsWith("\n  … a dalších 2", text);
+        Assert.StartsWith("Windows cannot store some names:\n  f1: contains a character Windows does not allow\n", text);
+        Assert.EndsWith("\n  … and 2 more", text);
         var scan = new SourceScan
         {
             Root = @"X:\",
@@ -103,16 +106,16 @@ public class PreflightMessagesTests
             Skipped = [],
         };
         Assert.Equal(
-            ["CLIP/a.mov: stejný název jako CLIP/A.MOV, liší se jen velikostí písmen", "CON.mov: rezervovaný název zařízení ve Windows", "b. : končí tečkou nebo mezerou"],
+            ["CLIP/a.mov: same name as CLIP/A.MOV, differs only in letter case", "CON.mov: reserved device name in Windows", "b. : ends with a dot or a space"],
             Scanner.WindowsProblems(scan));
     }
 
     [Fact]
     public void CliAndClipTexts()
     {
-        Assert.Equal("Neznámý kodek proxy „av1“ — použijte h264, hevc, proresProxy, proresLT, prores422 nebo prores422HQ.", Msg.UnknownProxyCodec("av1"));
-        Assert.Equal("„x“ není kladné číslo.", Msg.NotPositiveNumber("x"));
-        Assert.Equal("Blackmagic RAW: chybí dekodér", Msg.NoDecoder(ClipFormat.Braw.Label()));
-        Assert.Equal("žádná ověřená kopie", Msg.NoVerifiedCopy);
+        Assert.Equal("Unknown proxy codec \"av1\" — use h264, hevc, proresProxy, proresLT, prores422 or prores422HQ.", Msg.UnknownProxyCodec("av1"));
+        Assert.Equal("\"x\" is not a positive number.", Msg.NotPositiveNumber("x"));
+        Assert.Equal("Blackmagic RAW: no decoder", Msg.NoDecoder(ClipFormat.Braw.Label()));
+        Assert.Equal("no verified copy", Msg.NoVerifiedCopy);
     }
 }

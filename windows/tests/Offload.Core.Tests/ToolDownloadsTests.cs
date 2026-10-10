@@ -26,13 +26,13 @@ public class ToolDownloadsTests
         var ff = new ExternalTools { Ffmpeg = @"C:\Windows\System32\cmd.exe", NoSearch = true }.Resolved();
         using var r = new ProxyRenderer(new ProxySettings(), ff);
         var note = r.UnsupportedReason(new Clip { Name = "x", Path = file, Format = format, Segments = [file] });
-        Assert.EndsWith("ke stažení: " + url, note);
+        Assert.EndsWith("download: " + url, note);
     }
 
     [Fact]
     public void NoFfmpeg_WarningHasTheDownloadPage()
     {
         var none = new ExternalTools { NoSearch = true }.Resolved();
-        Assert.EndsWith("ke stažení: " + ToolDownloads.Ffmpeg, ProxyPreflight.Warning(new ProxySettings { Enabled = true }, analyzeClips: false, none));
+        Assert.EndsWith("download: " + ToolDownloads.Ffmpeg, ProxyPreflight.Warning(new ProxySettings { Enabled = true }, analyzeClips: false, none));
     }
 }

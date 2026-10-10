@@ -262,7 +262,7 @@ public class VerifySessionTests
         s.Finish();
 
         var note = Assert.Single(s.Notes);
-        Assert.StartsWith("SOUND/b.wav: blok 2 nesouhlasí stejně na d1", note);
+        Assert.StartsWith("SOUND/b.wav: block 2 mismatches the same way on d1", note);
         Assert.EndsWith(Msg.CardGivesRecorded, note);
         Assert.All(s.Results, d => Assert.Equal(FileState.Failed, d[0].State));
     }
@@ -726,14 +726,14 @@ public class VerifySessionTests
         var results = s.Results.Select(d => d.ToArray()).ToList();
         results[0][Index(plan, "SOUND/b.wav")] = new DestFileResult(FileState.Written, null);   // as if a read never ended
 
-        var final = report.WithVerification(results, verified: true, s.Primary, s.ClassicWhy, ["poznámka"], DateTime.UtcNow, TimeSpan.Zero);
+        var final = report.WithVerification(results, verified: true, s.Primary, s.ClassicWhy, ["a note"], DateTime.UtcNow, TimeSpan.Zero);
 
         Assert.Null(final.VerifyPending);
         Assert.True(final.Verified);
         Assert.Equal([ReportDestination.ReadBack, ReportDestination.InProxy], final.Destinations.Select(d => d.VerifyMethod));
         Assert.Equal(Msg.ClassicSecondary, final.Destinations[0].VerifyNote);
         Assert.Equal((1, 1), (final.Destinations[0].FilesOK, final.Destinations[0].FilesFailed));
-        Assert.Equal(["poznámka"], final.VerifyNotes);
+        Assert.Equal(["a note"], final.VerifyNotes);
         Assert.False(final.SafeToFormat);
         Assert.Null(final.SafeToFormatSeconds);
         Assert.True(report.VerifyPending);   // the stage-1 report is a different object, unchanged

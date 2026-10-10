@@ -7,8 +7,8 @@ public class HwTestTests
     [Fact]
     public void Roles_CardsThenDestinations_OtherDrivesNotIncluded()
     {
-        List<(string Role, string Root)> expected1 = [("Karta", @"E:\"), ("Cíl 1", @"D:\a"), ("Cíl 2", @"F:\")];
-        List<(string Role, string Root)> expected2 = [("Karta 1", @"E:\"), ("Karta 2", @"G:\")];
+        List<(string Role, string Root, bool Card)> expected1 = [("Card", @"E:\", true), ("Destination 1", @"D:\a", false), ("Destination 2", @"F:\", false)];
+        List<(string Role, string Root, bool Card)> expected2 = [("Card 1", @"E:\", true), ("Card 2", @"G:\", true)];
         Assert.Equal(expected1, HwTest.Roles([@"E:\"], [@"D:\a", @"F:\"]));
         Assert.Equal(expected2, HwTest.Roles([@"E:\", @"G:\"], []));
     }
@@ -16,7 +16,7 @@ public class HwTestTests
     [Fact]
     public void Roles_ByDrive_LabelsDestinationsWithDriveLetter()
     {
-        List<(string Role, string Root)> expected = [("Karta", @"G:\"), ("E:", @"E:\"), ("D:", @"D:\")];
+        List<(string Role, string Root, bool Card)> expected = [("Card", @"G:\", true), ("E:", @"E:\", false), ("D:", @"D:\", false)];
         Assert.Equal(expected, HwTest.Roles([@"G:\"], [@"E:\", @"D:\"], rolesByDrive: true));
     }
 
@@ -43,7 +43,7 @@ public class HwTestTests
         Assert.True(m.ReadMBps > 0);
         Assert.Null(m.WriteMBps);
         Assert.Single(Directory.GetFiles(card));
-        Assert.Contains(r.Advice, a => a.Text.StartsWith("Odhad rychlosti offloadu"));
+        Assert.Contains(r.Advice, a => a.Text.StartsWith("Estimated offload speed"));
     }
 
     [Fact]
@@ -69,12 +69,14 @@ public class HwTestTests
         Assert.True(HwTest.SameVolume(card, dest));
         var r = HwTest.Run([card], [dest], measure: true, bytesPerDevice: 8 << 20);
         var m = r.Measurements.ToDictionary(x => x.Role);
-        Assert.True(m["Karta"].ReadMBps > 0);
-        Assert.Null(m["Cíl 1"].ReadMBps);
-        Assert.Null(m["Cíl 1"].WriteMBps);
+        Assert.True(m["Card"].ReadMBps > 0);
+        Assert.Null(m["Destination 1"].ReadMBps);
+        Assert.Null(m["Destination 1"].WriteMBps);
+        Assert.True(m["Card"].Card);
+        Assert.True(r.Drives[0].Card);
         Assert.Empty(Directory.GetFiles(dest, "*", SearchOption.AllDirectories));
-        var w = Assert.Single(r.Advice, a => a.Kind == AdviceKind.Warning && a.Text.Contains("stejném svazku"));
-        Assert.StartsWith("Cíl 1 je na stejném svazku jako Karta", w.Text);
+        var w = Assert.Single(r.Advice, a => a.Kind == AdviceKind.Warning && a.Text.Contains("same volume"));
+        Assert.StartsWith("Destination 1 is on the same volume as Card", w.Text);
         Assert.Equal(AdviceKind.Warning, r.Advice[0].Kind);
     }
 
@@ -99,8 +101,8 @@ public class HwTestTests
         Assert.Equal(r.Advice, HwTest.Advise(r.Drives, r.Connectors, r.Measurements, null));
         if (r.Connectors.FirstOrDefault(c => c.UserVisible && c.SupportsUsb3 == true && c.Device == null) is { } free)
         {
-            var named = HwTest.Advise(r.Drives, r.Connectors, r.Measurements, new Dictionary<string, string> { [free.Id] = "přední levý" });
-            Assert.Contains(named, a => a.Text.Contains("přední levý"));
+            var named = HwTest.Advise(r.Drives, r.Connectors, r.Measurements, new Dictionary<string, string> { [free.Id] = "front left" });
+            Assert.Contains(named, a => a.Text.Contains("front left"));
         }
     }
 
@@ -142,6 +144,34 @@ public class HwTestTests
         Assert.Equal(r.Drives.Count, back!.Drives.Count);
         Assert.Equal(r.Connectors.Count, back.Connectors.Count);
         Assert.Null(HwTest.Load(Path.Combine(dir.Path, "missing.json")));
+    }
+
+    // English 0.9.0: the card is told by an explicit flag (saved as "card"); an hwtest.json of an older version has none
+    // and Czech roles ("Karta", "Cíl 1") — the card is still recognised there, so its pace is its read speed.
+    [Fact]
+    public void Load_OldCzechRoles_CardStillRecognised_FlagRoundTrips()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "hwtest.json");
+        var card = new DriveLink(@"E:\", StorageBus.Sd, "Reader", null);
+        var disk = new DriveLink(@"D:\", StorageBus.Sata, "SSD", null);
+        var old = new HwTestResult(DateTime.UtcNow, [new RoleLink("Karta", card), new RoleLink("Cíl 1", disk)], [],
+            [new DriveMeasurement("Karta", @"E:\", 90, null), new DriveMeasurement("Cíl 1", @"D:\", 400, 300)], []);
+        HwTest.Save(old, path);
+        Assert.DoesNotContain("\"card\"", File.ReadAllText(path));   // no flag given: none written, like an old file
+        var back = HwTest.Load(path)!;
+        Assert.True(back.Drives[0].IsCard);
+        Assert.False(back.Drives[1].IsCard);
+        Assert.Null(back.Measurements[0].Card);
+        Assert.Contains(HwTest.Advise(back.Drives, back.Connectors, back.Measurements, null), a => a.Text.Contains("90 MB/s (bottleneck: Karta Reader)"));
+
+        // The explicit flag wins over the wording: a role named anything is the card when the flag says so.
+        var flagged = new HwTestResult(DateTime.UtcNow, [new RoleLink("Reader", card, Card: true), new RoleLink("Card copy", disk, Card: false)], [],
+            [new DriveMeasurement("Reader", @"E:\", 90, null, true), new DriveMeasurement("Card copy", @"D:\", 400, 300, false)], []);
+        HwTest.Save(flagged, path);
+        back = HwTest.Load(path)!;
+        Assert.Equal([true, false], back.Drives.Select(d => d.IsCard));
+        Assert.Equal([true, false], back.Measurements.Select(m => m.Card ?? false));
     }
 
     [Fact]

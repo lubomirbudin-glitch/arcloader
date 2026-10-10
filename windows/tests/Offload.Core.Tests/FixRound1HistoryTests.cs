@@ -213,8 +213,8 @@ public class FixRound1HistoryTests
         Assert.False(record.Verified);
         var day = DayReport.Load(Path.GetDirectoryName(p1)!);
         Assert.Equal(0, day.VerifiedCards);
-        Assert.Contains("NEDOKONČENO", DayReport.Html(day));
-        Assert.DoesNotContain("VŠE OVĚŘENO", DayReport.Html(day));
+        Assert.Contains("UNFINISHED", DayReport.Html(day));
+        Assert.DoesNotContain("ALL VERIFIED", DayReport.Html(day));
 
         Directory.Move(Path.GetDirectoryName(Path.GetDirectoryName(p2))!, Path.GetDirectoryName(Path.GetDirectoryName(p2))! + "-unplugged");
         Assert.False(CardRecord.Load(p1).Incomplete);
@@ -241,9 +241,9 @@ public class FixRound1HistoryTests
         Assert.True(OffloadReport.FromJson(File.ReadAllText(Path.Combine(p1, "_REPORT", "offload_report.json"))).VerifyIncomplete);
         var day = DayReport.Load(Path.Combine(d1, "2026-10-08"));
         Assert.Equal(0, day.VerifiedCards);
-        Assert.Contains("NEDOKONČENO", DayReport.Html(day));
-        Assert.DoesNotContain("VŠE OVĚŘENO", DayReport.Html(day));
-        Assert.Contains(DayReport.Problems(day), x => x.Text.StartsWith("výsledek ověření není zapsaný na všech cílech", StringComparison.Ordinal));
+        Assert.Contains("UNFINISHED", DayReport.Html(day));
+        Assert.DoesNotContain("ALL VERIFIED", DayReport.Html(day));
+        Assert.Contains(DayReport.Problems(day), x => x.Text.StartsWith("the verification result is not written on all destinations", StringComparison.Ordinal));
 
         var resume = new OffloadJob(new JobConfig(card, []) { AppendInto = job.Plan.CardPaths, AnalyzeClips = false, RecordHistory = false,
             Outputs = new OutputSettings { DayReport = false } }, ResumeTests.Options());

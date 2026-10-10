@@ -75,7 +75,7 @@ public class CliProjectTests
         var r = Run(settings, seen, CopyCommand.Create(), Card(dir), "--project", "film x", "--date", "2026-10-07", "--no-history");
 
         Assert.Equal(0, r.Exit);
-        Assert.Contains("Projekt: Film X", r.Out);
+        Assert.Contains("Project: Film X", r.Out);
         var c = Assert.Single(seen);
         Assert.Equal([d1], c.DestRoots);
         Assert.Equal(HashKind.Both, c.Hashes);
@@ -124,7 +124,7 @@ public class CliProjectTests
         var r = Run(settings, seen, CopyCommand.Create(), Card(dir), "--project", "Reklama", "--no-history");
 
         Assert.Equal(1, r.Exit);
-        Assert.Contains("Chyba: Projekt „Reklama“ neexistuje. Projekty: Film X.", r.Err);
+        Assert.Contains("Error: Project \"Reklama\" does not exist. Projects: Film X.", r.Err);
         Assert.Empty(seen);
     }
 
@@ -144,7 +144,7 @@ public class CliProjectTests
         Assert.True(c.Verify);
         Assert.Equal(HashKind.Xxh64, c.Hashes);
         Assert.Equal((ProxyCodec.H264, 1080, LutMode.Auto), (c.Proxy.Codec, c.Proxy.Height, c.Proxy.LutMode));
-        Assert.DoesNotContain("Projekt:", r.Out);
+        Assert.DoesNotContain("Project:", r.Out);
     }
 
     // naming.suggestFromClips of the project acts as --name auto; --name still wins.
@@ -182,7 +182,7 @@ public class CliProjectTests
         var r = Run(folder, seen, CopyCommand.Create(), Card(dir), "--project", "Film X", "--no-history");
 
         Assert.Equal(1, r.Exit);
-        Assert.Contains("LUT nenalezen: gone.cube", r.Err);
+        Assert.Contains("LUT not found: gone.cube", r.Err);
         Assert.Empty(seen);
     }
 
@@ -210,8 +210,8 @@ public class CliProjectTests
 
         Assert.Equal(0, r.Exit);
         // Fix round 1, item 3: the append's own line — the card keeps the earlier backup's project.
-        Assert.Contains("Nastavení z projektu: Reklama Y (projekt zálohy zůstane podle dřívějšího reportu)", r.Out);
-        Assert.DoesNotContain("Projekt: Reklama Y", r.Out);
+        Assert.Contains("Settings from project: Reklama Y (the backup's project stays as in the earlier report)", r.Out);
+        Assert.DoesNotContain("Project: Reklama Y", r.Out);
         var c = seen[1];
         Assert.False(c.Verify);
         Assert.False(c.AnalyzeClips);
@@ -254,7 +254,7 @@ public class CliProjectTests
             // The append ran; the earlier copy was made without verification (Film X), so the backup is not "Lze
             // formátovat" — R5 / ruling I1 (plan 10): exit 1 then, with the warning.
             Assert.True(r.Exit == 1, r.Out + r.Err);
-            Assert.Contains("Varování: " + Msg.UnverifiedEarlier(1), r.Out);
+            Assert.Contains("Warning: " + Msg.UnverifiedEarlier(1), r.Out);
             Assert.Equal("Film X", seen[1].Project);
             Assert.Equal([Path.Combine(d1, "2026-10-07", "A001")], seen[1].AppendInto);
         }
@@ -277,10 +277,10 @@ public class CliProjectTests
         SettingsStore.Save(s, Path.Combine(folder, "settings.json"));
         var seen = new List<JobConfig>();
 
-        var r = Run(folder, seen, CopyCommand.Create(), Card(dir), "--project", "bez projektu", "--dry-run", "--no-history");
+        var r = Run(folder, seen, CopyCommand.Create(), Card(dir), "--project", "no project", "--dry-run", "--no-history");
 
         Assert.Equal(0, r.Exit);
-        Assert.Contains("Projekt: Bez projektu", r.Out);
+        Assert.Contains("Project: No project", r.Out);
         var c = Assert.Single(seen);
         Assert.Null(c.Project);
         Assert.Equal([d0], c.DestRoots);
@@ -299,7 +299,7 @@ public class CliProjectTests
         var r = Run(settings, seen, AppendCommand.Create(), Card(dir), "--into", dir.Sub("x"), "--project", "Reklama", "--no-history");
 
         Assert.Equal(1, r.Exit);
-        Assert.Contains("Chyba: Projekt „Reklama“ neexistuje. Projekty: Film X.", r.Err);
+        Assert.Contains("Error: Project \"Reklama\" does not exist. Projects: Film X.", r.Err);
         Assert.Empty(seen);
     }
 }

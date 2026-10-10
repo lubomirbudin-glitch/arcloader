@@ -51,8 +51,8 @@ public class RealAscmhlTests
         Assert.Equal(["CLIP/x.mov"], r.Changed);
         Assert.Empty(r.FailedAtCopy);
         Assert.False(r.Success);
-        Assert.StartsWith("Nesedí", VerifyTexts.Summary(r).Text);
-        Assert.EndsWith("NALEZENY PROBLÉMY: nesedí 1, chybí 0, nečitelné 0, selhalo při kopii 0, navíc 0.", VerifyTexts.CliSummary(r));
+        Assert.StartsWith("Mismatch", VerifyTexts.Summary(r).Text);
+        Assert.EndsWith("PROBLEMS FOUND: mismatch 1, missing 0, unreadable 0, failed during the copy 0, extra 0.", VerifyTexts.CliSummary(r));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class RealAscmhlTests
         Assert.True(r.Success);
         Assert.Equal(1, r.Ok);
         Assert.Equal(["CLIP/x.mov"], r.FailedSuperseded);
-        Assert.Single(VerifyTexts.Warnings(r), w => w.Contains("selhalo při kopii"));
+        Assert.Single(VerifyTexts.Warnings(r), w => w.Contains("failed during the copy"));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class RealAscmhlTests
 
         Assert.False(r.Success);
         Assert.Equal(["CLIP/x.mov"], r.FailedAtCopy);
-        Assert.DoesNotContain("v pořádku", VerifyTexts.CliSummary(r));
+        Assert.DoesNotContain("all OK", VerifyTexts.CliSummary(r));
         Assert.Equal(VerifyTone.Error, VerifyTexts.Summary(r).Tone);
     }
 
@@ -163,7 +163,7 @@ public class RealAscmhlTests
 
         Assert.Empty(r.Missing);
         Assert.True(r.FolderGone);
-        Assert.Contains(r.Unreadable, u => u.Error == "složka zálohy zmizela");
+        Assert.Contains(r.Unreadable, u => u.Error == "the backup folder disappeared");
         Assert.False(r.Success);
     }
 
@@ -173,7 +173,7 @@ public class RealAscmhlTests
         var r = new VerifyResult { CardPath = "x", Basis = "ascmhl", Started = DateTime.UtcNow.AddSeconds(-1), Finished = DateTime.UtcNow, Checked = 10, Ok = 3 };
         r.Changed.Add("a");
         r.Missing.AddRange(["b", "c", "d", "e", "f", "g"]);
-        Assert.StartsWith("Ověřeno 4 soubory (", VerifyTexts.CliSummary(r));
+        Assert.StartsWith("Verified 4 files (", VerifyTexts.CliSummary(r));
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class RealAscmhlTests
         Directory.CreateDirectory(Path.Combine(card, "ascmhl"));
         File.WriteAllText(Path.Combine(card, "ascmhl", "0001_A001_x.mhl"), "<hashlist");
         var e = Assert.Throws<OffloadError>(() => BackupVerifier.Verify(card));
-        Assert.Contains("ASC MHL generaci 0001 nejde přečíst", e.Message);
+        Assert.Contains("Cannot read ASC MHL generation 0001", e.Message);
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public class RealAscmhlTests
         File.WriteAllText(Path.Combine(card, "ascmhl", "0001_A001_x.mhl"), "<hashlist");
         var r = BackupVerifier.Verify(card, chunkSize: 4096);
         Assert.Equal("hashList", r.Basis);
-        Assert.Contains(r.ChainProblems, p => p.Contains("nejde přečíst"));
+        Assert.Contains(r.ChainProblems, p => p.Contains("Cannot read"));
     }
 
     [Fact]
@@ -220,7 +220,7 @@ public class RealAscmhlTests
         Assert.StartsWith(Path.Combine(day, "_REPORT") + Path.DirectorySeparatorChar + "A001_verify_", html);
         Assert.True(File.Exists(Path.Combine(day, "_REPORT", $"A001_verify_{VerifyReport.Stamp(r)}Z.json")));
         Assert.Equal(before, Directory.GetFiles(card, "*", SearchOption.AllDirectories).Order().ToList());
-        Assert.Contains("mimo složku karty", VerifyTexts.ReportOutsideNote(html));
+        Assert.Contains("outside the card folder", VerifyTexts.ReportOutsideNote(html));
         Assert.Contains(html, VerifyTexts.ReportOutsideNote(html));
         Assert.Empty(BackupVerifier.Verify(card, chunkSize: 4096).Extra);
     }
