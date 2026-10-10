@@ -45,7 +45,7 @@ final class ProxyFolderTests: XCTestCase {
         let extra = dir.path + "/disconnected"
         let (path, error) = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001", fileName: "C0001.mov")
         XCTAssertNil(path)
-        XCTAssertEqual(error, "složka není dostupná")
+        XCTAssertEqual(error, "folder is not available")
         XCTAssertFalse(FileManager.default.fileExists(atPath: extra))
     }
 
@@ -73,7 +73,7 @@ final class ProxyFolderTests: XCTestCase {
         let (path, error) = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001",
                                                     fileName: "C0001.mov", maxAttempts: 3)
         XCTAssertNil(path)
-        XCTAssertEqual(error, "žádné volné jméno (C0001.mov … C0001_3.mov)")
+        XCTAssertEqual(error, "no free name (C0001.mov … C0001_3.mov)")
         XCTAssertEqual(TestFS.files(in: extra), [])
     }
 
@@ -209,7 +209,7 @@ final class ProxyFolderTests: XCTestCase {
         XCTAssertEqual(s.proxiesFailed, 0)
         let clip = try XCTUnwrap(report.clips.first)
         XCTAssertEqual(clip.proxyStatus, .done)
-        XCTAssertEqual(clip.proxyNote, "kopie do \(extra) selhala: složka není dostupná")
+        XCTAssertEqual(clip.proxyNote, "copy to \(extra) failed: folder is not available")
         XCTAssertTrue(log.contains { $0.contains("C0001") && $0.contains(extra) }, "\(log)")
         XCTAssertFalse(FileManager.default.fileExists(atPath: extra))
     }

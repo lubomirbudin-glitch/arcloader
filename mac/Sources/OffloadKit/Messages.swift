@@ -7,154 +7,179 @@ public enum PreflightCode: String {
     case sharedVolume, emptySource, noSpace, noHashRecord, noFilesToRead
     case appendUnavailable, appendNoReport, appendNoMhl, appendDiverged, appendConflict, appendMissingFile, appendFailedFile
     case appendOtherCard, appendMhlDamaged, appendBusy
-    /// Not an error: the backup already has everything (the job ends "Hotovo").
+    /// Not an error: the backup already has everything (the job ends "Done").
     case nothingNew
     /// Not an error: a repair found every file good on every destination.
     case repairNothing
     case repairConflict
 }
 
-/// Czech text with the right plural: 1 / 2–4 / other.
-func plural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String { Texts.plural(n, one, few, many) }
+/// English count with the right plural: "1 file", "2 files".
+func plural(_ n: Int, _ one: String, _ other: String) -> String { Texts.plural(n, one, other) }
 
-/// Every message a user sees from checks and validation — Czech, word for word as Windows (Messages.cs), paths with "/".
+/// Every message a user sees from checks and validation — English (the Mac app is English only, Windows stays Czech:
+/// docs/ROZDILY.md), the same meaning as Windows `Messages.cs`, paths with "/". Terms: mac/docs/en-glossary.md.
 public enum Msg {
-    public static func chunkSize(_ n: Int) -> String { "Velikost bloku musí být násobek 4096 B a nejvýš 1 GiB (zadáno \(n))." }
-    public static func bufferCount(_ n: Int) -> String { "Počet bufferů musí být aspoň 2 (zadáno \(n))." }
-    public static func date(_ d: String) -> String { "Datum musí být ve tvaru RRRR-MM-DD (zadáno „\(d)“)." }
-    public static func sourceNotFound(_ p: String) -> String { "Zdroj nenalezen: \(p)" }
-    public static let noDestination = "Není zadaný žádný cíl."
-    public static func duplicateDestination(_ r: String) -> String { "Cíl je zadaný dvakrát: \(r)" }
+    public static func chunkSize(_ n: Int) -> String { "Block size must be a multiple of 4096 B and at most 1 GiB (got \(n))." }
+    public static func bufferCount(_ n: Int) -> String { "Buffer count must be at least 2 (got \(n))." }
+    public static func date(_ d: String) -> String { "Date must be YYYY-MM-DD (got “\(d)”)." }
+    public static func sourceNotFound(_ p: String) -> String { "Source not found: \(p)" }
+    public static let noDestination = "No destination selected."
+    public static func duplicateDestination(_ r: String) -> String { "Destination added twice: \(r)" }
     public static let sourceIsOffload =
-        "Zdroj vypadá jako dřívější offload (má _REPORT, _PROXY nebo ascmhl) — kopírujte původní kartu, nebo tyto složky odeberte."
-    public static func sourceUnreadable(_ p: String) -> String { "Zdroj nejde přečíst: \(p)" }
-    public static func destinationNotFound(_ r: String) -> String { "Cíl nenalezen: \(r) — je disk připojený?" }
-    public static func destinationNotWritable(_ r: String) -> String { "Na cíl nejde zapisovat: \(r)" }
-    public static func destinationUnreadable(_ r: String) -> String { "Cíl nejde přečíst: \(r)" }
-    public static func sameVolumeAsSource(_ r: String) -> String { "Cíl \(r) je na stejném disku jako zdroj." }
+        "The source looks like an earlier offload (it has _REPORT, _PROXY or ascmhl) — copy the original card, or remove those folders."
+    public static func sourceUnreadable(_ p: String) -> String { "Cannot read the source: \(p)" }
+    public static func destinationNotFound(_ r: String) -> String { "Destination not found: \(r) — is the drive connected?" }
+    public static func destinationNotWritable(_ r: String) -> String { "Cannot write to the destination: \(r)" }
+    public static func destinationUnreadable(_ r: String) -> String { "Cannot read the destination: \(r)" }
+    public static func sameVolumeAsSource(_ r: String) -> String { "Destination \(r) is on the same drive as the source." }
     public static func sharedVolume(_ r: String) -> String {
-        "Dva cíle jsou na stejném disku (\(r)) — to není druhá kopie. Povolit jde volbou --allow-same-device."
+        "Two destinations are on the same drive (\(r)) — that is not a second copy. Allow it with --allow-same-device."
     }
-    public static let emptySource = "Na zdroji nejsou žádné soubory."
-    public static func reportNotWritten(_ d: String) -> String { "Report se nepodařilo zapsat: \(d)" }
-    public static func noHashRecord(_ dir: String) -> String { "Ve složce \(dir) není ASC MHL ani seznam součtů — není s čím porovnat." }
-    public static func noFilesToRead(_ p: String) -> String { "V \(p) nejsou soubory ke čtení." }
-    public static let cardVolumeUnreadable = "Karta se nedá přečíst."
-    public static let cardInspectFailed = "Kartu se nepodařilo prověřit."
-    public static let cardSwapped = "Karta se během čtení vyměnila."
-    public static let cardNameAutoNone = "Návrh názvu nenalezen, použije se jmenovka svazku."
-    public static func cardNameAuto(_ n: String) -> String { "Název karty: \(n) (podle klipů)" }
-    public static func cardUnreadable(_ d: String) -> String { "Kartu nejde přečíst: \(d)" }
-    /// Where a backup is checked (the new look: top bar; before it: menu Nástroje).
-    public static let verifyHint = "Ověřit zálohu (horní lišta okna; v příkazové řádce offload verify)"
+    public static let emptySource = "There are no files on the source."
+    public static func reportNotWritten(_ d: String) -> String { "Could not write the report: \(d)" }
+    public static func noHashRecord(_ dir: String) -> String { "\(dir) has no ASC MHL and no checksum list — nothing to compare against." }
+    public static func noFilesToRead(_ p: String) -> String { "No files to read in \(p)." }
+    public static let cardVolumeUnreadable = "Cannot read the card."
+    public static let cardInspectFailed = "Could not check the card."
+    public static let cardSwapped = "The card was swapped while it was being read."
+    public static let cardNameAutoNone = "No name suggestion found — using the volume label."
+    public static func cardNameAuto(_ n: String) -> String { "Card name: \(n) (from the clips)" }
+    public static func cardUnreadable(_ d: String) -> String { "Cannot read the card: \(d)" }
+    /// Where a backup is checked (the new look: the window toolbar; before it: the Tools menu).
+    public static let verifyHint = "Verify backup (window toolbar; on the command line: offload verify)"
 
-    // Space (úkol 48 fills the parts)
+    // Space (task 48 fills the parts)
     public static func noSpace(_ whereTo: String, total: Int64, parts: String, free: Int64) -> String {
-        "Na cíli \(whereTo) není dost místa: potřeba \(formatBytesCs(total)) (\(parts)), volno \(formatBytesCs(free))."
+        "Not enough space on \(whereTo): needs \(formatBytesShort(total)) (\(parts)), free \(formatBytesShort(free))."
     }
     public static func spaceLine(_ whereTo: String, total: Int64, parts: String, free: Int64) -> String {
-        "Místo: \(whereTo) potřeba \(formatBytesCs(total)) (\(parts)), volno \(formatBytesCs(free))"
+        "Space: \(whereTo) needs \(formatBytesShort(total)) (\(parts)), free \(formatBytesShort(free))"
     }
     public static func lowSpace(_ whereTo: String, left: Int64) -> String {
-        "Na cíli \(whereTo) zbude po offloadu jen \(formatBytesCs(left)) — rezerva pod 5 %, odhad proxy je přibližný."
+        "Only \(formatBytesShort(left)) will be left on \(whereTo) after the offload — under 5% headroom, the proxy estimate is approximate."
     }
     public static func proxiesSkippedForSpace(_ whereTo: String, need: Int64, free: Int64) -> String {
-        "Proxy se nevyrenderovaly: na \(whereTo) chybí místo (potřeba ~\(formatBytesCs(need)), volno \(formatBytesCs(free)))."
+        "Proxies were not rendered: not enough space on \(whereTo) (needs ~\(formatBytesShort(need)), free \(formatBytesShort(free)))."
     }
 
     // Append
-    public static func appendUnavailable(_ p: String) -> String { "Dřívější záloha není dostupná: \(p) — připojte disk, nebo udělejte celou kopii." }
-    public static func appendNoReport(_ p: String) -> String { "V \(p) chybí report dřívější zálohy (_REPORT/offload_report.json) — doplnit nejde." }
-    public static func appendBadReport(_ p: String, _ d: String) -> String { "Report dřívější zálohy v \(p) nejde přečíst (\(d)) — doplnit nejde." }
-    public static func appendNoMhl(_ p: String) -> String { "V \(p) chybí ASC MHL (ascmhl/ascmhl_chain.xml) — doplnit nejde." }
+    public static func appendUnavailable(_ p: String) -> String {
+        "The earlier backup is not available: \(p) — connect the drive, or make a full copy."
+    }
+    public static func appendNoReport(_ p: String) -> String {
+        "\(p) has no report of the earlier backup (_REPORT/offload_report.json) — cannot append."
+    }
+    public static func appendBadReport(_ p: String, _ d: String) -> String {
+        "Cannot read the report of the earlier backup in \(p) (\(d)) — cannot append."
+    }
+    public static func appendNoMhl(_ p: String) -> String { "\(p) has no ASC MHL (ascmhl/ascmhl_chain.xml) — cannot append." }
     public static func appendDiverged(_ details: String) -> String {
-        "Zálohy na cílech se liší (\(details)) — zkontrolujte je přes \(verifyHint); doplnit nejde."
+        "The backups on the destinations differ (\(details)) — check them with \(verifyHint); cannot append."
     }
     public static func appendReportsMismatch(_ p: String, report: Int, mhl: Int) -> String {
-        "V \(p) nesouhlasí reporty s ASC MHL (poslední report je generace \(report), poslední generace MHL \(mhl)) — dřívější doplnění se nedokončilo. "
-            + "Zkontrolujte zálohu přes \(verifyHint) a složku opravte ručně; doplnit nejde."
+        "The reports in \(p) do not match the ASC MHL (the last report is generation \(report), the last MHL generation \(mhl)) — "
+            + "an earlier append did not finish. Check the backup with \(verifyHint) and fix the folder by hand; cannot append."
     }
-    public static func appendNotACardFolder(_ p: String) -> String { "\(p) není složka karty v záloze (<cíl>/<datum>/<karta>) — doplnit nejde." }
+    public static func appendNotACardFolder(_ p: String) -> String {
+        "\(p) is not a card folder of a backup (<destination>/<date>/<card>) — cannot append."
+    }
     public static func appendDifferentFolders(_ paths: [String]) -> String {
-        "Složky dřívější zálohy se jmenují různě (\(paths.joined(separator: ", "))) — doplnit jde jen do složek se stejným datem a názvem karty."
+        "The folders of the earlier backup have different names (\(paths.joined(separator: ", "))) — "
+            + "can append only into folders with the same date and card name."
     }
     public static func appendConflict(_ lines: [String], fullCopyFolder: String) -> String {
-        "Doplnění zastaveno — nic se nezkopírovalo. \(lines.count) \(plural(lines.count, "soubor se neshoduje", "soubory se neshodují", "souborů se neshoduje")) "
-            + "se zálohou:\n  " + lines.prefix(10).joined(separator: "\n  ") + (lines.count > 10 ? "\n  …" : "")
-            + "\nUdělejte celou kopii (vznikne \(fullCopyFolder))."
+        "Append stopped — nothing was copied. \(lines.count) \(plural(lines.count, "file does not match", "files do not match")) "
+            + "the backup:\n  " + lines.prefix(10).joined(separator: "\n  ") + (lines.count > 10 ? "\n  …" : "")
+            + "\nMake a full copy (it goes to \(fullCopyFolder))."
     }
     public static func appendMissingFile(_ disk: String, _ path: String) -> String {
-        "Na \(disk) chybí soubor z dřívější zálohy: \(path) — zkontrolujte zálohu přes \(verifyHint)"
+        "A file of the earlier backup is missing on \(disk): \(path) — check the backup with \(verifyHint)"
     }
     public static func appendFailedFile(_ path: String, _ disk: String) -> String {
-        "\(path) se při dřívější záloze na \(disk) nezkopíroval správně — doplnit nejde, udělejte celou kopii."
+        "\(path) was not copied correctly to \(disk) in the earlier backup — cannot append, make a full copy."
     }
-    public static let appendOtherCard = "Na kartě není žádný soubor z dřívější zálohy — jde o jinou kartu? Udělejte celou kopii."
-    public static func appendMhlDamaged(_ p: String) -> String { "Historie ASC MHL v \(p) je poškozená — zkontrolujte ji přes \(verifyHint); doplnit nejde." }
-    public static func appendUnknownFile(_ disk: String, _ path: String) -> String { "na \(disk) je soubor \(path), který žádný report nezná (nedokončené doplnění?)" }
-    public static func appendPartNameTaken(_ path: String, _ part: String) -> String { "\(path) (dočasné jméno kopie \(part) je jiný soubor zálohy nebo karty)" }
-    public static func hashListNotHealed(_ p: String, _ e: String) -> String { "Seznam kontrolních součtů (.xxh64) v \(p) nejde doplnit o chybějící řádky: \(e)" }
+    public static let appendOtherCard = "None of the files of the earlier backup is on the card — is it a different card? Make a full copy."
+    public static func appendMhlDamaged(_ p: String) -> String {
+        "The ASC MHL history in \(p) is damaged — check it with \(verifyHint); cannot append."
+    }
+    public static func appendUnknownFile(_ disk: String, _ path: String) -> String {
+        "\(disk) has a file \(path) that no report knows (an unfinished append?)"
+    }
+    public static func appendPartNameTaken(_ path: String, _ part: String) -> String {
+        "\(path) (the temporary copy name \(part) is another file of the backup or the card)"
+    }
+    public static func hashListNotHealed(_ p: String, _ e: String) -> String {
+        "Cannot add the missing lines to the checksum list (.xxh64) in \(p): \(e)"
+    }
     public static func appendBusy(_ p: String) -> String {
-        "S touto zálohou právě pracuje jiná úloha — doplnění, oprava nebo ověření s proxy (\(p)) — počkejte, až skončí."
+        "Another job is working with this backup right now — an append, a repair or a verify with proxies (\(p)) — wait until it finishes."
     }
-    public static let nothingNew = "Nic nového — záloha je úplná."
+    public static let nothingNew = "Nothing new — the backup is complete."
     public static func unverifiedEarlier(_ n: Int) -> String {
-        "\(n) \(plural(n, "soubor", "soubory", "souborů")) z dřívější zálohy \(plural(n, "nebyl ověřen", "nebyly ověřeny", "nebylo ověřeno")) — doporučeno Ověřit zálohu."
+        "\(n) \(plural(n, "file", "files")) of the earlier backup \(plural(n, "was", "were")) not verified — Verify backup recommended."
     }
-    public static let cardNotInHistory = "Karta není v historii — zadejte složky zálohy volbou --into."
+    public static let cardNotInHistory = "The card is not in the history — give the backup folders with --into."
 
-    // Repair (soubor -3, úkol 62)
-    public static let repairNothing = "Nic k opravě — všechny soubory jsou na všech cílech v pořádku."
+    // Repair (file -3, task 62)
+    public static let repairNothing = "Nothing to repair — every file is good on every destination."
     public static func repairConflict(_ lines: [String]) -> String {
-        "Oprava zastavena — nic se nezkopírovalo. \(lines.count) \(plural(lines.count, "soubor nejde opravit", "soubory nejde opravit", "souborů nejde opravit")):\n  "
+        "Repair stopped — nothing was copied. \(lines.count) \(plural(lines.count, "file cannot be repaired", "files cannot be repaired")):\n  "
             + lines.prefix(10).joined(separator: "\n  ") + (lines.count > 10 ? "\n  …" : "")
-            + "\nKarta se od zálohy změnila nebo ve složce zálohy chybí soubor — zkontrolujte ji přes Ověřit zálohu, nebo udělejte celou kopii."
+            + "\nThe card has changed since the backup, or a file is missing in the backup folder — check it with Verify backup, or make a full copy."
     }
-    public static func repairNotOnCard(_ p: String) -> String { "\(p): na kartě už není" }
+    public static func repairNotOnCard(_ p: String) -> String { "\(p): no longer on the card" }
     public static func repairCardDiffers(_ p: String, _ algorithm: String, now: String, recorded: String) -> String {
-        "\(p): na kartě je jiný obsah než při záloze (\(algorithm) \(now), v záloze \(recorded))"
+        "\(p): the card has different content than at the backup (\(algorithm) \(now), in the backup \(recorded))"
     }
-    public static func repairCardUnreadable(_ p: String, _ d: String) -> String { "\(p): na kartě nejde přečíst (\(d))" }
-    public static let repairNeedsVerify = "Oprava se vždy ověřuje zpětným čtením — bez ověření ji spustit nejde."
+    public static func repairCardUnreadable(_ p: String, _ d: String) -> String { "\(p): cannot read it on the card (\(d))" }
+    public static let repairNeedsVerify = "A repair is always verified by reading back — it cannot run without verification."
     public static func mhlRepairComment(copied: Int, readBack: Int, source: String) -> String {
-        "Offload oprava: \(copied) \(plural(copied, "soubor", "soubory", "souborů")) znovu z \(source)"
-            + (readBack > 0 ? "; \(readBack) \(plural(readBack, "soubor jen přečten", "soubory jen přečteny", "souborů jen přečteno")) zpět" : "")
+        "Offload repair: \(copied) \(plural(copied, "file", "files")) again from \(source)"
+            + (readBack > 0 ? "; \(readBack) \(plural(readBack, "file", "files")) only read back" : "")
     }
     public static let repairOtherCard =
-        "Ve čtečce není karta, ze které se záloha dělala (jiná karta, nebo žádná) — nic se nezkopírovalo. Vložte původní kartu a spusťte Zkopírovat znovu."
+        "The card in the reader is not the one the backup was made from (another card, or none) — nothing was copied. "
+            + "Insert the original card and run Copy again."
     public static func cardFilesNotInBackup(_ n: Int) -> String {
-        "Na kartě \(plural(n, "je", "jsou", "je")) \(n) \(plural(n, "soubor, který", "soubory, které", "souborů, které")) záloha nemá — kartu nevysouvejte, zálohu doplňte."
+        "The card has \(n) \(plural(n, "file", "files")) that the backup does not — do not eject the card, append to the backup."
     }
     public static func backupStillFailed(_ n: Int) -> String {
-        "V záloze \(n) \(plural(n, "soubor stále nesouhlasí", "soubory stále nesouhlasí", "souborů stále nesouhlasí")) — kartu nevysouvejte, spusťte Zkopírovat znovu."
+        "\(n) \(plural(n, "file", "files")) in the backup still \(plural(n, "does", "do")) not match — do not eject the card, run Copy again."
     }
-    public static func backupStateUnreadable(_ d: String) -> String { "Stav zálohy nejde přečíst (\(d)) — nic se nezkontrolovalo, kartu zatím nevysouvejte." }
+    public static func backupStateUnreadable(_ d: String) -> String {
+        "Cannot read the state of the backup (\(d)) — nothing was checked, do not eject the card yet."
+    }
     public static func forRepair(_ appendRefusal: String) -> String {
-        appendRefusal.replacingOccurrences(of: "doplnit nejde", with: "opravit nejde").replacingOccurrences(of: "doplnit jde jen", with: "opravit jde jen")
+        appendRefusal.replacingOccurrences(of: "cannot append", with: "cannot repair")
+            .replacingOccurrences(of: "can append only", with: "can repair only")
     }
     public static let cardChangedWhilePaused =
-        "Během pozastavení se karta ve čtečce vyměnila nebo vytáhla — zbylé soubory se nezkopírovaly. Vložte původní kartu a zálohu doplňte."
+        "The card in the reader was swapped or removed during the pause — the remaining files were not copied. "
+            + "Insert the original card and append to the backup."
 
     // CLI
-    public static let cliError = "Chyba: "
+    public static let cliError = "Error: "
     public static func unknownProxyCodec(_ x: String?) -> String {
-        "Neznámý kodek proxy „\(x ?? "")“ — použijte h264, hevc, proresProxy, proresLT, prores422 nebo prores422HQ."
+        "Unknown proxy codec “\(x ?? "")” — use h264, hevc, proresProxy, proresLT, prores422 or prores422HQ."
     }
-    public static func lutNotFound(_ p: String) -> String { "LUT nenalezen: \(p)" }
-    public static func unknownHash(_ x: String?) -> String { "Neznámý kontrolní součet „\(x ?? "")“ — použijte xxh64 nebo both (xxh64 + MD5)." }
-    public static func proxyFolderNotFound(_ p: String) -> String { "Složka pro proxy nenalezena: \(p)" }
-    public static let proxyFolderNoEffect = "Poznámka: --proxy-folder bez --proxy nic nedělá."
-    public static let cancelling = "Ruším — dokončuji aktuální blok, rozpracované soubory se smažou…"
-    public static func notPositiveNumber(_ s: String?) -> String { "„\(s ?? "")“ není kladné číslo." }
-    public static func unknownFallbackLut(_ x: String, ids: String) -> String { "Neznámý záložní LUT „\(x)“. Vestavěné: \(ids)" }
-    public static func unknownLut(_ x: String, ids: String) -> String { "Neznámý LUT „\(x)“. Použijte auto, none, cestu k .cube nebo jedno z: \(ids)" }
-    public static let noBuiltinLuts = "Vestavěné LUTy nenalezeny (chybí složka luts)."
+    public static func lutNotFound(_ p: String) -> String { "LUT not found: \(p)" }
+    public static func unknownHash(_ x: String?) -> String { "Unknown checksum “\(x ?? "")” — use xxh64 or both (xxh64 + MD5)." }
+    public static func proxyFolderNotFound(_ p: String) -> String { "Folder for proxies not found: \(p)" }
+    public static let proxyFolderNoEffect = "Note: --proxy-folder does nothing without --proxy."
+    public static let cancelling = "Cancelling — finishing the current block, partly copied files will be deleted…"
+    public static func notPositiveNumber(_ s: String?) -> String { "“\(s ?? "")” is not a positive number." }
+    public static func unknownFallbackLut(_ x: String, ids: String) -> String { "Unknown fallback LUT “\(x)”. Built-in: \(ids)" }
+    public static func unknownLut(_ x: String, ids: String) -> String {
+        "Unknown LUT “\(x)”. Use auto, none, a path to a .cube or one of: \(ids)"
+    }
+    public static let noBuiltinLuts = "Built-in LUTs not found (the luts folder is missing)."
 
     // Clip notes
-    public static let noVerifiedCopy = "žádná ověřená kopie"
-    public static func proxyRenamed(_ name: String) -> String { "Proxy přejmenována na \(name) (shoda jmen) — přelinkujte ji ručně." }
-    public static let ffmpegNotFound = "ffmpeg nenalezen"
-    public static let ffprobeNotFound = "ffprobe nenalezen"
-    public static let unknownFormat = "neznámý formát"
-    public static func noDecoder(_ f: String) -> String { "\(f): chybí dekodér" }
+    public static let noVerifiedCopy = "no verified copy"
+    public static func proxyRenamed(_ name: String) -> String { "Proxy renamed to \(name) (name clash) — relink it by hand." }
+    public static let ffmpegNotFound = "ffmpeg not found"
+    public static let ffprobeNotFound = "ffprobe not found"
+    public static let unknownFormat = "unknown format"
+    public static func noDecoder(_ f: String) -> String { "\(f): no decoder available" }
 }

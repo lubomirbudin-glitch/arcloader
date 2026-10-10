@@ -11,7 +11,7 @@ final class JobTests: XCTestCase {
         return o
     }
 
-    // Review focus 1 (queue): cancelled while queued → "Zrušeno", not "Čeká" forever.
+    // Review focus 1 (queue): cancelled while queued → "Cancelled", not "Waiting" forever.
     func testCancelledBeforeStartReportsCancelled() {
         let dir = tempDir()
         let job = OffloadJob(config: JobConfig(source: dir.sub("card"), destRoots: [dir.sub("d1")]))

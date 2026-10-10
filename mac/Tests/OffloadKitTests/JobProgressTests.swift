@@ -55,7 +55,7 @@ final class JobProgressTests: XCTestCase {
         p.update(st(.verifying, snap(0, [0, 0], [200_000_000, 100_000_000])), now: t0 + 1.5)
         XCTAssertEqual(p.readRate, 100e6, accuracy: 1)
         XCTAssertEqual(p.eta!, 9.0, accuracy: 0.001)
-        XCTAssertEqual(p.detailText, "D1 200 MB/s · D2 100 MB/s · zbývá 0:09")
+        XCTAssertEqual(p.detailText, "D1 200 MB/s · D2 100 MB/s · 0:09 left")
     }
 
     func testPhaseProgressEachPhase() {
@@ -78,7 +78,7 @@ final class JobProgressTests: XCTestCase {
     }
 
     func testDetailTexts() {
-        XCTAssertEqual(copying().detailText, "Karta 80 MB/s · D1 80 MB/s · D2 50 MB/s · zbývá 0:10 · A001.MOV")
+        XCTAssertEqual(copying().detailText, "Card 80 MB/s · D1 80 MB/s · D2 50 MB/s · 0:10 left · A001.MOV")
         let p = JobProgress(now: t0)
         var s = JobStatus()
         s.phase = .proxies
@@ -87,15 +87,15 @@ final class JobProgressTests: XCTestCase {
         s.clipName = "A003"
         s.clipFraction = 0.426
         p.update(s, now: t0)
-        XCTAssertEqual(p.detailText, "Proxy 3/5 · A003 · 43 %")
+        XCTAssertEqual(p.detailText, "Proxy 3/5 · A003 · 43%")
         s.phase = .analyzing
         s.clipIndex = 0
         s.clipCount = 3
         s.clipName = "A001"
         p.update(s, now: t0)
-        XCTAssertEqual(p.detailText, "Klip 1/3 · A001")
+        XCTAssertEqual(p.detailText, "Clip 1/3 · A001")
         p.update(st(.flushing), now: t0)
-        XCTAssertEqual(p.detailText, "Zápis cache disků…")
+        XCTAssertEqual(p.detailText, "Flushing disk caches…")
     }
 
     func testEtaText() {
@@ -108,13 +108,13 @@ final class JobProgressTests: XCTestCase {
 
     func testStatusTextToneAndErrorNotForCancelled() {
         let cases: [(JobStatus.Phase, Bool?, String, CardTone, Bool)] = [
-            (.done, false, "Chyba", .error, true),
-            (.done, true, "Hotovo", .ok, false),
-            (.failed, nil, "Chyba", .error, true),
-            (.cancelled, nil, "Zrušeno", .warning, false),
-            (.cancelled, false, "Zrušeno", .warning, false),
-            (.copying, nil, "Kopírování", .active, false),
-            (.waiting, nil, "Čeká", .waiting, false),
+            (.done, false, "Error", .error, true),
+            (.done, true, "Done", .ok, false),
+            (.failed, nil, "Error", .error, true),
+            (.cancelled, nil, "Cancelled", .warning, false),
+            (.cancelled, false, "Cancelled", .warning, false),
+            (.copying, nil, "Copying", .active, false),
+            (.waiting, nil, "Waiting", .waiting, false),
         ]
         for (phase, ok, text, tone, error) in cases {
             let p = JobProgress(now: t0)
@@ -151,28 +151,29 @@ final class JobProgressTests: XCTestCase {
         var p = ProxySettings()
         p.enabled = true
         r.proxy = p
-        XCTAssertEqual(JobProgress.summaryText(r), "kopie 100 MB/s · ověření 200 MB/s · 3 klipy · proxy 1, 1 chyba, 1 nepodporováno")
+        XCTAssertEqual(JobProgress.summaryText(r), "copy 100 MB/s · verify 200 MB/s · 3 clips · proxy 1, 1 failed, 1 unsupported")
     }
 
-    func testCzechPlurals() {
-        XCTAssertEqual(Texts.cards(0), "Vyberte kartu")
-        XCTAssertEqual(Texts.cards(1), "1 karta")
-        XCTAssertEqual(Texts.cards(3), "3 karty")
-        XCTAssertEqual(Texts.cards(5), "5 karet")
-        XCTAssertEqual(Texts.destinations(0), "0 cílů")
-        XCTAssertEqual(Texts.destinations(1), "1 cíl")
-        XCTAssertEqual(Texts.destinations(2), "2 cíle")
-        XCTAssertEqual(Texts.files(1, 1000), "1 soubor · 1.00 KB")
-        XCTAssertEqual(Texts.files(12, 2_500_000_000), "12 souborů · 2.50 GB")
-        XCTAssertEqual(Texts.clips(1), "1 klip")
-        XCTAssertEqual(Texts.clips(4), "4 klipy")
-        XCTAssertEqual(Texts.clips(7), "7 klipů")
-        XCTAssertEqual(Texts.safeToEject(1), "Všechny soubory jsou na 1 disku a ověřené — kartu lze vysunout.")
-        XCTAssertEqual(Texts.safeToEject(2), "Všechny soubory jsou na 2 discích a ověřené — kartu lze vysunout.")
-        XCTAssertEqual(Texts.failed(3), "3 soubory selhaly — karta NENÍ bezpečně zálohovaná. Podrobnosti v reportu.")
-        XCTAssertEqual(Texts.failed(1), "1 soubor selhal — karta NENÍ bezpečně zálohovaná. Podrobnosti v reportu.")
-        XCTAssertEqual(Texts.warnings(0), "bez varování")
-        XCTAssertEqual(Texts.warnings(2), "2 varování")
-        XCTAssertEqual(Texts.cancelled, "Zrušeno — karta není kompletně zálohovaná.")
+    func testEnglishPlurals() {
+        XCTAssertEqual(Texts.cards(0), "Select a card")
+        XCTAssertEqual(Texts.cards(1), "1 card")
+        XCTAssertEqual(Texts.cards(3), "3 cards")
+        XCTAssertEqual(Texts.cards(5), "5 cards")
+        XCTAssertEqual(Texts.destinations(0), "0 destinations")
+        XCTAssertEqual(Texts.destinations(1), "1 destination")
+        XCTAssertEqual(Texts.destinations(2), "2 destinations")
+        XCTAssertEqual(Texts.files(1, 1000), "1 file · 1.00 KB")
+        XCTAssertEqual(Texts.files(12, 2_500_000_000), "12 files · 2.50 GB")
+        XCTAssertEqual(Texts.clips(1), "1 clip")
+        XCTAssertEqual(Texts.clips(4), "4 clips")
+        XCTAssertEqual(Texts.clips(7), "7 clips")
+        XCTAssertEqual(Texts.safeToEject(1), "All files are on 1 drive and verified — safe to eject.")
+        XCTAssertEqual(Texts.safeToEject(2), "All files are on 2 drives and verified — safe to eject.")
+        XCTAssertEqual(Texts.failed(3), "3 files failed — the card is NOT safely backed up. See the report for details.")
+        XCTAssertEqual(Texts.failed(1), "1 file failed — the card is NOT safely backed up. See the report for details.")
+        XCTAssertEqual(Texts.warnings(0), "no warnings")
+        XCTAssertEqual(Texts.warnings(1), "1 warning")
+        XCTAssertEqual(Texts.warnings(2), "2 warnings")
+        XCTAssertEqual(Texts.cancelled, "Cancelled — the card is not fully backed up.")
     }
 }

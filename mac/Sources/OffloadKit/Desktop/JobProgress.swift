@@ -79,7 +79,7 @@ public final class JobProgress {
         }
     }
 
-    public var statusText: String { status.phase == .done && status.copySucceeded == false ? "Chyba" : status.phase.label }
+    public var statusText: String { status.phase == .done && status.copySucceeded == false ? "Error" : status.phase.label }
 
     /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound).
     public var isError: Bool { tone == .error }
@@ -103,32 +103,32 @@ public final class JobProgress {
 
     public var detailText: String {
         let s = status
-        let etaPart = eta.map { " · zbývá " + JobProgress.etaText($0) } ?? ""
+        let etaPart = eta.map { " · " + JobProgress.etaText($0) + " left" } ?? ""
         let dests = destRates.enumerated().map { "D\($0.offset + 1) \(JobProgress.mb($0.element))" }.joined(separator: " · ")
         switch s.phase {
         case .copying:
             let file = ((s.copy?.currentFile ?? "") as NSString).lastPathComponent
-            return "Karta \(JobProgress.mb(readRate)) · \(dests)\(etaPart) · \(file)"
+            return "Card \(JobProgress.mb(readRate)) · \(dests)\(etaPart) · \(file)"
         case .verifying:
             return dests + etaPart
         case .analyzing:
-            return "Klip \(s.clipIndex + 1)/\(s.clipCount) · \(s.clipName)"
+            return "Clip \(s.clipIndex + 1)/\(s.clipCount) · \(s.clipName)"
         case .proxies:
-            return "Proxy \(s.clipIndex + 1)/\(s.clipCount) · \(s.clipName) · " + String(format: "%.0f", s.clipFraction * 100) + " %"
+            return "Proxy \(s.clipIndex + 1)/\(s.clipCount) · \(s.clipName) · " + String(format: "%.0f", s.clipFraction * 100) + "%"
         default:
             return s.phase.label + "…"
         }
     }
 
     public static func summaryText(_ r: OffloadReport) -> String {
-        var parts = ["kopie \(formatRate(r.totalBytes, r.copySeconds))"]
-        if r.verified { parts.append("ověření \(formatRate(r.totalBytes, r.verifySeconds))") }
+        var parts = ["copy \(formatRate(r.totalBytes, r.copySeconds))"]
+        if r.verified { parts.append("verify \(formatRate(r.totalBytes, r.verifySeconds))") }
         if !r.clips.isEmpty { parts.append(Texts.clips(r.clips.count)) }
         if r.proxy?.enabled == true {
             func count(_ st: ProxyStatus) -> Int { r.clips.filter { $0.proxyStatus == st }.count }
             var proxy = "proxy \(count(.done))"
-            if count(.failed) > 0 { proxy += ", \(count(.failed)) chyba" }
-            if count(.unsupported) > 0 { proxy += ", \(count(.unsupported)) nepodporováno" }
+            if count(.failed) > 0 { proxy += ", \(count(.failed)) failed" }
+            if count(.unsupported) > 0 { proxy += ", \(count(.unsupported)) unsupported" }
             parts.append(proxy)
         }
         return parts.joined(separator: " · ")

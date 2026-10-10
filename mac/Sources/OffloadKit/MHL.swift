@@ -26,7 +26,7 @@ public enum MHL {
         if generation > 1 {
             let last = earlier?.chain.map(\.seq).max() ?? 0
             if last != generation - 1 {
-                throw OffloadError.failed("ASC MHL v \(cardPath) se během doplnění změnil (poslední generace \(last), doplnění píše \(generation)) — generace se nezapsala.")
+                throw OffloadError.failed("The ASC MHL in \(cardPath) changed during the append (last generation \(last), the append writes \(generation)) — the generation was not written.")
             }
         }
         let stamp = isoDate(now)
@@ -38,7 +38,7 @@ public enum MHL {
         let fileName = String(format: "%04d_%@_%@.mhl", generation, folder, utc.string(from: now))
         let listed = report.files.filter { $0.xxh64 != nil }.count
         let comment = generation > 1
-            ? "Offload doplnění: \(listed) \(plural(listed, "nový soubor", "nové soubory", "nových souborů")) z \(report.source)"
+            ? "Offload append: \(listed) new \(plural(listed, "file", "files")) from \(report.source)"
             : "Offload of \(report.cardName) from \(report.source)"
         let ignore = earlier?.generations.first?.ignore
             ?? ignorePatterns + report.skipped.map { ($0 as NSString).lastPathComponent }
