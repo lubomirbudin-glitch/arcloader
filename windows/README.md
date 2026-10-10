@@ -46,6 +46,17 @@ zvyšují poslední číslo, 1.0.0 po ostrém testu s kartou.
    — vznikne `build\Offload-win-x64-<verze>.zip` a `build\offload-update.json` (`{"version", "url", "notes"}`, UTF-8).
    `-ReleaseUrl` je adresa, kterou uživatel otevře tlačítkem *Otevřít* (https adresa, `\\NAS\Offload\`, sdílená složka).
 3. Nahrajte zip na web / NAS a **až potom** manifest (manifest nesmí ukazovat na zip, který tam ještě není).
+4. **GitHub Releases** (stálé odkazy, vždy na nejnovější build kanálu): po pushnutí commitu, ze kterého je zip sestavený,
+   `powershell -ExecutionPolicy Bypass -File scripts\publish.ps1 -Channel dev` (vývojová verze) nebo `-Channel stable`
+   (stabilní; `-Since <předchozí stabilní>` vypíše do popisu změny všech verzí od ní, `-DryRun` jen ukáže popis). Skript
+   nahraje archiv `windows-v<verze>` (Offload-win-x64-<verze>.zip), posune značku kanálu `stable`/`dev` na commit a nahradí
+   v jeho release soubor se stálým jménem; u stabilní i `offload-update.json`. Popis verze bere z `docs/VYVOJ-WINDOWS.md`.
+   - stabilní: https://github.com/lubomirbudin-glitch/offload/releases/download/stable/Offload-Windows.zip
+     (stránka https://github.com/lubomirbudin-glitch/offload/releases/tag/stable, také `/releases/latest`)
+   - vývojová: https://github.com/lubomirbudin-glitch/offload/releases/download/dev/Offload-Windows-dev.zip
+     (stránka https://github.com/lubomirbudin-glitch/offload/releases/tag/dev)
+   - manifest pro kontrolu aktualizací: https://github.com/lubomirbudin-glitch/offload/releases/download/stable/offload-update.json
+   - Mac verze může do stejných release přidat `Offload-Mac.zip` / `Offload-Mac-dev.zip`.
 
 Kontrola aktualizací v aplikaci (Nastavení → Aplikace → Aktualizace…) čte manifest z adresy, kterou tam zadáte (`https://…`,
 `\\NAS\Offload\offload-update.json`, místní cesta); nejvýš jednou za 24 h, 5 s po startu, nic nestahuje ani nespouští,

@@ -51,6 +51,15 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 - **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzích 0.7.0 a 0.7.1, viz níže.
 
+## 2026-10-10 — veřejný repozitář a stálé odkazy na buildy
+
+- Repozitář je veřejný, **jen k nahlédnutí — všechna práva vyhrazena** (`LICENSE`, `THIRD-PARTY-NOTICES.md`); hotové
+  balíčky z Releases je dovoleno zdarma používat. Nový podrobný `README.md` v kořeni.
+- **GitHub Releases** přes `windows/scripts/publish.ps1`: kanály `stable` (Latest) a `dev` (pre-release) se stálými
+  odkazy `releases/download/stable/Offload-Windows.zip` a `releases/download/dev/Offload-Windows-dev.zip`, archiv
+  `windows-v<verze>`, manifest aktualizací `releases/download/stable/offload-update.json`. Popis verze z tohoto souboru.
+  Zveřejněno: 0.7.2 jako stabilní i vývojová.
+
 ## 2026-10-10 — 0.7.2: odkazy na stažení dekodérů
 
 Verze **0.7.2** (zadání uživatele: „přidělej tam linky na stažení těch dekodérů, když budou někomu chybět“).
