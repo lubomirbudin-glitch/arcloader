@@ -86,6 +86,66 @@ public class JobPauseTests
         Assert.Equal(0, awake.Active);           // M6: released when the job finished
     }
 
+    // Task 2026-10-09: Pozastavit while a clip is analysed lets that clip finish ("Pozastavuji (dokončuji klip A001C001…)"
+    // until then), then the job stands; Pokračovat goes on with the next clip — no clip is analysed twice.
+    [Fact]
+    public async Task Stage2_PausedMidClip_FinishesTheClip_ThenStands_ResumeGoesOnWithTheNext()
+    {
+        using var dir = new TempDir();
+        var (job, _) = ThreeClips(dir);
+        Assert.True(job.RunCopy());
+        var probes = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        JobStatus? pausing = null;
+        var post = TestThreads.Start(() => job.RunPost(line =>
+        {
+            if (!line.StartsWith("probe ", StringComparison.Ordinal)) return;
+            probes.Enqueue(line);
+            if (probes.Count != 1) return;
+            job.Pause();
+            pausing = job.Status();   // on the stage-2 thread, still inside the clip
+        }));
+
+        Assert.True(Until(() => job.Status().PauseHeld));
+        var held = job.Status();
+        Assert.Equal((JobPhase.Analyzing, 0), (held.Phase, held.ClipIndex));
+        Assert.Equal((true, false, "klip A001C001"), (pausing!.Paused, pausing.PauseHeld, pausing.PauseStep));
+        Assert.Null(held.PauseStep);
+        Thread.Sleep(300);
+        Assert.Single(probes);
+        job.Resume();
+        await post.WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.Equal(JobPhase.Done, job.Status().Phase);
+        Assert.Equal(3, probes.Count);   // every clip once
+        Assert.StartsWith("probe A001C002", probes.ElementAt(1), StringComparison.Ordinal);
+        Assert.Equal(3, job.Report!.Clips.Count);
+        Assert.True(job.Status().PausedTotal >= TimeSpan.FromMilliseconds(300));
+    }
+
+    // Cancel while the pause is still pending (the clip not finished yet): the job ends Zrušeno, no next clip is started,
+    // and it never stood — no paused time.
+    [Fact]
+    public async Task CancelWhilePausingInStage2_EndsCancelled_NoPausedTime()
+    {
+        using var dir = new TempDir();
+        var (job, _) = ThreeClips(dir);
+        Assert.True(job.RunCopy());
+        int probes = 0;
+        var post = TestThreads.Start(() => job.RunPost(line =>
+        {
+            if (!line.StartsWith("probe ", StringComparison.Ordinal) || Interlocked.Increment(ref probes) != 1) return;
+            job.Pause();
+            job.Cancel();
+        }));
+        await post.WaitAsync(TimeSpan.FromSeconds(60));
+
+        var s = job.Status();
+        Assert.Equal(JobPhase.Cancelled, s.Phase);
+        Assert.False(s.Paused);
+        Assert.Equal(1, Volatile.Read(ref probes));
+        Assert.Equal(TimeSpan.Zero, s.PausedTotal);
+    }
+
     // The day report and history locks are taken only for a moment and never while waiting: another job of the same
     // day makes its day report while this one stands paused.
     [Fact]

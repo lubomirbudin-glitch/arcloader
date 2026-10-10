@@ -59,7 +59,7 @@ public static class JobCard
                 ? $"{n} ({drive})" : n).ToList();
     }
 
-    /// "661 MB/s"; a paused job shows a dash.
+    /// "661 MB/s"; a job standing paused shows a dash (while it still finishes its file it shows its speed).
     public static string Rate(double bytesPerSecond, bool paused = false) =>
         paused ? "—" : (bytesPerSecond / 1_000_000).ToString("0", CultureInfo.InvariantCulture) + " MB/s";
 
@@ -83,14 +83,14 @@ public static class JobCard
         bool verifying = s.Phase == JobPhase.Verifying;
         var rows = new List<TransferRow>();
         if (!verifying)
-            rows.Add(new TransferRow("Čtení karty", null, Share(c.ReadBytes, c.TotalBytes), Rate(p.ReadRate, s.Paused)));
+            rows.Add(new TransferRow("Čtení karty", null, Share(c.ReadBytes, c.TotalBytes), Rate(p.ReadRate, s.PauseHeld)));
         for (int d = 0; d < destNames.Count; d++)
         {
             long done = verifying ? At(c.VerifiedBytes, d) : At(c.WrittenBytes, d);
             long of = verifying ? c.ToVerify(d) : c.Planned(d);
             double rate = d < p.DestRates.Length ? p.DestRates[d] : 0;
             // A destination a repair only reads back has nothing to write: full, and no speed while the others copy.
-            rows.Add(new TransferRow(destNames[d], d + 1, of == 0 ? 1 : Share(done, of), of == 0 && !verifying ? "jen ověření" : Rate(rate, s.Paused)));
+            rows.Add(new TransferRow(destNames[d], d + 1, of == 0 ? 1 : Share(done, of), of == 0 && !verifying ? "jen ověření" : Rate(rate, s.PauseHeld)));
         }
         return rows;
     }

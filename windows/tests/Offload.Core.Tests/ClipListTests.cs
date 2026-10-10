@@ -29,10 +29,10 @@ public class ClipListTests
         var csv = ClipList.Csv([a, b, c]);
 
         Assert.Equal(
-            "Clip Name,File Name,Path,Card,Camera,Reel,Start TC,Duration,FPS,Resolution,Codec,LUT,Size (bytes),XXH64,MD5\r\n"
-            + "\"Záběr, 1\",\"Záběr, 1.mov\",\"CLIP/Záběr, 1.mov\",A001,\"ARRI \"\"ALEXA\"\" 35\",A001,01:00:00:00,00:00:12:10,25,3840x2160,prores 4444,ARRI LogC4 → Rec.709,1234,0123456789abcdef,900150983cd24fb0d6963f7d28e17f72\r\n"
-            + "B002C001_x,B002C001_x.mov,CLIP/B002C001_x.mov,A001,,B002,10:00:00:00,00:00:02:00,23.976,,,\"look\nB\",1234,0123456789abcdef,\r\n"
-            + "-take,-take.mov,CLIP/-take.mov,A001,,A001,,,,,Blackmagic RAW,,1234,0123456789abcdef,\r\n",
+            "Clip Name,File Name,Path,Card,Camera,Reel,Start TC,Duration,FPS,Capture FPS,Resolution,Codec,LUT,Size (bytes),XXH64,MD5\r\n"
+            + "\"Záběr, 1\",\"Záběr, 1.mov\",\"CLIP/Záběr, 1.mov\",A001,\"ARRI \"\"ALEXA\"\" 35\",A001,01:00:00:00,00:00:12:10,25,25,3840x2160,prores 4444,ARRI LogC4 → Rec.709,1234,0123456789abcdef,900150983cd24fb0d6963f7d28e17f72\r\n"
+            + "B002C001_x,B002C001_x.mov,CLIP/B002C001_x.mov,A001,,B002,10:00:00:00,00:00:02:00,23.976,23.976,,,\"look\nB\",1234,0123456789abcdef,\r\n"
+            + "-take,-take.mov,CLIP/-take.mov,A001,,A001,,,,,,Blackmagic RAW,,1234,0123456789abcdef,\r\n",
             csv);
     }
 
@@ -52,9 +52,9 @@ public class ClipListTests
         Assert.Null(suffix);
         Assert.Equal(
             "Heading\r\nFIELD_DELIM\tTABS\r\nVIDEO_FORMAT\t1080\r\nAUDIO_FORMAT\t48khz\r\nFPS\t25\r\n\r\n"
-            + "Column\r\nName\tTape\tStart\tEnd\tTracks\tSource File\tCamera\tLUT\tResolution\tCodec\tXXH64\tMD5\r\nData\r\n"
-            + "A001C003\tA001\t01:00:00:00\t01:00:12:10\tVA1A2\tA001C003.mov\tARRI ALEXA 35\tARRI LogC4 → Rec.709\t1920x1080\tprores 4444\t0123456789abcdef\t\r\n"
-            + "C0001\tA001\t00:00:00:00\t00:00:02:00\tV\tC0001.mov\tSony FX6\t\t1920x1080\th264 High\t0123456789abcdef\t\r\n",
+            + "Column\r\nName\tTape\tStart\tEnd\tTracks\tSource File\tCamera\tSensor_fps\tLUT\tResolution\tCodec\tXXH64\tMD5\r\nData\r\n"
+            + "A001C003\tA001\t01:00:00:00\t01:00:12:10\tVA1A2\tA001C003.mov\tARRI ALEXA 35\t25\tARRI LogC4 → Rec.709\t1920x1080\tprores 4444\t0123456789abcdef\t\r\n"
+            + "C0001\tA001\t00:00:00:00\t00:00:02:00\tV\tC0001.mov\tSony FX6\t25\t\t1920x1080\th264 High\t0123456789abcdef\t\r\n",
             text);
     }
 
@@ -127,7 +127,7 @@ public class ClipListTests
         var plain = Row("interview");
         Assert.Equal("A003", named.Reel);
         Assert.Equal("A001", plain.Reel);
-        Assert.Contains("\r\nA003C005_220101_R1AB,A003C005_220101_R1AB.mov,CLIP/A003C005_220101_R1AB.mov,A001,,A003,,,,,,,1234,", ClipList.Csv([named, plain]));
+        Assert.Contains("\r\nA003C005_220101_R1AB,A003C005_220101_R1AB.mov,CLIP/A003C005_220101_R1AB.mov,A001,,A003,,,,,,,,1234,", ClipList.Csv([named, plain]));
         var ale = Assert.Single(ClipList.Ale([named, plain])).Text;
         Assert.Contains("\r\ninterview\tA001\t00:00:00:00\t00:00:00:00\tV\t", ale);
     }
@@ -231,7 +231,7 @@ public class ClipListTests
         foreach (var p in paths)
         {
             var csv = File.ReadAllText(Path.Combine(p, "_REPORT", "A001_clips.csv"));
-            Assert.Contains($"A001C001,A001C001.mov,CLIP/A001C001.mov,A001,,A001,,,,,,,10000,{report.Files[0].Xxh64},\r\n", csv);
+            Assert.Contains($"A001C001,A001C001.mov,CLIP/A001C001.mov,A001,,A001,,,,,,,,10000,{report.Files[0].Xxh64},\r\n", csv);
             Assert.True(File.Exists(Path.Combine(p, "_REPORT", "A001_clips.ale")));
         }
 

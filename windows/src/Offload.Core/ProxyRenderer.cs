@@ -198,6 +198,8 @@ public sealed class ProxyRenderer : IDisposable
             var ffprobe = Tools.Ffprobe ?? throw new ToolError("ffprobe", -1, Msg.FfprobeNotFound);
             var info = ffprobeTimeout is TimeSpan limit ? FFProbe.Probe(ffprobe, path, limit) : FFProbe.Probe(ffprobe, path);
             info.CameraSerial ??= SonyXml.Serial(path);   // Sony keeps it in the XML next to the clip (spec 4.2)
+            // S&Q: the capture rate is only in the XML (task 2026-10-10); other video says nothing — capture = playback.
+            info.CaptureFrameRate ??= SonyXml.CaptureFrameRate(path);
             return info;
         }
         if (!backends.TryGetValue(clip.Format, out var b) || !b.IsAvailable(Tools))

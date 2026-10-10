@@ -80,20 +80,72 @@ public sealed class ClipInfo
     /// when unknown — then a "serial" rule never matches.
     [JsonPropertyName("cameraSerial"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CameraSerial { get; set; }
 
+    /// The rate the camera recorded at (task 2026-10-10): from the metadata of the clip's first frame — ARRIRAW `Sensor
+    /// State.sensorSampleRate`, BRAW `sensorRate` (braw-decode --info), RED record fps, Sony M01.XML `captureFps`. Written
+    /// like FrameRate ("35", "120000/1001"). FrameRate stays the file's playback rate, so Duration (frames ÷ FrameRate) is
+    /// the editing length. Report key `clips[].info.captureFrameRate`, absent when unknown — then capture = playback.
+    [JsonPropertyName("captureFrameRate"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CaptureFrameRate { get; set; }
+
+    /// When the camera recorded the clip (UTC), from its metadata: ffprobe `creation_time` (QuickTime, MXF, MP4). Report key
+    /// `clips[].info.recorded`, absent when unknown (RAW decoders, older reports) — the summary report then orders the
+    /// clips by their number (task 2026-10-09).
+    /// Read leniently (review S-8): a value this version cannot read (a number, another shape) is unknown, never a report
+    /// that cannot be read.
+    [JsonPropertyName("recorded"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull), JsonConverter(typeof(LenientDateConverter))]
+    public DateTime? Recorded { get; set; }
+
+    /// A record time a camera could have meant (review S-7): from 2000 on and at most a day ahead of now. A camera without
+    /// its clock set writes 1904-01-01 (QuickTime) or 1970-01-01 — unknown, never the first clapper.
+    public static DateTime? Plausible(DateTime? t) =>
+        t is DateTime v && v.Year >= 2000 && v.ToUniversalTime() <= DateTime.UtcNow.AddDays(1) ? v : null;
+
+    /// The playback rate as people read it: "23.976", "25"; "" when unknown.
     [JsonIgnore]
-    public string FpsLabel
+    public string FpsLabel => Label(FrameRate);
+
+    /// The capture rate is known and is not the playback rate (overcranked, undercranked, S&Q).
+    [JsonIgnore]
+    public bool CaptureDiffers => Offload.Core.Timecode.Fps(CaptureFrameRate) is double c && Offload.Core.Timecode.Fps(FrameRate) is double p && Math.Abs(c - p) > 0.001;
+
+    /// What a report shows for the clip's fps: "35 fps · přehrávání 24" when the rates differ, else the playback rate
+    /// ("25"); "48 fps" when only the capture rate is known; "" when neither is.
+    [JsonIgnore]
+    public string FpsSummary
     {
         get
         {
-            if (FrameRate == null) return "";
-            var parts = FrameRate.Split('/')
-                .Select(p => double.TryParse(p, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : double.NaN)
-                .Where(v => !double.IsNaN(v)).ToArray();
-            double fps = parts.Length == 2 && parts[1] != 0 ? parts[0] / parts[1] : parts.FirstOrDefault();
-            return fps == Math.Round(fps)
-                ? ((long)fps).ToString(CultureInfo.InvariantCulture)
-                : fps.ToString("0.000", CultureInfo.InvariantCulture);
+            if (CaptureDiffers) return $"{Label(CaptureFrameRate)} fps · přehrávání {FpsLabel}";
+            if (FpsLabel.Length == 0 && Label(CaptureFrameRate) is { Length: > 0 } capture) return capture + " fps";
+            return FpsLabel;
         }
+    }
+
+    /// "24000/1001" → "23.976", "25/1" → "25"; "" for null or anything unusable.
+    public static string Label(string? rate)
+    {
+        if (Offload.Core.Timecode.Fps(rate) is not double fps) return "";
+        return fps == Math.Round(fps)
+            ? ((long)fps).ToString(CultureInfo.InvariantCulture)
+            : fps.ToString("0.000", CultureInfo.InvariantCulture);
+    }
+
+    /// A rate from camera metadata written like FrameRate: "35/1" → "35", "24000/1001" stays, "119.88" → "120000/1001",
+    /// "48.000" → "48"; null when it is not a usable rate.
+    public static string? NormalizeRate(string? rate)
+    {
+        rate = rate?.Trim();
+        if (Offload.Core.Timecode.Fps(rate) is not double raw || Plausible(raw) is not double fps) return null;
+        if (fps == raw && rate!.EndsWith("/1", StringComparison.Ordinal) && !rate[..^2].Contains('.')) return rate[..^2];
+        if (fps == raw && rate!.EndsWith("/1001", StringComparison.Ordinal)) return rate;
+        return RawBackends.Rational(fps);
+    }
+
+    /// ARRI writes some rates in thousandths of a frame per second (review F-4): above 1000 the value is divided by
+    /// 1000 (35000 → 35, 23976 → 23.976); null when even then it is no camera rate (0 or above 1000 fps).
+    internal static double? Plausible(double fps)
+    {
+        if (fps > 1000) fps /= 1000;
+        return fps > 0 && fps <= 1000 ? fps : null;
     }
 
     [JsonIgnore]
@@ -108,6 +160,26 @@ public sealed class ClipInfo
             int s = (int)Math.Round(d, MidpointRounding.AwayFromZero);
             return $"{s / 3600}:{s / 60 % 60:00}:{s % 60:00}";
         }
+    }
+}
+
+/// An optional ISO 8601 date written to the second in UTC ("2026-10-06T08:15:30Z", as `started`); anything else reads as
+/// null instead of failing the whole report.
+public sealed class LenientDateConverter : JsonConverter<DateTime?>
+{
+    public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String
+            && DateTime.TryParse(reader.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var t))
+            return t;
+        reader.Skip();
+        return null;
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
+    {
+        if (value is DateTime v) writer.WriteStringValue(v.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture));
+        else writer.WriteNullValue();
     }
 }
 

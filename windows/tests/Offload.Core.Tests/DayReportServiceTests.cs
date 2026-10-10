@@ -111,7 +111,7 @@ public class DayReportServiceTests
         var html = File.ReadAllText(Assert.Single(failed.DayReports));
         Assert.Contains("<td>A001</td>", html);
         // Fix round 1, item 2: the failed card is a card (its _REPORT is made with the folder) — it needs attention.
-        Assert.Contains("<td>B001</td><td colspan=\"11\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", html);
+        Assert.Contains("<td>B001</td><td colspan=\"12\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", html);
         Assert.Contains("<tr><td>B001</td><td class=\"warn wrap\">bez reportu (probíhá, nebo byl přerušen)</td></tr>", html);   // Problems
         Assert.Contains("VYŽADUJE POZORNOST", html);
         Assert.Contains("<b>1 / 2</b><span>ověřené karty</span>", html);
@@ -164,7 +164,7 @@ public class DayReportServiceTests
         job.Run();
 
         Assert.NotNull(during);
-        Assert.Contains("<td>B001</td><td colspan=\"11\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", during);
+        Assert.Contains("<td>B001</td><td colspan=\"12\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", during);
         Assert.Contains("<b>1 / 2</b><span>ověřené karty</span>", during);
         Assert.Contains("<b>2 / 2</b><span>ověřené karty</span>", File.ReadAllText(Assert.Single(job.DayReports)));
     }

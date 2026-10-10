@@ -13,7 +13,7 @@ public static class LocalReports
     public const string FolderName = "Offload reporty";
 
     /// The marker in a local card folder: which backup it holds (OriginOf) — the `_2` rule tells cards apart by it.
-    const string Marker = ".offload-origin";
+    internal const string Marker = ".offload-origin";
 
     /// Tests: where "Documents" is (the test assembly redirects it to %TEMP%, never the developer's own).
     internal static string? DocumentsOverride { get; set; }
@@ -90,7 +90,7 @@ public static class LocalReports
 
     /// The card folder whose report is the newest: the highest generation, then committed over still verifying, then
     /// the later end, then more clips; the first destination on a tie. Reads only.
-    static string? Newest(IReadOnlyList<string> cardPaths)
+    internal static string? Newest(IReadOnlyList<string> cardPaths)
     {
         string? best = null;
         (int, int, int, long, int) bestKey = default;
@@ -145,14 +145,16 @@ public static class LocalReports
     {
         try
         {
-            var r = OffloadReport.FromJson(File.ReadAllText(Path.Combine(cardPath, Layout.ReportDirName, CardRecord.MainReport)));
-            return $"{r.Started.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}|{r.CardName}|{r.Source}";
+            return Origin(OffloadReport.FromJson(File.ReadAllText(Path.Combine(cardPath, Layout.ReportDirName, CardRecord.MainReport))));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or NotSupportedException or ArgumentException or InvalidOperationException)
         {
             return Path.GetFullPath(cardPath).ToUpperInvariant();
         }
     }
+
+    /// The marker text of the backup whose first report is `main`: `<started UTC>|<cardName>|<source>`.
+    internal static string Origin(OffloadReport main) => $"{main.Started.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}|{main.CardName}|{main.Source}";
 
     /// The local folder of this backup in `dayDir`: NAME, NAME_2, NAME_3 … as on the destination (Layout.UniqueCardFolder)
     /// — the one whose marker names this backup, else the first free one, which is claimed. A folder without our marker

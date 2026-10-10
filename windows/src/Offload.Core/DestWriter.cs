@@ -114,7 +114,14 @@ internal sealed class DestWriter : IDisposable
                 blockHashes.AddRange(resume.Blocks);
                 checkpointed = resume.Blocks.Length;
             }
-            else handle = OpenPart(file.Size);
+            else
+            {
+                // A part left by a run that ended without cleaning up (a crash, the PC switched off — e.g. a repair's held
+                // copy while it stood paused, review M-3): hidden, so it could not be created over. Its name belongs to no
+                // file of the card or the backup (the planners refuse that), and it is not resumed — it goes.
+                if (File.Exists(partPath)) NativeIO.Delete(partPath);
+                handle = OpenPart(file.Size);
+            }
             File.SetAttributes(partPath, FileAttributes.Hidden);
         }
         catch (Exception e)
@@ -342,15 +349,20 @@ internal sealed class DestWriter : IDisposable
 
     public void Wait() => worker.Wait();
 
+    volatile string? verifying;
+    /// The file the read-back reads now (relative), null when none — what "Pozastavuji (dokončuji …)" names.
+    public string? VerifyingFile => verifying;
+
     long verifyPlanned = -1;
     /// What the read-back will read on this destination (files written in this run); -1 until it starts.
     public long VerifyPlanned => Interlocked.Read(ref verifyPlanned);
 
     /// Re-reads every written file from the disk — once, through every hash in `kinds` — and compares it with the
     /// source hashes. The error texts stay English: they go into the report JSON shared with the Mac. `pause`: the
-    /// read-back waits there before every file and every block (Pozastavit).
+    /// read-back's membership of the pause gate — it waits there before every file, never inside one (Pozastavit lets
+    /// the file being read finish, task 2026-10-09).
     public void Verify(IReadOnlyList<SourceFile> files, IReadOnlyList<FileHashes> sourceHashes, HashKind kinds, CancellationToken ct,
-        PauseGate? pause = null)
+        PauseGate.Worker? pause = null)
     {
         using var buf = new AlignedBuffer(options.ChunkSize);
         bool md5 = HashKinds.Normalize(kinds).HasFlag(HashKind.Md5);
@@ -383,8 +395,9 @@ internal sealed class DestWriter : IDisposable
             var f = files[i];
             try
             {
+                verifying = f.RelPath;
                 var (got, size) = Hashing.HashFile(Layout.Join(CardPath, f.RelPath), buf, kinds, n => Interlocked.Add(ref verified, n), ct,
-                    hold == null ? null : () => hold());
+                    options.BeforeReadBackBlock is { } hook ? () => hook(index) : null);
                 var want = sourceHashes[i];
                 if (size != f.Size)
                     Results[i] = new DestFileResult(FileState.Failed, $"size mismatch: {size} != {f.Size}");
@@ -402,6 +415,10 @@ internal sealed class DestWriter : IDisposable
             catch (Exception e)
             {
                 Results[i] = new DestFileResult(FileState.Failed, "verify: " + e.Message);
+            }
+            finally
+            {
+                verifying = null;
             }
         }
     }

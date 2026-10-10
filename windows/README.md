@@ -46,11 +46,22 @@ zvyšují poslední číslo, 1.0.0 po ostrém testu s kartou.
    — vznikne `build\Offload-win-x64-<verze>.zip` a `build\offload-update.json` (`{"version", "url", "notes"}`, UTF-8).
    `-ReleaseUrl` je adresa, kterou uživatel otevře tlačítkem *Otevřít* (https adresa, `\\NAS\Offload\`, sdílená složka).
 3. Nahrajte zip na web / NAS a **až potom** manifest (manifest nesmí ukazovat na zip, který tam ještě není).
+4. **GitHub Releases** (stálé odkazy, vždy na nejnovější build kanálu): po pushnutí commitu, ze kterého je zip sestavený,
+   `powershell -ExecutionPolicy Bypass -File scripts\publish.ps1 -Channel dev` (vývojová verze) nebo `-Channel stable`
+   (stabilní; `-Since <předchozí stabilní>` vypíše do popisu změny všech verzí od ní, `-DryRun` jen ukáže popis). Skript
+   nahraje archiv `windows-v<verze>` (Offload-win-x64-<verze>.zip), posune značku kanálu `stable`/`dev` na commit a nahradí
+   v jeho release soubor se stálým jménem; u stabilní i `offload-update.json`. Popis verze bere z `docs/VYVOJ-WINDOWS.md`.
+   - stabilní: https://github.com/lubomirbudin-glitch/offload/releases/download/stable/Offload-Windows.zip
+     (stránka https://github.com/lubomirbudin-glitch/offload/releases/tag/stable, také `/releases/latest`)
+   - vývojová: https://github.com/lubomirbudin-glitch/offload/releases/download/dev/Offload-Windows-dev.zip
+     (stránka https://github.com/lubomirbudin-glitch/offload/releases/tag/dev)
+   - manifest pro kontrolu aktualizací: https://github.com/lubomirbudin-glitch/offload/releases/download/stable/offload-update.json
+   - Mac verze může do stejných release přidat `Offload-Mac.zip` / `Offload-Mac-dev.zip`.
 
 Kontrola aktualizací v aplikaci (Nastavení → Aplikace → Aktualizace…) čte manifest z adresy, kterou tam zadáte (`https://…`,
 `\\NAS\Offload\offload-update.json`, místní cesta); nejvýš jednou za 24 h, 5 s po startu, nic nestahuje ani nespouští,
 čte nejvýš 64 KB. Tlačítko *Otevřít* otevře jen adresu `https://…` nebo existující složku / zip (v Průzkumníku); cokoli
-jiného se jen zobrazí. Prázdná adresa = vypnuto (výchozí). Repozitář je soukromý, proto se nečte GitHub.
+jiného se jen zobrazí. Prázdná adresa = vypnuto (výchozí). Kontrola nečte GitHub (balíčky se tam nezveřejňují).
 
 ### Podepisování
 
@@ -475,6 +486,68 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
 - [ ] 67. **ARRIRAW bez LUTu:** `offload … --proxy --lut none` s klipem ALEXA 35 a ALEXA Mini → proxy v Rec.709
       (vestavěný vzhled kamery), art-cmd bez `--target-colorspace`; poškozený klip / art-cmd, který skončí kódem 0 bez
       souboru → poznámka „ARRIRAW: art-cmd skončil bez chyby, ale nic nezapsal — proxy nevznikla ([error] …)“.
+- [ ] 68. **Snímací fps — ARRIRAW:** karta ALEXA 35 natočená 35 fps (projekt 24, např. A_0012_1F75) → v HTML/PDF u každého
+      klipu FPS „35 fps · přehrávání 24“, pod tabulkou vysvětlivka „Stopáž = počet snímků ÷ přehrávací fps“, stopáž =
+      snímky ÷ 24 (stejná jako v ARRI Reference Tool / Resolve); `offload_report.json` `clips[].info.captureFrameRate`
+      `"35"`, `frameRate` `"24"`; TXT `Frame rate:  35 fps capture, 24 playback (N clips)`; CSV `FPS` 24, `Capture FPS`
+      35; ALE `FPS 24` v hlavičce a sloupec `Sensor_fps` 35 (import do Avidu: sloupec se objeví v binu, `End` sedí);
+      denní report: sloupec FPS „35 fps · přehrávání 24“, dlaždice „celková stopáž“. Karta natočená 24 fps → jen „24“.
+- [ ] 69. **Snímací fps — BRAW, RED, Sony:** klip BRAW natočený off-speed (např. 48 fps v projektu 24; nejdřív
+      `braw-decode.exe --info` → klíč `"sensorRate":48.000000` na konci řádku), klip R3D s jiným record a project fps
+      (zkontrolovat, že `REDline --printMeta 1` vypisuje „Record FPS“ a „Project FPS“ / „Timebase“ — jinak upravit
+      `R3dBackend.ParseMeta`), Sony S&Q (FX3/FX6, 120 fps do 23.98p: `M01.XML` `captureFps="119.88p"`) → FPS „119.880 fps ·
+      přehrávání 23.976“ / „48 fps · přehrávání 24“. Starší report (0.7.x) bez klíče se otevře a ukáže jen přehrávací fps.
+      V HTML/PDF jsou obě rychlosti ve sloupci FPS na dvou řádcích (náhled 1000 px, 1300 px i PDF): text nepřetéká do
+      sloupce Stopáž.
+- [ ] 70. **Snímací fps — Canon (chybí vzorek):** karta Canon (C70/C300 III/R5 C, XF-AVC MXF a Cinema RAW Light .CRM)
+      natočená S&F (Slow & Fast, např. 100 fps do 25p) → zatím se ukáže jen přehrávací rychlost (25). Prohlédnout, co karta
+      nese: XML vedle klipu (`CONTENTS\CLIPS001\…\*.XML`), `ffprobe -show_format -show_streams` (tagy MXF) — kde je snímací
+      rychlost, poslat vzorek; podle něj doplnit čtení do `ProxyRenderer.Probe` (jako Sony `M01.XML`).
+
+- [ ] 72. **Pozastavit během velkého souboru (kopie):** karta s klipem 20+ GB na dva disky → Pozastavit uprostřed
+      souboru → karta úlohy „Pozastavuji (dokončuji soubor A001C001.mxf…)“, rychlosti dál běží, soubor se dokopíruje na
+      **oba** disky → „Pozastaveno — Pokračovat naváže dalším souborem.“, rychlosti „—“; v cílových složkách žádný
+      `.offload-part`, soubor je na místě v plné velikosti a v `_REPORT\offload-manifest.jsonl` (i malé soubory —
+      při zastavení se vyprázdní cache disků). Pokračovat → kopie pokračuje dalším souborem (čtení karty neopakuje hotový
+      soubor), report: `copyPausedSeconds` ≈ doba, kdy úloha **stála** (ne od stisku tlačítka). Pozastavit, vyměnit
+      kartu za jinou (stejná kamera) a Pokračovat ještě během „Pozastavuji“ → úloha selže s hláškou o vyměněné kartě,
+      z jiné karty se nic nezkopíruje.
+- [ ] 73. **Pozastavit během ověření:** klasické ověření (Nastavení → ověřovat zpětným čtením, nebo bez proxy) →
+      Pozastavit během čtení velkého souboru → „Pozastavuji (dokončuji soubor …)“, soubor se dočte na všech discích, pak
+      „Pozastaveno“; Pokračovat → ověří zbytek, `verifyPausedSeconds` v reportu. S Verify-in-Proxy (proxy zapnuté):
+      Pozastavit během proxy → klip se dorenderuje, čtení na pozadí sekundárního disku dočte svůj soubor, pak
+      „Pozastaveno“; 5 minut pauzy → žádné „disk přestal odpovídat“, po Pokračovat vše ověřené. Sekundární disk během
+      „Pozastavuji“ odpojit tak, aby visel (nebo zablokovat) → po doběhnutí rozpracovaného klipu a limitu hlídače jeho soubory selžou a úloha se zastaví; disk jen
+      vytížený renderem (pomalé čtení, ale čte) během „Pozastavuji“ nikdy neselže.
+- [ ] 74. **Pozastavit během analýzy a proxy:** „Pozastavuji (dokončuji klip A001C003…)“ / „(dokončuji proxy klipu
+      A001C003…)“ → klip doběhne (proxy kompletní, přehratelná), pak „Pozastaveno — Pokračovat naváže dalším klipem.“;
+      Pokračovat → další klip, hotový se neopakuje.
+- [ ] 75. **Zrušit během „Pozastavuji“:** Pozastavit uprostřed souboru 100+ GB a hned Zrušit → úloha skončí do pár
+      vteřin jako Zrušeno (nečeká na dokopírování souboru), žádný `.offload-part`; totéž v „Pozastaveno“ a při zavření
+      aplikace. Výjimka: přijde-li Zrušit ve chvíli, kdy se před „Pozastaveno“ vyprazdňuje cache cílových disků, počká
+      na dokončení tohoto vyprázdnění (obvykle vteřiny; jako vyprázdnění na konci kopie, které proběhne i po Zrušit). Doplnění a Zkopírovat znovu: Pozastavit → soubor se dokopíruje, pak stojí; vysunout kartu jde až po kopii
+      (jako bez pauzy).
+
+Souhrnný report z vybraných záloh (úkol 2026-10-09):
+
+- [ ] 76. **Souhrnný report v aplikaci:** Historie karet → zaškrtnout 3 karty ze dvou dnů a dvou disků → „Souhrnný report
+      (3)…“ (i v DNES) → otázka „Uložit … i na vybraný disk?“ → Ne: otevře se
+      `Dokumenty\Offload reporty\souhrn\<datum>_<čas>_souhrn.html`, vedle PDF (A4 na šířku, nic neuříznuté); natáčecí dny,
+      tabulka dnů a karet s klipy, soubory, daty, stopáží, první a poslední klapkou (TC + klip; ALEXA „TC denní doby“),
+      kamery, ověření, „Kde je co zálohované“ (disk, cesta, připojen, ověřeno, kopie reportu na počítači). Ano → vybrat
+      disk → soubory i tam; podruhé tamtéž → `_2`, nic se nepřepíše; vybrat složku karty se zálohou (i rozpracované —
+      jen prázdný `_REPORT`), kartu ve čtečce (i mimo frontu), flash disk nebo disk jen pro čtení → česká hláška proč,
+      report jen na počítači (totéž `offload summary-report … -o <karta>` → kód 1). Tutéž kartu zálohovanou dvěma
+      úlohami na dva disky zaškrtnout obě → v součtech jednou, v „Kde je co zálohované“ oba disky. „Zrušit výběr“ odškrtne
+      vše; během tvorby odkaz „Vytvářím souhrnný report…“ a okno reaguje; 200 karet do pár sekund.
+- [ ] 77. **Odpojený disk:** jednu z vybraných karet zálohovat na disk, který pak odpojit → v souhrnu údaje z kopie reportu na
+      počítači („kopie reportu na počítači“, disk „nepřipojen“, ověřeno „podle reportu“); smazat i kopii v `Offload reporty`
+      → karta v reportu je, „report není k dispozici“, soubory a velikost podle historie, report vznikne. Karty, disky ani
+      `Offload reporty\<datum>` se nezmění (porovnat časy souborů).
+- [ ] 78. **Klapky ze skutečných karet:** karta Sony/Canon (MXF/MP4 s `creation_time`) s klipy natočenými přes půlnoc nebo
+      s resetovaným číslováním → první a poslední klapka podle času záznamu (`clips[].info.recorded` v reportu); ARRIRAW /
+      BRAW (bez času záznamu) → podle čísla klipu; ALEXA → časy první a poslední klapky odpovídají TC denní doby na
+      klapce. `offload summary-report <složka dne> -o <složka>` vypíše obě cesty.
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
@@ -496,6 +569,7 @@ offload append E:\ --into D:\Zaloha\2026-10-06\A001 --into F:\Zaloha\2026-10-06\
 offload verify D:\Zaloha\2026-10-06 --report                # ověřit všechny karty dne proti ASC MHL + report ověření
 offload E:\ -d D:\Zaloha -d F:\Zaloha --hash both --ale     # xxHash64 + MD5, seznam klipů i pro Avid
 offload day-report D:\Zaloha\2026-10-06                     # denní report znovu (HTML, PDF, seznam klipů dne)
+offload summary-report D:\Zaloha\2026-10-06\A001 F:\Zaloha\2026-10-07 -o G:\   # souhrnný report vybraných záloh (+ kopie na G:\)
 offload bench --hash md5                                    # rychlost MD5 proti xxh64 (CPU)
 offload E:\ --project "Film X"                              # nastavení projektu z aplikace; volby z příkazové řádky mají přednost
 offload E:\ -d D:\Zaloha --proxy --lut-rule camera=FX6:sony-slog3-sgamut3cine --lut-rule "folder=A00*/*:C:\luts\show.cube"
@@ -519,6 +593,14 @@ přidá `<karta>_clips.ale` pro Avid) a na každém cíli znovu denní report `<
 se seznamem klipů dne (`--no-day-report` vypne); CLI vypíše „Denní report: …“. `--hash both` počítá navíc MD5
 (`<karta>.md5`, MD5 v reportu a ASC MHL); `append` volbu nemá — doplnění počítá součty dřívější zálohy. `day-report
 <složka>` vytvoří denní report znovu (složka dne, nebo karty v ní), kód 0/1.
+`summary-report <složky karet | složky dne | id z historie…> [-o <složka>]` (úkol 2026-10-09) udělá jeden souhrnný
+report (HTML + PDF, bez náhledů) z vybraných záloh — i z různých dnů a disků: natáčecí dny, za kartu a celkem klipy,
+soubory, velikost, stopáž, první a poslední klapka (startovní TC prvního a posledního nahraného klipu, u ALEXY TC denní
+doby), kamery, ověření a kde je co zálohované. Čte reporty `offload_report*.json` ze zálohy (všechny generace), když disk
+není připojený, z kopie v `Dokumenty\Offload reporty`; když není ani ta, řekne to v reportu. Uloží se vždy do
+`<Offload reporty>\souhrn\<datum>_<čas>_souhrn.html/.pdf`, s `-o` i do zadané složky (nikdy přes existující soubor —
+přípona `_2`, `_3` …; do složky karty se zálohou nikdy). Vypíše „Souhrnný report: …“; kód 0, kód 1 = nic nevzniklo nebo
+se nepovedlo `-o`.
 
 Historie (`%APPDATA%\Offload\history.json`): `copy` před plánem vypíše „Zálohováno … — ověřeno“, když kartu zná (bez
 dotazu), a po dokončené kopii ji zapíše; `--no-history` čtení i zápis vypne. `append` bez `--into` najde složky zálohy

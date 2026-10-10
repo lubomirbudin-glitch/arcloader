@@ -20,7 +20,8 @@ public sealed class TapLease(string? url, Action release) : IDisposable
 /// is verified by what the proxies read (mode A: RangeServer + TapFile; mode B: CacheWarm), then the fill-in reads what
 /// they did not; every other destination is read in the background — one thread per volume, low I/O priority; the
 /// primary's files that no proxy reads (sidecars, audio, other segments) are read on the primary volume's thread while
-/// no proxy reads the primary. Pause and cancel are honoured before every block. A destination that may not be verified
+/// no proxy reads the primary. A cancel is honoured before every block; Pozastavit between files (each reader finishes
+/// the file it reads — task 2026-10-09; a clip's reads for its proxy belong to the clip). A destination that may not be verified
 /// from reads that might come from the cache (UnbufferedCheck) is read in the background like a secondary one.
 ///
 /// A copy is "verified" only when every block was hashed from a read of that destination: the tap and mode B read only
@@ -66,6 +67,20 @@ public sealed class VerifySession : IDisposable
     public List<string> Notes { get; } = [];
     /// A verification thread is reading now (a pause stands only when none is).
     public bool Reading => Volatile.Read(ref active) > 0;
+
+    /// The files the verification reads now (relative; the background readers and the fill-in), for the pause text.
+    public IReadOnlyList<string> CurrentFiles
+    {
+        get
+        {
+            List<BackgroundReader> all;
+            lock (gate) all = [.. readers];
+            if (filling is { } f) all.Add(f);
+            return all.Where(r => !r.Abandoned).Select(r => r.Current).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+    }
+
+    volatile BackgroundReader? filling;
     /// Bytes verified so far per destination (never above ToVerify), and what there is to verify (the "Dokončení
     /// ověření" bar).
     public long[] VerifiedBytes => Enumerable.Range(0, verifiedBytes.Length).Select(d => Math.Min(Interlocked.Read(ref verifiedBytes[d]), ToVerify[d])).ToArray();
@@ -94,6 +109,10 @@ public sealed class VerifySession : IDisposable
         public volatile bool Abandoned;
         public int ActiveHeld;
         public Thread? Thread;
+        /// Its membership of the pause gate (a background reader; the fill-in pauses on the stage-2 thread) and the file
+        /// it reads now (relative) — what "Pozastavuji (dokončuji …)" names.
+        public PauseGate.Worker? Pausing;
+        public volatile string? Current;
     }
 
     internal IReadOnlyList<BackgroundReader> Readers
@@ -171,8 +190,9 @@ public sealed class VerifySession : IDisposable
     };
 
     /// Starts the background reads: every destination but the primary in full, and the primary's files no proxy reads —
-    /// one thread per volume; the primary volume's thread waits while a proxy reads the primary.
-    public void StartBackground()
+    /// one thread per volume; the primary volume's thread waits while a proxy reads the primary. `stage`: stage 2's own
+    /// worker of the pause gate (analysis, proxies, fill-in) — see the watch below; null: no watch before Finish.
+    public void StartBackground(PauseGate.Worker? stage = null)
     {
         lock (gate)
         {
@@ -194,17 +214,50 @@ public sealed class VerifySession : IDisposable
         foreach (var (volume, work) in byVolume)
         {
             var reader = new BackgroundReader(volume, work.Select(w => w.Dest).Distinct().Order().ToArray(),
-                string.Equals(volume, primaryVolume, StringComparison.OrdinalIgnoreCase));
+                string.Equals(volume, primaryVolume, StringComparison.OrdinalIgnoreCase))
+            {
+                Pausing = pauses.Work(),   // joined before its thread starts: the job never stands while it has yet to begin
+            };
             var t = new Thread(() => Background(reader, work)) { IsBackground = true, Name = "offload.verify." + work[0].Dest };
             reader.Thread = t;
             lock (gate) readers.Add(reader);
-            t.Start();
+            try { t.Start(); }
+            catch
+            {
+                // Never a registration left behind (review M-5): the job could not stand for the rest of its life.
+                lock (gate) reader.Abandoned = true;
+                reader.Pausing?.Dispose();
+                throw;
+            }
         }
+        if (byVolume.Count == 0 || stage == null) return;
+        // Review M-2: once the job's own work has stopped for a pause, every reader is watched at once — a disk that
+        // hangs inside a file never keeps the job "Pozastavuji…" for ever (Finish watches them all the same way).
+        // Re-review N-1: only once stage 2 waits at the gate (its clip, analysis step or fill-in file done) — while it
+        // still renders, the readers at the lowest I/O priority may be starved for long without a hung disk, and are
+        // not judged then, exactly as without a pause. In Finish stage 2 is Idle (not at the gate): Finish judges.
+        new Thread(() =>
+        {
+            try { WaitFor(Readers, () => pauses.IsPaused && stage.IsHolding); }
+            catch (Exception) { /* never take the process down; Finish watches them again */ }
+        }) { IsBackground = true, Name = "offload.verify.watch" }.Start();
     }
 
     string VolumeOf(int d) => VolumeOfDestination?.Invoke(d) ?? NativeIO.VolumeId(cardPaths[d]) ?? cardPaths[d];
 
     void Background(BackgroundReader reader, List<(int Dest, int File)> work)
+    {
+        try
+        {
+            BackgroundReads(reader, work);
+        }
+        finally
+        {
+            reader.Pausing?.Dispose();   // whatever happened (review M-5): never a registration left behind
+        }
+    }
+
+    void BackgroundReads(BackgroundReader reader, List<(int Dest, int File)> work)
     {
         try
         {
@@ -217,6 +270,7 @@ public sealed class VerifySession : IDisposable
                 foreach (var (d, i) in work)
                 {
                     if (token.IsCancellationRequested || reader.Abandoned) return;
+                    if (!HoldBetweenFiles(reader)) return;
                     Verify(d, i, reader.Gated, reader);
                 }
             }
@@ -228,6 +282,22 @@ public sealed class VerifySession : IDisposable
         catch (Exception)
         {
             // Never take the process down from a background thread: Verify already made every file's error its verdict.
+        }
+    }
+
+    /// Pozastavit, before a background reader's next file: it waits at the gate (not reading, not watched as hung); false =
+    /// cancelled (or given up on).
+    bool HoldBetweenFiles(BackgroundReader reader)
+    {
+        if (reader.Pausing is not { } pausing || !pauses.IsPaused) return !token.IsCancellationRequested;
+        Interlocked.Decrement(ref active);
+        Volatile.Write(ref reader.Waiting, 1);
+        try { return pausing.WaitWhilePaused(token) && !reader.Abandoned; }
+        finally
+        {
+            Volatile.Write(ref reader.Waiting, 0);
+            Interlocked.Increment(ref reader.Progress);
+            Interlocked.Increment(ref active);
         }
     }
 
@@ -244,6 +314,7 @@ public sealed class VerifySession : IDisposable
     {
         BlockVerifier v;
         lock (gate) v = verifiers[d][i] ??= new BlockVerifier(manifests[i]!);
+        reader.Current = files[i].RelPath;
         try
         {
             var (outcome, fromCache) = BlockReads.CompleteClassic(Layout.Join(cardPaths[d], files[i].RelPath), v,
@@ -276,6 +347,10 @@ public sealed class VerifySession : IDisposable
             lock (gate)
                 if (!reader.Abandoned) results[d][i] = new DestFileResult(FileState.Failed, "verify: " + e.Message);
         }
+        finally
+        {
+            reader.Current = null;
+        }
     }
 
     /// The fill-in's read of one file, on a thread of its own so that a disk that hangs cannot hold the finishing thread.
@@ -284,35 +359,63 @@ public sealed class VerifySession : IDisposable
         var reader = new BackgroundReader(VolumeOf(d), [d], gated: false);
         var worker = new Thread(() => Verify(d, i, gated: false, reader)) { IsBackground = true, Name = "offload.verify.fill." + d };
         reader.Thread = worker;
-        worker.Start();
-        WaitFor(reader);
+        filling = reader;
+        try
+        {
+            worker.Start();
+            WaitFor([reader], () => true);
+        }
+        finally
+        {
+            filling = null;
+        }
     }
 
-    /// Waits for a reader's thread. With no block read for StallTimeout (a pause or a wait for the tap not counting) its
-    /// disk is hung — not unplugged, that would fail the read: the thread is given up on (it stops at its next block, or
-    /// stays in the read it hangs in and writes nothing), every file of its destinations still "written" fails with
-    /// Msg.VerifyDiskHung, and the job goes on — never green (item 1 of 0.6.1, the pattern of mode B in Prepare).
-    void WaitFor(BackgroundReader reader)
+    /// Waits until every reader's thread has ended or was given up on, watching them all at once (review M-2). With no
+    /// block read for ReadStallTimeout (a wait at the pause gate or for the tap, or — for a reader of the pause gate — the
+    /// job standing paused, not counting) a reader's disk is hung — not unplugged, that would fail the read: the thread is
+    /// given up on (it stops at its next block, or stays in the read it hangs in and writes nothing), every file of its
+    /// destinations still "written" fails with Msg.VerifyDiskHung, and the job goes on — never green (item 1 of 0.6.1,
+    /// the pattern of mode B in Prepare). A pause still pending (Pozastavit pressed, the reader finishing a long file)
+    /// is reading: its blocks keep it alive, so only a disk that really stopped answering is given up on. `judging`:
+    /// false = no reader is judged now (the watch during the proxies judges only while a pause is asked for).
+    void WaitFor(IReadOnlyList<BackgroundReader> all, Func<bool> judging)
     {
-        var thread = reader.Thread!;
-        long seen = -1;
-        var still = System.Diagnostics.Stopwatch.StartNew();
-        while (!thread.Join(PollInterval))
+        var seen = all.Select(_ => -1L).ToArray();
+        var still = all.Select(_ => System.Diagnostics.Stopwatch.StartNew()).ToArray();
+        while (true)
         {
-            long now = Interlocked.Read(ref reader.Progress);
-            if (now != seen || pauses.IsPaused || Volatile.Read(ref reader.Waiting) != 0)
+            bool waiting = false;
+            bool judge = judging();
+            for (int k = 0; k < all.Count; k++)
             {
-                seen = now;
-                still.Restart();
+                var reader = all[k];
+                if (reader.Abandoned || reader.Thread is not { IsAlive: true }) continue;
+                waiting = true;
+                long now = Interlocked.Read(ref reader.Progress);
+                if (!judge || now != seen[k] || Volatile.Read(ref reader.Waiting) != 0 || (reader.Pausing != null && pauses.IsStanding))
+                {
+                    seen[k] = now;
+                    still[k].Restart();
+                }
+                else if (still[k].Elapsed >= ReadStallTimeout) GiveUp(reader);
             }
-            else if (still.Elapsed >= ReadStallTimeout)
-            {
-                lock (gate) reader.Abandoned = true;
-                ReleaseActive(reader);
-                foreach (var d in reader.Dests) FailHungDestination(d);
-                return;
-            }
+            if (!waiting) return;
+            Thread.Sleep(PollInterval);
         }
+    }
+
+    /// A reader whose disk stopped answering: given up on — once — and its destinations' unread copies failed.
+    void GiveUp(BackgroundReader reader)
+    {
+        lock (gate)
+        {
+            if (reader.Abandoned) return;
+            reader.Abandoned = true;
+        }
+        ReleaseActive(reader);
+        reader.Pausing?.Dispose();   // a thread given up on never keeps a pause from standing
+        foreach (var d in reader.Dests) FailHungDestination(d);
     }
 
     /// A destination's disk stopped answering: every file of it still "written" is failed — never green.
@@ -323,15 +426,16 @@ public sealed class VerifySession : IDisposable
                 if (results[d][j].State == FileState.Written) results[d][j] = new DestFileResult(FileState.Failed, Msg.VerifyDiskHung);
     }
 
-    /// Before every block: wait while a proxy reads the primary (`gated`), then at the pause gate; false = cancelled.
-    /// Waiting is not reading (a pause stands then).
+    /// Before every block: wait while a proxy reads the primary (`gated`); false = cancelled. Waiting is not reading.
+    /// Pozastavit never waits here — inside a file (HoldBetweenFiles waits before the next one).
     bool Before(bool gated)
     {
+        if (!gated) return !token.IsCancellationRequested;
         Interlocked.Decrement(ref active);
         try
         {
-            if (gated) WaitHandle.WaitAny([tapIdle.WaitHandle, token.WaitHandle]);
-            return !token.IsCancellationRequested && pauses.WaitWhilePaused(token);
+            WaitHandle.WaitAny([tapIdle.WaitHandle, token.WaitHandle]);
+            return !token.IsCancellationRequested;
         }
         finally
         {
@@ -392,8 +496,9 @@ public sealed class VerifySession : IDisposable
             TapBusy();
             Interlocked.Increment(ref active);
             // Final review, item 4: the reads run on their own thread, watched like the proxy (StallTimeout without a
-            // block read, not counting a pause) — a hung (not unplugged) primary disk never holds the job thread. Given
-            // up on, the thread stops at its next block (or stays in the read it hangs in); the fill-in decides.
+            // block read) — a hung (not unplugged) primary disk never holds the job thread. Given up on, the thread stops
+            // at its next block (or stays in the read it hangs in); the fill-in decides. They are part of the clip:
+            // Pozastavit lets them finish with its render (the proxy loop waits between clips), never in the middle.
             int ended = 0, abandoned = 0;
             long progress = 0;
             void End()
@@ -439,7 +544,7 @@ public sealed class VerifySession : IDisposable
             while (!done.Wait(PollInterval))
             {
                 long now = Interlocked.Read(ref progress);
-                if (now != seen || pauses.IsPaused)
+                if (now != seen)
                 {
                     seen = now;
                     still.Restart();
@@ -483,8 +588,10 @@ public sealed class VerifySession : IDisposable
     /// After the proxies (spec 6): the fill-in reads on the primary what the proxies did not (the files a proxy was meant to
     /// read — the others are the background thread's), the background threads finish (waiting while paused), then the
     /// notes of spec 10 — unstable reads, a block wrong on several destinations compared with the card — and of the
-    /// reads through the cache (ruling I3).
-    public void Finish()
+    /// reads through the cache (ruling I3). `pausing`: the caller's (the stage-2 thread's) membership of the pause gate —
+    /// the fill-in waits there before every file; while it only waits for the background readers it does not keep a
+    /// pause from standing.
+    public void Finish(PauseGate.Worker? pausing = null)
     {
         lock (gate)
         {
@@ -498,14 +605,30 @@ public sealed class VerifySession : IDisposable
             try
             {
                 for (int i = 0; i < files.Count && !token.IsCancellationRequested; i++)
-                    if (proxyFiles.Contains(files[i].RelPath) && Writable(i)) VerifyWatched(Primary, i);
+                {
+                    if (!proxyFiles.Contains(files[i].RelPath) || !Writable(i)) continue;
+                    if (pausing != null && pauses.IsPaused)
+                    {
+                        Interlocked.Decrement(ref active);
+                        try
+                        {
+                            if (!pausing.WaitWhilePaused(token)) break;
+                        }
+                        finally
+                        {
+                            Interlocked.Increment(ref active);
+                        }
+                    }
+                    VerifyWatched(Primary, i);
+                }
             }
             finally
             {
                 Interlocked.Decrement(ref active);
             }
         }
-        foreach (var r in Readers) WaitFor(r);
+        using (pausing?.Idle())
+            WaitFor(Readers, () => true);
         Annotate();
     }
 
@@ -575,7 +698,8 @@ public sealed class VerifySession : IDisposable
         }
         stop.Cancel();
         tapIdle.Set();
-        foreach (var r in Readers) WaitFor(r);
+        WaitFor(Readers, () => true);
+        foreach (var r in Readers) r.Pausing?.Dispose();
         server?.Dispose();
         stop.Dispose();
         lock (gate)

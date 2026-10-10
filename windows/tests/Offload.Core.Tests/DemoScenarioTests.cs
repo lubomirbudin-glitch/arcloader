@@ -136,7 +136,7 @@ public class DemoSealTests
     [Fact]
     public void TheCommands_AreTheOnesOfTheRuling()
     {
-        Assert.Equal(["Append", "Cancel", "DayReport", "Eject", "MeasurePorts", "Notify", "Pause", "ProjectEdit", "Repair", "Resume", "SettingsSave", "Start", "UpdateCheck", "VerifyBackup"],
+        Assert.Equal(["Append", "Cancel", "DayReport", "Eject", "MeasurePorts", "Notify", "Pause", "ProjectEdit", "Repair", "Resume", "SettingsSave", "Start", "SummaryReport", "UpdateCheck", "VerifyBackup"],
             Enum.GetNames<DemoCommand>().Order());
     }
 

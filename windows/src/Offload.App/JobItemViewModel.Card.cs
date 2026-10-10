@@ -129,7 +129,7 @@ public sealed partial class JobItemViewModel
     public string FileCaption => JobCard.FileLine(progress.Status).Caption;
     public string FileValue => JobCard.FileLine(progress.Status).Value;
 
-    /// "Pozastavuje se…" / "Pozastaví se po proxy klipu A003…" / "Pozastaveno — …", or null.
+    /// "Pozastavuji (dokončuji proxy klipu A003…)" / "Pozastaveno — …", or null.
     public string? PauseText => progress.PauseText;
     public bool CanPause => IsRunning && !IsPaused && !Job.IsCancelled;
 

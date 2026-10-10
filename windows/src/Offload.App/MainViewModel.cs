@@ -27,6 +27,7 @@ public sealed partial class MainViewModel : ObservableObject
         InitHistory();
         InitVerify();
         InitDayReport();
+        InitSummaryReport();
         InitProjects();
         InitNotify();
         InitUpdates();

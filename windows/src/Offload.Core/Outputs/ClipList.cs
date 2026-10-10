@@ -38,6 +38,9 @@ public static partial class ClipList
         public string Reel => ReelResolver.Resolve(Clip, Info, Card);
         public double? Fps => Timecode.Fps(Info?.FrameRate);
         public string FpsText => Fps is double f ? f.ToString("0.###", Inv) : "";
+        /// The capture rate (task 2026-10-10; CSV "Capture FPS", ALE "Sensor_fps" as ARRI's own ALEs name it): from the
+        /// metadata, else the playback rate (nothing says otherwise); empty when neither is known.
+        public string CaptureFpsText => (Timecode.Fps(Info?.CaptureFrameRate) ?? Fps) is double f ? f.ToString("0.###", Inv) : "";
         public string? StartTc => Timecode.IsValid(Info?.Timecode) ? Info!.Timecode : null;
         /// Frames of the clip: the stream's count, else duration × rate; null when either is unknown.
         public long? Frames => Info?.Frames is int n && n > 0 ? n : Info?.Duration is double d && Fps is double f ? (long)Math.Round(d * f) : null;
@@ -58,7 +61,7 @@ public static partial class ClipList
 
     public static readonly IReadOnlyList<string> CsvColumns =
     [
-        "Clip Name", "File Name", "Path", "Card", "Camera", "Reel", "Start TC", "Duration", "FPS", "Resolution", "Codec", "LUT",
+        "Clip Name", "File Name", "Path", "Card", "Camera", "Reel", "Start TC", "Duration", "FPS", "Capture FPS", "Resolution", "Codec", "LUT",
         "Size (bytes)", "XXH64", "MD5",
     ];
 
@@ -74,7 +77,7 @@ public static partial class ClipList
         void Line(IEnumerable<string> fields) => s.Append(string.Join(",", fields.Select(CsvField))).Append("\r\n");
         Line(CsvColumns);
         foreach (var r in rows)
-            Line([r.Clip.Name, r.FileName, r.Clip.Path, r.Card, r.Info?.Camera ?? "", r.Reel, r.StartTc ?? "", DurationText(r), r.FpsText,
+            Line([r.Clip.Name, r.FileName, r.Clip.Path, r.Card, r.Info?.Camera ?? "", r.Reel, r.StartTc ?? "", DurationText(r), r.FpsText, r.CaptureFpsText,
                   r.Resolution, r.Codec, r.LutName, r.Clip.Bytes.ToString(Inv), r.Xxh64 ?? "", r.Md5 ?? ""]);
         return s.ToString();
     }
@@ -83,7 +86,7 @@ public static partial class ClipList
         v.IndexOfAny([',', '"', '\r', '\n']) >= 0 ? "\"" + v.Replace("\"", "\"\"") + "\"" : v;
 
     public static readonly IReadOnlyList<string> AleColumns =
-        ["Name", "Tape", "Start", "End", "Tracks", "Source File", "Camera", "LUT", "Resolution", "Codec", "XXH64", "MD5"];
+        ["Name", "Tape", "Start", "End", "Tracks", "Source File", "Camera", "Sensor_fps", "LUT", "Resolution", "Codec", "XXH64", "MD5"];
 
     /// One ALE per frame rate (an ALE has one FPS in its heading): `Suffix` null when the clips share one rate, else the
     /// rate ("25", "23.976") for `<name>_clips_<rate>.ale`. A clip whose rate is unknown goes with the most common rate;
@@ -125,7 +128,7 @@ public static partial class ClipList
             var end = r.Frames is long n ? Timecode.Add(start, n, rate) : start;
             int channels = Math.Min(r.Info?.AudioChannels ?? 0, 8);
             var tracks = "V" + string.Concat(Enumerable.Range(1, channels).Select(i => $"A{i}"));
-            Line(r.Clip.Name, r.Reel, start, end, tracks, r.FileName, r.Info?.Camera ?? "", r.LutName, r.Resolution, r.Codec, r.Xxh64 ?? "", r.Md5 ?? "");
+            Line(r.Clip.Name, r.Reel, start, end, tracks, r.FileName, r.Info?.Camera ?? "", r.CaptureFpsText, r.LutName, r.Resolution, r.Codec, r.Xxh64 ?? "", r.Md5 ?? "");
         }
         return s.ToString();
     }

@@ -135,8 +135,15 @@ public static class FFProbe
             ?? Str(ftags, "product_name") ?? Str(ftags, "company_name");
         info.Reel = new[] { format }.Concat(streams).Select(x => Reel(Tags(x))).FirstOrDefault(r => r != null);
         info.CameraSerial = new[] { format }.Concat(streams).Select(x => Tag(Tags(x), SerialTags)).FirstOrDefault(t => t != null);
+        info.Recorded = new[] { format }.Concat(streams).Select(x => Recorded(Tag(Tags(x), ["creation_time"]))).FirstOrDefault(t => t != null);
         return info;
     }
+
+    /// `creation_time` ("2026-10-06T08:15:30.000000Z") in UTC; null when it is no date or not a plausible one (a camera
+    /// without its clock set: 1904, 1970 — ClipInfo.Plausible).
+    static DateTime? Recorded(string? text) =>
+        DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var t)
+            ? ClipInfo.Plausible(t) : null;
 
     /// Tags that carry the camera body's serial number (spec 4.2): QuickTime (Apple, Blackmagic, Canon), others.
     static readonly string[] SerialTags = ["com.apple.quicktime.camera.identifier", "camera_serial_number"];

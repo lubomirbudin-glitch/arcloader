@@ -114,11 +114,11 @@ public class DayReportTests
         Assert.Contains("<b>6</b><span>souborů</span>", html);
         Assert.Contains($"<b>{Format.Bytes(9000)}</b><span>data</span>", html);
         Assert.Contains("<b>6</b><span>klipů</span>", html);
-        Assert.Contains("<b>1:30</b><span>celková délka</span>", html);
+        Assert.Contains("<b>1:30</b><span>celková stopáž</span>", html);
         Assert.Contains("<b>1 / 5</b><span>ověřené karty</span>", html);
-        Assert.Contains("<td>E001</td><td colspan=\"11\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", html);
-        Assert.Contains("<td>D001</td><td colspan=\"11\" class=\"warn\">report nejde přečíst</td>", html);
-        Assert.Contains("<td>SOUND</td><td colspan=\"11\" class=\"muted\">jiná složka (bez reportu)</td>", html);
+        Assert.Contains("<td>E001</td><td colspan=\"12\" class=\"warn\">bez reportu (probíhá, nebo byl přerušen)</td>", html);
+        Assert.Contains("<td>D001</td><td colspan=\"12\" class=\"warn\">report nejde přečíst</td>", html);
+        Assert.Contains("<td>SOUND</td><td colspan=\"12\" class=\"muted\">jiná složka (bez reportu)</td>", html);
         Assert.Contains("<td>1 / 1</td><td class=\"wrap\">ARRI LogC4 → Rec.709</td><td class=\"num\">—</td>", html);   // A001
         Assert.Contains("<td class=\"warn\">NEOVĚŘENO</td>", html);   // C001
         // Fix round 1, item 6: read back, but with a failed file — not green.

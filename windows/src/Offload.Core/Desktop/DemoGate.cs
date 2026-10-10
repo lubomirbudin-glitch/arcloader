@@ -5,7 +5,7 @@ namespace Offload.Core.Desktop;
 /// runs, so they only change what the card shows — the screenshot of a paused card).
 public enum DemoCommand
 {
-    Start, Append, Repair, Pause, Resume, Cancel, MeasurePorts, ProjectEdit, SettingsSave, UpdateCheck, Notify, VerifyBackup, DayReport, Eject,
+    Start, Append, Repair, Pause, Resume, Cancel, MeasurePorts, ProjectEdit, SettingsSave, UpdateCheck, Notify, VerifyBackup, DayReport, Eject, SummaryReport,
 }
 
 public static class DemoGate

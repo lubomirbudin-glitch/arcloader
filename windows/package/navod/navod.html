@@ -594,8 +594,9 @@ offload“</span>. Každá spuštěná karta dostane vlastní kartu úlohy, nejn
 <b class="ui">Denní report…</b> a řádek pro každou dnes zálohovanou kartu (<span class="q">„A034_ARRI · 256 GB · 18:12 ·
 ✓ 2 kopie ověřeny“</span>, oranžově <span class="q">„! neověřeno“</span>, červeně <span class="q">„✕ s chybami (3 soubory)“</span>).
 Záložka <b class="ui">Historie karet</b> ukáže totéž pro všechny dny (<span class="q">„Dnes“</span>, <span class="q">„Včera“</span>,
-<span class="q">„4. 10. 2026“</span>; nejvýš 300 posledních karet). Obojí je z historie offloadů v tomto počítači. Podrobně
-o kartách úloh v kapitole 8.</p>
+<span class="q">„4. 10. 2026“</span>; nejvýš 300 posledních karet). Obojí je z historie offloadů v tomto počítači. Zaškrtnutím
+karet (i z různých dnů a disků) a odkazem <b class="ui">Souhrnný report (3)…</b> vznikne jeden souhrnný report z nich
+(kapitola 7); <b class="ui">Zrušit výběr</b> zaškrtnutí zruší. Podrobně o kartách úloh v kapitole 8.</p>
 
 <h3>Nastavení</h3>
 <p>Stránka <b class="ui">Nastavení</b> se otevře místo obou sloupců (fronta dál běží); <b class="ui">‹ Zpět</b>,
@@ -719,9 +720,9 @@ Verze 0.2.0 nové volby 0.3.0 (kontrolní součet, seznamy klipů, denní report
 <h3>Jak kopie probíhá</h3>
 <ul>
   <li>Karta se čte jednou, data jdou současně na všechny cíle. Pomalejší disk může chvíli zaostávat, aniž by brzdil čtení karty.</li>
-  <li>Kopii i ověření lze <b class="ui">Pozastavit</b> a pak <b class="ui">Pokračovat</b> (kapitola 8). Zastaví se mezi bloky
-    dat (16 MB) — rozpracovaný soubor zůstane otevřený a po obnovení pokračuje. Doba pauzy se do rychlostí v reportu
-    nepočítá.</li>
+  <li>Kopii i ověření lze <b class="ui">Pozastavit</b> a pak <b class="ui">Pokračovat</b> (kapitola 8). Rozpracovaný soubor
+    se nejdřív dokopíruje na všechny cíle (nebo dočte při ověření), teprve pak úloha stojí; Pokračovat naváže dalším
+    souborem. Doba, kdy úloha stála, se do rychlostí v reportu nepočítá.</li>
   <li>Čte i zapisuje se mimo systémovou paměť (cache) a po zápisu se vyprázdní i cache disku, takže ověření čte data
     opravdu z disku. Svazky, které to neumějí (některé síťové), přejdou na běžný zápis a report to u cíle uvede:
     <span class="q">„Cíl 1: svazek nepodporuje přímý zápis, použita systémová cache.“</span></li>
@@ -945,7 +946,7 @@ když už je hotové, jinak HTML).</p>
 <ul>
   <li><b>Hlavička</b>: název karty, štítek stavu <span class="pill ok">OVĚŘENO</span>, <span class="pill warn">ZKOPÍROVÁNO — NEOVĚŘENO</span>
     nebo <span class="pill bad">CHYBA</span>, datum a čas začátku a konce.</li>
-  <li><b>Souhrn</b>: počet souborů, objem dat, počet klipů a jejich celková délka, doba a rychlost kopírování a ověření, kontrolní součet (XXH64, nebo XXH64 + MD5).
+  <li><b>Souhrn</b>: počet souborů, objem dat, počet klipů a jejich celková stopáž, doba a rychlost kopírování a ověření, kontrolní součet (XXH64, nebo XXH64 + MD5).
     Když byla úloha pozastavená, je tu navíc <span class="q">„pozastaveno · mimo rychlosti“</span> — doba pauzy se do časů ani rychlostí nepočítá.
     Report opravy (<b class="ui">Zkopírovat znovu</b>, kapitola 8) má v hlavičce <span class="q">„oprava (generace 2)“</span>.</li>
   <li><b>Cíle</b>: tabulka disků — disk, složka, souborový systém, počet souborů OK a chyb. Pod ní zdroj a jeho souborový systém.</li>
@@ -953,8 +954,13 @@ když už je hotové, jinak HTML).</p>
     <span class="q">„cíl 2: nesouhlasí kontrolní součet (cíl …, karta …)“</span>, <span class="q">„jiná velikost: …“</span>,
     <span class="q">„zápis selhal“</span>. V <code>offload_report.json</code> zůstávají anglicky (sdílí ho Mac verze).</li>
   <li><b>Klipy</b>: u každého klipu tři snímky, název (u proxy z kamery <span class="q">„(proxy kamery)“</span>), cesta na kartě,
-    formát a kodek, rozlišení, FPS, délka, timecode, počet zvukových kanálů, velikost a stav proxy
+    formát a kodek, rozlišení, FPS, stopáž, timecode, počet zvukových kanálů, velikost a stav proxy
     (<span class="txt-ok">hotovo</span>, <span class="txt-bad">chyba</span>, <span class="txt-warn">nepodporováno</span>, přeskočeno).
+    <b>FPS</b> je snímací rychlost z metadat prvního snímku klipu; když se liší od přehrávací rychlosti souboru (off-speed,
+    S&amp;Q), je tam obojí na dvou řádcích: <span class="q">„35 fps“</span> a pod tím menší <span class="q">„přehrávání 24“</span>. Snímací rychlost umí ARRIRAW (přes art-cmd),
+    Blackmagic RAW, RED (přes REDline; přehrávací je projektová rychlost) a Sony (soubor <code>M01.XML</code> vedle klipu).
+    Canon zatím ukazuje jen přehrávací rychlost (chybí vzorek metadat), stejně jako ostatní video (iPhone …). <b>Stopáž</b> = počet snímků ÷ přehrávací rychlost, tedy délka klipu ve střižně (u 35 fps
+    v projektu 24 delší než skutečný čas natáčení).
     Pod tabulkou řádek s nastavením proxy, např. <span class="q">„Proxy: H.264 (h264_nvenc), 1080p, výřez 1.85, LUT: automaticky
     podle kamery → _PROXY/ · také ve složce G:\Proxy“</span>.</li>
   <li><b>Všechny soubory</b>: každý soubor s velikostí, kontrolním součtem (s MD5 i sloupec md5) a stavem na každém cíli
@@ -993,15 +999,17 @@ U R3D a ARRIRAW se snímky berou z hotové proxy, takže bez proxy je tyto klipy
 
 <h3>Seznam klipů (CSV a Avid ALE)</h3>
 <p>Při každém zápisu reportu vznikne <code>&lt;karta&gt;_clips.csv</code>: jeden řádek na klip (proxy nahrané kamerou se
-neuvádějí), sloupce <code>Clip Name, File Name, Path, Card, Camera, Reel, Start TC, Duration, FPS, Resolution, Codec,
-LUT, Size (bytes), XXH64, MD5</code> (anglicky, jak je čte Resolve). Kódování UTF-8, oddělovač čárka. Do Resolve se
+neuvádějí), sloupce <code>Clip Name, File Name, Path, Card, Camera, Reel, Start TC, Duration, FPS, Capture FPS,
+Resolution, Codec, LUT, Size (bytes), XXH64, MD5</code> (anglicky, jak je čte Resolve; <code>FPS</code> je přehrávací
+rychlost, <code>Capture FPS</code> snímací). Kódování UTF-8, oddělovač čárka. Do Resolve se
 načte přes <i>File → Import Metadata To → Media Pool</i>. <b>Excel</b> s českým nastavením čeká středník: soubor
 otevřete přes <i>Data → Z textu/CSV</i> a zvolte oddělovač <i>Čárka</i>. Hodnoty začínající <code>=</code>,
 <code>+</code>, <code>-</code> nebo <code>@</code> se neupravují (úprava by rozbila import do Resolve) — Excel je může
 brát jako vzorec.</p>
 <p>Se zapnutou volbou <b class="ui">Seznam klipů pro Avid (ALE)</b> vznikne i <code>&lt;karta&gt;_clips.ale</code>
 (<i>File → Input → Import</i> v Media Composeru). ALE má jednu snímkovou frekvenci, takže karta se smíšenými fps dostane
-soubor na každou: <code>A001_clips_25.ale</code>, <code>A001_clips_23.976.ale</code>. Bez analýzy klipů mají řádky jen
+soubor na každou: <code>A001_clips_25.ale</code>, <code>A001_clips_23.976.ale</code> (podle přehrávací rychlosti; snímací
+je ve sloupci <code>Sensor_fps</code> — stejně ho jmenují ALE z kamer ARRI, v Avidu se objeví jako vlastní sloupec binu). Bez analýzy klipů mají řádky jen
 název, cestu, cívku, velikost a součty. ALE je UTF-8 <b>bez</b> BOM; starší verze Avidu mohou češtinu (diakritiku)
 přečíst špatně.</p>
 <p>Po doplnění seznamy pokrývají všechny generace karty. Jsou to odvozené soubory: přepisují se celé; seznam otevřený
@@ -1010,13 +1018,28 @@ v Excelu se nepřepíše (zapíše se jen do logu) a úloha tím neselže. Sezna
 <h3>Denní report</h3>
 <p>Po každé úloze (i doplnění a zrušené) se na každém cíli vytvoří znovu přehled celého dne
 <code>&lt;cíl&gt;\&lt;datum&gt;\_REPORT\&lt;datum&gt;_day_report.html</code> a <code>.pdf</code>: dlaždice (karty, soubory,
-data, klipy, celková délka, ověřené karty <span class="q">„7 / 8“</span>), tabulka karet (čas, soubory, data, klipy, délka,
-kamery, ověření, chyby, proxy hotovo / selhalo, LUTy, počet generací po doplnění), sekce <b>Problémy</b> (selhané soubory,
+data, klipy, celková stopáž, ověřené karty <span class="q">„7 / 8“</span>), tabulka karet (čas, soubory, data, klipy, stopáž,
+FPS klipů jako v reportu karty, kamery, ověření, chyby, proxy hotovo / selhalo, LUTy, počet generací po doplnění), sekce <b>Problémy</b> (selhané soubory,
 neověřené karty, nečitelné reporty, složka karty <span class="q">„bez reportu (probíhá, nebo byl přerušen)“</span>)
 a <b>LUTy</b>. Vedle je seznam klipů celého dne <code>&lt;datum&gt;_clips.csv</code> (a <code>.ale</code>).
 Vypíná se volbou <b class="ui">Denní report po každé kartě</b> (Nastavení → Report). Ručně: <b class="ui">Denní report…</b>
 (pod frontou u DNES, v záložce Historie karet nebo v Nastavení → Report) a vyberte složku dne na cíli (nebo složku karty v ní) — report se vytvoří a otevře. Dvě úlohy, které skončí zároveň,
 se vystřídají; každý cíl má report podle toho, co je na něm.</p>
+<h3>Souhrnný report z vybraných záloh</h3>
+<p>V záložce <b class="ui">Historie karet</b> (nebo u DNES) zaškrtněte karty, které do přehledu patří — třeba všechny karty
+natáčení z několika dnů a disků — a klikněte na <b class="ui">Souhrnný report (N)…</b>. Offload se zeptá, jestli report uložit
+i na vybraný disk (třeba ten, který jde do střižny); na tomto počítači se uloží vždy, do
+<code>Dokumenty\Offload reporty\souhrn\&lt;datum&gt;_&lt;čas&gt;_souhrn.html</code> a <code>.pdf</code> (složka kopie reportu
+z Nastavení → Report), a HTML se otevře. Existující soubor se nikdy nepřepíše — nový dostane <code>_2</code>, <code>_3</code>…;
+do složky karty se zálohou ani na kartu ve čtečce se nezapisuje.</p>
+<p>V reportu (bez náhledů, A4 na šířku): natáčecí dny; za každý den, každou kartu a celkem počet klipů a souborů, velikost,
+<b>stopáž</b> (součet délek klipů), <b>první a poslední klapka</b> — startovní timecode prvního a posledního nahraného klipu
+(pořadí podle času záznamu z kamery, a když ho klipy nemají, podle čísla klipu A001C001…; u ALEXY je to TC denní doby, tedy
+skutečný čas), kamery a stav ověření; nakonec <b>Kde je co zálohované</b> — každý disk karty s cestou, jestli je připojený,
+jestli je ověřený a jestli je kopie reportu na tomto počítači. Údaje se čtou z reportů na discích (i doplnění a opravy);
+disk, který už odešel, nahradí kopie reportu na tomto počítači. Když není ani ta, karta v souhrnu zůstane s poznámkou
+<span class="q">„report není k dispozici“</span> a s počtem souborů a velikostí z historie. Z příkazové řádky:
+<code>offload summary-report &lt;složky karet nebo dne&gt; [-o &lt;složka&gt;]</code>.</p>
 <p>Ve složce <code>ascmhl</code> vedle je ASC MHL (verze 2) se součty všech souborů — lze ji ověřit nástroji třetích stran
 (<code>ascmhl</code>, Silverstack, ShotPut). Snímky z reportu jsou jen v HTML a PDF, ne v JSON.</p>
 </section>
@@ -1061,22 +1084,35 @@ s kopií další karty. Každá úloha si při spuštění uloží nastavení, s
 </table>
 
 <h3>Pozastavení</h3>
-<p><b class="ui">Pozastavit</b> na běžící kartě úlohu zastaví v nejbližším bezpečném místě a tlačítko se změní na
-<b class="ui">Pokračovat</b>. Nic se tím neruší ani nemaže:</p>
+<p><b class="ui">Pozastavit</b> na běžící kartě nechá <b>doběhnout rozpracovaný krok</b> — soubor nebo klip — a teprve
+pak úlohu zastaví; tlačítko se změní na <b class="ui">Pokračovat</b>, které plynule naváže dalším souborem nebo klipem
+(nic hotového se neopakuje, úloha se nespouští znovu). Nic se tím neruší ani nemaže:</p>
 <ul>
-  <li><b>Kopie a ověření</b> se zastaví mezi bloky dat (16 MB): disky dopíšou to, co už mají, a stojí; rozpracované
-    soubory <code>.offload-part</code> zůstanou otevřené. Karta úlohy ukáže nejdřív <span class="q">„Pozastavuje se…“</span>,
-    pak <span class="q">„Pozastaveno — Pokračovat spustí úlohu od místa, kde stojí.“</span>; rychlosti ukazují „—“ a odhad
-    času zmizí.</li>
-  <li><b>Analýza klipů a proxy</b> se zastaví <b>po</b> rozpracovaném klipu (<span class="q">„Pozastaví se po proxy klipu
-    A003…“</span>) — ffmpeg se nikdy neuspává uprostřed práce. Stejně tak PDF a denní report doběhnou a pauza přijde až
-    před ně.</li>
-  <li>Doba pauzy se do rychlostí a časů v reportu ani do „Celkem“ na kartě nepočítá; po <b class="ui">Pokračovat</b> se
-    rychlost měří znovu.</li>
+  <li><b>Kopie</b> dokopíruje rozpracovaný soubor na <b>všechny</b> cíle najednou (karta se čte jen jednou), <b>ověření</b>
+    dočte soubor, který právě čte (i čtení na pozadí u Verify-in-Proxy). Během toho karta úlohy ukazuje
+    <span class="q">„Pozastavuji (dokončuji soubor A001C003.mxf…)“</span> a rychlosti běží dál — u velkého souboru (ARRIRAW
+    100+ GB) to může trvat několik minut. Pak <span class="q">„Pozastaveno — Pokračovat naváže dalším souborem.“</span>,
+    rychlosti „—“ a odhad času zmizí. Než se kopie zastaví, Offload vyprázdní zápisovou cache cílových disků a zapíše
+    záznamy hotových souborů: všechno zkopírované do té chvíle je opravdu na discích a po případném pádu nebo vypnutí
+    počítače se nekopíruje znovu. Během pauzy není otevřený žádný napůl zapsaný soubor <code>.offload-part</code>
+    (u <b class="ui">Zkopírovat znovu</b> čekají už hotové kopie pod skrytým jménem do konce kopie; když počítač mezitím
+    vypadne, další oprava je přepíše).</li>
+  <li><b>Analýza klipů a proxy</b> dokončí rozpracovaný klip (<span class="q">„Pozastavuji (dokončuji proxy klipu
+    A003…)“</span>) — ffmpeg se nikdy neuspává ani nepřerušuje uprostřed práce. Stejně tak PDF a denní report doběhnou a
+    pauza přijde až před ně.</li>
+  <li>Do rychlostí a časů v reportu ani do „Celkem“ na kartě se nepočítá jen doba, kdy úloha opravdu <b>stála</b>; čas
+    dokončování souboru je práce. Po <b class="ui">Pokračovat</b> se rychlost měří znovu.</li>
+  <li>Hlídač zaseknutého disku během pauzy nezasáhne: stojící úloha nic nečte a soubor, který se ještě dokončuje, se čte
+    dál. Když se ale některý disk při dokončování ověřování na pozadí opravdu zasekne, Offload ho po limitu vzdá (jeho
+    soubory selžou s poznámkou o neodpovídajícím disku, nikdy zeleně) a úloha se zastaví — nezůstane viset ve stavu
+    „Pozastavuji“.</li>
+  <li>Když během „Pozastavuji“ nebo pauzy vyměníte kartu a dáte <b class="ui">Pokračovat</b>, Offload před dalším
+    souborem vždy znovu zjistí, která karta je ve čtečce (i když úloha ještě nestála).</li>
   <li>Během pauzy počítač nepřejde do spánku (otevřené soubory na USB disku by spánek mohl poškodit). Pozastavená úloha
     blokuje frontu — další karta čeká.</li>
-  <li><b class="ui">Zrušit</b> i zavření aplikace během pauzy úlohu ukončí hned, jako bez pauzy (rozpracované soubory se
-    smažou).</li>
+  <li><b class="ui">Zrušit</b> i zavření aplikace během pauzy — i ve stavu „Pozastavuji“ — úlohu ukončí hned, jako bez
+    pauzy: na dokončení souboru nečeká a rozpracované soubory se smažou. Jen když Offload zrovna vyprazdňuje zápisovou
+    cache cílových disků (těsně před „Pozastaveno“, i na konci kopie), počká, než disky dopíšou — obvykle pár vteřin.</li>
   <li>Když během pauzy odpojíte cílový disk, po <b class="ui">Pokračovat</b> soubory na tom disku selžou (ostatní cíle
     pokračují) a karta úlohy zežloutne — pak pomůže <b class="ui">Zkopírovat znovu</b>.</li>
   <li>Když během pauzy vyměníte nebo vytáhnete kartu, Offload po <b class="ui">Pokračovat</b> nezkopíruje nic dalšího

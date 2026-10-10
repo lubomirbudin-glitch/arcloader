@@ -214,7 +214,7 @@ public class VerifySessionTests
         try
         {
             s.StartBackground();
-            var finishing = Task.Run(s.Finish);
+            var finishing = Task.Run(() => s.Finish());
             Assert.Same(finishing, await Task.WhenAny(finishing, Task.Delay(TimeSpan.FromSeconds(30))));   // not held by the disk
             await finishing;
             foreach (var r in s.Results[0])
@@ -487,7 +487,7 @@ public class VerifySessionTests
         Thread.Sleep(200);
         Assert.Equal([0, 0], s.VerifiedBytes);
         Assert.False(s.Reading);   // a pause stands: nobody reads
-        var finish = Task.Run(s.Finish);
+        var finish = Task.Run(() => s.Finish());
         Thread.Sleep(200);
         Assert.False(finish.IsCompleted);   // Finish waits for the paused readers
         pauses.Resume();
@@ -526,6 +526,149 @@ public class VerifySessionTests
         Assert.True(Eventually(() => pauses.IsHolding));
 
         await Task.Run(s.Dispose).WaitAsync(TimeSpan.FromSeconds(30));   // TimeoutException if a reader hangs
+    }
+
+    // Task 2026-10-09: Pozastavit while a background reader reads a long file — it reads that file to its end (each block
+    // keeps the hung-disk watchdog quiet however long the file takes), then the session stands; standing, the watchdog
+    // never fires however long the pause; Pokračovat verifies the rest. Nothing is read twice.
+    [Fact]
+    public async Task PausedMidFile_TheReaderFinishesItsFile_ThenStands_WatchdogQuiet()
+    {
+        using var dir = new TempDir();
+        var (e, plan, report, _) = Copy(dir, ("SOUND/b.wav", 8 * Block), ("SOUND/c.wav", 2 * Block));
+        var pauses = new PauseGate();
+        using var s = new VerifySession(plan, report, e.Blocks, Block, plan.CardPaths.Select(_ => (double?)1).ToArray(), 0,
+            new string?[plan.CardPaths.Count], pauses, default, (_, _) => null)
+        {
+            VolumeOfDestination = d => "V" + d,   // one reader per destination
+            ReadStallTimeout = TimeSpan.FromSeconds(3),   // room for the low-priority reads under the full suite's load
+        };
+        var file = Path.GetFullPath(Layout.Join(plan.CardPaths[1], "SOUND/b.wav"));
+        int reads = 0;
+        Assert.True(BlockReads.ReadHooks.TryAdd(file, () =>
+        {
+            if (Interlocked.Increment(ref reads) == 1) pauses.Pause();
+            Thread.Sleep(450);   // 3.6 s after Pozastavit, over the watchdog's limit — never that long without a block
+        }));
+        try
+        {
+            s.StartBackground();
+            var finishing = Task.Run(() => s.Finish());   // its watchdog watches the readers from now on
+            Assert.True(Eventually(() => s.CurrentFiles.Contains("SOUND/b.wav")));
+            Assert.True(Eventually(() => pauses.IsStanding, TimeSpan.FromSeconds(30)));
+            int b = Index(plan, "SOUND/b.wav"), c = Index(plan, "SOUND/c.wav");
+            Assert.Equal(8L * Block, s.VerifiedBytes[1]);                       // the file it was on, to its end
+            Assert.Equal((FileState.Verified, FileState.Written), (s.Results[1][b].State, s.Results[1][c].State));
+            Assert.False(s.Reading);
+            Assert.Empty(s.CurrentFiles);
+            Thread.Sleep(4000);                                                  // standing, longer than the watchdog's limit
+            Assert.False(finishing.IsCompleted);
+            pauses.Resume();
+            await finishing.WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.All(s.Results, d => Assert.All(d, r => Assert.Equal(FileState.Verified, r.State)));
+            Assert.Equal(8, Volatile.Read(ref reads));                           // b.wav read once
+        }
+        finally
+        {
+            BlockReads.ReadHooks.TryRemove(file, out _);
+        }
+    }
+
+    // Review M-2: Pozastavit while one background reader stands at the gate and another hangs inside a read on its disk:
+    // every reader is watched at once — the hung one is given up on after the stall limit (its copies fail with the
+    // hung-disk note, never green), and then the job stands instead of "Pozastavuji…" for ever. Pokračovat finishes.
+    [Fact]
+    public async Task PausedWhileAnotherDiskHangs_HungReaderGivenUp_ThenStands()
+    {
+        using var dir = new TempDir();
+        var (e, plan, report, _) = Copy(dir, ("SOUND/b.wav", 2 * Block), ("SOUND/c.wav", 2 * Block));
+        var pauses = new PauseGate();
+        using var s = new VerifySession(plan, report, e.Blocks, Block, plan.CardPaths.Select(_ => (double?)1).ToArray(), 0,
+            new string?[plan.CardPaths.Count], pauses, default, (_, _) => null)
+        {
+            VolumeOfDestination = d => "V" + d,
+            ReadStallTimeout = TimeSpan.FromSeconds(3),
+        };
+        var file = Path.GetFullPath(Layout.Join(plan.CardPaths[1], "SOUND/b.wav"));
+        var slowFile = Path.GetFullPath(Layout.Join(plan.CardPaths[0], "SOUND/b.wav"));
+        using var disk = new ManualResetEventSlim();
+        Assert.True(BlockReads.ReadHooks.TryAdd(slowFile, () => Thread.Sleep(300)));   // destination 1 still on b.wav at the press
+        Assert.True(BlockReads.ReadHooks.TryAdd(file, () =>
+        {
+            pauses.Pause();
+            disk.Wait(TimeSpan.FromSeconds(60));   // the disk of destination 2 stops answering
+        }));
+        using var stage = pauses.Work();   // stage 2: its clip is done, it waits at the gate
+        var standing = TestThreads.Start(() =>
+        {
+            Assert.True(SpinWait.SpinUntil(() => pauses.IsPaused, TimeSpan.FromSeconds(30)));
+            return stage.WaitWhilePaused(CancellationToken.None);
+        });
+        try
+        {
+            s.StartBackground(stage);
+            Assert.True(Eventually(() => pauses.IsStanding, TimeSpan.FromSeconds(30)));   // without Finish: watched all along
+            Assert.All(s.Results[1], r => Assert.Equal((FileState.Failed, Msg.VerifyDiskHung), (r.State, r.Error)));
+            pauses.Resume();
+            Assert.True(await standing.WaitAsync(TimeSpan.FromSeconds(30)));
+            await Task.Run(() => s.Finish(stage)).WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.All(s.Results[0], r => Assert.Equal(FileState.Verified, r.State));
+            Assert.All(s.Results[1], r => Assert.Equal(FileState.Failed, r.State));
+        }
+        finally
+        {
+            BlockReads.ReadHooks.TryRemove(file, out _);
+            BlockReads.ReadHooks.TryRemove(slowFile, out _);
+            disk.Set();
+        }
+    }
+
+    // Re-review N-1: Pozastavit while stage 2 still renders its clip ("Pozastavuji…"): a background reader at the lowest
+    // I/O priority that the render starves for longer than the stall limit — alive, not hung — is never judged then (as
+    // without a pause): no VerifyDiskHung, no "Neformátovat" for a healthy disk. Only once stage 2 waits at the gate.
+    [Fact]
+    public async Task PausedWhileTheClipRenders_StarvedReaderNotGivenUp()
+    {
+        using var dir = new TempDir();
+        var (e, plan, report, _) = Copy(dir, ("SOUND/b.wav", 2 * Block), ("SOUND/c.wav", 2 * Block));
+        var pauses = new PauseGate();
+        using var s = new VerifySession(plan, report, e.Blocks, Block, plan.CardPaths.Select(_ => (double?)1).ToArray(), 0,
+            new string?[plan.CardPaths.Count], pauses, default, (_, _) => null)
+        {
+            VolumeOfDestination = d => "V" + d,
+            ReadStallTimeout = TimeSpan.FromSeconds(3),   // as wide as in the test above: low-priority reads under load
+        };
+        var file = Path.GetFullPath(Layout.Join(plan.CardPaths[1], "SOUND/b.wav"));
+        int calls = 0;
+        using var starved = new ManualResetEventSlim();
+        Assert.True(BlockReads.ReadHooks.TryAdd(file, () =>
+        {
+            if (Interlocked.Increment(ref calls) != 1) return;
+            pauses.Pause();
+            Thread.Sleep(7000);   // one block starved by the render: over 2× the limit, then it reads on
+            starved.Set();
+        }));
+        using var stage = pauses.Work();   // stage 2 busy: the clip still renders
+        try
+        {
+            s.StartBackground(stage);
+            Assert.True(starved.Wait(TimeSpan.FromSeconds(30)));
+            Thread.Sleep(300);
+            Assert.DoesNotContain(s.Results[1], r => r.State == FileState.Failed);
+            var standing = TestThreads.Start(() => stage.WaitWhilePaused(CancellationToken.None));   // the clip is done
+            Assert.True(Eventually(() => pauses.IsStanding, TimeSpan.FromSeconds(30)));
+            pauses.Resume();
+            Assert.True(await standing.WaitAsync(TimeSpan.FromSeconds(30)));
+            await Task.Run(() => s.Finish(stage)).WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.All(s.Results, rs => Assert.All(rs, r => Assert.Equal(FileState.Verified, r.State)));
+        }
+        finally
+        {
+            BlockReads.ReadHooks.TryRemove(file, out _);
+        }
     }
 
     // A disk unplugged during stage 2: its copies fail (repair copies them again later), the other disk is verified.

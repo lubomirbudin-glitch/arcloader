@@ -60,7 +60,7 @@ public static class Hashing
     }
 
     /// Every hash in `kinds` (xxh64 always) in one read of the file — the read-back verification of a copy.
-    /// `beforeBlock`: called before every block is read (a pause waits there).
+    /// `beforeBlock`: called before every block is read (tests; Pozastavit waits between files, never here).
     public static (FileHashes Hashes, long Size) HashFile(string path, AlignedBuffer buffer, HashKind kinds, Action<int>? progress = null, CancellationToken ct = default,
         Action? beforeBlock = null)
     {

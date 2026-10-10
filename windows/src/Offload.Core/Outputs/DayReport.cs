@@ -23,6 +23,10 @@ public sealed class DayCard
     public double Seconds => VideoClips.Sum(c => c.Info?.Duration ?? 0);
     public IReadOnlyList<string> Cameras =>
         VideoClips.Select(c => c.Info?.Camera?.Trim()).Where(c => !string.IsNullOrEmpty(c)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToList()!;
+    /// The clips' frame rates as the card report shows them (task 2026-10-10): "35 fps · přehrávání 24", "25" — each once,
+    /// in clip order; empty when no clip's rate is known.
+    public IReadOnlyList<string> FrameRates =>
+        VideoClips.Select(c => c.Info?.FpsSummary ?? "").Where(f => f.Length > 0).Distinct(StringComparer.Ordinal).ToList();
     /// LUT name → clips (no LUT and switched-off LUT are left out).
     public IReadOnlyDictionary<string, int> Luts =>
         VideoClips.Where(c => c.Lut is { Source: not "none" }).GroupBy(c => c.Lut!.Name).ToDictionary(g => g.Key, g => g.Count());
@@ -152,25 +156,25 @@ public static class DayReport
         Stat(h, cards.Sum(c => c.Record.TotalFiles).ToString(Inv), "souborů");
         Stat(h, Format.Bytes(cards.Sum(c => c.Record.TotalBytes)), "data");
         Stat(h, cards.Sum(c => c.ClipCount).ToString(Inv), "klipů");
-        Stat(h, HtmlReport.Duration(cards.Sum(c => c.Seconds)), "celková délka");
+        Stat(h, HtmlReport.Duration(cards.Sum(c => c.Seconds)), "celková stopáž");
         Stat(h, $"{verified} / {cards.Count}", "ověřené karty");
         h.Append("</div>\n\n");
 
         h.Append("<h2>Karty</h2><div class=\"panel\"><table>\n");
-        h.Append("<tr><th>Karta</th><th>Čas</th><th class=\"num\">Soubory</th><th class=\"num\">Data</th><th class=\"num\">Klipy</th><th class=\"num\">Délka</th>");
+        h.Append("<tr><th>Karta</th><th>Čas</th><th class=\"num\">Soubory</th><th class=\"num\">Data</th><th class=\"num\">Klipy</th><th class=\"num\">Stopáž</th><th>FPS</th>");
         h.Append("<th>Kamery</th><th>Ověření</th><th class=\"num\">Chyby</th><th>Proxy</th><th>LUTy</th><th class=\"num\">Doplnění</th></tr>\n");
         foreach (var c in day.Folders)
         {
             var r = c.Record;
             if (!c.IsCard)
             {
-                h.Append($"<tr><td>{E(c.Name)}</td><td colspan=\"11\" class=\"muted\">jiná složka (bez reportu)</td></tr>\n");
+                h.Append($"<tr><td>{E(c.Name)}</td><td colspan=\"12\" class=\"muted\">jiná složka (bez reportu)</td></tr>\n");
                 continue;
             }
             if (c.NoReport || r.Generations.Count == 0)
             {
                 var why = c.NoReport ? "bez reportu (probíhá, nebo byl přerušen)" : "report nejde přečíst";
-                h.Append($"<tr><td>{E(c.Name)}</td><td colspan=\"11\" class=\"warn\">{why}</td></tr>\n");
+                h.Append($"<tr><td>{E(c.Name)}</td><td colspan=\"12\" class=\"warn\">{why}</td></tr>\n");
                 continue;
             }
             int failed = r.FailedFiles.Count;
@@ -184,7 +188,8 @@ public static class DayReport
             var generations = r.Generations.Count > 1 ? r.Generations.Count.ToString(Inv) : "—";
             h.Append($"<tr><td>{E(c.Name)}</td><td>{Time(r.Started!.Value)}–{Time(r.Finished!.Value)}</td>");
             h.Append($"<td class=\"num\">{r.TotalFiles}</td><td class=\"num\">{Format.Bytes(r.TotalBytes)}</td><td class=\"num\">{c.ClipCount}</td>");
-            h.Append($"<td class=\"num\">{(c.Seconds > 0 ? HtmlReport.Duration(c.Seconds) : "—")}</td><td class=\"wrap\">{E(c.Cameras.Count == 0 ? "—" : string.Join(", ", c.Cameras))}</td>");
+            h.Append($"<td class=\"num\">{(c.Seconds > 0 ? HtmlReport.Duration(c.Seconds) : "—")}</td><td class=\"wrap\">{E(c.FrameRates.Count == 0 ? "—" : string.Join(", ", c.FrameRates))}</td>");
+            h.Append($"<td class=\"wrap\">{E(c.Cameras.Count == 0 ? "—" : string.Join(", ", c.Cameras))}</td>");
             h.Append($"<td class=\"{vClass}\">{vText}</td><td class=\"num {(failed > 0 ? "bad" : "muted")}\">{failed}</td>");
             h.Append($"<td>{proxies}</td><td class=\"wrap\">{E(lutNames)}</td><td class=\"num\">{generations}</td></tr>\n");
         }

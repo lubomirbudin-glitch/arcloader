@@ -258,4 +258,22 @@ public static partial class Msg
     public static string LocalReportFailed(string detail) => $"Kopie reportu na tento počítač se nepovedla: {detail} — report je jen na cílových discích.";
     public const string LocalReportOnCard = "složka pro kopii reportu je na kartě — na kartu se nikdy nezapisuje";
     public static string LocalReportWritten(string path) => $"Kopie reportu: {path}";
+
+    // Souhrnný report z vybraných záloh (2026-10-09)
+    public static string SummaryNotACard(string path) =>
+        $"{path} není složka karty se zálohou (chybí {Layout.ReportDirName}\\{CardRecord.MainReport}) ani složka dne s kartami.";
+    public static string SummaryUnknown(string arg) => $"„{arg}“ není složka karty ani id zálohy v historii.";
+    public const string SummaryNothing = "Vyberte aspoň jednu zálohu.";
+    public static string SummaryTargetMissing(string path) => $"Složka pro souhrnný report nenalezena: {path}";
+    public static string SummaryTargetIsCard(string path) =>
+        $"{path} je ve složce zálohy karty (i rozpracované nebo přerušené) — souhrnný report se do zálohy nezapisuje; vyberte jinou složku.";
+    public static string SummaryTargetCameraCard(string path) => $"{path} vypadá jako karta z kamery — na kartu se nikdy nezapisuje.";
+    public static string SummaryTargetRemovable(string path) =>
+        $"{path} je na výměnném médiu (karta ve čtečce, flash disk) — souhrnný report se tam neukládá; vyberte disk.";
+    public static string SummaryTargetReadOnly(string path) => $"{path} je na disku jen pro čtení.";
+    public static string SummaryTargetIsSource(string path) => $"{path} je na kartě — na kartu se nikdy nezapisuje.";
+    public static string SummaryWritten(string path) => $"Souhrnný report: {path}";
+    public static string SummaryExtraWritten(string path) => $"Souhrnný report i na vybraném disku: {path}";
+    public static string SummaryExtraFailed(string detail) => $"Na vybraný disk se souhrnný report nezapsal: {detail} — je jen na tomto počítači.";
+    public static string SummaryFailed(string detail) => $"Souhrnný report se nepodařilo vytvořit: {detail}";
 }

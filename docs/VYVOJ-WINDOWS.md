@@ -25,31 +25,46 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
-- **Snímací fps z metadat prvního snímku u každého klipu (zadání uživatele 2026-10-10, obě verze, chyba):** report
-  u karty A_0012_1F75 (ALEXA 35, natočeno 35 fps) uvádí u všech klipů 24 fps — bere se jen projektová / přehrávací
-  rychlost souboru (`nativePictureEssenceDescriptor.file.sampleRate` = 24/1), ne snímací (`frameBasedMetadata` →
-  `Sensor State.sensorSampleRate` = 35/1 v prvním snímku). U **každého klipu** číst metadata prvního snímku a v reportu
-  (HTML/PDF/JSON, seznamy klipů, denní a souhrnný report) uvádět **snímací fps** a, když se liší, i přehrávací
-  („35 fps · přehrávání 24“); délku klipu brát z počtu snímků a přehrávací rychlosti (stopáž ve střižně) a označit
-  ji tak. Totéž ověřit u BRAW (`sensorRate` / GetSensorRate), RED (record vs. project fps) a Sony/Canon (S&Q,
-  `captureFps` v XML/metadatech). Nový klíč JSON doplnit do `docs/FORMATY.md` pro obě verze.
-
-- **Pauza zálohy (zadání uživatele 2026-10-09, obě verze):** tlačítko Pozastavit nechá **doběhnout rozpracovaný dílčí
-  krok** — soubor při kopii a ověření, klip při analýze a renderu proxy — a teprve pak úlohu zastaví (žádný napůl
-  zapsaný soubor, žádný přerušený render). Pokračovat **plynule naváže** dalším souborem / klipem, bez opakování hotové
-  práce a bez nového spuštění úlohy; stav „pozastavuji (dokončuji …)“ → „pozastaveno“ musí být vidět. Windows od 0.5.0
-  pozastavuje mezi 16MB bloky a mezi klipy 2. fáze — sladit s tímto zadáním (pozastavení po dokončení souboru/klipu).
-
-- **Souhrnný report z vybraných záloh (zadání uživatele 2026-10-09, obě verze):** v historii karet označit libovolný
-  počet záloh (karet, i z různých dnů a disků) a vytvořit z nich **jeden souhrnný report** (HTML + PDF, bez náhledů):
-  natáčecí den (dny), za každou kartu i celkem: počet klipů a souborů, **velikost**, **stopáž** (součet délek klipů),
-  **čas první a poslední klapky** = začátek **prvního a posledního nahraného klipu** (rozhodnutí uživatele
-  2026-10-09; pořadí podle času záznamu z metadat kamery, jinak podle čísla klipu `A001C001…`; čas = startovní TC
-  klipu, u ALEXY TC denní doby), kamery, stav ověření a **na kterých discích je co zálohované** (disk, cesta,
-  ověřeno ano/ne, kopie reportu na počítači). Zdroj dat: `history.json` + reporty `offload_report*.json` (z disků, nebo
-  z lokální kopie `Offload reporty`, když disk už odešel). Uložit lokálně a volitelně na vybraný disk.
+- **Snímací fps, pauza po souboru/klipu, souhrnný report (zadání 2026-10-09/10)** — hotovo ve verzi 0.8.0, viz níže.
 
 - **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzích 0.7.0 a 0.7.1, viz níže.
+
+## 2026-10-10 — 0.8.0: snímací fps, pauza po souboru/klipu, souhrnný report
+
+Verze **0.8.0**. Tři souběžné větve; každá s recenzí a opravami, pauza s hloubkovou recenzí, re-recenzí a další opravou.
+
+- **Snímací fps z metadat prvního snímku (chyba: ALEXA 35 natočená 35 fps se hlásila jako 24):** nový klíč
+  `clips[].info.captureFrameRate` (tvar jako `frameRate`, jen když je známý); ARRIRAW `Sensor State.sensorSampleRate`
+  prvního snímku, BRAW `sensorRate` z `braw-decode --info` (nový klíč na konci řádku), RED record fps (oprava: dřív se
+  bral jako přehrávací; přehrávací = Project FPS / Timebase), Sony `M01.XML` `captureFps`; Canon zatím jen přehrávací
+  (chybí vzorek). Report „35 fps“ a pod tím „přehrávání 24“, sloupec „Stopáž“ (snímky ÷ přehrávací fps) s vysvětlivkou;
+  TXT `Frame rate:`, CSV `Capture FPS`, ALE `Sensor_fps`, denní report sloupec FPS a celková stopáž. Ruční testy 68–70.
+- **Pauza po dokončení souboru / klipu:** Pozastavit nechá doběhnout rozpracovaný soubor (kopie na všech cílech
+  najednou, zpětné čtení, čtení na pozadí Verify-in-Proxy) nebo klip (analýza, proxy), pak úloha stojí; Pokračovat
+  naváže dalším. Karta „Pozastavuji (dokončuji …)“ → „Pozastaveno“. Před stáním FlushDevice a záznamy manifestu (trvalý
+  kontrolní bod), žádný otevřený `.offload-part`; karta se po každé žádosti o pauzu znovu ověří (výměna karty během
+  „Pozastavuji“ = chyba, nic z cizí karty); hlídač zaseknutých disků hlídá při pauze všechny čtenáře na pozadí, ale
+  hodnotí až když úloha opravdu stojí (vytížený, ne zaseknutý disk nedostane falešné „Neformátovat“). Osiřelý skrytý
+  `.offload-part` po pádu během pauzy smaže další oprava (dřív „Access denied“). `copyPausedSeconds` /
+  `verifyPausedSeconds` počítají jen dobu stání. Zrušit funguje i během „Pozastavuji“. Ruční testy 72–75.
+- **Souhrnný report z vybraných záloh:** v DNES / Historii karet zaškrtnout karty → „Souhrnný report (N)…“ → HTML + PDF
+  do `Offload reporty\souhrn\` (volitelně i na vybraný disk, nikdy přes existující soubor; nikdy do složky zálohy, na
+  kartu, výměnné médium ani zdroj — kontrola v Core, platí i pro CLI). Dny, za kartu a celkem klipy, soubory, velikost,
+  stopáž, první a poslední klapka (startovní TC prvního a posledního nahraného klipu; řazení podle nového
+  `clips[].info.recorded` z ffprobe `creation_time`, jinak podle čísla klipu; ALEXA TC denní doby), kamery, ověření a kde
+  je co zálohované. Stejná karta na dvou discích = v součtech jednou. Data z reportů na cílech, u odpojeného disku
+  z lokální kopie, jinak z historie s poznámkou. CLI `offload summary-report <složky | id…> [-o složka]`. Ruční testy 76–78.
+- Otevřené: čas záznamu ARRIRAW/BRAW/R3D (chybí vzorky; řadí se podle čísla klipu), Canon snímací fps, snímací fps
+  zatím není v souhrnném reportu; testy `UpdateCheckerTests` občas selžou pod zátěží (opravit).
+
+## 2026-10-10 — veřejný repozitář a stálé odkazy na buildy
+
+- Repozitář je veřejný, **jen k nahlédnutí — všechna práva vyhrazena** (`LICENSE`, `THIRD-PARTY-NOTICES.md`); hotové
+  balíčky z Releases je dovoleno zdarma používat. Nový podrobný `README.md` v kořeni.
+- **GitHub Releases** přes `windows/scripts/publish.ps1`: kanály `stable` (Latest) a `dev` (pre-release) se stálými
+  odkazy `releases/download/stable/Offload-Windows.zip` a `releases/download/dev/Offload-Windows-dev.zip`, archiv
+  `windows-v<verze>`, manifest aktualizací `releases/download/stable/offload-update.json`. Popis verze z tohoto souboru.
+  Zveřejněno: 0.7.2 jako stabilní i vývojová.
 
 ## 2026-10-10 — 0.7.2: odkazy na stažení dekodérů
 

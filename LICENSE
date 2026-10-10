@@ -1,0 +1,38 @@
+Copyright (c) 2026 ProBudin (github.com/lubomirbudin-glitch). All rights reserved.
+
+The source code in this repository is published for viewing only.
+
+No licence is granted. You may read the code and the documentation on GitHub, but you may not copy, modify,
+distribute, sublicense, sell, publish, or use this software or any part of it (including building and running it,
+or incorporating it into other works) without prior written permission from the copyright holder.
+
+Official builds. The ready-made packages published by the copyright holder in this repository's GitHub Releases
+(https://github.com/lubomirbudin-glitch/offload/releases) may be downloaded and used free of charge, as they are,
+for their intended purpose. They may not be modified, resold, redistributed as part of another product, or
+reverse engineered. Third-party components inside them keep their own licences.
+
+GitHub's Terms of Service allow other users to view and fork this public repository on GitHub; that does not grant
+any rights beyond what those terms require.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+ITS USE.
+
+---
+
+Všechna práva vyhrazena. Zdrojový kód je zveřejněn pouze k nahlédnutí. Bez předchozího písemného svolení autora jej
+není dovoleno kopírovat, upravovat, šířit, prodávat ani používat (včetně sestavení a spuštění) ani začleňovat do
+jiných děl.
+
+Hotové balíčky, které autor zveřejnil v sekci Releases tohoto repozitáře, je dovoleno zdarma stáhnout a používat
+tak, jak jsou, k jejich účelu. Není dovoleno je upravovat, prodávat, šířit jako součást jiného produktu ani
+zpětně analyzovat.
+
+---
+
+Third-party components included in this repository keep their own licences (see THIRD-PARTY-NOTICES.md):
+
+- mac/Sources/CXXHash/ — xxHash, Copyright (C) 2012-2023 Yann Collet, BSD 2-Clause licence.
+- mac/Tools/braw-decode/BlackmagicRawAPI.h, BlackmagicRawAPIDispatch.cpp — Copyright (c) Blackmagic Design,
+  permissive licence stated in the file headers.

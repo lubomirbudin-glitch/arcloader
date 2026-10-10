@@ -7,7 +7,7 @@ Pravidlo: když změna v jedné verzi způsobí, že se verze v něčem rozejdou
 aktualizuje se tento soubor ve stejném commitu. Historie každé verze je v [VYVOJ-MAC.md](VYVOJ-MAC.md)
 a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 
-*Stav k 2026-10-08.*
+*Stav k 2026-10-10.*
 
 ## Přehled
 
@@ -16,7 +16,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.2.0 | 0.6.0-win (ve vývoji) |
+| Verze | 0.2.0C | 0.8.0-win (ve vývoji) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
@@ -61,6 +61,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Propustnost článků HW při kopii** (port/linka/disk, úzké hrdlo) | ✅ CLI + GUI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; řetěz připojení, % linky a úzké hrdlo na kartě úlohy (GUI čeká ruční test) | ✅ CLI: úzké hrdlo („brzdí: D1“) ve stavovém řádku; GUI: řetěz připojení s rychlostí, % linky, součtem na řadiči a úzkým hrdlem na kartě úlohy |
 | **Nový vzhled** (`docs/ui-navrh/`: horní lišta, kroky 1–3, karty úloh po stavech, stránka Nastavení, tmavé i světlé téma) | ⏳ po schválení Windows verze | ✅ GUI 0.5.0 (čeká ruční test) |
 | **Pozastavit / Pokračovat** (kopie, ověření, 2. fáze mezi klipy; `copyPausedSeconds`, `verifyPausedSeconds`) | ⏳ naplánováno | ✅ GUI (CLI ne) |
+| **Pauza po dokončení souboru / klipu** (rozpracovaný soubor kopie — na všech cílech — a ověření, klip analýzy a proxy doběhne, pak „Pozastaveno“; „Pozastavuji (dokončuji …)“; čas pauzy jen doba stání) | ⏳ naplánováno | ✅ GUI 0.8.0 (čeká ruční test) |
 | **Zkopírovat znovu** (oprava: jen nesouhlasné soubory, jen na postižený disk, generace ASC MHL N, `kind: "repair"`, `_REPORT/neshoda_NNNN/`) | ⏳ naplánováno | ✅ GUI (CLI ne) |
 | **Dnes a historie karet** (z `history.json`), štítek kamery a připojení, odhad času | ⏳ naplánováno | ✅ GUI |
 | **Proxy ve složkách jako na kartě** (`_PROXY/<složka klipu>/<klip>.mov`, plochá starší záloha zůstane plochá) | ⏳ naplánováno (proxy přímo v `_PROXY`) | ✅ 0.5.1 |
@@ -70,8 +71,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
 | **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ⏳ naplánováno | ✅ 0.6.0 |
 | **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ⏳ naplánováno | ✅ 0.6.0 |
-| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
-| **Automatické načtení disků** (externí USB disk → cíl, karta ve čtečce → zaškrtnutá; odebraný disk si pamatuje, `autoDrives`) | ⏳ naplánováno | ✅ GUI (čeká ruční test se skutečným diskem a čtečkou) |
+| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ✅ 0.2.0C (`~/Documents/Offload reporty`) | ✅ CLI + GUI (čeká ruční test) |
+| **Souhrnný report z vybraných záloh** (zaškrtnuté karty v historii → jeden HTML + PDF do `Offload reporty\souhrn\`, volitelně na vybraný disk; `offload summary-report`; `clips[].info.recorded`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
+| **Automatické načtení disků** (externí USB disk → cíl, karta ve čtečce → zaškrtnutá; odebraný disk si pamatuje, `autoDrives`) | ✅ 0.2.0C (zapisovatelné externí disky do cílů, `ignoredVolumes`) | ✅ GUI (čeká ruční test se skutečným diskem a čtečkou) |
+| **Snímací fps z metadat prvního snímku** (`clips[].info.captureFrameRate`; „35 fps · přehrávání 24“ v HTML/PDF, TXT, denním reportu; CSV `Capture FPS`, ALE `Sensor_fps`; stopáž z přehrávací rychlosti) | ⏳ naplánováno (report uvádí přehrávací fps souboru) | ✅ 0.8.0: ARRIRAW `sensorSampleRate`, BRAW `sensorRate` (braw-decode --info), RED record fps (přehrávací = projektová), Sony `M01.XML` `captureFps`; Canon zatím jen přehrávací rychlost (chybí vzorek metadat); ostatní video = přehrávací. Čeká ruční test s art-cmd / REDline / vzorkem BRAW |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
 
@@ -185,7 +188,9 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   přesune do `_REPORT/neshoda_NNNN/<cesta>` (nemaže se). Mac takovou složku ověří ze seznamu `<karta>.xxh64` (oprava
   neopakuje řádky) a klíče ignoruje; `ascmhl verify` projde, protože `_REPORT` je ignorovaný. CLI opravu nemá.
 - **Pozastavení** (zatím jen Windows GUI, od 0.5.0): report `copyPausedSeconds` / `verifyPausedSeconds` (chybí, když se
-  nepozastavovalo), rychlosti a TXT `Paused:` bez pauzy. Mac klíče ignoruje — jeho rychlosti by pauzu zahrnuly.
+  nepozastavovalo), rychlosti a TXT `Paused:` bez pauzy. Mac klíče ignoruje — jeho rychlosti by pauzu zahrnuly. Od
+  0.8.0 se pauza čeká až po dokončení rozpracovaného souboru (kopie na všech cílech, zpětné čtení, čtení na pozadí
+  Verify-in-Proxy) nebo klipu (analýza, proxy) — dřív mezi 16MB bloky; klíče měří jen dobu, kdy úloha stála.
 - **Vzhled** (Windows od 0.5.0): podle `docs/ui-navrh/` s přepínačem **projektů** místo presetů, systémovým písmem
   (Segoe UI, Cascadia Mono) a tmavým i světlým tématem podle Windows; Mac převezme po schválení Windows verze. Thunderbolt
   Windows nerozliší (čtečka za ním je „NVMe“ / „USB“), Mac ano.
@@ -234,4 +239,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Doplnění do zálohy — zámek složky karty** (Windows): dvě doplnění do stejné zálohy najednou se nepustí (druhé hned
   skončí „S touto zálohou právě pracuje jiná úloha …“; s ověřením během proxy drží zámek úloha až do zápisu výsledku ověření). Zámek platí jen v jedné přihlášené relaci Windows na jednom
   počítači — nechrání před doplněním z jiného účtu ani z jiného počítače do sdílené složky — a stejnou složku pod jiným
-  jménem (`subst`, `\\localhost\D$`, krátké jméno 8.3) bere jako jinou.
+  jménem (`subst`, `\\localhost\D$`, krátké jméno 8.3) bere jako jinou. Oprava z jiné relace tak může smazat
+  hotovou kopii běžící opravy, která čeká pod skrytým jménem `.offload-part` (třeba během pauzy). Neproběhne to
+  potichu: soubor běžící opravy skončí chybou a stačí znovu „Zkopírovat znovu“.

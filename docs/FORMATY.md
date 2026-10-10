@@ -98,7 +98,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `version` | string | `0.2.0` (Mac), `0.6.0-win` (Windows) |
 | `generation` | číslo? | jen Windows od 0.2.0 a jen v reportu doplnění nebo opravy (`offload_report_NNNN.json`): číslo generace ASC MHL; chybí = 1 (celá kopie) |
 | `kind` | string? | jen Windows od 0.5.0: `repair` u opravy („Zkopírovat znovu“); chybí u celé kopie a doplnění. Mac ignoruje |
-| `copyPausedSeconds`, `verifyPausedSeconds` | číslo? | jen Windows od 0.5.0: sekundy, které kopie / zpětné čtení stály pozastavené (od Pozastavit do Pokračovat); chybí, když se nepozastavovalo. Rychlosti a doby v TXT, HTML a PDF je odečítají; Mac ignoruje |
+| `copyPausedSeconds`, `verifyPausedSeconds` | číslo? | jen Windows od 0.5.0: sekundy, které kopie / zpětné čtení stály pozastavené; chybí, když se nepozastavovalo. Od 0.8.0 (pauza po dokončení souboru / klipu, obě verze) se počítá jen doba, kdy úloha opravdu **stála** — od chvíle, kdy doběhl rozpracovaný soubor / klip, do Pokračovat; čas mezi stiskem Pozastavit a koncem souboru je práce a v rychlostech zůstává (do 0.7.x od stisku Pozastavit). Rychlosti a doby v TXT, HTML a PDF je odečítají; Mac ignoruje (⏳ převezme se stejným významem) |
 | `setAside[]` | objekt? | jen Windows od 0.5.0 a jen u opravy: `destination` (index cíle), `path` (cesta na kartě), `movedTo` (`_REPORT/neshoda_NNNN/<path>`) — nesouhlasné kopie přesunuté před novou; chybí, když žádná nebyla |
 | `project` | string? | jen Windows od 0.4.0: projekt, ve kterém se karta kopírovala; chybí bez projektu. Doplnění zapíše projekt dřívější zálohy, ne projekt zobrazený v aplikaci. Denní report ho ukáže, když ho mají všechny karty dne stejný |
 | `hashAlgorithm` | string | `xxh64` (vždy, i s MD5 — Mac ho jen zobrazí) |
@@ -139,9 +139,31 @@ Hodnoty výčtů:
   jinak cívka z názvu klipu (`A001C003…` → `A001`), jinak název složky karty. Je i v proxy (stopa timecodu). Mac ignoruje.
 - `clips[].info.cameraSerial` (volitelné, Windows od 0.4.0): sériové číslo těla kamery — Sony `M01.XML` (`Device serialNo`),
   ffprobe `com.apple.quicktime.camera.identifier` / `camera_serial_number`; ARRI a BRAW zatím ne (ověří vzorky). Mac ignoruje.
+- `clips[].info.recorded` (volitelné, datum ISO 8601 UTC, Windows od 0.8.0): kdy kamera klip natočila — z metadat
+  (ffprobe `creation_time` u MOV, MXF, MP4); chybí, když ho dekodér nezná (RAW: ARRIRAW přes art-cmd, BRAW, R3D) a ve
+  starších reportech. Tvar jako `started` (`YYYY-MM-DDTHH:MM:SSZ`); hodnota jiného tvaru (číslo, jiný text) se čte jako
+  neznámá — report kvůli ní nikdy není nečitelný. Data před rokem 2000 (kamera bez nastavených hodin: 1904-01-01,
+  1970-01-01) a víc než den v budoucnosti se berou jako neznámá. Souhrnný report podle něj řadí klipy (první a poslední
+  klapka); bez něj podle čísla klipu. Mac ignoruje (naplánováno).
 - `clips[].info.colorScienceGenOriginal` (volitelné, Windows od 0.4.0): u BRAW Film dekódovaného s převodem Gen 4 → Gen 5
   generace, ve které byl klip natočený (`colorScienceGen` je pak účinná, `5`); chybí, když se převod nepodařil (klip se
   dekódoval tak, jak byl natočený). Mac ignoruje.
+- `clips[].info.captureFrameRate` (volitelné, string; Windows od 0.8.0, Mac ⏳ naplánováno — stejný klíč a tvar):
+  **snímací** rychlost klipu z metadat jeho **prvního snímku**, zapsaná stejně jako `frameRate` (racionální číslo jako
+  pro ffmpeg: `"35"`, `"24000/1001"`, `"120000/1001"`; celé číslo bez `/1`). `frameRate` zůstává **přehrávací** rychlost
+  souboru a `duration` = počet snímků ÷ `frameRate` (stopáž ve střižně). Zdroje: ARRIRAW `frameBasedMetadata` →
+  `Sensor State.sensorSampleRate` prvního snímku z `art-cmd export --duration 1` (ALEXA 35 natočená 35 fps: `"35"`, přitom
+  `nativePictureEssenceDescriptor.file.sampleRate` a `frameRate` = `"24"`; hodnota v tisícinách — `35000`, `23976` — se
+  vydělí 1000 a zapíše jako `"35"`, `"24000/1001"`); BRAW `sensorRate` z `braw-decode --info`
+  (Windows: `IBlackmagicRawFrame::GetSensorRate` snímku 0; nový klíč na konci řádku `--info`, `"sensorRate":48.000000`,
+  chybí, když ho SDK neřekne — sdílené klíče se nemění); RED snímací = `Record FPS` z `REDline --printMeta 1`, přehrávací = projektová
+  (`Project FPS` / `Timebase`, jinak klíč přesně `FPS` nebo `Frame Rate` — ne jiný klíč s „fps“ v názvu); bez projektové
+  se jako dřív bere record fps pro obojí; Sony `M01.XML` `<VideoFrame captureFps="119.88p"
+  formatFps="23.98p"/>` (S&Q; `i` = půlsnímky, `59.94i` → `30000/1001`). **Canon: zatím jen přehrávací rychlost (chybí vzorek
+  metadat)** — klíč se u Canonu nezapisuje. Ostatní video přes ffprobe snímací rychlost v tom, co se čte, nemá. **Zapisuje se, jen když je známá** (i když se rovná `frameRate`); chybí-li
+  (starší report, ffprobe), platí snímací = přehrávací. HTML/PDF ve sloupci FPS: dva řádky `35 fps` / `přehrávání 24`
+  (menší, šedě), když se liší, jinak jen `24`; denní report a ostatní místa `35 fps · přehrávání 24`; sloupec délky se jmenuje „Stopáž“. TXT: řádek `Frame rate:  35 fps capture, 24 playback (2 clips); 25 fps
+  (1 clip)`.
 
 Náhledy klipů (JPEG) se do JSON neukládají — jsou jen v HTML a PDF.
 
@@ -305,14 +327,17 @@ klipy nalezené v souborech, metadata prázdná.
 s čárkou, uvozovkou nebo koncem řádku v uvozovkách, uvozovky zdvojené), hlavička vždy, sloupce v tomto pořadí:
 `Clip Name`, `File Name` (hlavní soubor s příponou), `Path` (relativní, `/`), `Card` (složka karty), `Camera`, `Reel`,
 `Start TC` (jak ho dá zdroj, `;` u drop-frame; prázdné bez TC), `Duration` (`HH:MM:SS:FF` v nominálních snímcích; bez fps
-`H:MM:SS`), `FPS` (invariantně, `23.976`, `25`, `29.97`), `Resolution` (`3840x2160`), `Codec` (u RAW formát, např.
+`H:MM:SS`; počítá se z přehrávací rychlosti), `FPS` (přehrávací, invariantně, `23.976`, `25`, `29.97`), `Capture FPS` (snímací z
+`clips[].info.captureFrameRate`, Windows od 0.8.0; bez ní totéž co `FPS`; např. `35` u `FPS` `24`), `Resolution` (`3840x2160`), `Codec` (u RAW formát, např.
 `Blackmagic RAW`), `LUT` (název použitého LUTu), `Size (bytes)`, `XXH64` a `MD5` (hlavního souboru; u vícedílných klipů
 prvního dílu; MD5 prázdné bez MD5). Hodnoty začínající `=`, `+`, `-`, `@` se neupravují.
 
 **ALE** (`<karta>_clips.ale`, `<datum>_clips.ale`): UTF-8 **bez** BOM (starší verze Avidu mohou diakritiku přečíst špatně), CRLF, tabulátory (tabulátor a konec řádku uvnitř
 hodnoty → mezera). Hlavička `Heading` / `FIELD_DELIM TABS` / `VIDEO_FORMAT` (nejčastější výška: `1080`, `720`, jinak
 `CUSTOM`) / `AUDIO_FORMAT 48khz` / `FPS`, pak `Column` se sloupci `Name, Tape, Start, End, Tracks, Source File, Camera,
-LUT, Resolution, Codec, XXH64, MD5` a `Data`. `Tape` = cívka, `End` = začátek + délka (výlučně, drop-frame počítá jako
+Sensor_fps, LUT, Resolution, Codec, XXH64, MD5` a `Data`. `Sensor_fps` (Windows od 0.8.0) = snímací rychlost jako `Capture FPS`
+v CSV — Avid pro ni vlastní sloupec nemá, vlastní sloupce ALE se v binu objeví jako uživatelské; jméno je stejné jako
+v ALE z kamer ARRI, takže se sejdou v jednom sloupci. `FPS` v hlavičce a `End` počítají s přehrávací rychlostí. `Tape` = cívka, `End` = začátek + délka (výlučně, drop-frame počítá jako
 kamera), bez TC začátek `00:00:00:00`, `Tracks` = `V` + `A1…An` podle zvukových kanálů (nejvýš 8). ALE má jedno FPS:
 smíšené fps → soubor na každé, `<název>_clips_25.ale`, `<název>_clips_23.976.ale` (klip bez fps patří k nejčastějšímu;
 když fps nezná žádný klip, hlavička `FPS 25`). ALE, které se při novém zápisu už nevytváří (změnily se frekvence), se smaže — jen když ALE je zapnuté nebo už existuje. Seznam, který je vypnutý, ale už je ve složce (CSV i ALE, u ALE všechny soubory frekvencí), se při dalším zápisu přesto přepíše (odvozený soubor: jinak by ukazoval jen dřívější generace); nikdy se nemaže a nově se nevytvoří.
@@ -330,6 +355,8 @@ Pravidla (Windows od 0.3.0):
 
 - Denní report nikdy nesahá na soubory ověření v téže `_REPORT` (`*_verify_*.json/.html/.pdf`) — zapisuje jen svoje názvy
   (`_day_report.html/.pdf`, `<datum>_clips.csv`, `<datum>_clips.ale` a `<datum>_clips_<fps>.ale`; stejně jako u karty smaže ALE, které se už nevytváří). Kořen disku, složka karty ani složka bez karty s reportem se za den nepovažují (česká chyba, nic se nezapíše).
+- Tabulka karet (Windows od 0.8.0): sloupec „Stopáž“ (součet délek klipů = snímky ÷ přehrávací fps; dlaždice „celková
+  stopáž“) a „FPS“ — rychlosti klipů karty, každá jednou, jako v reportu karty (`35 fps · přehrávání 24`, `25`).
 - Jen podsložky s `_REPORT\` nebo `ascmhl\` jsou karty; ostatní (např. `SOUND`) mají řádek „jiná složka (bez reportu)“.
 - `<karta>\_REPORT` vzniká hned na začátku kopie (prázdná), aby byla rozpracovaná nebo přerušená karta vidět; denní
   report ji ukáže jako „bez reportu (probíhá, nebo byl přerušen)“. Prázdný `_REPORT` ostatní funkce (ověření, doplnění,
@@ -340,6 +367,35 @@ Pravidla (Windows od 0.3.0):
   a krátká jména 8.3 dávají jiné klíče, takže dva zapisovatelé přes různá pojmenování téhož místa se nevylučují (poslední
   zápis vyhraje, soubory se přepisují celé).
 - Zrušená úloha čeká na obsazený den nejvýš 5 s na cíl, pak denní report přeskočí (do logu).
+
+## Souhrnný report (Windows od 0.8.0, Mac naplánováno)
+
+Jeden report z vybraných záloh (karty i z různých dnů a disků): `<Offload reporty>/souhrn/<YYYY-MM-DD>_<HHmmss>_souhrn.html`
++ `.pdf` (A4 na šířku, bez náhledů), volitelně i do složky, kterou uživatel vybere. `<Offload reporty>` =
+`outputs.localReportFolder`, jinak `<Dokumenty>\Offload reporty` — i když je kopie reportu vypnutá. Soubory se **nikdy
+nepřepisují**: při shodě jména `…_souhrn_2.html/.pdf`, `_3` … (stejná přípona pro HTML i PDF); HTML odkazuje na PDF, jen když PDF vzniklo. Vybraná složka se odmítne (česky s důvodem), když je
+ve složce zálohy karty — i rozpracované nebo přerušené: ona nebo složka nad ní má `_REPORT` nebo `ascmhl` (pravidlo M13;
+`_REPORT` složky dne se nepočítá), nebo leží uvnitř `<YYYY-MM-DD>/<karta>/…` —, na kartě ve frontě, na svazku s kamerovou
+strukturou v kořeni (pravidlo automatických cílů `CameraAtRoot`, pokud na něm není výstup Offloadu), na výměnném médiu
+(karta ve čtečce, flash disk) nebo na svazku jen pro čtení; platí pro GUI i `offload summary-report -o`. Nic jiného se
+nezapisuje — reporty karet, denní reporty, `Offload reporty/<datum>` ani `history.json` se nemění.
+
+Zdroj: záznamy `history.json` (cíle `destinations[].cardPath`, soubory, velikost, ověření) a reporty `offload_report.json`
++ `offload_report_NNNN.json` (všechny generace — doplnění i opravy, jako denní report) ze složky karty na připojeném cíli
+(nejnovější report, pravidlo kopie na počítači); když žádný cíl není připojený, z kopie `<Offload reporty>/<datum>/<karta>`
+(i `_2`, `_3` …), jejíž `.offload-origin` odpovídá záloze (přesně, když je report přečtený; jinak karta a zdroj z historie).
+Report, který na cíli nejde přečíst, ustoupí dalšímu připojenému cíli, pak kopii na počítači. Lokální kopie bez přečteného
+reportu se vezme jen tehdy, když jí odpovídá karta, zdroj i konec některé generace z historie a je jediná taková — jinak
+„nenalezeno“, nikdy cizí karta. Když není ani kopie, karta v reportu je s poznámkou „report není k dispozici“ a s údaji
+z historie — není to chyba. **Jedna karta je jedna karta:** zálohy téže karty (identita jako v historii: `shape` — tvar
+souborů `relpath\tsize` přes všechny generace — a název karty; u záznamu historie jeho `shape`, u reportu spočítaný ze
+souborů) se spojí — v součtech jednou (čísla z nejlépe přečtené zálohy), v „Kde je co zálohované“ každá kopie s vlastním
+ověřením; karta je ověřená, jen když jsou ověřené všechny její kopie.
+Ověřeno za cíl = sdílená definice (`CardRecord.ReadBack`): na připojeném disku z jeho složky, u odpojeného ze sloupce
+reportu, který tomu cíli patří (cesta + `volumeSerial`), bez reportu podle historie. Klapka = startovní `timecode`
+prvního a posledního nahraného klipu (bez kamerových proxy); pořadí podle `clips[].info.recorded`, mají-li ho všechny
+klipy, jinak podle dne a čísla klipu (pořadí Průzkumníka: `A001C002` < `A001C010`); u ALEXY (`camera` obsahuje „ALEXA“
+nebo formát `arriraw`) je to TC denní doby. Stopáž = součet `info.duration` klipů.
 
 ## settings.json (jen tento počítač)
 

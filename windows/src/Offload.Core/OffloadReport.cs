@@ -128,6 +128,23 @@ public sealed partial class OffloadReport
     [JsonIgnore] public bool Success => FailedFiles.Count == 0;
     /// Every file is on every destination and was verified there (spec 2 safe_to_format for this generation).
     [JsonIgnore] public bool SafeToFormat => Success && Verified;
+    /// The clips' frame rates for the TXT report (task 2026-10-10): "35 fps capture, 24 playback (2 clips); 25 fps (1 clip)"
+    /// — the capture rate first when it differs from the playback rate; camera proxies and clips without a known rate are
+    /// left out; null when no clip has one.
+    [JsonIgnore]
+    public string? FrameRateSummary
+    {
+        get
+        {
+            var groups = Clips.Where(c => !c.Clip.IsCameraProxy && c.Info is { } i && (i.FpsLabel.Length > 0 || ClipInfo.Label(i.CaptureFrameRate).Length > 0))
+                .GroupBy(c => c.Info!.CaptureDiffers
+                    ? $"{ClipInfo.Label(c.Info.CaptureFrameRate)} fps capture, {c.Info.FpsLabel} playback"
+                    : $"{(c.Info.FpsLabel.Length > 0 ? c.Info.FpsLabel : ClipInfo.Label(c.Info.CaptureFrameRate))} fps")
+                .Select(g => $"{g.Key} ({g.Count()} {(g.Count() == 1 ? "clip" : "clips")})").ToList();
+            return groups.Count == 0 ? null : string.Join("; ", groups);
+        }
+    }
+
     /// Spec 7: the clips whose decoder reported a defect (content_warn) — the copy matches the card, the file may not.
     [JsonIgnore] public IReadOnlyList<ClipEntry> ContentWarnings => Clips.Where(c => c.Content?.IsWarn == true).ToList();
 
@@ -219,6 +236,7 @@ public sealed partial class OffloadReport
             s.Append($"Started:     {LocalIso(Started)}\n");
             s.Append($"Finished:    {LocalIso(Finished)}\n");
             s.Append($"Files:       {TotalFiles}  ({Format.Bytes(TotalBytes)})\n");
+            if (FrameRateSummary is string rates) s.Append($"Frame rate:  {rates}\n");
             s.Append($"Copy:        {CopySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, CopySeconds)}\n");
             s.Append("Verify:      " + (Verified ? $"{VerifySeconds.ToString("0.0", inv)} s  {Format.Rate(TotalBytes, VerifySeconds)}" : VerifyPending == true ? "PENDING (with the proxies)" : "NOT VERIFIED") + "\n");
             if (SafeToFormatSeconds is double toFormat) s.Append($"Safe to format after: {toFormat.ToString("0.0", inv)} s\n");
