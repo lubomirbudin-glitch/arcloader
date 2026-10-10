@@ -22,11 +22,11 @@ public enum CardEject {
     /// ejectable, removable or external (USB, Thunderbolt, SD).
     public static func problem(exists: Bool, isVolumeRoot: Bool, isLocal: Bool, isRootFileSystem: Bool,
                                isInternal: Bool?, isEjectable: Bool?, isRemovable: Bool?) -> String? {
-        guard exists else { return "karta není připojená" }
-        guard isLocal else { return "síťová složka se nevysouvá" }
-        guard isVolumeRoot else { return "zdroj je složka, ne celá karta" }
-        if isRootFileSystem { return "systémový disk nelze vysunout" }
-        if !(isEjectable == true || isRemovable == true || isInternal == false) { return "interní disk nelze vysunout" }
+        guard exists else { return "card is not connected" }
+        guard isLocal else { return "a network folder is not ejected" }
+        guard isVolumeRoot else { return "the source is a folder, not a whole card" }
+        if isRootFileSystem { return "the system disk cannot be ejected" }
+        if !(isEjectable == true || isRemovable == true || isInternal == false) { return "an internal disk cannot be ejected" }
         return nil
     }
 
@@ -45,7 +45,7 @@ public enum CardEject {
                        isEjectable: v.volumeIsEjectable, isRemovable: v.volumeIsRemovable)
     }
 
-    /// Never throws; the error completes "Kartu se nepodařilo vysunout: …". Call off the main thread.
+    /// Never throws; the error completes "Could not eject the card: …". Call off the main thread.
     public static func eject(_ source: String) -> (ok: Bool, error: String?) {
         if let p = problem(source: source) { return (false, p) }
         do {
@@ -59,13 +59,13 @@ public enum CardEject {
 
 /// Decisions of the queue panel that need no window (port of Windows `Desktop/QueueRules.cs`).
 public enum QueueRules {
-    public static let otherCardText = "karta v mechanice není ta, která se kopírovala"
-    public static let inUseText = "z karty ještě kopíruje jiná úloha — vysuňte ji, až její kopie doběhne"
+    public static let otherCardText = "the card in the reader is not the one that was copied"
+    public static let inUseText = "another job is still copying from the card — eject it when that copy has finished"
 
-    /// Why "Vysunout kartu" must not eject, or nil. `copied` = the card recorded when the copy started,
+    /// Why "Eject card" must not eject, or nil. `copied` = the card recorded when the copy started,
     /// `current` = the card at the source now (both `CardIdentity`), `cardInUse` = `cardInUse` for the other jobs.
     public static func ejectProblem(copied: String?, current: String?, cardInUse: Bool) -> String? {
-        guard let current else { return "karta není připojená" }
+        guard let current else { return "card is not connected" }
         guard let copied, copied.caseInsensitiveCompare(current) == .orderedSame else { return otherCardText }
         return cardInUse ? inUseText : nil
     }

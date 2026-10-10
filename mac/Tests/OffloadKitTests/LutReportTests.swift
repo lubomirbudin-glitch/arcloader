@@ -24,8 +24,10 @@ final class LutReportTests: XCTestCase {
     }
 
     func testNoLutReasonShownUnlessSwitchedOff() throws {
-        XCTAssertTrue(HTMLReport.render(report(lut: .off("kamera nerozpoznána"))).contains("<div class=\"note\">LUT: bez LUT (kamera nerozpoznána)</div>"))
-        XCTAssertFalse(HTMLReport.render(report(lut: .off("vypnuto v nastavení"))).contains("LUT: bez LUT"))
+        XCTAssertTrue(HTMLReport.render(report(lut: .off("camera not recognised"))).contains("<div class=\"note\">LUT: no LUT (camera not recognised)</div>"))
+        XCTAssertFalse(HTMLReport.render(report(lut: .off("off in settings"))).contains("LUT: no LUT"))
+        // A report from before the Mac went English (or from Windows): the Czech "switched off" reason, still no note.
+        XCTAssertFalse(HTMLReport.render(report(lut: .off("vypnuto v nastavení"))).contains("LUT: no LUT"))
         XCTAssertFalse(HTMLReport.render(report(lut: nil)).contains("class=\"note\""))
         let none = try XCTUnwrap(try JSONSerialization.jsonObject(with: try report(lut: .off("x")).jsonData()) as? [String: Any])
         let lut = try XCTUnwrap(((none["clips"] as? [[String: Any]])?.first)?["lut"] as? [String: Any])
@@ -83,7 +85,7 @@ final class LutReportTests: XCTestCase {
         XCTAssertEqual(c1.thumbnails.count, 3)
         let c2 = try XCTUnwrap(report.clips.first { $0.clip.name == "C0002" })
         XCTAssertEqual(c2.lut?.source, "none")
-        XCTAssertEqual(c2.lut?.reason, "kamera nerozpoznána")
+        XCTAssertEqual(c2.lut?.reason, "camera not recognised")
         let json = try String(contentsOfFile: try XCTUnwrap(job.plan).cardPaths[0] + "/_REPORT/offload_report.json", encoding: .utf8)
         XCTAssertTrue(json.contains("\"lut\""))
     }

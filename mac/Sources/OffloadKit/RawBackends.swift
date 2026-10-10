@@ -42,7 +42,7 @@ struct RawDecoderError: Error, CustomStringConvertible {
 
 struct BRAWBackend: RawBackend {
     let format = ClipFormat.braw
-    let missingHint = "Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)"
+    let missingHint = "Blackmagic RAW: braw-decode or the Blackmagic RAW library is missing (SDK, Player or DaVinci Resolve)"
 
     /// How long `braw-decode --info` may take: opening a clip is quick; a hung SDK must never hang the job (the clip
     /// then gets a note instead).
@@ -109,9 +109,9 @@ struct BRAWBackend: RawBackend {
         let lib = tools.brawDecoder.flatMap { findLibrary(BRAWBackend.decoderDir($0)) } ?? BrawLibrary.frameworkName
         let note: String
         switch e.status {
-        case 3: note = "Blackmagic RAW: knihovnu \(lib) nelze použít — nainstalujte aktuální Blackmagic RAW Player"
-        case 4: note = "Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna \(lib) starší než kamera (nainstalujte aktuální Blackmagic RAW Player)"
-        case 5: note = "Blackmagic RAW: snímek klipu se nepodařilo dekódovat (\(BRAWBackend.lastLine(e.message)))"
+        case 3: note = "Blackmagic RAW: cannot use the library \(lib) — install the current Blackmagic RAW Player"
+        case 4: note = "Blackmagic RAW: cannot open the clip — it is damaged, or the library \(lib) is older than the camera (install the current Blackmagic RAW Player)"
+        case 5: note = "Blackmagic RAW: could not decode a frame of the clip (\(BRAWBackend.lastLine(e.message)))"
         default: return e
         }
         return RawDecoderError(note: note, decoderError: e)
@@ -165,7 +165,7 @@ struct BRAWBackend: RawBackend {
 
 struct R3DBackend: RawBackend {
     let format = ClipFormat.r3d
-    let missingHint = "RED R3D: nainstalujte REDCINE-X PRO (REDline)"
+    let missingHint = "RED R3D: install REDCINE-X PRO (REDline)"
 
     func isAvailable(_ tools: ExternalTools) -> Bool { tools.redline != nil }
 
@@ -228,7 +228,7 @@ struct R3DBackend: RawBackend {
 
 struct ARRIRAWBackend: RawBackend {
     let format = ClipFormat.arriraw
-    let missingHint = "ARRIRAW: nainstalujte ARRI Reference Tool (art-cmd)"
+    let missingHint = "ARRIRAW: install ARRI Reference Tool (art-cmd)"
 
     func isAvailable(_ tools: ExternalTools) -> Bool { tools.artCmd != nil }
 
@@ -401,7 +401,7 @@ struct ARRIRAWBackend: RawBackend {
 
 struct CanonRawBackend: RawBackend {
     let format = ClipFormat.canonRaw
-    let missingHint = "Canon Cinema RAW Light: pro macOS neexistuje dekodér pro příkazovou řádku — zkopírováno a ověřeno, proxy přeskočeno"
+    let missingHint = "Canon Cinema RAW Light: there is no command-line decoder for macOS — copied and verified, proxy skipped"
 
     func isAvailable(_ tools: ExternalTools) -> Bool { false }
     func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo { throw ToolError(tool: "Canon RAW", status: -1, message: missingHint) }

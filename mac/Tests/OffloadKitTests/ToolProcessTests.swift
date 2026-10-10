@@ -7,7 +7,7 @@ final class ToolProcessTests: XCTestCase {
         let hang = BrawTest.script(tempDir(), "hang", "exec sleep 30")
         let t0 = Date()
         XCTAssertThrowsError(try ToolProcess.run(hang, [], timeout: 1)) { e in
-            XCTAssertEqual("\(e)", "hang failed (exit -1): neodpověděl do 1 s — ukončen")
+            XCTAssertEqual("\(e)", "hang failed (exit -1): no response within 1 s — stopped")
         }
         XCTAssertLessThan(Date().timeIntervalSince(t0), 10)
     }

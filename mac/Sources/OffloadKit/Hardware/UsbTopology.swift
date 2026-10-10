@@ -34,7 +34,7 @@ public struct UsbController: Codable, Equatable {
 
 /// One physical socket: a root hub lists it twice — a USB 2 port and its USB 3 twin; an external USB 3 hub is two hub
 /// devices (USB 3 half + USB 2 half) with the same port numbers. `label` is the socket's unique default name
-/// ("port 6", "port 7 › 2", "<řadič> · port 3"). Port of Windows `UsbTopology.cs`.
+/// ("port 6", "port 7 › 2", "<controller> · port 3"). Port of Windows `UsbTopology.cs`.
 public struct UsbConnector: Codable, Equatable {
     public let id: String
     public let hubInstanceId: String
@@ -53,15 +53,15 @@ public struct UsbConnector: Codable, Equatable {
 
     public func has(_ connectorId: String) -> Bool { id == connectorId || altIds.contains(connectorId) }
 
-    /// "USB 3", "USB-C", "jen USB 2.0", "USB-C jen USB 2.0", "" (unknown) + " (interní)".
+    /// "USB 3", "USB-C", "USB 2.0 only", "USB-C USB 2.0 only", "" (unknown) + " (internal)".
     public var kind: String {
         let speed: String
         switch supportsUsb3 {
         case true?: speed = typeC ? "USB-C" : "USB 3"
-        case false?: speed = typeC ? "USB-C jen USB 2.0" : "jen USB 2.0"
+        case false?: speed = typeC ? "USB-C USB 2.0 only" : "USB 2.0 only"
         case nil: speed = typeC ? "USB-C" : ""
         }
-        return userVisible ? speed : (speed + " (interní)").trimmingCharacters(in: .whitespaces)
+        return userVisible ? speed : (speed + " (internal)").trimmingCharacters(in: .whitespaces)
     }
 
     public var defaultLabel: String { kind.isEmpty ? label : "\(label) \(kind)" }

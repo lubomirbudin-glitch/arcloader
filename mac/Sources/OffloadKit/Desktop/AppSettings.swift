@@ -185,16 +185,16 @@ public enum ProxyPreflight {
         return path
     }
 
-    /// Why "Spustit offload" must stay disabled, or nil. `lutExists` nil = not checked yet (does not block).
+    /// Why "Start offload" must stay disabled, or nil. `lutExists` nil = not checked yet (does not block).
     public static func blocking(_ p: ProxySettings, analyzeClips: Bool, lutExists: Bool?) -> String? {
         guard let lut = lutInUse(p, analyzeClips: analyzeClips), lutExists == false else { return nil }
-        return "LUT nenalezen: \((lut as NSString).lastPathComponent) — vyberte jiný nebo ho odeberte."
+        return "LUT not found: \((lut as NSString).lastPathComponent) — choose another one or remove it."
     }
 
     /// A warning that does not block (copy and verification still run), or nil.
     public static func warning(_ p: ProxySettings, analyzeClips: Bool, resolved: ExternalTools) -> String? {
         (p.enabled || analyzeClips) && (resolved.ffmpeg == nil || resolved.ffprobe == nil)
-            ? "ffmpeg/ffprobe nenalezen — náhledy a proxy se přeskočí, kopie a ověření proběhnou." : nil
+            ? "ffmpeg/ffprobe not found — thumbnails and proxies will be skipped, copy and verification will run." : nil
     }
 
     /// The extra proxy folder the next start copies into (only when proxies are rendered), or nil.
@@ -204,7 +204,7 @@ public enum ProxyPreflight {
     /// `folderExists` nil = not checked yet (does not block). The app passes its background answer.
     public static func extraFolderBlocking(_ p: ProxySettings, folderExists: Bool?) -> String? {
         guard let f = extraFolderInUse(p), folderExists == false else { return nil }
-        return "Složka pro proxy není dostupná: \(f)"
+        return "Folder for proxies is not available: \(f)"
     }
 
     /// The same, asking the disk now — the CLI only (the app never touches a disk on the main thread).

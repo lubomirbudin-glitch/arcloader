@@ -72,17 +72,17 @@ final class BrawBackendTests: XCTestCase {
         let r = ProxyRenderer(settings: ProxySettings(), tools: ExternalTools(ffmpeg: "/bin/cat", brawDecoder: exe))
         r.backends[.braw] = BRAWBackend(findLibrary: { _ in nil })
         XCTAssertEqual(r.unsupportedReason(BrawTest.brawClip),
-                       "Blackmagic RAW: chybí braw-decode nebo knihovna Blackmagic RAW (SDK, Player nebo DaVinci Resolve)")
+                       "Blackmagic RAW: braw-decode or the Blackmagic RAW library is missing (SDK, Player or DaVinci Resolve)")
     }
 
     // Windows final fix I1: exit codes 3/4/5 become a Czech note at the clip; the decoder's own line stays inside.
     func testInfoDecoderExitCodeBecomesCzechNote() {
         let cases: [(code: Int, line: String, note: String)] = [
             (3, "braw-decode: CreateCodec failed (0x80004005; library /BM/BlackmagicRawAPI.framework)",
-             "Blackmagic RAW: knihovnu /BM/BlackmagicRawAPI.framework nelze použít — nainstalujte aktuální Blackmagic RAW Player"),
+             "Blackmagic RAW: cannot use the library /BM/BlackmagicRawAPI.framework — install the current Blackmagic RAW Player"),
             (4, "braw-decode: cannot open /card/A001.braw (0x80004005; library /BM/BlackmagicRawAPI.framework)",
-             "Blackmagic RAW: klip nelze otevřít — je poškozený, nebo je knihovna /BM/BlackmagicRawAPI.framework starší než kamera (nainstalujte aktuální Blackmagic RAW Player)"),
-            (5, "braw-decode: frame 0 failed", "Blackmagic RAW: snímek klipu se nepodařilo dekódovat (frame 0 failed)"),
+             "Blackmagic RAW: cannot open the clip — it is damaged, or the library /BM/BlackmagicRawAPI.framework is older than the camera (install the current Blackmagic RAW Player)"),
+            (5, "braw-decode: frame 0 failed", "Blackmagic RAW: could not decode a frame of the clip (frame 0 failed)"),
         ]
         for c in cases {
             let dir = tempDir()
@@ -114,7 +114,7 @@ final class BrawBackendTests: XCTestCase {
                                        frames: BrawTest.hang).path
         XCTAssertThrowsError(try BRAWBackend(findLibrary: { _ in nil }).probe(dir.path + "/A001.braw",
                                                                             tools: ExternalTools(brawDecoder: exe))) { e in
-            XCTAssertEqual("\(e)", "Blackmagic RAW: knihovnu BlackmagicRawAPI.framework nelze použít — nainstalujte aktuální Blackmagic RAW Player")
+            XCTAssertEqual("\(e)", "Blackmagic RAW: cannot use the library BlackmagicRawAPI.framework — install the current Blackmagic RAW Player")
         }
     }
 
@@ -125,7 +125,7 @@ final class BrawBackendTests: XCTestCase {
         let t0 = Date()
         XCTAssertThrowsError(try BRAWBackend(findLibrary: { _ in self.lib }, infoTimeout: 2)
             .probe(dir.path + "/A001.braw", tools: ExternalTools(brawDecoder: exe))) { e in
-            XCTAssertEqual("\(e)", "braw-decode failed (exit -1): neodpověděl do 2 s — ukončen")
+            XCTAssertEqual("\(e)", "braw-decode failed (exit -1): no response within 2 s — stopped")
         }
         XCTAssertTrue((1.9...30).contains(Date().timeIntervalSince(t0)), "\(Date().timeIntervalSince(t0))")
     }
@@ -145,7 +145,7 @@ final class BrawBackendTests: XCTestCase {
         r.backends[.braw] = BRAWBackend(findLibrary: { _ in self.lib })
         r.log = { log.add($0) }
         XCTAssertThrowsError(try r.probe(BrawTest.brawClip, cardPath: dir.sub("card"))) { e in
-            XCTAssertTrue("\(e)".hasPrefix("Blackmagic RAW: klip nelze otevřít"), "\(e)")
+            XCTAssertTrue("\(e)".hasPrefix("Blackmagic RAW: cannot open the clip"), "\(e)")
         }
         XCTAssertTrue(log.lines.contains("braw-decode failed (exit 4): \(line)"), "\(log.lines)")
     }

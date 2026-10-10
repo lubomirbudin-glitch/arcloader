@@ -19,7 +19,7 @@ final class UsbTopologyTests: XCTestCase {
         XCTAssertEqual(typeC.defaultLabel, "port 2 USB-C")
         let usb2Only = try XCTUnwrap(c.first { $0.usb2Port == 3 })
         XCTAssertEqual(usb2Only.supportsUsb3, false)
-        XCTAssertEqual(usb2Only.defaultLabel, "port 3 jen USB 2.0")
+        XCTAssertEqual(usb2Only.defaultLabel, "port 3 USB 2.0 only")
     }
 
     func testDeviceOnUsb2HalfOfUsb3Connector() throws {
@@ -32,7 +32,7 @@ final class UsbTopologyTests: XCTestCase {
         let c = build(UsbHub(instanceId: "H", name: "hub", ports: [p(1, false, companion: 99), p(20, true, visible: false)]))
         XCTAssertEqual(c.count, 2)
         XCTAssertEqual(c.first { $0.usb2Port == 1 }?.usb3Port, 0)
-        XCTAssertEqual(c.first { $0.usb3Port == 20 }?.defaultLabel, "port 20 USB 3 (interní)")
+        XCTAssertEqual(c.first { $0.usb3Port == 20 }?.defaultLabel, "port 20 USB 3 (internal)")
     }
 
     func testRecurseIntoExternalHubs() {
@@ -49,18 +49,18 @@ final class UsbTopologyTests: XCTestCase {
         let c = build(root(onPort3: dev("hub", .high, .high, hub: ext)))
         XCTAssertEqual(Set(c.map(\.label)).count, c.count)
         XCTAssertEqual(c.first { $0.id == "EXT#1" }?.label, "port 3 › 1")
-        XCTAssertEqual(c.first { $0.id == "EXT#2" }?.defaultLabel, "port 3 › 2 jen USB 2.0")
+        XCTAssertEqual(c.first { $0.id == "EXT#2" }?.defaultLabel, "port 3 › 2 USB 2.0 only")
         XCTAssertEqual(c.first { $0.id == "ROOT#1" }?.label, "port 1")
     }
 
     // Windows final review 1 + 4: the controller goes into the name only with more than one; same names get numbers.
     func testControllerPrefixOnlyWithSeveralControllers() {
         func r(_ id: String) -> UsbHub { UsbHub(instanceId: id, name: "Root", ports: [p(1, false)]) }
-        let one = UsbTopology(controllers: [UsbController(instanceId: "A", name: "USB řadič XHC1", rootHubs: [r("RA")])])
+        let one = UsbTopology(controllers: [UsbController(instanceId: "A", name: "USB controller XHC1", rootHubs: [r("RA")])])
         XCTAssertEqual(one.connectors.map(\.label), ["port 1"])
-        let two = UsbTopology(controllers: [UsbController(instanceId: "A", name: "USB řadič usb-drd0", rootHubs: [r("RA")]),
-                                            UsbController(instanceId: "B", name: "USB řadič usb-drd1", rootHubs: [r("RB")])])
-        XCTAssertEqual(two.connectors.map(\.label), ["USB řadič usb-drd0 · port 1", "USB řadič usb-drd1 · port 1"])
+        let two = UsbTopology(controllers: [UsbController(instanceId: "A", name: "USB controller usb-drd0", rootHubs: [r("RA")]),
+                                            UsbController(instanceId: "B", name: "USB controller usb-drd1", rootHubs: [r("RB")])])
+        XCTAssertEqual(two.connectors.map(\.label), ["USB controller usb-drd0 · port 1", "USB controller usb-drd1 · port 1"])
         XCTAssertEqual(two.connectors.map(\.controllerId), ["A", "B"])
         let amd = "AMD USB 3.10 eXtensible Host Controller - 1.10 (Microsoft)"
         let same = UsbTopology(controllers: [UsbController(instanceId: "A", name: amd, rootHubs: [r("RA")]),
@@ -99,6 +99,6 @@ final class UsbTopologyTests: XCTestCase {
         XCTAssertEqual(PortLabels.withKind(c, ["ROOT#1": "  "]), "port 1 USB 3")
         XCTAssertEqual(PortLabels.find([c], "ROOT#17")?.id, "ROOT#1")
         XCTAssertEqual(PortLabels.shortController("Intel(R) USB 3.20 eXtensible Host Controller - 1.20 (Microsoft)"), "Intel USB 3.20 xHCI")
-        XCTAssertEqual(PortLabels.shortController("USB řadič XHC1"), "USB řadič XHC1")
+        XCTAssertEqual(PortLabels.shortController("USB controller XHC1"), "USB controller XHC1")
     }
 }

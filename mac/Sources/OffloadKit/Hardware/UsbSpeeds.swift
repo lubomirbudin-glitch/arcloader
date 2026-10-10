@@ -37,12 +37,12 @@ public enum UsbSpeeds {
 
     public static func label(_ s: UsbLinkSpeed) -> String {
         switch s {
-        case .low: return "USB 1.0 (1,5 Mb/s)"
+        case .low: return "USB 1.0 (1.5 Mb/s)"
         case .full: return "USB 1.1 (12 Mb/s)"
         case .high: return "USB 2.0 (480 Mb/s)"
         case .superSpeed: return "USB 3 (5 Gb/s)"
-        case .superPlus: return "USB 3 (10 Gb/s a víc)"
-        case .unknown: return "neznámá"
+        case .superPlus: return "USB 3 (10 Gb/s or more)"
+        case .unknown: return "unknown"
         }
     }
 

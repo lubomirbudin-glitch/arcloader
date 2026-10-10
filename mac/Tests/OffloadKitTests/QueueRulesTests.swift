@@ -10,13 +10,13 @@ final class QueueRulesTests: XCTestCase {
     func testEjectProblemOtherCardOrGoneRefused() {
         XCTAssertEqual(QueueRules.ejectProblem(copied: "uuid:AB12", current: "uuid:CD34", cardInUse: false), QueueRules.otherCardText)
         XCTAssertEqual(QueueRules.ejectProblem(copied: nil, current: "uuid:CD34", cardInUse: false), QueueRules.otherCardText)
-        XCTAssertEqual(QueueRules.ejectProblem(copied: "uuid:AB12", current: nil, cardInUse: false), "karta není připojená")
-        XCTAssertEqual(QueueRules.otherCardText, "karta v mechanice není ta, která se kopírovala")
+        XCTAssertEqual(QueueRules.ejectProblem(copied: "uuid:AB12", current: nil, cardInUse: false), "card is not connected")
+        XCTAssertEqual(QueueRules.otherCardText, "the card in the reader is not the one that was copied")
     }
 
     func testEjectProblemCardStillNeededByAnotherJobRefused() {
         XCTAssertEqual(QueueRules.ejectProblem(copied: "uuid:AB12", current: "uuid:AB12", cardInUse: true), QueueRules.inUseText)
-        XCTAssertEqual(QueueRules.inUseText, "z karty ještě kopíruje jiná úloha — vysuňte ji, až její kopie doběhne")
+        XCTAssertEqual(QueueRules.inUseText, "another job is still copying from the card — eject it when that copy has finished")
     }
 
     func testCardInUseByPhaseOfAnotherJobOnTheSameVolume() {
@@ -62,24 +62,24 @@ final class QueueRulesTests: XCTestCase {
                               isInternal: `internal`, isEjectable: ejectable, isRemovable: removable)
         }
         XCTAssertNil(p())
-        XCTAssertEqual(p(exists: false), "karta není připojená")
-        XCTAssertEqual(p(local: false), "síťová složka se nevysouvá")
-        XCTAssertEqual(p(root: false), "zdroj je složka, ne celá karta")
-        XCTAssertEqual(p(rootFS: true), "systémový disk nelze vysunout")
-        XCTAssertEqual(p(internal: true, ejectable: false, removable: false), "interní disk nelze vysunout")
-        XCTAssertEqual(p(internal: nil, ejectable: nil, removable: nil), "interní disk nelze vysunout")
+        XCTAssertEqual(p(exists: false), "card is not connected")
+        XCTAssertEqual(p(local: false), "a network folder is not ejected")
+        XCTAssertEqual(p(root: false), "the source is a folder, not a whole card")
+        XCTAssertEqual(p(rootFS: true), "the system disk cannot be ejected")
+        XCTAssertEqual(p(internal: true, ejectable: false, removable: false), "an internal disk cannot be ejected")
+        XCTAssertEqual(p(internal: nil, ejectable: nil, removable: nil), "an internal disk cannot be ejected")
         XCTAssertNil(p(internal: true, ejectable: true, removable: true))     // built-in SD slot
         XCTAssertNil(p(internal: false, ejectable: false, removable: false))  // USB / Thunderbolt disk
     }
 
     func testCardEjectProblemFromTheDisk() {
         let dir = tempDir()
-        XCTAssertEqual(CardEject.problem(source: dir.path), "zdroj je složka, ne celá karta")
-        XCTAssertEqual(CardEject.problem(source: "/"), "systémový disk nelze vysunout")
-        XCTAssertEqual(CardEject.problem(source: dir.path + "/missing"), "karta není připojená")
+        XCTAssertEqual(CardEject.problem(source: dir.path), "the source is a folder, not a whole card")
+        XCTAssertEqual(CardEject.problem(source: "/"), "the system disk cannot be ejected")
+        XCTAssertEqual(CardEject.problem(source: dir.path + "/missing"), "card is not connected")
         let r = CardEject.eject(dir.path)
         XCTAssertFalse(r.ok)
-        XCTAssertEqual(r.error, "zdroj je složka, ne celá karta")
+        XCTAssertEqual(r.error, "the source is a folder, not a whole card")
     }
 
     func testMeasureBlockedWhileACopyWritesOrVerifies() {

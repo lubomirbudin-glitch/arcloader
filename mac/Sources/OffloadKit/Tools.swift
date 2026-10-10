@@ -199,7 +199,7 @@ final class ToolProcess {
             while p.process.isRunning && Date() < deadline { usleep(20_000) }
             if p.process.isRunning {
                 kill(p.process.processIdentifier, SIGKILL)
-                throw ToolError(tool: name, status: -1, message: "neodpověděl do \(String(format: "%.0f", timeout)) s — ukončen")
+                throw ToolError(tool: name, status: -1, message: "no response within \(String(format: "%.0f", timeout)) s — stopped")
             }
         }
         p.process.waitUntilExit()

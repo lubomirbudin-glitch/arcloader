@@ -30,34 +30,37 @@ public enum ChainView {
         }
     }
 
-    /// Realistic MB/s ceiling of the element's USB link; nil without one (no "% linky").
+    /// Realistic MB/s ceiling of the element's USB link; nil without one (no "% of link").
     public static func linkCeiling(_ r: RoleLink) -> Double? {
         guard let u = r.link.usb else { return nil }
         let c = UsbSpeeds.practicalMBps(u.link)
         return c > 0 ? c : nil
     }
 
-    /// "Cíl 1 ST1000" or "Karta reader — linka je plná (USB 2.0 (480 Mb/s))".
+    /// "Destination 1 ST1000" or "Card reader — the link is full (USB 2.0 (480 Mb/s))".
     public static func describe(_ brake: Brake, _ chain: [ChainElement]) -> String {
         guard brake.element >= 0, brake.element < chain.count else { return "" }
         let e = chain[brake.element]
         let who = "\(e.role) \(e.product)".trimmingCharacters(in: .whitespaces)
-        if brake.linkFull, let link = e.link { return "\(who) — linka je plná (\(link))" }
+        if brake.linkFull, let link = e.link { return "\(who) — the link is full (\(link))" }
         return who
     }
 
+    /// The start of the bottleneck line in `lines` (the GUI colours that line).
+    public static let bottleneckPrefix = "Bottleneck: "
+
     public static func lines(_ chain: [ChainElement], brake: Brake?) -> [String] {
         var lines = chain.map { e -> String in
-            let util = e.utilization.map { "  " + String(format: "%.0f", $0 * 100) + " % linky" } ?? ""
+            let util = e.utilization.map { "  " + String(format: "%.0f", $0 * 100) + "% of link" } ?? ""
             return "\(e.role) \(e.product) — \(e.connection)  \(String(format: "%.0f", e.mbps)) MB/s\(util)"
         }
         // Shared controller: by identity — two controllers may carry the same name.
         for g in orderedGroups(chain.filter { $0.controllerId != nil }, by: { $0.controllerId!.lowercased() }) where g.count >= 2 {
-            lines.append("Řadič \(g[0].controllerName ?? ""): \(String(format: "%.0f", g.reduce(0) { $0 + $1.mbps })) MB/s")
+            lines.append("\(g[0].controllerName ?? "") (shared): \(String(format: "%.0f", g.reduce(0) { $0 + $1.mbps })) MB/s")
         }
         if let b = brake {
             let text = describe(b, chain)
-            if !text.isEmpty { lines.append("Úzké hrdlo: \(text)") }
+            if !text.isEmpty { lines.append(bottleneckPrefix + text) }
         }
         return lines
     }

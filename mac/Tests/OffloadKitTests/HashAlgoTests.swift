@@ -155,7 +155,7 @@ final class MHLReaderTests: XCTestCase {
         f.write(Data("<!-- edited -->".utf8))
         f.closeFile()
         let h = MHLReader.read(cardPath: card)!
-        XCTAssertEqual(h.chainProblems, ["ASC MHL generace 0002 neodpovídá řetězu (soubor MHL byl změněn)."])
+        XCTAssertEqual(h.chainProblems, ["ASC MHL generation 0002 does not match the chain (the MHL file was changed)."])
         XCTAssertEqual(h.generations.count, 2)
         XCTAssertTrue(h.record("CLIP/b.mov")!.failed)
         XCTAssertNil(h.lastGood["clip/b.mov"])
@@ -166,7 +166,7 @@ final class MHLReaderTests: XCTestCase {
         _ = generation(card, 2, [("CLIP/b.mov", 10, [("xxh64", "bbbbbbbbbbbbbbbb")], "original")])
         _ = generation(card, 1, [("CLIP/a.mov", 10, [("xxh64", "aaaaaaaaaaaaaaaa")], "original")])
         let h = MHLReader.read(cardPath: card)!
-        XCTAssertEqual(h.chainProblems, ["Chybí ascmhl_chain.xml — generace se čtou podle čísla v názvu souboru."])
+        XCTAssertEqual(h.chainProblems, ["ascmhl_chain.xml is missing — generations are read by the number in the file name."])
         XCTAssertEqual(h.generations.map(\.seq), [1, 2])
         XCTAssertTrue(h.chain.isEmpty)
     }

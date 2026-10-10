@@ -108,7 +108,7 @@ final class ProxyFolderTests: XCTestCase {
         XCTAssertEqual(ProxyPreflight.extraFolderInUse(p), "/Volumes/Proxy")
         XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: nil))   // not checked yet
         XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: true))
-        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p, folderExists: false), "Složka pro proxy není dostupná: /Volumes/Proxy")
+        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p, folderExists: false), "Folder for proxies is not available: /Volumes/Proxy")
         p.enabled = false
         XCTAssertNil(ProxyPreflight.extraFolderInUse(p))
         XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: false))
@@ -124,7 +124,7 @@ final class ProxyFolderTests: XCTestCase {
         p.extraFolder = dir.path
         XCTAssertNil(ProxyPreflight.extraFolderBlocking(p))
         p.extraFolder = dir.path + "/nope"
-        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p), "Složka pro proxy není dostupná: \(dir.path)/nope")
+        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p), "Folder for proxies is not available: \(dir.path)/nope")
     }
 
     func testSettingsExtraFolderTrimmedBlankIsNilAbsentWhenUnset() throws {

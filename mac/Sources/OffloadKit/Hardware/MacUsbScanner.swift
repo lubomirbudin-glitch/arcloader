@@ -224,12 +224,12 @@ public enum UsbScanner {
         return e.name
     }
 
-    /// "USB řadič XHC1", "USB řadič usb-drd1", "… (Thunderbolt)" only for a PCI controller behind a Thunderbolt
+    /// "USB controller XHC1", "USB controller usb-drd1", "… (Thunderbolt)" only for a PCI controller behind a Thunderbolt
     /// tunnel (a dock, an Intel TB controller) — built-in Apple Silicon controllers are not PCI devices (verify, step 1h).
     static func controllerName(_ c: IOEntry) -> String {
         let above = c.ancestors
         let pci = above.contains { $0.conforms(to: "IOPCIDevice") }
         let thunderbolt = pci && above.dropFirst().contains { $0.className.contains("Thunderbolt") }
-        return "USB řadič \(c.name)" + (thunderbolt ? " (Thunderbolt)" : "")
+        return "USB controller \(c.name)" + (thunderbolt ? " (Thunderbolt)" : "")
     }
 }

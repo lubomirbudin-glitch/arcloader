@@ -1,7 +1,7 @@
 import Foundation
 
 /// The one place that names a USB socket — drive lines, the port list, advice and the copy chain all go through here,
-/// so one socket always reads the same. User names (`UsbConnector.id` → název) replace the default label.
+/// so one socket always reads the same. User names (`UsbConnector.id` → name) replace the default label.
 public enum PortLabels {
     /// The socket's name: the user's name (under its id or one of its alt ids), else the default unique label.
     public static func name(_ c: UsbConnector, _ names: [String: String]? = nil) -> String {
@@ -13,7 +13,7 @@ public enum PortLabels {
         return c.label
     }
 
-    /// Name plus what the socket can do: "port 6 USB 3", "port 3 jen USB 2.0", "port 4" (unknown).
+    /// Name plus what the socket can do: "port 6 USB 3", "port 3 USB 2.0 only", "port 4" (unknown).
     public static func withKind(_ c: UsbConnector, _ names: [String: String]? = nil) -> String {
         c.kind.isEmpty ? name(c, names) : "\(name(c, names)) \(c.kind)"
     }

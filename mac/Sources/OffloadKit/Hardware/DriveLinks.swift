@@ -5,21 +5,21 @@ public enum StorageBus: String, Codable {
 }
 
 public enum StorageBuses {
-    /// Czech name of a connection without a USB link.
+    /// The name of a connection without a USB link.
     public static func label(_ bus: StorageBus) -> String {
         switch bus {
         case .nvme: return "NVMe"
         case .sata: return "SATA"
-        case .sd, .mmc: return "SD čtečka"
-        case .virtual: return "virtuální disk"
-        case .network: return "síťový disk"
-        case .usb: return "USB (port nezjištěn)"
+        case .sd, .mmc: return "SD reader"
+        case .virtual: return "virtual disk"
+        case .network: return "network drive"
+        case .usb: return "USB (port unknown)"
         case .scsi: return "SCSI"
         case .sas: return "SAS"
         case .raid: return "RAID"
         case .thunderbolt: return "Thunderbolt"
-        case .other: return "jiné připojení"
-        case .unknown: return "neznámé připojení"
+        case .other: return "other connection"
+        case .unknown: return "unknown connection"
         }
     }
 }
@@ -79,9 +79,9 @@ extension PortLabels {
         return "port \(u.connectorPort)"
     }
 
-    /// One row of the port list: "port 6 USB 3   Elements 25A2 — USB 3 (5 Gb/s)  ← SSD_A (Cíl 1)".
+    /// One row of the port list: "port 6 USB 3   Elements 25A2 — USB 3 (5 Gb/s)  ← SSD_A (Destination 1)".
     public static func listRow(_ c: UsbConnector, drives: [RoleLink], names: [String: String]? = nil, labelWidth: Int = 24) -> String {
-        let device = c.device.map { "\($0.name) — \(UsbSpeeds.label($0.link))" } ?? "volný"
+        let device = c.device.map { "\($0.name) — \(UsbSpeeds.label($0.link))" } ?? "free"
         let here = drives.filter { d in d.link.usb.map { c.has($0.connectorId) } ?? false }.map { d -> String in
             let volume = volumeLabel(d.link.root)
             return d.role == volume ? volume : "\(volume) (\(d.role))"

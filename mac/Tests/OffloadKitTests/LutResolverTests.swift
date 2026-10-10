@@ -73,8 +73,8 @@ final class LutResolverTests: XCTestCase {
 
     // S-Log2 / S-Log is log, just without a built-in LUT — only the rest is "not log".
     func testSonyOtherGammaNoLutWithHonestReason() {
-        for (gamma, reason) in [("s-log2", "Sony XML: s-log2 (bez vestavěného LUTu)"), ("S-Log", "Sony XML: S-Log (bez vestavěného LUTu)"),
-                                ("hlg2", "Sony XML: hlg2 (není log)"), ("s-cinetone", "Sony XML: s-cinetone (není log)")] {
+        for (gamma, reason) in [("s-log2", "Sony XML: s-log2 (no built-in LUT)"), ("S-Log", "Sony XML: S-Log (no built-in LUT)"),
+                                ("hlg2", "Sony XML: hlg2 (not log)"), ("s-cinetone", "Sony XML: s-cinetone (not log)")] {
             let dir = tempDir()
             let clip = sonyXML(dir, "XDROOT/Clip/C0003.MP4", gamma: gamma, primaries: "rec709")
             let use = LutResolver.resolve(videoClip(), info: ClipInfo(), clipFullPath: clip,
@@ -142,11 +142,11 @@ final class LutResolverTests: XCTestCase {
             ("Blackmagic Design Film", 5, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film Gen 5"),
             ("blackmagic design film", 6, "auto", "bmd-film-gen5", "Blackmagic RAW: blackmagic design film Gen 6"),
             ("Blackmagic Design Film", nil, "auto", "bmd-film-gen5", "Blackmagic RAW: Blackmagic Design Film"),
-            ("Blackmagic Design Film", 4, "none", nil, "Blackmagic RAW: Blackmagic Design Film Gen 4 (bez vestavěného LUTu)"),
-            ("Blackmagic Design Video", 5, "none", nil, "Blackmagic RAW: Blackmagic Design Video Gen 5 (není log)"),
-            ("Blackmagic Design Extended Video", 5, "none", nil, "Blackmagic RAW: Blackmagic Design Extended Video Gen 5 (není log)"),
-            (nil, nil, "auto", "bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)"),
-            ("", nil, "auto", "bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)"),
+            ("Blackmagic Design Film", 4, "none", nil, "Blackmagic RAW: Blackmagic Design Film Gen 4 (no built-in LUT)"),
+            ("Blackmagic Design Video", 5, "none", nil, "Blackmagic RAW: Blackmagic Design Video Gen 5 (not log)"),
+            ("Blackmagic Design Extended Video", 5, "none", nil, "Blackmagic RAW: Blackmagic Design Extended Video Gen 5 (not log)"),
+            (nil, nil, "auto", "bmd-film-gen5", "Blackmagic RAW (gamma not stated — assuming Film Gen 5)"),
+            ("", nil, "auto", "bmd-film-gen5", "Blackmagic RAW (gamma not stated — assuming Film Gen 5)"),
         ]
         for c in cases {
             var info = ClipInfo()
@@ -160,7 +160,7 @@ final class LutResolverTests: XCTestCase {
         }
         XCTAssertEqual(LutResolver.resolve(rawClip(.braw, "A001.braw"), info: nil, clipFullPath: "/x/A001.braw",
                                            settings: auto(), catalog: cat).reason,
-                       "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)")
+                       "Blackmagic RAW (gamma not stated — assuming Film Gen 5)")
     }
 
     // Recognised as display-ready: the fallback LUT is only for cameras that were not recognised.
@@ -177,11 +177,11 @@ final class LutResolverTests: XCTestCase {
         let clip = videoClip("DCIM/100CANON/MVI_0001.MP4")
         let none = LutResolver.resolve(clip, info: info(camera: "Canon EOS R5"), clipFullPath: "/x/x.mp4", settings: auto(), catalog: cat)
         XCTAssertEqual(none.source, "none")
-        XCTAssertEqual(none.reason, "kamera nerozpoznána")
+        XCTAssertEqual(none.reason, "camera not recognised")
         let fb = LutResolver.resolve(clip, info: ClipInfo(), clipFullPath: "/x/x.mp4", settings: auto(fallback: "canon-clog3-cinemagamut"), catalog: cat)
         XCTAssertEqual(fb.source, "fallback")
         XCTAssertEqual(fb.id, "canon-clog3-cinemagamut")
-        XCTAssertEqual(fb.reason, "kamera nerozpoznána — záložní LUT")
+        XCTAssertEqual(fb.reason, "camera not recognised — fallback LUT")
     }
 
     func testModesBuiltinCustomOff() {
@@ -190,16 +190,16 @@ final class LutResolverTests: XCTestCase {
         b.lutMode = .builtin
         b.lutBuiltin = "dji-dlog-dgamut"
         let builtin = LutResolver.resolve(clip, info: nil, clipFullPath: "/x", settings: b, catalog: cat)
-        XCTAssertEqual([builtin.source, builtin.id, builtin.reason], ["builtin", "dji-dlog-dgamut", "vybraný v nastavení"])
+        XCTAssertEqual([builtin.source, builtin.id, builtin.reason], ["builtin", "dji-dlog-dgamut", "selected in settings"])
         var c = ProxySettings()
         c.lutMode = .custom
         c.lutPath = "/Users/x/luts/show.cube"
         let custom = LutResolver.resolve(clip, info: nil, clipFullPath: "/x", settings: c, catalog: cat)
-        XCTAssertEqual(custom, LutUse(source: "custom", id: nil, name: "show.cube", reason: "vlastní LUT", file: "/Users/x/luts/show.cube"))
+        XCTAssertEqual(custom, LutUse(source: "custom", id: nil, name: "show.cube", reason: "custom LUT", file: "/Users/x/luts/show.cube"))
         var n = ProxySettings()
         n.lutMode = .off
         let off = LutResolver.resolve(clip, info: nil, clipFullPath: "/x", settings: n, catalog: cat)
-        XCTAssertEqual([off.source, off.name, off.reason], ["none", "bez LUT", "vypnuto v nastavení"])
+        XCTAssertEqual([off.source, off.name, off.reason], ["none", "no LUT", "off in settings"])
         // No mode stored (older settings): a lutPath means custom, otherwise automatic.
         var old = ProxySettings()
         old.lutPath = "/l.cube"
@@ -213,7 +213,7 @@ final class LutResolverTests: XCTestCase {
         XCTAssertEqual(LutResolver.effectiveMode(s), .auto)
         s.lutMode = .custom
         XCTAssertEqual(LutResolver.resolve(videoClip(), info: nil, clipFullPath: "/x", settings: s, catalog: cat).reason,
-                       "vlastní LUT není vybraný")
+                       "no custom LUT selected")
     }
 
     func testBuiltinIdMissingFromTheCatalog() {
@@ -221,7 +221,7 @@ final class LutResolverTests: XCTestCase {
         s.lutMode = .builtin
         s.lutBuiltin = "gone"
         XCTAssertEqual(LutResolver.resolve(videoClip(), info: nil, clipFullPath: "/x", settings: s, catalog: cat).reason,
-                       "vestavěný LUT nenalezen")
+                       "built-in LUT not found")
     }
 
     func testAutoWithoutCatalogNoLut() {
@@ -229,7 +229,7 @@ final class LutResolverTests: XCTestCase {
         let clip = sonyXML(dir, "XDROOT/Clip/C0001.MP4", gamma: "s-log3-cine", primaries: "S-Gamut3Cine")
         let use = LutResolver.resolve(videoClip(), info: nil, clipFullPath: clip, settings: auto(), catalog: LutCatalog.load(nil))
         XCTAssertEqual(use.source, "none")
-        XCTAssertEqual(use.reason, "vestavěné LUTy chybí")
+        XCTAssertEqual(use.reason, "built-in LUTs missing")
     }
 
     func testLutUseJSONHasNoFile() throws {

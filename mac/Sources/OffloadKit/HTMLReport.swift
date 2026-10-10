@@ -154,11 +154,11 @@ public enum HTMLReport {
                 for n in [c.probeError, c.proxyNote].compactMap({ $0 }) where !notes.contains(n) { notes.append(n) }
                 let note = notes.joined(separator: " · ")
                 var noteHTML = note.isEmpty ? "" : "<div class=\"path err\">\(esc(note))</div>"
-                // Which LUT and why — also "bez LUT (reason)", unless the user switched LUTs off.
+                // Which LUT and why — also "no LUT (reason)", unless the user switched LUTs off.
                 if let lu = c.lut, lu.source != "none" {
                     noteHTML += "<div class=\"note\">LUT: \(esc(lu.name)) (\(esc(lu.reason)))</div>"
-                } else if let ln = c.lut, ln.reason != "vypnuto v nastavení" {
-                    noteHTML += "<div class=\"note\">LUT: bez LUT (\(esc(ln.reason)))</div>"
+                } else if let ln = c.lut, !LutUse.isOffInSettings(ln.reason) {
+                    noteHTML += "<div class=\"note\">LUT: no LUT (\(esc(ln.reason)))</div>"
                 }
                 h += "<tr><td>\(img)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))\(c.clip.isCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "")</div>"
                 h += "<div class=\"path\">\(esc(c.clip.path))</div>\(noteHTML)</td>"
