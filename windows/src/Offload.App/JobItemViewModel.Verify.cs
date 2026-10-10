@@ -4,8 +4,8 @@ using Offload.Core.Desktop;
 
 namespace Offload.App;
 
-/// One content warning of a finished card (spec 7, 9): "A001C003" and the yellow label "01:00:02:13 · poškozená data",
-/// with Náhled when the report has a picture of the place.
+/// One content warning of a finished card (spec 7, 9): "A001C003" and the yellow label "01:00:02:13 · corrupt data",
+/// with Preview when the report has a picture of the place.
 public sealed class ContentRowViewModel(ContentLine line, byte[]? jpeg, bool canOpen, Action<byte[]> open)
 {
     public string Clip => line.Clip;
@@ -14,7 +14,7 @@ public sealed class ContentRowViewModel(ContentLine line, byte[]? jpeg, bool can
     public RelayCommand PreviewCommand { get; } = new(() => { if (jpeg != null) open(jpeg); }, () => jpeg != null && canOpen);
 }
 
-/// Plan 10 on the job card (R5, spec 7, spec 9): the two verdicts "Lze vyjmout" and "Lze formátovat" side by side, never
+/// Plan 10 on the job card (R5, spec 7, spec 9): the two verdicts "Safe to eject" and "Safe to format" side by side, never
 /// merged, and the content warnings with their place and a picture — formatting waits for the user's confirmation.
 public sealed partial class JobItemViewModel
 {
@@ -33,7 +33,7 @@ public sealed partial class JobItemViewModel
     public bool ShowChips => Phase != JobPhase.Waiting && Job.Plan != null;
     public CardChip EjectChip => JobCard.Chips(progress.Status, contentConfirmed).Eject;
     public CardChip FormatChip => JobCard.Chips(progress.Status, contentConfirmed).Format;
-    /// "Zkontrolováno — kartu lze formátovat" is offered while content warnings wait for a look.
+    /// "Checked — safe to format the card" is offered while content warnings wait for a look.
     public bool NeedsContentConfirm => JobCard.NeedsContentConfirm(progress.Status, contentConfirmed);
     public string ContentConfirmText => JobCard.ContentConfirmText;
 
@@ -44,7 +44,7 @@ public sealed partial class JobItemViewModel
         {
             if (contentRows != null || !IsFinished || Job.Report is not { } r) return contentRows ?? [];
             var pictures = r.ContentWarnings.Select(c => c.Content!.Jpeg).ToList();
-            // A demo preview writes nothing (ruling I3 of plan 9): its Náhled stays off.
+            // A demo preview writes nothing (ruling I3 of plan 9): its Preview stays off.
             return contentRows = JobCard.ContentLines(r).Select((line, i) => new ContentRowViewModel(line, pictures[i], !Job.IsPreview, OpenDefect)).ToList();
         }
     }
@@ -56,7 +56,7 @@ public sealed partial class JobItemViewModel
         {
             var path = await Task.Run(() =>
             {
-                var p = Path.Combine(Path.GetTempPath(), $"offload-vada-{Guid.NewGuid():N}.jpg");
+                var p = Path.Combine(Path.GetTempPath(), $"offload-defect-{Guid.NewGuid():N}.jpg");
                 File.WriteAllBytes(p, jpeg);
                 return p;
             });
@@ -64,7 +64,7 @@ public sealed partial class JobItemViewModel
         }
         catch (Exception e)
         {
-            owner.ShowMessage($"Náhled nejde otevřít: {e.Message}");
+            owner.ShowMessage($"Cannot open the preview: {e.Message}");
         }
     }
 }

@@ -5,7 +5,7 @@ using Offload.Core.Space;
 
 namespace Offload.App;
 
-/// Spec 2.5 in the window: red "není dost místa" blocks the start, orange "rezerva pod 5 %" only warns. Memory only —
+/// Spec 2.5 in the window: red "not enough space" blocks the start, orange "margin under 5%" only warns. Memory only —
 /// sizes from the card inspections, volumes and free space from the destination probes; evaluated 3x/s. The probes
 /// themselves run off the UI thread: at Start and when a copy finishes (ruling I4), so the free space is never older
 /// than the bytes the running jobs have already written.
@@ -20,7 +20,7 @@ public sealed partial class MainViewModel
 
     public string? SpaceProblem => spaceProblem;
     public string? SpaceWarning => spaceWarning;
-    /// "Prověřuji karty…" while Start waits for the inspections or the free space; null otherwise.
+    /// "Checking cards…" while Start waits for the inspections or the free space; null otherwise.
     public string? StartStatus => startStatus;
 
     void SetStartStatus(string? text)

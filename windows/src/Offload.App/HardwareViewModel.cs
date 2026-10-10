@@ -73,8 +73,8 @@ public sealed class HardwareViewModel : ObservableObject
     public string Status { get => status; private set => Set(ref status, value); }
     public bool HasMeasurements => Measurements.Count > 0;
     public string MeasureHint =>
-        byDrive ? "Pro měření vyberte kartu nebo přidejte cíl."
-        : owner.CopyRunning ? "Během kopírování nelze měřit — měření zapisuje 1 GB na cílové disky." : "";
+        byDrive ? "To measure, select a card or add a destination."
+        : owner.CopyRunning ? "Cannot measure while copying — the measurement writes 1 GB to the destination disks." : "";
 
     /// A copy started or ended (the main window's ticker): the hint follows; the button follows CanExecute.
     internal void CopyStateChanged() => Raise(nameof(MeasureHint));
@@ -87,30 +87,30 @@ public sealed class HardwareViewModel : ObservableObject
 
     public void RunQuick() => Run(measure: false);
 
-    /// The window closed: the run stops and the next "Prověřit USB porty…" opens a new window.
+    /// The window closed: the run stops and the next "Test USB ports…" opens a new window.
     public void WindowClosed()
     {
         renameTimer.Stop();
         owner.HardwareClosed(this);
     }
 
-    /// Zastavit, or the window closed: the run stops at once (a measurement deletes its temporary file);
-    /// "Zastavuji…" until the task has really ended.
+    /// Stop, or the window closed: the run stops at once (a measurement deletes its temporary file);
+    /// "Stopping…" until the task has really ended.
     public void Stop()
     {
         if (!Busy || stopping || cts is not { } c) return;
         stopping = true;
         c.Cancel();
-        Status = "Zastavuji…";
+        Status = "Stopping…";
     }
 
     void Measure()
     {
         var (_, dests, _) = owner.HardwareRoles();
-        var list = dests.Count > 0 ? string.Join("\n", dests.Select(d => "   " + d)) : "   (žádné)";
-        var text = "Změřit rychlost?\n\nZ karet se jen čte (až 1 GB z každé).\n" +
-                   $"Na cílové disky se zapíše a přečte dočasný soubor 1 GB a hned se smaže:\n{list}\n\n" +
-                   "Podle rychlosti disků to může trvat několik minut.";
+        var list = dests.Count > 0 ? string.Join("\n", dests.Select(d => "   " + d)) : "   (none)";
+        var text = "Measure speed?\n\nThe cards are only read (up to 1 GB from each).\n" +
+                   $"A temporary 1 GB file is written to and read from the destination disks, then deleted at once:\n{list}\n\n" +
+                   "Depending on the disks' speed this can take several minutes.";
         // A copy may have started while the question was open.
         if (Confirm?.Invoke(text) == true && !owner.CopyRunning) Run(measure: true);
     }
@@ -124,9 +124,9 @@ public sealed class HardwareViewModel : ObservableObject
         cts = new CancellationTokenSource();
         var token = cts.Token;
         Busy = true;
-        var running = measure ? "Měřím rychlost… (může trvat několik minut)" : "Zjišťuji připojení…";
+        var running = measure ? "Measuring speed… (can take several minutes)" : "Checking connections…";
         bool waits = owner.HardwareFinishing;
-        Status = waits ? "Čekám, až doběhne předchozí test…" : running;
+        Status = waits ? "Waiting for the previous test to finish…" : running;
         var task = owner.RunHardware(() =>
         {
             if (waits) Dispatch(() => { if (!stopping) Status = running; });   // the previous run has ended
@@ -145,19 +145,19 @@ public sealed class HardwareViewModel : ObservableObject
                 {
                     result = t.Result.Result;
                     byDrive = t.Result.ByDrive;
-                    Status = token.IsCancellationRequested && measure ? "Měření přerušeno — zobrazeno, co se stihlo změřit." : "";
+                    Status = token.IsCancellationRequested && measure ? "Measurement stopped — showing what was measured so far." : "";
                     Rebuild();
                     if (!token.IsCancellationRequested) owner.HardwareTestFinished(result);
                 }
                 else
                 {
-                    Status = "Test se nepodařil: " + t.Exception?.GetBaseException().Message;
+                    Status = "The test failed: " + t.Exception?.GetBaseException().Message;
                     AppLog.Write($"hwtest: {t.Exception?.GetBaseException()}");
                 }
             }
             catch (Exception e)
             {
-                Status = "Test se nepodařil: " + e.Message;
+                Status = "The test failed: " + e.Message;
                 AppLog.Write($"hwtest show: {e}");
             }
             RaiseMany(nameof(MeasureHint), nameof(HasMeasurements));
@@ -199,7 +199,7 @@ public sealed class HardwareViewModel : ObservableObject
         {
             var rows = g.Select(c =>
             {
-                var device = c.Device is { } dev ? $"{dev.Name} — {UsbSpeeds.Label(dev.Link)}" : "volný";
+                var device = c.Device is { } dev ? $"{dev.Name} — {UsbSpeeds.Label(dev.Link)}" : "free";
                 var drives = string.Join(", ", r.Drives.Where(d => d.Link.Usb is { } u && c.Has(u.ConnectorId))
                     .Select(d => d.Role == d.Link.Root.TrimEnd('\\') ? d.Role : $"{d.Link.Root.TrimEnd('\\')} ({d.Role})"));
                 return new HwPortRow(this, c, c.Kind, device, drives, UserName(c, names));

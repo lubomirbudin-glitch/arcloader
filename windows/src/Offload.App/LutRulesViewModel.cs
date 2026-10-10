@@ -4,7 +4,7 @@ using Offload.Core;
 
 namespace Offload.App;
 
-/// "Vlastní pravidla LUTů" (spec 4.2): a copy of the rules, edited row by row; OK hands back the new list.
+/// "Custom LUT rules" (spec 4.2): a copy of the rules, edited row by row; OK hands back the new list.
 /// A rule of a newer version (ruling I3) is a read-only row: it keeps its number, can be moved or removed, and goes back
 /// unchanged.
 public sealed class LutRulesViewModel : ObservableObject
@@ -13,7 +13,7 @@ public sealed class LutRulesViewModel : ObservableObject
 
     public LutRulesViewModel(IReadOnlyList<LutRule> rules, LutCatalog catalog)
     {
-        LutChoices = [.. catalog.Luts.Select(l => new Option<string>(l.Id, l.Name)), new("none", "Bez LUT"), new(Custom, "Vlastní…")];
+        LutChoices = [.. catalog.Luts.Select(l => new Option<string>(l.Id, l.Name)), new("none", "No LUT"), new(Custom, "Custom…")];
         foreach (var r in rules) Rows.Add(new LutRuleRowViewModel(this, r));
         AddCommand = new RelayCommand(() =>
         {
@@ -25,7 +25,7 @@ public sealed class LutRulesViewModel : ObservableObject
     public const string Custom = "custom";
 
     public ObservableCollection<LutRuleRowViewModel> Rows { get; } = [];
-    /// Built-in LUTs, "Bez LUT", "Vlastní…" — the same instances for every row (ComboBox compares by reference).
+    /// Built-in LUTs, "No LUT", "Custom…" — the same instances for every row (ComboBox compares by reference).
     public IReadOnlyList<Option<string>> LutChoices { get; }
     public RelayCommand AddCommand { get; }
 
@@ -58,7 +58,7 @@ public sealed class LutRulesViewModel : ObservableObject
     }
 }
 
-/// One rule: [Podle ▾] [hodnota] → [LUT ▾] [↑] [↓] [✕] — or, for a rule of a newer version, a read-only line.
+/// One rule: [Match by ▾] [value] → [LUT ▾] [↑] [↓] [✕] — or, for a rule of a newer version, a read-only line.
 public sealed class LutRuleRowViewModel : ObservableObject
 {
     readonly LutRulesViewModel owner;
@@ -71,10 +71,10 @@ public sealed class LutRuleRowViewModel : ObservableObject
 
     public static IReadOnlyList<Option<string>> Kinds { get; } =
     [
-        new(LutRule.Camera, "Kamera (výrobce/model)"),
-        new(LutRule.Serial, "Sériové číslo kamery"),
-        new(LutRule.Reel, "Cívka (začátek)"),
-        new(LutRule.Folder, "Složka (vzor s * a ?)"),
+        new(LutRule.Camera, "Camera (maker/model)"),
+        new(LutRule.Serial, "Camera serial number"),
+        new(LutRule.Reel, "Reel (starts with)"),
+        new(LutRule.Folder, "Folder (pattern with * and ?)"),
     ];
 
     public LutRuleRowViewModel(LutRulesViewModel owner, LutRule rule)
@@ -94,8 +94,8 @@ public sealed class LutRuleRowViewModel : ObservableObject
     /// Ruling I3: a match this version does not know (or an item that is not a rule at all) — shown, never edited.
     public bool IsFuture => LutRules.IsFuture(original);
     public bool IsEditable => !IsFuture;
-    /// "Pravidlo z novější verze (lens) — tato verze ho přeskočí"
-    public string FutureText => $"Pravidlo z novější verze ({(original.Raw == null || original.Match != "?" ? original.Match : "neznámé")}) — tato verze ho přeskočí";
+    /// "Rule from a newer version (lens) — this version skips it"
+    public string FutureText => $"Rule from a newer version ({(original.Raw == null || original.Match != "?" ? original.Match : "unknown")}) — this version skips it";
 
     public IReadOnlyList<Option<string>> LutChoices => owner.LutChoices;
     public RelayCommand UpCommand { get; }
@@ -114,7 +114,7 @@ public sealed class LutRuleRowViewModel : ObservableObject
         set => Set(ref this.value, value ?? "");
     }
 
-    /// The chosen LUT; "Vlastní…" opens the .cube dialog (deferred: not inside the ComboBox's own change), a cancel
+    /// The chosen LUT; "Custom…" opens the .cube dialog (deferred: not inside the ComboBox's own change), a cancel
     /// keeps the earlier choice.
     public Option<string> Lut
     {
@@ -127,7 +127,7 @@ public sealed class LutRuleRowViewModel : ObservableObject
             {
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
                 {
-                    if (Dialogs.PickFile("Vyber LUT (.cube)", "LUT (*.cube)|*.cube") is string path)
+                    if (Dialogs.PickFile("Choose a LUT (.cube)", "LUT (*.cube)|*.cube") is string path)
                     {
                         lutPath = path;
                         lut = null;

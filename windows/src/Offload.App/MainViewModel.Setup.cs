@@ -13,14 +13,14 @@ public sealed partial class MainViewModel
 {
     readonly HashSet<string> selected = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> cardNames = new(StringComparer.OrdinalIgnoreCase);
-    // Cards whose "Doplnit jen nové klipy" is ticked (spec 2.2); it applies only while the card still has new files.
+    // Cards whose "Append (new clips only)" is ticked (spec 2.2); it applies only while the card still has new files.
     // A tick belongs to the history entry the user saw and is pruned as soon as its offer goes away (never returns by itself).
     readonly AppendTicks appendTicks = new();
     readonly List<string> manualSources = [];
     // Volume labels of manual sources that are a drive root the scan does not list (an internal disk, a network
     // letter), read off the UI thread when the source is added.
     readonly Dictionary<string, string?> manualLabels = new(StringComparer.OrdinalIgnoreCase);
-    // How each source's disk is connected (UI návrh 6), looked up off the UI thread once per card in the drive.
+    // How each source's disk is connected (UI design 6), looked up off the UI thread once per card in the drive.
     readonly Dictionary<string, (string? Identity, string? Label)> sourceLinks = new(StringComparer.OrdinalIgnoreCase);
     List<VolumeItem> volumes = [];
     ExternalTools resolvedTools = new();
@@ -96,7 +96,7 @@ public sealed partial class MainViewModel
         // Missing rows (a NAS that may come back) and present network/removable ones (a NAS that may drop out);
         // a row whose probe is still running is skipped by Probe itself.
         foreach (var d in Destinations.Where(d => d.ShouldReprobe)) d.Probe();
-        ReprobeStaleSpaceProblem();   // a red "není dost místa" on a fixed disk must clear once space is freed
+        ReprobeStaleSpaceProblem();   // a red "not enough space" on a fixed disk must clear once space is freed
         RefreshLut();
         RefreshProxyFolder();
     }
@@ -120,7 +120,7 @@ public sealed partial class MainViewModel
         RefreshVolumes();   // the ejected letter is skipped: the card leaves the list without being mounted again
     }
 
-    // ── Karty ──────────────────────────────────────────────────────────────
+    // ── Cards ──────────────────────────────────────────────────────────────
 
     public bool HasSources => Sources.Count > 0;
 
@@ -164,7 +164,7 @@ public sealed partial class MainViewModel
     void ApplyVolumes(List<VolumeItem> found)
     {
         // One decision per volume — destination, source or neither — applied in this one step (controller ruling
-        // 2026-10-09): a disk the automatic choice makes a destination is never ticked in Karty, not even for a moment.
+        // 2026-10-09): a disk the automatic choice makes a destination is never ticked in Cards, not even for a moment.
         var auto = Settings.AutoDrive;
         if (starting && !IsDemo) autoDriveDeferred = true;
         var decision = Volumes.Decide(volumes.Select(v => v.Path), found, selected, manualSources, auto.Cards,
@@ -202,7 +202,7 @@ public sealed partial class MainViewModel
         if (dropped) RefreshVolumes();   // a disk that took a dropped destination's letter is offered as a card again
         InspectMissing();   // new or swapped cards
         ResolveSourceLinks();   // how the new cards are connected
-        foreach (var j in Jobs.OfType<JobItemViewModel>()) j.VolumesChanged();   // "Vysunout kartu" only while the copied card is in its drive
+        foreach (var j in Jobs.OfType<JobItemViewModel>()) j.VolumesChanged();   // "Eject card" only while the copied card is in its drive
         RefreshLut();   // the LUT may sit on a disk that just came or went
         RefreshProxyFolder();   // and so may the proxy folder
     }
@@ -215,7 +215,7 @@ public sealed partial class MainViewModel
         Sources.Clear();
         foreach (var v in volumes.Where(v => !v.IsDestination))
             Sources.Add(new SourceItemViewModel(this, v.Path, v.Name,
-                $"{Format.Bytes(v.Total - v.Free)} · {v.Format}{(v.LooksLikeCard ? "" : " · nevypadá jako karta")}",
+                $"{Format.Bytes(v.Total - v.Free)} · {v.Format}{(v.LooksLikeCard ? "" : " · does not look like a card")}",
                 v.LooksLikeCard ? SourceKind.Card : SourceKind.Drive));
         foreach (var p in manualSources)
             Sources.Add(new SourceItemViewModel(this, p, Path.GetFileName(p.TrimEnd('\\')) is { Length: > 0 } n ? n : p, p, SourceKind.Folder));
@@ -225,7 +225,7 @@ public sealed partial class MainViewModel
 
     void AddManualSource()
     {
-        if (Dialogs.PickFolder("Vyber kartu nebo složku se záznamem") is string path) AddManualSourcePath(path);
+        if (Dialogs.PickFolder("Choose a card or a folder with footage") is string path) AddManualSourcePath(path);
     }
 
     void AddManualSourcePath(string path)
@@ -238,7 +238,7 @@ public sealed partial class MainViewModel
         ResolveSourceLinks();
     }
 
-    /// The connection of every listed source whose card has not been looked at yet ("čtečka USB 3 · 5 Gb/s"), each off
+    /// The connection of every listed source whose card has not been looked at yet ("USB 3 reader · 5 Gb/s"), each off
     /// the UI thread (DriveLinks asks the device; it never throws).
     void ResolveSourceLinks()
     {
@@ -374,14 +374,14 @@ public sealed partial class MainViewModel
         SetupChanged?.Invoke();
     }
 
-    // ── Cíle ───────────────────────────────────────────────────────────────
+    // ── Destinations ───────────────────────────────────────────────────────────────
 
     public bool HasNoDestinations => Destinations.Count == 0;
     public bool SingleDestination => Destinations.Count == 1;
 
     void AddDestination()
     {
-        if (Dialogs.PickFolder("Vyber cílovou složku (root)") is not string path) return;
+        if (Dialogs.PickFolder("Choose a destination folder (root)") is not string path) return;
         if (!Settings.DestRoots.Contains(path, StringComparer.OrdinalIgnoreCase)) Settings.DestRoots.Add(path);
         // Added by hand: a disk removed earlier is no longer remembered as unwanted (from the last scan — memory only).
         if (AutoDrives.RemovedDisk(path, ScannedFacts) is string disk) Settings.AutoDrive.Removed.RemoveAll(r => string.Equals(r, disk, StringComparison.OrdinalIgnoreCase));
@@ -402,7 +402,7 @@ public sealed partial class MainViewModel
         DestinationsChanged();
     }
 
-    // ── Automatické načtení disků (2026-10-09) ─────────────────────────────
+    // ── Automatic disk pick-up (2026-10-09) ─────────────────────────────
 
     string? autoDriveHint;
     bool autoDriveDeferred;
@@ -472,7 +472,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// "Zapomenout odebrané disky (2)", or null when none is remembered.
+    /// "Forget removed disks (2)", or null when none is remembered.
     public string? ForgetRemovedText => Settings.AutoDrive.Removed.Count > 0 ? SettingsTexts.ForgetRemovedLabel(Settings.AutoDrive.Removed.Count) : null;
 
     void ForgetRemovedDisks()
@@ -500,7 +500,7 @@ public sealed partial class MainViewModel
         SetupChanged?.Invoke();
     }
 
-    // ── Struktura a kontrola ───────────────────────────────────────────────
+    // ── Structure and verification ───────────────────────────────────────────────
 
     public bool UseCustomDate
     {
@@ -540,7 +540,7 @@ public sealed partial class MainViewModel
         ? d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
         : Layout.Today();
 
-    /// "…\2026-10-07\A035_ARRI\" with one card ticked, else "…\2026-10-07\<název karty>\".
+    /// "…\2026-10-07\A035_ARRI\" with one card ticked, else "…\2026-10-07\<card name>\".
     public string PathPreview => SetupTexts.PathPreview(DateString, SelectedSources() is [var only] ? PlannedName(only) : null);
 
     public bool Verify
@@ -549,7 +549,7 @@ public sealed partial class MainViewModel
         set { Settings.Verify = value; SettingsChanged(); Raise(); }
     }
 
-    /// Plan 10 (R11): "Ověřit primární disk během proxy" — `verifyInProxy` in settings.json.
+    /// Plan 10 (R11): "Verify the primary disk while proxies are made" — `verifyInProxy` in settings.json.
     public bool VerifyInProxy
     {
         get => Settings.VerifyInProxy;
@@ -563,7 +563,7 @@ public sealed partial class MainViewModel
         set { Settings.VerifyPrimary = value ? SettingsProfile.PrimaryFirst : SettingsProfile.PrimaryFastest; SettingsChanged(); Raise(); }
     }
 
-    /// "Kontrolní součet" (spec 3.5): xxHash64 or xxHash64 + MD5 — `hash` in settings.json.
+    /// "Checksum" (spec 3.5): xxHash64 or xxHash64 + MD5 — `hash` in settings.json.
     public IReadOnlyList<HashChoice> HashChoices => HashChoice.All;
 
     public HashChoice Hash
@@ -583,7 +583,7 @@ public sealed partial class MainViewModel
     /// Shown under the choice while MD5 is on.
     public string? Md5Note => HashKinds.FromSetting(Settings.Hash).HasFlag(HashKind.Md5) ? Texts.Md5Slower : null;
 
-    /// "Seznam klipů CSV" / "Seznam klipů pro Avid (ALE)" (spec 3.3) — `outputs` in settings.json.
+    /// "Clip list CSV" / "Clip list for Avid (ALE)" (spec 3.3) — `outputs` in settings.json.
     public bool ClipListCsv
     {
         get => Settings.Outputs.ClipListCsv;
@@ -596,21 +596,21 @@ public sealed partial class MainViewModel
         set { Settings.Outputs.ClipListAle = value; SettingsChanged(); Raise(); }
     }
 
-    /// "Denní report po každé kartě" (spec 3.2).
+    /// "Day report after every card" (spec 3.2).
     public bool DayReportAfterEachCard
     {
         get => Settings.Outputs.DayReport;
         set { Settings.Outputs.DayReport = value; SettingsChanged(); Raise(); }
     }
 
-    /// "Kopie reportu i na tomto počítači" (task 2026-10-09) — `outputs.localReport`.
+    /// "Also copy the report to this computer" (task 2026-10-09) — `outputs.localReport`.
     public bool LocalReportCopy
     {
         get => Settings.Outputs.LocalReport;
         set { Settings.Outputs.LocalReport = value; SettingsChanged(); Raise(); }
     }
 
-    /// The folder the reports are copied to: the chosen one, else `<Dokumenty>\Offload reporty` (memory only).
+    /// The folder the reports are copied to: the chosen one, else `<Documents>\Offload reports` (memory only).
     public string LocalReportFolderText => Settings.Outputs.LocalReportFolder ?? LocalReports.DefaultRoot;
 
     public bool LocalReportFolderCustom => Settings.Outputs.LocalReportFolder != null;
@@ -620,7 +620,7 @@ public sealed partial class MainViewModel
 
     void ChooseLocalReportFolder()
     {
-        if (Dialogs.PickFolder("Vyberte složku pro kopie reportů na tomto počítači") is not string folder) return;
+        if (Dialogs.PickFolder("Choose a folder for report copies on this computer") is not string folder) return;
         Settings.Outputs.LocalReportFolder = folder;
         SettingsChanged();
         RaiseMany(nameof(LocalReportFolderText), nameof(LocalReportFolderCustom));
@@ -646,7 +646,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    // ── Proxy a dekodéry ───────────────────────────────────────────────────
+    // ── Proxies and decoders ───────────────────────────────────────────────────
 
     /// A missing LUT (custom, or an own rule's) blocks the start (red); missing ffmpeg only warns (orange). From the cached
     /// check — no disk here; while the files in use have not been checked yet, nothing blocks.
@@ -756,10 +756,10 @@ public sealed partial class MainViewModel
         SetupChanged?.Invoke();
     }
 
-    /// Opens "Vlastní pravidla LUTů" (set by the window): the rules to edit, the built-in LUTs; the new rules or null.
+    /// Opens "Custom LUT rules" (set by the window): the rules to edit, the built-in LUTs; the new rules or null.
     public Func<IReadOnlyList<LutRule>, LutCatalog, List<LutRule>?>? EditLutRulesDialog { get; set; }
 
-    /// "Pravidla LUTů…": OK writes the rules into the active profile; their .cube files are checked again (off the UI thread).
+    /// "LUT rules…": OK writes the rules into the active profile; their .cube files are checked again (off the UI thread).
     internal void EditLutRules(LutCatalog catalog)
     {
         if (EditLutRulesDialog?.Invoke(Settings.Proxy.LutRules, catalog) is not { } rules) return;
@@ -783,16 +783,16 @@ public sealed partial class MainViewModel
         void Row(string name, string purpose, string? path, Action<string> set, string url, string? missing = null) =>
             Tools.Add(new ToolRowViewModel(name, purpose, path, () =>
             {
-                if (Dialogs.PickFile($"Vyber {name}", "Programy (*.exe)|*.exe") is not string picked) return;
+                if (Dialogs.PickFile($"Choose {name}", "Programs (*.exe)|*.exe") is not string picked) return;
                 set(picked);
                 SettingsChanged();
                 RefreshTools();
             }, url, missing));
-        Row("ffmpeg", "proxy, náhledy", resolvedTools.Ffmpeg, p => AllSettings.Tools.Ffmpeg = p, ToolDownloads.Ffmpeg);
-        Row("ffprobe", "metadata klipů", resolvedTools.Ffprobe, p => AllSettings.Tools.Ffprobe = p, ToolDownloads.Ffmpeg);
+        Row("ffmpeg", "proxies, thumbnails", resolvedTools.Ffmpeg, p => AllSettings.Tools.Ffmpeg = p, ToolDownloads.Ffmpeg);
+        Row("ffprobe", "clip metadata", resolvedTools.Ffprobe, p => AllSettings.Tools.Ffprobe = p, ToolDownloads.Ffmpeg);
         // braw-decode ships with Offload; the Blackmagic RAW library it needs does not (Player, SDK or Resolve).
         var brawLibraryMissing = resolvedTools.BrawDecoder is string braw && BrawLibrary.Find(Path.GetDirectoryName(braw) ?? "") == null
-            ? "chybí knihovna Blackmagic RAW (Player, SDK nebo DaVinci Resolve)" : null;
+            ? "Blackmagic RAW library missing (Player, SDK or DaVinci Resolve)" : null;
         Row("braw-decode", "Blackmagic RAW", resolvedTools.BrawDecoder, p => AllSettings.Tools.BrawDecoder = p, ToolDownloads.BlackmagicRaw,
             brawLibraryMissing);
         Row("REDline", "RED R3D", resolvedTools.Redline, p => AllSettings.Tools.Redline = p, ToolDownloads.Redline);

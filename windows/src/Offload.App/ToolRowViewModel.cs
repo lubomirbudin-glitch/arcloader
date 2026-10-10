@@ -7,7 +7,7 @@ public sealed class ToolRowViewModel(string name, string purpose, string? path, 
     public string Purpose => purpose;
     /// Found and usable: braw-decode without the Blackmagic RAW library is not (`missing` says what is lacking).
     public bool Found => path != null && missing == null;
-    public string PathText => path == null ? "nenalezeno" : missing is null ? path : $"{path} — {missing}";
+    public string PathText => path == null ? "not found" : missing is null ? path : $"{path} — {missing}";
     /// The maker's download page, offered while the tool is not found.
     public string? DownloadUrl => downloadUrl;
     public bool CanDownload => !Found && downloadUrl != null;

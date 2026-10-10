@@ -23,7 +23,7 @@ public sealed partial class MainViewModel
     /// the demo is a temp folder of its own, see App.OnStartup).
     internal bool Allowed(DemoCommand command) => DemoGate.Allows(demo, command);
 
-    /// Pozastavit / Pokračovat / Zrušit work on a demo preview job, which only changes what its card shows.
+    /// Pause / Resume / Cancel work on a demo preview job, which only changes what its card shows.
     internal bool AllowedFor(DemoCommand command, bool previewJob) => DemoGate.Allows(demo, command, previewJob);
 
     /// The demo has no settings.json of its own to read: two destinations in its temp folder (empty, created here) and
@@ -62,7 +62,7 @@ public sealed partial class MainViewModel
             history = DemoScenario.Today(roots, DateTime.Now);
             ApplyVolumes(demoVolumes);
             selected.Clear();
-            selected.Add(cards[0].Path);   // A035 ticked, B012 offers Doplnit
+            selected.Add(cards[0].Path);   // A035 ticked, B012 offers Append
             RebuildSources();
         }
         else history = [];
@@ -82,7 +82,7 @@ public sealed partial class MainViewModel
                 Jobs.Insert(0, new JobItemViewModel(this, DemoScenario.Done(Source("A035_ARRI"), roots, GreyThumbnail), "A035_ARRI", canEject: false));
                 break;
             case DemoState.Verifying:
-                // Plan 10 (R5): both verdicts for the screenshots — "Lze vyjmout" while verifying, the content defect, "Lze formátovat".
+                // Plan 10 (R5): both verdicts for the screenshots — "Safe to eject" while verifying, the content defect, "Safe to format".
                 Jobs.Insert(0, new JobItemViewModel(this, DemoScenario.Done(Source("A035_ARRI"), roots, GreyThumbnail), "A035_ARRI", canEject: false));
                 Jobs.Insert(0, new JobItemViewModel(this, DemoScenario.ContentDefect(Source("A037_ARRI"), roots, GreyThumbnail), "A037_ARRI", canEject: false));
                 Jobs.Insert(0, new JobItemViewModel(this, DemoScenario.Verifying(Source("A036_ARRI"), roots), "A036_ARRI", canEject: false,

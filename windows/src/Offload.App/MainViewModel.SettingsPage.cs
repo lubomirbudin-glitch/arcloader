@@ -3,7 +3,7 @@ using Offload.Core.Desktop;
 
 namespace Offload.App;
 
-/// One choice of a segmented control (Kodek, Výška): selected when the setting has its value; selecting it sets it.
+/// One choice of a segmented control (Codec, Height): selected when the setting has its value; selecting it sets it.
 public sealed class Choice(string label, Func<bool> isSelected, Action select) : ObservableObject
 {
     public string Label => label;
@@ -20,8 +20,8 @@ public sealed class Choice(string label, Func<bool> isSelected, Action select) :
     internal void Changed() => Raise(nameof(IsSelected));
 }
 
-/// The settings page (UI návrh obr. 4) in place of the two columns: "‹ Zpět", the project, "Uložit jako nový projekt",
-/// "Hotovo"; sections on the left. Everything edits the profile shown (as the left panel did) and is saved as before.
+/// The settings page (UI design fig. 4) in place of the two columns: "‹ Back", the project, "Save as new project",
+/// "Done"; sections on the left. Everything edits the profile shown (as the left panel did) and is saved as before.
 public sealed partial class MainViewModel
 {
     bool settingsOpen;
@@ -29,7 +29,7 @@ public sealed partial class MainViewModel
 
     public RelayCommand OpenSettingsCommand { get; private set; } = null!;
     public RelayCommand CloseSettingsCommand { get; private set; } = null!;
-    /// A row of step 3 (or "Upravit projekt"): the settings page at that section (SettingsSections).
+    /// A row of step 3 (or "Edit project"): the settings page at that section (SettingsSections).
     public RelayCommand<string> OpenSettingsSectionCommand { get; private set; } = null!;
     /// The tick of a step 3 row: flips the setting of the profile shown (saved as everything else).
     public RelayCommand<AfterCopyKind> ToggleAfterCopyCommand { get; private set; } = null!;
@@ -80,7 +80,7 @@ public sealed partial class MainViewModel
         set => Set(ref settingsSection, value ?? SettingsSections.Folders);
     }
 
-    /// "Windows: zapnuto · telefon (ntfy): vypnuto".
+    /// "Windows: on · phone (ntfy): off".
     public string NotifySummary => SettingsTexts.NotifySummary(Settings.Notify);
 
     /// "Offload 0.5.0-win".

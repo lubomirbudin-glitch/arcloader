@@ -14,7 +14,7 @@ namespace Offload.App;
 public sealed partial class MainViewModel
 {
     readonly JobQueue queue = new(m => AppLog.Write(m));
-    // What the jobs of this session took — the start bar's estimate (UI návrh 10).
+    // What the jobs of this session took — the start bar's estimate (UI design 10).
     readonly RateMemory rates = new();
     bool shownCompact, shownJobsRunning;
     DateTime shownDay = DateTime.Today;
@@ -34,9 +34,9 @@ public sealed partial class MainViewModel
     public event Action<bool>? AttentionRequested;
     /// Closing was requested while jobs ran; they are cancelled and finished now — close the window.
     public event Action? CloseReady;
-    /// Shows "Karty už jsou zálohované" (set by the window; modal, the user answers — no disk is waited on).
+    /// Shows "Cards already backed up" (set by the window; modal, the user answers — no disk is waited on).
     public Func<BackedUpPromptModel, BackedUpChoice>? AskBackedUp { get; set; }
-    /// A Czech yes/no question (set by the window); without it the answer is Ne.
+    /// A yes/no question (set by the window); without it the answer is No.
     public Func<string, bool>? AskYesNo { get; set; }
 
     void InitQueue()
@@ -57,16 +57,16 @@ public sealed partial class MainViewModel
 
     public string CardsText => Texts.Cards(selected.Count);
 
-    // ── The start bar and step 3 (UI návrh obr. 1) ─────────────────────────────────────────────────────────────
+    // ── The start bar and step 3 (UI design fig. 1) ─────────────────────────────────────────────────────────────
     /// What each ticked card will copy (an append only its new files), null while one is not known yet.
     long? SelectedBytes => SetupTexts.Total(SelectedSources().Select(p => AppendChosen(p) && Insight(p)?.History is { } h
         ? h.NewBytes : Insight(p) is { Error: null } i ? i.TotalBytes : (long?)null));
 
-    /// "1 karta → 2 disky" (bold) and " · 1,70 GB".
+    /// "1 card → 2 disks" (bold) and " · 1.70 GB".
     public string StartCounts => SetupTexts.StartSummary(selected.Count, Settings.DestRoots.Count, SelectedBytes).Counts;
     public string? StartSize => SetupTexts.StartSummary(selected.Count, Settings.DestRoots.Count, SelectedBytes).Size;
 
-    /// "odhad ~8:00 vč. proxy" — only from what this session measured (RateMemory); null shows only the size.
+    /// "estimate ~8:00 incl. proxies" — only from what this session measured (RateMemory); null shows only the size.
     public string? EstimateText => SelectedBytes is long bytes && selected.Count > 0
         ? RateMemory.StartText(rates.Estimate(bytes, SelectedSources().SelectMany(p => Insight(p)?.Clips ?? []).ToList(), Settings.Verify,
             Settings.AnalyzeClips, Settings.Proxy), Settings.Proxy.Enabled)
@@ -76,43 +76,56 @@ public sealed partial class MainViewModel
     internal bool BlockedByPaused(JobItemViewModel item) =>
         QueueRules.BlockedByPaused(item.Phase, Jobs.OfType<JobItemViewModel>().Where(j => !ReferenceEquals(j, item)).Select(j => (j.Phase, j.IsPaused)));
 
-    /// "Spustit offload", or "Zařadit do fronty" while a card waits for or is in its copy.
+    /// "Start offload", or "Add to queue" while a card waits for or is in its copy.
     public string StartLabel => QueueSummary.StartLabel(Jobs.Select(j => j.Phase));
 
-    /// No card and jobs in the queue: steps 2 and 3 compact (obr. 2, 3).
+    /// No card and jobs in the queue: steps 2 and 3 compact (figs. 2, 3).
     public bool IsCompact => SetupTexts.Compact(HasSources, HasJobs);
 
     bool JobsRunning => Jobs.Any(j => !j.IsFinished);
     public string NoCardTitle => SetupTexts.NoCard(JobsRunning).Title;
     public string NoCardText => SetupTexts.NoCard(JobsRunning).Text;
 
-    /// Step 3: Ověření · Analýza · Proxy · Report of the profile shown (the camera of the first ticked card names the LUT).
+    /// Step 3: Verification · Analysis · Proxies · Report of the profile shown (the camera of the first ticked card names the LUT).
     public IReadOnlyList<AfterCopyRow> AfterCopyRows =>
         SetupTexts.AfterCopy(Settings, lutCatalog, SelectedSources().Select(p => Insight(p)?.Camera).FirstOrDefault(c => c != null));
     public string AfterCopyLine => SetupTexts.AfterCopyLine(Settings);
     public string VerifyOffWarning => SetupTexts.VerifyOffWarning;
 
-    // ── The empty queue (obr. 1) ───────────────────────────────────────────────────────────────────────────────
-    /// Karta → 2 disky naráz → Ověření → Proxy → Report (only what the profile shown does).
-    public IReadOnlyList<FlowStep> FlowSteps => SetupTexts.Flow(Settings.DestRoots.Count, Settings.Verify, Settings.AnalyzeClips, Settings.Proxy.Enabled)
-        .Select((label, i) => new FlowStep(label, i switch
+    // ── The empty queue (fig. 1) ───────────────────────────────────────────────────────────────────────────────
+    /// Card → 2 disks at once → Verification → Proxies → Report (only what the profile shown does). The icons follow the
+    /// same settings as the steps, never the wording of the labels.
+    public IReadOnlyList<FlowStep> FlowSteps
+    {
+        get
         {
-            0 => "card",
-            1 => "disk",
-            _ => label switch { "Ověření" => "verify", "Proxy" or "Analýza" => "proxy", _ => "report" },
-        }, i == 0)).ToList();
+            var labels = SetupTexts.Flow(Settings.DestRoots.Count, Settings.Verify, Settings.AnalyzeClips, Settings.Proxy.Enabled);
+            var icons = FlowIcons(Settings.Verify, Settings.AnalyzeClips, Settings.Proxy.Enabled);
+            return labels.Select((label, i) => new FlowStep(label, i < icons.Count ? icons[i] : "report", i == 0)).ToList();
+        }
+    }
 
-    /// "Připraveno — A035_ARRI na 2 disky" with a ticked card, else "Zatím žádný offload".
+    /// The icon of each step SetupTexts.Flow lists, in its order: card, disks, [verification], [proxies or analysis], report.
+    internal static IReadOnlyList<string> FlowIcons(bool verify, bool analyze, bool proxy)
+    {
+        var icons = new List<string> { "card", "disk" };
+        if (verify) icons.Add("verify");
+        if (proxy || analyze) icons.Add("proxy");
+        icons.Add("report");
+        return icons;
+    }
+
+    /// "Ready — A035_ARRI to 2 disks" with a ticked card, else "No offload yet".
     public string QueueEmptyTitle => SetupTexts.QueueEmpty(SelectedSources().Select(PlannedName).ToList(), Settings.DestRoots.Count, Settings.Verify).Title;
     public string QueueEmptyText => SetupTexts.QueueEmpty(SelectedSources().Select(PlannedName).ToList(), Settings.DestRoots.Count, Settings.Verify).Text;
 
-    /// " 2" after "Fronta" (the unfinished jobs), nothing for none.
+    /// " 2" after "Queue" (the unfinished jobs), nothing for none.
     public string QueueBadgeText => QueueBadge > 0 ? $" {QueueBadge}" : "";
 
     /// The parts of the left column that follow the queue (checked every tick, raised only when they change).
     void RefreshLayout()
     {
-        // DNES and the day titles of the history tab move on at midnight (memory only, history as loaded).
+        // TODAY and the day titles of the history tab move on at midnight (memory only, history as loaded).
         if (DateTime.Today != shownDay)
         {
             shownDay = DateTime.Today;
@@ -134,10 +147,10 @@ public sealed partial class MainViewModel
             Raise(nameof(StartLabel));
         }
     }
-    public string DestinationsText => Texts.Destinations(Settings.DestRoots.Count) + (Settings.Proxy.Enabled ? " · proxy" : "");
+    public string DestinationsText => Texts.Destinations(Settings.DestRoots.Count) + (Settings.Proxy.Enabled ? " · proxies" : "");
     /// In memory only (evaluated 3×/s): the LUT, the proxy folder and the destinations come from checks made off the UI thread.
     public bool CanStart => !starting && ReadyToStart;
-    /// The Cíle section is needed only by full copies: appends go to the destinations of their earlier backup (spec 2.2).
+    /// The Destinations section is needed only by full copies: appends go to the destinations of their earlier backup (spec 2.2).
     bool ReadyToStart => !closing && selected.Count > 0
         && (!AppendRules.NeedsDestinations(AppendRules.FullCopies(selected, AppendWanted)) || (Settings.DestRoots.Count > 0 && Destinations.All(d => d.Exists)))
         && !ShownCheckMissing() && StartProblem == null && SpaceProblem == null;
@@ -171,7 +184,7 @@ public sealed partial class MainViewModel
         starting = true;
         ProjectMenuOpen = false;
         RaiseMany(nameof(CanStart), nameof(CanSwitchProject), nameof(AfterCopyEnabled));
-        // Ruling I1: every check below is made for the profile shown now. The project switcher and the Projekt menu are
+        // Ruling I1: every check below is made for the profile shown now. The project switcher and the Project menu are
         // off until Start ends; should another profile be shown anyway, Start stops — its checks were not for that one.
         var stamp = ProfileStamp.Of(AllSettings);
         bool Switched()
@@ -193,7 +206,7 @@ public sealed partial class MainViewModel
             if (closing || Switched()) return;
             if (!looked)
             {
-                // Ruling S1: not knowing whether a card is backed up, a full copy needs the user's yes (default Ne).
+                // Ruling S1: not knowing whether a card is backed up, a full copy needs the user's yes (default No).
                 var names = Pending().Select(PlannedName).ToList();
                 AppLog.Write("start: the card inspection did not finish in 10 s");
                 SetStartStatus(null);
@@ -235,7 +248,7 @@ public sealed partial class MainViewModel
         catch (Exception e) when (!closing)
         {
             AppLog.Write($"start: {e}");
-            ShowMessage($"Offload se nepodařilo spustit: {e.Message}");
+            ShowMessage($"Could not start the offload: {e.Message}");
         }
         finally
         {
@@ -322,14 +335,14 @@ public sealed partial class MainViewModel
             }
             if (kind == StartKind.Append && Insight(src)?.History is { } known)
             {
-                // Spec 2.2: only the new files, into the card folders of the earlier backup — not into the Cíle section.
-                // The engine plans again under the folder lock and refuses with a Czech message when anything is off.
+                // Spec 2.2: only the new files, into the card folders of the earlier backup — not into the Destinations section.
+                // The engine plans again under the folder lock and refuses with a message when anything is off.
                 // Ruling I2: with the profile of the project that backup was made in, not the one shown now.
                 var appendConfig = JobConfigs.Append(AllSettings, src, known.Entry);
                 string? profileNote = null;
                 if (AppendRules.ProfileFor(AllSettings, known.Entry.Project).Gone)
                 {
-                    // Deleted or renamed since: "Bez projektu", never the project shown (fix round 1, item 1).
+                    // Deleted or renamed since: "No project", never the project shown (fix round 1, item 1).
                     AppLog.Write($"append {src}: project {known.Entry.Project} no longer exists — the Bez projektu settings are used");
                     profileNote = AppendRules.GoneNote(known.Entry.Project!);
                 }
@@ -387,7 +400,7 @@ public sealed partial class MainViewModel
     /// The copied card is in its drive per the last scan (not pulled out, not replaced by another card).
     internal bool CardInDrive(JobItemViewModel item) => QueueRules.CardInDrive(item.Job.Config.Source, item.Runner.SourceIdentity, volumes);
 
-    /// "Zkopírovat znovu" needs the card the job copied: a drive root must hold that card now; a folder is taken as there
+    /// "Copy again" needs the card the job copied: a drive root must hold that card now; a folder is taken as there
     /// (the repair's planner reads it first and refuses a changed one). Memory only.
     internal bool SourcePresent(JobItemViewModel item)
     {
@@ -418,7 +431,7 @@ public sealed partial class MainViewModel
             if (j.IsFinished) j.RepairChanged();
     }
 
-    /// "Zkopírovat znovu" (UI návrh 4): a repair job — only the failed files, only where they failed — with the finished
+    /// "Copy again" (UI design 4): a repair job — only the failed files, only where they failed — with the finished
     /// job's own settings; it waits in the copy queue like any card (it reads the card).
     internal void Repair(JobItemViewModel item)
     {
@@ -438,7 +451,7 @@ public sealed partial class MainViewModel
         : null;
 
     /// Ruling I2 (plan 10): the success sound only when every copy is verified everywhere and nothing needs a look
-    /// (JobOutcomes.Chime) — never for "Lze vyjmout" alone; once per job.
+    /// (JobOutcomes.Chime) — never for "Safe to eject" alone; once per job.
     void Chime(JobItemViewModel item)
     {
         if (closing || item.Chimed || !Offload.Core.Notify.JobOutcomes.Chime(item.Job.Status())) return;
@@ -453,8 +466,8 @@ public sealed partial class MainViewModel
         if (Find(job) is not JobItemViewModel item) return;   // a verification has no stage 2: OnJobFinished follows
         item.Refresh();
         Chime(item);   // ruling I2: only once everything is verified — with verify-in-proxy at the end of stage 2
-        NotifyCopyDone(item);   // spec 4.3: "kartu lze vyjmout" while stage 2 still runs
-        if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Zálohováno"
+        NotifyCopyDone(item);   // spec 4.3: "safe to eject the card" while stage 2 still runs
+        if (!closing) ReloadHistory();   // the job has just recorded the card: its line says "Backed up"
         if (!closing) _ = ProbeFreeSpaceAsync(TimeSpan.FromSeconds(30));   // the disks changed: free space again (ruling I4)
         // Ended in stage 1: only the day report is left and it may queue behind other cards' stage 2 — alert now.
         if (QueueRules.AlertAtCopyEnd(item.Phase)) Alert(item);
@@ -528,7 +541,7 @@ public sealed partial class MainViewModel
                 if (!waitNoticeShown)
                 {
                     waitNoticeShown = true;
-                    Dispatch(() => ShowMessage("Ukončuji — čekám, až se zrušené úlohy uklidí."));
+                    Dispatch(() => ShowMessage("Closing — waiting for the cancelled jobs to clean up."));
                 }
                 return false;
             }
@@ -539,7 +552,7 @@ public sealed partial class MainViewModel
             foreach (var j in Jobs) j.Cancel();
             foreach (var j in Jobs) j.Refresh();
             RaiseMany(nameof(CanStart), nameof(CanSwitchProject), nameof(AfterCopyEnabled));
-            // A queued job reports Zrušeno at once; if nothing is left running, close right away.
+            // A queued job reports Cancelled at once; if nothing is left running, close right away.
             if (Jobs.Any(Busy)) return false;
         }
         closeRaised = true;
@@ -576,13 +589,13 @@ public sealed partial class MainViewModel
             }
             else
             {
-                ShowMessage($"Kartu se nepodařilo vysunout: {result.Error}");
+                ShowMessage($"Could not eject the card: {result.Error}");
             }
         }
         catch (Exception e)
         {
             item.Ejecting = false;
-            ShowMessage($"Kartu se nepodařilo vysunout: {e.Message}");
+            ShowMessage($"Could not eject the card: {e.Message}");
         }
         finally
         {

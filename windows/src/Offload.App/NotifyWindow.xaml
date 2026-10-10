@@ -1,15 +1,15 @@
 <Window x:Class="Offload.App.NotifyWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Oznámení" SizeToContent="Height" Width="480" ResizeMode="NoResize"
+        Title="Notifications" SizeToContent="Height" Width="480" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Icon="pack://application:,,,/Offload.ico">
     <StackPanel Margin="22,18">
-        <TextBlock Text="Oznámení" FontSize="17" FontWeight="SemiBold" />
+        <TextBlock Text="Notifications" FontSize="17" FontWeight="SemiBold" />
         <TextBlock Text="{Binding ProfileText}" Style="{StaticResource Caption}" Margin="0,4,0,0" />
-        <CheckBox Content="Oznámení Windows" IsChecked="{Binding Windows}" Margin="0,12,0,0" AutomationProperties.AutomationId="NotifyWindows" />
-        <TextBlock Text="Jen když okno Offloadu není v popředí; zvuk a blikání zůstávají." Style="{StaticResource Caption}" Margin="24,0,0,0" TextWrapping="Wrap" />
-        <CheckBox Content="Posílat na telefon přes ntfy" IsChecked="{Binding NtfyEnabled}" Margin="0,10,0,0" AutomationProperties.AutomationId="NotifyNtfy" />
+        <CheckBox Content="Windows notifications" IsChecked="{Binding Windows}" Margin="0,12,0,0" AutomationProperties.AutomationId="NotifyWindows" />
+        <TextBlock Text="Only when the Offload window is not in front; the sound and the flashing stay." Style="{StaticResource Caption}" Margin="24,0,0,0" TextWrapping="Wrap" />
+        <CheckBox Content="Send to a phone via ntfy" IsChecked="{Binding NtfyEnabled}" Margin="0,10,0,0" AutomationProperties.AutomationId="NotifyNtfy" />
         <Grid Margin="24,6,0,0" IsEnabled="{Binding NtfyEnabled}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="60" />
@@ -21,13 +21,13 @@
             </Grid.RowDefinitions>
             <TextBlock Text="Server" Style="{StaticResource Caption}" VerticalAlignment="Center" />
             <TextBox Grid.Column="1" Text="{Binding Server, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" AutomationProperties.AutomationId="NtfyServer" />
-            <TextBlock Grid.Row="1" Text="Téma" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="1" Text="Topic" Style="{StaticResource Caption}" VerticalAlignment="Center" />
             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Topic, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" AutomationProperties.AutomationId="NtfyTopic" />
         </Grid>
-        <TextBlock Text="Téma volte nehádatelné — kdo ho zná, oznámení čte. Posílá se jen název karty a výsledek, žádné cesty."
+        <TextBlock Text="Choose a topic nobody can guess — whoever knows it can read the notifications. Only the card name and the result are sent, no paths."
                    Style="{StaticResource Caption}" Margin="24,6,0,0" TextWrapping="Wrap" />
         <StackPanel Orientation="Horizontal" Margin="24,8,0,0">
-            <Button Content="Poslat zkušební oznámení" Command="{Binding TestCommand}" Padding="12,5" AutomationProperties.AutomationId="NtfyTest" />
+            <Button Content="Send a test notification" Command="{Binding TestCommand}" Padding="12,5" AutomationProperties.AutomationId="NtfyTest" />
             <TextBlock Text="{Binding TestResult}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" MaxWidth="220"
                        AutomationProperties.AutomationId="NtfyTestResult" />
         </StackPanel>
@@ -36,7 +36,7 @@
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
             <Button Content="OK" Click="Ok_Click" IsDefault="True" MinWidth="80" Padding="12,5" Style="{DynamicResource AccentButtonStyle}"
                     AutomationProperties.AutomationId="NotifyOk" />
-            <Button Content="Zrušit" IsCancel="True" MinWidth="80" Padding="12,5" Margin="8,0,0,0" />
+            <Button Content="Cancel" IsCancel="True" MinWidth="80" Padding="12,5" Margin="8,0,0,0" />
         </StackPanel>
     </StackPanel>
 </Window>
