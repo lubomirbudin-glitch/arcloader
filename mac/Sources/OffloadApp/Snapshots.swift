@@ -4,8 +4,9 @@ import OffloadKit
 import SwiftUI
 
 /// Renders the views offscreen to PNG files for checking the look against docs/ui-navrh/screeny without opening a
-/// window (`OffloadApp --ui-snapshots <folder>`, debug builds only). Nothing touches a disk but the PNG files: the model
-/// is a preview model (no scans, no timers, settings not saved) filled with made-up cards, disks and jobs.
+/// window (`OffloadApp --ui-snapshots <folder>`, debug builds only). Nothing is written but the PNG files: the model
+/// is a preview model (no scans, no timers, settings not saved) filled with made-up cards, disks and jobs; only the
+/// Hardware dot reads the last saved port check.
 @MainActor
 enum Snapshots {
     static func run(to folder: String) {
@@ -51,9 +52,84 @@ enum Snapshots {
         [("ready", ready),
          ("ready-warnings", readyWarnings),
          ("empty", base),
+         ("running", running),
+         ("finished", finished),
          ("settings-proxy", { settings(.proxy) }),
          ("settings-folders", { settings(.folders) }),
          ("settings-decoders", { settings(.decoders) })]
+    }
+
+    static func job(_ card: String, _ state: JobCardState) -> JobItem {
+        let item = JobItem(job: OffloadJob(config: JobConfig(source: "/Volumes/" + card, destRoots: [raid, shuttle])),
+                           sourceName: card, canEject: true)
+        item.preview = state
+        return item
+    }
+
+    /// obr. 2: a card copying (phase 1 of 4, speed table, slowest link), another waiting; no card in a reader.
+    static func running() -> AppModel {
+        let m = base()
+        var run = JobCardState(kind: .running, phase: .copying, name: "A035_ARRI", sub: "24 files · 1.70 GB")
+        run.percent = 38
+        run.remaining = "~0:02 left · copy"
+        run.steps = [PhaseStep(number: 1, label: "Copy", state: .active, fill: 0.38),
+                     PhaseStep(number: 2, label: "Verify", state: .pending, fill: 0),
+                     PhaseStep(number: 3, label: "Proxy", state: .pending, fill: 0),
+                     PhaseStep(number: 4, label: "Report", state: .pending, fill: 0)]
+        run.rows = [TransferRow(id: 0, name: "Card read", number: nil, share: 0.38, rate: "661 MB/s"),
+                    TransferRow(id: 1, name: "RAID_A", number: 1, share: 0.38, rate: "661 MB/s"),
+                    TransferRow(id: 2, name: "SHUTTLE_B", number: 2, share: 0.37, rate: "655 MB/s")]
+        run.fileCaption = "File 10 / 24"
+        run.fileValue = "A035C010_261007_R2KQ.mxf"
+        run.brake = "Slowest link: card reader (USB 3 (5 Gb/s)). The disks could go faster."
+        run.canCancel = true
+        var wait = JobCardState(kind: .waiting, phase: .waiting, name: "B012_FX6", sub: "~14.2 GB · 2 disks")
+        wait.canCancel = true
+        var proxies = JobCardState(kind: .running, phase: .proxies, name: "A034_ARRI", sub: "212 files · 256 GB")
+        proxies.percent = 61
+        proxies.steps = [PhaseStep(number: 1, label: "Copy", state: .done, fill: 1),
+                         PhaseStep(number: 2, label: "Verify", state: .done, fill: 1),
+                         PhaseStep(number: 3, label: "Proxy", state: .active, fill: 0.61),
+                         PhaseStep(number: 4, label: "Report", state: .pending, fill: 0)]
+        proxies.fileCaption = "Proxy 15 / 24"
+        proxies.fileValue = "A034C015_261007_R1AB.mxf · 40 %"
+        proxies.safeWhileRunning = true
+        proxies.showEject = true
+        proxies.canCancel = true
+        m.jobs = [job("A034_ARRI", proxies), job("A035_ARRI", run), job("B012_FX6", wait)]
+        return m
+    }
+
+    /// obr. 3: one card done and verified (green), one with a file that doesn't match (yellow), a failed and a
+    /// cancelled one.
+    static func finished() -> AppModel {
+        let m = base()
+        var done = JobCardState(kind: .done, phase: .done, name: "A035_ARRI", sub: "24 files · 1.70 GB")
+        done.title = "A035_ARRI — safe to eject"
+        done.text = "All 24 files are on 2 disks and verified (xxHash64)."
+        done.summary = [SummaryField(label: "Copy", value: "602 MB/s"), SummaryField(label: "Verify", value: "799 MB/s"),
+                        SummaryField(label: "Proxy", value: "24 / 24"), SummaryField(label: "Total", value: "6 min 12 s")]
+        done.thumbs = (1...5).map { ClipThumb(id: $0, clip: String(format: "C%03d", $0), image: nil) }
+        done.moreThumbs = 19
+        done.path = "…/2026-10-10/A035_ARRI/"
+        done.showEject = true
+        done.hasReport = true
+        done.hasProxies = true
+        var problem = JobCardState(kind: .problem, phase: .done, name: "B012_FX6", sub: "31 files · 14.2 GB")
+        problem.title = "B012_FX6 — don't eject the card yet"
+        problem.text = "1 file on SHUTTLE_B doesn't match the card. RAID_A is fine."
+        problem.failed = [FailedFileRow(id: 0, path: "XDROOT/Clip/B012C015_261007_9QW1.MXF",
+                                        disks: [.init(ok: true, text: "RAID_A ✓"), .init(ok: false, text: "SHUTTLE_B ✕ hash")])]
+        problem.hasReport = true
+        problem.path = "…/2026-10-10/B012_FX6/"
+        var failed = JobCardState(kind: .failed, phase: .failed, name: "C007_VENICE", sub: "2 disks")
+        failed.title = "C007_VENICE — offload failed"
+        failed.text = "Not enough space on SHUTTLE_B: needs 412 GB, free 120 GB"
+        var cancelled = JobCardState(kind: .cancelled, phase: .cancelled, name: "D002_BMPCC", sub: "2 disks")
+        cancelled.title = "D002_BMPCC — cancelled"
+        cancelled.text = "The card isn't fully backed up — copy it again in full."
+        m.jobs = [job("D002_BMPCC", cancelled), job("C007_VENICE", failed), job("B012_FX6", problem), job("A035_ARRI", done)]
+        return m
     }
 
     /// One destination nearly full, verification and proxies off, a folder source.

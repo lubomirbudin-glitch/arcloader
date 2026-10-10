@@ -552,7 +552,7 @@ struct ProxySettingsView: View {
     }
 }
 
-/// A grey 16:9 frame (no real picture yet — README "Nové věci" 8): the crop to the frame lines, the clip name bottom
+/// A grey 16:9 frame (no real picture yet — README "new things" 8): the crop to the frame lines, the clip name bottom
 /// left and the timecode bottom right, inside the picture the proxy keeps.
 struct BurnInPreview: View {
     @Environment(\.palette) private var p

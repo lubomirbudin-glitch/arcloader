@@ -40,6 +40,10 @@ final class JobItem: ObservableObject, Identifiable {
     private(set) var startedAt: Date?
     private(set) var finishedAt: Date?
     private var thumbsLoaded = false
+#if DEBUG
+    /// Snapshot rendering only: the card as it should look, instead of the job's status.
+    var preview: JobCardState?
+#endif
 
     init(job: OffloadJob, sourceName: String, canEject: Bool, estimatedBytes: Int64? = nil) {
         self.job = job
@@ -58,7 +62,15 @@ final class JobItem: ObservableObject, Identifiable {
     var isError: Bool { progress.isError }
 
     /// The phase the queue counts by (a snapshot card's own kind in DEBUG previews).
-    var queuePhase: JobStatus.Phase { status.phase }
+    var queuePhase: JobStatus.Phase {
+#if DEBUG
+        if let p = preview { return p.phase }
+#endif
+        return status.phase
+    }
+
+    /// Finished as the queue sees it (a snapshot card's own kind in DEBUG previews).
+    var queueFinished: Bool { queuePhase.isFinished }
 
     /// The card recorded right before the copy (`CardIdentity`); nil before or when unknown.
     var copiedIdentity: String? { lock.lock(); defer { lock.unlock() }; return copied }
