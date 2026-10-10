@@ -211,12 +211,12 @@ public final class ProxyRenderer {
 
     /// nil when the clip can be rendered, otherwise the reason it cannot.
     public func unsupportedReason(_ clip: Clip) -> String? {
-        guard tools.ffmpeg != nil else { return "ffmpeg not found" }
+        guard tools.ffmpeg != nil else { return Msg.ffmpegNotFound }
         switch clip.format {
         case .video: return nil
-        case .unknown: return "unknown format"
+        case .unknown: return Msg.unknownFormat
         default:
-            guard let b = backends[clip.format] else { return "\(clip.format.label): no decoder available" }
+            guard let b = backends[clip.format] else { return Msg.noDecoder(clip.format.label) }
             return b.isAvailable(tools) ? nil : b.missingHint
         }
     }
@@ -297,8 +297,8 @@ public final class ProxyRenderer {
 
     /// The note at a clip whose ffmpeg stalled (texts shared with Windows `StallNote`).
     static func stallNote(_ seconds: TimeInterval, retriedInSoftware: Bool) -> String {
-        "ffmpeg se zasekl (\(String(format: "%.0f", seconds)) s bez nového snímku)"
-            + (retriedInSoftware ? " i bez hardwarového dekódování; proxy nevznikla" : "")
+        "ffmpeg stalled (\(String(format: "%.0f", seconds)) s without a new frame)"
+            + (retriedInSoftware ? ", also with software decoding; proxy not created" : "")
     }
 
     // MARK: LUT per clip
@@ -399,7 +399,7 @@ public final class ProxyRenderer {
             } catch let e as FFmpegStall where src?.feeder != nil {
                 if isCancelled() { return [] }
                 // A hung decoder would hang at the next positions too (3 × the grace per clip): stop here.
-                let stall = FFmpegStall(note: "dekodér nebo " + e.note)
+                let stall = FFmpegStall(note: "decoder or " + e.note)
                 lastError = stall
                 log?("thumbnails \(clip.name): \(stall); the remaining frames are skipped")
                 break
@@ -438,7 +438,7 @@ public final class ProxyRenderer {
                            output: output, progress: progress, isCancelled: isCancelled)
             return
         } catch let e as FFmpegStall where !hw && !isCancelled() {
-            throw FFmpegStall(note: e.note + "; proxy nevznikla")
+            throw FFmpegStall(note: e.note + "; proxy not created")
         } catch where hw && (error is FFmpegStall || error is ToolError) && !isCancelled() {
             first = error   // hardware decoding stalled or failed: once more in software
         }
@@ -454,9 +454,9 @@ public final class ProxyRenderer {
             case (is FFmpegStall, is FFmpegStall):
                 throw ProxyRetryFailed(note: ProxyRenderer.stallNote(stallTimeout, retriedInSoftware: true))
             case (is FFmpegStall, _):
-                throw ProxyRetryFailed(note: "\(first); bez hardwarového dekódování selhal: \(error)")
+                throw ProxyRetryFailed(note: "\(first); software decoding failed: \(error)")
             default:
-                throw ProxyRetryFailed(note: "\(error); s hardwarovým dekódováním předtím: \(first)")
+                throw ProxyRetryFailed(note: "\(error); earlier with hardware decoding: \(first)")
             }
         }
     }

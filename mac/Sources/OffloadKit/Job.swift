@@ -27,16 +27,16 @@ public struct JobStatus {
 
         public var label: String {
             switch self {
-            case .waiting: return "Čeká"
-            case .copying: return "Kopírování"
-            case .flushing: return "Zápis cache disků"
-            case .verifying: return "Ověřování"
+            case .waiting: return "Waiting"
+            case .copying: return "Copying"
+            case .flushing: return "Flushing disk caches"
+            case .verifying: return "Verifying"
             case .reporting: return "Report"
-            case .analyzing: return "Analýza klipů"
-            case .proxies: return "Render proxy"
-            case .done: return "Hotovo"
-            case .failed: return "Chyba"
-            case .cancelled: return "Zrušeno"
+            case .analyzing: return "Analysing clips"
+            case .proxies: return "Rendering proxies"
+            case .done: return "Done"
+            case .failed: return "Error"
+            case .cancelled: return "Cancelled"
             }
         }
 
@@ -132,7 +132,7 @@ public final class OffloadJob {
             case .report, .done: s.phase = .reporting
             }
         }
-        // Cancelled while still queued: it never runs, so say so instead of "Čeká" forever.
+        // Cancelled while still queued: it never runs, so say so instead of "Waiting" forever.
         if s.phase == .waiting && !wasStarted && wasCancelled { s.phase = .cancelled }
         return s
     }
@@ -244,7 +244,7 @@ public final class OffloadJob {
                 $0.clipFraction = 0
             }
             guard let d = goodDest(clip) else {
-                entries[i].probeError = "no verified copy"
+                entries[i].probeError = Msg.noVerifiedCopy
                 continue
             }
             if let reason = renderer.unsupportedReason(clip), clip.format != .video {
@@ -265,7 +265,7 @@ public final class OffloadJob {
                         info = arriInfo
                     } else {
                         entries[i].info = info
-                        entries[i].probeError = "kodek nepodporován ffmpegem (např. Sony X-OCN) — zkopírováno a ověřeno, bez proxy"
+                        entries[i].probeError = "codec not supported by ffmpeg (e.g. Sony X-OCN) — copied and verified, no proxy"
                         continue
                     }
                 }
@@ -313,7 +313,7 @@ public final class OffloadJob {
             }
             guard let d = goodDest(clip), let info = entries[i].info else {
                 entries[i].proxyStatus = .failed
-                entries[i].proxyNote = entries[i].probeError ?? "no verified copy"
+                entries[i].proxyNote = entries[i].probeError ?? Msg.noVerifiedCopy
                 update { $0.proxiesFailed += 1 }
                 continue
             }
@@ -337,7 +337,7 @@ public final class OffloadJob {
                         do {
                             try ProxyCopy.copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel)
                         } catch {
-                            let note = "kopie na \(other) selhala: \(error)"
+                            let note = "copy to \(other) failed: \(error)"
                             entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note
                             log?("proxy \(clip.name): copy to \(other) failed: \(error)")
                         }
@@ -348,7 +348,7 @@ public final class OffloadJob {
                     let (_, error) = ProxyCopy.toExtraFolder(plan.cardPaths[d] + "/" + rel, extraFolder: extra, date: plan.date,
                                                              cardName: plan.cardName, fileName: name + ".mov")
                     if let error {
-                        let note = "kopie do \(extra) selhala: \(error)"
+                        let note = "copy to \(extra) failed: \(error)"
                         entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note
                         log?("proxy \(clip.name): copy to \(extra) failed: \(error)")
                     }

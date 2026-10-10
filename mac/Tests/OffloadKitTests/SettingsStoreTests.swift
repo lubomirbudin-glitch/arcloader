@@ -87,7 +87,7 @@ final class SettingsStoreTests: XCTestCase {
         var p = ProxySettings()
         p.lutPath = "/nope/look.cube"
         XCTAssertEqual(ProxyPreflight.blocking(p, analyzeClips: true, lutExists: false),
-                       "LUT nenalezen: look.cube — vyberte jiný nebo ho odeberte.")
+                       "LUT not found: look.cube — choose another one or remove it.")
         XCTAssertNil(ProxyPreflight.blocking(p, analyzeClips: false, lutExists: false))   // nothing uses it
         p.enabled = true
         XCTAssertNotNil(ProxyPreflight.blocking(p, analyzeClips: false, lutExists: false))
@@ -97,7 +97,7 @@ final class SettingsStoreTests: XCTestCase {
 
     func testMissingFFmpegOnlyWarns() {
         XCTAssertEqual(ProxyPreflight.warning(ProxySettings(), analyzeClips: true, resolved: ExternalTools()),
-                       "ffmpeg/ffprobe nenalezen — náhledy a proxy se přeskočí, kopie a ověření proběhnou.")
+                       "ffmpeg/ffprobe not found — thumbnails and proxies will be skipped, copy and verification will run.")
         XCTAssertNil(ProxyPreflight.warning(ProxySettings(), analyzeClips: false, resolved: ExternalTools()))
         XCTAssertNil(ProxyPreflight.warning(ProxySettings(), analyzeClips: true, resolved: ExternalTools(ffmpeg: "/f", ffprobe: "/p")))
     }

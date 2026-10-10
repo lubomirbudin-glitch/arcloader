@@ -17,10 +17,11 @@ public enum HTMLReport {
         return o
     }
 
+    /// "Oct 10, 2026 14:05:12" — English month, 24-hour time, local time zone.
     static func dateTime(_ d: Date) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "cs_CZ")
-        f.dateFormat = "d. M. yyyy HH:mm:ss"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "MMM d, yyyy HH:mm:ss"
         return f.string(from: d)
     }
 
@@ -36,15 +37,15 @@ public enum HTMLReport {
     }
 
     static let stateLabel: [String: String] = [
-        "verified": "ověřeno", "written": "zapsáno", "failed": "CHYBA", "pending": "nezpracováno",
+        "verified": "verified", "written": "written", "failed": "FAILED", "pending": "pending",
     ]
 
     static func proxyLabel(_ c: ClipEntry) -> (String, String) {
         switch c.proxyStatus {
-        case .done: return ("ok", "hotovo")
-        case .failed: return ("bad", "chyba")
-        case .unsupported: return ("warn", "nepodporováno")
-        case .skipped: return ("muted", "přeskočeno")
+        case .done: return ("ok", "done")
+        case .failed: return ("bad", "failed")
+        case .unsupported: return ("warn", "unsupported")
+        case .skipped: return ("muted", "skipped")
         case .none: return ("muted", "—")
         }
     }
@@ -64,7 +65,7 @@ public enum HTMLReport {
 
     public static func render(_ r: OffloadReport, forPrint: Bool = false) -> String {
         let ok = r.success
-        let status = !ok ? "CHYBA" : (r.verified ? "OVĚŘENO" : "ZKOPÍROVÁNO — NEOVĚŘENO")
+        let status = !ok ? "FAILED" : (r.verified ? "VERIFIED" : "COPIED — NOT VERIFIED")
         let statusClass = !ok ? "bad" : (r.verified ? "ok" : "warn")
         let failed = r.failedFiles
         let videoClips = r.clips.filter { !$0.clip.isCameraProxy }
@@ -72,7 +73,7 @@ public enum HTMLReport {
 
         var h = """
         <!doctype html>
-        <html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+        <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Offload \(esc(r.cardName)) – \(esc(r.date))</title>
         <style>
         :root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e3e3e0;--ok:#1f8a4c;--okbg:#e5f4ea;--bad:#c62828;--badbg:#fdeaea;--warn:#a86400;--warnbg:#fdf2dc;--accent:#3a5bd9}
@@ -106,16 +107,16 @@ public enum HTMLReport {
         <header><h1>\(esc(r.cardName))</h1><span class="badge \(statusClass)">\(status)</span>
         <span class="sub">\(dateTime(r.started)) – \(timeOnly(r.finished))</span></header>
         <div class="stats">
-        <div class="stat"><b>\(r.totalFiles)</b><span>souborů</span></div>
+        <div class="stat"><b>\(r.totalFiles)</b><span>\(r.totalFiles == 1 ? "file" : "files")</span></div>
         <div class="stat"><b>\(formatBytes(r.totalBytes))</b><span>data</span></div>
-        <div class="stat"><b>\(videoClips.count)</b><span>klipů\(totalDuration > 0 ? " · " + duration(totalDuration) : "")</span></div>
-        <div class="stat"><b>\(duration(r.copySeconds))</b><span>kopírování · \(formatRate(r.totalBytes, r.copySeconds))</span></div>
-        <div class="stat"><b>\(r.verified ? duration(r.verifySeconds) : "—")</b><span>ověření · \(r.verified ? formatRate(r.totalBytes, r.verifySeconds) : "neprovedeno")</span></div>
-        <div class="stat"><b>\(esc(r.hashAlgorithm.uppercased()))</b><span>kontrolní součet</span></div>
+        <div class="stat"><b>\(videoClips.count)</b><span>\(videoClips.count == 1 ? "clip" : "clips")\(totalDuration > 0 ? " · " + duration(totalDuration) : "")</span></div>
+        <div class="stat"><b>\(duration(r.copySeconds))</b><span>copy · \(formatRate(r.totalBytes, r.copySeconds))</span></div>
+        <div class="stat"><b>\(r.verified ? duration(r.verifySeconds) : "—")</b><span>verification · \(r.verified ? formatRate(r.totalBytes, r.verifySeconds) : "not run")</span></div>
+        <div class="stat"><b>\(esc(r.hashAlgorithm.uppercased()))</b><span>checksum</span></div>
         </div>
 
-        <h2>Cíle</h2><div class="panel"><table>
-        <tr><th>Disk</th><th>Složka</th><th>FS</th><th class="num">OK</th><th class="num">Chyby</th></tr>
+        <h2>Destinations</h2><div class="panel"><table>
+        <tr><th>Drive</th><th>Folder</th><th>FS</th><th class="num">OK</th><th class="num">Errors</th></tr>
 
         """
         for d in r.destinations {
@@ -123,22 +124,22 @@ public enum HTMLReport {
             h += "<td class=\"num ok\">\(d.filesOK)</td><td class=\"num \(d.filesFailed > 0 ? "bad" : "muted")\">\(d.filesFailed)</td></tr>\n"
         }
         h += "</table></div>\n"
-        h += "<p class=\"sub\">Zdroj: <span class=\"mono\">\(esc(r.source))</span> (\(esc(r.sourceFilesystem)))</p>\n"
+        h += "<p class=\"sub\">Source: <span class=\"mono\">\(esc(r.source))</span> (\(esc(r.sourceFilesystem)))</p>\n"
 
         if !failed.isEmpty {
-            h += "<h2 class=\"bad\">Chyby (\(failed.count))</h2><div class=\"panel\"><table><tr><th>Soubor</th><th>Problém</th></tr>\n"
+            h += "<h2 class=\"bad\">Errors (\(failed.count))</h2><div class=\"panel\"><table><tr><th>File</th><th>Problem</th></tr>\n"
             for f in failed {
                 var msgs: [String] = []
-                if let e = f.sourceError { msgs.append("karta: " + e) }
-                for (i, e) in f.errors.enumerated() { if let e { msgs.append("cíl \(i + 1): " + e) } }
+                if let e = f.sourceError { msgs.append("card: " + e) }
+                for (i, e) in f.errors.enumerated() { if let e { msgs.append("destination \(i + 1): " + e) } }
                 h += "<tr><td class=\"mono\">\(esc(f.path))</td><td class=\"err\">\(esc(msgs.joined(separator: " · ")))</td></tr>\n"
             }
             h += "</table></div>\n"
         }
 
         if !r.clips.isEmpty {
-            h += "<h2>Klipy</h2><div class=\"panel\"><table>\n"
-            h += "<tr><th></th><th>Klip</th><th>Formát</th><th>Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Délka</th><th>TC</th><th class=\"num\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n"
+            h += "<h2>Clips</h2><div class=\"panel\"><table>\n"
+            h += "<tr><th></th><th>Clip</th><th>Format</th><th>Resolution</th><th class=\"num\">FPS</th><th class=\"num\">Duration</th><th>TC</th><th class=\"num\">Audio</th><th class=\"num\">Size</th><th>Proxy</th></tr>\n"
             for c in r.clips {
                 let img = c.thumbnails.isEmpty ? "<div class=\"nothumb\"></div>"
                     : "<div class=\"thumbs\">" + c.thumbnails.map { t in
@@ -154,13 +155,13 @@ public enum HTMLReport {
                 for n in [c.probeError, c.proxyNote].compactMap({ $0 }) where !notes.contains(n) { notes.append(n) }
                 let note = notes.joined(separator: " · ")
                 var noteHTML = note.isEmpty ? "" : "<div class=\"path err\">\(esc(note))</div>"
-                // Which LUT and why — also "bez LUT (reason)", unless the user switched LUTs off.
+                // Which LUT and why — also "no LUT (reason)", unless the user switched LUTs off.
                 if let lu = c.lut, lu.source != "none" {
                     noteHTML += "<div class=\"note\">LUT: \(esc(lu.name)) (\(esc(lu.reason)))</div>"
-                } else if let ln = c.lut, ln.reason != "vypnuto v nastavení" {
-                    noteHTML += "<div class=\"note\">LUT: bez LUT (\(esc(ln.reason)))</div>"
+                } else if let ln = c.lut, !LutUse.isOffInSettings(ln.reason) {
+                    noteHTML += "<div class=\"note\">LUT: no LUT (\(esc(ln.reason)))</div>"
                 }
-                h += "<tr><td>\(img)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))\(c.clip.isCameraProxy ? " <span class=\"muted\">(proxy kamery)</span>" : "")</div>"
+                h += "<tr><td>\(img)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))\(c.clip.isCameraProxy ? " <span class=\"muted\">(camera proxy)</span>" : "")</div>"
                 h += "<div class=\"path\">\(esc(c.clip.path))</div>\(noteHTML)</td>"
                 h += "<td class=\"wrap fmt\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num\">\(esc(i?.fpsLabel ?? ""))</td>"
                 h += "<td class=\"num\">\(esc(i?.durationLabel ?? ""))</td><td class=\"mono tc\">\(esc(i?.timecode ?? ""))</td>"
@@ -171,20 +172,20 @@ public enum HTMLReport {
             if let p = r.proxy, p.enabled {
                 let lut: String
                 switch LutResolver.effectiveMode(p) {
-                case .auto: lut = "automaticky podle kamery"
-                case .builtin: lut = LutCatalog.shared.find(p.lutBuiltin)?.name ?? p.lutBuiltin ?? "bez LUT"
-                case .custom: lut = p.lutPath.flatMap { $0.isEmpty ? nil : ($0 as NSString).lastPathComponent } ?? "bez LUT"
-                case .off: lut = "bez LUT"
+                case .auto: lut = "auto by camera"
+                case .builtin: lut = LutCatalog.shared.find(p.lutBuiltin)?.name ?? p.lutBuiltin ?? "no LUT"
+                case .custom: lut = p.lutPath.flatMap { $0.isEmpty ? nil : ($0 as NSString).lastPathComponent } ?? "no LUT"
+                case .off: lut = "no LUT"
                 }
-                let frame = p.frameLabel.map { ", výřez \($0)" } ?? ""
-                let extra = p.extraFolder.map { " · také ve složce <span class=\"mono\">\(esc($0))</span>" } ?? ""
+                let frame = p.frameLabel.map { ", frame lines \($0)" } ?? ""
+                let extra = p.extraFolder.map { " · also in folder <span class=\"mono\">\(esc($0))</span>" } ?? ""
                 h += "<p class=\"sub\">Proxy: \(esc(p.codec.label)), \(p.height)p\(frame), LUT: \(esc(lut)) → <span class=\"mono\">\(Layout.proxyDirName)/</span>\(extra)</p>\n"
             }
         }
 
-        h += "<details\(forPrint ? " open" : "")><summary>Všechny soubory (\(r.files.count))</summary><div class=\"panel\"><table>\n"
-        h += "<tr><th>Soubor</th><th class=\"num\">Velikost</th><th>\(esc(r.hashAlgorithm))</th>"
-        for i in r.destinations.indices { h += "<th>Cíl \(i + 1)</th>" }
+        h += "<details\(forPrint ? " open" : "")><summary>All files (\(r.files.count))</summary><div class=\"panel\"><table>\n"
+        h += "<tr><th>File</th><th class=\"num\">Size</th><th>\(esc(r.hashAlgorithm))</th>"
+        for i in r.destinations.indices { h += "<th>Destination \(i + 1)</th>" }
         h += "</tr>\n"
         for f in r.files {
             h += "<tr><td class=\"mono\">\(esc(f.path))</td><td class=\"num\">\(formatBytes(f.size))</td><td class=\"mono\">\(esc(f.xxh64 ?? "—"))</td>"
@@ -196,9 +197,9 @@ public enum HTMLReport {
         }
         h += "</table></div></details>\n"
         if !r.skipped.isEmpty {
-            h += "<p class=\"sub\">Vynechané systémové soubory: \(esc(r.skipped.joined(separator: ", ")))</p>\n"
+            h += "<p class=\"sub\">Skipped system files: \(esc(r.skipped.joined(separator: ", ")))</p>\n"
         }
-        h += "<footer>\(esc(r.tool)) \(esc(r.version)) · ASC MHL v ascmhl/ · \(dateTime(Date()))</footer></main></body></html>\n"
+        h += "<footer>\(esc(r.tool)) \(esc(r.version)) · ASC MHL in ascmhl/ · \(dateTime(Date()))</footer></main></body></html>\n"
         return h
     }
 }

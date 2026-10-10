@@ -62,7 +62,7 @@ public struct OffloadReport: Codable {
     public var hashAlgorithms: [String]?
     /// ASC MHL generation of an append or a repair (`offload_report_NNNN.json`); absent = 1.
     public var generation: Int?
-    /// "repair" for "Zkopírovat znovu"; absent otherwise.
+    /// "repair" for "Copy again"; absent otherwise.
     public var kind: String?
     public var project: String?
     public var cardName: String

@@ -45,7 +45,7 @@ final class ProxyFolderTests: XCTestCase {
         let extra = dir.path + "/disconnected"
         let (path, error) = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001", fileName: "C0001.mov")
         XCTAssertNil(path)
-        XCTAssertEqual(error, "složka není dostupná")
+        XCTAssertEqual(error, "folder is not available")
         XCTAssertFalse(FileManager.default.fileExists(atPath: extra))
     }
 
@@ -73,7 +73,7 @@ final class ProxyFolderTests: XCTestCase {
         let (path, error) = ProxyCopy.toExtraFolder(src, extraFolder: extra, date: "2026-10-05", cardName: "A001",
                                                     fileName: "C0001.mov", maxAttempts: 3)
         XCTAssertNil(path)
-        XCTAssertEqual(error, "žádné volné jméno (C0001.mov … C0001_3.mov)")
+        XCTAssertEqual(error, "no free name (C0001.mov … C0001_3.mov)")
         XCTAssertEqual(TestFS.files(in: extra), [])
     }
 
@@ -108,7 +108,7 @@ final class ProxyFolderTests: XCTestCase {
         XCTAssertEqual(ProxyPreflight.extraFolderInUse(p), "/Volumes/Proxy")
         XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: nil))   // not checked yet
         XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: true))
-        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p, folderExists: false), "Složka pro proxy není dostupná: /Volumes/Proxy")
+        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p, folderExists: false), "Folder for proxies is not available: /Volumes/Proxy")
         p.enabled = false
         XCTAssertNil(ProxyPreflight.extraFolderInUse(p))
         XCTAssertNil(ProxyPreflight.extraFolderBlocking(p, folderExists: false))
@@ -124,7 +124,7 @@ final class ProxyFolderTests: XCTestCase {
         p.extraFolder = dir.path
         XCTAssertNil(ProxyPreflight.extraFolderBlocking(p))
         p.extraFolder = dir.path + "/nope"
-        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p), "Složka pro proxy není dostupná: \(dir.path)/nope")
+        XCTAssertEqual(ProxyPreflight.extraFolderBlocking(p), "Folder for proxies is not available: \(dir.path)/nope")
     }
 
     func testSettingsExtraFolderTrimmedBlankIsNilAbsentWhenUnset() throws {
@@ -146,11 +146,11 @@ final class ProxyFolderTests: XCTestCase {
         var p = ProxySettings()
         p.enabled = true
         r.proxy = p
-        XCTAssertFalse(HTMLReport.render(r).contains("také ve složce"))
+        XCTAssertFalse(HTMLReport.render(r).contains("also in folder"))
         p.extraFolder = "/Volumes/Proxy & co"
         r.proxy = p
         XCTAssertTrue(HTMLReport.render(r).contains(
-            "<span class=\"mono\">_PROXY/</span> · také ve složce <span class=\"mono\">/Volumes/Proxy &amp; co</span></p>"))
+            "<span class=\"mono\">_PROXY/</span> · also in folder <span class=\"mono\">/Volumes/Proxy &amp; co</span></p>"))
     }
 
     // MARK: Whole job (ffmpeg)
@@ -209,7 +209,7 @@ final class ProxyFolderTests: XCTestCase {
         XCTAssertEqual(s.proxiesFailed, 0)
         let clip = try XCTUnwrap(report.clips.first)
         XCTAssertEqual(clip.proxyStatus, .done)
-        XCTAssertEqual(clip.proxyNote, "kopie do \(extra) selhala: složka není dostupná")
+        XCTAssertEqual(clip.proxyNote, "copy to \(extra) failed: folder is not available")
         XCTAssertTrue(log.contains { $0.contains("C0001") && $0.contains(extra) }, "\(log)")
         XCTAssertFalse(FileManager.default.fileExists(atPath: extra))
     }

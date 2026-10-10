@@ -14,6 +14,6 @@ extension TestMedia {
 
     /// A custom .cube as the resolver hands it over.
     static func customLut(_ path: String) -> LutUse {
-        LutUse(source: "custom", id: nil, name: (path as NSString).lastPathComponent, reason: "vlastní LUT", file: path)
+        LutUse(source: "custom", id: nil, name: (path as NSString).lastPathComponent, reason: "custom LUT", file: path)
     }
 }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A mounted volume offered in the Karty section. `identity` (`CardIdentity`) tells two cards in the same slot
-/// apart; `ejectProblem` (`CardEject.problem`) is nil when "Vysunout kartu" may eject it.
+/// apart; `ejectProblem` (`CardEject.problem`) is nil when "Eject card" may eject it.
 public struct VolumeItem: Identifiable, Hashable {
     public var id: String { path }
     public let name: String

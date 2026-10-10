@@ -54,6 +54,6 @@ final class LutSettingsTests: XCTestCase {
         XCTAssertNil(ProxyPreflight.blocking(p, analyzeClips: true, lutExists: false))
         p.lutMode = .custom
         XCTAssertEqual(ProxyPreflight.lutInUse(p, analyzeClips: true), "/gone.cube")
-        XCTAssertEqual(ProxyPreflight.blocking(p, analyzeClips: true, lutExists: false), "LUT nenalezen: gone.cube — vyberte jiný nebo ho odeberte.")
+        XCTAssertEqual(ProxyPreflight.blocking(p, analyzeClips: true, lutExists: false), "LUT not found: gone.cube — choose another one or remove it.")
     }
 }

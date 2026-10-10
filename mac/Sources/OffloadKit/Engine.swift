@@ -363,7 +363,7 @@ public final class OffloadEngine {
         for root in destRoots {
             let free = IO.availableBytes(root) ?? 0
             if free < needed {
-                throw OffloadError.preflight(Msg.noSpace(root, total: needed, parts: "karty \(formatBytesCs(needed))", free: free), code: .noSpace)
+                throw OffloadError.preflight(Msg.noSpace(root, total: needed, parts: "cards \(formatBytesShort(needed))", free: free), code: .noSpace)
             }
         }
 

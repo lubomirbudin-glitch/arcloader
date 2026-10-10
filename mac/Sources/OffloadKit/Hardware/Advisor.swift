@@ -11,7 +11,7 @@ public struct Advice: Codable, Equatable {
     public let text: String
 }
 
-/// A drive in its role for this offload ("Karta", "Cíl 1" …, or a volume name when listing every drive).
+/// A drive in its role for this offload ("Card", "Destination 1" …, or a volume name when listing every drive).
 public struct RoleLink: Codable, Equatable {
     public let role: String
     public let link: DriveLink
@@ -21,7 +21,16 @@ public struct RoleLink: Codable, Equatable {
         self.link = link
     }
 
-    public var isCard: Bool { role.hasPrefix("Karta") }
+    public var isCard: Bool { RoleLink.isCardRole(role) }
+
+    /// The role of the card ("Card", or "Card 2" with several cards).
+    public static let card = "Card"
+
+    /// The role of destination `n` (1-based): "Destination 1".
+    public static func destination(_ n: Int) -> String { "Destination \(n)" }
+
+    /// "Card", "Card 2" — and "Karta…" of a hardware test saved before the Mac went English.
+    public static func isCardRole(_ role: String) -> Bool { role.hasPrefix(card) || role.hasPrefix("Karta") }
 }
 
 /// Groups in order of first appearance (like LINQ GroupBy).
@@ -43,7 +52,7 @@ public enum Advisor {
         func who(_ r: RoleLink) -> String { "\(r.role) \(r.link.product)".trimmingCharacters(in: .whitespaces) }
         let freeFastPorts = connectors.filter { $0.userVisible && $0.supportsUsb3 == true && $0.device == nil }
         let freeFast = freeFastPorts.map { PortLabels.withKind($0, portNames) }
-        // Bare names: the sentence already says "jen USB 2.0". Ports of unknown kind are in neither list.
+        // Bare names: the sentence already says "USB 2.0 only". Ports of unknown kind are in neither list.
         let slowOnly = connectors.filter { $0.userVisible && $0.supportsUsb3 == false }.map { PortLabels.name($0, portNames) }
 
         for r in drives {
@@ -55,11 +64,11 @@ public enum Advisor {
             let text: String
             switch u.connectorUsb3 {
             case false?:
-                text = "\(who(r)): umí \(UsbSpeeds.label(u.capable)), ale je v portu jen USB 2.0 (\(port)) — přepoj do USB 3 portu\(whereText)."
+                text = "\(who(r)): supports \(UsbSpeeds.label(u.capable)), but is in a USB 2.0 only port (\(port)) — move it to a USB 3 port\(whereText)."
             case true?:
-                text = "\(who(r)): umí \(UsbSpeeds.label(u.capable)), ale linka běží jako \(UsbSpeeds.label(u.link)) — pravděpodobně kabel jen pro USB 2.0 nebo špatný kontakt; zkus jiný kabel nebo port."
+                text = "\(who(r)): supports \(UsbSpeeds.label(u.capable)), but the link runs at \(UsbSpeeds.label(u.link)) — probably a USB 2.0 cable or a bad contact; try another cable or port."
             case nil:
-                text = "\(who(r)): umí \(UsbSpeeds.label(u.capable)), ale linka běží jako \(UsbSpeeds.label(u.link)) (\(port)) — zkus jiný kabel nebo USB 3 port\(whereText)."
+                text = "\(who(r)): supports \(UsbSpeeds.label(u.capable)), but the link runs at \(UsbSpeeds.label(u.link)) (\(port)) — try another cable or a USB 3 port\(whereText)."
             }
             advice.append(Advice(kind: .warning, text: text))
         }
@@ -69,13 +78,13 @@ public enum Advisor {
         for group in orderedGroups(usbDrives, by: { $0.link.usb!.controllerId.lowercased() }) where group.count >= 2 {
             let key = group[0].link.usb!.controllerId.lowercased()
             advice.append(Advice(kind: .info,
-                                 text: "\(group.map(\.role).joined(separator: ", ")) jdou přes jeden řadič (\(group[0].link.usb!.controllerName)) — dělí se o jeho kapacitu."))
+                                 text: "\(group.map(\.role).joined(separator: ", ")) share one controller (\(group[0].link.usb!.controllerName)) — they split its bandwidth."))
             // Reader and disks on one controller while another controller has a free fast socket: split them.
             if group.contains(where: \.isCard) && group.contains(where: { !$0.isCard }) {
                 let other = freeFastPorts.filter { $0.controllerId.lowercased() != key }.map { PortLabels.withKind($0, portNames) }
                 if !other.isEmpty {
                     advice.append(Advice(kind: .tip,
-                                         text: "Čtečku a cílové disky rozděl na různé řadiče — volné rychlé porty na jiném řadiči: \(other.joined(separator: ", "))."))
+                                         text: "Put the reader and the destination drives on different controllers — free fast ports on another controller: \(other.joined(separator: ", "))."))
                 }
             }
         }
@@ -98,7 +107,7 @@ public enum Advisor {
         for h in shared {
             let whoText = h.roles.joined(separator: ", ")
             if reported.insert(whoText).inserted {
-                advice.append(Advice(kind: .info, text: "\(whoText) jdou přes jeden hub (\(h.hub.name)) — dělí se o jeho linku."))
+                advice.append(Advice(kind: .info, text: "\(whoText) share one hub (\(h.hub.name)) — they split its link."))
             }
         }
 
@@ -106,21 +115,21 @@ public enum Advisor {
             let withPace = drives.filter { measured[$0.role] != nil }
             if let slowest = withPace.min(by: { measured[$0.role]! < measured[$1.role]! }) {
                 advice.append(Advice(kind: .info,
-                                     text: "Odhad rychlosti offloadu s tímto zapojením: \(mb(measured[slowest.role]!)) MB/s (brzdí \(who(slowest)))."))
+                                     text: "Estimated offload speed with this setup: \(mb(measured[slowest.role]!)) MB/s (limited by \(who(slowest)))."))
             }
             for r in withPace {
                 guard let u = r.link.usb, u.link >= .superSpeed else { continue }
                 let ceiling = UsbSpeeds.practicalMBps(u.link)
                 if measured[r.role]! < ceiling / 2 {
                     advice.append(Advice(kind: .info,
-                                         text: "\(who(r)): linka zvládne ~\(mb(ceiling)) MB/s, disk sám dává \(mb(measured[r.role]!)) MB/s — brzdí disk, ne port."))
+                                         text: "\(who(r)): the link can do ~\(mb(ceiling)) MB/s, the drive itself gives \(mb(measured[r.role]!)) MB/s — the drive is the limit, not the port."))
                 }
             }
         }
 
-        if !freeFast.isEmpty { advice.append(Advice(kind: .tip, text: "Volné rychlé porty: \(freeFast.joined(separator: ", ")).")) }
+        if !freeFast.isEmpty { advice.append(Advice(kind: .tip, text: "Free fast ports: \(freeFast.joined(separator: ", ")).")) }
         if !slowOnly.isEmpty {
-            advice.append(Advice(kind: .tip, text: "Porty jen USB 2.0 — na offload je nepoužívej (hodí se pro klávesnici, myš): \(slowOnly.joined(separator: ", "))."))
+            advice.append(Advice(kind: .tip, text: "USB 2.0 only ports — do not use them for offloads (fine for a keyboard or mouse): \(slowOnly.joined(separator: ", "))."))
         }
         return stable(advice)
     }

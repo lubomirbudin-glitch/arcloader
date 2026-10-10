@@ -53,7 +53,7 @@ public struct LutCatalog {
             let own = folder + "/" + l.id + ".cube"
             if FileManager.default.fileExists(atPath: own), LutCatalog.isValidCube(own) {
                 l.path = own
-                l.name += " (vlastní soubor)"
+                l.name += " (own file)"
             }
             return l
         }
@@ -154,7 +154,13 @@ public struct LutUse: Codable, Equatable {
     public var isBuiltin: Bool { id != nil }
 
     /// No LUT, with the reason for the report (source "none").
-    public static func off(_ reason: String) -> LutUse { LutUse(source: "none", id: nil, name: "bez LUT", reason: reason) }
+    public static func off(_ reason: String) -> LutUse { LutUse(source: "none", id: nil, name: "no LUT", reason: reason) }
+
+    /// The reason of a LUT the user switched off (no note in the report).
+    public static let offInSettings = "off in settings"
+
+    /// The user switched LUTs off — also in a report written before the Mac went English (or by Windows, in Czech).
+    public static func isOffInSettings(_ reason: String) -> Bool { reason == offInSettings || reason == "vypnuto v nastavení" }
 }
 
 /// Sony XAVC sidecar "<clip>M01.XML" (NonRealTimeMeta): the gamma and primaries the camera recorded in.
@@ -191,21 +197,21 @@ public enum LutResolver {
                                catalog: LutCatalog) -> LutUse {
         switch effectiveMode(s) {
         case .off:
-            return .off("vypnuto v nastavení")
+            return .off(LutUse.offInSettings)
         case .custom:
-            guard let path = s.lutPath, !path.isEmpty else { return .off("vlastní LUT není vybraný") }
-            return LutUse(source: "custom", id: nil, name: (path as NSString).lastPathComponent, reason: "vlastní LUT", file: path)
+            guard let path = s.lutPath, !path.isEmpty else { return .off("no custom LUT selected") }
+            return LutUse(source: "custom", id: nil, name: (path as NSString).lastPathComponent, reason: "custom LUT", file: path)
         case .builtin:
-            return builtin(catalog, s.lutBuiltin, source: "builtin", reason: "vybraný v nastavení") ?? .off("vestavěný LUT nenalezen")
+            return builtin(catalog, s.lutBuiltin, source: "builtin", reason: "selected in settings") ?? .off("built-in LUT not found")
         case .auto:
             break
         }
-        if catalog.luts.isEmpty { return .off("vestavěné LUTy chybí") }
+        if catalog.luts.isEmpty { return .off("built-in LUTs missing") }
         let (id, reason) = detect(clip, info: info, clipFullPath: clipFullPath)
         if id == "" { return .off(reason) }   // recognised, but not log footage
-        if let id { return builtin(catalog, id, source: "auto", reason: reason) ?? .off("vestavěný LUT nenalezen") }
-        return builtin(catalog, s.lutFallback, source: "fallback", reason: "kamera nerozpoznána — záložní LUT")
-            ?? .off("kamera nerozpoznána")
+        if let id { return builtin(catalog, id, source: "auto", reason: reason) ?? .off("built-in LUT not found") }
+        return builtin(catalog, s.lutFallback, source: "fallback", reason: "camera not recognised — fallback LUT")
+            ?? .off("camera not recognised")
     }
 
     private static func builtin(_ catalog: LutCatalog, _ id: String?, source: String, reason: String) -> LutUse? {
@@ -218,14 +224,14 @@ public enum LutResolver {
     /// the old assumption (Film Gen 5). Film Gen 4 has no built-in LUT (provisional, as Windows). Port of `LutResolver.Braw`.
     static func braw(_ info: ClipInfo?) -> (id: String?, reason: String) {
         guard let gamma = info?.gamma, !gamma.isEmpty else {
-            return ("bmd-film-gen5", "Blackmagic RAW (gama neuvedena — předpoklad Film Gen 5)")
+            return ("bmd-film-gen5", "Blackmagic RAW (gamma not stated — assuming Film Gen 5)")
         }
         let gen = info?.colorScienceGen
         let label = gen.map { "\(gamma) Gen \($0)" } ?? gamma
         if gamma.caseInsensitiveCompare("Blackmagic Design Film") != .orderedSame {
-            return ("", "Blackmagic RAW: \(label) (není log)")
+            return ("", "Blackmagic RAW: \(label) (not log)")
         }
-        if let gen, gen < 5 { return ("", "Blackmagic RAW: \(label) (bez vestavěného LUTu)") }
+        if let gen, gen < 5 { return ("", "Blackmagic RAW: \(label) (no built-in LUT)") }
         return ("bmd-film-gen5", "Blackmagic RAW: \(label)")
     }
 
@@ -252,15 +258,15 @@ public enum LutResolver {
                 return (cine ? "sony-slog3-sgamut3cine" : "sony-slog3-sgamut3", reason)
             }
             // S-Log2 / S-Log is log too, there is just no built-in LUT for it; the rest (rec709, hlg, s-cinetone) is not log.
-            if g.hasPrefix("s-log") { return ("", "Sony XML: \(gamma) (bez vestavěného LUTu)") }
-            if !g.isEmpty { return ("", "Sony XML: \(gamma) (není log)") }
+            if g.hasPrefix("s-log") { return ("", "Sony XML: \(gamma) (no built-in LUT)") }
+            if !g.isEmpty { return ("", "Sony XML: \(gamma) (not log)") }
         }
         let camera = (info?.camera ?? "").uppercased()
         if camera.contains("ALEXA") || camera.contains("AMIRA") {
             return ARRIRAWBackend.isAlexa35(camera)
-                ? ("arri-logc4-awg4", "ARRI kamera (předpoklad LogC4)") : ("arri-logc3-awg3", "ARRI kamera (předpoklad LogC3)")
+                ? ("arri-logc4-awg4", "ARRI camera (assuming LogC4)") : ("arri-logc3-awg3", "ARRI camera (assuming LogC3)")
         }
-        return (nil, "kamera nerozpoznána")
+        return (nil, "camera not recognised")
     }
 }
 

@@ -149,15 +149,15 @@ public func formatBytes(_ b: Int64) -> String {
     return i == 0 ? "\(b) B" : String(format: "%.2f %@", v, units[i])
 }
 
-/// A size inside a Czech sentence: "3,2 GB", "2 GB", "412 GB", "850 MB", "12 B".
-public func formatBytesCs(_ b: Int64) -> String {
+/// A size inside a sentence: "3.2 GB", "2 GB", "412 GB", "850 MB", "12 B" (English decimal point).
+public func formatBytesShort(_ b: Int64) -> String {
     let units = ["B", "KB", "MB", "GB", "TB"]
     var v = Double(b)
     var i = 0
     while v >= 1000 && i < units.count - 1 { v /= 1000; i += 1 }
     if i == 0 { return "\(b) B" }
     let f = NumberFormatter()
-    f.locale = Locale(identifier: "cs_CZ")
+    f.locale = Locale(identifier: "en_US_POSIX")
     f.minimumFractionDigits = 0
     f.maximumFractionDigits = v < 10 ? 1 : 0
     f.usesGroupingSeparator = false

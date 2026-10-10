@@ -134,7 +134,7 @@ final class MultiHasher {
     }
 }
 
-/// One running hash of a file for "Ověřit zálohu" (every ASC MHL hash type Windows verifies, R9).
+/// One running hash of a file for "Verify backup" (every ASC MHL hash type Windows verifies, R9).
 protocol RunningHash: AnyObject {
     func update(_ p: UnsafeRawPointer, _ n: Int)
     func value() -> String

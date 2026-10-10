@@ -88,14 +88,14 @@ final class HashAlgoTests: XCTestCase {
         XCTAssertEqual(progress, data.count)
     }
 
-    func testCzechBytesAndNoSpace() {
-        XCTAssertEqual(formatBytesCs(3_200_000_000), "3,2 GB")
-        XCTAssertEqual(formatBytesCs(2_000_000_000), "2 GB")
-        XCTAssertEqual(formatBytesCs(412_000_000_000), "412 GB")
-        XCTAssertEqual(formatBytesCs(12), "12 B")
+    func testBytesAndNoSpace() {
+        XCTAssertEqual(formatBytesShort(3_200_000_000), "3.2 GB")
+        XCTAssertEqual(formatBytesShort(2_000_000_000), "2 GB")
+        XCTAssertEqual(formatBytesShort(412_000_000_000), "412 GB")
+        XCTAssertEqual(formatBytesShort(12), "12 B")
         let need = SpaceNeed(card: 380_000_000_000, proxy: 30_000_000_000, report: 2_000_000_000)
-        XCTAssertEqual(Msg.noSpace("Zaloha", total: need.total, parts: need.partsText("karty"), free: 398_000_000_000),
-                       "Na cíli Zaloha není dost místa: potřeba 412 GB (karty 380 GB, proxy ~30 GB, report 2 GB), volno 398 GB.")
+        XCTAssertEqual(Msg.noSpace("Zaloha", total: need.total, parts: need.partsText("cards"), free: 398_000_000_000),
+                       "Not enough space on Zaloha: needs 412 GB (cards 380 GB, proxy ~30 GB, report 2 GB), free 398 GB.")
     }
 }
 
@@ -155,7 +155,7 @@ final class MHLReaderTests: XCTestCase {
         f.write(Data("<!-- edited -->".utf8))
         f.closeFile()
         let h = MHLReader.read(cardPath: card)!
-        XCTAssertEqual(h.chainProblems, ["ASC MHL generace 0002 neodpovídá řetězu (soubor MHL byl změněn)."])
+        XCTAssertEqual(h.chainProblems, ["ASC MHL generation 0002 does not match the chain (the MHL file was changed)."])
         XCTAssertEqual(h.generations.count, 2)
         XCTAssertTrue(h.record("CLIP/b.mov")!.failed)
         XCTAssertNil(h.lastGood["clip/b.mov"])
@@ -166,7 +166,7 @@ final class MHLReaderTests: XCTestCase {
         _ = generation(card, 2, [("CLIP/b.mov", 10, [("xxh64", "bbbbbbbbbbbbbbbb")], "original")])
         _ = generation(card, 1, [("CLIP/a.mov", 10, [("xxh64", "aaaaaaaaaaaaaaaa")], "original")])
         let h = MHLReader.read(cardPath: card)!
-        XCTAssertEqual(h.chainProblems, ["Chybí ascmhl_chain.xml — generace se čtou podle čísla v názvu souboru."])
+        XCTAssertEqual(h.chainProblems, ["ascmhl_chain.xml is missing — generations are read by the number in the file name."])
         XCTAssertEqual(h.generations.map(\.seq), [1, 2])
         XCTAssertTrue(h.chain.isEmpty)
     }

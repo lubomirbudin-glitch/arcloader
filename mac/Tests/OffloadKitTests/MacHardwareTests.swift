@@ -23,7 +23,7 @@ final class MacHardwareTests: XCTestCase {
         let hub = UsbHub(instanceId: "C", name: "C", ports: paired.map {
             UsbPort(number: $0.number, supportsUsb3: $0.usb3, userVisible: true, typeC: true, companionPort: $0.companion, device: nil)
         })
-        XCTAssertEqual(Connectors.build(hub, controllerId: "C", controllerName: "USB řadič usb-drd0").map(\.defaultLabel), ["port 1 USB-C"])
+        XCTAssertEqual(Connectors.build(hub, controllerId: "C", controllerName: "USB controller usb-drd0").map(\.defaultLabel), ["port 1 USB-C"])
     }
 
     func testRepeatedPortNumbersAreMadeUnique() {
@@ -94,9 +94,9 @@ final class MacHardwareTests: XCTestCase {
         let hub = UsbHub(instanceId: "C", name: "C", ports: paired.map {
             UsbPort(number: $0.number, supportsUsb3: $0.usb3, userVisible: true, typeC: false, companionPort: $0.companion, device: nil)
         })
-        let c = Connectors.build(hub, controllerId: "C", controllerName: "USB řadič XHC1")
+        let c = Connectors.build(hub, controllerId: "C", controllerName: "USB controller XHC1")
         XCTAssertEqual(c.map(\.defaultLabel), ["port 1 USB 3", "port 2"])
-        XCTAssertFalse(Advisor.advise([], connectors: c).contains { $0.text.contains("jen USB 2.0") })
+        XCTAssertFalse(Advisor.advise([], connectors: c).contains { $0.text.contains("USB 2.0 only") })
     }
 
     func testBusFromProtocolAndClasses() {
@@ -116,7 +116,7 @@ final class MacHardwareTests: XCTestCase {
     func testScanNeverCrashesAndLabelsAreUnique() {
         let connectors = UsbScanner.scan().connectors
         XCTAssertEqual(Set(connectors.map(\.label)).count, connectors.count)
-        for c in connectors { print("USB", c.controllerName, "|", c.defaultLabel, "|", c.device.map { "\($0.name) \(UsbSpeeds.label($0.link))" } ?? "volný") }
+        for c in connectors { print("USB", c.controllerName, "|", c.defaultLabel, "|", c.device.map { "\($0.name) \(UsbSpeeds.label($0.link))" } ?? "free") }
     }
 
     func testStartupVolumeIsInternalWithAProduct() {
