@@ -8,7 +8,7 @@
 //       raw interleaved RGB 16-bit little endian frames on stdout (ffmpeg: -f rawvideo -pix_fmt rgb48le)
 //
 //   S = full | half | quarter | eighth
-//   --gen5: a Film Gen 4 clip is decoded with colour science Gen 5 (ověří až vzorek .braw Gen 4); when the SDK does
+//   --gen5: a Film Gen 4 clip is decoded with colour science Gen 5 (not yet confirmed with a Gen 4 .braw sample); when the SDK does
 //       not take it, a warning on stderr and the clip is decoded as recorded (exit code unchanged)
 //
 // Exit codes: 0 OK (also when the reader closed the pipe early), 2 usage, 3 library/codec missing,

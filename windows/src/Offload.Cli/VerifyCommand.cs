@@ -31,7 +31,7 @@ static class VerifyCommand
     }
 
     /// Exit 0 when every card verified; 1 when any had a problem, an unfinished generation (plan 10) or nothing to verify. The problem lines stay
-    /// machine-readable (MISMATCH, MISSING, ERROR, EXTRA, FAILED-AT-COPY, FAILED-SUPERSEDED, CHAIN) for scripts; the summary is Czech.
+    /// machine-readable (MISMATCH, MISSING, ERROR, EXTRA, FAILED-AT-COPY, FAILED-SUPERSEDED, CHAIN) for scripts; the summary is plain text.
     static int Run(string folder, bool writeReport)
     {
         var cards = VerifyTargets.Resolve(folder);
