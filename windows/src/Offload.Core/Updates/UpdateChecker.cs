@@ -26,13 +26,13 @@ public enum UpdateStatus { Off, NotDue, UpToDate, NewVersion, Failed }
 /// The answer of a check. `Info`: the newer version (NewVersion, also NotDue when the last check found one).
 public sealed record UpdateResult(UpdateStatus Status, UpdateInfo? Info, string? Error)
 {
-    /// The line under "Zkontrolovat teď" (Czech), or null.
+    /// The line under "Check now", or null.
     public string? Text(string currentVersion) => Status switch
     {
-        UpdateStatus.NewVersion => $"Je k dispozici verze {UpdateChecker.Plain(Info!.Version)} (máte {UpdateChecker.Plain(currentVersion)}).",
-        UpdateStatus.UpToDate => $"Máte nejnovější verzi {UpdateChecker.Plain(currentVersion)}.",
-        UpdateStatus.Failed => $"Manifest nejde načíst: {Error}",
-        UpdateStatus.Off => "Adresa manifestu není vyplněná — kontrola je vypnutá.",
+        UpdateStatus.NewVersion => $"Version {UpdateChecker.Plain(Info!.Version)} is available (you have {UpdateChecker.Plain(currentVersion)}).",
+        UpdateStatus.UpToDate => $"You have the latest version {UpdateChecker.Plain(currentVersion)}.",
+        UpdateStatus.Failed => $"Cannot read the manifest: {Error}",
+        UpdateStatus.Off => "No manifest address is set — the check is off.",
         _ => null,
     };
 }
@@ -49,7 +49,7 @@ public sealed class UpdateState
 
 /// The update check (spec 4.4, R21): reads the manifest at most once in 24 h, never downloads or starts anything;
 /// HTTP with a 10 s limit, a file read on its own task with a 5 s limit (a dead UNC path would block for tens of
-/// seconds); at most 64 KB is read. Never throws — a problem is UpdateStatus.Failed with a Czech reason.
+/// seconds); at most 64 KB is read. Never throws — a problem is UpdateStatus.Failed with a reason.
 public static class UpdateChecker
 {
     public static readonly TimeSpan Interval = TimeSpan.FromHours(24);
@@ -68,7 +68,7 @@ public static class UpdateChecker
     static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
-    /// `force` ("Zkontrolovat teď") ignores the 24 h. A last check in the future (the clock went back) or one made for
+    /// `force` ("Check now") ignores the 24 h. A last check in the future (the clock went back) or one made for
     /// another address is due now.
     public static async Task<UpdateResult> CheckAsync(string? source, string currentVersion, DateTime nowUtc, string statePath,
         bool force = false, TimeSpan? httpTimeout = null, TimeSpan? fileTimeout = null)
@@ -115,28 +115,41 @@ public static class UpdateChecker
             try
             {
                 using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode) throw new UpdateException($"server odpověděl {(int)response.StatusCode} {response.ReasonPhrase}".TrimEnd());
+                if (!response.IsSuccessStatusCode) throw new UpdateException($"the server answered {(int)response.StatusCode} {response.ReasonPhrase}".TrimEnd());
                 await using var body = await response.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
-                return await ReadLimited(body, "odpověď", cts.Token).ConfigureAwait(false);
+                return await ReadLimited(body, "response", cts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                throw new UpdateException($"{source} neodpověděl do {httpTimeout.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture)} s");
+                throw new UpdateException($"{source} did not respond within {httpTimeout.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture)} s");
             }
         }
-        var read = Task.Run(async () =>
+        // The file is read on a thread of its own, synchronously: the limit then measures the disk alone. On a pool
+        // thread (Task.Run + ReadAsync, which a non-async FileStream also queues to the pool) a busy pool — the full
+        // test suite, a machine under load — could delay the very start of the read past the limit, and a healthy
+        // local manifest came back "did not respond" (the UpdateCheckerTests flake).
+        var read = new TaskCompletionSource<string>();   // completed on the reader thread: WhenAny sees it at once
+        var reader = new Thread(() =>
         {
-            await using var file = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
-            return await ReadLimited(file, "soubor", CancellationToken.None).ConfigureAwait(false);
-        });
-        if (await Task.WhenAny(read, Task.Delay(fileTimeout)).ConfigureAwait(false) != read)
+            try
+            {
+                using var file = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
+                read.TrySetResult(ReadLimited(file, "file"));
+            }
+            catch (Exception e)
+            {
+                read.TrySetException(e);   // observed below, or by the continuation after a timeout
+            }
+        }) { IsBackground = true, Name = "Offload update check (file)" };
+        reader.Start();
+        if (await Task.WhenAny(read.Task, Task.Delay(fileTimeout)).ConfigureAwait(false) != read.Task)
         {
-            _ = read.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);   // observed later, never unobserved
-            throw new UpdateException($"{source} neodpověděl do {fileTimeout.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture)} s");
+            _ = read.Task.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);   // observed later, never unobserved
+            throw new UpdateException($"{source} did not respond within {fileTimeout.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture)} s");
         }
         try
         {
-            return await read.ConfigureAwait(false);
+            return await read.Task.ConfigureAwait(false);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -144,7 +157,7 @@ public static class UpdateChecker
         }
     }
 
-    /// At most MaxManifestBytes of UTF-8; one byte more is "too large" (`what`: "soubor" / "odpověď").
+    /// At most MaxManifestBytes of UTF-8; one byte more is "too large" (`what`: "file" / "response").
     static async Task<string> ReadLimited(Stream stream, string what, CancellationToken token)
     {
         var buffer = new byte[MaxManifestBytes + 1];
@@ -155,7 +168,26 @@ public static class UpdateChecker
             if (n == 0) break;
             total += n;
         }
-        if (total > MaxManifestBytes) throw new UpdateException($"{what} je větší než 64 KB");
+        return Limited(buffer, total, what);
+    }
+
+    /// The same, synchronously (the file read on its own thread).
+    static string ReadLimited(Stream stream, string what)
+    {
+        var buffer = new byte[MaxManifestBytes + 1];
+        int total = 0;
+        while (total < buffer.Length)
+        {
+            int n = stream.Read(buffer, total, buffer.Length - total);
+            if (n == 0) break;
+            total += n;
+        }
+        return Limited(buffer, total, what);
+    }
+
+    static string Limited(byte[] buffer, int total, string what)
+    {
+        if (total > MaxManifestBytes) throw new UpdateException($"the {what} is larger than 64 KB");
         return Encoding.UTF8.GetString(buffer, 0, total);
     }
 
@@ -169,22 +201,24 @@ public static class UpdateChecker
         }
         catch (JsonException e)
         {
-            throw new UpdateException($"poškozený JSON ({e.Message})");
+            throw new UpdateException($"damaged JSON ({e.Message})");
         }
-        if (info?.Version is not string v) throw new UpdateException("v manifestu chybí platná verze (MAJOR.MINOR.PATCH)");
+        if (info?.Version is not string v) throw new UpdateException(NoVersion);
         Validate(info);
         if (info.Notes is { Length: > MaxNotesLength } n) info = info with { Notes = n[..MaxNotesLength] };
         return info;
     }
 
+    const string NoVersion = "the manifest has no valid version (MAJOR.MINOR.PATCH)";
+
     /// Text that ends up on screen is short and has no control characters (a hostile manifest or state file).
     static void Validate(UpdateInfo info)
     {
         if (info.Version.Length > MaxVersionLength || info.Version.Any(Odd))
-            throw new UpdateException("verze v manifestu je příliš dlouhá nebo obsahuje zvláštní znaky");
-        if (Parts(info.Version) == null) throw new UpdateException("v manifestu chybí platná verze (MAJOR.MINOR.PATCH)");
+            throw new UpdateException("the version in the manifest is too long or contains odd characters");
+        if (Parts(info.Version) == null) throw new UpdateException(NoVersion);
         if (info.Url is { } u && (u.Length > MaxUrlLength || u.Any(Odd)))
-            throw new UpdateException("adresa vydání v manifestu je příliš dlouhá nebo obsahuje zvláštní znaky");
+            throw new UpdateException("the release address in the manifest is too long or contains odd characters");
     }
 
     /// Control and Unicode Format characters (e.g. U+202E right-to-left override) are never shown.
@@ -247,17 +281,17 @@ public static class UpdateChecker
     }
 }
 
-/// A Czech reason the manifest could not be used.
+/// Why the manifest could not be used.
 public sealed class UpdateException(string message) : Exception(message);
 
 public enum UpdateLinkKind { None, Web, Network, Folder, File }
 
-/// Ruling I5 + U1: what "Otevřít" may open. Only an https URL (the browser), or a LOCAL path (a drive letter) that is an
+/// Ruling I5 + U1: what "Open" may open. Only an https URL (the browser), or a LOCAL path (a drive letter) that is an
 /// existing folder or .zip (Explorer) — never anything that would run (an exe, a .lnk, a protocol handler, plain http)
 /// and never a network path (UNC, file://host, anything not on a drive letter: opening it contacts SMB/WebDAV).
 public static class UpdateLinks
 {
-    public const string NetworkNote = "Síťová cesta — zkopírujte ji a otevřete ručně.";
+    public const string NetworkNote = "Network path — copy it and open it by hand.";
 
     static readonly System.Text.RegularExpressions.Regex DriveRoot = new(@"^[A-Za-z]:[\\/]", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
