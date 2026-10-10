@@ -111,11 +111,11 @@ public enum MHL {
     static func c4(_ data: Data) -> String {
         var digest = [UInt8](repeating: 0, count: Int(CC_SHA512_DIGEST_LENGTH))
         data.withUnsafeBytes { _ = CC_SHA512($0.baseAddress, CC_LONG(data.count), &digest) }
-        return c4(sha512: digest)
+        return c4FromSHA512(digest)
     }
 
     /// The C4 ID of data whose SHA-512 is `digest` (a file hashed block by block).
-    static func c4(sha512 digest: [UInt8]) -> String {
+    static func c4FromSHA512(_ digest: [UInt8]) -> String {
         let alphabet = Array("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
         var num = digest
         var out: [Character] = []

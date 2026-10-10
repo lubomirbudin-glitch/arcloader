@@ -19,6 +19,14 @@ final class TempDir {
         try! FileManager.default.createDirectory(atPath: p, withIntermediateDirectories: true)
         return p
     }
+
+    /// `path/parts…` for a file: the parent folders are created, the file is not (`sub` would make it a folder).
+    func file(_ parts: String...) -> String {
+        let p = ([path] + parts).joined(separator: "/")
+        try! FileManager.default.createDirectory(atPath: (p as NSString).deletingLastPathComponent,
+                                                 withIntermediateDirectories: true)
+        return p
+    }
 }
 
 extension XCTestCase {
