@@ -24,8 +24,8 @@ private struct RootView: View {
             } else {
                 TopBar()
                 HSplitView {
-                    SetupPanel()
-                        .frame(minWidth: 360, idealWidth: 400, maxWidth: 480)
+                    SetupColumn()
+                        .frame(minWidth: Metrics.leftMin, idealWidth: Metrics.leftIdeal, maxWidth: Metrics.leftMax)
                     QueuePanel()
                         .frame(minWidth: 520)
                 }
@@ -56,205 +56,6 @@ extension JobItem {
     var summaryText: String? {
         guard isFinished, !isCancelled, let r = report else { return nil }
         return JobProgress.summaryText(r)
-    }
-}
-
-// MARK: - Setup (left)
-
-struct SetupPanel: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    SourcesSection()
-                    DestinationsSection()
-                }
-                .padding(18)
-            }
-            Divider()
-            StartBar()
-        }
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
-}
-
-struct HardwareSection: View {
-    @ObservedObject var hw: HardwareModel
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionHeader(title: "Hardware", systemImage: "cable.connector",
-                          trailing: AnyView(Button("Prověřit…") { openWindow(id: "hardware") }.buttonStyle(.borderless)
-                              .help("Prověřit USB porty (⌘U)")))
-            Text(hw.summary).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-}
-
-struct SectionHeader: View {
-    let title: String
-    let systemImage: String
-    var trailing: AnyView? = nil
-
-    var body: some View {
-        HStack {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-            Spacer()
-            trailing
-        }
-    }
-}
-
-struct SourcesSection: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Karty", systemImage: "sdcard",
-                          trailing: AnyView(HStack(spacing: 4) {
-                              Button { model.refreshVolumes() } label: { Image(systemName: "arrow.clockwise") }
-                                  .help("Znovu načíst připojené disky")
-                              Button("Složka…") { model.addManualSource() }
-                          }.buttonStyle(.borderless)))
-            let cards = model.volumes.filter { !$0.isDestination }
-            if cards.isEmpty && model.manualSources.isEmpty {
-                Text("Vložte kartu do čtečky — objeví se tady automaticky.")
-                    .font(.callout).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
-            }
-            ForEach(cards) { v in
-                SourceRow(path: v.path, title: v.name,
-                          detail: "\(formatBytes(v.total - v.free)) · \(v.format)\(v.looksLikeCard ? "" : " · nevypadá jako karta")",
-                          icon: v.looksLikeCard ? "sdcard.fill" : "externaldrive")
-            }
-            ForEach(model.manualSources, id: \.self) { p in
-                SourceRow(path: p, title: (p as NSString).lastPathComponent, detail: p, icon: "folder")
-            }
-        }
-    }
-}
-
-struct SourceRow: View {
-    @EnvironmentObject var model: AppModel
-    let path: String
-    let title: String
-    let detail: String
-    let icon: String
-
-    var selected: Bool { model.selectedSources.contains(path) }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Toggle("", isOn: Binding(get: { selected }, set: { on in
-                if on { model.selectedSources.insert(path) } else { model.selectedSources.remove(path) }
-            }))
-            .labelsHidden()
-            .toggleStyle(.checkbox)
-            Image(systemName: icon).font(.title3).foregroundStyle(selected ? Color.accentColor : .secondary).frame(width: 22)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).fontWeight(.medium)
-                Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                if selected {
-                    HStack(spacing: 6) {
-                        Text("Název složky").font(.caption).foregroundStyle(.secondary)
-                        TextField(model.defaultName(path), text: Binding(
-                            get: { model.cardNames[path] ?? "" },
-                            set: { model.cardNames[path] = $0 }))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.caption)
-                    }
-                }
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.05)))
-    }
-}
-
-struct DestinationsSection: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Cíle", systemImage: "externaldrive.connected.to.line.below",
-                          trailing: AnyView(HStack(spacing: 4) {
-                              Button { model.refreshDestinations() } label: { Image(systemName: "arrow.clockwise") }
-                                  .help("Znovu zjistit volné místo a připojení cílů")
-                              Button("Přidat…") { model.addDestination() }
-                          }.buttonStyle(.borderless)))
-            if model.settings.destRoots.isEmpty {
-                Text("Přidejte dva disky — každá karta se zapíše na oba zároveň.")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
-            ForEach(Array(model.settings.destRoots.enumerated()), id: \.element) { i, root in
-                let info = model.destinationInfo(root)
-                HStack(spacing: 10) {
-                    Text("\(i + 1)")
-                        .font(.caption.bold()).foregroundStyle(.white)
-                        .frame(width: 20, height: 20)
-                        .background(Circle().fill(info.exists || info.checking ? Color.accentColor : .red))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text((root as NSString).lastPathComponent).fontWeight(.medium)
-                        if info.checking {
-                            Text("Zjišťuji…").font(.caption).foregroundStyle(.secondary)
-                        } else if info.exists {
-                            Text("\(formatBytes(info.free)) volno · \(info.format)").font(.caption).foregroundStyle(.secondary)
-                        } else {
-                            Text("Disk není připojen").font(.caption).foregroundStyle(.red)
-                        }
-                        if info.format.lowercased() == "exfat" || info.format.lowercased() == "msdos" {
-                            Label("Doporučeno APFS — spolehlivější a ověřování obchází cache", systemImage: "exclamationmark.triangle")
-                                .font(.caption).foregroundStyle(.orange)
-                        }
-                    }
-                    Spacer()
-                    Button { model.removeDestination(root) } label: { Image(systemName: "minus.circle") }
-                        .buttonStyle(.borderless).help("Odebrat cíl")
-                }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.05)))
-            }
-            if model.settings.destRoots.count == 1 {
-                Label("Jen jeden cíl — doporučeny jsou dvě nezávislé kopie.", systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.orange)
-            }
-        }
-    }
-}
-
-struct StartBar: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Texts.cards(model.selectedSources.count)).fontWeight(.medium)
-                Text(Texts.destinations(model.settings.destRoots.count) + (model.settings.proxy.enabled ? " · proxy" : ""))
-                    .font(.caption).foregroundStyle(.secondary)
-                // The LUT is also used by thumbnails when proxies are off: say so here, where the start button is.
-                if let p = model.lutProblem, !model.settings.proxy.enabled {
-                    Text(p).font(.caption).foregroundStyle(.red)
-                }
-            }
-            Spacer()
-            Button {
-                model.start()
-            } label: {
-                Label("Spustit offload", systemImage: "play.fill").frame(minWidth: 150)
-            }
-            .controlSize(.large)
-            .buttonStyle(.borderedProminent)
-            .keyboardShortcut(.return, modifiers: .command)
-            .disabled(!model.canStart)
-        }
-        .padding(14)
     }
 }
 
@@ -345,7 +146,7 @@ struct JobCard: View {
                         ForEach(Array(item.chainLines.enumerated()), id: \.offset) { _, line in
                             Text(line)
                                 .font(.caption.monospacedDigit())
-                                .foregroundStyle(line.hasPrefix("Úzké hrdlo") ? Color.orange : Color.secondary)
+                                .foregroundStyle(line.hasPrefix(ChainView.bottleneckPrefix) ? Color.orange : Color.secondary)
                                 .lineLimit(1).truncationMode(.middle)
                         }
                     }

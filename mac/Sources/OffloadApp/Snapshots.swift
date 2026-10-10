@@ -49,9 +49,28 @@ enum Snapshots {
 
     static var scenarios: [(String, () -> AppModel)] {
         [("ready", ready),
+         ("ready-warnings", readyWarnings),
+         ("empty", base),
          ("settings-proxy", { settings(.proxy) }),
          ("settings-folders", { settings(.folders) }),
          ("settings-decoders", { settings(.decoders) })]
+    }
+
+    /// One destination nearly full, verification and proxies off, a folder source.
+    static func readyWarnings() -> AppModel {
+        let m = base()
+        let a = card("A035_ARRI", used: 120 * gb)
+        m.settings.destRoots = [shuttle]
+        m.settings.verify = false
+        m.settings.proxy.enabled = false
+        m.previewState(volumes: [a], connections: [:], destinations: [
+            shuttle: DestinationStatus(free: 100 * gb, total: 4 * tb, format: "exfat", exists: true, checking: false,
+                                       connection: "USB 3 (10 Gb/s)"),
+        ])
+        m.manualSources = ["/Users/dit/Footage/B-cam day 3"]
+        m.selectedSources = [a.path]
+        m.cardNames[a.path] = "A035_ARRI_DAY3"
+        return m
     }
 
     static func settings(_ s: SettingsSection) -> AppModel {

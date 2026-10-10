@@ -94,8 +94,8 @@ final class JobItem: ObservableObject, Identifiable {
         chainRequested = true
         let config = job.config
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            var l = [RoleLink(role: "Card", link: DriveLinks.resolve(plan.source))]
-            l += plan.destRoots.enumerated().map { RoleLink(role: "Destination \($0.offset + 1)", link: DriveLinks.resolve($0.element)) }
+            var l = [RoleLink(role: RoleLink.card, link: DriveLinks.resolve(plan.source))]
+            l += plan.destRoots.enumerated().map { RoleLink(role: RoleLink.destination($0.offset + 1), link: DriveLinks.resolve($0.element)) }
             let c = UsbScanner.scan().connectors
             DispatchQueue.main.async {
                 guard let self else { return }
