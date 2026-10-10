@@ -25,6 +25,21 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
+- **Snímací fps z metadat prvního snímku u každého klipu (zadání uživatele 2026-10-10, obě verze, chyba):** report
+  u karty A_0012_1F75 (ALEXA 35, natočeno 35 fps) uvádí u všech klipů 24 fps — bere se jen projektová / přehrávací
+  rychlost souboru (`nativePictureEssenceDescriptor.file.sampleRate` = 24/1), ne snímací (`frameBasedMetadata` →
+  `Sensor State.sensorSampleRate` = 35/1 v prvním snímku). U **každého klipu** číst metadata prvního snímku a v reportu
+  (HTML/PDF/JSON, seznamy klipů, denní a souhrnný report) uvádět **snímací fps** a, když se liší, i přehrávací
+  („35 fps · přehrávání 24“); délku klipu brát z počtu snímků a přehrávací rychlosti (stopáž ve střižně) a označit
+  ji tak. Totéž ověřit u BRAW (`sensorRate` / GetSensorRate), RED (record vs. project fps) a Sony/Canon (S&Q,
+  `captureFps` v XML/metadatech). Nový klíč JSON doplnit do `docs/FORMATY.md` pro obě verze.
+
+- **Pauza zálohy (zadání uživatele 2026-10-09, obě verze):** tlačítko Pozastavit nechá **doběhnout rozpracovaný dílčí
+  krok** — soubor při kopii a ověření, klip při analýze a renderu proxy — a teprve pak úlohu zastaví (žádný napůl
+  zapsaný soubor, žádný přerušený render). Pokračovat **plynule naváže** dalším souborem / klipem, bez opakování hotové
+  práce a bez nového spuštění úlohy; stav „pozastavuji (dokončuji …)“ → „pozastaveno“ musí být vidět. Windows od 0.5.0
+  pozastavuje mezi 16MB bloky a mezi klipy 2. fáze — sladit s tímto zadáním (pozastavení po dokončení souboru/klipu).
+
 - **Souhrnný report z vybraných záloh (zadání uživatele 2026-10-09, obě verze):** v historii karet označit libovolný
   počet záloh (karet, i z různých dnů a disků) a vytvořit z nich **jeden souhrnný report** (HTML + PDF, bez náhledů):
   natáčecí den (dny), za každou kartu i celkem: počet klipů a souborů, **velikost**, **stopáž** (součet délek klipů),
