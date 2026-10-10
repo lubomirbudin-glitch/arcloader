@@ -84,6 +84,20 @@ public class ProjectsTests
         Assert.Null(s.ActiveProject);
     }
 
+    // Scripts written for 0.8 and older pass the Czech name of the top level.
+    [Theory]
+    [InlineData("No project")]
+    [InlineData("bez projektu")]
+    [InlineData(" Bez projektu ")]
+    public void OldAndNewNoProjectName_SwitchToTheTopLevel(string name)
+    {
+        var s = new AppSettings();
+        Projects.SaveAs(s, "Film X");
+        Assert.True(Projects.IsNoProject(name));
+        Projects.Activate(s, name);
+        Assert.Null(s.ActiveProject);
+    }
+
     [Fact]
     public void SaveAs_CopiesDeep_NotShared()
     {

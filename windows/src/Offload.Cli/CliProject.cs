@@ -19,7 +19,7 @@ static class CliProject
     {
         if (name == null) return null;
         var settings = SettingsStore.Load(SettingsPath());
-        if (string.Equals(name.Trim(), Projects.NoProject, StringComparison.OrdinalIgnoreCase)) return new CliProfile(settings, null);
+        if (Projects.IsNoProject(name)) return new CliProfile(settings, null);
         var project = Projects.Find(settings, name) ?? throw new ArgumentException(Projects.Unknown(name, settings));
         return new CliProfile(project, project.Name);
     }

@@ -12,6 +12,11 @@ public static class Projects
     public const string NoProjectOld = "Bez projektu";
     public const int MaxNameLength = 60;
 
+    /// "No project" in either spelling (scripts written for 0.8 and older pass "Bez projektu").
+    public static bool IsNoProject(string? name) =>
+        name != null && (string.Equals(name.Trim(), NoProject, StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(name.Trim(), NoProjectOld, StringComparison.OrdinalIgnoreCase));
+
     /// Why `name` cannot be a project's name, or null. `except`: the project being renamed (may keep its name).
     public static string? NameProblem(string? name, IEnumerable<string> existing, string? except = null)
     {
@@ -62,7 +67,7 @@ public static class Projects
     /// its own values, so switching there and back loses nothing.
     public static void Activate(AppSettings s, string? name)
     {
-        if (name == null || string.Equals(name.Trim(), NoProject, StringComparison.OrdinalIgnoreCase))
+        if (name == null || IsNoProject(name))
         {
             s.ActiveProject = null;
             return;
