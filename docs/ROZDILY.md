@@ -232,4 +232,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Doplnění do zálohy — zámek složky karty** (Windows): dvě doplnění do stejné zálohy najednou se nepustí (druhé hned
   skončí „S touto zálohou právě pracuje jiná úloha …“; s ověřením během proxy drží zámek úloha až do zápisu výsledku ověření). Zámek platí jen v jedné přihlášené relaci Windows na jednom
   počítači — nechrání před doplněním z jiného účtu ani z jiného počítače do sdílené složky — a stejnou složku pod jiným
-  jménem (`subst`, `\\localhost\D$`, krátké jméno 8.3) bere jako jinou.
+  jménem (`subst`, `\\localhost\D$`, krátké jméno 8.3) bere jako jinou. Oprava z jiné relace tak může smazat
+  hotovou kopii běžící opravy, která čeká pod skrytým jménem `.offload-part` (třeba během pauzy). Neproběhne to
+  potichu: soubor běžící opravy skončí chybou a stačí znovu „Zkopírovat znovu“.

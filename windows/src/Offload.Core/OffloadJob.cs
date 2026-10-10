@@ -1006,7 +1006,7 @@ public sealed class OffloadJob
         {
             StallTimeout = Engine.Options.ProxyStallTimeout ?? ProxyRenderer.DefaultStallTimeout,
         };
-        s.StartBackground();
+        s.StartBackground(postWorker);   // stage 2's worker: the readers are judged during a pause only once it stands
         return s;
     }
 

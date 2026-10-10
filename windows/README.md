@@ -488,13 +488,15 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
       „Pozastaveno“; Pokračovat → ověří zbytek, `verifyPausedSeconds` v reportu. S Verify-in-Proxy (proxy zapnuté):
       Pozastavit během proxy → klip se dorenderuje, čtení na pozadí sekundárního disku dočte svůj soubor, pak
       „Pozastaveno“; 5 minut pauzy → žádné „disk přestal odpovídat“, po Pokračovat vše ověřené. Sekundární disk během
-      „Pozastavuji“ odpojit tak, aby visel (nebo zablokovat) → po limitu hlídače jeho soubory selžou a úloha se zastaví.
+      „Pozastavuji“ odpojit tak, aby visel (nebo zablokovat) → po doběhnutí rozpracovaného klipu a limitu hlídače jeho soubory selžou a úloha se zastaví; disk jen
+      vytížený renderem (pomalé čtení, ale čte) během „Pozastavuji“ nikdy neselže.
 - [ ] 74. **Pozastavit během analýzy a proxy:** „Pozastavuji (dokončuji klip A001C003…)“ / „(dokončuji proxy klipu
       A001C003…)“ → klip doběhne (proxy kompletní, přehratelná), pak „Pozastaveno — Pokračovat naváže dalším klipem.“;
       Pokračovat → další klip, hotový se neopakuje.
 - [ ] 75. **Zrušit během „Pozastavuji“:** Pozastavit uprostřed souboru 100+ GB a hned Zrušit → úloha skončí do pár
       vteřin jako Zrušeno (nečeká na dokopírování souboru), žádný `.offload-part`; totéž v „Pozastaveno“ a při zavření
-      aplikace. Doplnění a Zkopírovat znovu: Pozastavit → soubor se dokopíruje, pak stojí; vysunout kartu jde až po kopii
+      aplikace. Výjimka: přijde-li Zrušit ve chvíli, kdy se před „Pozastaveno“ vyprazdňuje cache cílových disků, počká
+      na dokončení tohoto vyprázdnění (obvykle vteřiny; jako vyprázdnění na konci kopie, které proběhne i po Zrušit). Doplnění a Zkopírovat znovu: Pozastavit → soubor se dokopíruje, pak stojí; vysunout kartu jde až po kopii
       (jako bez pauzy).
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.

@@ -1088,7 +1088,8 @@ pak úlohu zastaví; tlačítko se změní na <b class="ui">Pokračovat</b>, kte
   <li>Během pauzy počítač nepřejde do spánku (otevřené soubory na USB disku by spánek mohl poškodit). Pozastavená úloha
     blokuje frontu — další karta čeká.</li>
   <li><b class="ui">Zrušit</b> i zavření aplikace během pauzy — i ve stavu „Pozastavuji“ — úlohu ukončí hned, jako bez
-    pauzy: na dokončení souboru nečeká a rozpracované soubory se smažou.</li>
+    pauzy: na dokončení souboru nečeká a rozpracované soubory se smažou. Jen když Offload zrovna vyprazdňuje zápisovou
+    cache cílových disků (těsně před „Pozastaveno“, i na konci kopie), počká, než disky dopíšou — obvykle pár vteřin.</li>
   <li>Když během pauzy odpojíte cílový disk, po <b class="ui">Pokračovat</b> soubory na tom disku selžou (ostatní cíle
     pokračují) a karta úlohy zežloutne — pak pomůže <b class="ui">Zkopírovat znovu</b>.</li>
   <li>Když během pauzy vyměníte nebo vytáhnete kartu, Offload po <b class="ui">Pokračovat</b> nezkopíruje nic dalšího

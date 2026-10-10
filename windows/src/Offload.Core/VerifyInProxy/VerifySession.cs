@@ -190,8 +190,9 @@ public sealed class VerifySession : IDisposable
     };
 
     /// Starts the background reads: every destination but the primary in full, and the primary's files no proxy reads —
-    /// one thread per volume; the primary volume's thread waits while a proxy reads the primary.
-    public void StartBackground()
+    /// one thread per volume; the primary volume's thread waits while a proxy reads the primary. `stage`: stage 2's own
+    /// worker of the pause gate (analysis, proxies, fill-in) — see the watch below; null: no watch before Finish.
+    public void StartBackground(PauseGate.Worker? stage = null)
     {
         lock (gate)
         {
@@ -229,12 +230,15 @@ public sealed class VerifySession : IDisposable
                 throw;
             }
         }
-        if (byVolume.Count == 0) return;
-        // Review M-2: while a pause is asked for, every reader is watched at once — a disk that hangs inside a file never
-        // keeps the job "Pozastavuji…" for ever (Finish watches them all the same way).
+        if (byVolume.Count == 0 || stage == null) return;
+        // Review M-2: once the job's own work has stopped for a pause, every reader is watched at once — a disk that
+        // hangs inside a file never keeps the job "Pozastavuji…" for ever (Finish watches them all the same way).
+        // Re-review N-1: only once stage 2 waits at the gate (its clip, analysis step or fill-in file done) — while it
+        // still renders, the readers at the lowest I/O priority may be starved for long without a hung disk, and are
+        // not judged then, exactly as without a pause. In Finish stage 2 is Idle (not at the gate): Finish judges.
         new Thread(() =>
         {
-            try { WaitFor(Readers, () => pauses.IsPaused); }
+            try { WaitFor(Readers, () => pauses.IsPaused && stage.IsHolding); }
             catch (Exception) { /* never take the process down; Finish watches them again */ }
         }) { IsBackground = true, Name = "offload.verify.watch" }.Start();
     }

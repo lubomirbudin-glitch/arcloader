@@ -599,13 +599,20 @@ public class VerifySessionTests
             pauses.Pause();
             disk.Wait(TimeSpan.FromSeconds(60));   // the disk of destination 2 stops answering
         }));
+        using var stage = pauses.Work();   // stage 2: its clip is done, it waits at the gate
+        var standing = TestThreads.Start(() =>
+        {
+            Assert.True(SpinWait.SpinUntil(() => pauses.IsPaused, TimeSpan.FromSeconds(30)));
+            return stage.WaitWhilePaused(CancellationToken.None);
+        });
         try
         {
-            s.StartBackground();
+            s.StartBackground(stage);
             Assert.True(Eventually(() => pauses.IsStanding, TimeSpan.FromSeconds(30)));   // without Finish: watched all along
             Assert.All(s.Results[1], r => Assert.Equal((FileState.Failed, Msg.VerifyDiskHung), (r.State, r.Error)));
             pauses.Resume();
-            await Task.Run(() => s.Finish()).WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.True(await standing.WaitAsync(TimeSpan.FromSeconds(30)));
+            await Task.Run(() => s.Finish(stage)).WaitAsync(TimeSpan.FromSeconds(30));
 
             Assert.All(s.Results[0], r => Assert.Equal(FileState.Verified, r.State));
             Assert.All(s.Results[1], r => Assert.Equal(FileState.Failed, r.State));
@@ -615,6 +622,52 @@ public class VerifySessionTests
             BlockReads.ReadHooks.TryRemove(file, out _);
             BlockReads.ReadHooks.TryRemove(slowFile, out _);
             disk.Set();
+        }
+    }
+
+    // Re-review N-1: Pozastavit while stage 2 still renders its clip ("Pozastavuji…"): a background reader at the lowest
+    // I/O priority that the render starves for longer than the stall limit — alive, not hung — is never judged then (as
+    // without a pause): no VerifyDiskHung, no "Neformátovat" for a healthy disk. Only once stage 2 waits at the gate.
+    [Fact]
+    public async Task PausedWhileTheClipRenders_StarvedReaderNotGivenUp()
+    {
+        using var dir = new TempDir();
+        var (e, plan, report, _) = Copy(dir, ("SOUND/b.wav", 2 * Block), ("SOUND/c.wav", 2 * Block));
+        var pauses = new PauseGate();
+        using var s = new VerifySession(plan, report, e.Blocks, Block, plan.CardPaths.Select(_ => (double?)1).ToArray(), 0,
+            new string?[plan.CardPaths.Count], pauses, default, (_, _) => null)
+        {
+            VolumeOfDestination = d => "V" + d,
+            ReadStallTimeout = TimeSpan.FromSeconds(3),   // as wide as in the test above: low-priority reads under load
+        };
+        var file = Path.GetFullPath(Layout.Join(plan.CardPaths[1], "SOUND/b.wav"));
+        int calls = 0;
+        using var starved = new ManualResetEventSlim();
+        Assert.True(BlockReads.ReadHooks.TryAdd(file, () =>
+        {
+            if (Interlocked.Increment(ref calls) != 1) return;
+            pauses.Pause();
+            Thread.Sleep(7000);   // one block starved by the render: over 2× the limit, then it reads on
+            starved.Set();
+        }));
+        using var stage = pauses.Work();   // stage 2 busy: the clip still renders
+        try
+        {
+            s.StartBackground(stage);
+            Assert.True(starved.Wait(TimeSpan.FromSeconds(30)));
+            Thread.Sleep(300);
+            Assert.DoesNotContain(s.Results[1], r => r.State == FileState.Failed);
+            var standing = TestThreads.Start(() => stage.WaitWhilePaused(CancellationToken.None));   // the clip is done
+            Assert.True(Eventually(() => pauses.IsStanding, TimeSpan.FromSeconds(30)));
+            pauses.Resume();
+            Assert.True(await standing.WaitAsync(TimeSpan.FromSeconds(30)));
+            await Task.Run(() => s.Finish(stage)).WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.All(s.Results, rs => Assert.All(rs, r => Assert.Equal(FileState.Verified, r.State)));
+        }
+        finally
+        {
+            BlockReads.ReadHooks.TryRemove(file, out _);
         }
     }
 
