@@ -87,7 +87,7 @@ final class JobTests: XCTestCase {
         let report = try XCTUnwrap(job.run())
         XCTAssertEqual(job.status().phase, .done)
         XCTAssertTrue(job.status().safeToEject)
-        XCTAssertTrue(report.safeToEject)
+        XCTAssertTrue(report.safeToFormat)
         for path in try XCTUnwrap(job.plan).cardPaths {
             XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path + "/CLIP/A.bin")), a)
             XCTAssertTrue(FileManager.default.fileExists(atPath: path + "/_REPORT/card.xxh64"))

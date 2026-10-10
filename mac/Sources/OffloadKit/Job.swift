@@ -171,7 +171,7 @@ public final class OffloadJob {
             LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
             setReport(report)
             update {
-                $0.safeToEject = report.safeToEject
+                $0.safeToEject = report.safeToFormat
                 $0.copySucceeded = report.success
                 $0.copy = engine.snapshot()
             }

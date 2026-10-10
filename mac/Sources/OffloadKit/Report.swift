@@ -1,62 +1,204 @@
 import Darwin
 import Foundation
 
+public struct SetAsideCopy: Codable, Equatable {
+    /// Index of the destination in `destinations`.
+    public var destination: Int
+    /// Path on the card ("/").
+    public var path: String
+    /// "_REPORT/neshoda_NNNN/<path>" relative to the card folder.
+    public var movedTo: String
+}
+
 public struct OffloadReport: Codable {
     public struct Destination: Codable {
-        public let root: String
-        public let cardPath: String
-        public let filesystem: String
-        public let filesOK: Int
-        public let filesFailed: Int
+        public var root: String
+        public var cardPath: String
+        public var filesystem: String
+        public var filesOK: Int
+        public var filesFailed: Int
+        /// Windows only (`false` = buffered I/O); the Mac reads it and never writes it.
+        public var unbuffered: Bool?
+        /// "verify-in-proxy" or "read-back"; absent without verification.
+        public var verifyMethod: String?
+        /// Czech: why this destination was read back although verify-in-proxy ran.
+        public var verifyNote: String?
+        /// "1A2B-3C4D" (FAT/exFAT/NTFS) or "uuid:<volume UUID>" (Mac, other file systems) — spec D.23.2.
+        public var volumeSerial: String?
+
+        public init(root: String, cardPath: String, filesystem: String, filesOK: Int, filesFailed: Int) {
+            self.root = root; self.cardPath = cardPath; self.filesystem = filesystem
+            self.filesOK = filesOK; self.filesFailed = filesFailed
+        }
     }
 
     public struct FileEntry: Codable {
-        public let path: String
-        public let size: Int64
-        public let modified: Date
-        public let xxh64: String?
-        /// Only when the copy computed MD5 too (spec 3.5): 32 lower-case hex digits.
-        public var md5: String? = nil
-        public let sourceError: String?
-        public let destinations: [String]
-        public let errors: [String?]
+        public var path: String
+        public var size: Int64
+        public var modified: Date
+        public var xxh64: String?
+        /// XXH3-128, 32 lower-case hex.
+        public var xxh128: String?
+        /// Only with MD5 (`hashAlgorithms` contains "md5").
+        public var md5: String?
+        public var sourceError: String?
+        public var destinations: [String]
+        public var errors: [String?]
+        /// Repair only: per destination true = a new copy, false = a good copy only read back.
+        public var rewritten: [Bool]?
+
+        public init(path: String, size: Int64, modified: Date, xxh64: String?, xxh128: String? = nil, md5: String? = nil,
+                    sourceError: String?, destinations: [String], errors: [String?], rewritten: [Bool]? = nil) {
+            self.path = path; self.size = size; self.modified = modified; self.xxh64 = xxh64; self.xxh128 = xxh128
+            self.md5 = md5; self.sourceError = sourceError; self.destinations = destinations; self.errors = errors
+            self.rewritten = rewritten
+        }
     }
 
     public var tool = "offload"
     public var version = OffloadVersion.string
     public var hashAlgorithm = "xxh64"
-    public let cardName: String
-    public let date: String
-    public let source: String
-    public let sourceFilesystem: String
-    public let started: Date
-    public let copyFinished: Date
-    public let finished: Date
-    public let verified: Bool
-    public let totalFiles: Int
-    public let totalBytes: Int64
-    public let destinations: [Destination]
-    public let files: [FileEntry]
-    public let skipped: [String]
+    /// Only when not just xxh64: ["xxh64", "md5"].
+    public var hashAlgorithms: [String]?
+    /// ASC MHL generation of an append or a repair (`offload_report_NNNN.json`); absent = 1.
+    public var generation: Int?
+    /// "repair" for "Zkopírovat znovu"; absent otherwise.
+    public var kind: String?
+    public var project: String?
+    public var cardName: String
+    public var date: String
+    public var source: String
+    public var sourceFilesystem: String
+    public var started: Date
+    public var copyFinished: Date
+    public var finished: Date
+    public var verified: Bool
+    /// The copy is done and verifies with the proxies; no ASC MHL generation yet (spec D.22.5).
+    public var verifyPending: Bool?
+    /// The verification result is not written into every card folder: never "verified" until a resume rewrites it.
+    public var verifyIncomplete: Bool?
+    public var safeToFormatSeconds: Double?
+    public var verifyNotes: [String]?
+    public var copyPausedSeconds: Double?
+    public var verifyPausedSeconds: Double?
+    public var setAside: [SetAsideCopy]?
+    public var totalFiles: Int
+    public var totalBytes: Int64
+    public var destinations: [Destination]
+    public var files: [FileEntry]
+    public var skipped: [String]
     public var clips: [ClipEntry] = []
     public var proxy: ProxySettings?
-    /// The ASC MHL generation this report belongs to: absent (= 1) for the full copy, 2, 3 … for appends (spec 2.2).
-    public var generation: Int? = nil
+    /// Windows only; read, never written (its value is not carried over by the Mac).
+    public var proxyEncoder: String?
 
-    public var copySeconds: Double { copyFinished.timeIntervalSince(started) }
-    public var verifySeconds: Double { finished.timeIntervalSince(copyFinished) }
+    public init(cardName: String, date: String, source: String, sourceFilesystem: String, started: Date, copyFinished: Date,
+                finished: Date, verified: Bool, totalFiles: Int, totalBytes: Int64, destinations: [Destination],
+                files: [FileEntry], skipped: [String]) {
+        self.cardName = cardName; self.date = date; self.source = source; self.sourceFilesystem = sourceFilesystem
+        self.started = started; self.copyFinished = copyFinished; self.finished = finished; self.verified = verified
+        self.totalFiles = totalFiles; self.totalBytes = totalBytes; self.destinations = destinations; self.files = files
+        self.skipped = skipped
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case tool, version, hashAlgorithm, hashAlgorithms, generation, kind, project, cardName, date, source, sourceFilesystem
+        case started, copyFinished, finished, verified, verifyPending, verifyIncomplete, safeToFormatSeconds, verifyNotes
+        case copyPausedSeconds, verifyPausedSeconds, setAside, totalFiles, totalBytes, destinations, files, skipped, clips, proxy
+        case proxyEncoder
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(tool, forKey: .tool); try c.encode(version, forKey: .version)
+        try c.encode(hashAlgorithm, forKey: .hashAlgorithm)
+        try c.encodeIfPresent(hashAlgorithms, forKey: .hashAlgorithms)
+        try c.encodeIfPresent((generation ?? 1) > 1 ? generation : nil, forKey: .generation)
+        try c.encodeIfPresent(kind, forKey: .kind); try c.encodeIfPresent(project, forKey: .project)
+        try c.encode(cardName, forKey: .cardName); try c.encode(date, forKey: .date)
+        try c.encode(source, forKey: .source); try c.encode(sourceFilesystem, forKey: .sourceFilesystem)
+        try c.encode(started, forKey: .started); try c.encode(copyFinished, forKey: .copyFinished)
+        try c.encode(finished, forKey: .finished); try c.encode(verified, forKey: .verified)
+        try c.encodeIfPresent(verifyPending == true ? true : nil, forKey: .verifyPending)
+        try c.encodeIfPresent(verifyIncomplete == true ? true : nil, forKey: .verifyIncomplete)
+        try c.encodeIfPresent(safeToFormatSeconds, forKey: .safeToFormatSeconds)
+        try c.encodeIfPresent(verifyNotes?.isEmpty == false ? verifyNotes : nil, forKey: .verifyNotes)
+        try c.encodeIfPresent(copyPausedSeconds, forKey: .copyPausedSeconds)
+        try c.encodeIfPresent(verifyPausedSeconds, forKey: .verifyPausedSeconds)
+        try c.encodeIfPresent(setAside?.isEmpty == false ? setAside : nil, forKey: .setAside)
+        try c.encode(totalFiles, forKey: .totalFiles); try c.encode(totalBytes, forKey: .totalBytes)
+        try c.encode(destinations.map { d -> Destination in var x = d; x.unbuffered = nil; return x }, forKey: .destinations)
+        try c.encode(files, forKey: .files); try c.encode(skipped, forKey: .skipped)
+        try c.encode(clips, forKey: .clips); try c.encodeIfPresent(proxy, forKey: .proxy)
+        // proxyEncoder: never written by the Mac.
+    }
+
+    /// Tolerant reading: every key added since 0.1.0 may be missing; `clips` missing or null (a report without analysis,
+    /// an older Mac) is an empty list — the files are the record of the copy, the clips only describe them.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tool = try c.decodeIfPresent(String.self, forKey: .tool) ?? "offload"
+        version = try c.decodeIfPresent(String.self, forKey: .version) ?? "?"
+        hashAlgorithm = try c.decodeIfPresent(String.self, forKey: .hashAlgorithm) ?? "xxh64"
+        hashAlgorithms = try c.decodeIfPresent([String].self, forKey: .hashAlgorithms)
+        generation = try c.decodeIfPresent(Int.self, forKey: .generation)
+        kind = try c.decodeIfPresent(String.self, forKey: .kind)
+        project = try c.decodeIfPresent(String.self, forKey: .project)
+        cardName = try c.decode(String.self, forKey: .cardName)
+        date = try c.decode(String.self, forKey: .date)
+        source = try c.decode(String.self, forKey: .source)
+        sourceFilesystem = try c.decodeIfPresent(String.self, forKey: .sourceFilesystem) ?? "?"
+        started = try c.decode(Date.self, forKey: .started)
+        copyFinished = try c.decodeIfPresent(Date.self, forKey: .copyFinished) ?? started
+        finished = try c.decodeIfPresent(Date.self, forKey: .finished) ?? copyFinished
+        verified = try c.decodeIfPresent(Bool.self, forKey: .verified) ?? false
+        verifyPending = try c.decodeIfPresent(Bool.self, forKey: .verifyPending)
+        verifyIncomplete = try c.decodeIfPresent(Bool.self, forKey: .verifyIncomplete)
+        safeToFormatSeconds = try c.decodeIfPresent(Double.self, forKey: .safeToFormatSeconds)
+        verifyNotes = try c.decodeIfPresent([String].self, forKey: .verifyNotes)
+        copyPausedSeconds = try c.decodeIfPresent(Double.self, forKey: .copyPausedSeconds)
+        verifyPausedSeconds = try c.decodeIfPresent(Double.self, forKey: .verifyPausedSeconds)
+        setAside = try c.decodeIfPresent([SetAsideCopy].self, forKey: .setAside)
+        destinations = try c.decode([Destination].self, forKey: .destinations)
+        files = try c.decode([FileEntry].self, forKey: .files)
+        totalFiles = try c.decodeIfPresent(Int.self, forKey: .totalFiles) ?? files.count
+        totalBytes = try c.decodeIfPresent(Int64.self, forKey: .totalBytes) ?? files.reduce(0) { $0 + $1.size }
+        skipped = try c.decodeIfPresent([String].self, forKey: .skipped) ?? []
+        clips = (try? c.decodeIfPresent([ClipEntry?].self, forKey: .clips))?.compactMap { $0 } ?? []
+        proxy = try? c.decodeIfPresent(ProxySettings.self, forKey: .proxy)
+        proxyEncoder = try c.decodeIfPresent(String.self, forKey: .proxyEncoder)
+    }
+
+    public static func jsonName(_ g: Int) -> String { g <= 1 ? "offload_report.json" : String(format: "offload_report_%04d.json", g) }
+    public static func textName(_ g: Int) -> String { g <= 1 ? "offload_report.txt" : String(format: "offload_report_%04d.txt", g) }
+    public static func htmlName(_ card: String, _ g: Int) -> String { g <= 1 ? "\(card)_report.html" : String(format: "%@_report_%04d.html", card, g) }
+    public static func pdfName(_ card: String, _ g: Int) -> String { g <= 1 ? "\(card)_report.pdf" : String(format: "%@_report_%04d.pdf", card, g) }
+
+    public var generationNumber: Int { generation ?? 1 }
+    public var isRepair: Bool { kind == "repair" }
+    public var algorithms: [String] { hashAlgorithms ?? ["xxh64"] }
+    public var pausedSeconds: Double { (copyPausedSeconds ?? 0) + (verifyPausedSeconds ?? 0) }
+    public var copySeconds: Double { max(0, copyFinished.timeIntervalSince(started) - (copyPausedSeconds ?? 0)) }
+    public var verifySeconds: Double { max(0, finished.timeIntervalSince(copyFinished) - (verifyPausedSeconds ?? 0)) }
+    public var failedFiles: [FileEntry] {
+        files.filter { f in f.sourceError != nil || f.destinations.contains { !OffloadReport.isGood($0, verified: verified) } }
+    }
+    public var success: Bool { failedFiles.isEmpty }
+    /// Spec D.22.7: every file on every destination verified, and the result written everywhere.
+    public var safeToFormat: Bool { success && verified && verifyPending != true && verifyIncomplete != true }
+
+    /// Reads a report written by any Offload (Mac 0.1+, Windows 0.1+): unknown keys ignored, dates ISO 8601.
+    public static func read(_ path: String) throws -> OffloadReport {
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        return try dec.decode(OffloadReport.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+    }
+
     /// A file state that counts as good: "verified" — or, when verification did not run to the end
     /// (off or cancelled), also "written". Shared with Windows `OffloadReport.FailedFiles`.
     static func isGood(_ state: String, verified: Bool) -> Bool {
         state == FileState.verified.rawValue || (!verified && state == FileState.written.rawValue)
     }
-
-    public var failedFiles: [FileEntry] {
-        files.filter { f in f.sourceError != nil || f.destinations.contains { !OffloadReport.isGood($0, verified: verified) } }
-    }
-    public var success: Bool { failedFiles.isEmpty }
-    /// Every file is on every destination and was read back with a matching hash.
-    public var safeToEject: Bool { success && verified }
 
     static func build(plan: OffloadPlan, hashes: [UInt64?], sourceErrors: [String?], destResults: [[DestFileResult]],
                       verified: Bool, started: Date, copyFinished: Date, finished: Date) -> OffloadReport {
@@ -96,12 +238,14 @@ public struct OffloadReport: Codable {
         Finished:    \(ts.string(from: finished))
         Files:       \(totalFiles)  (\(formatBytes(totalBytes)))
         Copy:        \(String(format: "%.1f s", copySeconds))  \(formatRate(totalBytes, copySeconds))
-        Verify:      \(verified ? String(format: "%.1f s", verifySeconds) + "  " + formatRate(totalBytes, verifySeconds) : "NOT VERIFIED")
-        Hash:        \(hashAlgorithm)
+        Verify:      \(verified ? String(format: "%.1f s", verifySeconds) + "  " + formatRate(totalBytes, verifySeconds) : verifyPending == true ? "PENDING (with the proxies)" : "NOT VERIFIED")
 
         """
+        if let t = safeToFormatSeconds { s += String(format: "Safe to format after: %.1f s\n", t) }
+        if pausedSeconds > 0 { s += String(format: "Paused:      %.1f s (not in the speeds)\n", pausedSeconds) }
+        s += "Hash:        \(algorithms.joined(separator: "+"))\n"
         for d in destinations {
-            s += "Destination: \(d.cardPath) [\(d.filesystem)]  ok \(d.filesOK)  failed \(d.filesFailed)\n"
+            s += "Destination: \(d.cardPath) [\(d.filesystem)\(d.volumeSerial.map { " " + $0 } ?? "")]  ok \(d.filesOK)  failed \(d.filesFailed)\(d.verifyMethod.map { "  verify: " + $0 } ?? "")\n"
         }
         if !skipped.isEmpty {
             s += "\nSkipped (system files): \(skipped.joined(separator: ", "))\n"

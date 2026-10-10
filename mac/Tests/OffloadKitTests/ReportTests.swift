@@ -3,10 +3,10 @@ import XCTest
 
 final class ReportTests: XCTestCase {
     func testSuccessAndEject() {
-        XCTAssertTrue(Reports.sample().safeToEject)
+        XCTAssertTrue(Reports.sample().safeToFormat)
         let notVerified = Reports.sample(verified: false)
         XCTAssertTrue(notVerified.success)
-        XCTAssertFalse(notVerified.safeToEject)
+        XCTAssertFalse(notVerified.safeToFormat)
         let failed = Reports.sample(destError: "boom")
         XCTAssertFalse(failed.success)
         XCTAssertEqual(failed.failedFiles.map(\.path), ["CLIP/c 02.mov"])
@@ -17,7 +17,7 @@ final class ReportTests: XCTestCase {
         for state in ["verified", "written"] {
             let r = Reports.sample(verified: false, states: [state, state])
             XCTAssertTrue(r.success, state)
-            XCTAssertFalse(r.safeToEject, state)
+            XCTAssertFalse(r.safeToFormat, state)
             XCTAssertTrue(r.failedFiles.isEmpty, state)
         }
         let mixed = Reports.sample(verified: false, states: ["verified", "failed"])
@@ -40,7 +40,7 @@ final class ReportTests: XCTestCase {
         XCTAssertEqual(r.destinations[0].filesOK, 2)
         XCTAssertEqual(r.destinations[0].filesFailed, 0)
         XCTAssertTrue(r.success)
-        XCTAssertFalse(r.safeToEject)
+        XCTAssertFalse(r.safeToFormat)
     }
 
     func testJSONKeysAreTheSharedFormatSorted() throws {
@@ -79,7 +79,7 @@ final class ReportTests: XCTestCase {
         let r = try dec.decode(OffloadReport.self, from: Data(json.utf8))
         XCTAssertEqual(r.version, "0.1.0-win")
         XCTAssertEqual(r.destinations.first?.filesOK, 1)
-        XCTAssertTrue(r.safeToEject)
+        XCTAssertTrue(r.safeToFormat)
     }
 
     func testHashListIsHashTwoSpacesPath() {

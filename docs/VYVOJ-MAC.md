@@ -90,6 +90,10 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 33 — report čte i zapisuje sdílené klíče Windows 0.2–0.6 (generace, oprava, projekt, MD5, xxh128, ověření
+  během proxy, pauza, odložené kopie); Mac nikdy nepíše unbuffered ani proxyEncoder; zápis souboru „jen nový“
+  (renamex_np RENAME_EXCL, `FileExists`); report s verifyPending/verifyIncomplete nikdy není „lze formátovat“
+  (`safeToEject` reportu → `safeToFormat`); `IO.writeFileNew`/`IO.renameNoReplace` proudu A nahrazeny verzí plánu
 - Úkol 32 — hash jádro: XXH3-128 (kanonický hex), XXH3-64 bloků, MD5 přes CryptoKit, registr hashů ASC MHL (xxh64, md5,
   sha1, xxh3, xxh128, c4); nahrazuje registr proudu A (`HashKind`, `HashAlgo.create`, MD5/SHA-1 přes zastaralé CommonCrypto),
   jeho testovací vektory zůstaly; `hashFile` počítá vždy xxh64 i xxh128 (`MultiHasher`)
