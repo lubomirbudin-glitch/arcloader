@@ -36,6 +36,17 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 - **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzích 0.7.0 a 0.7.1, viz níže.
 
+## 2026-10-10 — 0.7.2: odkazy na stažení dekodérů
+
+Verze **0.7.2** (zadání uživatele: „přidělej tam linky na stažení těch dekodérů, když budou někomu chybět“).
+
+- `ToolDownloads`: stránky výrobců — Blackmagic RAW (Player/SDK), REDCINE-X PRO pro Windows (REDline), ARRI Reference
+  Tool (art-cmd), Windows buildy ffmpeg (gyan.dev); adresy ověřené 2026-10-10.
+- Nastavení → Dekodéry RAW: u chybějícího nástroje odkaz „Stáhnout…“ (otevře prohlížeč); u braw-decode bez knihovny
+  Blackmagic RAW řádek ukáže „chybí knihovna Blackmagic RAW“ a odkaz (dřív byl zelený, i když BRAW nešlo dekódovat).
+- Poznámka klipu bez proxy kvůli chybějícímu dekodéru a upozornění na chybějící ffmpeg končí „— ke stažení: <adresa>“;
+  braw-decode bez knihovny vypíše adresu taky. CTI-ME.txt a návod (kapitola 2) mají odkazy.
+
 ## 2026-10-09 — 0.7.1: ARRIRAW (body 3–6 z ostrého nasazení Mac verze)
 
 Verze **0.7.1**. Zbytek bodů z ostrého nasazení Mac verze; recenze + oprava + re-recenze (nález I-1 a drobnosti).

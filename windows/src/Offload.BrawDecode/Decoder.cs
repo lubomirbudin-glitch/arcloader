@@ -36,7 +36,7 @@ internal static class Decoder
         var dll = BrawLibrary.Find(libraryDirs ?? BrawLibrary.SearchDirs(AppContext.BaseDirectory.TrimEnd('\\')));
         if (dll == null)
         {
-            Say(stderr, "braw-decode: BlackmagicRawAPI.dll not found (install Blackmagic RAW Player, the Blackmagic RAW SDK or DaVinci Resolve)");
+            Say(stderr, "braw-decode: BlackmagicRawAPI.dll not found (install Blackmagic RAW Player, the Blackmagic RAW SDK or DaVinci Resolve: " + Offload.Core.ToolDownloads.BlackmagicRaw + ")");
             return NoLibrary;
         }
         if (BrawRuntime.CreateFactory(dll, out var error) is not BrawFactory factory)

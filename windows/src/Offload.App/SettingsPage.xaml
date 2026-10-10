@@ -443,6 +443,14 @@
                                                 <Run Text="{Binding Purpose, Mode=OneWay}" FontSize="12" Foreground="{DynamicResource Text2}" />
                                             </TextBlock>
                                             <TextBlock Text="{Binding PathText}" Style="{StaticResource TextMonoFaint}" Margin="0,2,0,0" />
+                                            <TextBlock Margin="0,4,0,0" FontSize="12"
+                                                       Visibility="{Binding CanDownload, Converter={StaticResource BoolToVisible}}">
+                                                <Hyperlink Command="{Binding DownloadCommand}" Foreground="{DynamicResource AccentText}"
+                                                           ToolTip="{Binding DownloadUrl}" AutomationProperties.Name="Stáhnout">
+                                                    <Run Text="Stáhnout…" />
+                                                </Hyperlink>
+                                                <Run Text="(stránka výrobce)" Foreground="{DynamicResource Text3}" />
+                                            </TextBlock>
                                         </StackPanel>
                                     </DockPanel>
                                 </Border>

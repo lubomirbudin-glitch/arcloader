@@ -392,6 +392,6 @@ public static class ProxyPreflight
     /// A warning that does not block (copy and verification still run), or null.
     public static string? Warning(ProxySettings p, bool analyzeClips, ExternalTools resolved) =>
         (p.Enabled || analyzeClips) && (resolved.Ffmpeg == null || resolved.Ffprobe == null)
-            ? "ffmpeg/ffprobe nenalezen — náhledy a proxy se přeskočí, kopie a ověření proběhnou."
+            ? "ffmpeg/ffprobe nenalezen — náhledy a proxy se přeskočí, kopie a ověření proběhnou." + ToolDownloads.Hint(ToolDownloads.Ffmpeg)
             : null;
 }

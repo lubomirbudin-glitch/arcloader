@@ -20,10 +20,16 @@ Požadavky
 Volitelné doplňky
 -----------------
 - Blackmagic RAW (.braw): potřebuje knihovnu Blackmagic RAW — stačí nainstalovat zdarma
-  „Blackmagic RAW Player“ (blackmagicdesign.com, sekce Support), nebo mít DaVinci Resolve.
+  „Blackmagic RAW Player“, nebo mít DaVinci Resolve.
+  Ke stažení: https://www.blackmagicdesign.com/products/blackmagicraw
   Bez ní se klipy BRAW jen zkopírují a ověří, bez proxy a náhledů.
-- RED (.R3D) a ARRIRAW (.ari, .mxf): potřebují nástroje výrobců (REDline, ARRI art-cmd).
-  Bez nich se klipy jen zkopírují a ověří.
+- RED (.R3D): potřebuje REDline z balíku REDCINE-X PRO (zdarma).
+  Ke stažení: https://www.reddigitalcinema.com/download/redcine-x-pro-win
+- ARRIRAW (.ari, .mxf): potřebuje ARRI Reference Tool (art-cmd, zdarma).
+  Ke stažení: https://www.arri.com/en/learn/camera-systems/tools/arri-reference-tool
+- Bez RED a ARRI nástrojů se jejich klipy jen zkopírují a ověří.
+- ffmpeg a ffprobe jsou v balíčku (bin\). Kdyby chyběly: https://www.gyan.dev/ffmpeg/builds/
+Odkaz „Stáhnout…“ je i v aplikaci: Nastavení → Dekodéry RAW, u nástroje, který chybí.
 
 Co je ve složce
 ---------------

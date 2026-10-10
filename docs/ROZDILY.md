@@ -145,6 +145,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Hardwarové dekódování proxy** (2026-10-08/09): obě verze dekódují H.264/HEVC softwarově (Mac na Intelu dostal
   z VideoToolboxu zelené snímky bez chyby); kódování zůstává hardwarové. Windows ho umí zapnout volbou „Hardwarové
   dekódování (experimentální)“ / `--hw-decode` (`proxy.hardwareDecode`), Mac volbu nemá.
+- **Odkazy na stažení dekodérů** (2026-10-10): Windows u chybějícího nástroje ukáže „Stáhnout…“ (Nastavení →
+  Dekodéry RAW) a adresu výrobce i v poznámce klipu bez proxy; Mac zatím ne (VYVOJ-MAC, Naplánováno).
 - **Vlastní soubor místo vestavěného LUTu:** obě verze — Mac `~/Library/Application Support/Offload/luts/<id>.cube`,
   Windows `%APPDATA%\Offload\luts\<id>.cube`; v seznamu „(vlastní soubor)“. Windows navíc zapíše cestu k souboru do
   důvodu LUTu v reportu (`clips[].lut.reason`).

@@ -780,19 +780,23 @@ public sealed partial class MainViewModel
     {
         resolvedTools = AllSettings.Tools.Resolved();
         Tools.Clear();
-        void Row(string name, string purpose, string? path, Action<string> set) =>
+        void Row(string name, string purpose, string? path, Action<string> set, string url, string? missing = null) =>
             Tools.Add(new ToolRowViewModel(name, purpose, path, () =>
             {
                 if (Dialogs.PickFile($"Vyber {name}", "Programy (*.exe)|*.exe") is not string picked) return;
                 set(picked);
                 SettingsChanged();
                 RefreshTools();
-            }));
-        Row("ffmpeg", "proxy, náhledy", resolvedTools.Ffmpeg, p => AllSettings.Tools.Ffmpeg = p);
-        Row("ffprobe", "metadata klipů", resolvedTools.Ffprobe, p => AllSettings.Tools.Ffprobe = p);
-        Row("braw-decode", "Blackmagic RAW", resolvedTools.BrawDecoder, p => AllSettings.Tools.BrawDecoder = p);
-        Row("REDline", "RED R3D", resolvedTools.Redline, p => AllSettings.Tools.Redline = p);
-        Row("art-cmd", "ARRIRAW", resolvedTools.ArtCmd, p => AllSettings.Tools.ArtCmd = p);
+            }, url, missing));
+        Row("ffmpeg", "proxy, náhledy", resolvedTools.Ffmpeg, p => AllSettings.Tools.Ffmpeg = p, ToolDownloads.Ffmpeg);
+        Row("ffprobe", "metadata klipů", resolvedTools.Ffprobe, p => AllSettings.Tools.Ffprobe = p, ToolDownloads.Ffmpeg);
+        // braw-decode ships with Offload; the Blackmagic RAW library it needs does not (Player, SDK or Resolve).
+        var brawLibraryMissing = resolvedTools.BrawDecoder is string braw && BrawLibrary.Find(Path.GetDirectoryName(braw) ?? "") == null
+            ? "chybí knihovna Blackmagic RAW (Player, SDK nebo DaVinci Resolve)" : null;
+        Row("braw-decode", "Blackmagic RAW", resolvedTools.BrawDecoder, p => AllSettings.Tools.BrawDecoder = p, ToolDownloads.BlackmagicRaw,
+            brawLibraryMissing);
+        Row("REDline", "RED R3D", resolvedTools.Redline, p => AllSettings.Tools.Redline = p, ToolDownloads.Redline);
+        Row("art-cmd", "ARRIRAW", resolvedTools.ArtCmd, p => AllSettings.Tools.ArtCmd = p, ToolDownloads.ArtCmd);
         Raise(nameof(ToolsWarning));
     }
 }

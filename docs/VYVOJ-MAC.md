@@ -7,6 +7,12 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Odkazy na stažení dekodérů (zadání uživatele 2026-10-10, ve Windows 0.7.2):** když chybí nástroj
+  pro RAW, ukázat odkaz na stránku výrobce — v nastavení nástrojů tlačítko „Stáhnout…“ a v poznámce klipu bez proxy
+  „— ke stažení: <adresa>“: Blackmagic RAW https://www.blackmagicdesign.com/products/blackmagicraw, REDCINE-X PRO
+  (REDline) https://www.reddigitalcinema.com/download/redcine-x-pro-mac, ARRI Reference Tool (art-cmd)
+  https://www.arri.com/en/learn/camera-systems/tools/arri-reference-tool (adresu pro Mac u REDu ověřit).
+
 - **Souhrnný report z vybraných záloh (zadání uživatele 2026-10-09, obě verze):** v historii karet označit libovolný
   počet záloh (karet, i z různých dnů a disků) a vytvořit z nich **jeden souhrnný report** (HTML + PDF, bez náhledů):
   natáčecí den (dny), za každou kartu i celkem: počet klipů a souborů, **velikost**, **stopáž** (součet délek klipů),

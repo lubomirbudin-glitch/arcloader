@@ -316,11 +316,21 @@ a složka bude v kroku <b class="ui">1 · Karty</b> rovnou zaškrtnutá.</div>
 <table>
   <thead><tr><th class="w25">Formát</th><th class="w35">Co je potřeba</th><th>Bez doplňku</th></tr></thead>
   <tr><td>Blackmagic RAW (<code>.braw</code>)</td>
-      <td>knihovna Blackmagic RAW — stačí nainstalovat zdarma <b>Blackmagic RAW Player</b> (blackmagicdesign.com, sekce Support), nebo mít DaVinci Resolve</td>
+      <td>knihovna Blackmagic RAW — stačí nainstalovat zdarma <b>Blackmagic RAW Player</b>, nebo mít DaVinci Resolve<br>
+      <a href="https://www.blackmagicdesign.com/products/blackmagicraw">blackmagicdesign.com/products/blackmagicraw</a></td>
       <td>klipy se jen zkopírují a ověří, bez proxy a náhledů</td></tr>
-  <tr><td>RED (<code>.R3D</code>)</td><td>REDline z balíku REDCINE-X PRO</td><td>klipy se jen zkopírují a ověří</td></tr>
-  <tr><td>ARRIRAW (<code>.ari</code>, <code>.mxf</code>)</td><td>ARRI Reference Tool (<code>art-cmd</code>)</td><td>klipy se jen zkopírují a ověří</td></tr>
+  <tr><td>RED (<code>.R3D</code>)</td><td>REDline z balíku REDCINE-X PRO (zdarma)<br>
+      <a href="https://www.reddigitalcinema.com/download/redcine-x-pro-win">reddigitalcinema.com/download/redcine-x-pro-win</a></td>
+      <td>klipy se jen zkopírují a ověří</td></tr>
+  <tr><td>ARRIRAW (<code>.ari</code>, <code>.mxf</code>)</td><td>ARRI Reference Tool (<code>art-cmd</code>, zdarma)<br>
+      <a href="https://www.arri.com/en/learn/camera-systems/tools/arri-reference-tool">arri.com/en/learn/camera-systems/tools/arri-reference-tool</a></td>
+      <td>klipy se jen zkopírují a ověří</td></tr>
+  <tr><td>ffmpeg, ffprobe</td><td>jsou v balíčku (<code>bin\</code>); kdyby chyběly:<br>
+      <a href="https://www.gyan.dev/ffmpeg/builds/">gyan.dev/ffmpeg/builds</a></td>
+      <td>bez náhledů a proxy, kopie a ověření proběhnou</td></tr>
 </table>
+<p>Když nástroj chybí, je u něj v <b class="ui">Nastavení → Dekodéry RAW</b> odkaz <b class="ui">Stáhnout…</b> na stránku
+výrobce a stejná adresa je i v poznámce u klipu, který kvůli tomu nedostal proxy.</p>
 <p>Nainstalované nástroje Offload najde sám ve standardních umístěních; jinou cestu lze zadat v
 <b class="ui">Nastavení → Dekodéry RAW</b> (kapitola 3). Podpora RED a ARRIRAW je v aplikaci hotová, ale zatím nebyla
 vyzkoušená se skutečnými nástroji výrobců. ARRI Reference Tool svůj průběh nehlásí: u klipu ARRIRAW se průběh do 80 %
