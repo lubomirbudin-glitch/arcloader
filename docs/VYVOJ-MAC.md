@@ -129,6 +129,9 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 37 — zámky historie, složky karty a dne přes flock v Application Support/Offload/locks (nikdy na cíli),
+  složky v pevném pořadí bez čekání; `AppSupport.folder` (`OFFLOAD_SETTINGS_DIR`), `hwtest.json` tam taky; testy
+  nastaví `OFFLOAD_SETTINGS_DIR` na dočasnou složku (`testSettingsDir`)
 - Úkol 36 — svazek: sériové číslo FS z boot sektoru (exFAT/FAT/NTFS, jako Windows), záložně uuid:, kapacita,
   volumeSerial, klíč složky pro zámky, časy FAT s tolerancí celých hodin, .NET ticks; ověřeno: obrazy exFAT, FAT16
   a FAT32 pod dočasnou složkou — sériové číslo = bajty boot sektoru, kapacita = `diskutil` „Volume Total Space“;

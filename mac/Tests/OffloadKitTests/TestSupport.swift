@@ -29,9 +29,19 @@ final class TempDir {
     }
 }
 
+/// Every test run writes history, locks and update checks into a temporary folder, never into the user's own.
+/// Started by the first tempDir() (every test that touches the disk calls it) and by TestMedia.
+let testSettingsDir: String = {
+    let d = NSTemporaryDirectory() + "offload-tests-\(getpid())"
+    try? FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+    setenv("OFFLOAD_SETTINGS_DIR", d, 1)
+    return d
+}()
+
 extension XCTestCase {
     /// A fresh folder, removed after the test.
     func tempDir() -> TempDir {
+        _ = testSettingsDir
         let dir = TempDir()
         addTeardownBlock { try? FileManager.default.removeItem(atPath: dir.path) }
         return dir
@@ -84,6 +94,7 @@ enum TestMedia {
     /// ffmpeg / ffprobe / braw-decode: mac/Tools/bin first (like the app build), then the usual search
     /// (~/Library/Application Support/Offload/bin, /opt/homebrew/bin, /usr/local/bin, /usr/bin).
     static let tools: ExternalTools = {
+        _ = testSettingsDir
         let mac = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // OffloadKitTests
             .deletingLastPathComponent()   // Tests

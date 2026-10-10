@@ -248,3 +248,6 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   jménem (`subst`, `\\localhost\D$`, krátké jméno 8.3) bere jako jinou. Oprava z jiné relace tak může smazat
   hotovou kopii běžící opravy, která čeká pod skrytým jménem `.offload-part` (třeba během pauzy). Neproběhne to
   potichu: soubor běžící opravy skončí chybou a stačí znovu „Zkopírovat znovu“.
+  Mac: `flock` na místním souboru v `~/Library/Application Support/Offload/locks/` (klíč = UUID svazku a cesta pod jeho
+  kořenem, takže symlink ani jiný zápis cesty nevytvoří jiný zámek) — platí pro všechny procesy jednoho uživatele na
+  jednom Macu (GUI i CLI); Mac a Windows se navzájem nevylučují (jiný mechanismus), stejně jako dva Windows počítače.

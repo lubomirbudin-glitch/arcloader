@@ -32,7 +32,7 @@ public final class CancelFlag: @unchecked Sendable {
 /// The hardware check (spec 8a.2): topology and links in a moment; with `measure`, a short read of each card and
 /// write + read of each destination (a temporary file, deleted). Nothing is ever written to a card.
 public enum HwTest {
-    public static var defaultPath: String { ExternalTools.supportDir + "/hwtest.json" }
+    public static var defaultPath: String { AppSupport.folder + "/hwtest.json" }
 
     static func roles(cards: [String], destinations: [String], rolesByDrive: Bool = false) -> [(role: String, root: String)] {
         var list: [(role: String, root: String)] = cards.enumerated().map { (cards.count == 1 ? RoleLink.card : "\(RoleLink.card) \($0.offset + 1)", $0.element) }
