@@ -1,10 +1,10 @@
-# Prints navod.html (with offload-icon.png next to it) to windows\package\Offload-navod.pdf with Microsoft Edge
+# Prints manual.html (with offload-icon.png next to it) to windows\package\Offload-manual.pdf with Microsoft Edge
 # in headless mode - the same way the app prints its PDF report (PdfReport.cs): a throwaway profile, no header/footer,
 # page size and margins from the page's @page rule.
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
-$html = Join-Path $here 'navod.html'
-$pdf = Join-Path (Split-Path -Parent $here) 'Offload-navod.pdf'
+$html = Join-Path $here 'manual.html'
+$pdf = Join-Path (Split-Path -Parent $here) 'Offload-manual.pdf'
 
 $edge = @(
     (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
@@ -13,9 +13,9 @@ $edge = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $edge) { throw 'Microsoft Edge not found' }
 
-$work = Join-Path ([IO.Path]::GetTempPath()) ('offload-navod-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+$work = Join-Path ([IO.Path]::GetTempPath()) ('offload-manual-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force $work | Out-Null
-$tmp = Join-Path $work 'navod.pdf'
+$tmp = Join-Path $work 'manual.pdf'
 try {
     $uri = ([Uri]$html).AbsoluteUri
     $edgeArgs = @(
