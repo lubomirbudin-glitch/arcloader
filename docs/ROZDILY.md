@@ -7,7 +7,7 @@ Pravidlo: když změna v jedné verzi způsobí, že se verze v něčem rozejdou
 aktualizuje se tento soubor ve stejném commitu. Historie každé verze je v [VYVOJ-MAC.md](VYVOJ-MAC.md)
 a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 
-*Stav k 2026-10-08.*
+*Stav k 2026-10-10.*
 
 ## Přehled
 
@@ -16,7 +16,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.2.0 | 0.6.0-win (ve vývoji) |
+| Verze | 0.2.0C | 0.8.0-win (ve vývoji) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
@@ -71,9 +71,9 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
 | **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ⏳ naplánováno | ✅ 0.6.0 |
 | **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ⏳ naplánováno | ✅ 0.6.0 |
-| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
+| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ✅ 0.2.0C (`~/Documents/Offload reporty`) | ✅ CLI + GUI (čeká ruční test) |
 | **Souhrnný report z vybraných záloh** (zaškrtnuté karty v historii → jeden HTML + PDF do `Offload reporty\souhrn\`, volitelně na vybraný disk; `offload summary-report`; `clips[].info.recorded`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
-| **Automatické načtení disků** (externí USB disk → cíl, karta ve čtečce → zaškrtnutá; odebraný disk si pamatuje, `autoDrives`) | ⏳ naplánováno | ✅ GUI (čeká ruční test se skutečným diskem a čtečkou) |
+| **Automatické načtení disků** (externí USB disk → cíl, karta ve čtečce → zaškrtnutá; odebraný disk si pamatuje, `autoDrives`) | ✅ 0.2.0C (zapisovatelné externí disky do cílů, `ignoredVolumes`) | ✅ GUI (čeká ruční test se skutečným diskem a čtečkou) |
 | **Snímací fps z metadat prvního snímku** (`clips[].info.captureFrameRate`; „35 fps · přehrávání 24“ v HTML/PDF, TXT, denním reportu; CSV `Capture FPS`, ALE `Sensor_fps`; stopáž z přehrávací rychlosti) | ⏳ naplánováno (report uvádí přehrávací fps souboru) | ✅ 0.8.0: ARRIRAW `sensorSampleRate`, BRAW `sensorRate` (braw-decode --info), RED record fps (přehrávací = projektová), Sony `M01.XML` `captureFps`; Canon zatím jen přehrávací rychlost (chybí vzorek metadat); ostatní video = přehrávací. Čeká ruční test s art-cmd / REDline / vzorkem BRAW |
 
 ✅ hotovo · 🔨 rozpracováno · ⏳ naplánováno · ❌ není
