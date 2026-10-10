@@ -48,7 +48,7 @@
     </Style>
 
     <!-- ── Text ───────────────────────────────────────────────────────────────────────────────────────────────── -->
-    <!-- "1 · KARTY": 12 / SemiBold / Text2 (WPF has no letter spacing; the text itself is in capitals). -->
+    <!-- "1 · CARDS": 12 / SemiBold / Text2 (WPF has no letter spacing; the text itself is in capitals). -->
     <Style x:Key="StepTitle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="SemiBold" />
@@ -175,7 +175,7 @@
         </Style.Triggers>
     </Style>
 
-    <!-- ▶ Spustit offload: 48 px, Accent, radius 10; disabled = Raised with a LineStrong edge and Text3 (obr. 2, 3). -->
+    <!-- ▶ Start offload: 48 px, Accent, radius 10; disabled = Raised with a LineStrong edge and Text3 (obr. 2, 3). -->
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ButtonBaseFlat}">
         <Setter Property="Template" Value="{StaticResource Flat10}" />
         <Setter Property="Height" Value="48" />
@@ -226,7 +226,7 @@
         <Setter Property="Padding" Value="0" />
         <Setter Property="Foreground" Value="{DynamicResource Text3}" />
     </Style>
-    <!-- "Ze složky…", "+ Přidat disk", "Upravit projekt": a link, 13 px, AccentText. -->
+    <!-- "From folder…", "+ Add disk", "Edit project": a link, 13 px, AccentText. -->
     <Style x:Key="LinkButton" TargetType="ButtonBase" BasedOn="{StaticResource ButtonBaseFlat}">
         <Setter Property="Padding" Value="0,6" />
         <Setter Property="BorderThickness" Value="0" />
@@ -289,7 +289,7 @@
             </Trigger>
         </Style.Triggers>
     </Style>
-    <!-- Report PDF · Otevřít složku · Proxy on the green card. -->
+    <!-- Report PDF · Open folder · Proxies on the green card. -->
     <Style x:Key="SuccessSecondaryButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
         <Setter Property="Height" Value="36" />
         <Setter Property="Padding" Value="14,0" />
@@ -297,7 +297,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource SuccessBtnBorder}" />
     </Style>
 
-    <!-- Tabs "Fronta" / "Historie karet", settings sections and segmented choices: radio buttons. -->
+    <!-- Tabs "Queue" / "Card history", settings sections and segmented choices: radio buttons. -->
     <Style x:Key="TabButton" TargetType="RadioButton" BasedOn="{StaticResource ButtonBaseFlat}">
         <Setter Property="Height" Value="32" />
         <Setter Property="Padding" Value="14,0" />

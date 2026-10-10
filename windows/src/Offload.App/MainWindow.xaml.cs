@@ -27,7 +27,7 @@ public partial class MainWindow : Window
         vm.MessageRequested += text => MessageBox.Show(this, text, "Offload");
         Closed += (_, _) => vm.SaveNow();
         Closing += (_, e) => e.Cancel = !vm.TryClose(() => MessageBox.Show(this,
-            "Probíhá offload. Opravdu ukončit?\n\nRozpracované soubory se smažou, hotové zůstanou.", "Offload",
+            "An offload is running. Quit anyway?\n\nFiles in progress are deleted, finished files stay.", "Offload",
             MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes);
         // Deferred and once: CloseReady can arrive from a dispatcher callback; Close() inside a Closing event throws.
         bool closed = false;
@@ -41,7 +41,7 @@ public partial class MainWindow : Window
         vm.AskYesNo = text => MessageBox.Show(this, text, "Offload", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
         vm.AskProjectName = (title, initial, problem) => ProjectNameWindow.Ask(this, title, initial, problem);
         vm.EditLutRulesDialog = (rules, catalog) => LutRulesWindow.Edit(this, rules, catalog);
-        // Spec 8a.2: the USB check is on demand only (menu Nástroje, Ctrl+U, the Hardware section) — no start-up question.
+        // Spec 8a.2: the USB check is on demand only (menu Tools, Ctrl+U, the Hardware section) — no start-up question.
         vm.HardwareRequested += hw =>
         {
             if (hardwareWindow is { } open && ReferenceEquals(open.DataContext, hw))

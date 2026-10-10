@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using Offload.Core;
 using Offload.Core.Desktop;
@@ -49,7 +50,7 @@ public sealed partial class JobItemViewModel : QueueItem
     }
 
     public OffloadJob Job { get; }
-    /// "Projekt Film X už neexistuje — doplnění běží s nastavením Bez projektu" (AppendRules.GoneNote), or null.
+    /// "Project Film X no longer exists — the append runs with the No project settings" (AppendRules.GoneNote), or null.
     public string? ProfileNote { get; }
     public JobQueue.Runner Runner { get; }
     public bool CanEject { get; }
@@ -79,24 +80,24 @@ public sealed partial class JobItemViewModel : QueueItem
         Raise(string.Empty);   // every binding of the card may have changed
     }
 
-    // ── The new card (UI návrh obr. 2, 3) ──────────────────────────────────────────────────────────────────────
+    // ── The new card (UI design figs. 2, 3) ──────────────────────────────────────────────────────────────────────
     /// Waiting, Running, Done (green), Problem (yellow), Failed (red), Cancelled (grey) — which look the card has.
     public JobCardKind Kind => headline.Kind;
-    /// "A035_ARRI — kartu lze formátovat" / "A036_ARRI — lze vyjmout, formátovat zatím ne" / "B012_FX6 — kartu zatím nevysunujte" …
+    /// "A035_ARRI — safe to format" / "A036_ARRI — safe to eject, do not format yet" / "B012_FX6 — do not eject the card yet" …
     public string HeadTitle => headline.Title;
-    /// "Všech 24 souborů je na 2 discích a ověřených (xxHash64)." / "1 soubor na disku SHUTTLE_B nesouhlasí s kartou. …"
+    /// "All 24 files are on 2 disks and verified (xxHash64)." / "1 file on disk SHUTTLE_B does not match the card. …"
     public string HeadSub => headline.Sub;
 
     /// The destinations as the card names them ("RAID_A").
     internal IReadOnlyList<string> DestNames => destNames ??= JobCard.DiskNames(Job.Plan?.DestRoots ?? Job.Config.DestRoots);
 
-    /// "Čeká na pozastavenou úlohu." under a waiting card that stands behind a paused job, or null.
+    /// "Waiting for a paused job." under a waiting card that stands behind a paused job, or null.
     public string? WaitingHint => JobCard.WaitingHint(headline);
 
     /// Minor M12: every card folder of the job, one per line (the tooltip of the path on a finished card).
     public string? PathsTooltip => Job.Plan is { } plan ? string.Join("\n", plan.CardPaths) : null;
 
-    /// "24 klipů · 1,70 GB · ALEXA 35"; before the plan, what the card had when it was started.
+    /// "24 clips · 1.70 GB · ALEXA 35"; before the plan, what the card had when it was started.
     public string Sub
     {
         get
@@ -107,12 +108,12 @@ public sealed partial class JobItemViewModel : QueueItem
         }
     }
 
-    /// The waiting row: "B012_FX6" + " — doplnění" (or " — oprava").
+    /// The waiting row: "B012_FX6" + " — append" (or " — repair").
     public string TitleName => CardName;
-    public string TitleSuffix => Job.Config.AppendInto != null ? " — doplnění" : Job.Config.RepairInto != null ? " — oprava" : "";
+    public string TitleSuffix => Job.Config.AppendInto != null ? " — append" : Job.Config.RepairInto != null ? " — repair" : "";
 
-    /// "38 %" — the phase's share (the indicator shows which phase).
-    public string PercentText => $"{Math.Round(Progress * 100):0} %";
+    /// "38%" — the phase's share (the indicator shows which phase).
+    public string PercentText => string.Create(CultureInfo.InvariantCulture, $"{Math.Round(Progress * 100):0}%");
 
     /// "…\2026-10-07\A035_ARRI\" on the finished card.
     public string PathText => Job.Plan is { } plan ? SetupTexts.PathPreview(plan.Date, plan.CardName) : "";
@@ -123,8 +124,8 @@ public sealed partial class JobItemViewModel : QueueItem
         var names = new Dictionary<string, string>(owner.AllSettings.PortNames, StringComparer.OrdinalIgnoreCase);
         Task.Run(() =>
         {
-            var l = new List<RoleLink> { new("Karta", DriveLinks.Resolve(plan.Source)) };
-            l.AddRange(plan.DestRoots.Select((d, i) => new RoleLink($"Cíl {i + 1}", DriveLinks.Resolve(d))));
+            var l = new List<RoleLink> { new("Card", DriveLinks.Resolve(plan.Source)) };
+            l.AddRange(plan.DestRoots.Select((d, i) => new RoleLink($"Destination {i + 1}", DriveLinks.Resolve(d))));
             return (Links: l, Connectors: UsbScanner.Scan().Connectors);
         }).ContinueWith(t =>
         {
@@ -208,18 +209,18 @@ public sealed partial class JobItemViewModel : QueueItem
 
     /// A volume scan finished (a finished card is not refreshed every tick).
     internal void VolumesChanged() => RaiseMany(nameof(ShowEjectButton), nameof(CanRepair));
-    /// A repair of this backup was queued or finished: the "Zkopírovat znovu" button may have to go (a finished card is not refreshed).
+    /// A repair of this backup was queued or finished: the "Copy again" button may have to go (a finished card is not refreshed).
     internal void RepairChanged() => Raise(nameof(CanRepair));
-    /// R5: "lze vyjmout" while the verification still runs, "lze vyjmout i formátovat" once it is done.
+    /// R5: "safe to eject" while the verification still runs, "safe to eject and format" once it is done.
     public string SafeText => SafeToFormat ? Texts.SafeToFormat(Job.Plan?.CardPaths.Count ?? 0) : Texts.SafeToEject(Job.Plan?.CardPaths.Count ?? 0);
-    // Cancelled (unlike the Mac): no red "N souborů selhalo" and no rate of a copy that was cut short — one orange line.
+    // Cancelled (unlike the Mac): no red "N files failed" and no rate of a copy that was cut short — one orange line.
     bool IsCancelled => Phase == JobPhase.Cancelled;
     public string? ErrorText => progress.Status.Error;
-    /// "Nic nového — záloha je úplná." (spec 2.2) and similar information.
+    /// "Nothing new — the backup is complete." (spec 2.2) and similar information.
     public string? NoteText => progress.Status.Note;
     /// Task 2026-10-09: the copy of the report on this computer failed (a note, never the job's result).
     public string? LocalReportNoteText => progress.Status.LocalReportNote;
-    /// Orange, never an error: e.g. "5 souborů z dřívější zálohy nebylo ověřeno — doporučeno Ověřit zálohu."
+    /// Orange, never an error: e.g. "5 files of the earlier backup were not verified — Verify backup recommended."
     public string? WarningText => progress.Status.Warning;
     public string? SummaryText => IsFinished && !IsCancelled && Job.Report is { } r ? JobProgress.SummaryText(r) : null;
     public bool HasReport => Job.Report != null;
@@ -238,14 +239,14 @@ public sealed partial class JobItemViewModel : QueueItem
             var path = await Task.Run(() => QueueRules.FirstReport(cards, name, generation));
             if (path == null)
             {
-                owner.ShowMessage("Report nenalezen na žádném cíli:\n" + string.Join("\n", cards.Select(c => QueueRules.ReportPath(c, name, generation))));
+                owner.ShowMessage("Report not found on any destination:\n" + string.Join("\n", cards.Select(c => QueueRules.ReportPath(c, name, generation))));
                 return;
             }
             if (Shell.Open(path) is string error) owner.ShowMessage(error);
         }
         catch (Exception e)
         {
-            owner.ShowMessage($"Report nejde otevřít: {e.Message}");
+            owner.ShowMessage($"Cannot open the report: {e.Message}");
         }
         finally
         {

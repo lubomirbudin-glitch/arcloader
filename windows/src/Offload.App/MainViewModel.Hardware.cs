@@ -31,11 +31,11 @@ public sealed partial class MainViewModel
     }
 
     public string HardwareSummary => lastHwTest is { } r
-        ? $"Poslední test {r.Time.ToLocalTime().ToString("d. M. yyyy H:mm", CultureInfo.InvariantCulture)} · " +
+        ? $"Last test {r.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} · " +
           Texts.Warnings(r.Advice.Count(a => a.Kind == AdviceKind.Warning))
-        : "Zatím neproběhl";
+        : "Not run yet";
 
-    /// On demand (spec 8a.2: menu Nástroje, Ctrl+U, the Hardware section). An open Hardware window is only
+    /// On demand (spec 8a.2: menu Tools, Ctrl+U, the Hardware section). An open Hardware window is only
     /// brought to the front — no second run.
     public void OpenHardware()
     {

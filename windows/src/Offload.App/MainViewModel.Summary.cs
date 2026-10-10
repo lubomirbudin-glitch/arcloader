@@ -6,7 +6,7 @@ using Offload.Core.Outputs;
 
 namespace Offload.App;
 
-/// One card in "DNES" and "Historie karet" with its tick for the summary report. One instance per history id, shared by
+/// One card in "TODAY" and "Card history" with its tick for the summary report. One instance per history id, shared by
 /// both lists, so a tick shows in both.
 public sealed class HistoryRowItem(MainViewModel owner, HistoryRow row) : ObservableObject
 {
@@ -43,8 +43,8 @@ public sealed class HistoryRowItem(MainViewModel owner, HistoryRow row) : Observ
 /// A day of the history with its rows (HistoryDay with HistoryRowItem).
 public sealed record HistoryDayItem(string Title, string Summary, IReadOnlyList<HistoryRowItem> Rows);
 
-/// Task "Souhrnný report z vybraných záloh" (2026-10-09): ticked cards of the history → one summary report (HTML + PDF),
-/// made off the UI thread, saved into `<Offload reporty>\souhrn` and, when the user wants, onto a disk they pick; the
+/// Task "Summary report of chosen backups" (2026-10-09): ticked cards of the history → one summary report (HTML + PDF),
+/// made off the UI thread, saved into `<Offload reports>\summary` and, when the user wants, onto a disk they pick; the
 /// HTML is opened.
 public sealed partial class MainViewModel
 {
@@ -86,10 +86,10 @@ public sealed partial class MainViewModel
 
     public bool HasSummarySelection => summarySelection.Count > 0 || makingSummary;
 
-    /// "Souhrnný report (3)…", "Souhrnný report…" with nothing ticked.
-    /// "Vytvářím souhrnný report…" while one is being made (review S-9: the window shows it works).
-    public string SummaryButtonText => makingSummary ? "Vytvářím souhrnný report…"
-        : summarySelection.Count > 0 ? $"Souhrnný report ({summarySelection.Count})…" : "Souhrnný report…";
+    /// "Summary report (3)…", "Summary report…" with nothing ticked.
+    /// "Making summary report…" while one is being made (review S-9: the window shows it works).
+    public string SummaryButtonText => makingSummary ? "Making summary report…"
+        : summarySelection.Count > 0 ? $"Summary report ({summarySelection.Count})…" : "Summary report…";
 
     /// The shared row of `row.Id` (made once, then only refreshed).
     HistoryRowItem RowItem(HistoryRow row)
@@ -123,10 +123,10 @@ public sealed partial class MainViewModel
         }
         var localRoot = SummaryReport.LocalRoot(Settings.Outputs);
         string? extra = null;
-        if (AskYesNo?.Invoke($"Uložit souhrnný report ({entries.Count} {Texts.Plural(entries.Count, "karta", "karty", "karet")}) i na vybraný disk?\n\n"
-                + $"Na tomto počítači se uloží vždy: {System.IO.Path.Combine(localRoot, SummaryReport.FolderName)}") == true)
+        if (AskYesNo?.Invoke($"Also save the summary report ({entries.Count} {(entries.Count == 1 ? "card" : "cards")}) to a disk of your choice?\n\n"
+                + $"It is always saved on this computer: {System.IO.Path.Combine(localRoot, SummaryReport.FolderName)}") == true)
         {
-            extra = Dialogs.PickFolder("Vyberte disk nebo složku pro souhrnný report");
+            extra = Dialogs.PickFolder("Choose a disk or folder for the summary report");
             if (extra == null) return;
         }
         makingSummary = true;

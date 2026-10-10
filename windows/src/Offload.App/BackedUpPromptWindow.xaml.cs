@@ -3,7 +3,7 @@ using Offload.Core.Desktop;
 
 namespace Offload.App;
 
-/// "Karty už jsou zálohované" before a full copy (spec 2.1). Own window: MessageBox cannot have three own buttons.
+/// "Cards already backed up" before a full copy (spec 2.1). Own window: MessageBox cannot have three own buttons.
 public partial class BackedUpPromptWindow : Window
 {
     BackedUpChoice choice = BackedUpChoice.Cancel;   // closed with the X or Esc = nothing starts

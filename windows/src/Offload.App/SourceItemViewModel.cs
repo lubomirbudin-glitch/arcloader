@@ -5,7 +5,7 @@ namespace Offload.App;
 
 public enum SourceKind { Card, Drive, Folder }
 
-/// One row in Karty: a volume or a manual folder; the tick and the card name live in MainViewModel.
+/// One row in Cards: a volume or a manual folder; the tick and the card name live in MainViewModel.
 public sealed class SourceItemViewModel(MainViewModel owner, string path, string title, string detail, SourceKind kind) : ObservableObject
 {
     public string Path => path;
@@ -14,25 +14,25 @@ public sealed class SourceItemViewModel(MainViewModel owner, string path, string
     public string Glyph => kind switch { SourceKind.Card => "\uE7F1", SourceKind.Drive => "\uEDA2", _ => "\uE8B7" };
     /// The name a start uses when none is typed: the clips' reel, the next in line, or the volume label / folder name.
     public string CardNamePlaceholder => owner.Placeholder(path).Name;
-    /// "podle názvů klipů (A001C001…)", "další v řadě po A001 (dnes)", "Na kartě je víc cívek: …" — or null.
+    /// "from the clip names (A001C001…)", "next after A001 (today)", "The card has several reels: …" — or null.
     public string? NameHint => owner.CardName(path).Trim().Length > 0 ? null : owner.Placeholder(path).Hint;
 
-    /// " — podle názvů klipů (A001C001…)" after "Název složky" (UI návrh obr. 1), or nothing.
+    /// " — from the clip names (A001C001…)" after "Folder name" (UI design fig. 1), or nothing.
     public string NameHintSuffix => NameHint is { } hint ? $" — {hint}" : "";
 
-    /// "24 klipů · 1,70 GB · exFAT · čtečka USB 3 · 5 Gb/s".
+    /// "24 clips · 1.70 GB · exFAT · USB 3 reader · 5 Gb/s".
     public string Facts => owner.SourceFacts(path);
 
     /// "ALEXA 35 · LogC4" from one clip of the card, or null.
     public string? CameraText => owner.Insight(path)?.Camera?.Text;
 
-    /// "Doplnit" is offered (new clips, the earlier backup reachable).
+    /// "Append" is offered (new clips, the earlier backup reachable).
     public bool CanAppend => AppendText != null;
 
     /// The disk's connection was looked up (off the UI thread).
     internal void FactsChanged() => Raise(nameof(Facts));
 
-    /// "Zálohováno … — ověřeno" (spec 2.1), or null for a card history does not know.
+    /// "Backed up … — verified" (spec 2.1), or null for a card history does not know.
     public string? HistoryText => owner.HistoryLine(path).Text;
     public HistoryTone HistoryTone => owner.HistoryLine(path).Tone;
 
@@ -40,7 +40,7 @@ public sealed class SourceItemViewModel(MainViewModel owner, string path, string
     internal void InsightChanged() => RaiseMany(nameof(HistoryText), nameof(HistoryTone), nameof(CardNamePlaceholder), nameof(NameHint),
         nameof(NameHintSuffix), nameof(AppendText), nameof(AppendNewFiles), nameof(AppendFolderText), nameof(Facts), nameof(CameraText), nameof(CanAppend));
 
-    /// "Doplnit jen nové klipy do dřívější zálohy (12 souborů · 3,2 GB)", or null when there is nothing to append.
+    /// "Append only the new clips to the earlier backup (12 files · 3.2 GB)", or null when there is nothing to append.
     public string? AppendText => owner.AppendOffer(path);
 
     public bool AppendNewFiles
@@ -49,12 +49,12 @@ public sealed class SourceItemViewModel(MainViewModel owner, string path, string
         set
         {
             owner.SetAppend(path, value);
-            if (value && !IsSelected) IsSelected = true;   // "Doplnit" on the tile also ticks the card
+            if (value && !IsSelected) IsSelected = true;   // "Append" on the tile also ticks the card
             RaiseMany(nameof(AppendNewFiles), nameof(AppendFolderText));
         }
     }
 
-    /// "Složka: 2026-10-06\A001 na 2 cílech" in place of the name field while appending.
+    /// "Folder: 2026-10-06\A001 on 2 destinations" in place of the name field while appending.
     public string? AppendFolderText => owner.AppendFolder(path);
 
     /// The date folder or the naming option changed: the suggested name may be another.

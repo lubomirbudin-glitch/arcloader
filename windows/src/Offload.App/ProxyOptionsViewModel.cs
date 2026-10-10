@@ -30,17 +30,17 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         BuildLutLists();
     }
 
-    /// The segmented Kodek and Výška of the settings page (UI návrh obr. 4).
+    /// The segmented Codec and Height of the settings page (UI design fig. 4).
     public IReadOnlyList<Choice> CodecChoices { get; }
     public IReadOnlyList<Choice> HeightChoices { get; }
 
-    /// "≈ 75 MB / minutu" next to the bitrate.
+    /// "≈ 75 MB / minute" next to the bitrate.
     public string BitrateHint => SettingsTexts.BitrateHint(p.BitrateMbps);
 
-    /// "LUT podle kamery": every built-in LUT, the chosen one marked "použito".
+    /// "LUT by camera": every built-in LUT, the chosen one marked "used".
     public IReadOnlyList<LutRow> LutRows => catalog.Luts.Select(l => SettingsTexts.Row(l, p)).ToList();
 
-    /// The burn-in preview's frame lines (the crop of "Výřez"): shown only with a crop; star sizes of a 3 × 3 grid.
+    /// The burn-in preview's frame lines (the crop of "Crop"): shown only with a crop; star sizes of a 3 × 3 grid.
     public bool HasFrame => SettingsTexts.Frame(p) != null;
     public string FrameText => SettingsTexts.FrameText(p);
     System.Windows.GridLength Star(Func<(double X, double Y, double W, double H), double> part) =>
@@ -65,8 +65,8 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     void BuildLutLists()
     {
         var builtin = catalog.Luts.Select(l => new Option<string>(l.Id, l.Name)).ToList();
-        lutChoices = [new("auto", "Automaticky podle kamery"), .. builtin, new("none", "Bez LUT"), new("custom", "Vlastní…")];
-        fallbackChoices = [new("none", "Bez LUT"), .. builtin];
+        lutChoices = [new("auto", "Automatic by camera"), .. builtin, new("none", "No LUT"), new("custom", "Custom…")];
+        fallbackChoices = [new("none", "No LUT"), .. builtin];
     }
 
     /// The catalog arrived (UI thread): the lists are rebuilt and the selections re-read.
@@ -124,9 +124,9 @@ public sealed class ProxyOptionsViewModel : ObservableObject
 
     static readonly string[] LutProperties = [nameof(LutChoice), nameof(ShowFallback), nameof(ShowCustom), nameof(LutName), nameof(LutPath), nameof(ShowRules), nameof(LutRows)];
 
-    /// "Pravidla LUTů… (2)" (spec 4.2) — only with "Automaticky podle kamery": the rules apply in that mode only (R18).
+    /// "LUT rules… (2)" (spec 4.2) — only with "Automatic by camera": the rules apply in that mode only (R18).
     public bool ShowRules => Mode == LutMode.Auto;
-    public string RulesButtonText => $"Pravidla LUTů… ({p.LutRules.Count})";
+    public string RulesButtonText => $"LUT rules… ({p.LutRules.Count})";
     public RelayCommand EditRulesCommand { get; }
 
     /// The rules were edited (MainViewModel.EditLutRules wrote them into the profile).
@@ -155,7 +155,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
 
     public static IReadOnlyList<Option<double?>> Aspects { get; } =
     [
-        new(null, "celý obraz"),
+        new(null, "full frame"),
         .. new[] { 1.33, 1.66, 1.78, 1.85, 2.0, 2.39 }.Select(a => new Option<double?>(a, a.ToString("0.00", CultureInfo.InvariantCulture))),
     ];
 
@@ -223,9 +223,9 @@ public sealed class ProxyOptionsViewModel : ObservableObject
         set { p.FrameScale = Math.Clamp(value, 50, 100) / 100.0; Changed([nameof(ScalePercent), nameof(ScaleText), .. FrameProperties]); }
     }
 
-    public string ScaleText => $"{ScalePercent} % obrazu";
+    public string ScaleText => $"{ScalePercent}% of image";
 
-    public string LutName => p.LutPath is string l ? Path.GetFileName(l) : "nevybráno";
+    public string LutName => p.LutPath is string l ? Path.GetFileName(l) : "not chosen";
 
     public bool BurnFilename { get => p.BurnFilename; set { p.BurnFilename = value; Changed(nameof(BurnFilename)); } }
     public bool BurnTimecode { get => p.BurnTimecode; set { p.BurnTimecode = value; Changed(nameof(BurnTimecode)); } }
@@ -241,16 +241,16 @@ public sealed class ProxyOptionsViewModel : ObservableObject
 
     static readonly string[] FolderProperties = [nameof(ExtraFolderName), nameof(ExtraFolderPath), nameof(HasExtraFolder)];
 
-    /// "Kopírovat proxy i do složky": the folder's name (the full path is in the tooltip), or "nevybráno".
+    /// "Also copy proxies to a folder": the folder's name (the full path is in the tooltip), or "not chosen".
     public string ExtraFolderName => p.ExtraFolder is string f
         ? (Path.GetFileName(f.TrimEnd('\\')) is { Length: > 0 } n ? n : f)
-        : "nevybráno";
+        : "not chosen";
     public string? ExtraFolderPath => p.ExtraFolder;
     public bool HasExtraFolder => p.ExtraFolder != null;
 
     void PickFolder()
     {
-        if (Dialogs.PickFolder("Vyber složku pro proxy") is not string path) return;
+        if (Dialogs.PickFolder("Choose a folder for proxies") is not string path) return;
         p.ExtraFolder = path;
         Changed(FolderProperties);
     }
@@ -258,7 +258,7 @@ public sealed class ProxyOptionsViewModel : ObservableObject
     /// The .cube dialog; a picked file switches to custom mode. False when cancelled (nothing changes).
     bool PickLut()
     {
-        if (Dialogs.PickFile("Vyber LUT (.cube)", "LUT (*.cube)|*.cube") is not string path) return false;
+        if (Dialogs.PickFile("Choose a LUT (.cube)", "LUT (*.cube)|*.cube") is not string path) return false;
         p.LutPath = path;
         p.LutMode = LutMode.Custom;
         Changed(LutProperties);

@@ -7,15 +7,15 @@ using Offload.Core.Space;
 
 namespace Offload.App;
 
-/// One row in Cíle: number, name, free space and file system; red when the disk is not connected.
-/// The disk is probed off the UI thread; until then the row shows "zjišťuji…". A missing disk (a NAS that may come
+/// One row in Destinations: number, name, free space and file system; red when the disk is not connected.
+/// The disk is probed off the UI thread; until then the row shows "checking…". A missing disk (a NAS that may come
 /// back) and a present network or removable one (a NAS that may drop out) are probed again by MainViewModel every
 /// few seconds, every row by the refresh button; one probe per row at a time.
 public sealed class DestinationViewModel : ObservableObject
 {
     readonly MainViewModel owner;
     bool exists, isChecking = true, probing, mayDropOut;
-    string fileSystem = "", freeText = "zjišťuji…", compactFreeText = "";
+    string fileSystem = "", freeText = "checking…", compactFreeText = "";
     string? fsWarning, volume, spaceNote, barTone;
     long? freeBytes, totalBytes;
     long need;
@@ -53,10 +53,10 @@ public sealed class DestinationViewModel : ObservableObject
                 freeBytes = ex ? free : null;
                 totalBytes = ex ? total : null;
                 fileSystem = fs;
-                // "7,20 TB volných z 8 TB · NTFS · NVMe" (UI návrh obr. 1); "7,20 TB volno" in the compact list.
-                freeText = ex ? (free is long f ? DestinationTile.FreeText(f, total, fs, connection) : $"? volno · {fs}") : "";
+                // "7.20 TB free of 8 TB · NTFS · NVMe" (UI design fig. 1); "7.20 TB free" in the compact list.
+                freeText = ex ? (free is long f ? DestinationTile.FreeText(f, total, fs, connection) : $"? free · {fs}") : "";
                 compactFreeText = ex && free is long cf ? DestinationTile.CompactFree(cf) : "";
-                fsWarning = ex && fs is "exFAT" or "FAT32" or "FAT" ? "Doporučeno NTFS — spolehlivější než exFAT/FAT32" : null;
+                fsWarning = ex && fs is "exFAT" or "FAT32" or "FAT" ? "NTFS recommended — more reliable than exFAT/FAT32" : null;
             }
             else
             {
@@ -86,7 +86,7 @@ public sealed class DestinationViewModel : ObservableObject
     {
         bool mayDropOut = DestinationHealth.MayDropOut(root, DriveTypeOf(root));
         if (!Directory.Exists(root)) return (false, "", null, mayDropOut, null, null, null);
-        // The connection from the HW diagnostics (UI návrh 6): never throws, "unknown" is null.
+        // The connection from the HW diagnostics (UI design 6): never throws, "unknown" is null.
         var connection = ConnectionLabel.Short(DriveLinks.Resolve(root), card: false);
         return (true, NativeIO.FilesystemType(root), NativeIO.AvailableBytes(root), mayDropOut, SpacePlanner.VolumeKey(root), NativeIO.TotalBytes(root), connection);
     }
@@ -116,9 +116,9 @@ public sealed class DestinationViewModel : ObservableObject
     public string FileSystem => fileSystem;
     public string FreeText => freeText;
     public string CompactFreeText => compactFreeText;
-    public string RemoveName => $"Odebrat cíl {Name}";
+    public string RemoveName => $"Remove destination {Name}";
 
-    // The space bar (UI návrh obr. 1): grey = used, blue = what the ticked cards need here; yellow / red with the space check.
+    // The space bar (UI design fig. 1): grey = used, blue = what the ticked cards need here; yellow / red with the space check.
     public bool HasBar => exists && totalBytes > 0 && freeBytes != null;
     (double Used, double Need) Bar => HasBar ? DestinationTile.Bar(totalBytes!.Value, freeBytes!.Value, need) : (0, 0);
     public System.Windows.GridLength BarUsed => new(Math.Max(Bar.Used, 0.0001), System.Windows.GridUnitType.Star);
@@ -126,7 +126,7 @@ public sealed class DestinationViewModel : ObservableObject
     public System.Windows.GridLength BarRest => new(Math.Max(1 - Bar.Used - Bar.Need, 0.0001), System.Windows.GridUnitType.Star);
     /// null, "Warning" or "Blocking" (SpaceSeverity) — the bar's and the note's colour.
     public string? BarTone => barTone;
-    /// The space check's sentence about this disk ("Na cíli … není dost místa …"), or null.
+    /// The space check's sentence about this disk ("Not enough space on destination …"), or null.
     public string? SpaceNote => spaceNote;
 
     /// The window's space check ran (3× a second): raised only when something changed.

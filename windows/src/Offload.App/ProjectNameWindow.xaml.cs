@@ -3,7 +3,7 @@ using System.Windows.Controls;
 
 namespace Offload.App;
 
-/// "Název projektu" for Uložit jako projekt… / Přejmenovat… (spec 4.1). The name is checked as it is typed (the Czech
+/// "Project name" for Save as project… / Rename… (spec 4.1). The name is checked as it is typed (the
 /// problem under the field); OK only takes a name without a problem.
 public partial class ProjectNameWindow : Window
 {
