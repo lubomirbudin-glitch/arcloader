@@ -19,10 +19,10 @@ private struct RootView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TopBar()
             if model.settingsSection != nil {
-                LegacySettings()
+                SettingsPage()
             } else {
+                TopBar()
                 HSplitView {
                     SetupPanel()
                         .frame(minWidth: 360, idealWidth: 400, maxWidth: 480)
@@ -38,31 +38,6 @@ private struct RootView: View {
             Button("OK") { model.message = nil }
         } message: {
             Text(model.message ?? "")
-        }
-    }
-}
-
-/// Until the settings page: the options of the old left column.
-private struct LegacySettings: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    StructureSection()
-                    ProxySection()
-                    ToolsSection()
-                }
-                .padding(18)
-                .frame(maxWidth: 560, alignment: .leading)
-            }
-            Divider()
-            HStack {
-                Spacer()
-                Button("Done") { model.closeSettings() }.buttonStyle(.offload(.primary))
-            }
-            .padding(14)
         }
     }
 }
@@ -95,9 +70,6 @@ struct SetupPanel: View {
                 VStack(alignment: .leading, spacing: 18) {
                     SourcesSection()
                     DestinationsSection()
-                    StructureSection()
-                    ProxySection()
-                    ToolsSection()
                 }
                 .padding(18)
             }
@@ -253,180 +225,6 @@ struct DestinationsSection: View {
                 Label("Jen jeden cíl — doporučeny jsou dvě nezávislé kopie.", systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
             }
-        }
-    }
-}
-
-struct StructureSection: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Struktura a kontrola", systemImage: "folder.badge.gearshape")
-            HStack {
-                Toggle("Vlastní datum", isOn: $model.useCustomDate)
-                if model.useCustomDate {
-                    DatePicker("", selection: $model.customDate, displayedComponents: .date).labelsHidden()
-                }
-            }
-            Text("…/\(model.dateString)/<název karty>/").font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
-            Toggle("Připojené disky automaticky do cílů", isOn: $model.settings.autoDestinations)
-                .help("Externí disk, na který jde zapisovat a který nevypadá jako karta, se po připojení sám přidá do cílů; odpojený zmizí. Ručně odebraný disk se znovu nepřidá.")
-            Toggle("Ověřit kopie zpětným čtením (xxHash64)", isOn: $model.settings.verify)
-            if !model.settings.verify {
-                Label("Bez ověření není jisté, že data na disku jsou v pořádku.", systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.orange)
-            }
-            Toggle("Analýza klipů a náhledy v reportu", isOn: $model.settings.analyzeClips)
-            if let w = ProxyPreflight.warning(model.settings.proxy, analyzeClips: model.settings.analyzeClips, resolved: model.tools) {
-                Label(w, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
-            }
-        }
-    }
-}
-
-struct ProxySection: View {
-    @EnvironmentObject var model: AppModel
-
-    private var lutMode: LutMode { LutResolver.effectiveMode(model.settings.proxy) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Proxy", systemImage: "film.stack")
-            Toggle("Renderovat proxy po ověření", isOn: $model.settings.proxy.enabled)
-            if model.settings.proxy.enabled {
-                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
-                    GridRow {
-                        Text("Kodek").foregroundStyle(.secondary)
-                        Picker("", selection: $model.settings.proxy.codec) {
-                            ForEach(ProxyCodec.allCases) { Text($0.label).tag($0) }
-                        }.labelsHidden()
-                    }
-                    GridRow {
-                        Text("Výška").foregroundStyle(.secondary)
-                        Picker("", selection: $model.settings.proxy.height) {
-                            ForEach([540, 720, 1080, 2160], id: \.self) { Text("\($0)p").tag($0) }
-                        }.labelsHidden().pickerStyle(.segmented)
-                    }
-                    if model.settings.proxy.codec == .h264 || model.settings.proxy.codec == .hevc {
-                        GridRow {
-                            Text("Datový tok").foregroundStyle(.secondary)
-                            Stepper("\(model.settings.proxy.bitrateMbps) Mb/s", value: $model.settings.proxy.bitrateMbps, in: 2...50)
-                        }
-                    }
-                    GridRow {
-                        Text("Výřez").foregroundStyle(.secondary)
-                        HStack {
-                            Picker("", selection: $model.settings.proxy.frameAspect) {
-                                Text("celý obraz").tag(Double?.none)
-                                ForEach([1.33, 1.66, 1.78, 1.85, 2.0, 2.39], id: \.self) { a in
-                                    Text(String(format: "%.2f", a)).tag(Double?.some(a))
-                                }
-                            }.labelsHidden().frame(maxWidth: 130)
-                            if model.settings.proxy.frameAspect != nil {
-                                Stepper("\(Int((model.settings.proxy.frameScale * 100).rounded())) % obrazu",
-                                        value: $model.settings.proxy.frameScale, in: 0.5...1.0, step: 0.01)
-                                    .help("Velikost frame lines vůči obrazu – 90 % = 10 % overscan")
-                            }
-                        }
-                    }
-                    GridRow {
-                        Text("LUT").foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Picker("", selection: Binding(get: { model.lutChoice }, set: { model.setLutChoice($0) })) {
-                                Text("Automaticky podle kamery").tag("auto")
-                                ForEach(model.luts.luts, id: \.id) { Text($0.name).tag($0.id) }
-                                Text("Bez LUT").tag("none")
-                                Text("Vlastní…").tag("custom")
-                            }.labelsHidden()
-                            if lutMode == .auto {
-                                Text("Když kameru nepoznám:").font(.caption).foregroundStyle(.secondary)
-                                Picker("", selection: Binding(get: { model.settings.proxy.lutFallback ?? "none" },
-                                                              set: { model.settings.proxy.lutFallback = $0 == "none" ? nil : $0 })) {
-                                    Text("Bez LUT").tag("none")
-                                    ForEach(model.luts.luts, id: \.id) { Text($0.name).tag($0.id) }
-                                }.labelsHidden()
-                            }
-                            if lutMode == .custom {
-                                HStack {
-                                    // An empty path (old settings) is "no LUT" — shown as not chosen.
-                                    Text(model.settings.proxy.lutPath.flatMap { $0.isEmpty ? nil : ($0 as NSString).lastPathComponent }
-                                         ?? "nevybráno")
-                                        .lineLimit(1).truncationMode(.middle)
-                                        .help(model.settings.proxy.lutPath ?? "")
-                                    Spacer()
-                                    Button("Vybrat…") { model.pickLUT() }
-                                }
-                            }
-                        }
-                    }
-                }
-                Toggle("Burn-in názvu klipu", isOn: $model.settings.proxy.burnFilename)
-                Toggle("Burn-in timecodu", isOn: $model.settings.proxy.burnTimecode)
-                Toggle("Zvuk", isOn: $model.settings.proxy.audio)
-                Toggle("Přeskočit proxy nahrané kamerou (SUB/PROXY)", isOn: $model.settings.proxy.skipCameraProxies)
-                Toggle("Kopírovat proxy na všechny cíle", isOn: $model.settings.proxy.copyToAllDestinations)
-                Text("Kopírovat proxy i do složky").font(.caption).foregroundStyle(.secondary).padding(.top, 4)
-                HStack {
-                    Text(model.settings.proxy.extraFolder.map { ($0 as NSString).lastPathComponent } ?? "nevybráno")
-                        .lineLimit(1).truncationMode(.middle)
-                        .foregroundStyle(model.settings.proxy.extraFolder == nil ? .secondary : .primary)
-                        .help(model.settings.proxy.extraFolder ?? "")
-                    Spacer()
-                    Button("Vybrat…") { model.pickProxyFolder() }
-                    if model.settings.proxy.extraFolder != nil {
-                        Button { model.settings.proxy.extraFolder = nil } label: { Image(systemName: "xmark.circle.fill") }
-                            .buttonStyle(.borderless).help("Nekopírovat do složky")
-                    }
-                }
-            }
-            // Outside the proxy block (as on Windows): a missing custom LUT also blocks a start with proxies off
-            // when clip analysis (thumbnails) uses it — the reason must stay visible.
-            if let p = model.lutProblem { Text(p).font(.caption).foregroundStyle(.red) }
-            if let p = model.proxyFolderProblem { Text(p).font(.caption).foregroundStyle(.red) }
-        }
-    }
-}
-
-struct ToolsSection: View {
-    @EnvironmentObject var model: AppModel
-    @State private var expanded = false
-
-    var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 6) {
-                ToolRow(name: "ffmpeg", path: model.tools.ffmpeg, purpose: "proxy, náhledy", keyPath: \.ffmpeg)
-                ToolRow(name: "ffprobe", path: model.tools.ffprobe, purpose: "metadata klipů", keyPath: \.ffprobe)
-                ToolRow(name: "braw-decode", path: model.tools.brawDecoder, purpose: "Blackmagic RAW", keyPath: \.brawDecoder)
-                ToolRow(name: "REDline", path: model.tools.redline, purpose: "RED R3D", keyPath: \.redline)
-                ToolRow(name: "art-cmd", path: model.tools.artCmd, purpose: "ARRIRAW", keyPath: \.artCmd)
-                Text("Canon Cinema RAW Light a Sony X-OCN se zkopírují a ověří, proxy pro ně na macOS Intel nejde vyrobit.")
-                    .font(.caption).foregroundStyle(.secondary).padding(.top, 4)
-            }
-            .padding(.top, 6)
-        } label: {
-            Label("Dekodéry", systemImage: "wrench.and.screwdriver").font(.headline)
-        }
-    }
-}
-
-struct ToolRow: View {
-    @EnvironmentObject var model: AppModel
-    let name: String
-    let path: String?
-    let purpose: String
-    let keyPath: WritableKeyPath<ExternalTools, String?>
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: path != nil ? "checkmark.circle.fill" : "xmark.circle")
-                .foregroundStyle(path != nil ? .green : .secondary)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(name).font(.callout.weight(.medium)) + Text("  \(purpose)").font(.caption).foregroundColor(.secondary)
-                Text(path ?? "nenalezeno").font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-            }
-            Spacer()
-            Button("…") { model.pickTool(keyPath) }.buttonStyle(.borderless).help("Vybrat cestu k nástroji")
         }
     }
 }

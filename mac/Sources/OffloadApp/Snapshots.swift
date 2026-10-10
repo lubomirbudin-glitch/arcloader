@@ -48,7 +48,18 @@ enum Snapshots {
     }
 
     static var scenarios: [(String, () -> AppModel)] {
-        [("ready", ready)]
+        [("ready", ready),
+         ("settings-proxy", { settings(.proxy) }),
+         ("settings-folders", { settings(.folders) }),
+         ("settings-decoders", { settings(.decoders) })]
+    }
+
+    static func settings(_ s: SettingsSection) -> AppModel {
+        let m = ready()
+        m.settings.proxy.frameAspect = 2.39
+        m.settings.proxy.frameScale = 0.9
+        m.openSettings(s)
+        return m
     }
 
     // MARK: Made-up data
