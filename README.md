@@ -14,6 +14,7 @@ Pro Windows a macOS.
 
 ## Obsah
 
+- [Stažení](#stažení)
 - [Co Offload dělá](#co-offload-dělá)
 - [Jak zajišťuje bezpečnost dat](#jak-zajišťuje-bezpečnost-dat)
 - [Co vznikne na disku](#co-vznikne-na-disku)
@@ -27,6 +28,18 @@ Pro Windows a macOS.
 - [Licence](#licence)
 
 ---
+
+## Stažení
+
+| | Windows 10/11 (x64) |
+|---|---|
+| **Stabilní verze** — poslední vydaná | [⬇️ Offload-Windows.zip](https://github.com/lubomirbudin-glitch/offload/releases/download/stable/Offload-Windows.zip) · [popis verze](https://github.com/lubomirbudin-glitch/offload/releases/tag/stable) |
+| **Vývojová verze** — nejnovější build z vývoje | [⬇️ Offload-Windows-dev.zip](https://github.com/lubomirbudin-glitch/offload/releases/download/dev/Offload-Windows-dev.zip) · [popis verze](https://github.com/lubomirbudin-glitch/offload/releases/tag/dev) |
+| Všechny verze (archiv) | [Releases](https://github.com/lubomirbudin-glitch/offload/releases) |
+
+Odkazy se nemění a vždy vedou na nejnovější build daného kanálu. Rozbalte ZIP kamkoli a spusťte
+`Offload\Offload.exe`, nic se neinstaluje. Mac verze se zatím sestavuje jen ze zdrojů (viz [Mac verze](#mac-verze)).
+Hotové balíčky je dovoleno zdarma používat, viz [Licence](#licence).
 
 ## Co Offload dělá
 
@@ -146,7 +159,7 @@ ve [windows/README.md](windows/README.md).
 
 **Požadavky:** Windows 10 nebo 11 (x64). Nic se neinstaluje, balíček je přenosný.
 
-**Spuštění z balíčku:** rozbalte `Offload-win-x64-<verze>.zip` kamkoli a spusťte `Offload\Offload.exe`. Návod pro
+**Spuštění z balíčku:** stáhněte [stabilní verzi](https://github.com/lubomirbudin-glitch/offload/releases/download/stable/Offload-Windows.zip), rozbalte ji kamkoli a spusťte `Offload\Offload.exe`. Návod pro
 uživatele je přiložený jako `Offload-navod.pdf` a krátký úvod jako `CTI-ME.txt`.
 
 **Sestavení ze zdrojů** (.NET 10 SDK):
@@ -230,7 +243,9 @@ mac/
 **© 2026 ProBudin. Všechna práva vyhrazena.**
 
 Zdrojový kód je zveřejněný **pouze k nahlédnutí**. Bez předchozího písemného svolení autora ho není dovoleno
-kopírovat, upravovat, šířit ani používat, a to včetně sestavení a spuštění. Celé znění je v [LICENSE](LICENSE).
+kopírovat, upravovat, šířit ani používat, a to včetně sestavení a spuštění. **Hotové balíčky** ze sekce
+[Releases](https://github.com/lubomirbudin-glitch/offload/releases) je dovoleno zdarma stáhnout a používat tak, jak jsou;
+nesmí se upravovat, prodávat ani šířit jako součást jiného produktu. Celé znění je v [LICENSE](LICENSE).
 Komponenty třetích stran mají vlastní licence, viz [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 Zájem o používání nebo spolupráci: ozvěte se přes GitHub ([lubomirbudin-glitch](https://github.com/lubomirbudin-glitch)).
