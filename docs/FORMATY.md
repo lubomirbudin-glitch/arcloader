@@ -344,7 +344,8 @@ Pravidla (Windows od 0.3.0):
 ## settings.json (jen tento počítač)
 
 - Neznámé klíče se při uložení zachovají (na horní úrovni, v `proxy` i v `tools`; i sekce `proxy` nebo `tools` s hodnotou
-  z novější verze, kterou tahle verze nedokáže přečíst, zůstane beze změny) — Windows od 0.2.0 (verze 0.1.0 je smazala).
+  z novější verze, kterou tahle verze nedokáže přečíst, zůstane beze změny) — Windows od 0.2.0 (verze 0.1.0 je smazala),
+  Mac od 0.3.0 (`UserDefaults` klíč `settings`, stejné schéma; zachová je i v `naming` a `outputs`).
 - `naming.suggestFromClips` (bool, výchozí `true`, Windows od 0.2.0): navrhovat název složky karty z názvů klipů.
 - `hash` (`"xxh64"` | `"both"`, výchozí `"xxh64"`, Windows od 0.3.0): kontrolní součty kopie; `both` = xxh64 + MD5. Jiná
   hodnota (z novější verze) se zachová a čte jako `xxh64`.

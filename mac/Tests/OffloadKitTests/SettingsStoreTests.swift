@@ -101,4 +101,63 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertNil(ProxyPreflight.warning(ProxySettings(), analyzeClips: false, resolved: ExternalTools()))
         XCTAssertNil(ProxyPreflight.warning(ProxySettings(), analyzeClips: true, resolved: ExternalTools(ffmpeg: "/f", ffprobe: "/p")))
     }
+
+    func testUnknownKeysSurviveASave() throws {
+        let json = """
+        {"destRoots":["/Volumes/A"],"verify":true,"futureTop":{"x":1},
+         "proxy":{"enabled":true,"height":1080,"codec":"h264","bitrateMbps":10,"futureProxy":"keep"},
+         "projects":[{"name":"Film X","destRoots":["/Volumes/B"]}],"activeProject":"Film X",
+         "hash":"sha256","outputs":{"dayReport":false,"futureOut":2}}
+        """
+        var s = SettingsStore.decode(Data(json.utf8))
+        XCTAssertEqual(s.hash, "sha256")
+        XCTAssertEqual(HashKinds.fromSetting(s.hash), .xxh64)
+        XCTAssertFalse(s.outputs.dayReport)
+        s.verify = false
+        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(SettingsStore.encode(s))) as? [String: Any])
+        XCTAssertNotNil(saved["futureTop"])
+        XCTAssertNotNil(saved["projects"], "a newer version's projects stay")
+        XCTAssertEqual(saved["activeProject"] as? String, "Film X")
+        XCTAssertEqual((saved["proxy"] as? [String: Any])?["futureProxy"] as? String, "keep")
+        XCTAssertEqual((saved["outputs"] as? [String: Any])?["futureOut"] as? Int, 2)
+        XCTAssertEqual(saved["verify"] as? Bool, false)
+        XCTAssertEqual(saved["hash"] as? String, "sha256", "an unknown hash value is kept as it was")
+    }
+
+    func testUnreadableSectionIsKeptUnchanged() throws {
+        let json = #"{"destRoots":["/Volumes/A"],"proxy":"from a future version"}"#
+        let s = SettingsStore.decode(Data(json.utf8))
+        XCTAssertEqual(s.destRoots, ["/Volumes/A"])
+        XCTAssertTrue(s.unreadable.contains("proxy"))
+        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(SettingsStore.encode(s))) as? [String: Any])
+        XCTAssertEqual(saved["proxy"] as? String, "from a future version")
+    }
+
+    func testDefaultsOfNewKeys() {
+        let s = SettingsStore.decode(nil)
+        XCTAssertTrue(s.naming.suggestFromClips)
+        XCTAssertEqual(s.hash, "xxh64")
+        XCTAssertEqual(s.outputs, OutputSettings())
+    }
+
+    /// Merging over the last read JSON must not bring back a value the user cleared (an optional the encoder leaves out).
+    func testClearedOptionalIsNotRevivedFromTheLastRead() throws {
+        let json = #"{"proxy":{"lutPath":"/Users/x/look.cube","lutMode":"custom","futureProxy":1},"tools":{"ffmpeg":"/opt/ffmpeg"}}"#
+        var s = SettingsStore.decode(Data(json.utf8))
+        XCTAssertEqual(s.proxy.lutPath, "/Users/x/look.cube")
+        s.proxy.lutPath = nil
+        s.proxy.lutMode = .auto
+        s.tools.ffmpeg = nil
+        s.portNames = ["a": "x"]
+        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(SettingsStore.encode(s))) as? [String: Any])
+        let proxy = try XCTUnwrap(saved["proxy"] as? [String: Any])
+        XCTAssertNil(proxy["lutPath"], "a cleared LUT path stays cleared")
+        XCTAssertEqual(proxy["futureProxy"] as? Int, 1)
+        XCTAssertNil((saved["tools"] as? [String: Any])?["ffmpeg"], "a tool path set back to automatic stays automatic")
+        var reread = SettingsStore.decode(SettingsStore.encode(s))
+        XCTAssertEqual(reread.portNames, ["a": "x"])
+        reread.portNames = [:]
+        let again = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(SettingsStore.encode(reread))) as? [String: Any])
+        XCTAssertEqual((again["portNames"] as? [String: Any])?.count, 0, "a removed port name is not merged back")
+    }
 }

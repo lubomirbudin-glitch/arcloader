@@ -90,6 +90,9 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 35 — nastavení zachová neznámé klíče a nečitelné sekce (projekty a pravidla z novější verze nezmizí); klíče
+  naming, hash, outputs; v sekcích proxy/tools/naming/outputs se zachovají jen klíče, které tahle verze nezná —
+  vymazaná volitelná hodnota (cesta k LUTu, nástroji) se ze starého JSON nevrátí, `portNames` se neslučuje
 - Úkol 34 — hlášky kontrol a CLI česky (`Msg` v `Messages.swift`, `PreflightCode`, `OffloadError.code`), „Chyba: “,
   `formatBytesCs`; chyby parseru swift-argument-parser zůstávají anglicky; nahrazuje `Msg.swift` proudu A (texty
   stejné, `verifyHint` podle plánu = Windows, `Msg.bytes` → `formatBytesCs`, `Msg.count` bez použití vypuštěno)
