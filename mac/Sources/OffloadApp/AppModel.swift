@@ -3,12 +3,22 @@ import Combine
 import OffloadKit
 import SwiftUI
 
-/// Free space, filesystem and existence of a destination — probed off the main thread.
+/// Free space, size, filesystem, connection and existence of a destination — probed off the main thread.
 struct DestinationStatus: Equatable {
     var free: Int64 = 0
+    var total: Int64 = 0
     var format = ""
     var exists = false
     var checking = true
+    /// "Thunderbolt", "USB 3 (5 Gb/s)", "NVMe" — resolved once per destination (DriveLinks), nil until known.
+    var connection: String?
+}
+
+/// One clip thumbnail of a finished card (decoded off the main thread).
+struct ClipThumb: Identifiable {
+    let id: Int
+    let clip: String
+    let image: NSImage?
 }
 
 /// One card in the queue; mirrors the job's status for SwiftUI. Main thread only, except `recordCopiedCard`.
@@ -18,16 +28,28 @@ final class JobItem: ObservableObject, Identifiable {
     let sourceName: String
     /// The source is a whole card volume that may be ejected (from the volume scan when the job was created).
     let canEject: Bool
+    /// The used space of the card volume when the job was queued (the size before the plan exists), nil for a folder.
+    let estimatedBytes: Int64?
     @Published var ejected = false
     @Published var ejecting = false
-    private let progress = JobProgress(now: Date())
+    @Published private(set) var thumbs: [ClipThumb] = []
+    @Published private(set) var moreThumbs = 0
+    let progress = JobProgress(now: Date())
     private let lock = NSLock()
     private var copied: String?
+    private(set) var startedAt: Date?
+    private(set) var finishedAt: Date?
+    private var thumbsLoaded = false
+#if DEBUG
+    /// Snapshot rendering only: the card as it should look, instead of the job's status.
+    var preview: JobCardState?
+#endif
 
-    init(job: OffloadJob, sourceName: String, canEject: Bool) {
+    init(job: OffloadJob, sourceName: String, canEject: Bool, estimatedBytes: Int64? = nil) {
         self.job = job
         self.sourceName = sourceName
         self.canEject = canEject
+        self.estimatedBytes = estimatedBytes
     }
 
     var plan: OffloadPlan? { job.plan }
@@ -37,10 +59,18 @@ final class JobItem: ObservableObject, Identifiable {
     var isFinished: Bool { progress.status.phase.isFinished }
     var isCancelled: Bool { progress.status.phase == .cancelled }
     var phaseProgress: Double { progress.phaseProgress }
-    var detailText: String { progress.detailText }
-    var statusText: String { progress.statusText }
-    var tone: CardTone { progress.tone }
     var isError: Bool { progress.isError }
+
+    /// The phase the queue counts by (a snapshot card's own kind in DEBUG previews).
+    var queuePhase: JobStatus.Phase {
+#if DEBUG
+        if let p = preview { return p.phase }
+#endif
+        return status.phase
+    }
+
+    /// Finished as the queue sees it (a snapshot card's own kind in DEBUG previews).
+    var queueFinished: Bool { queuePhase.isFinished }
 
     /// The card recorded right before the copy (`CardIdentity`); nil before or when unknown.
     var copiedIdentity: String? { lock.lock(); defer { lock.unlock() }; return copied }
@@ -52,7 +82,9 @@ final class JobItem: ObservableObject, Identifiable {
         lock.lock(); copied = id; lock.unlock()
     }
 
-    @Published private(set) var chainLines: [String] = []
+    /// Where the card and each destination sit, with live throughput (copy and verify only) — the speed table's tooltips
+    /// and the "slowest link" sentence.
+    private(set) var chain: [ChainElement]?
     private var links: [RoleLink]?
     private var connectors: [UsbConnector]?
     private var portNames: [String: String] = [:]
@@ -61,7 +93,11 @@ final class JobItem: ObservableObject, Identifiable {
     func refresh() {
         objectWillChange.send()
         progress.update(job.status(), now: Date())
+        let phase = status.phase
+        if startedAt == nil && phase != .waiting && phase != .cancelled { startedAt = Date() }
+        if finishedAt == nil && phase.isFinished { finishedAt = Date() }
         updateChain()
+        loadThumbsIfNeeded()
     }
 
     /// Where the card and each destination are connected — resolved once, off the main thread, when copying starts.
@@ -70,8 +106,8 @@ final class JobItem: ObservableObject, Identifiable {
         chainRequested = true
         let config = job.config
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            var l = [RoleLink(role: "Karta", link: DriveLinks.resolve(plan.source))]
-            l += plan.destRoots.enumerated().map { RoleLink(role: "Cíl \($0.offset + 1)", link: DriveLinks.resolve($0.element)) }
+            var l = [RoleLink(role: RoleLink.card, link: DriveLinks.resolve(plan.source))]
+            l += plan.destRoots.enumerated().map { RoleLink(role: RoleLink.destination($0.offset + 1), link: DriveLinks.resolve($0.element)) }
             let c = UsbScanner.scan().connectors
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -84,31 +120,52 @@ final class JobItem: ObservableObject, Identifiable {
         }
     }
 
-    /// The chain with live throughput and the brake (spec 8a.3) while copying or verifying; unchanged lines are kept.
     private func updateChain() {
-        var lines: [String] = []
-        if let links, status.phase == .copying || status.phase == .verifying {
-            let rates = [status.phase == .copying ? progress.readRate / 1e6 : 0] + progress.destRates.map { $0 / 1e6 }
-            let chain = ChainView.build(links, mbps: rates, connectors: connectors, portNames: portNames)
-            lines = ChainView.lines(chain, brake: status.phase == .copying ? progress.brake : nil)
+        guard let links, status.phase == .copying || status.phase == .verifying else {
+            chain = nil
+            return
         }
-        if lines != chainLines { chainLines = lines }
+        let rates = [status.phase == .copying ? progress.readRate / 1e6 : 0] + progress.destRates.map { $0 / 1e6 }
+        chain = ChainView.build(links, mbps: rates, connectors: connectors, portNames: portNames)
     }
 
-    var safeText: String { Texts.safeToEject(plan?.cardPaths.count ?? 0) }
-
-    /// Not for a cancelled job: it shows one orange line instead (a cut-short copy is not "N souborů selhalo").
-    var failedText: String? {
-        guard !isCancelled, let r = report, !r.success else { return nil }
-        return Texts.failed(r.failedFiles.count)
+    /// The first five clips with a thumbnail (the middle frame of three) — decoded once, off the main thread.
+    private func loadThumbsIfNeeded() {
+        guard !thumbsLoaded, isFinished, let r = report else { return }
+        thumbsLoaded = true
+        let clips = r.clips.filter { !$0.clip.isCameraProxy }
+        let picked = Array(clips.filter { !$0.thumbnails.isEmpty }.prefix(5))
+        guard !picked.isEmpty else { return }
+        let more = clips.count - picked.count
+        let input = picked.map { ($0.clip.name, $0.thumbnails[$0.thumbnails.count == 3 ? 1 : 0].jpeg) }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let thumbs = input.enumerated().map { ClipThumb(id: $0.offset, clip: $0.element.0, image: NSImage(data: $0.element.1)) }
+            DispatchQueue.main.async {
+                self?.thumbs = thumbs
+                self?.moreThumbs = more
+            }
+        }
     }
 
-    var cancelledText: String? { isCancelled && !status.safeToEject ? Texts.cancelled : nil }
+    /// The names the destinations are shown with ("RAID_A"; the volume root as it is).
+    var destNames: [String] { job.config.destRoots.map(AppModel.diskName) }
+}
 
-    /// No rate summary for a cancelled job — the rate of a cut-short copy would mislead.
-    var summaryText: String? {
-        guard isFinished, !isCancelled, let r = report else { return nil }
-        return JobProgress.summaryText(r)
+/// The sections of the settings page (also what a click on a "3 · After copy" row opens).
+enum SettingsSection: String, CaseIterable, Identifiable {
+    case folders, verify, analysis, proxy, report, decoders, hardware
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .folders: return "Folders"
+        case .verify: return "Verify"
+        case .analysis: return "Analysis"
+        case .proxy: return "Proxy"
+        case .report: return "Report"
+        case .decoders: return "Decoders"
+        case .hardware: return "Hardware"
+        }
     }
 }
 
@@ -124,7 +181,11 @@ final class AppModel: ObservableObject {
     @Published var cardNames: [String: String] = [:]
     @Published var tools = ExternalTools()
     @Published var message: String?
+    /// The settings page shows instead of the two columns (nil = main view).
+    @Published var settingsSection: SettingsSection?
     @Published private(set) var destStatus: [String: DestinationStatus] = [:]
+    /// How each card volume is connected ("USB 3 (5 Gb/s)", "SD reader"), resolved once per mount off the main thread.
+    @Published private(set) var volumeConnections: [String: String] = [:]
     @Published private(set) var lutExists: Bool?
     @Published private(set) var terminating = false
     @Published private(set) var folderExists: Bool?
@@ -132,6 +193,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var starting = false
     /// The built-in LUTs (the app bundle's Resources/luts; already loaded by SettingsStore.decode at launch).
     let luts = LutCatalog.shared
+    /// Snapshot rendering: no disks, no timers, nothing saved.
+    let isPreview: Bool
     private var folderChecked: String?
     private var probedFolder: String?
     private var lutChecked: String?
@@ -140,6 +203,8 @@ final class AppModel: ObservableObject {
     /// One destination check in flight, at most one more requested — a hung NAS never stacks a check every 5 s.
     private var probing = false
     private var probeAgain = false
+    /// Destination connections already resolved (they do not change while the disk stays mounted).
+    private var destConnections: [String: String] = [:]
 
     private let copyQueue = DispatchQueue(label: "app.copy", qos: .userInitiated)
     private let postQueue = DispatchQueue(label: "app.post", qos: .userInitiated)  // proxies: the user waits for dailies
@@ -150,9 +215,11 @@ final class AppModel: ObservableObject {
     private var timers: [Timer] = []
     private var observers: [NSObjectProtocol] = []
 
-    init() {
-        settings = SettingsStore.decode(UserDefaults.standard.data(forKey: SettingsStore.defaultsKey))
+    init(preview: Bool = false) {
+        isPreview = preview
+        settings = preview ? AppSettings() : SettingsStore.decode(UserDefaults.standard.data(forKey: SettingsStore.defaultsKey))
         tools = settings.tools.resolved()
+        guard !preview else { return }
         refreshVolumes()
         refreshDestinations()
         let nc = NSWorkspace.shared.notificationCenter
@@ -174,6 +241,7 @@ final class AppModel: ObservableObject {
     }
 
     private func save() {
+        guard !isPreview else { return }
         if let data = SettingsStore.encode(settings) { UserDefaults.standard.set(data, forKey: SettingsStore.defaultsKey) }
         let t = settings.tools.resolved()
         if t != tools { tools = t }
@@ -198,7 +266,7 @@ final class AppModel: ObservableObject {
     }
 
     private var _hardware: HardwareModel?
-    /// Created on first use (the Hardware section or window); `waitForHardware` never creates it.
+    /// Created on first use (the top bar's Hardware dot or the window); `waitForHardware` never creates it.
     var hardware: HardwareModel {
         if let h = _hardware { return h }
         let h = HardwareModel(app: self)
@@ -226,19 +294,30 @@ final class AppModel: ObservableObject {
         return f.string(from: customDate)
     }
 
+    // MARK: Settings page
+
+    func openSettings(_ section: SettingsSection = .folders) { settingsSection = section }
+    func closeSettings() { settingsSection = nil }
+
     // MARK: Volumes and destinations (always off the main thread)
 
     func refreshVolumes() {
+        guard !isPreview else { return }
         let roots = settings.destRoots
+        let known = volumeConnections
         probeQueue.async { [weak self] in
             let found = Volumes.scan(destRoots: roots)
             let mounted = Set((FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: nil, options: []) ?? [])
                 .map(\.path))
-            DispatchQueue.main.async { self?.applyVolumes(found, mounted: mounted) }
+            var connections: [String: String] = [:]
+            for v in found where !v.isDestination {
+                connections[v.path] = known[v.path] ?? AppModel.connectionLabel(DriveLinks.resolve(v.path))
+            }
+            DispatchQueue.main.async { self?.applyVolumes(found, mounted: mounted, connections: connections) }
         }
     }
 
-    private func applyVolumes(_ found: [VolumeItem], mounted: Set<String>) {
+    private func applyVolumes(_ found: [VolumeItem], mounted: Set<String>, connections: [String: String]) {
         if settings.autoDestinations {
             let next = Volumes.autoDestinations(current: settings.destRoots, found: found, mounted: mounted,
                                                 ignored: Set(settings.ignoredVolumes),
@@ -252,12 +331,14 @@ final class AppModel: ObservableObject {
         selectedSources = Volumes.selectionAfterRefresh(previousPaths: volumes.map(\.path), found: found,
                                                         selected: selectedSources, manual: manualSources)
         volumes = found
-        for j in jobs { j.objectWillChange.send() }   // "Vysunout kartu" follows the scan
+        if connections != volumeConnections { volumeConnections = connections }
+        for j in jobs { j.objectWillChange.send() }   // "Eject card" follows the scan
     }
 
-    /// Free space / filesystem / existence of every destination, whether the custom LUT and the proxy folder exist —
-    /// every 5 s, after a change and from the refresh button. Never on the main thread.
+    /// Free space / size / filesystem / existence of every destination, whether the custom LUT and the proxy folder
+    /// exist — every 5 s, after a change and from the refresh button. Never on the main thread.
     func refreshDestinations() {
+        guard !isPreview else { return }
         if probing {
             probeAgain = true   // runs once the check in flight returns (it may hang on a network disk)
             return
@@ -266,17 +347,24 @@ final class AppModel: ObservableObject {
         let roots = settings.destRoots
         let lut = ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips)
         let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
+        let knownLinks = destConnections
         probedRoots = roots
         probedLut = lut
         probedFolder = folder
         destQueue.async { [weak self] in
             var found: [String: DestinationStatus] = [:]
-            for r in roots { found[r] = AppModel.probe(r) }
+            for r in roots {
+                var s = AppModel.probe(r)
+                if s.exists { s.connection = knownLinks[r] ?? AppModel.connectionLabel(DriveLinks.resolve(r)) }
+                found[r] = s
+            }
             let lutOK = lut.map { FileManager.default.fileExists(atPath: $0) }
             let folderOK = folder.map { ProxyPreflight.isDirectory($0) }
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.destStatus = found
+                // A disk that went away forgets its connection (another disk may mount there next).
+                self.destConnections = found.compactMapValues(\.connection)
                 self.lutExists = lutOK
                 self.lutChecked = lut
                 self.folderExists = folderOK
@@ -298,7 +386,20 @@ final class AppModel: ObservableObject {
         var fs = statfs()
         guard statfs(path, &fs) == 0 else { return DestinationStatus(checking: false) }
         let format = withUnsafeBytes(of: fs.f_fstypename) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
-        return DestinationStatus(free: Int64(fs.f_bavail) * Int64(fs.f_bsize), format: format, exists: true, checking: false)
+        return DestinationStatus(free: Int64(fs.f_bavail) * Int64(fs.f_bsize), total: Int64(fs.f_blocks) * Int64(fs.f_bsize),
+                                 format: format, exists: true, checking: false)
+    }
+
+    /// "Thunderbolt", "USB 3 (5 Gb/s)", "NVMe"…: the USB link speed, else the bus.
+    nonisolated static func connectionLabel(_ link: DriveLink) -> String? {
+        if let u = link.usb { return UsbSpeeds.label(u.link) }
+        return link.bus == .unknown ? nil : StorageBuses.label(link.bus)
+    }
+
+    /// The name a destination is shown with: its folder's name ("RAID_A"), "/" as it is.
+    nonisolated static func diskName(_ root: String) -> String {
+        let n = (root as NSString).lastPathComponent
+        return n.isEmpty ? root : n
     }
 
     func destinationInfo(_ path: String) -> DestinationStatus { destStatus[path] ?? DestinationStatus() }
@@ -317,13 +418,18 @@ final class AppModel: ObservableObject {
     }
 
     func addManualSource() {
-        guard let path = pickFolder(title: "Vyber kartu nebo složku se záznamem") else { return }
+        guard let path = pickFolder(title: "Choose a card or a folder with footage") else { return }
         if !manualSources.contains(path) { manualSources.append(path) }
         selectedSources.insert(path)
     }
 
+    func removeManualSource(_ path: String) {
+        manualSources.removeAll { $0 == path }
+        selectedSources.remove(path)
+    }
+
     func addDestination() {
-        guard let path = pickFolder(title: "Vyber cílovou složku (root)") else { return }
+        guard let path = pickFolder(title: "Choose a destination folder (root)") else { return }
         if !settings.destRoots.contains(path) { settings.destRoots.append(path) }
         if let vol = Volumes.volumeRoot(of: path) {   // added by hand again: automatic again
             let key = volumes.first { $0.path == vol }.map(Volumes.volumeKey) ?? (vol as NSString).lastPathComponent
@@ -346,7 +452,7 @@ final class AppModel: ObservableObject {
     @discardableResult
     func pickLUT() -> Bool {
         let panel = NSOpenPanel()
-        panel.title = "Vyber LUT (.cube)"
+        panel.title = "Choose a LUT (.cube)"
         panel.allowedContentTypes = [.init(filenameExtension: "cube")!]
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         settings.proxy.lutPath = url.path
@@ -389,7 +495,7 @@ final class AppModel: ObservableObject {
     }
 
     func pickProxyFolder() {
-        guard let path = pickFolder(title: "Vyber složku pro proxy") else { return }
+        guard let path = pickFolder(title: "Choose a folder for proxies") else { return }
         settings.proxy.extraFolder = path
     }
 
@@ -425,6 +531,24 @@ final class AppModel: ObservableObject {
         return t.isEmpty ? nil : t
     }
 
+    /// The ticked sources in the order they are shown (volumes, then folders).
+    var selectedInOrder: [String] { (volumes.map(\.path) + manualSources).filter { selectedSources.contains($0) } }
+
+    /// The used space of a ticked card volume (what it will copy, at most); nil for a folder (not scanned on the main thread).
+    func usedBytes(_ path: String) -> Int64? {
+        volumes.first { $0.path == path }.map { max(0, $0.total - $0.free) }
+    }
+
+    /// What the ticked cards take, when every one is a scanned volume; nil otherwise.
+    var selectedBytes: Int64? {
+        var sum: Int64 = 0
+        for p in selectedInOrder {
+            guard let b = usedBytes(p) else { return nil }
+            sum += b
+        }
+        return sum
+    }
+
     // MARK: Jobs
 
     var canStart: Bool {
@@ -433,13 +557,41 @@ final class AppModel: ObservableObject {
             && lutProblem == nil && proxyFolderProblem == nil
     }
 
+    /// Why Start is disabled, in one line (nil when it can start or nothing is ticked yet).
+    var startProblem: String? {
+        if terminating { return nil }
+        if let p = lutProblem { return p }
+        if let p = proxyFolderProblem { return p }
+        if selectedSources.isEmpty { return nil }
+        if settings.destRoots.isEmpty { return "Add a destination disk." }
+        if let missing = settings.destRoots.first(where: { destStatus[$0].map { !$0.exists && !$0.checking } ?? false }) {
+            return "\(AppModel.diskName(missing)) is not connected."
+        }
+        return nil
+    }
+
     /// A copy writes or verifies the destinations — no speed measurement now.
     var copyRunning: Bool { QueueRules.measureBlocked(jobs.map(\.status.phase)) }
+
+    /// Running, waiting: the top bar's pill and the queue's count.
+    var queueCounts: (running: Int, waiting: Int) {
+        var running = 0, waiting = 0
+        for j in jobs {
+            let p = j.queuePhase
+            if p == .waiting { waiting += 1 } else if !p.isFinished { running += 1 }
+        }
+        return (running, waiting)
+    }
+
+    /// "Add to queue" while a card waits for or is in its copy — a new one then waits.
+    var startQueues: Bool {
+        jobs.contains { [.waiting, .copying, .flushing, .verifying].contains($0.queuePhase) }
+    }
 
     /// The custom LUT and the proxy folder are checked once more right before the start (they may sit on a disk that
     /// just went away) — off the main thread, at most 5 s each; meanwhile the start button is disabled.
     func start() {
-        guard canStart else { return }
+        guard canStart, !isPreview else { return }
         let lut = ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips)
         let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
         guard lut != nil || folder != nil else { return startJobs() }
@@ -477,8 +629,7 @@ final class AppModel: ObservableObject {
     }
 
     private func startJobs() {
-        let sources = (volumes.map(\.path) + manualSources).filter { selectedSources.contains($0) }
-        for src in sources {
+        for src in selectedInOrder {
             var config = JobConfig(source: src, destRoots: settings.destRoots)
             config.cardName = customName(src)
             config.date = dateString
@@ -488,7 +639,7 @@ final class AppModel: ObservableObject {
             config.tools = settings.tools
             let volume = volumes.first { $0.path == src }
             let item = JobItem(job: OffloadJob(config: config), sourceName: sourceName(src),
-                               canEject: volume != nil && volume?.ejectProblem == nil)
+                               canEject: volume != nil && volume?.ejectProblem == nil, estimatedBytes: usedBytes(src))
             jobs.append(item)
             selectedSources.remove(src)
             // Copies run one after another (they share the destination disks); post-processing runs
@@ -538,7 +689,7 @@ final class AppModel: ObservableObject {
 
     func clearFinished() { jobs.removeAll { $0.isFinished && !$0.ejecting } }
 
-    /// "Vysunout kartu" only while the copied card is in its slot per the last scan.
+    /// "Eject card" only while the copied card is in its slot per the last scan.
     func canShowEject(_ item: JobItem) -> Bool {
         item.status.safeToEject && !item.ejected && item.canEject
             && QueueRules.cardInDrive(item.job.config.source, copied: item.copiedIdentity, scanned: volumes)
@@ -565,7 +716,7 @@ final class AppModel: ObservableObject {
                     item.ejected = true
                     self?.refreshVolumes()
                 } else {
-                    self?.message = "Kartu se nepodařilo vysunout: \(result.error ?? "")"
+                    self?.message = "Couldn't eject the card: \(result.error ?? "")"
                 }
                 self?.checkTerminateReady()
             }
@@ -575,6 +726,22 @@ final class AppModel: ObservableObject {
     func reveal(_ item: JobItem) {
         guard let p = item.plan?.cardPaths.first else { return }
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)])
+    }
+
+    /// The proxy folder of the first destination, in Finder (looked up off the main thread).
+    func revealProxies(_ item: JobItem) {
+        guard let card = item.plan?.cardPaths.first else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let proxies = (card as NSString).appendingPathComponent(Layout.proxyDirName)
+            let target = FileManager.default.fileExists(atPath: proxies) ? proxies : card
+            DispatchQueue.main.async {
+                if FileManager.default.fileExists(atPath: target) {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: target)])
+                } else {
+                    self?.message = "Folder not found: \(target)"
+                }
+            }
+        }
     }
 
     /// The report from the first destination that has it, looked up off the main thread.
@@ -588,7 +755,7 @@ final class AppModel: ObservableObject {
                 if let path {
                     NSWorkspace.shared.open(URL(fileURLWithPath: path))
                 } else {
-                    self?.message = "Report nenalezen na žádném cíli:\n"
+                    self?.message = "Report not found on any destination:\n"
                         + cards.map { QueueRules.reportPath(cardPath: $0, cardName: name) }.joined(separator: "\n")
                 }
             }
@@ -607,16 +774,16 @@ final class AppModel: ObservableObject {
         if terminating {
             // An NSAlert, not `message`: the main window (and its alert) may already be closed.
             let notice = NSAlert()
-            notice.messageText = "Ukončuji — čekám, až se zrušené úlohy uklidí."
+            notice.messageText = "Quitting — waiting for the cancelled jobs to clean up."
             notice.runModal()
             return .terminateCancel
         }
         if jobs.contains(where: { !$0.isFinished }) {
             let alert = NSAlert()
-            alert.messageText = "Probíhá offload. Opravdu ukončit?"
-            alert.informativeText = "Rozpracované soubory se smažou, hotové zůstanou."
-            alert.addButton(withTitle: "Ukončit")
-            alert.addButton(withTitle: "Pokračovat")
+            alert.messageText = "An offload is running. Quit anyway?"
+            alert.informativeText = "Files in progress are deleted; finished files stay."
+            alert.addButton(withTitle: "Quit")
+            alert.addButton(withTitle: "Keep running")
             guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
         }
         terminating = true
@@ -632,4 +799,13 @@ final class AppModel: ObservableObject {
         guard terminating, !hasBusyJobs else { return }
         NSApp.terminate(nil)
     }
+
+#if DEBUG
+    /// Snapshot rendering: what the disk probes would have found.
+    func previewState(volumes: [VolumeItem], connections: [String: String], destinations: [String: DestinationStatus]) {
+        self.volumes = volumes
+        volumeConnections = connections
+        destStatus = destinations
+    }
+#endif
 }

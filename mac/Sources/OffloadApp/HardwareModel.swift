@@ -73,18 +73,21 @@ final class HardwareModel: ObservableObject {
         }
     }
 
-    /// The Hardware section: "Poslední test 5. 10. 2026 14:03 · bez varování" / "Zatím neproběhl".
+    /// "Last check Oct 5, 2026 14:03 · no warnings" / "Not checked yet".
     var summary: String {
-        guard let r = lastTest else { return "Zatím neproběhl" }
+        guard let r = lastTest, let warnings = lastWarnings else { return "Not checked yet" }
         let f = DateFormatter()
-        f.locale = Locale(identifier: "cs_CZ")
-        f.dateFormat = "d. M. yyyy H:mm"
-        return "Poslední test \(f.string(from: r.time)) · \(Texts.warnings(r.advice.filter { $0.kind == .warning }.count))"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "MMM d, yyyy H:mm"
+        return "Last check \(f.string(from: r.time)) · " + (warnings == 0 ? "no warnings" : Fmt.count(warnings, "warning"))
     }
 
+    /// Warnings of the last check (the top bar's dot: green with none, yellow with some); nil before any check.
+    var lastWarnings: Int? { lastTest.map { r in r.advice.filter { $0.kind == .warning }.count } }
+
     var measureHint: String {
-        if byDrive { return "Pro měření vyberte kartu nebo přidejte cíl." }
-        if app.copyRunning { return "Během kopírování nelze měřit — měření zapisuje 1 GB na cílové disky." }
+        if byDrive { return "To measure, tick a card or add a destination." }
+        if app.copyRunning { return "No measuring during a copy — the test writes 1 GB to the destinations." }
         return ""
     }
 
@@ -93,16 +96,16 @@ final class HardwareModel: ObservableObject {
 
     var measureQuestion: String {
         let dests = app.hardwareRoles().destinations
-        let list = dests.isEmpty ? "   (žádné)" : dests.map { "   " + $0 }.joined(separator: "\n")
-        return "Z karet se jen čte (až 1 GB z každé).\nNa cílové disky se zapíše a přečte dočasný soubor 1 GB a hned se smaže:\n\(list)\n\nPodle rychlosti disků to může trvat několik minut."
+        let list = dests.isEmpty ? "   (none)" : dests.map { "   " + $0 }.joined(separator: "\n")
+        return "Cards are only read (up to 1 GB each).\nA 1 GB temporary file is written to and read from each destination, then deleted:\n\(list)\n\nDepending on the disks this can take a few minutes."
     }
 
-    /// The window opened (menu Nástroje › Prověřit USB porty…, ⌘U, or the Hardware section): a quick test.
+    /// The window opened (the top bar's Hardware button or ⌘U): a quick test.
     func windowOpened() {
         if busy {
             // Like Windows (one HW run at a time): the previous run (of a closed window) is still finishing.
             rerunQuick = true
-            status = "Čekám, až doběhne předchozí test…"
+            status = "Waiting for the previous check to finish…"
         } else {
             run(measure: false)
         }
@@ -119,7 +122,7 @@ final class HardwareModel: ObservableObject {
         let flag = CancelFlag()
         self.flag = flag
         busy = true
-        let running = measure ? "Měřím rychlost… (může trvat několik minut)" : "Zjišťuji připojení…"
+        let running = measure ? "Measuring speed… (may take a few minutes)" : "Checking connections…"
         status = running
         queue.async { [weak self] in
             let (targets, all) = HwTest.targets(cards: roles.cards, destinations: roles.destinations, byDrive: roles.byDrive)
@@ -130,13 +133,13 @@ final class HardwareModel: ObservableObject {
         }
     }
 
-    /// Zastavit, or the window closed: stops at once; "Zastavuji…" until the run has really ended.
+    /// Stop, or the window closed: stops at once; "Stopping…" until the run has really ended.
     func stop() {
         guard busy, !stopping, let flag else { return }
         stopping = true
         rerunQuick = false
         flag.cancel()
-        status = "Zastavuji…"
+        status = "Stopping…"
     }
 
     /// On quit (mirrors Windows `MainViewModel.WaitForHardware`): stop a measurement and wait — at most `timeout` s —
@@ -161,7 +164,7 @@ final class HardwareModel: ObservableObject {
         stopping = false
         result = r
         self.byDrive = byDrive
-        status = cancelled && measured ? "Měření přerušeno — zobrazeno, co se stihlo změřit." : ""
+        status = cancelled && measured ? "Measurement stopped — showing what was measured." : ""
         rebuild()
         guard !cancelled else { return }
         lastTest = r
@@ -197,7 +200,7 @@ final class HardwareModel: ObservableObject {
         }
         var groups: [PortGroup] = []
         for c in r.connectors where c.userVisible || showInternal {
-            let device = c.device.map { "\($0.name) — \(UsbSpeeds.label($0.link))" } ?? "volný"
+            let device = c.device.map { "\($0.name) — \(UsbSpeeds.label($0.link))" } ?? "free"
             let here = r.drives.filter { d in d.link.usb.map { c.has($0.connectorId) } ?? false }.map(\.role).joined(separator: ", ")
             let row = PortRow(connector: c, label: c.defaultLabel, device: device, drives: here)
             if let i = groups.firstIndex(where: { $0.controllerId == c.controllerId }) {
