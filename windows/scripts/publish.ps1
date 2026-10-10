@@ -24,8 +24,15 @@ function Invoke-Gh {
     & gh @args
     if ($LASTEXITCODE -ne 0) { throw "gh $($args -join ' ') failed" }
 }
+# Windows PowerShell 5.1 turns a native tool's stderr into a terminating error under 'Stop': probes run with 'Continue'.
 function Test-Release([string]$Tag) {
+    $ErrorActionPreference = 'Continue'
     & gh release view $Tag --repo $Repo --json tagName 2>$null | Out-Null
+    return $LASTEXITCODE -eq 0
+}
+function Test-Tag([string]$Tag) {
+    $ErrorActionPreference = 'Continue'
+    & gh api "repos/$Repo/git/ref/tags/$Tag" 2>$null | Out-Null
     return $LASTEXITCODE -eq 0
 }
 
@@ -110,8 +117,7 @@ try {
     }
 
     # 2) Rolling channel release: its tag moves to this commit, its asset keeps one name.
-    & gh api "repos/$Repo/git/ref/tags/$Channel" 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
+    if (Test-Tag $Channel) {
         Invoke-Gh api -X PATCH "repos/$Repo/git/refs/tags/$Channel" -f "sha=$commit" -F force=true | Out-Null
     } else {
         Invoke-Gh api "repos/$Repo/git/refs" -f "ref=refs/tags/$Channel" -f "sha=$commit" | Out-Null
