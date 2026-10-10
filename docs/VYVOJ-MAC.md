@@ -7,6 +7,30 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Aplikace jen anglicky (zadání uživatele 2026-10-10, obě verze; Windows 0.9.0):** celá aplikace bude **natrvalo jen
+  anglicky** — čeština zmizí ze všeho, co uživatel vidí: GUI, hlášky, poznámky u klipů, texty kontroly před startem,
+  oznámení (systémová i ntfy), reporty (HTML/PDF/TXT karty, denní report, report ověření, souhrnný report, lidsky čitelné
+  sloupce seznamů klipů), nápověda, výstup a chyby CLI, hlášky `braw-decode`, návod a readme v balíčku. Vývojová
+  dokumentace v `docs/` a komentáře v kódu zůstávají česky (nejsou součástí aplikace).
+  - **Nesmí se změnit** (formát na disku sdílený s Windows a se staršími zálohami, `docs/FORMATY.md`): klíče a hodnoty
+    enumů v JSON, ASC MHL, `.xxh64`/`.md5`, manifest, klíče `history.json`, klíče a hodnoty `settings.json`; jména
+    uvnitř zálohy (`_REPORT`, `ascmhl`, `_PROXY`, `neshoda_NNNN`, jména souborů reportů, `<karta>_2`); názvy sloupců
+    CSV/ALE, které čtou nástroje (lidsky čitelné hodnoty už anglicky). Čtení musí dál přijmout všechno, co zapsaly
+    starší verze, včetně českého volného textu ve starých reportech (např. poznámky) — ten se ukáže tak, jak je.
+  - **Formátování nezávislé na jazyku systému** (obdoba `CultureInfo.InvariantCulture` — na Macu `Locale(identifier:
+    "en_US_POSIX")` / pevný formát, nikdy `Locale.current`): datum `2026-10-10`, čas `14:14:28`, datum a čas
+    `2026-10-10 14:14:28`, desetinná tečka (`1.70 GB`, `23.976`), velikosti `GB`/`MB` jako dosud, délky `0:01:32`,
+    rychlosti `602 MB/s`; v HTML `<html lang="en">`.
+  - **Místní složky:** kopie reportů do `~/Documents/Offload reports/<datum>/<karta>/` (dosud `Offload reporty`),
+    souhrnný report do `~/Documents/Offload reports/summary/<datum>_<čas>_summary.html/.pdf`. Čtení (záložní zdroj
+    souhrnného reportu, `.offload-origin`) se musí dívat **i do staré složky `Offload reporty`**. Klíč nastavení pro
+    složku zůstává.
+  - **Slovník pojmů** (stejné slovo pro stejnou věc v obou verzích, např. Safe to eject / Safe to format, Append,
+    Copy again, Verify backup, Day report, Summary report): [ui-text-glossary.md](ui-text-glossary.md).
+  - **Přejmenované soubory v balíčku:** `CTI-ME.txt` → `READ-ME.txt`, návod `Offload-navod.pdf` → `Offload-manual.pdf`
+    (Windows: zdroj `windows/package/navod/navod.html` → `windows/package/manual/manual.html` + `render.ps1`). Mac build
+    má přibalit odpovídající anglický readme a návod se stejnými jmény.
+
 - **Odkazy na stažení dekodérů (zadání uživatele 2026-10-10, ve Windows 0.7.2):** když chybí nástroj
   pro RAW, ukázat odkaz na stránku výrobce — v nastavení nástrojů tlačítko „Stáhnout…“ a v poznámce klipu bez proxy
   „— ke stažení: <adresa>“: Blackmagic RAW https://www.blackmagicdesign.com/products/blackmagicraw, REDCINE-X PRO
