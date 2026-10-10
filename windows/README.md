@@ -483,8 +483,11 @@ Souhrnný report z vybraných záloh (úkol 2026-10-09):
       `Dokumenty\Offload reporty\souhrn\<datum>_<čas>_souhrn.html`, vedle PDF (A4 na šířku, nic neuříznuté); natáčecí dny,
       tabulka dnů a karet s klipy, soubory, daty, stopáží, první a poslední klapkou (TC + klip; ALEXA „TC denní doby“),
       kamery, ověření, „Kde je co zálohované“ (disk, cesta, připojen, ověřeno, kopie reportu na počítači). Ano → vybrat
-      disk → soubory i tam; podruhé tamtéž → `_2`, nic se nepřepíše; vybrat složku karty se zálohou nebo kartu ve čtečce →
-      hláška, report jen na počítači. „Zrušit výběr“ odškrtne vše; během tvorby okno reaguje.
+      disk → soubory i tam; podruhé tamtéž → `_2`, nic se nepřepíše; vybrat složku karty se zálohou (i rozpracované —
+      jen prázdný `_REPORT`), kartu ve čtečce (i mimo frontu), flash disk nebo disk jen pro čtení → česká hláška proč,
+      report jen na počítači (totéž `offload summary-report … -o <karta>` → kód 1). Tutéž kartu zálohovanou dvěma
+      úlohami na dva disky zaškrtnout obě → v součtech jednou, v „Kde je co zálohované“ oba disky. „Zrušit výběr“ odškrtne
+      vše; během tvorby odkaz „Vytvářím souhrnný report…“ a okno reaguje; 200 karet do pár sekund.
 - [ ] 77. **Odpojený disk:** jednu z vybraných karet zálohovat na disk, který pak odpojit → v souhrnu údaje z kopie reportu na
       počítači („kopie reportu na počítači“, disk „nepřipojen“, ověřeno „podle reportu“); smazat i kopii v `Offload reporty`
       → karta v reportu je, „report není k dispozici“, soubory a velikost podle historie, report vznikne. Karty, disky ani

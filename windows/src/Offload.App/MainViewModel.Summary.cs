@@ -84,10 +84,12 @@ public sealed partial class MainViewModel
         CommandManager.InvalidateRequerySuggested();
     }
 
-    public bool HasSummarySelection => summarySelection.Count > 0;
+    public bool HasSummarySelection => summarySelection.Count > 0 || makingSummary;
 
     /// "Souhrnný report (3)…", "Souhrnný report…" with nothing ticked.
-    public string SummaryButtonText => summarySelection.Count > 0 ? $"Souhrnný report ({summarySelection.Count})…" : "Souhrnný report…";
+    /// "Vytvářím souhrnný report…" while one is being made (review S-9: the window shows it works).
+    public string SummaryButtonText => makingSummary ? "Vytvářím souhrnný report…"
+        : summarySelection.Count > 0 ? $"Souhrnný report ({summarySelection.Count})…" : "Souhrnný report…";
 
     /// The shared row of `row.Id` (made once, then only refreshed).
     HistoryRowItem RowItem(HistoryRow row)
@@ -128,7 +130,7 @@ public sealed partial class MainViewModel
             if (extra == null) return;
         }
         makingSummary = true;
-        CommandManager.InvalidateRequerySuggested();
+        SummarySelectionChanged();
         var roots = SummaryReport.LocalRoots(AllSettings);
         var cards = Sources.Select(s => s.Path).ToList();   // never onto a card in a reader
         try
@@ -151,7 +153,7 @@ public sealed partial class MainViewModel
         finally
         {
             makingSummary = false;
-            CommandManager.InvalidateRequerySuggested();
+            SummarySelectionChanged();
         }
     }
 }

@@ -15,15 +15,15 @@ public class SummaryReportTests
         Info = new ClipInfo { Camera = camera, Duration = seconds, FrameRate = "25/1", Timecode = tc, Recorded = recorded },
     };
 
-    static DateTime Utc(int day, int hour, int minute = 0) => new(2026, 10, day, hour, minute, 0, DateTimeKind.Utc);
+    internal static DateTime Utc(int day, int hour, int minute = 0) => new(2026, 10, day, hour, minute, 0, DateTimeKind.Utc);
 
-    static ReportFile File(int i, long size = 1000, bool verified = true, int day = 6, string? path = null) => new()
+    internal static ReportFile File(int i, long size = 1000, bool verified = true, int day = 6, string? path = null) => new()
     {
         Path = path ?? $"CLIP/f{i}.mxf", Size = size, Modified = Utc(day, 7), Xxh64 = "0123456789abcdef", Destinations = [verified ? "verified" : "written"], Errors = [null],
     };
 
     /// A report of `card` on `root` (`<root>\<date>\<card>`) listing `files` and `clips`.
-    static OffloadReport Report(string root, string date, string card, IReadOnlyList<ClipEntry> clips, IReadOnlyList<ReportFile> files,
+    internal static OffloadReport Report(string root, string date, string card, IReadOnlyList<ClipEntry> clips, IReadOnlyList<ReportFile> files,
         bool verified = true, string source = @"E:\", int day = 6) => new()
     {
         CardName = card, Date = date, Source = source, SourceFilesystem = "exFAT",
@@ -45,7 +45,7 @@ public class SummaryReportTests
     }
 
     /// The history entry of the backups at `cardPaths` (one card, several destinations).
-    static HistoryEntry Entry(string card, string date, params string[] cardPaths) => new()
+    internal static HistoryEntry Entry(string card, string date, params string[] cardPaths) => new()
     {
         Id = HistoryStore.NewId(Utc(6, 9)), CardName = card, Date = date, Source = @"E:\", Finished = Utc(6, 8, 15), Success = true, Verified = true,
         Files = 7, Bytes = 7_000_000,
@@ -53,7 +53,7 @@ public class SummaryReportTests
         Generations = [new HistoryGeneration { Seq = 1, Kind = HistoryGeneration.Full, Finished = Utc(6, 8, 15), Files = 7, Bytes = 7_000_000, Verified = true }],
     };
 
-    static Dictionary<string, byte[]> Tree(string dir) =>
+    internal static Dictionary<string, byte[]> Tree(string dir) =>
         Directory.GetFiles(dir, "*", SearchOption.AllDirectories).ToDictionary(f => Path.GetRelativePath(dir, f), System.IO.File.ReadAllBytes);
 
     [Fact]
@@ -289,7 +289,9 @@ public class SummaryReportTests
         Assert.Equal(Path.Combine(picked, "2026-10-10_143205_souhrn_2.html"), saved.ExtraHtml);
         Assert.Null(saved.ExtraError);
         Assert.Equal("the user's own", System.IO.File.ReadAllText(Path.Combine(picked, "2026-10-10_143205_souhrn.html")));
-        Assert.Contains("2026-10-10_143205_souhrn_2.pdf", System.IO.File.ReadAllText(saved.ExtraHtml!));   // its own PDF link
+        // Review S-10: no PDF was printed (tests skip Edge) — the copy on the disk has no link to a file that is not there.
+        Assert.Null(saved.ExtraPdf);
+        Assert.DoesNotContain("Otevřít PDF report", System.IO.File.ReadAllText(saved.ExtraHtml!));
 
         var again = SummaryReport.Save(model, dir.Sub("local"), null, null, now);   // the same second: a suffix, never over
         Assert.Equal(Path.Combine(dir.Path, "local", "souhrn", "2026-10-10_143205_souhrn_2.html"), again.Html);
@@ -309,7 +311,7 @@ public class SummaryReportTests
 
         Assert.True(System.IO.File.Exists(saved.Html));
         Assert.Null(saved.ExtraHtml);
-        Assert.Contains("ve složce karty", saved.ExtraError);
+        Assert.Contains("ve složce zálohy karty", saved.ExtraError);
         DayFixtures.AssertSame(before, Tree(d1));
     }
 

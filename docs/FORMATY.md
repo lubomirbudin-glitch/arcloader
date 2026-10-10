@@ -141,8 +141,10 @@ Hodnoty výčtů:
   ffprobe `com.apple.quicktime.camera.identifier` / `camera_serial_number`; ARRI a BRAW zatím ne (ověří vzorky). Mac ignoruje.
 - `clips[].info.recorded` (volitelné, datum ISO 8601 UTC, Windows od 0.8.0): kdy kamera klip natočila — z metadat
   (ffprobe `creation_time` u MOV, MXF, MP4); chybí, když ho dekodér nezná (RAW: ARRIRAW přes art-cmd, BRAW, R3D) a ve
-  starších reportech. Souhrnný report podle něj řadí klipy (první a poslední klapka); bez něj podle čísla klipu. Mac
-  ignoruje (naplánováno).
+  starších reportech. Tvar jako `started` (`YYYY-MM-DDTHH:MM:SSZ`); hodnota jiného tvaru (číslo, jiný text) se čte jako
+  neznámá — report kvůli ní nikdy není nečitelný. Data před rokem 2000 (kamera bez nastavených hodin: 1904-01-01,
+  1970-01-01) a víc než den v budoucnosti se berou jako neznámá. Souhrnný report podle něj řadí klipy (první a poslední
+  klapka); bez něj podle čísla klipu. Mac ignoruje (naplánováno).
 - `clips[].info.colorScienceGenOriginal` (volitelné, Windows od 0.4.0): u BRAW Film dekódovaného s převodem Gen 4 → Gen 5
   generace, ve které byl klip natočený (`colorScienceGen` je pak účinná, `5`); chybí, když se převod nepodařil (klip se
   dekódoval tak, jak byl natočený). Mac ignoruje.
@@ -350,15 +352,24 @@ Pravidla (Windows od 0.3.0):
 Jeden report z vybraných záloh (karty i z různých dnů a disků): `<Offload reporty>/souhrn/<YYYY-MM-DD>_<HHmmss>_souhrn.html`
 + `.pdf` (A4 na šířku, bez náhledů), volitelně i do složky, kterou uživatel vybere. `<Offload reporty>` =
 `outputs.localReportFolder`, jinak `<Dokumenty>\Offload reporty` — i když je kopie reportu vypnutá. Soubory se **nikdy
-nepřepisují**: při shodě jména `…_souhrn_2.html/.pdf`, `_3` … (stejná přípona pro HTML i PDF). Do složky karty se zálohou
-(`_REPORT/offload_report.json` nebo `ascmhl` v ní či nad ní) ani na kartu ve čtečce se nezapisuje. Nic jiného se
+nepřepisují**: při shodě jména `…_souhrn_2.html/.pdf`, `_3` … (stejná přípona pro HTML i PDF); HTML odkazuje na PDF, jen když PDF vzniklo. Vybraná složka se odmítne (česky s důvodem), když je
+ve složce zálohy karty — i rozpracované nebo přerušené: ona nebo složka nad ní má `_REPORT` nebo `ascmhl` (pravidlo M13;
+`_REPORT` složky dne se nepočítá), nebo leží uvnitř `<YYYY-MM-DD>/<karta>/…` —, na kartě ve frontě, na svazku s kamerovou
+strukturou v kořeni (pravidlo automatických cílů `CameraAtRoot`, pokud na něm není výstup Offloadu), na výměnném médiu
+(karta ve čtečce, flash disk) nebo na svazku jen pro čtení; platí pro GUI i `offload summary-report -o`. Nic jiného se
 nezapisuje — reporty karet, denní reporty, `Offload reporty/<datum>` ani `history.json` se nemění.
 
 Zdroj: záznamy `history.json` (cíle `destinations[].cardPath`, soubory, velikost, ověření) a reporty `offload_report.json`
 + `offload_report_NNNN.json` (všechny generace — doplnění i opravy, jako denní report) ze složky karty na připojeném cíli
 (nejnovější report, pravidlo kopie na počítači); když žádný cíl není připojený, z kopie `<Offload reporty>/<datum>/<karta>`
 (i `_2`, `_3` …), jejíž `.offload-origin` odpovídá záloze (přesně, když je report přečtený; jinak karta a zdroj z historie).
-Když není ani kopie, karta v reportu je s poznámkou „report není k dispozici“ a s údaji z historie — není to chyba.
+Report, který na cíli nejde přečíst, ustoupí dalšímu připojenému cíli, pak kopii na počítači. Lokální kopie bez přečteného
+reportu se vezme jen tehdy, když jí odpovídá karta, zdroj i konec některé generace z historie a je jediná taková — jinak
+„nenalezeno“, nikdy cizí karta. Když není ani kopie, karta v reportu je s poznámkou „report není k dispozici“ a s údaji
+z historie — není to chyba. **Jedna karta je jedna karta:** zálohy téže karty (identita jako v historii: `shape` — tvar
+souborů `relpath\tsize` přes všechny generace — a název karty; u záznamu historie jeho `shape`, u reportu spočítaný ze
+souborů) se spojí — v součtech jednou (čísla z nejlépe přečtené zálohy), v „Kde je co zálohované“ každá kopie s vlastním
+ověřením; karta je ověřená, jen když jsou ověřené všechny její kopie.
 Ověřeno za cíl = sdílená definice (`CardRecord.ReadBack`): na připojeném disku z jeho složky, u odpojeného ze sloupce
 reportu, který tomu cíli patří (cesta + `volumeSerial`), bez reportu podle historie. Klapka = startovní `timecode`
 prvního a posledního nahraného klipu (bez kamerových proxy); pořadí podle `clips[].info.recorded`, mají-li ho všechny
