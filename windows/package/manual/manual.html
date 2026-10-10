@@ -248,14 +248,14 @@ destination disks at the same time. Then it reads the copy on each disk back and
 
 <div class="box tip"><span class="t">Safe to eject × Safe to format</span>
 As soon as all files are written to all disks, the job card shows the chip <b>Safe to eject</b> (neutral, not green) and the text
-<span class="q">“All files are on 2 disks — the card can be ejected. Format only after verification.”</span> Clip analysis
+<span class="q">“All files are on 2 disks — the card is safe to eject. Format it only after verification.”</span> Clip analysis
 and proxies read only from the destination disks, so you can insert the next card in the meantime. But <b>do not format</b>
 the card until the second chip says <b>Safe to format</b> — only then is everything verified. Only <b>Safe to format</b> is
-green; the sound and the notification <span class="q">“Offload: A001 done”</span> with the sentence “… the card can be formatted”
+green; the sound and the notification <span class="q">“Offload: A001 done”</span> with the text “Verified on 2 disks — the card is safe to format.”
 also come only then. Until then the chip shows <b>Verifying…</b>, and briefly <b>Finishing verification</b> at the end. When the
 decoder finds a defect in a camera file while making proxies (the copy still matches the card), a yellow label with the timecode
 and <b class="ui">Preview</b> appears; formatting is possible only after
-<b class="ui">Checked — the card can be formatted</b>.</div>
+<b class="ui">Checked — the card is safe to format</b>.</div>
 
 <div class="box danger"><span class="t">Nothing is ever written to the card</span>
 Offload only reads the card. It creates, deletes and renames nothing on it. The same goes for the speed test in the Hardware window.</div>
@@ -265,7 +265,7 @@ Offload only reads the card. It creates, deletes and renames nothing on it. The 
   <li>Several cards in a row in the queue; while the proxies of one card are rendering, the next one is copying.</li>
   <li>Built-in Log → Rec.709 LUTs for ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI and Fujifilm, and automatic LUT
     selection by camera (chapter 6).</li>
-  <li>Offload history: a “Backed up …” line on the card, appending only new clips to an earlier backup, a folder name from the
+  <li>Offload history: a “Backed up on …” line on the card, appending only new clips to an earlier backup, a folder name from the
     clip names, verifying a finished backup against ASC MHL and a free space check before the start (chapters 3, 8 and 10).</li>
   <li>Output for production and editorial: a day report of the whole day, a CSV clip list (Resolve, Excel) and ALE (Avid), MD5
     in addition to xxHash64, proxies ready for relinking in Resolve and Premiere (chapters 5, 6 and 7).</li>
@@ -300,7 +300,7 @@ Offload only reads the card. It creates, deletes and renames nothing on it. The 
 
 <div class="box tip"><span class="t">A folder as an argument</span>
 You can drag a folder with footage (e.g. a copy of a card on a disk) onto <code>Offload.exe</code>. The app opens
-and the folder is already ticked in step <b class="ui">1 · Cards</b>.</div>
+and the folder is already ticked in step <b class="ui">1 · CARDS</b>.</div>
 
 <h3>What is in the folder</h3>
 <table>
@@ -360,7 +360,7 @@ The <b class="ui">Open</b> button is shown only for an <code>https://…</code> 
 (opens File Explorer with the item selected). <b>Network paths</b> (<code>\\NAS\…</code>, a mapped network drive) and anything else are
 only shown as text to copy and open by hand (<span class="q">“Network path — copy it
 and open it by hand.”</span>). The <b class="ui">Check now</b> button tries immediately:
-<span class="q">“You have the latest version …”</span>, or <span class="q">“Cannot load the manifest: …”</span> (it gives up after 5 s on a disk,
+<span class="q">“You have the latest version …”</span>, or <span class="q">“Cannot read the manifest: …”</span> (it gives up after 5 s on a disk,
 10 s on the web, and reads at most 64 KB). An empty address = the check is off.</p>
 </section>
 
@@ -380,28 +380,28 @@ change it in Windows.</p>
 <div class="win">
   <div class="bar"><span>Offload — Film X</span><span>— ☐ ✕</span></div>
   <div class="top"><span class="callout">1</span><b>Offload</b> <span class="btn">Project <b>Film X</b> ▾</span><span class="sp"></span>
-    <span class="pillq">● 1 offload running · 1 queued</span> <span class="btn">Verify backup</span> <span class="btn"><span class="txt-ok">●</span> Hardware</span> <span class="btn">⚙</span></div>
+    <span class="pillq">● Running 1 offload · 1 in queue</span> <span class="btn">Verify backup</span> <span class="btn"><span class="txt-ok">●</span> Hardware</span> <span class="btn">⚙</span></div>
   <div class="body">
     <div class="left">
       <div class="sec">
         <div class="step"><span><span class="callout">2</span>1 · CARDS</span><span><span class="btn">⟳</span> <span class="btn">From folder…</span></span></div>
         <div class="tile sel">☑ <b>A035_ARRI</b> <span class="cap">ALEXA 35 · LogC4</span><br>
-          <span class="cap">24 clips · 1.70 GB · exFAT · USB 3 reader · 5 Gb/s</span><br>
+          <span class="cap">24 clips · 1.70 GB · exFAT · reader USB 3 · 5 Gb/s</span><br>
           <span class="cap">Folder name</span> <span class="btn mono" style="width:48%">A035_ARRI</span></div>
         <div class="tile">☐ <b>B012_FX6</b> <span class="btn" style="float:right">Append</span><br>
-          <span class="txt-warn" style="font-size:7.6pt">Backed up 2026-10-06 18:12 … · new files: 2 (14.2 GB)</span></div>
+          <span class="txt-warn" style="font-size:7.6pt">Backed up on 2026-10-06 18:12 … · new files: 2 (14.2 GB)</span></div>
       </div>
       <div class="sec">
         <div class="step"><span><span class="callout">3</span>2 · DESTINATIONS</span><span class="btn">+ Add disk</span></div>
         <div class="tile"><span class="num">1</span><b>RAID_A</b> <span class="cap">· 7.20 TB free of 8 TB · NTFS · NVMe</span>
           <div class="space"><i style="width:12%"></i></div></div>
-        <div class="tile"><span class="num">2</span><b>SHUTTLE_B</b> <span class="cap">· 1.84 TB free of 2 TB · exFAT · USB 3</span>
+        <div class="tile"><span class="num">2</span><b>SHUTTLE_B</b> <span class="cap">· 1.84 TB free of 2 TB · exFAT · USB 3 · 5 Gb/s</span>
           <div class="space"><i style="width:9%"></i></div></div>
         <span class="cap mono">…\2026-10-07\A035_ARRI\</span>
       </div>
       <div class="sec">
         <div class="step"><span><span class="callout">4</span>3 · AFTER COPY</span><span class="btn">Edit project</span></div>
-        <div class="row"><span><span class="okc">✓</span> Read-back verification</span><span class="cap">xxHash64</span></div>
+        <div class="row"><span><span class="okc">✓</span> Verification by reading back</span><span class="cap">xxHash64</span></div>
         <div class="row"><span><span class="okc">✓</span> Clip analysis and thumbnails</span><span class="cap">3 frames / clip</span></div>
         <div class="row"><span><span class="okc">✓</span> Proxies</span><span class="cap">1080p · H.264 · LogC4 → 709</span></div>
         <div class="row"><span><span class="okc">✓</span> Report</span><span class="cap">PDF · HTML · ASC MHL · CSV</span></div>
@@ -416,7 +416,7 @@ change it in Windows.</p>
       <div class="job">
         <div style="display:flex;justify-content:space-between"><span><b>A034_ARRI</b> <span class="cap">24 clips · 1.70 GB · ALEXA 35</span></span><b>38 %</b></div>
         <div class="phases"><i class="act"></i><i></i><i></i><i></i></div>
-        <div class="cap" style="display:flex;justify-content:space-between"><span>Copying · Verification · Proxies · Report</span><span>~0:02 left copying · ~6:00 total</span></div>
+        <div class="cap" style="display:flex;justify-content:space-between"><span>Copying · Verification · Proxies · Report</span><span>~0:02 left for the copy · ~6:00 in total</span></div>
         <div class="rates"><div><span>Card read</span><span>661 MB/s</span></div><div><span>1 RAID_A</span><span>661 MB/s</span></div><div><span>2 SHUTTLE_B</span><span>661 MB/s</span></div></div>
         <div class="cap" style="margin-top:1mm">File 10 / 24 · <span class="mono">A034C010_261007_R2KQ.mxf</span></div>
         <div style="text-align:right;margin-top:1mm"><span class="callout">7</span><span class="btn">Pause</span> <span class="btn">Cancel</span></div>
@@ -424,13 +424,13 @@ change it in Windows.</p>
       <div class="job ok">
         <div><b>A033_ARRI — safe to format</b> <span class="btn" style="float:right">Eject card</span></div>
         <div class="cap">Copy 602 MB/s · Verification 799 MB/s · Proxies 24 / 24 · Total 6 min 12 s</div>
-        <div style="margin-top:1mm"><span class="btn">PDF report</span> <span class="btn">Open folder</span> <span class="btn">Proxies</span></div>
+        <div style="margin-top:1mm"><span class="btn">Report PDF</span> <span class="btn">Open folder</span> <span class="btn">Proxies</span></div>
       </div>
       <div class="job warn">
         <div><b>A032_ARRI — do not eject the card yet</b></div>
         <div class="cap">1 file on disk SHUTTLE_B does not match the card. Everything is fine on RAID_A.</div>
         <div class="cap mono">CLIP\A032C007.mxf · RAID_A ✓ · SHUTTLE_B ✕ hash</div>
-        <div style="margin-top:1mm"><span class="callout">8</span><span class="btn">Copy again</span> <span class="btn">PDF report</span></div>
+        <div style="margin-top:1mm"><span class="callout">8</span><span class="btn">Copy again</span> <span class="btn">Report PDF</span></div>
       </div>
       <div class="today cap"><span class="callout">9</span><b>TODAY</b> · 3 cards · 412 GB · all verified <span class="btn" style="float:right">Day report…</span></div>
     </div>
@@ -441,9 +441,9 @@ change it in Windows.</p>
 
 <div class="legend">
   <div><span class="callout">1</span><b>Top bar</b> — project, queue status, <b class="ui">Verify backup</b>, <b class="ui">Hardware</b>, Settings.</div>
-  <div><span class="callout">2</span><b>1 · Cards</b> — sources to copy.</div>
-  <div><span class="callout">3</span><b>2 · Destinations</b> — disks and folders to copy to.</div>
-  <div><span class="callout">4</span><b>3 · After copy</b> — what the project does after the copy; <b class="ui">Edit project</b> opens Settings, the marks on the left are switches, the rows open their part of Settings.</div>
+  <div><span class="callout">2</span><b>1 · CARDS</b> — sources to copy.</div>
+  <div><span class="callout">3</span><b>2 · DESTINATIONS</b> — disks and folders to copy to.</div>
+  <div><span class="callout">4</span><b>3 · AFTER COPY</b> — what the project does after the copy; <b class="ui">Edit project</b> opens Settings, the marks on the left are switches, the rows open their part of Settings.</div>
   <div><span class="callout">5</span><b>Start bar</b> — summary, time estimate and <b class="ui">Start offload</b>.</div>
   <div><span class="callout">6</span><b>Queue</b> and <b>Card history</b> — job cards, chapter 8.</div>
   <div><span class="callout">7</span><b class="ui">Pause</b> / <b class="ui">Cancel</b> a running job, chapter 8.</div>
@@ -455,7 +455,7 @@ change it in Windows.</p>
 <ul>
   <li><b class="ui">Project <i>name</i> ▾</b> — project switcher (below).</li>
   <li>The link <span class="q">“New version 0.9.1”</span> when the update check found a newer version (chapter 2).</li>
-  <li>A pill with the queue status: <span class="q">“● 1 offload running · 1 queued”</span>, <span class="q">“Paused: 1 offload · 1 queued”</span>;
+  <li>A pill with a dot and the queue status: <span class="q">“Running 1 offload · 1 in queue”</span>, <span class="q">“Paused: 1 offload · 1 in queue”</span>;
     not shown when there are no jobs.</li>
   <li><b class="ui">Verify backup</b> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>) — verifying a finished backup against ASC MHL (chapter 8).</li>
   <li><b class="ui">Hardware</b> (<kbd>Ctrl</kbd>+<kbd>U</kbd>) — the Hardware window (chapter 9). The dot on the button shows the result of the last
@@ -472,25 +472,23 @@ into the currently selected project; switching to another one and back loses not
 settings when they were started — switching the project does not change them. While a start is being prepared (checks,
 questions) the switcher is locked. Tool paths, USB port names and the update check stay shared by all projects.</p>
 <p><b class="ui">Save as new project…</b> creates a project from the current settings and selects it;
-<b class="ui">Delete…</b> asks <span class="q">“Delete project Film X? The project settings will be lost, the backups on the disks
-stay.”</span> Name: 1–60 characters, must not repeat (not even in different letter case), and <span class="q">“No project”</span>
+<b class="ui">Delete…</b> asks <span class="q">“Delete project Film X? The project's settings will be lost; the backups on the disks stay.”</span> Name: 1–60 characters, must not repeat (not even in different letter case), and <span class="q">“No project”</span>
 is reserved. The window title shows the selected project, e.g. <span class="q">“Offload — Film X”</span>. The project is written into the
-report and the history: the <span class="q">“next in sequence”</span> suggestion counts only cards of the same project, and the day
+report and the history: the <span class="q">“next after A001 (today)”</span> suggestion counts only cards of the same project, and the day
 report shows <span class="q">“Project: Film X”</span> when all cards of the day come from it.</p>
 <p><b>Appending to a card</b> follows the project in which the card was originally backed up (not the one currently selected).
 When that project no longer exists (deleted or renamed), the append runs with the <b>No project</b> settings and the job card
 says so. The start checks only the LUTs and proxy folders that the jobs really use.</p>
 
-<h3>1 · Cards</h3>
+<h3>1 · CARDS</h3>
 <ul>
   <li>A card inserted into a reader <b>appears by itself and is ticked</b> (a card with a camera structure, or a non-empty card in a
-    reader — e.g. from a sound recorder; this is turned off in Settings → Folder structure → <b class="ui">Automatically mark cards
-    in readers as sources</b>). While there is none, the step shows a dashed frame
-    <span class="q">“Insert a card into the reader”</span> (during an offload <span class="q">“Insert the next card”</span>).</li>
+    reader — e.g. from a sound recorder; this is turned off in Settings → Folder structure → <b class="ui">Automatically select cards in readers as sources</b>). While there is none, the step shows a dashed frame
+    <span class="q">“Insert a card into the reader”</span> (during an offload <span class="q">“Insert another card”</span>).</li>
   <li>The card tile shows the name, the <b>camera</b> (e.g. <span class="q">“ALEXA 35 · LogC4”</span> — found from the card's first clip,
     read-only, at most 5 s; when Offload does not recognise it, the label is missing) and the line <span class="q">“24 clips · 1.70 GB ·
-    exFAT · USB 3 reader · 5 Gb/s”</span>. The connection type is <span class="q">“USB 3 reader · 5 Gb/s”</span>,
-    <span class="q">“USB 2.0”</span>, <span class="q">“SD reader”</span>, <span class="q">“NVMe”</span>, <span class="q">“SATA”</span>
+    exFAT · reader USB 3 · 5 Gb/s”</span>. The connection type is <span class="q">“reader USB 3 · 5 Gb/s”</span>,
+    <span class="q">“reader USB 2.0”</span>, <span class="q">“SD reader”</span>, <span class="q">“NVMe”</span>, <span class="q">“SATA”</span>
     or <span class="q">“network”</span>. Windows cannot tell Thunderbolt apart — a reader behind it shows up as NVMe or USB.
     A disk that does not look like a camera card additionally shows <span class="q">“does not look like a card”</span> and is not ticked by itself.
     A card is a medium with folders such as <code>DCIM</code>, <code>PRIVATE</code>, <code>CLIP</code>,
@@ -499,21 +497,21 @@ says so. The start checks only the LUTs and proxy folders that the jobs really u
   <li>Removable media and disks connected over USB or SD are offered. Neither the system disk nor a disk holding one of the
     destinations is offered as a card.</li>
   <li>Under the card's details is a line from the <b>offload history</b>: grey <span class="q">“Checking whether the card is already backed up…”</span>,
-    then green <span class="txt-ok">“Backed up 2026-10-06 08:15 to Backup (D:), Backup2 (F:) — verified”</span>, orange
-    with the addition <span class="txt-warn">“· new files: 12 (3.2 GB)”</span>, <span class="txt-warn">“— NOT VERIFIED”</span> or
-    <span class="txt-warn">“…, but the card has changed since (4 files differ) — append is not possible, full copy only”</span>,
+    then green <span class="txt-ok">“Backed up on 2026-10-06 08:15 to Backup (D:), Backup2 (F:) — verified, safe to format”</span>, orange
+    with the addition <span class="txt-warn">“· new files: 12 (3.2 GB)”</span>, <span class="txt-warn">“— NOT VERIFIED (safe to eject, do not format)”</span> or
+    <span class="txt-warn">“…, but the card has changed since (4 files differ) — cannot append, only a full copy”</span>,
     red <span class="txt-bad">“— with errors (3 files)”</span>. A card Offload has never copied gets no line;
     a card emptied in the camera shows a neutral <span class="q">“The card is empty — backed up earlier …”</span>. Offload recognises the card by
     the file system serial number and capacity, so even in a different reader; a reformatted card is a new card. The history is only
     on this computer (<code>%APPDATA%\Offload\history.json</code>); a copy cancelled half-way is not written into it.</li>
   <li>A ticked card has a <b class="ui">Folder name</b> field with a hint where the suggestion comes from. The grey pre-filled suggestion is: the reel
-    from the clip names (<code>A001C003_…</code> → <code>A001</code>, <span class="q">“from clip names (A001C003…)”</span>); for a card without
-    such names and without history, <span class="q">“next in sequence after A001 (today)”</span> based on the cards copied into the same
+    from the clip names (<code>A001C003_…</code> → <code>A001</code>, <span class="q">“from the clip names (A001C003…)”</span>); for a card without
+    such names and without history, <span class="q">“next after A001 (today)”</span> based on the cards copied into the same
     date folder; otherwise the volume label (for a folder, its name). Several reels on one card give no suggestion
-    (<span class="q">“The card holds several reels: A001, A002”</span>). Two unknown cards get A002, A003 in turn. A name you type always
+    (<span class="q">“The card has more than one reel: A001, A002”</span>). Two unknown cards get A002, A003 in turn. A name you type always
     wins. The suggestion is turned off by an option in chapter 5.</li>
   <li>A card with clips added since the backup (and with the earlier destinations connected) has a yellow <b class="ui">Append</b> button
-    (tooltip: <span class="q">“Append only the new clips to the earlier backup (12 files · 3.2 GB)”</span>). Pressing it ticks the card
+    (tooltip: <span class="q">“Append new clips only to the earlier backup (12 files · 3.2 GB)”</span>). Pressing it ticks the card
     and, instead of the name, shows <span class="q">“Folder: 2026-10-06\A001 on 2 destinations”</span>: only the new files are copied into the
     <b>same</b> card folder on the disks of the earlier backup (the Destinations step may be empty). It is not offered for a changed card, a
     different card, or a folder added by hand. Details in chapters 8 and 10.</li>
@@ -522,18 +520,18 @@ says so. The start checks only the LUTs and proxy folders that the jobs really u
     by itself). It behaves like a card: it can be ticked and named.</li>
 </ul>
 
-<h3>2 · Destinations</h3>
+<h3>2 · DESTINATIONS</h3>
 <ul>
-  <li><b class="ui">+ Add disk</b> picks a destination folder (the root under which the date folders are created). There can be any number of
+  <li><b class="ui">Add disk</b> picks a destination folder (the root under which the date folders are created). There can be any number of
     destinations; the app remembers the list (it belongs to the project).</li>
   <li><b>A connected external USB disk is added by itself</b> (the disk's root, e.g. <code>G:\</code>) and disappears from the destinations
     again when it is disconnected. A card or SSD from a camera (a camera structure right in the disk's root: DCIM, PRIVATE, CLIP, CONTENTS,
     ARRI, RED…, or clips right in the root as on an SSD from Blackmagic or Atomos), a card reader, or an internal
     or system disk (SATA, NVMe — even a disk behind Thunderbolt; add that one by hand) is never added as a destination. A backup disk
     with clips in folders is added, as is any disk with an Offload backup. A disk you remove with the cross is remembered
-    (by serial number and capacity) and is not added automatically again; <b class="ui">+ Add disk</b> or
-    <b class="ui">Forget removed disks</b> in Settings undoes that. A full disk (less than 1 GB free) or a read-only disk
-    is not added — under the destinations it says in orange <span class="txt-warn">Disk BACKUP (G:) is full — it was not added as a destination.</span>
+    (by serial number and capacity) and is not added automatically again; <b class="ui">Add disk</b> or
+    <b class="ui">Forget removed disks (N)</b> in Settings undoes that. A full disk (less than 1 GB free) or a read-only disk
+    is not added — under the destinations it says in orange <span class="txt-warn">Disk BACKUP (G:) is full — not added as a destination.</span>
     Nothing is added during the pre-start checks and in demo mode.</li>
   <li>A destination tile has a number in a circle (in the report it becomes <b>D1</b>, <b>D2</b>…), the name, <span class="q">“7.20 TB free of
     8 TB · NTFS · NVMe”</span> and a space bar: grey for used, blue for what the selected cards will take (yellow when little space will be
@@ -548,8 +546,8 @@ says so. The start checks only the LUTs and proxy folders that the jobs really u
     the option in Settings → Folder structure).</li>
 </ul>
 
-<h3>3 · After copy</h3>
-<p>Four rows summarise what the selected project does after the copy: <b>Read-back verification</b> (<span class="q">“xxHash64”</span>,
+<h3>3 · AFTER COPY</h3>
+<p>Four rows summarise what the selected project does after the copy: <b>Verification by reading back</b> (<span class="q">“xxHash64”</span>,
 with MD5 <span class="q">“xxHash64 + MD5”</span>; when off, yellow with a warning), <b>Clip analysis and thumbnails</b> (<span class="q">“3 frames
 / clip”</span>), <b>Proxies</b> (e.g. <span class="q">“1080p · H.264 · LogC4 → 709”</span> — the curve comes from the LUT or the camera of the
 selected card) and <b>Report</b> (<span class="q">“PDF · HTML · ASC MHL · CSV”</span> + ALE when it is on). The
@@ -557,7 +555,7 @@ selected card) and <b>Report</b> (<span class="q">“PDF · HTML · ASC MHL · C
 <ul>
   <li>The <b>green mark on the left</b> is a switch. Click it to turn <b>Verification</b>, <b>Analysis</b> or <b>Proxies</b> of the active
     project on or off; the change is saved by itself and the text on the right changes at once (e.g. <span class="q">“off”</span>). The mark on
-    <b>Report</b> is fixed (on hover: <span class="q">“A report is always made”</span>). The switches are inactive while the pre-start check
+    <b>Report</b> is fixed (on hover: <span class="q">“The report is always created”</span>). The switches are inactive while the pre-start check
     is running (just like the project switcher) and in demo mode.</li>
   <li><b>The row name or the text on the right</b>: clicking it (or <kbd>Enter</kbd> / <kbd>Space</kbd> on a row selected with
     <kbd>Tab</kbd>) opens Settings right at the matching part — Verification, Analysis and thumbnails, Proxies (codec, height, LUT and
@@ -578,13 +576,10 @@ The <b class="ui">▶ Start offload</b> button (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>
 <b class="ui">Add to queue</b>) is active when at least one card is selected, there is at least one destination, all destinations
 are connected and nothing else prevents the start (a missing LUT, an unreachable proxy folder, a running speed test,
 not enough space — the reason is always written in red or orange above the button).
-Above the button you may see in red <span class="txt-bad">“Not enough space on destination Backup (D:): 412 GB needed (cards 380 GB,
-proxies ~30 GB, report 2 GB), 398 GB free.”</span> (no start) or in orange <span class="txt-warn">“Only 6 GB will be left on destination Backup (D:)
-after the offload — reserve under 5 %, the proxy estimate is approximate.”</span> (start possible). Selected cards,
+Above the button you may see in red <span class="txt-bad">“Not enough space on destination Backup (D:): needs 412 GB (cards 380 GB, proxies ~30 GB, report 2 GB), free 398 GB.”</span> (no start) or in orange <span class="txt-warn">“Only 6 GB will be left on destination Backup (D:) after the offload — less than the 5 % reserve, and the proxy estimate is approximate.”</span> (start possible). Selected cards,
 queued jobs, running jobs, destinations on the same disk and the proxy folder are all counted together. When a card has not been checked yet,
-Start waits for it for at most 10 seconds (<span class="q">“Checking the card before copying…”</span>); when it still is not known
-whether it is backed up, it asks <span class="q">“Card A001 is still being checked — it is not known whether it is already backed up.
-Start a full copy anyway?”</span> (the default answer is No).</p>
+Start waits for it for at most 10 seconds (<span class="q">“Checking the card before the copy starts…”</span>); when it still is not known
+whether it is backed up, it asks <span class="q">“Card A001 is still being checked — it is not known yet whether it is backed up. Start a full copy anyway?”</span> (the default answer is No).</p>
 
 <h3>Queue and Card history</h3>
 <p>An empty queue shows what will happen to the card — icons Card → 2 disks at once → Verification → Proxies → Report (only the steps the
@@ -592,26 +587,25 @@ project does) and <span class="q">“Ready — A035_ARRI to 2 disks”</span>; w
 Every started card gets its own job card, newest at the top; the number on the <b class="ui">Queue</b> tab is the number of
 unfinished jobs. <b class="ui">Clear finished</b> removes finished jobs from the list
 (nothing is deleted on the disks). Under the queue is <b>TODAY</b>: <span class="q">“3 cards · 412 GB · all verified”</span>, the
-<b class="ui">Day report…</b> link and a line for every card backed up today (<span class="q">“A034_ARRI · 256 GB · 18:12 ·
-✓ 2 copies verified”</span>, in orange <span class="q">“! not verified”</span>, in red <span class="q">“✕ with errors (3 files)”</span>).
+<b class="ui">Day report…</b> link and a line for every card backed up today (<span class="q">“A034_ARRI · 256 GB · 18:12 · ✓ 2 copies verified · safe to format”</span>, in orange <span class="q">“! not verified · do not format”</span> or <span class="q">“! unfinished”</span>, in red <span class="q">“✕ with errors (3 files)”</span>).
 The <b class="ui">Card history</b> tab shows the same for all days (<span class="q">“Today”</span>, <span class="q">“Yesterday”</span>,
 <span class="q">“2026-10-04”</span>; at most the last 300 cards). Both come from the offload history on this computer. Tick
 cards (even from different days and disks) and click <b class="ui">Summary report (3)…</b> to make one summary report of them
 (chapter 7); <b class="ui">Clear selection</b> unticks them. More about job cards in chapter 8.</p>
 
 <h3>Settings</h3>
-<p>The <b class="ui">Settings</b> page opens in place of both columns (the queue keeps running); <b class="ui">‹ Back</b>,
+<p>The <b class="ui">Settings</b> page opens in place of both columns (the queue keeps running); <b class="ui">Back</b>,
 <b class="ui">Done</b> or <kbd>Esc</kbd> close it. Changes are saved immediately into the selected project (its name is
 in the page's bar; the <b class="ui">Save as new project…</b> button creates a new one). Sections:</p>
 <table>
   <thead><tr><th class="w25">Section</th><th>What is in it</th></tr></thead>
   <tr><td><b class="ui">Folder structure</b></td><td>the path <code>&lt;destination&gt;\&lt;date&gt;\&lt;card name&gt;\</code>, <b class="ui">Custom date</b>,
-      <b class="ui">Suggest the card name from clips</b> (chapter 5); <b>Connected disks</b>: <b class="ui">Automatically add
-      connected disks as destinations</b>, <b class="ui">Automatically mark cards in readers as sources</b> (both on,
-      part of the project) and <b class="ui">Forget removed disks</b> (chapter 3)</td></tr>
+      <b class="ui">Suggest the card name from the clips</b> (chapter 5); <b>Connected disks</b>: <b class="ui">Automatically add
+      connected disks as destinations</b>, <b class="ui">Automatically select cards in readers as sources</b> (both on,
+      part of the project) and <b class="ui">Forget removed disks (N)</b> (chapter 3)</td></tr>
   <tr><td><b class="ui">Verification</b></td><td>read-back verification, <b class="ui">Verify the primary disk during proxies</b> and
-      <b class="ui">Primary is the first destination</b>, checksum (MD5), <b class="ui">Verify backup…</b> and
-      <b class="ui">Save the verification report</b> (chapters 1, 5 and 8)</td></tr>
+      <b class="ui">The primary is the first destination (otherwise the fastest disk measured during the copy)</b>, checksum (MD5), <b class="ui">Verify backup…</b> and
+      <b class="ui">Save a verification report</b> (chapters 1, 5 and 8)</td></tr>
   <tr><td><b class="ui">Analysis and thumbnails</b></td><td>clip analysis and three frames in the report (chapter 5)</td></tr>
   <tr><td><b class="ui">Proxies</b></td><td>everything about proxies, LUTs and the burn-in preview (chapter 6)</td></tr>
   <tr><td><b class="ui">Report</b></td><td>CSV and ALE clip lists, day report after every card, <b class="ui">Day report…</b>,
@@ -622,7 +616,7 @@ in the page's bar; the <b class="ui">Save as new project…</b> button creates a
   <tr><td><b class="ui">App</b></td><td>version, <b class="ui">Updates…</b> (chapter 2), <b class="ui">Test USB ports…</b> (chapter 9)</td></tr>
 </table>
 <p><b>RAW decoders:</b> each tool shows the path where the app found it, or <span class="q">“not found”</span>; a found
-tool has a green icon. The <b class="ui">…</b> button (<span class="q">“Choose the tool's path”</span>) picks a different
+tool has a green icon. The <b class="ui">…</b> button (<span class="q">“Choose the path to the tool”</span>) picks a different
 <code>.exe</code>. Under the list is the note <span class="q">“Canon Cinema RAW Light and Sony X-OCN are copied and verified; proxies cannot be
 made for them yet.”</span></p>
 </section>
@@ -632,15 +626,15 @@ made for them yet.”</span></p>
 <h2 class="ch"><span class="n">4</span>Step by step: your first offload</h2>
 
 <ol class="steps">
-  <li><b>Connect the destination disks.</b> External USB disks appear by themselves in step <b class="ui">2 · Destinations</b>; add others
-    (a network folder, an internal disk) with the <b class="ui">+ Add disk</b> button.
+  <li><b>Connect the destination disks.</b> External USB disks appear by themselves in step <b class="ui">2 · DESTINATIONS</b>; add others
+    (a network folder, an internal disk) with the <b class="ui">Add disk</b> button.
     Two independent disks are recommended. You only need to do this once — the app remembers the destinations.</li>
-  <li><b>Insert the card into the reader.</b> It appears in step <b class="ui">1 · Cards</b> and is ticked. There can be several cards
+  <li><b>Insert the card into the reader.</b> It appears in step <b class="ui">1 · CARDS</b> and is ticked. There can be several cards
     at once; they are copied one after another. A card the app did not offer can be added with <b class="ui">From folder…</b>.</li>
   <li><b>Check the card's folder name.</b> The suggestion is pre-filled (the reel from the clip names, the next in sequence or the volume
     label). To change it (e.g. to <code>A001</code>), type the name into the <b class="ui">Folder name</b> field.
     The path preview under the destinations shows where the copy will go: <code>…\2026-10-06\A001\</code>.</li>
-  <li><b>Check step 3 · After copy</b>: <b>Read-back verification</b> should be green (when off, it is yellow with a warning).
+  <li><b>Check step 3 · AFTER COPY</b>: <b>Verification by reading back</b> should be green (when off, it is yellow with a warning).
     If you want proxies, open <b class="ui">Edit project</b>, turn them on in the <b class="ui">Proxies</b> section and set them up (chapter 6).</li>
   <li><b>Start</b> with the <b class="ui">▶ Start offload</b> button or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>. The started cards
     are unticked and a job card appears for each of them in the queue on the right.</li>
@@ -654,9 +648,8 @@ made for them yet.”</span></p>
     formatted.</li>
   <li><b>Eject the card</b> with the <b class="ui">Eject card</b> button. The card disappears from step 1, the reader stays connected.
     Insert the next card and continue from step 2 — the proxies of the previous card keep rendering in the meantime.</li>
-  <li><b>When it is finished</b>, the green card shows the summary <span class="q">“Copy 602 MB/s · Verification 799 MB/s · Proxies 24 / 24 ·
-    Total 6 min 12 s”</span> and thumbnails of the first clips, and the app's button in the Windows taskbar flashes.
-    <b class="ui">PDF report</b> opens the report, <b class="ui">Open folder</b> the card folder on the first destination and
+  <li><b>When it is finished</b>, the green card shows the summary with four values: <b>Copy</b> 602 MB/s, <b>Verification</b> 799 MB/s, <b>Proxies</b> 24 / 24 and <b>Total</b> 6 min 12 s, thumbnails of the first clips, and the app's button in the Windows taskbar flashes.
+    <b class="ui">Report PDF</b> opens the report, <b class="ui">Open folder</b> the card folder on the first destination and
     <b class="ui">Proxies</b> the proxy folder. The card also appears under the queue in the <b>TODAY</b> overview.</li>
 </ol>
 
@@ -688,21 +681,19 @@ summarises them.</p>
   <tr><td><b class="ui">Checksum</b></td><td>xxHash64 (fast)</td>
       <td><b class="ui">xxHash64 + MD5</b> also computes the MD5 of every file (for productions and insurers that require it):
       MD5 is in the report, in <code>_REPORT\&lt;card&gt;.md5</code> and in ASC MHL, and verification reads both. MD5 is never on its own —
-      xxHash64 is always there, so the Mac and older versions can still verify the backup. Under the option, in orange: <span class="txt-warn">“MD5 is
-      slower — with fast cards (CFexpress) it may slow down the copy.”</span> An append uses the checksums of the earlier backup.</td></tr>
-  <tr><td><b class="ui">Verification</b> → <b class="ui">On</b><br>(in step 3: Read-back verification)</td><td>on</td>
+      xxHash64 is always there, so the Mac and older versions can still verify the backup. Under the option, in orange: <span class="txt-warn">“MD5 is slower — with fast cards (CFexpress) it may slow the copy down.”</span> An append uses the checksums of the earlier backup.</td></tr>
+  <tr><td><b class="ui">Verification</b> → <b class="ui">On</b><br>(in step 3: Verification by reading back)</td><td>on</td>
       <td>After the copy, every file is read again from every destination and the checksums are compared. Without verification the row
       in step 3 is yellow with the warning <span class="txt-warn">“Without verification there is no certainty that the data on the disk is intact.”</span>,
       the report has the label <b>COPIED — NOT VERIFIED</b> and the job card is yellow (“copied without verification”), never the green
       “safe to format”.</td></tr>
   <tr><td><b class="ui">Verify the primary disk during proxies</b></td><td>on</td>
       <td>With proxies, the primary disk is verified by the reads for the proxies and the other disks in parallel in the background — without an extra read
-      after the copy. The primary disk is the fastest disk measured during the copy, or, with the option <b class="ui">Primary is the first destination</b>, the first
-      destination. Off (or CLI <code>--classic-verify</code>) = read-back right after the copy. A network destination, and a destination that fails
+      after the copy. By default the primary disk is the fastest disk measured during the copy; the option <b class="ui">The primary is the first destination (otherwise the fastest disk measured during the copy)</b> makes it the first destination. Off (or CLI <code>--classic-verify</code>) = read-back right after the copy. A network destination, and a destination that fails
       the uncached read check, are always verified by read-back (the reason is in the report).</td></tr>
-  <tr><td><b class="ui">Suggest the card name from clips</b></td><td>on</td>
+  <tr><td><b class="ui">Suggest the card name from the clips</b></td><td>on</td>
       <td>A grey suggestion in the <b class="ui">Folder name</b> field from the clip names (ARRI, Sony Venice, Canon Cinema EOS, RED,
-      Blackmagic) or “next in sequence” (chapter 3). Off = the volume label, as before.</td></tr>
+      Blackmagic) or “next after A001 (today)” (chapter 3). Off = the volume label, as before.</td></tr>
   <tr><td><b class="ui">Analysis and thumbnails</b> → <b class="ui">On</b></td><td>on</td>
       <td>After the copy, the format, codec, resolution, frame rate, duration, timecode and audio tracks of every clip are found
       and three frames are put into the report. Reading is from the destination disks, not the card. Needs ffmpeg and ffprobe (bundled).</td></tr>
@@ -726,7 +717,7 @@ Version 0.2.0 does not know the new 0.3.0 options (checksum, clip lists, day rep
     file. The time the job was stopped does not count towards the speeds in the report.</li>
   <li>Reading and writing bypass the system memory (cache), and after writing the disk's cache is flushed too, so verification really reads the data
     from the disk. Volumes that cannot do this (some network ones) fall back to normal writing and the report says so for that destination:
-    <span class="q">“Destination 1: the volume does not support direct writes, the system cache was used.”</span></li>
+    <span class="q">“Destination 1: the volume does not support direct writes; the system cache was used.”</span></li>
   <li>A file in progress has the hidden name <code>.&lt;name&gt;.offload-part</code> on the destination and gets its real name only once it is
     completely written. An unfinished copy therefore never looks finished.</li>
   <li>When a file on the card cannot be read, it is tried three more times. Then the file is marked as failed and the copy
@@ -773,21 +764,20 @@ with the same name in different folders are thus not renamed and the edit relink
   <tr><td><b class="ui">Height</b></td><td>1080p</td><td>540p, 720p, 1080p, 2160p.</td></tr>
   <tr><td><b class="ui">Bitrate</b></td><td>10 Mb/s</td><td>Only for H.264 and H.265; with the − and + buttons in the range 2–50 Mb/s, with how much that is
       per minute next to it (<span class="q">“≈ 75 MB / minute”</span>).</td></tr>
-  <tr><td><b class="ui">Frame lines</b></td><td>full frame</td><td>Crops the proxy to frame lines: full frame, 1.33, 1.66, 1.78, 1.85, 2.00, 2.39. With a ratio chosen,
-      the size of the crop in <span class="q">“% of frame”</span> appears next to it (50–100 %; tooltip: <span class="q">“Size of the frame lines relative
-      to the frame – 90 % = 10 % overscan”</span>).</td></tr>
+  <tr><td><b class="ui">Crop</b></td><td>full frame</td><td>Crops the proxy to frame lines (the <b class="ui">Crop</b> list): full frame, 1.33, 1.66, 1.78, 1.85, 2.00, 2.39. With a ratio chosen,
+      the size of the crop, e.g. <span class="q">“90% of image”</span>, appears next to it (50–100 %; tooltip: <span class="q">“Frame line size relative to the image – 90% = 10% overscan”</span>).</td></tr>
   <tr><td><b class="ui">LUT</b></td><td>Automatic by camera</td><td>See “LUT for proxies and thumbnails” below. The table
-      <b>LUT by camera</b> shows the built-in LUTs; the one that will be used is marked <span class="q">“used”</span>.</td></tr>
+      <b>LUT by camera</b> shows the built-in LUTs; the one that will be used is marked <span class="q">“in use”</span>.</td></tr>
   <tr><td><b class="ui">Clip name</b> (burn-in preview)</td><td>on</td><td>The clip name burnt into the proxy image.</td></tr>
   <tr><td><b class="ui">Timecode</b> (burn-in preview)</td><td>on</td><td>The timecode burnt into the proxy image.</td></tr>
-  <tr><td><b class="ui">Audio</b></td><td>on</td><td>Proxies contain <b>all</b> audio tracks of the clip (e.g. 8 mono tracks from a Sony MXF) —
+  <tr><td><b class="ui">Audio in proxies</b></td><td>on</td><td>Proxies contain <b>all</b> audio tracks of the clip (e.g. 8 mono tracks from a Sony MXF) —
       Premiere attaches proxies only with the same number of tracks. H.264/H.265: AAC 64 kb/s per channel of each track (at least 128,
       at most 512 kb/s); ProRes: uncompressed audio (PCM).</td></tr>
-  <tr><td><b class="ui">Skip proxies recorded by the camera (SUB/PROXY)</b></td><td>on</td><td>Small files the camera records by itself
+  <tr><td><b class="ui">Skip proxies recorded by the camera (SUB / PROXY)</b></td><td>on</td><td>Small files the camera records by itself
       (in <code>SUB</code> or <code>PROXY</code> folders) are copied and verified, but no proxy is made from them again. In the report they are
       marked <span class="q">“(camera proxy)”</span> and have the status <span class="q">“skipped”</span>.</td></tr>
-  <tr><td><b class="ui">No proxy when the original is lighter (H.264 / HEVC up to the proxy size)</b></td><td>on</td><td><b>Only for H.264/HEVC
-      proxies and only when neither a LUT nor a crop is used</b> (a clip with a LUT or with <b class="ui">Frame lines</b> set always gets a
+  <tr><td><b class="ui">No proxy when the original is lighter (H.264/HEVC proxies only)</b></td><td>on</td><td><b>Only for H.264/HEVC
+      proxies and only when neither a LUT nor a crop is used</b> (a clip with a LUT or with <b class="ui">Crop</b> set always gets a
       proxy — the proxy carries its look too; a burnt-in name and timecode alone do not matter). An H.264 or H.265 original that is not larger than the proxy (height ≤ proxy height and width ≤ its 16:9 width, e.g. 1920 × 1080) and does not have
       a higher bitrate than the proxy (the <b class="ui">Bitrate</b> set) gets no proxy — it would be the same size or larger and would not speed up editing. In the report it has the status
       <span class="q">“no proxy”</span> and a grey note <span class="q">“no proxy — the original is lighter (5.2 Mb/s ≤ 10 Mb/s)”</span>;
@@ -813,9 +803,9 @@ every finished proxy is also copied to</p>
   <li>Nothing is overwritten: when a file with the same name is already there, the new one gets <code>_2</code>, <code>_3</code>…</li>
   <li>The cross next to it (<span class="q">“Do not copy to a folder”</span>) cancels the option.</li>
   <li>When the folder is unreachable (a disconnected disk), the offload cannot be started, and Settings → Proxies and step 3 show in red
-    <span class="txt-bad">“The proxy folder is unreachable: …”</span>.</li>
+    <span class="txt-bad">“The proxy folder is not available: …”</span>.</li>
   <li>When the folder disappears only during the job, the proxies stay on the destinations and the clip has a note in the report:
-    <span class="q">“copy to … failed: …”</span>.</li>
+    <span class="q">“the copy to … failed: …”</span>.</li>
 </ul>
 
 <h3>Proxies for relinking (Resolve, Premiere)</h3>
@@ -843,13 +833,12 @@ with NVIDIA), otherwise on the CPU. ProRes is always encoded on the CPU. The enc
 <table>
   <thead><tr><th class="w30">Option</th><th>What happens</th></tr></thead>
   <tr><td><b class="ui">Automatic by camera</b> (default)</td><td>For every clip Offload finds the camera and log curve and picks a built-in LUT.
-      Under the list is the option <b class="ui">When the camera is not recognised:</b> — a fallback LUT for clips the automatic choice does not recognise
+      Under the list is the option <b class="ui">If the camera is not recognised:</b> — a fallback LUT for clips the automatic choice does not recognise
       (default <b class="ui">No LUT</b>, or any built-in LUT).</td></tr>
   <tr><td>a built-in LUT (e.g. <b class="ui">Sony S-Log3 / S-Gamut3.Cine → Rec.709</b>)</td><td>All clips get this LUT.</td></tr>
   <tr><td><b class="ui">No LUT</b></td><td>Proxies and thumbnails without a LUT.</td></tr>
-  <tr><td><b class="ui">Custom…</b></td><td>Opens a file picker for a <code>.cube</code> file. The name of the chosen file is next to the <b class="ui">Choose…</b> button,
-      the full path in the tooltip. When the file disappears (e.g. a disconnected disk), the offload cannot be started and it says in red
-      <span class="txt-bad">“LUT not found: … — choose another one or remove it.”</span></td></tr>
+  <tr><td><b class="ui">Custom…</b></td><td>Opens a file picker for a <code>.cube</code> file. The name of the chosen file is shown after <b>Custom LUT:</b> (the <b class="ui">Custom .cube…</b> link picks another file), the full path in the tooltip. When the file disappears (e.g. a disconnected disk), the offload cannot be started and it says in red
+      <span class="txt-bad">“LUT not found: … — select another one or remove it.”</span></td></tr>
 </table>
 <p><b>The maker's official LUT instead of the built-in one:</b> save it as <code>%APPDATA%\Offload\luts\&lt;id&gt;.cube</code>
 (<code>offload luts</code> lists the ids, e.g. <code>arri-logc4-awg4.cube</code> for ARRI LogC4) and restart Offload. The built-in
@@ -883,7 +872,7 @@ mentions it for the clip. The built-in LUTs are Offload's own calculation (the m
   <tr><td>RED R3D</td><td>format</td><td>Log3G10</td></tr>
 </table>
 <p>Canon, Panasonic, DJI and Fujifilm are not recognised automatically yet and get the fallback LUT from the option
-<b class="ui">When the camera is not recognised:</b>. There is no built-in LUT for DJI D-Log M.</p>
+<b class="ui">If the camera is not recognised:</b>. There is no built-in LUT for DJI D-Log M.</p>
 
 <div class="box warn"><span class="t">ARRI recorded in Rec.709</span>
 ARRI is recognised by the camera model, and log recording is assumed. An ARRI clip recorded directly in Rec.709 would get a LUT
@@ -894,22 +883,22 @@ wrongly — in that case choose <b class="ui">No LUT</b>.</div>
 
 <h3>Custom LUT rules</h3>
 <p>The <b class="ui">Automatic by camera</b> option has a <b class="ui">LUT rules… (N)</b> button. In the
-<b>Custom LUT rules</b> window each row has a <i>match by</i> — <b>Camera (make/model)</b> (the model contains the text),
+<b>Custom LUT rules</b> window each row has a <i>match by</i> — <b>Camera (maker/model)</b> (the model contains the text),
 <b>Camera serial number</b> (exact), <b>Reel (starts with)</b> (e.g. <code>A</code> = all of camera A) or <b>Folder (pattern with *
 and ?)</b> over <code>&lt;card&gt;/&lt;clip folder&gt;</code>, e.g. <code>A00*/CLIP</code> — a value and a LUT (built-in,
 <b>No LUT</b>, or <b>Custom…</b> <code>.cube</code>). The ↑ ↓ arrows change the order, ✕ deletes the rule. The rules are tried
 from top to bottom, <b>before</b> the automatic camera recognition; the first one that matches decides — even a rule whose target is
-<b>No LUT</b> (the clip then gets no LUT). The report says for the clip e.g. <span class="q">“rule 2: camera contains “FX6””</span>.
+<b>No LUT</b> (the clip then gets no LUT). The report says for the clip e.g. <span class="q">“rule 2: camera contains "FX6"”</span>.
 For now the serial number is read for Sony (the <code>M01.XML</code> file) and from QuickTime metadata (Blackmagic, Apple, Canon…); where
 the camera does not state it, a serial number rule never matches. When a custom <code>.cube</code> from a rule is missing, the offload cannot
-be started (<span class="q">“LUT from rule 2 not found: show.cube”</span>). The rules belong to the project. A rule written by a
+be started (<span class="q">“LUT of rule 2 not found: show.cube”</span>). The rules belong to the project. A rule written by a
 newer version of Offload that this one does not know (a kind other than camera, serial number, reel and folder) is shown read-only
-(<span class="q">“Rule from a newer version …”</span>), is never used and is left unchanged when saving; you can delete it
+(<span class="q">“Rule from a newer version (…) — this version skips it”</span>), is never used and is left unchanged when saving; you can delete it
 with the ✕ button.</p>
 
 <h3>Blackmagic RAW Film Gen 4</h3>
 <p>Clips shot in Blackmagic Design Film <b>Gen 4</b> get proxies without a LUT (the built-in LUT is for Gen 5). The option
-in Settings → RAW decoders <b class="ui">Convert Blackmagic RAW Film Gen 4 to Gen 5 (uses the Gen 5 LUT)</b> lets the Blackmagic RAW
+in Settings → RAW decoders <b class="ui">Convert Blackmagic RAW Film Gen 4 to Gen 5 (the Gen 5 LUT is used)</b> lets the Blackmagic RAW
 library decode the clip with Gen 5 colour science and applies the Gen 5 LUT (the reason in the report: <span class="q">“Blackmagic RAW:
 Film Gen 4 → Gen 5 (SDK conversion)”</span>). It applies only to the <b>Film</b> gamma — Video and Extended Video stay as they are. The option
 is <b>off</b> by default and <b>untested</b>: <i>only a Gen 4 .braw sample will verify it</i>; so far it is only known that the code works with a mock
@@ -940,7 +929,7 @@ fails, the job finishes normally and its card shows only a grey note.</p>
 
 <p>The report is written into the <code>_REPORT</code> folder inside the card folder <b>on every destination</b>. The main one is the HTML report
 <code>&lt;card&gt;_report.html</code>; next to it is the same report as a PDF, <code>&lt;card&gt;_report.pdf</code> (A4 landscape,
-with embedded frames). The <b class="ui">PDF report</b> button on the job card opens the report from the first connected destination (the PDF
+with embedded frames). The <b class="ui">Report PDF</b> button on the job card opens the report from the first connected destination (the PDF
 when it is ready, otherwise the HTML).</p>
 
 <h3>What is in the report</h3>
@@ -948,11 +937,11 @@ when it is ready, otherwise the HTML).</p>
   <li><b>Header</b>: card name, status label <span class="pill ok">VERIFIED</span>, <span class="pill warn">COPIED — NOT VERIFIED</span>
     or <span class="pill bad">ERROR</span>, start and end date and time.</li>
   <li><b>Summary</b>: number of files, data volume, number of clips and their total duration, copy and verification time and speed, checksum (XXH64, or XXH64 + MD5).
-    When the job was paused, there is also <span class="q">“paused · excluded from speeds”</span> — the pause time does not count towards the times or speeds.
+    When the job was paused, there is also <span class="q">“paused · not in the speeds”</span> — the pause time does not count towards the times or speeds.
     A repair report (<b class="ui">Copy again</b>, chapter 8) has <span class="q">“repair (generation 2)”</span> in its header.</li>
   <li><b>Destinations</b>: a table of disks — disk, folder, file system, number of files OK and errors. Below it the source and its file system.</li>
   <li><b>Errors</b> (only when there are any): the file and the problem, separately for the card and each destination — e.g.
-    <span class="q">“destination 2: checksum mismatch (destination …, card …)”</span>, <span class="q">“different size: …”</span>,
+    <span class="q">“destination 2: checksum mismatch (destination …, card …)”</span>, <span class="q">“size mismatch: …”</span>,
     <span class="q">“write failed”</span>. In <code>offload_report.json</code> they keep their fixed English codes (shared with the Mac version).</li>
   <li><b>Clips</b>: for each clip three frames, the name (for camera proxies <span class="q">“(camera proxy)”</span>), the path on the card,
     format and codec, resolution, FPS, duration, timecode, number of audio channels, size and proxy status
@@ -962,7 +951,7 @@ when it is ready, otherwise the HTML).</p>
     Blackmagic RAW, RED (via REDline; playback is the project rate) and Sony (the <code>M01.XML</code> file next to the clip).
     Canon shows only the playback rate for now (a metadata sample is missing), as does other video (iPhone …). <b>Duration</b> = number of frames ÷ playback rate, i.e. the clip's length in the edit (for 35 fps
     in a 24 project longer than the real shooting time).
-    Under the table is a line with the proxy settings, e.g. <span class="q">“Proxies: H.264 (h264_nvenc), 1080p, frame lines 1.85, LUT: automatic
+    Under the table is a line with the proxy settings, e.g. <span class="q">“Proxies: H.264 (h264_nvenc), 1080p, crop 1.85, LUT: automatic
     by camera → _PROXY/ · also in the folder G:\Proxy”</span>.</li>
   <li><b>All files</b>: every file with its size, checksum (with MD5 also an md5 column) and status on each destination
     (<span class="txt-ok">verified</span>, written, <span class="txt-bad">ERROR</span>, not processed). In the HTML the list is collapsed, in the PDF expanded.</li>
@@ -978,9 +967,9 @@ For R3D and ARRIRAW the frames are taken from the finished proxy, so without pro
 <p>Under the clip name is a line with the LUT and the reason it was chosen:</p>
 <table>
   <thead><tr><th class="w40">Example</th><th>Meaning</th></tr></thead>
-  <tr><td>LUT: ARRI LogC4 / AWG4 → Rec.709 (ARRI camera (LogC4 assumed))</td><td>the automatic choice recognised the camera</td></tr>
+  <tr><td>LUT: ARRI LogC4 / AWG4 → Rec.709 (ARRI camera (assuming LogC4))</td><td>the automatic choice recognised the camera</td></tr>
   <tr><td>LUT: … (camera not recognised — fallback LUT)</td><td>camera not recognised, the fallback LUT was used</td></tr>
-  <tr><td>LUT: … (selected in settings)</td><td>a built-in LUT chosen by hand</td></tr>
+  <tr><td>LUT: … (selected in the settings)</td><td>a built-in LUT chosen by hand</td></tr>
   <tr><td>LUT: my_look.cube (custom LUT)</td><td>a custom <code>.cube</code> file</td></tr>
   <tr><td>LUT: no LUT (Blackmagic RAW: Video (not log))</td><td>camera recognised, but the recording is not log</td></tr>
   <tr><td>LUT: no LUT (camera not recognised)</td><td>the automatic choice did not recognise the camera and the fallback LUT is “No LUT”</td></tr>
@@ -1021,7 +1010,7 @@ in Excel is not rewritten (this goes only into the log) and the job does not fai
 <code>&lt;destination&gt;\&lt;date&gt;\_REPORT\&lt;date&gt;_day_report.html</code> and <code>.pdf</code>: tiles (cards, files,
 data, clips, total duration, verified cards <span class="q">“7 / 8”</span>), a table of cards (time, files, data, clips, duration,
 clip FPS as in the card report, cameras, verification, errors, proxies done / failed, LUTs, number of generations after appends), a <b>Problems</b> section (failed files,
-unverified cards, unreadable reports, a card folder <span class="q">“without a report (in progress, or interrupted)”</span>)
+unverified cards, unreadable reports, a card folder <span class="q">“no report (running, or it was interrupted)”</span>)
 and <b>LUTs</b>. Next to it is the clip list of the whole day, <code>&lt;date&gt;_clips.csv</code> (and <code>.ale</code>).
 It is turned off with the option <b class="ui">Day report after every card</b> (Settings → Report). By hand: <b class="ui">Day report…</b>
 (under the queue at TODAY, in the Card history tab or in Settings → Report), then pick the day folder on a destination (or a card folder in it) — the report is made and opened. Two jobs that finish at the same time
@@ -1057,19 +1046,18 @@ with the copy of the next card. Every job stores the settings it was started wit
 <p>The job card changes its look with its state:</p>
 <table>
   <thead><tr><th class="w25">Look</th><th>What it means</th></tr></thead>
-  <tr><td><span class="pill wait">Queued</span></td><td>a compact line (<span class="q">“B012_FX6 — append · 2 new clips · 14.2 GB · same
-      destinations”</span>) with a <b class="ui">Cancel</b> button; another card is copying</td></tr>
+  <tr><td><span class="pill wait">Waiting in queue</span></td><td>a compact line (e.g. <span class="q">“B012_FX6 — append”</span> with <span class="q">“2 new clips · 14.2 GB · same destinations”</span>) with a <b class="ui">Cancel</b> button; another card is copying</td></tr>
   <tr><td><span class="pill act">running</span></td><td>name, <span class="q">“24 clips · 1.70 GB · ALEXA 35”</span>, a large percentage of the current phase,
       the phase bar (<b>Copying · Verification · Proxies · Report</b>, or <b>Analysis</b> without proxies; finished phases in green, the active one
-      in blue), <span class="q">“~0:02 left copying · ~6:00 total”</span>, a speed table (<b>Card read</b> and each destination —
+      in blue), <span class="q">“~0:02 left for the copy · ~6:00 in total”</span>, a speed table (<b>Card read</b> and each destination —
       the row's tooltip shows the device and connection), <span class="q">“File 10 / 24”</span> with the file name (in the 2nd phase
-      <span class="q">“Clip 3 / 24”</span>, <span class="q">“Proxy 3 / 24 · 45 %”</span>), the <b class="ui">Pause</b>
+      <span class="q">“Clip 3 / 24”</span>, <span class="q">“Proxy 3 / 24”</span> with the clip name and <span class="q">“45 %”</span>), the <b class="ui">Pause</b>
       and <b class="ui">Cancel</b> buttons; under the card the <b>Bottleneck</b> line (chapter 9)</td></tr>
   <tr><td><span class="pill ok">green</span></td><td><span class="txt-ok">“A001 — safe to format”</span> and <span class="q">“All 24 files are on
       2 disks and verified (xxHash64).”</span>; a sound plays (only when nothing needs attention). Before verification the card is neutral
       with the <b>Safe to eject</b> chip. The line <b>Copy · Verification · Proxies · Total</b> (Total without pauses),
       thumbnails of the first five clips (the middle frame, a sixth tile <span class="q">“+19”</span>), <b class="ui">Eject
-      card</b>, <b class="ui">PDF report</b>, <b class="ui">Open folder</b>, <b class="ui">Proxies</b> and the path to the card on the
+      card</b>, <b class="ui">Report PDF</b>, <b class="ui">Open folder</b>, <b class="ui">Proxies</b> and the path to the card on the
       first destination. When processing fails after a verified copy (proxies, PDF), the card stays green and the error is an orange line —
       the card is backed up. An append without new clips: <span class="q">“A001 — the backup is complete”</span>.</td></tr>
   <tr><td><span class="pill warn">yellow</span></td><td><span class="txt-warn">“A001 — do not eject the card yet”</span> and a sentence saying what does not match and where
@@ -1080,8 +1068,7 @@ with the copy of the next card. Every job stores the settings it was started wit
       verification”</span> (verification turned off).</td></tr>
   <tr><td><span class="pill bad">red</span></td><td><span class="txt-bad">“A001 — offload failed”</span> with the reason (pre-copy check, chapter 12)</td></tr>
   <tr><td><span class="pill">grey</span></td><td><span class="q">“A001 — cancelled”</span>: <span class="q">“The card is not completely backed up — copy
-      it again in full.”</span>, or after a verified copy <span class="q">“The copy is finished and verified, only the post-copy processing
-      was cancelled.”</span></td></tr>
+      it again in full.”</span>, or after a verified copy <span class="q">“The copy is done and verified; only the processing after the copy was cancelled.”</span></td></tr>
 </table>
 
 <h3>Pause</h3>
@@ -1117,8 +1104,7 @@ stops the job; the button changes to <b class="ui">Resume</b>, which carries on 
   <li>When you disconnect a destination disk during a pause, after <b class="ui">Resume</b> the files on that disk fail (the other destinations
     carry on) and the job card turns yellow — then <b class="ui">Copy again</b> helps.</li>
   <li>When you swap or pull out the card during a pause, after <b class="ui">Resume</b> Offload copies nothing more
-    and the job card turns yellow: <span class="q">“The card in the reader was swapped or removed during the pause — the remaining files were
-    not copied. Insert the original card and append to the backup.”</span> What was copied stays and is verified.</li>
+    and the job card turns yellow: <span class="q">“The card in the reader was swapped or removed while paused — the remaining files were not copied. Insert the original card and append to the backup.”</span> What was copied stays and is verified.</li>
   <li>An append keeps its backup locked even during a pause: no other job can append to it in the meantime.</li>
 </ul>
 
@@ -1138,13 +1124,13 @@ where they do not match</b> — with the same settings as the original job and a
     meantime, the repair writes nothing and the recorded checksum stays (<span class="q">“Repair stopped — nothing was copied. …”</span>, chapter 12).</li>
   <li>The repair writes a new generation of the report and ASC MHL to <b>all</b> destinations (like an append), and rewrites the checksum lists,
     clip lists and the day report. The card's history is corrected — after a successful repair the card's line says
-    <span class="txt-ok">“— verified”</span> again. Clip analysis and proxies are not repeated.</li>
+    <span class="txt-ok">“— verified, safe to format”</span> again. Clip analysis and proxies are not repeated.</li>
   <li>When there is nothing to repair: <span class="q">“Nothing to repair — all files are fine on all destinations.”</span>
     An interrupted repair spoils nothing — start it again.</li>
   <li>A repair is always verified by read-back, even when the original job ran without verification; good copies that have not been read back
     yet (cancelled verification, a backup without verification) are read too — with a large card this may take a while. When something is
     still unverified after the repair, the card stays yellow and Offload says so.</li>
-  <li>A repair and an append of the same backup never run at the same time (<span class="q">“Another job is appending to this backup right now …”</span>).
+  <li>A repair and an append of the same backup never run at the same time (<span class="q">“Another job is working with this backup right now — an append, a repair or a verification during proxies (…) — wait until it finishes.”</span>).
     A repair cannot be started from the command line.</li>
 </ul>
 <p>When any job ends, Offload's button in the Windows taskbar flashes; on an error, an error sound plays.
@@ -1153,23 +1139,21 @@ A finished card appears in the <b>TODAY</b> overview under the queue and in the 
 <h3>Notifications</h3>
 <p>When the Offload window is not in the foreground, Windows shows a notification at the end of a job (the Offload icon appears in the notification
 area at the bottom right and stays there until the app is closed; clicking the notification or the icon brings the window back):
-<span class="q">“Offload: A001 done”</span> (<span class="q">“Verified on 2 disks. Proxies: 24 done.”</span>),
+<span class="q">“Offload: A001 done”</span> (<span class="q">“Verified on 2 disks — the card is safe to format. Proxies: 24 done.”</span>),
 <span class="q">“Offload: A001 — needs attention”</span> (not verified, failed proxies, proxies skipped for lack of space…),
 <span class="q">“Offload: A001 — ERROR”</span> and, after the copy while the proxies are still being made and verification runs, <span class="q">“Offload: A001 — safe to
 eject”</span> (without a sound; not safe to format yet). A job that fails during the copy reports the error as soon as the copy ends. A cancelled job has no notification. The sound
 and the flashing button stay.</p>
-<p><b class="ui">Settings → Notifications → Edit notifications…</b>: <b class="ui">Windows notifications</b> (on) and <b class="ui">Send to phone via
-ntfy</b> — to the ntfy app on your phone (the server <code>https://ntfy.sh</code> or your own; the <b>topic</b> may contain only letters without
-accents, digits, <code>-</code> and <code>_</code>). The <b class="ui">Send test notification</b> button shows
+<p><b class="ui">Settings → Notifications → Edit notifications…</b>: <b class="ui">Windows notifications</b> (on) and <b class="ui">Send to a phone via ntfy</b> — to the ntfy app on your phone (the server <code>https://ntfy.sh</code> or your own; the <b>topic</b> may contain only letters without
+accents, digits, <code>-</code> and <code>_</code>). The <b class="ui">Send a test notification</b> button shows
 <span class="q">“Sent.”</span> or <span class="q">“Failed: …”</span> (after at most 10 s). Choose a topic that cannot be guessed —
-anyone who knows it can read the notifications. The phone gets a fixed text: the card name, the result and the counts (e.g. <span class="q">“Verified on 2
-disks.”</span>), for warnings and errors only a general sentence; never paths, file names or the computer's name, and “safe to
+anyone who knows it can read the notifications. The phone gets a fixed text: the card name, the result and the counts (e.g. <span class="q">“Verified on 2 disks — the card is safe to format.”</span>), for warnings and errors only a general sentence; never paths, file names or the computer's name, and “safe to
 eject” is not sent to the phone. A job never waits for the sending. The notification settings belong to the project.</p>
 
 <h3>Cards already backed up</h3>
 <p>When you start a full copy of a card the history knows, Offload asks in the <b>Cards already backed up</b> window
 (for one card, <b>Card already backed up</b>) with a list of the backups and the folder that would be created (e.g. <code>A001_2</code>):
-<b class="ui">Copy everything again</b>, <b class="ui">Skip backed-up cards</b> (starts only the other cards) or
+<b class="ui">Copy again in full</b>, <b class="ui">Skip backed-up</b> (starts only the other cards) or
 <b class="ui">Cancel</b> (starts nothing). It does not ask for a card that has changed since the backup (its line already says that only a
 full copy is possible), for an empty card, or for cards with the append option ticked. The command line does not ask; it only prints a line with the backup.</p>
 
@@ -1177,12 +1161,12 @@ full copy is possible), for an empty card, or for cards with the append option t
 <p>An append job is named <span class="q">“A001 · append”</span> and uses the destinations of the earlier backup. It copies only new files,
 overwrites nothing and writes a new generation of the report and ASC MHL (chapter 10). When there is nothing to copy, it ends
 <span class="pill ok">Done</span> with the text <span class="q">“Nothing new — the backup is complete.”</span> In orange it may warn
-<span class="txt-warn">“5 files from the earlier backup were not verified — Verify backup is recommended.”</span> The append is
+<span class="txt-warn">“5 files of the earlier backup were not verified — Verify backup is recommended.”</span> The append is
 refused before anything is written (a red message on the job card, chapter 12) when the earlier backup is unreachable, its
 report or ASC MHL is missing, the backups on the destinations are not the same, the card holds no file of the backup (a different card), there is a file
 with the same name but a different size or date, or another job is appending to the same backup right now (the same card folder is
 only ever appended to once at a time, even from a second Offload window). Then make a full copy. When the card changed between ticking it and Start,
-Start says <span class="q">“Card A001 has changed — append is no longer possible. Check it and start again.”</span>
+Start says <span class="q">“Card A001 has changed — it can no longer be appended. Check it and start again.”</span>
 and does not start that card (the others start).</p>
 
 <h3>Two card states and content defects</h3>
@@ -1194,18 +1178,18 @@ all folders. <b>Do not format the card until it has the Safe to format chip.</b>
 timestamps, extra frames, a clip that ends early, damaged audio). The copy still matches the card, so the copy is fine — the defect
 is in the original. The clip gets a yellow label with the <b>timecode of the spot</b> (e.g. <span class="q">“01:00:02:13 · corrupt data”</span>)
 and the <b class="ui">Preview</b> button opens an image of that spot. The chip changes to <b>Safe to format after checking defects</b>.
-When you have checked the defects, confirm them with the <b class="ui">Checked — the card can be formatted</b> button: only then do the
+When you have checked the defects, confirm them with the <b class="ui">Checked — the card is safe to format</b> button: only then do the
 chip and the card turn green. Offload itself never formats the card.</p>
 <p><b>A note about the cache.</b> Offload reads the copies from the disk bypassing the Windows cache. When the volume or file does not allow that (for example
 a file compressed by NTFS or encrypted with EFS), it is verified by reading through the cache and the card shows an orange note
-<span class="q">“Verified by reading through the Windows cache: … the data may have come from memory instead of the disk”</span>. The copy counts as
+<span class="q">“Verified by reading through the Windows cache: … — the volume or the file does not allow reads past the cache, so the data may have come from memory instead of the disk.”</span>. The copy counts as
 verified and the card is safe to format, but without the sound and with a <i>needs attention</i> notification; the most reliable choice is to back up to
 uncompressed and unencrypted folders.</p>
 
 <h3>Finish an interrupted backup</h3>
 <p>When the app crashes or the computer turns off in the middle of a copy or during verification with proxies, the backup stays
-<b>unfinished</b>: the history shows it as <span class="q">“Unfinished backup … it can be finished”</span>, the day report
-marks it <b>VERIFYING</b> or <b>INCOMPLETE</b>, and <b class="ui">Verify backup</b> does not say “all fine” (on the command
+<b>unfinished</b>: the history shows it as <span class="q">“Unfinished backup on … to … — the copy was interrupted; it can be finished”</span>, the day report
+marks it <b>VERIFYING</b> or <b>UNFINISHED</b>, and <b class="ui">Verify backup</b> does not report a clean “Verified: all … files match” (on the command
 line it ends with code <code>1</code>). Do not format the card. Insert the card again: it has the checkbox
 <b class="ui">Finish interrupted backup</b> (on the command line <code>offload append</code>); it is offered even when there is nothing new
 to copy and only the verification is missing. Finishing continues where the backup stopped: files that are already on the disks are not read
@@ -1223,12 +1207,11 @@ from the card, the disk is read and verified. Only when some files then do not m
 or a whole day folder (each card is verified separately). Each verification is a queue item <span class="q">“Verification A001”</span>
 and runs in the same queue as the copies, one after another (it loads the same disks): <span class="q">“Verifying 120 / 1,234 files
 · 45 GB / 512 GB · 380 MB/s”</span>. The result in green <span class="txt-ok">“Verified: all 1,234 files match (ASC MHL,
-2 generations, xxHash64).”</span>, in red <span class="txt-bad">“2 files mismatch, 1 missing, 0 unreadable — details
-in the verification report.”</span>, in orange extra files, files that already failed during the copy, and changed MHL generations. The buttons
-<b class="ui">Verification report</b> and <b class="ui">File Explorer</b>; <b class="ui">Cancel</b> ends the verification without a report.
-The verification report is saved as long as <b class="ui">Save the verification report</b> is ticked in Settings → Verification: into the card's <code>_REPORT</code>,
+2 generations, xxHash64).”</span>, in red <span class="txt-bad">“Mismatch 2 files, missing 1, unreadable 0 — details in the verification report.”</span>, in orange extra files, files that already failed during the copy, and changed MHL generations. The buttons
+<b class="ui">Verification report</b> and <b class="ui">Open folder</b>; <b class="ui">Cancel</b> ends the verification without a report.
+The verification report is saved as long as <b class="ui">Save a verification report</b> is ticked in Settings → Verification: into the card's <code>_REPORT</code>,
 and for a backup with an MHL from another program (one that does not ignore <code>_REPORT</code>) into a <code>_REPORT</code> next to the card
-folder, with the note <span class="q">“The verification report is saved outside the card folder so that it does not disturb its ASC MHL history”</span>.
+folder, with the note <span class="q">“The verification report is saved outside the card folder so it does not disturb its ASC MHL history: …”</span>.
 All ASC MHL generations and all of its checksums are verified (xxHash64, MD5, SHA-1, xxHash3, xxHash128, C4) —
 including backups from other programs; without <code>ascmhl</code> the check is against <code>_REPORT\&lt;card&gt;.xxh64</code>. Nothing is ever
 written to the card or into <code>ascmhl</code> during verification.</p>
@@ -1240,19 +1223,17 @@ written to the card or into <code>ascmhl</code> during verification.</p>
 and “safe to eject” still holds (format only after verification).</p>
 
 <h3>Closing the app during an offload</h3>
-<p>When you close the window with a job running, the app asks <span class="q">“An offload is running. Quit anyway? Files in progress
-will be deleted, finished ones stay.”</span> After <b class="ui">Yes</b> all jobs are cancelled and the window closes once it has cleaned up
-(meanwhile <span class="q">“Quitting — waiting for the cancelled jobs to clean up.”</span>).</p>
+<p>When you close the window with a job running, the app asks <span class="q">“An offload is running. Quit anyway? Files in progress are deleted, finished files stay.”</span> After <b class="ui">Yes</b> all jobs are cancelled and the window closes once it has cleaned up
+(meanwhile <span class="q">“Closing — waiting for the cancelled jobs to clean up.”</span>).</p>
 <div class="box danger"><span class="t">An interrupted card is not backed up</span>
 Offload a card whose copy was cancelled or interrupted by closing the app again in full.</div>
 
 <h3>Ejecting the card</h3>
 <ul>
   <li>The <b class="ui">Eject card</b> button is on the green job card. The card in the reader is ejected as a medium, the reader stays
-    connected. Then the job card says <span class="q">“Card ejected”</span> and the card disappears from step 1 · Cards.</li>
+    connected. Then the job card says <span class="q">“Card ejected”</span> and the card disappears from step 1 · CARDS.</li>
   <li><b>Only the card that was copied</b> is ejected. When you swap or pull out the card in the reader, the button disappears.</li>
-  <li>It is not ejected while another job is still copying from the card (<span class="q">“another job is still copying from the card — eject it when its
-    copy is finished”</span>).</li>
+  <li>It is not ejected while another job is still copying from the card (<span class="q">“another job is still copying from the card — eject it when that copy finishes”</span>).</li>
   <li>Internal disks, the system disk, network folders and folders added by hand (not whole cards) are never ejected.</li>
   <li>When ejecting fails, the app shows <span class="q">“Could not eject the card: …”</span> with the reason (chapter 12).</li>
 </ul>
@@ -1280,15 +1261,15 @@ yellow = there are recommendations (the tooltip says how many and when).</p>
   <div style="padding:2mm 3.5mm">
     <b>Connections</b><br>
     <span class="mono" style="font-size:7.6pt">Card &nbsp; E:\ &nbsp; SD reader … — USB 3 (5 Gb/s), port 6<br>Destination 1 &nbsp; D:\ &nbsp; WD Elements 25A2 — USB 3 (5 Gb/s), port 3</span><br>
-    <b style="display:block;margin-top:1.5mm">Recommendations</b>
-    <span class="cap">! Destination 1 …: supports USB 3 (10 Gb/s or more), but the link runs as USB 2.0 (480 Mb/s) — …<br>i Card, Destination 1 go through one controller (…) — they share its capacity.<br>• Free fast ports: …</span>
-    <div style="display:flex;justify-content:space-between;margin-top:1.5mm"><b>Speed test</b><span class="btn">Measure speed…</span></div>
+    <b style="display:block;margin-top:1.5mm">Advice</b>
+    <span class="cap">! Destination 1 …: capable of USB 3 (10 Gb/s or more), but the link runs as USB 2.0 (480 Mb/s) — …<br>i Card, Destination 1 go through one controller (…) — they share its bandwidth.<br>• Free fast ports: …</span>
+    <div style="display:flex;justify-content:space-between;margin-top:1.5mm"><b>Measurement</b><span class="btn">Measure speed…</span></div>
     <span class="mono" style="font-size:7.6pt">Card &nbsp; E:\ &nbsp; read 89 MB/s &nbsp; write —<br>Destination 1 &nbsp; D:\ &nbsp; read 180 MB/s &nbsp; write 175 MB/s</span>
     <div style="display:flex;justify-content:space-between;margin-top:1.5mm"><b>USB ports</b><span class="cap">☐ Show internal ports</span></div>
     <span class="cap">Intel USB 3.20 xHCI</span><br>
     <span class="mono" style="font-size:7.6pt">port 6 USB 3 &nbsp; … — USB 3 (5 Gb/s) &nbsp; E: (Card)</span> <span class="btn" style="width:24%">front left</span>
   </div>
-  <div style="border-top:1px solid #c7cdd3;padding:1.5mm 3.5mm;display:flex;justify-content:flex-end;gap:2mm"><span class="btn">Check again</span><span class="btn">Close</span></div>
+  <div style="border-top:1px solid #c7cdd3;padding:1.5mm 3.5mm;display:flex;justify-content:flex-end;gap:2mm"><span class="btn">Test again</span><span class="btn">Close</span></div>
 </div>
 <figcaption>Diagram of the Hardware window (shortened; the values are only examples).</figcaption>
 </figure>
@@ -1297,35 +1278,35 @@ yellow = there are recommendations (the tooltip says how many and when).</p>
 <table>
   <thead><tr><th class="w20">Part</th><th>What it shows</th></tr></thead>
   <tr><td><b class="ui">Connections</b></td><td>each card and destination (Card, Destination 1, Destination 2…): drive letter, device, connection type (USB speed and port,
-      <span class="q">“SD reader”</span>, <span class="q">“network drive”</span>, <span class="q">“USB (port unknown)”</span>…).</td></tr>
-  <tr><td><b class="ui">Recommendations</b></td><td>warnings (orange), information and tips — see the table below.</td></tr>
-  <tr><td><b class="ui">Speed test</b></td><td>after <b class="ui">Measure speed…</b>, the real read and write speed of each device in MB/s.</td></tr>
+      <span class="q">“SD reader”</span>, <span class="q">“network disk”</span>, <span class="q">“USB (port unknown)”</span>…).</td></tr>
+  <tr><td><b class="ui">Advice</b></td><td>warnings (orange), information and tips — see the table below.</td></tr>
+  <tr><td><b class="ui">Measurement</b></td><td>after <b class="ui">Measure speed…</b>, the real read and write speed of each device in MB/s.</td></tr>
   <tr><td><b class="ui">USB ports</b></td><td>ports by controller: the port name, what is in it (<span class="q">“free”</span> or the device and link speed),
       the drive letter of the disk in it and a field for your own name. <b class="ui">Show internal ports</b> also shows the ports inside the computer.</td></tr>
-  <tr><td>bottom bar</td><td>status (<span class="q">“Detecting connections…”</span>, <span class="q">“Measuring speed… (may take several minutes)”</span>),
-      <b class="ui">Stop</b>, <b class="ui">Check again</b>, <b class="ui">Close</b>.</td></tr>
+  <tr><td>bottom bar</td><td>status (<span class="q">“Checking connections…”</span>, <span class="q">“Measuring speed… (can take several minutes)”</span>),
+      <b class="ui">Stop</b>, <b class="ui">Test again</b>, <b class="ui">Close</b>.</td></tr>
 </table>
 
-<h3>Recommendations you may see</h3>
+<h3>Advice you may see</h3>
 <table>
   <thead><tr><th class="w40">Message (shortened)</th><th>What to do</th></tr></thead>
-  <tr><td>“… supports USB 3 (5 Gb/s), but is in a USB 2.0-only port (port …) — move it to a USB 3 port …”</td><td>move the device to the suggested fast port</td></tr>
-  <tr><td>“… but the link runs as USB 2.0 (480 Mb/s) — probably a USB 2.0-only cable or a bad contact; try another cable or port.”</td><td>swap the cable, try another port</td></tr>
-  <tr><td>“Card, Destination 1 go through one controller (…) — they share its capacity.”</td><td>information; it helps to spread the devices over different controllers</td></tr>
+  <tr><td>“…: capable of USB 3 (5 Gb/s), but plugged into a USB 2.0-only port (port …) — move it to a USB 3 port ….”</td><td>move the device to the suggested fast port</td></tr>
+  <tr><td>“…: capable of USB 3 (5 Gb/s), but the link runs as USB 2.0 (480 Mb/s) — probably a USB 2.0-only cable or a bad contact; try another cable or port.”</td><td>swap the cable, try another port</td></tr>
+  <tr><td>“Card, Destination 1 go through one controller (…) — they share its bandwidth.”</td><td>information; it helps to spread the devices over different controllers</td></tr>
   <tr><td>“Put the reader and the destination disks on different controllers — free fast ports on another controller: …”</td><td>reconnect the reader or the disks</td></tr>
   <tr><td>“… go through one hub (…) — they share its link.”</td><td>consider connecting outside the hub or dock</td></tr>
   <tr><td>“Estimated offload speed with this setup: … MB/s (bottleneck: …).”</td><td>after a speed test: the bottleneck</td></tr>
-  <tr><td>“… the link can do ~… MB/s, the disk itself gives … MB/s — the disk is the bottleneck, not the port.”</td><td>the port is fine, the disk is slow</td></tr>
-  <tr><td>“Free fast ports: …” / “USB 2.0-only ports — do not use them for offloads (fine for a keyboard or mouse): …”</td><td>tips on where to connect</td></tr>
+  <tr><td>“…: the link can do ~… MB/s, the disk itself gives … MB/s — the bottleneck is the disk, not the port.”</td><td>the port is fine, the disk is slow</td></tr>
+  <tr><td>“Free fast ports: …” / “USB 2.0-only ports — do not use them for offloads (fine for a keyboard or a mouse): …”</td><td>tips on where to connect</td></tr>
 </table>
 
-<h3>Speed test</h3>
+<h3>Measuring speed</h3>
 <ul>
   <li>The app asks before measuring. The cards are only read (up to 1 GB from each). A temporary 1 GB file is written to and read from each
     destination disk and deleted right away. Depending on the disk speed this may take several minutes.</li>
   <li>A speed test is possible only when a card is selected or a destination added (otherwise <span class="q">“To measure, select a card or add a destination.”</span>).</li>
-  <li>It is not possible during copying (<span class="q">“Cannot measure while copying — the test writes 1 GB to the destination disks.”</span>).
-    Conversely, an offload cannot be started during a speed test (<span class="txt-warn">“A speed test is running — wait or stop it”</span>).</li>
+  <li>It is not possible during copying (<span class="q">“Cannot measure while copying — the measurement writes 1 GB to the destination disks.”</span>).
+    Conversely, an offload cannot be started during a speed test (<span class="txt-warn">“A speed measurement is running — wait or stop it”</span>).</li>
   <li><b class="ui">Stop</b> ends the test and deletes the temporary file; what has been measured so far is shown.</li>
 </ul>
 
@@ -1338,7 +1319,7 @@ lines, in the recommendations and in the tooltips of the speed table on the job 
 <h3>Bottleneck during the copy</h3>
 <p>During copying the job card shows a speed table — <b>Card read</b> and each destination in MB/s; the row's tooltip shows the
 device and the connection (e.g. <span class="q">“Card … — USB 3 (5 Gb/s), port 6”</span>). Under the card is a sentence:</p>
-<pre class="tree">Bottleneck: card reader (USB 3 (5 Gb/s)). The disks could do more.
+<pre class="tree">Bottleneck: the card reader (USB 3 (5 Gb/s)). The disks could do more.
 Bottleneck: disk SHUTTLE_B (USB 2.0 (480 Mb/s) — the link is saturated). The card could be read faster.</pre>
 <ul>
   <li>The <b>bottleneck</b> is whatever slows the copy down: the card (reader) or one of the destinations. It is found by which disk has the most
@@ -1368,7 +1349,7 @@ Bottleneck: disk SHUTTLE_B (USB 2.0 (480 Mb/s) — the link is saturated). The c
       ├─ _REPORT\
       │  ├─ offload_report.json
       │  ├─ offload_report.txt
-      │  ├─ A001_report.html                 <span class="c">← the Report button</span>
+      │  ├─ A001_report.html                 <span class="c">← the Report PDF button</span>
       │  ├─ A001_report.pdf
       │  ├─ A001.xxh64                       <span class="c">← checksums (after an append, new files too)</span>
       │  ├─ A001.md5                         <span class="c">← only with the xxHash64 + MD5 option</span>
@@ -1515,21 +1496,19 @@ refine) and <code>--no-history</code> (then <code>--into</code> is required). Co
 <h3>During and after the copy</h3>
 <ul>
   <li>Before the copy, the plan, a <code>Connections:</code> list (<code>D1 = Destination 1: …</code>) and connection warnings are printed.
-    The status line shows which link is the bottleneck: <code>bottleneck: D1</code>, <code>bottleneck: card</code>, possibly <code>(link saturated)</code>.</li>
+    The status line shows which link is the bottleneck: <code>bottleneck: D1</code>, <code>bottleneck: card</code>, possibly <code>(link full)</code>.</li>
   <li><kbd>Ctrl</kbd>+<kbd>C</kbd> cancels the copy: it finishes the current block and deletes the files in progress.</li>
   <li>Exit code: <code>0</code> = all fine and the card is <b>safe to format</b>, <code>1</code> = error, or the card is not safe to
     format (the verification result could not be written into all folders, earlier unverified files; with <code>--no-verify</code> it stays
     <code>0</code> as before). Suitable for scripts. <code>append</code> also accepts <code>--classic-verify</code> and <code>--primary</code>.</li>
-  <li>For a card the history knows, <code>copy</code> prints before the plan <code>Backed up 2026-10-06 08:15 to D:\Backup,
-    F:\Backup — verified</code> (without asking).</li>
+  <li>For a card the history knows, <code>copy</code> prints before the plan <code>Backed up on 2026-10-06 08:15 to D:\Backup, F:\Backup — verified, safe to format</code> (without asking).</li>
   <li>At the end, <code>copy</code> and <code>append</code> print <code>Day report: D:\Backup\2026-10-06\_REPORT\2026-10-06_day_report.html</code>
     for every destination.</li>
   <li>For problem files <code>verify</code> prints <code>MISMATCH</code> (different checksum), <code>MISSING</code> (missing),
     <code>ERROR</code> (unreadable), <code>EXTRA</code> (not in the record), <code>FAILED-AT-COPY</code> (already failed during the copy),
     <code>FAILED-SUPERSEDED</code> (the newest record failed, the file matches an older generation), <code>CHAIN</code>
     (an ASC MHL chain problem) and at the end a summary: <span class="q">“Verified 1,234 files (512 GB) in 22:10
-    (385 MB/s) — all fine.”</span> or <span class="q">“… — PROBLEMS FOUND: 2 mismatched, 1 missing, 0 unreadable,
-    0 failed at copy, 3 extra.”</span> Code <code>1</code> on any problem (extra files alone do not count).</li>
+    (385 MB/s) — all OK.”</span> or <span class="q">“… — PROBLEMS FOUND: mismatch 2, missing 1, unreadable 0, failed during the copy 0, extra 3.”</span> Code <code>1</code> on any problem (extra files alone do not count).</li>
 </ul>
 </section>
 
@@ -1548,66 +1527,66 @@ refine) and <code>--no-history</code> (then <code>--into</code> is required). Co
 <h3>Cards and destinations</h3>
 <table>
   <thead><tr><th class="w35">Problem</th><th>Solution</th></tr></thead>
-  <tr><td>The card does not appear in step 1 · Cards</td><td>Click <b>⟳</b> (Reload connected disks). CFexpress readers over Thunderbolt show up in Windows
+  <tr><td>The card does not appear in step 1 · CARDS</td><td>Click <b>⟳</b> (Reload connected disks). CFexpress readers over Thunderbolt show up in Windows
       as an NVMe disk, so the app does not offer them by itself — add the card with the <b class="ui">From folder…</b> button (choose the card's root).
       A disk holding one of the destinations is not offered as a card.</td></tr>
   <tr><td>A disk shows “does not look like a card” and is not ticked</td><td>The disk has none of a camera's typical folders or clips. If you really want to copy it, tick it by hand.</td></tr>
   <tr><td><span class="txt-bad">Disk not connected</span> on a destination, Start offload is grey</td><td>Connect the disk; within a few seconds the line fixes itself (or click ⟳). Remove a destination you do not need with the cross.</td></tr>
   <tr><td><span class="txt-warn">NTFS recommended — more reliable than exFAT/FAT32</span></td><td>Only a recommendation. NTFS is more reliable for offloads on Windows. On FAT32, a file of 4 GB or more does not fit at all.</td></tr>
   <tr><td>“FAT32 cannot store files of 4 GB or more (…)”</td><td>The destination is FAT32 and the card holds a file of 4 GB or more. Use a disk with NTFS or exFAT.</td></tr>
-  <tr><td>“Not enough space on destination …: … needed (cards …, proxies ~…, report …), … free”</td><td>The disk does not have enough space for the card, proxies and report (including the cards in the queue). Free up space, use another disk, or turn off proxies.</td></tr>
-  <tr><td><span class="txt-warn">“Only … will be left on destination … after the offload — reserve under 5 %, the proxy estimate is approximate.”</span></td><td>Only a warning; the offload can be started. The proxy estimate may be higher or lower than reality.</td></tr>
-  <tr><td>“The proxies were not rendered: not enough space on … (~… needed, … free).” (on the job card)</td><td>The copy is finished and verified, only the proxies did not fit. Free up space and make the proxies again (a new copy with proxies, or another tool).</td></tr>
+  <tr><td>“Not enough space on destination …: needs … (cards …, proxies ~…, report …), free ….”</td><td>The disk does not have enough space for the card, proxies and report (including the cards in the queue). Free up space, use another disk, or turn off proxies.</td></tr>
+  <tr><td><span class="txt-warn">“Only … will be left on destination … after the offload — less than the 5 % reserve, and the proxy estimate is approximate.”</span></td><td>Only a warning; the offload can be started. The proxy estimate may be higher or lower than reality.</td></tr>
+  <tr><td>“Proxies were not rendered: not enough space on … (needs ~…, free …).” (on the job card)</td><td>The copy is finished and verified, only the proxies did not fit. Free up space and make the proxies again (a new copy with proxies, or another tool).</td></tr>
   <tr><td>“Destination … is on the same disk as the source.”, “Two destinations are on the same disk (…) — that is not a second copy. …”</td><td>The destination is on the card itself, or two destinations are on the same disk. The second copy must be on a different disk.</td></tr>
   <tr><td>“The source looks like an earlier offload (it has _REPORT, _PROXY or ascmhl) …”</td><td>The selected folder is already a finished offload. Choose the original card, or (for a copy of a copy) a folder without <code>_REPORT</code>, <code>_PROXY</code> and <code>ascmhl</code>.</td></tr>
-  <tr><td>“Some names cannot be stored by Windows: …”</td><td>The card holds names Windows cannot store (forbidden characters, names such as <code>CON</code>, a trailing dot or space, or two names that differ only in letter case). The message lists the affected files.</td></tr>
+  <tr><td>“Windows cannot store some names: …”</td><td>The card holds names Windows cannot store (forbidden characters, names such as <code>CON</code>, a trailing dot or space, or two names that differ only in letter case). The message lists the affected files.</td></tr>
   <tr><td>“The earlier backup is not available: … — connect the disk, or make a full copy.”</td><td>An append needs all disks of the earlier backup. Connect them, or copy the card in full (a new folder is created).</td></tr>
-  <tr><td>“The report of the earlier backup is missing in …”, “ASC MHL is missing in …”, “The report of the earlier backup in … cannot be read …”</td><td>The backup folder is not complete (a copy from another tool without MHL, a deleted or damaged report). Make a full copy.</td></tr>
-  <tr><td>“The backups on the destinations differ (…) — check them with Verify backup (top bar of the window; on the command line offload verify); append is not possible.”</td><td>The backups on the disks are not the same (one was appended to without the other, a copy was interrupted). Verify both backups; then make a full copy.</td></tr>
-  <tr><td>“In … the reports do not match ASC MHL (the last report is generation …, the last MHL generation …) — an earlier append did not finish. …”</td><td>An earlier append was interrupted while writing the reports. Verify the backup and repair the folder by hand (or make a full copy into a new folder).</td></tr>
-  <tr><td>“The ASC MHL history in … is damaged — … append is not possible.”</td><td>Someone changed an MHL file, or a file outside the chain appeared in the <code>ascmhl</code> folder. Verify the backup; an append is possible only after a repair, a full copy always.</td></tr>
-  <tr><td>“The card holds no file from the earlier backup — is it a different card? Make a full copy.”</td><td>You are appending to a different card than the one backed up (or the copy was cancelled before its first file). Make a full copy.</td></tr>
+  <tr><td>“The report of the earlier backup is missing in …”, “ASC MHL is missing in …”, “Cannot read the report of the earlier backup in … (…) — cannot append.”</td><td>The backup folder is not complete (a copy from another tool without MHL, a deleted or damaged report). Make a full copy.</td></tr>
+  <tr><td>“The backups on the destinations differ (…) — check them with Verify backup (top bar of the window; on the command line offload verify); cannot append.”</td><td>The backups on the disks are not the same (one was appended to without the other, a copy was interrupted). Verify both backups; then make a full copy.</td></tr>
+  <tr><td>“The reports in … do not match the ASC MHL (the last report is generation …, the last MHL generation …) — an earlier append did not finish. …”</td><td>An earlier append was interrupted while writing the reports. Verify the backup and repair the folder by hand (or make a full copy into a new folder).</td></tr>
+  <tr><td>“The ASC MHL history in … is damaged — check it with Verify backup …; cannot append.”</td><td>Someone changed an MHL file, or a file outside the chain appeared in the <code>ascmhl</code> folder. Verify the backup; an append is possible only after a repair, a full copy always.</td></tr>
+  <tr><td>“No file of the earlier backup is on the card — is it a different card? Make a full copy.”</td><td>You are appending to a different card than the one backed up (or the copy was cancelled before its first file). Make a full copy.</td></tr>
   <tr><td>“Append stopped — nothing was copied. N files do not match the backup: …”</td><td>Files already backed up have changed on the card (“different size or date”, another card with the same serial number, an edit in the camera), or the destination holds a file no report knows (an unfinished append). Make a full copy.</td></tr>
-  <tr><td>“A file from the earlier backup is missing on …: …”, “… was not copied correctly to … in the earlier backup …”</td><td>The earlier backup is incomplete. Verify it (Verify backup in the top bar) and copy the card in full; for files that failed during the copy, <b class="ui">Copy again</b> on the job card helps.</td></tr>
+  <tr><td>“A file of the earlier backup is missing on …: … — check the backup with Verify backup …”, “… was not copied correctly to … in the earlier backup — cannot append; make a full copy.”</td><td>The earlier backup is incomplete. Verify it (Verify backup in the top bar) and copy the card in full; for files that failed during the copy, <b class="ui">Copy again</b> on the job card helps.</td></tr>
   <tr><td>“Repair stopped — nothing was copied. N files cannot be repaired: …”</td><td><b class="ui">Copy again</b> did not find the file on the card (“no longer on the card”), the file has a different size or date than at the copy, a good copy is missing in the backup folder, or the place for setting aside the mismatched copy (<code>_REPORT\neshoda_…</code>) is taken. Check that the same card is in the reader, verify the backup, or copy the card in full.</td></tr>
   <tr><td>“Nothing to repair — all files are fine on all destinations.”</td><td>Not an error — a repair has already run in the meantime (maybe from a second window), or the reports on the disks show no errors.</td></tr>
   <tr><td>A file stayed yellow after the repair with the reason “card”</td><td>The card reads differently from what was copied the first time (a faulty card or reader). The new copy is not considered good; try another reader and repair again.</td></tr>
-  <tr><td>“Another job is appending to this backup right now (…) — wait until it finishes.”</td><td>Another job is appending to the same card folder (even from a second Offload window or from <code>offload append</code>). Wait for it to end; then start the append again — only what has not been added in the meantime is appended.</td></tr>
+  <tr><td>“Another job is working with this backup right now — an append, a repair or a verification during proxies (…) — wait until it finishes.”</td><td>Another job is appending to the same card folder (even from a second Offload window or from <code>offload append</code>). Wait for it to end; then start the append again — only what has not been added in the meantime is appended.</td></tr>
   <tr><td>“Nothing new — the backup is complete.”</td><td>Not an error — all files of the card are already in the backup.</td></tr>
-  <tr><td>“The folder … has neither ASC MHL nor a checksum list — nothing to compare with.”</td><td>The selected folder is not an Offload card or day folder (or both <code>ascmhl</code> and <code>_REPORT</code> are missing). Choose a card folder <code>&lt;destination&gt;\&lt;date&gt;\&lt;card&gt;</code>.</td></tr>
+  <tr><td>“Folder … has no ASC MHL and no checksum list — nothing to compare with.”</td><td>The selected folder is not an Offload card or day folder (or both <code>ascmhl</code> and <code>_REPORT</code> are missing). Choose a card folder <code>&lt;destination&gt;\&lt;date&gt;\&lt;card&gt;</code>.</td></tr>
   <tr><td><span class="txt-warn">“ASC MHL generation 0002 does not match the chain (the MHL file was changed).”</span> (verification)</td><td>Someone changed the MHL file after it was written. The files were verified anyway; check the backup, or make a new copy.</td></tr>
-  <tr><td>Yellow card “— do not eject the card yet”</td><td>The job card lists the files and the reason for each disk; details are in the Errors part of the <b class="ui">PDF report</b>. Check the card, the reader and the disks and press <b class="ui">Copy again</b> (chapter 8), or offload the card again in full.</td></tr>
+  <tr><td>Yellow card “— do not eject the card yet”</td><td>The job card lists the files and the reason for each disk; details are in the Errors part of the PDF report (the <b class="ui">Report PDF</b> button). Check the card, the reader and the disks and press <b class="ui">Copy again</b> (chapter 8), or offload the card again in full.</td></tr>
   <tr><td>“Report not found on any destination: …”</td><td>No destination with the report is connected. Connect a destination disk.</td></tr>
-  <tr><td>“Destination N: the volume does not support direct writes, the system cache was used.” (in the report)</td><td>Typically a network drive that cannot write past the system cache. Offload wrote to it the normal way and says so in the report.</td></tr>
+  <tr><td>“Destination N: the volume does not support direct writes; the system cache was used.” (in the report)</td><td>Typically a network drive that cannot write past the system cache. Offload wrote to it the normal way and says so in the report.</td></tr>
 </table>
 
 <h3>Proxies, LUTs and thumbnails</h3>
 <table>
   <thead><tr><th class="w35">Problem</th><th>Solution</th></tr></thead>
-  <tr><td><span class="txt-bad">LUT not found: … — choose another one or remove it.</span></td><td>The custom <code>.cube</code> is not in its place (disk disconnected, file moved). Connect the disk, choose the file again, or pick another LUT.</td></tr>
-  <tr><td><span class="txt-bad">The proxy folder is unreachable: …</span></td><td>Connect the disk with the folder, or cancel the option with the cross next to <b class="ui">Also copy proxies to a folder</b>.</td></tr>
-  <tr><td><span class="txt-warn">ffmpeg/ffprobe not found — thumbnails and proxies will be skipped, copy and verification will run.</span></td><td>The bundled ffmpeg or ffprobe is missing from the <code>bin</code> folder. Unpack the whole ZIP again, or choose the tool's path in <b class="ui">Settings → RAW decoders</b>.</td></tr>
+  <tr><td><span class="txt-bad">LUT not found: … — select another one or remove it.</span></td><td>The custom <code>.cube</code> is not in its place (disk disconnected, file moved). Connect the disk, choose the file again, or pick another LUT.</td></tr>
+  <tr><td><span class="txt-bad">The proxy folder is not available: …</span></td><td>Connect the disk with the folder, or cancel the option with the cross next to <b class="ui">Also copy proxies to a folder</b>.</td></tr>
+  <tr><td><span class="txt-warn">ffmpeg/ffprobe not found — thumbnails and proxies are skipped; the copy and the verification run.</span></td><td>The bundled ffmpeg or ffprobe is missing from the <code>bin</code> folder. Unpack the whole ZIP again, or choose the tool's path in <b class="ui">Settings → RAW decoders</b>.</td></tr>
   <tr><td>Proxies render slowly</td><td>Without an NVIDIA graphics card (Intel and AMD are tried, but not tested) H.264/H.265 are encoded on the CPU. ProRes is always encoded on the CPU. A lower <b class="ui">Height</b> helps (e.g. 720p). The copy of the next card runs in the meantime.</td></tr>
-  <tr><td>Note “ffmpeg got stuck (60 s without a new frame) …; no proxy was made”</td><td>ffmpeg produced no frame for a minute; Offload stopped it (with hardware decoding on, it tried once more without it). The job carries on, the other clips are processed. Check the clip (it may be damaged).</td></tr>
-  <tr><td>“Blackmagic RAW: braw-decode or the Blackmagic RAW library is missing …”</td><td>Install the free Blackmagic RAW Player (or DaVinci Resolve). Note: the <b>braw-decode</b> line in Settings → RAW decoders is green even without the library — you can tell the BRAW status from the clip's note in the report.</td></tr>
-  <tr><td>“Blackmagic RAW: the clip cannot be opened — it is damaged, or the library … is older than the camera …”</td><td>Install the current Blackmagic RAW Player. If that does not help, the clip may be damaged.</td></tr>
-  <tr><td>“Blackmagic RAW: the library … cannot be used …”</td><td>Install the current Blackmagic RAW Player.</td></tr>
+  <tr><td>Note “ffmpeg stalled (60 s without a new frame)” (followed by “also without hardware decoding; no proxy was made” when the retry stalled too)</td><td>ffmpeg produced no frame for a minute; Offload stopped it (with hardware decoding on, it tried once more without it). The job carries on, the other clips are processed. Check the clip (it may be damaged).</td></tr>
+  <tr><td>“Blackmagic RAW: braw-decode or the Blackmagic RAW library (SDK, Player or DaVinci Resolve) is missing — download: …”</td><td>Install the free Blackmagic RAW Player (or DaVinci Resolve). Note: the <b>braw-decode</b> line in Settings → RAW decoders is green even without the library — you can tell the BRAW status from the clip's note in the report.</td></tr>
+  <tr><td>“Blackmagic RAW: cannot open the clip — it is damaged, or the library … is older than the camera (install the current Blackmagic RAW Player)”</td><td>Install the current Blackmagic RAW Player. If that does not help, the clip may be damaged.</td></tr>
+  <tr><td>“Blackmagic RAW: cannot use the library … — install the current Blackmagic RAW Player”</td><td>Install the current Blackmagic RAW Player.</td></tr>
   <tr><td>“RED R3D: install REDCINE-X PRO (REDline)” / “ARRIRAW: install ARRI Reference Tool (art-cmd)”</td><td>Install the maker's tool, or choose its path in Settings → RAW decoders. Without it the clips are only copied and verified.</td></tr>
-  <tr><td>“ARRIRAW: art-cmd finished without an error but wrote nothing — no proxy was made (…)” (or the same for REDline)</td><td>The maker's tool finished as if all was well, but did not create the intermediate file. Its own message is in the brackets ([error] …). Check that the tool is up to date and the clip is readable; the job log contains the full message.</td></tr>
-  <tr><td>“codec not supported by ffmpeg (e.g. Sony X-OCN) …”, “Canon Cinema RAW Light: … proxy skipped”</td><td>Offload only copies and verifies these formats; proxies cannot be made for them.</td></tr>
+  <tr><td>“ARRIRAW: art-cmd ended without an error but wrote nothing — no proxy was made (…)” (or the same for REDline)</td><td>The maker's tool finished as if all was well, but did not create the intermediate file. Its own message is in the brackets ([error] …). Check that the tool is up to date and the clip is readable; the job log contains the full message.</td></tr>
+  <tr><td>“codec not supported by ffmpeg (e.g. Sony X-OCN) — copied and verified, no proxy”, “Canon Cinema RAW Light: there is no command-line decoder for Windows — copied and verified, proxy skipped”</td><td>Offload only copies and verifies these formats; proxies cannot be made for them.</td></tr>
   <tr><td>An ARRI clip recorded in Rec.709 got a LUT</td><td>For ARRI the automatic choice assumes log recording. For such clips choose <b class="ui">No LUT</b>.</td></tr>
-  <tr><td>A clip got “no LUT (camera not recognised)”</td><td>Canon, Panasonic, DJI and Fujifilm are not recognised automatically yet. Set a fallback LUT in <b class="ui">When the camera is not recognised:</b>, or choose the LUT by hand.</td></tr>
+  <tr><td>A clip got “no LUT (camera not recognised)”</td><td>Canon, Panasonic, DJI and Fujifilm are not recognised automatically yet. Set a fallback LUT in <b class="ui">If the camera is not recognised:</b>, or choose the LUT by hand.</td></tr>
   <tr><td>R3D and ARRIRAW clips have no frames in the report</td><td>For these formats the frames are taken from the finished proxy. Turn on proxies.</td></tr>
 </table>
 
 <h3>Ejecting, speed test, closing</h3>
 <table>
   <thead><tr><th class="w35">Problem</th><th>Solution</th></tr></thead>
-  <tr><td>“Could not eject the card: another program has a file open on the card …”</td><td>Close the program (File Explorer showing the card, a player) and try again.</td></tr>
-  <tr><td>“… the volume is dismounted, but the device stayed connected; eject it with the Safely Remove Hardware icon”</td><td>The card is no longer in use; finish ejecting it with the Windows icon.</td></tr>
+  <tr><td>“Could not eject the card: another program has a file on the card open — close it and try again”</td><td>Close the program (File Explorer showing the card, a player) and try again.</td></tr>
+  <tr><td>“… the volume is dismounted, but the device is still connected; eject it with the Safely Remove Hardware icon”</td><td>The card is no longer in use; finish ejecting it with the Windows icon.</td></tr>
   <tr><td>“the card in the drive is not the one that was copied”</td><td>A different card is in the reader. Offload ejects only the card it copied.</td></tr>
   <tr><td>The Eject card button is missing</td><td>The card was pulled out or swapped, or it is a folder or internal disk, which are never ejected.</td></tr>
-  <tr><td><span class="txt-warn">A speed test is running — wait or stop it</span></td><td>A speed test is running in the Hardware window. Wait, or click <b class="ui">Stop</b>.</td></tr>
+  <tr><td><span class="txt-warn">A speed measurement is running — wait or stop it</span></td><td>A speed test is running in the Hardware window. Wait, or click <b class="ui">Stop</b>.</td></tr>
   <tr><td>After closing the app during a copy</td><td>The files in progress are deleted. A card whose copy was interrupted is <b>not backed up</b> — offload it again in full.</td></tr>
   <tr><td>A paused job does not move for more than a few seconds even after <b class="ui">Resume</b></td><td>During clip analysis and proxies the job first finishes the clip in progress; in the copy it waits for the disks. When a disk has disappeared in the meantime, the files on it fail and the card turns yellow — connect the disk and use <b class="ui">Copy again</b>.</td></tr>
 </table>
