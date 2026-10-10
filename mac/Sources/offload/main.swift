@@ -10,6 +10,30 @@ struct Offload: ParsableCommand {
         version: OffloadVersion.string,
         subcommands: [Copy.self, Verify.self, Bench.self, Ports.self, Luts.self],
         defaultSubcommand: Copy.self)
+
+    /// Errors of a command print as "Chyba: …" (Czech, as Windows). Parser errors (unknown option, a value that is
+    /// not a number …) and --help stay as swift-argument-parser prints them — the library is not localised.
+    static func main() {
+        var command: ParsableCommand
+        do {
+            command = try parseAsRoot()
+        } catch {
+            Self.exit(withError: error)
+        }
+        do {
+            try command.run()
+        } catch let e as ValidationError {
+            fputs(Msg.cliError + e.message + "\n", stderr)
+            Darwin.exit(Self.exitCode(for: e).rawValue)
+        } catch let e as ExitCode {
+            Self.exit(withError: e)
+        } catch let e as CleanExit {
+            Self.exit(withError: e)
+        } catch {
+            fputs(Msg.cliError + "\(error)\n", stderr)
+            Darwin.exit(1)
+        }
+    }
 }
 
 struct Copy: ParsableCommand {
@@ -76,6 +100,9 @@ struct Copy: ParsableCommand {
     var proxyFolder: String?
 
     func run() throws {
+        guard chunkMb > 0 else { throw ValidationError(Msg.notPositiveNumber(String(chunkMb))) }
+        if let a = frameAspect, !(a > 0) { throw ValidationError(Msg.notPositiveNumber(numberText(a))) }
+        guard frameScale > 0 else { throw ValidationError(Msg.notPositiveNumber(numberText(frameScale))) }
         var config = JobConfig(source: abs(source), destRoots: dest.map(abs))
         config.cardName = name
         config.date = date
@@ -93,11 +120,11 @@ struct Copy: ParsableCommand {
         config.proxy.lutPath = choice.path.map(abs)
         config.proxy.lutFallback = choice.fallback
         if let p = config.proxy.lutPath, !FileManager.default.fileExists(atPath: p) {
-            throw ValidationError("LUT not found: \(p)")
+            throw ValidationError(Msg.lutNotFound(p))
         }
         config.proxy.height = proxyHeight
         guard let codec = ProxyCodec(rawValue: proxyCodec) else {
-            throw ValidationError("Unknown proxy codec \(proxyCodec)")
+            throw ValidationError(Msg.unknownProxyCodec(proxyCodec))
         }
         config.proxy.codec = codec
         config.proxy.bitrateMbps = proxyBitrate
@@ -107,10 +134,10 @@ struct Copy: ParsableCommand {
         config.proxy.burnTimecode = !noBurnIn
         config.proxy.extraFolder = proxyFolder.map(abs)
         if config.proxy.extraFolder != nil && !proxy {
-            fputs("Note: --proxy-folder has no effect without --proxy.\n", stderr)
+            fputs(Msg.proxyFolderNoEffect + "\n", stderr)
         }
         if let folder = ProxyPreflight.extraFolderInUse(config.proxy), !ProxyPreflight.isDirectory(folder) {
-            throw ValidationError("Proxy folder not found: \(folder)")
+            throw ValidationError(Msg.proxyFolderNotFound(folder))
         }
         // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all (Windows LutOption.PlanLine).
         if proxy || config.analyzeClips { print("LUT: " + Copy.lutLine(config.proxy)) }
@@ -141,7 +168,7 @@ struct Copy: ParsableCommand {
         signal(SIGINT, SIG_IGN)
         let sigint = DispatchSource.makeSignalSource(signal: SIGINT, queue: .global())
         sigint.setEventHandler {
-            fputs("\nCancelling — finishing current block, partial files will be removed…\n", stderr)
+            fputs("\n" + Msg.cancelling + "\n", stderr)
             job.cancel()
         }
         sigint.resume()
@@ -171,7 +198,7 @@ struct Copy: ParsableCommand {
             }
             print("Report: \(plan.cardPaths[0])/\(Layout.reportDirName)/\(plan.cardName)_report.html")
         }
-        if let e = status.error { print("ERROR: \(e)") }
+        if let e = status.error { print(Msg.cliError + e) }
         if status.phase != .done || report?.success != true { throw ExitCode(1) }
     }
 
@@ -226,6 +253,7 @@ struct Bench: ParsableCommand {
     var gb: Double = 2
 
     func run() throws {
+        guard gb > 0 else { throw ValidationError(Msg.notPositiveNumber(numberText(gb))) }
         let bytes = Int64(gb * 1_000_000_000)
         let print2: (OffloadKit.Bench.Line) -> Void = { l in
             print("  \(l.label.padding(toLength: 22, withPad: " ", startingAt: 0)) \(formatBytes(l.bytes).padding(toLength: 10, withPad: " ", startingAt: 0)) \(l.rate)")
@@ -262,11 +290,12 @@ struct Ports: ParsableCommand {
     var gb: Double = 1
 
     func run() throws {
+        guard gb > 0 else { throw ValidationError(Msg.notPositiveNumber(numberText(gb))) }
         let cards = card.map(abs)
         var dests = dest.map(abs)
         for d in dests {
             if let c = cards.first(where: { HwTest.sameVolume($0, d) }) {
-                fputs("Error: cíl \(d) je na stejném svazku jako karta \(c) — na kartu se nikdy nezapisuje\n", stderr)
+                fputs(Msg.cliError + "cíl \(d) je na stejném svazku jako karta \(c) — na kartu se nikdy nezapisuje\n", stderr)
                 throw ExitCode(1)
             }
         }
@@ -274,7 +303,7 @@ struct Ports: ParsableCommand {
         if cards.isEmpty && dests.isEmpty {
             // No roles given: every volume, labelled by its name.
             if measure {
-                fputs("Error: --measure needs --card and/or --dest\n", stderr)
+                fputs(Msg.cliError + "--measure needs --card and/or --dest\n", stderr)
                 throw ExitCode(1)
             }
             dests = HwTest.allVolumes()
@@ -341,10 +370,13 @@ struct Luts: ParsableCommand {
 
     func run() throws {
         let cat = LutCatalog.shared
-        if cat.luts.isEmpty { fputs("No built-in LUTs found (luts folder missing).\n", stderr) }
+        if cat.luts.isEmpty { fputs(Msg.noBuiltinLuts + "\n", stderr) }
         for l in cat.luts { print("\(l.id) — \(l.name)") }
     }
 }
+
+/// A number as it was most likely typed: "0", "-2", "1.5" (for Msg.notPositiveNumber).
+func numberText(_ v: Double) -> String { Swift.abs(v) < 1e15 && v == v.rounded() ? String(Int64(v)) : String(v) }
 
 func abs(_ p: String) -> String {
     URL(fileURLWithPath: (p as NSString).expandingTildeInPath).standardizedFileURL.path

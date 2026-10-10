@@ -280,7 +280,7 @@ public enum LutOption {
         var fb: String?
         if let fallback, fallback.lowercased() != "none" {
             guard catalog.find(fallback) != nil else {
-                return Parsed(mode: .auto, error: "Unknown fallback LUT '\(fallback)'. Built-in: \(ids)")
+                return Parsed(mode: .auto, error: Msg.unknownFallbackLut(fallback, ids: ids))
             }
             fb = fallback
         }
@@ -292,6 +292,6 @@ public enum LutOption {
         }
         return catalog.find(value) != nil
             ? Parsed(mode: .builtin, builtin: value, fallback: fb)
-            : Parsed(mode: .auto, fallback: fb, error: "Unknown LUT '\(value)'. Use auto, none, a .cube path or one of: \(ids)")
+            : Parsed(mode: .auto, fallback: fb, error: Msg.unknownLut(value, ids: ids))
     }
 }

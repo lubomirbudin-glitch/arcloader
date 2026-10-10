@@ -16,15 +16,17 @@ final class PreflightTests: XCTestCase {
         return card
     }
 
-    private func assertPreflight(_ message: String, options o: OffloadOptions? = nil,
+    /// The check is told by its code; the text is the Czech one of `Msg` (task 34).
+    private func assertPreflight(_ code: PreflightCode, _ message: String, options o: OffloadOptions? = nil,
                                  file: StaticString = #filePath, line: UInt = #line,
                                  _ act: (OffloadEngine) throws -> Void) {
         do {
             try act(OffloadEngine(options: o ?? options()))
-            XCTFail("expected a preflight error containing \"\(message)\"", file: file, line: line)
+            XCTFail("expected a preflight error \(code) \"\(message)\"", file: file, line: line)
         } catch let e as OffloadError {
             XCTAssertTrue(e.isPreflight, "\(e)", file: file, line: line)
-            XCTAssertTrue(e.description.contains(message), "\(e)", file: file, line: line)
+            XCTAssertEqual(e.code, code, "\(e)", file: file, line: line)
+            XCTAssertEqual(e.description, message, file: file, line: line)
         } catch {
             XCTFail("unexpected error \(error)", file: file, line: line)
         }
@@ -50,15 +52,17 @@ final class PreflightTests: XCTestCase {
 
     func testDestinationOnSourceVolumeIsRejected() {
         let dir = tempDir()
-        assertPreflight("same volume as the source", options: options(allowSourceVolume: false)) {
-            _ = try $0.prepare(source: self.card(dir), destRoots: [dir.sub("d1")], cardName: nil, date: nil)
+        let d1 = dir.sub("d1")
+        assertPreflight(.sameVolumeAsSource, Msg.sameVolumeAsSource(d1), options: options(allowSourceVolume: false)) {
+            _ = try $0.prepare(source: self.card(dir), destRoots: [d1], cardName: nil, date: nil)
         }
     }
 
     func testTwoDestinationsOnOneVolumeNeedAllowSameDevice() {
         let dir = tempDir()
-        assertPreflight("--allow-same-device", options: options(allowSameDevice: false)) {
-            _ = try $0.prepare(source: self.card(dir), destRoots: [dir.sub("d1"), dir.sub("d2")], cardName: nil, date: nil)
+        let d2 = dir.sub("d2")
+        assertPreflight(.sharedVolume, Msg.sharedVolume(d2), options: options(allowSameDevice: false)) {
+            _ = try $0.prepare(source: self.card(dir), destRoots: [dir.sub("d1"), d2], cardName: nil, date: nil)
         }
     }
 
@@ -67,7 +71,7 @@ final class PreflightTests: XCTestCase {
             let dir = tempDir()
             let card = card(dir)
             dir.sub("A001", folder)
-            assertPreflight("Source looks like an earlier offload") {
+            assertPreflight(.sourceIsOffload, Msg.sourceIsOffload) {
                 _ = try $0.prepare(source: card, destRoots: [dir.sub("d1")], cardName: nil, date: nil)
             }
         }
@@ -83,10 +87,10 @@ final class PreflightTests: XCTestCase {
     func testDuplicateDestinationIsRejectedEvenWithAllowSameDevice() {
         let dir = tempDir()
         let d1 = dir.sub("d1")
-        assertPreflight("Destination given twice") {
+        assertPreflight(.duplicateDestination, Msg.duplicateDestination(d1 + "/")) {
             _ = try $0.prepare(source: self.card(dir), destRoots: [d1, d1 + "/"], cardName: nil, date: nil)
         }
-        assertPreflight("Destination given twice") {
+        assertPreflight(.duplicateDestination, Msg.duplicateDestination(dir.path + "/./d1")) {
             _ = try $0.prepare(source: self.card(dir), destRoots: [d1, dir.path + "/./d1"], cardName: nil, date: nil)
         }
     }
@@ -102,7 +106,7 @@ final class PreflightTests: XCTestCase {
             let dir = tempDir()
             var o = options()
             o.chunkSize = chunk
-            assertPreflight("ChunkSize", options: o) {
+            assertPreflight(.chunkSize, Msg.chunkSize(chunk), options: o) {
                 _ = try $0.prepare(source: self.card(dir), destRoots: [dir.sub("d1")], cardName: nil, date: nil)
             }
         }
@@ -112,7 +116,7 @@ final class PreflightTests: XCTestCase {
         let dir = tempDir()
         var o = options()
         o.bufferCount = 1
-        assertPreflight("BufferCount", options: o) {
+        assertPreflight(.bufferCount, Msg.bufferCount(1), options: o) {
             _ = try $0.prepare(source: self.card(dir), destRoots: [dir.sub("d1")], cardName: nil, date: nil)
         }
     }
@@ -120,7 +124,7 @@ final class PreflightTests: XCTestCase {
     func testBadDateIsRejected() {
         for date in ["2026-1-4", "../evil", "2026-10-04\n", "2026-10-04x"] {
             let dir = tempDir()
-            assertPreflight("Date must be") {
+            assertPreflight(.date, Msg.date(date)) {
                 _ = try $0.prepare(source: self.card(dir), destRoots: [dir.sub("d1")], cardName: nil, date: date)
             }
         }
@@ -128,16 +132,16 @@ final class PreflightTests: XCTestCase {
 
     func testMissingSourceNoDestinationMissingDestinationEmptySource() {
         let dir = tempDir()
-        assertPreflight("Source not found") {
+        assertPreflight(.sourceNotFound, Msg.sourceNotFound(dir.path + "/no-such-card")) {
             _ = try $0.prepare(source: dir.path + "/no-such-card", destRoots: [dir.sub("d1")], cardName: nil, date: nil)
         }
-        assertPreflight("No destination given") {
+        assertPreflight(.noDestination, Msg.noDestination) {
             _ = try $0.prepare(source: self.card(dir), destRoots: [], cardName: nil, date: nil)
         }
-        assertPreflight("Destination not found") {
+        assertPreflight(.destinationNotFound, Msg.destinationNotFound(dir.path + "/nope")) {
             _ = try $0.prepare(source: self.card(dir), destRoots: [dir.path + "/nope"], cardName: nil, date: nil)
         }
-        assertPreflight("Source contains no files") {
+        assertPreflight(.emptySource, Msg.emptySource) {
             _ = try $0.prepare(source: dir.sub("empty"), destRoots: [dir.sub("d1")], cardName: nil, date: nil)
         }
     }

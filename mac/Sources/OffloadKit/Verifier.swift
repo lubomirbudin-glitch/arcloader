@@ -17,7 +17,7 @@ public enum Verifier {
         let reportDir = cardPath + "/" + Layout.reportDirName
         let lists = (try? FileManager.default.contentsOfDirectory(atPath: reportDir))?.filter { $0.hasSuffix(".xxh64") } ?? []
         guard let listName = lists.first else {
-            throw OffloadError.preflight("No .xxh64 hash list in \(reportDir)")
+            throw OffloadError.preflight(Msg.noHashRecord(reportDir), code: .noHashRecord)
         }
         let text = try String(contentsOfFile: reportDir + "/" + listName, encoding: .utf8)
         var expected: [(hash: String, path: String)] = []

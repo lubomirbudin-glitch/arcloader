@@ -38,7 +38,7 @@ public enum MHL {
         let fileName = String(format: "%04d_%@_%@.mhl", generation, folder, utc.string(from: now))
         let listed = report.files.filter { $0.xxh64 != nil }.count
         let comment = generation > 1
-            ? Msg.mhlAppendComment(listed, report.source)
+            ? "Offload doplnění: \(listed) \(plural(listed, "nový soubor", "nové soubory", "nových souborů")) z \(report.source)"
             : "Offload of \(report.cardName) from \(report.source)"
         let ignore = earlier?.generations.first?.ignore
             ?? ignorePatterns + report.skipped.map { ($0 as NSString).lastPathComponent }

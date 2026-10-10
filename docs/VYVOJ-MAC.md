@@ -90,6 +90,9 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 34 — hlášky kontrol a CLI česky (`Msg` v `Messages.swift`, `PreflightCode`, `OffloadError.code`), „Chyba: “,
+  `formatBytesCs`; chyby parseru swift-argument-parser zůstávají anglicky; nahrazuje `Msg.swift` proudu A (texty
+  stejné, `verifyHint` podle plánu = Windows, `Msg.bytes` → `formatBytesCs`, `Msg.count` bez použití vypuštěno)
 - Úkol 33 — report čte i zapisuje sdílené klíče Windows 0.2–0.6 (generace, oprava, projekt, MD5, xxh128, ověření
   během proxy, pauza, odložené kopie); Mac nikdy nepíše unbuffered ani proxyEncoder; zápis souboru „jen nový“
   (renamex_np RENAME_EXCL, `FileExists`); report s verifyPending/verifyIncomplete nikdy není „lze formátovat“

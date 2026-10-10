@@ -88,13 +88,13 @@ final class HashAlgoTests: XCTestCase {
         XCTAssertEqual(progress, data.count)
     }
 
-    func testCzechBytesAndCount() {
-        XCTAssertEqual(Msg.bytes(3_200_000_000), "3,2 GB")
-        XCTAssertEqual(Msg.bytes(2_000_000_000), "2 GB")
-        XCTAssertEqual(Msg.bytes(412_000_000_000), "412 GB")
-        XCTAssertEqual(Msg.bytes(12), "12 B")
-        XCTAssertEqual(Msg.count(1234), "1\u{00A0}234")
-        XCTAssertEqual(Msg.noSpace("Zaloha", SpaceNeed(card: 380_000_000_000, proxy: 30_000_000_000, report: 2_000_000_000), 398_000_000_000),
+    func testCzechBytesAndNoSpace() {
+        XCTAssertEqual(formatBytesCs(3_200_000_000), "3,2 GB")
+        XCTAssertEqual(formatBytesCs(2_000_000_000), "2 GB")
+        XCTAssertEqual(formatBytesCs(412_000_000_000), "412 GB")
+        XCTAssertEqual(formatBytesCs(12), "12 B")
+        let need = SpaceNeed(card: 380_000_000_000, proxy: 30_000_000_000, report: 2_000_000_000)
+        XCTAssertEqual(Msg.noSpace("Zaloha", total: need.total, parts: need.partsText("karty"), free: 398_000_000_000),
                        "Na cíli Zaloha není dost místa: potřeba 412 GB (karty 380 GB, proxy ~30 GB, report 2 GB), volno 398 GB.")
     }
 }

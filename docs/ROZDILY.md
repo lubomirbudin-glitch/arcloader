@@ -47,7 +47,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ⏳ naplánováno | ✅ CLI + GUI |
 | **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | `verify` jen proti `.xxh64` | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
 | **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | jen velikost karty | ✅ CLI + GUI |
-| **Hlášky kontrol před kopií česky** (`PreflightCode`) | ⏳ naplánováno (zatím anglicky) | ✅ |
+| **Hlášky kontrol před kopií česky** (`PreflightCode`) | ✅ (chyby parseru swift-argument-parser anglicky — knihovna je nepřekládá) | ✅ |
 | **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `offload day-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
 | **Seznam klipů CSV / Avid ALE** (`_clips.csv/.ale` karty i dne) | ⏳ naplánováno | ✅ CLI + GUI (import do Resolve/Avid čeká ruční test) |
 | **Proxy pro přelinkování** (`reel_name` ve stopě TC, všechny zvukové stopy) | ⏳ naplánováno (1 zvuková stopa) | ✅ (Resolve/Premiere čeká ruční test) |
@@ -224,8 +224,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   podle odhadu z délky a datového toku, report 32 MiB + 1 MiB na klip, čekající a běžící úlohy, složka pro proxy) a před
   renderem proxy přepočítá podle skutečné délky klipů (nevejde-li se, proxy se přeskočí, kopie zůstane ověřená). Mac
   kontroluje jen kartu.
-- **Hlášky česky:** kontroly před kopií, CLI („Chyba: …“, souhrn `verify`) a chyby parseru (kde je System.CommandLine
-  přeložené) jsou na Windows česky; logy, TXT report a `--help` zůstávají anglicky. Mac je zatím anglicky.
+- **Hlášky česky:** kontroly před kopií a chyby CLI („Chyba: …“) jsou v obou verzích česky a doslova stejně (Mac
+  píše cesty s `/`); logy, TXT report a `--help` zůstávají anglicky. Chyby parseru jsou česky jen na Windows (kde je
+  System.CommandLine přeložené) — swift-argument-parser na Macu lokalizaci nemá (neznámá volba, hodnota, která není
+  číslo …). Souhrn `verify` je na Macu zatím anglicky (nové `offload verify` přinese úkol 45).
 - **Doplnění do zálohy — zámek složky karty** (Windows): dvě doplnění do stejné zálohy najednou se nepustí (druhé hned
   skončí „S touto zálohou právě pracuje jiná úloha …“; s ověřením během proxy drží zámek úloha až do zápisu výsledku ověření). Zámek platí jen v jedné přihlášené relaci Windows na jednom
   počítači — nechrání před doplněním z jiného účtu ani z jiného počítače do sdílené složky — a stejnou složku pod jiným

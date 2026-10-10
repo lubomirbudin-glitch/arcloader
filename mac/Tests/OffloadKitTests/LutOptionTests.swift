@@ -16,8 +16,8 @@ final class LutOptionTests: XCTestCase {
         XCTAssertEqual(LutOption.parse("/Users/x/show.cube", fallback: nil, catalog: cat), parsed(.custom, path: "/Users/x/show.cube"))
         XCTAssertEqual(LutOption.parse("look.CUBE", fallback: nil, catalog: cat), parsed(.custom, path: "look.CUBE"))
         XCTAssertEqual(LutOption.parse("luts/x", fallback: nil, catalog: cat).mode, .custom)
-        XCTAssertTrue(LutOption.parse("nope", fallback: nil, catalog: cat).error?.hasPrefix("Unknown LUT 'nope'. Use auto, none, a .cube path or one of: arri-logc3-awg3, ") == true)
-        XCTAssertTrue(LutOption.parse("auto", fallback: "nope", catalog: cat).error?.hasPrefix("Unknown fallback LUT 'nope'. Built-in: ") == true)
+        XCTAssertTrue(LutOption.parse("nope", fallback: nil, catalog: cat).error?.hasPrefix("Neznámý LUT „nope“. Použijte auto, none, cestu k .cube nebo jedno z: arri-logc3-awg3, ") == true)
+        XCTAssertTrue(LutOption.parse("auto", fallback: "nope", catalog: cat).error?.hasPrefix("Neznámý záložní LUT „nope“. Vestavěné: ") == true)
         XCTAssertNil(LutOption.parse("auto", fallback: "none", catalog: cat).fallback)
         XCTAssertNil(LutOption.parse("auto", fallback: "None", catalog: cat).error)
     }

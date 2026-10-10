@@ -265,19 +265,21 @@ final class DestWriter {
 }
 
 public enum OffloadError: Error, CustomStringConvertible {
-    case preflight(String)
+    case preflight(String, code: PreflightCode = .other)
     case failed(String)
 
     public var description: String {
         switch self {
-        case .preflight(let m), .failed(let m): return m
+        case .preflight(let m, _), .failed(let m): return m
         }
     }
 
-    public var isPreflight: Bool {
-        if case .preflight = self { return true }
-        return false
+    public var code: PreflightCode? {
+        if case .preflight(_, let c) = self { return c }
+        return nil
     }
+
+    public var isPreflight: Bool { code != nil }
 }
 
 public final class OffloadEngine {
@@ -305,25 +307,25 @@ public final class OffloadEngine {
     /// Scans the card and checks the destinations before a single byte is written.
     public func prepare(source: String, destRoots: [String], cardName: String?, date: String?) throws -> OffloadPlan {
         guard options.chunkSize > 0, options.chunkSize % 4096 == 0, options.chunkSize <= 1 << 30 else {
-            throw OffloadError.preflight("ChunkSize must be a positive multiple of 4096 and at most 1 GiB (got \(options.chunkSize))")
+            throw OffloadError.preflight(Msg.chunkSize(options.chunkSize), code: .chunkSize)
         }
         guard options.bufferCount >= 2 else {
-            throw OffloadError.preflight("BufferCount must be at least 2 (got \(options.bufferCount))")
+            throw OffloadError.preflight(Msg.bufferCount(options.bufferCount), code: .bufferCount)
         }
         // \z, not $: "$" would also accept a trailing newline.
         if let date, date.range(of: #"^\d{4}-\d{2}-\d{2}\z"#, options: .regularExpression) == nil {
-            throw OffloadError.preflight("Date must be YYYY-MM-DD (got \"\(date)\")")
+            throw OffloadError.preflight(Msg.date(date), code: .date)
         }
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: source, isDirectory: &isDir), isDir.boolValue else {
-            throw OffloadError.preflight("Source not found: \(source)")
+            throw OffloadError.preflight(Msg.sourceNotFound(source), code: .sourceNotFound)
         }
-        guard !destRoots.isEmpty else { throw OffloadError.preflight("No destination given") }
+        guard !destRoots.isEmpty else { throw OffloadError.preflight(Msg.noDestination, code: .noDestination) }
         var seen: [String] = []
         for root in destRoots {
             let n = OffloadEngine.normalizedRoot(root)
-            if seen.contains(n) { throw OffloadError.preflight("Destination given twice: \(root)") }
+            if seen.contains(n) { throw OffloadError.preflight(Msg.duplicateDestination(root), code: .duplicateDestination) }
             seen.append(n)
         }
         let top = (try? fm.contentsOfDirectory(atPath: source)) ?? []
@@ -334,34 +336,34 @@ public final class OffloadEngine {
                     && fm.fileExists(atPath: source + "/" + name, isDirectory: &d) && d.boolValue
             }
             if found {
-                throw OffloadError.preflight("Source looks like an earlier offload (has _REPORT/_PROXY/ascmhl) — copy its parent card instead, or remove these folders")
+                throw OffloadError.preflight(Msg.sourceIsOffload, code: .sourceIsOffload)
             }
         }
-        guard let srcDev = IO.device(of: source) else { throw OffloadError.preflight("Cannot stat source \(source)") }
+        guard let srcDev = IO.device(of: source) else { throw OffloadError.preflight(Msg.sourceUnreadable(source), code: .sourceUnreadable) }
 
         var devices: [dev_t] = []
         for root in destRoots {
             guard fm.fileExists(atPath: root, isDirectory: &isDir), isDir.boolValue else {
-                throw OffloadError.preflight("Destination not found: \(root)")
+                throw OffloadError.preflight(Msg.destinationNotFound(root), code: .destinationNotFound)
             }
-            guard fm.isWritableFile(atPath: root) else { throw OffloadError.preflight("Destination not writable: \(root)") }
-            guard let dev = IO.device(of: root) else { throw OffloadError.preflight("Cannot stat destination \(root)") }
+            guard fm.isWritableFile(atPath: root) else { throw OffloadError.preflight(Msg.destinationNotWritable(root), code: .destinationNotWritable) }
+            guard let dev = IO.device(of: root) else { throw OffloadError.preflight(Msg.destinationUnreadable(root), code: .destinationUnreadable) }
             if dev == srcDev && !options.allowSourceVolume {
-                throw OffloadError.preflight("Destination \(root) is on the same volume as the source")
+                throw OffloadError.preflight(Msg.sameVolumeAsSource(root), code: .sameVolumeAsSource)
             }
             if devices.contains(dev) && !options.allowSameDevice {
-                throw OffloadError.preflight("Destinations share a volume (\(root)) — that is not a second copy. Use --allow-same-device to override.")
+                throw OffloadError.preflight(Msg.sharedVolume(root), code: .sharedVolume)
             }
             devices.append(dev)
         }
 
         let scan = try Scanner.scan(source)
-        guard !scan.files.isEmpty else { throw OffloadError.preflight("Source contains no files") }
+        guard !scan.files.isEmpty else { throw OffloadError.preflight(Msg.emptySource, code: .emptySource) }
         let needed = scan.totalBytes + Int64(scan.files.count) * 64 * 1024 + 64 << 20
         for root in destRoots {
             let free = IO.availableBytes(root) ?? 0
             if free < needed {
-                throw OffloadError.preflight("Not enough space on \(root): need \(formatBytes(needed)), free \(formatBytes(free))")
+                throw OffloadError.preflight(Msg.noSpace(root, total: needed, parts: "karty \(formatBytesCs(needed))", free: free), code: .noSpace)
             }
         }
 
@@ -481,7 +483,7 @@ public final class OffloadEngine {
         }
         setPhase(.done)
         if !reportErrors.isEmpty {
-            throw OffloadError.failed("Report could not be written: " + reportErrors.joined(separator: "; "))
+            throw OffloadError.failed(Msg.reportNotWritten(reportErrors.joined(separator: "; ")))
         }
         return report
     }
