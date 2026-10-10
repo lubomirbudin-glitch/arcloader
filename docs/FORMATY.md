@@ -4,6 +4,11 @@ Tohle je **smlouva mezi Mac a Windows verzí**. Co tu je, musí obě verze zapis
 udělanou jednou verzí ověřit druhou (`offload verify`) i nástroji třetích stran (`ascmhl`, Silverstack, ShotPut).
 Změna čehokoli tady = změna v obou verzích + záznam v obou `VYVOJ-*.md` + v [ROZDILY.md](ROZDILY.md).
 
+**Jazyk volných textů** (Windows od 0.9.0 anglicky, uživatel 2026-10-10): poznámky, důvody LUTu, komentáře ASC MHL
+a podobné volné texty uvnitř reportů jsou od Windows 0.9.0 anglicky; klíče, hodnoty výčtů, názvy souborů a složek
+v záloze (`_REPORT`, `ascmhl`, `_PROXY`, `neshoda_NNNN` …) se **nemění**. Čtečky musí přijmout obojí (starší zálohy
+a Mac mají české texty). Slovník pojmů: [ui-text-glossary.md](ui-text-glossary.md).
+
 ## Struktura složek
 
 ```
@@ -109,7 +114,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `verifyPending` | bool? | jen Windows od 0.6.0: kopie je hotová a ověřuje se s proxy (`verified` je zatím `false`, stavy `written`); report s tímto klíčem ještě **nemá generaci ASC MHL** — zapíše se až po ověření. Po pádu aplikace ho dokončí doplnění (viz „Blokový manifest“). Mac ignoruje |
 | `verifyIncomplete` | bool? | jen Windows od 0.6.0: výsledek ověření se nepodařilo zapsat do všech složek karty; složky, kam se zapsal, nesou tento klíč a nejsou nikdy „ověřené“, dokud doplnění („Dokončit přerušenou zálohu“) klíč nepřepíše (viz „Blokový manifest“). Mac ignoruje |
 | `safeToFormatSeconds` | číslo? | jen Windows od 0.6.0: sekundy od startu do chvíle, kdy byl každý soubor ověřený na každém cíli (bez pauz); chybí, když to nenastalo |
-| `verifyNotes[]` | string? | jen Windows od 0.6.0: česky — nestabilní čtení (blok se při opakovaném čtení lišil), stejný blok špatně na více cílech a co dává karta při novém čtení |
+| `verifyNotes[]` | string? | jen Windows od 0.6.0: volný text (do 0.8.0 česky, od 0.9.0 anglicky) — nestabilní čtení (blok se při opakovaném čtení lišil), stejný blok špatně na více cílech a co dává karta při novém čtení |
 | `totalFiles`, `totalBytes` | číslo | |
 | `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows); Windows od 0.6.0 `verifyMethod` (`verify-in-proxy` = čtením pro proxy a dorovnáním, `read-back` = zpětným čtením; chybí bez ověření), `verifyNote` (česky, proč zpětným čtením, i když běželo ověření během proxy) a `volumeSerial` (`1A2B-3C4D`, sériové číslo svazku cíle — podle něj se cíl pozná i pod jiným písmenem, R12) |
 | `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `xxh128`? (XXH3-128, 32 malých hex, Windows od 0.6.0), `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
@@ -209,7 +214,7 @@ Mac klíč nezná a ignoruje ho (renderuje vše).
 - Windows od 0.6.0: každý `<hash>` má i `<xxh128 action=… hashdate=…>` (XXH3-128, R2) — `<xxh64>` zůstává, takže zálohu
   ověří i Mac a starší Offload. Do generace jde jen soubor ověřený na daném cíli (`original`) nebo selhaný (`failed`);
   zapsaný a neověřený jen v generaci bez ověření nebo zrušené před ním. Metoda ověření toho cíle je na konci
-  `<creatorinfo><comment>` (`· ověření: verify-in-proxy` / `· ověření: read-back`) — `<process>` zůstává `transfer`,
+  `<creatorinfo><comment>` (`· ověření: verify-in-proxy` / `· ověření: read-back`; Windows od 0.9.0 anglicky `· verification: verify-in-proxy` / `· verification: read-back`) — `<process>` zůstává `transfer`,
   schéma ASC MHL v2 jiné hodnoty nepovoluje. S ověřením během proxy se generace zapíše až po ověření (`verifyPending`).
 
 ## Blokový manifest — `_REPORT/offload-manifest.jsonl` (Windows od 0.6.0, Mac ignoruje)
@@ -244,7 +249,7 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
 - zkopírují se jen nové soubory; existující soubory ani dřívější reporty se nikdy nepřepíšou (soubor, který se mezitím
   na cíli objeví, kopii zastaví);
 - nová generace ASC MHL `NNNN_<karta>_<YYYY-MM-DD_HHMMSS>Z.mhl` obsahuje **jen nové soubory** (`action="original"`,
-  `<process>transfer</process>`, `<comment>Offload doplnění: 12 nových souborů z E:\</comment>`, `<ignore>` stejné jako
+  `<process>transfer</process>`, `<comment>Offload doplnění: 12 nových souborů z E:\</comment>` (Windows od 0.9.0 `Offload append: 12 new files from E:\`), `<ignore>` stejné jako
   generace 1); `ascmhl_chain.xml` se nahradí (dočasné jméno + `ReplaceFile`): dřívější záznamy `<hashlist>` mají stejné
   `sequencenr`, cestu a C4 (zapíšou se znovu, ne bajt po bajtu) a přibude nový záznam s číslem N a C4 nového souboru;
 - report doplnění `_REPORT/offload_report_NNNN.json/.txt`, `<karta>_report_NNNN.html/.pdf` (NNNN = generace MHL, na všech
@@ -284,7 +289,7 @@ selhaly — jako další generace ve stejné složce karty (jen GUI, tlačítko 
   nepřepíše; je-li místo obsazené, použije se první volné `neshoda_NNNN_2`, `_3`, …; obsadí-li se až po plánování,
   soubor na tom cíli selže s `set aside: …` a nic se nepřepíše);
 - generace MHL N obsahuje opravované soubory na všech cílech: nová kopie `action="original"`, přečtená dobrá kopie
-  `action="verified"` (`hashdate` = čas opravy), `<comment>Offload oprava: 1 soubor znovu z E:\</comment>`;
+  `action="verified"` (`hashdate` = čas opravy), `<comment>Offload oprava: 1 soubor znovu z E:\</comment>` (Windows od 0.9.0 `Offload repair: 1 file copied again from E:\`);
 - report `offload_report_NNNN.*` s `kind: "repair"`, `rewritten`, `setAside`; `<karta>.xxh64` (a `.md5`) se přepíše bez
   opakovaných řádků; nic k opravě = nic se nezapíše.
 
@@ -313,7 +318,7 @@ a proto se uloží do `_REPORT` vedle složky karty (`<cíl>\<datum>\_REPORT\<ka
 | `failedAtCopy[]` | string[] | soubory, které selhaly už při kopii a nemají žádný platný starší záznam |
 | `failedSuperseded[]` | string[] | nejnovější záznam je `failed`, ale starší generace je platná — soubor sedí podle ní |
 | `unreadable[]` | objekt[] | `{path, error}` |
-| `chainProblems[]` | string[] | česky: změněná nebo chybějící generace, chybějící řetěz |
+| `chainProblems[]` | string[] | volný text (do 0.8.0 česky, od 0.9.0 anglicky): změněná nebo chybějící generace, chybějící řetěz |
 | `success` | bool | nic nesedí špatně, nechybí, není nečitelné a nic nezůstalo `failedAtCopy` (soubory navíc výsledek neovlivní) |
 | `unfinished` | bool | Windows 0.6.0: nejnovější generace není dokončená (`verifyPending` nebo `verifyIncomplete` v jejím reportu, nebo `verifyPending` v reportu téže generace na jiném cíli) — i se `success` není záloha ověřená („Dokončit přerušenou zálohu“); CLI `verify` končí kódem 1 |
 
@@ -370,19 +375,19 @@ Pravidla (Windows od 0.3.0):
 
 ## Souhrnný report (Windows od 0.8.0, Mac naplánováno)
 
-Jeden report z vybraných záloh (karty i z různých dnů a disků): `<Offload reporty>/souhrn/<YYYY-MM-DD>_<HHmmss>_souhrn.html`
-+ `.pdf` (A4 na šířku, bez náhledů), volitelně i do složky, kterou uživatel vybere. `<Offload reporty>` =
-`outputs.localReportFolder`, jinak `<Dokumenty>\Offload reporty` — i když je kopie reportu vypnutá. Soubory se **nikdy
-nepřepisují**: při shodě jména `…_souhrn_2.html/.pdf`, `_3` … (stejná přípona pro HTML i PDF); HTML odkazuje na PDF, jen když PDF vzniklo. Vybraná složka se odmítne (česky s důvodem), když je
+Jeden report z vybraných záloh (karty i z různých dnů a disků): `<Offload reports>/summary/<YYYY-MM-DD>_<HHmmss>_summary.html` (do 0.8.0 `<Offload reporty>/souhrn/…_souhrn.html`)
++ `.pdf` (A4 na šířku, bez náhledů), volitelně i do složky, kterou uživatel vybere. `<Offload reports>` =
+`outputs.localReportFolder`, jinak `<Dokumenty>\Offload reports` (do 0.8.0 `Offload reporty`, čte se dál) — i když je kopie reportu vypnutá. Soubory se **nikdy
+nepřepisují**: při shodě jména `…_summary_2.html/.pdf`, `_3` … (stejná přípona pro HTML i PDF); HTML odkazuje na PDF, jen když PDF vzniklo. Vybraná složka se odmítne (česky s důvodem), když je
 ve složce zálohy karty — i rozpracované nebo přerušené: ona nebo složka nad ní má `_REPORT` nebo `ascmhl` (pravidlo M13;
 `_REPORT` složky dne se nepočítá), nebo leží uvnitř `<YYYY-MM-DD>/<karta>/…` —, na kartě ve frontě, na svazku s kamerovou
 strukturou v kořeni (pravidlo automatických cílů `CameraAtRoot`, pokud na něm není výstup Offloadu), na výměnném médiu
 (karta ve čtečce, flash disk) nebo na svazku jen pro čtení; platí pro GUI i `offload summary-report -o`. Nic jiného se
-nezapisuje — reporty karet, denní reporty, `Offload reporty/<datum>` ani `history.json` se nemění.
+nezapisuje — reporty karet, denní reporty, `Offload reports/<datum>` ani `history.json` se nemění.
 
 Zdroj: záznamy `history.json` (cíle `destinations[].cardPath`, soubory, velikost, ověření) a reporty `offload_report.json`
 + `offload_report_NNNN.json` (všechny generace — doplnění i opravy, jako denní report) ze složky karty na připojeném cíli
-(nejnovější report, pravidlo kopie na počítači); když žádný cíl není připojený, z kopie `<Offload reporty>/<datum>/<karta>`
+(nejnovější report, pravidlo kopie na počítači); když žádný cíl není připojený, z kopie `<Offload reports>/<datum>/<karta>` (nebo staré `Offload reporty`)
 (i `_2`, `_3` …), jejíž `.offload-origin` odpovídá záloze (přesně, když je report přečtený; jinak karta a zdroj z historie).
 Report, který na cíli nejde přečíst, ustoupí dalšímu připojenému cíli, pak kopii na počítači. Lokální kopie bez přečteného
 reportu se vezme jen tehdy, když jí odpovídá karta, zdroj i konec některé generace z historie a je jediná taková — jinak
@@ -407,7 +412,7 @@ nebo formát `arriraw`) je to TC denní doby. Stopáž = součet `info.duration`
   hodnota (z novější verze) se zachová a čte jako `xxh64`.
 - `outputs` (Windows od 0.3.0): `dayReport` (bool, `true`) — denní report po každé úloze; `clipListCsv` (bool, `true`),
   `clipListAle` (bool, `false`) — seznamy klipů; `localReport` (bool, `true`, úkol 2026-10-09) — kopie reportu karty na
-  tomto počítači; `localReportFolder` (string | `null` = `<Dokumenty>\Offload reporty`). Neznámé klíče sekce se zachovají.
+  tomto počítači; `localReportFolder` (string | `null` = `<Dokumenty>\Offload reports`; do 0.8.0 `Offload reporty`, ta se při čtení prohledává také). Neznámé klíče sekce se zachovají.
 - Kopie reportu na počítači (Windows, úkol 2026-10-09): `<složka>\<datum>\<karta>\_REPORT\…` a `…\ascmhl\…` jako na
   cíli (bez médií: bez `_REPORT\neshoda_NNNN\`, klipů a proxy), denní report do `<složka>\<datum>\_REPORT\`. Ve složce
   karty je skrytý soubor `.offload-origin` (`<started UTC>|<cardName>|<source>` z `offload_report.json`): podle něj se jiná

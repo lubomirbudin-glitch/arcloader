@@ -15,7 +15,7 @@ public class HtmlReportTests
         Assert.Contains("<td class=\"ok\">verified</td>", html);
         Assert.Contains("<details><summary>All files (2)</summary>", html);
         Assert.Contains("prefers-color-scheme:dark", html);
-        Assert.Contains("offload 0.8.0-win", html);
+        Assert.Contains("offload 0.9.0-win", html);
     }
 
     [Fact]

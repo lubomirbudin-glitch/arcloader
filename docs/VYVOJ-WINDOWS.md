@@ -29,6 +29,27 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 - **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzích 0.7.0 a 0.7.1, viz níže.
 
+## 2026-10-10 — 0.9.0: aplikace jen anglicky
+
+Verze **0.9.0** (zadání uživatele: „obě verze programu do EN“ → „Jen angličtina“). Tři souběžné větve (Core + testy,
+aplikace + CLI + braw-decode, návod + balíček), pak sjednocení citací. Slovník pojmů [ui-text-glossary.md](ui-text-glossary.md).
+
+- **Celá aplikace anglicky, natrvalo:** okna, nastavení, dialogy, hlášky, poznámky u klipů, oznámení (Windows i ntfy),
+  reporty karty, dne, ověření a souhrnu (`lang="en"`), seznamy klipů, CLI (nápověda, výstup, chyby parseru — en-US UI
+  kultura, satelit „cs“ se nepřibaluje), braw-decode, rady HW testu, LUTy, kontrola obsahu, kontrola aktualizací.
+- **Formát:** data `2026-10-10`, desetinná tečka, vše přes InvariantCulture (testy pod cs-CZ); UI vlákno en-US s ISO
+  datem. Formát zálohy (klíče, výčty, názvy souborů a složek) beze změny; volné texty v nových reportech a komentáře
+  ASC MHL anglicky, staré české hodnoty se čtou dál (FORMATY).
+- **Lokální složka reportů:** `Documents\Offload reports` (souhrn `summary\<datum>_<čas>_summary.*`); stará `Offload
+  reporty` se při čtení prohledává dál. Starý název „Bez projektu“ v `--project` a ve skriptech funguje dál.
+- **Balíček:** `READ-ME.txt` (dřív `CTI-ME.txt`), anglický návod `Offload-manual.pdf` z `package/manual/manual.html`
+  (dřív `navod`), `licence\LUTs-README.md`; zprávy `release.ps1` a popis vydání (`publish.ps1`) anglicky.
+- **Vedlejší opravy:** role disků v HW testu mají explicitní příznak karty (`card` v hwtest.json; dřív se poznávala
+  podle textu „Karta…“); ikony prázdné fronty nezávisí na textech; nestabilní `UpdateCheckerTests` — čtení manifestu
+  ze souboru čekalo na vlákno z poolu a pod zátěží vypršel limit dřív, než začalo (teď vlastní vlákno), testovací
+  HTTP server měl dva závody.
+- Mac: úkol „Aplikace jen anglicky“ v [VYVOJ-MAC.md](VYVOJ-MAC.md) (Naplánováno).
+
 ## 2026-10-10 — 0.8.0: snímací fps, pauza po souboru/klipu, souhrnný report
 
 Verze **0.8.0**. Tři souběžné větve; každá s recenzí a opravami, pauza s hloubkovou recenzí, re-recenzí a další opravou.
