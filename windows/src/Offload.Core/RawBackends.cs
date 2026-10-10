@@ -113,7 +113,8 @@ internal sealed record BrawInfo(
     [property: JsonPropertyName("gamma")] string? Gamma = null,
     [property: JsonPropertyName("gamut")] string? Gamut = null,
     [property: JsonPropertyName("colorScienceGen")] int? ColorScienceGen = null,
-    [property: JsonPropertyName("colorScienceGenOriginal")] int? ColorScienceGenOriginal = null);
+    [property: JsonPropertyName("colorScienceGenOriginal")] int? ColorScienceGenOriginal = null,
+    [property: JsonPropertyName("sensorRate")] double? SensorRate = null);
 
 internal sealed class BrawBackend : IRawBackend
 {
@@ -168,6 +169,8 @@ internal sealed class BrawBackend : IRawBackend
         Gamut = string.IsNullOrEmpty(i.Gamut) ? null : i.Gamut,
         ColorScienceGen = i.ColorScienceGen,
         ColorScienceGenOriginal = i.ColorScienceGenOriginal,
+        // The capture rate (task 2026-10-10): frame 0's sensor rate; absent (the Mac decoder, older builds) or 0 = unknown.
+        CaptureFrameRate = i.SensorRate is double r && r > 0 ? RawBackends.Rational(r) : null,
     };
 
     /// The frame braw-decode starts at for a thumbnail `seconds` into the clip. Rounded: `seconds` comes from the
@@ -298,8 +301,23 @@ internal sealed class R3dBackend : IRawBackend
         var c = new ClipInfo { Codec = "REDCODE RAW" };
         c.Width = Digits(Find("frame width", "width"));
         c.Height = Digits(Find("frame height", "height"));
-        var fpsText = Find("record fps", "timebase", "fps", "frame rate")?.Split(' ')[0];
-        if (double.TryParse(fpsText, NumberStyles.Float, CultureInfo.InvariantCulture, out var fps) && fps > 0)
+        static double? Rate(string? v) =>
+            double.TryParse(v?.Split(' ')[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var r) && r > 0 ? r : null;
+        // The record (sensor) rate is the capture rate (task 2026-10-10); the project rate / timebase is the playback rate
+        // the length is counted in — without one (an older REDline) the record rate stands for both, as before.
+        var record = Rate(Find("record fps", "record frame rate", "sensor fps", "sensor frame rate"));
+        string? Playback(params string[] needles)
+        {
+            foreach (var n in needles)
+            {
+                var hit = meta.FirstOrDefault(m => m.Key.Contains(n, StringComparison.Ordinal) && !m.Key.Contains("record", StringComparison.Ordinal)
+                    && !m.Key.Contains("sensor", StringComparison.Ordinal)).Value;
+                if (!string.IsNullOrEmpty(hit)) return hit;
+            }
+            return null;
+        }
+        if (record is double rec) c.CaptureFrameRate = RawBackends.Rational(rec);
+        if ((Rate(Playback("project fps", "timebase", "playback fps", "fps", "frame rate")) ?? record) is double fps)
         {
             c.FrameRate = RawBackends.Rational(fps);
             if (Digits(Find("total frames", "frame count", "frames")) is int n)
@@ -405,6 +423,16 @@ internal sealed class ArriBackend : IRawBackend
         };
         if (Str("nativePictureEssenceDescriptor.file.sampleRate") is string rate)
             c.FrameRate = rate.EndsWith("/1", StringComparison.Ordinal) ? rate[..^2] : rate;
+        // The capture rate (task 2026-10-10): the first frame's Sensor State — an ALEXA 35 at 35 fps writes 35/1 there and
+        // 24/1 as the file's sampleRate (the playback rate, which the length is counted in).
+        var sensor = flat.FirstOrDefault(kv => kv.Key.StartsWith("frameBasedMetadata.", StringComparison.Ordinal) && kv.Key.EndsWith("sensorSampleRate", StringComparison.Ordinal)).Value
+            ?? Value("sensorSampleRate");
+        c.CaptureFrameRate = sensor?.GetValueKind() switch
+        {
+            JsonValueKind.String => ClipInfo.NormalizeRate(sensor.GetValue<string>()),
+            JsonValueKind.Number when sensor.GetValue<double>() is var r && r > 0 => RawBackends.Rational(r),
+            _ => null,
+        };
         if (c.Frames is int n && Timecode.Fps(c.FrameRate) is double fps) c.Duration = n / fps;
         // Lens squeeze; ARRI writes it as a factor or in thousandths depending on the field.
         var squeeze = flat.FirstOrDefault(kv => kv.Key.Contains("squeeze", StringComparison.OrdinalIgnoreCase) && kv.Value.GetValueKind() == JsonValueKind.Number).Value;

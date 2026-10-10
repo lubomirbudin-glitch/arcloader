@@ -80,20 +80,50 @@ public sealed class ClipInfo
     /// when unknown — then a "serial" rule never matches.
     [JsonPropertyName("cameraSerial"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CameraSerial { get; set; }
 
+    /// The rate the camera recorded at (task 2026-10-10): from the metadata of the clip's first frame — ARRIRAW `Sensor
+    /// State.sensorSampleRate`, BRAW `sensorRate` (braw-decode --info), RED record fps, Sony M01.XML `captureFps`. Written
+    /// like FrameRate ("35", "120000/1001"). FrameRate stays the file's playback rate, so Duration (frames ÷ FrameRate) is
+    /// the editing length. Report key `clips[].info.captureFrameRate`, absent when unknown — then capture = playback.
+    [JsonPropertyName("captureFrameRate"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CaptureFrameRate { get; set; }
+
+    /// The playback rate as people read it: "23.976", "25"; "" when unknown.
     [JsonIgnore]
-    public string FpsLabel
+    public string FpsLabel => Label(FrameRate);
+
+    /// The capture rate is known and is not the playback rate (overcranked, undercranked, S&Q).
+    [JsonIgnore]
+    public bool CaptureDiffers => Offload.Core.Timecode.Fps(CaptureFrameRate) is double c && Offload.Core.Timecode.Fps(FrameRate) is double p && Math.Abs(c - p) > 0.001;
+
+    /// What a report shows for the clip's fps: "35 fps · přehrávání 24" when the rates differ, else the playback rate
+    /// ("25"); "48 fps" when only the capture rate is known; "" when neither is.
+    [JsonIgnore]
+    public string FpsSummary
     {
         get
         {
-            if (FrameRate == null) return "";
-            var parts = FrameRate.Split('/')
-                .Select(p => double.TryParse(p, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : double.NaN)
-                .Where(v => !double.IsNaN(v)).ToArray();
-            double fps = parts.Length == 2 && parts[1] != 0 ? parts[0] / parts[1] : parts.FirstOrDefault();
-            return fps == Math.Round(fps)
-                ? ((long)fps).ToString(CultureInfo.InvariantCulture)
-                : fps.ToString("0.000", CultureInfo.InvariantCulture);
+            if (CaptureDiffers) return $"{Label(CaptureFrameRate)} fps · přehrávání {FpsLabel}";
+            if (FpsLabel.Length == 0 && Label(CaptureFrameRate) is { Length: > 0 } capture) return capture + " fps";
+            return FpsLabel;
         }
+    }
+
+    /// "24000/1001" → "23.976", "25/1" → "25"; "" for null or anything unusable.
+    public static string Label(string? rate)
+    {
+        if (Offload.Core.Timecode.Fps(rate) is not double fps) return "";
+        return fps == Math.Round(fps)
+            ? ((long)fps).ToString(CultureInfo.InvariantCulture)
+            : fps.ToString("0.000", CultureInfo.InvariantCulture);
+    }
+
+    /// A rate from camera metadata written like FrameRate: "35/1" → "35", "24000/1001" stays, "119.88" → "120000/1001",
+    /// "48.000" → "48"; null when it is not a usable rate.
+    public static string? NormalizeRate(string? rate)
+    {
+        rate = rate?.Trim();
+        if (Offload.Core.Timecode.Fps(rate) is not double fps) return null;
+        if (rate!.EndsWith("/1", StringComparison.Ordinal)) return rate[..^2].Contains('.') ? RawBackends.Rational(fps) : rate[..^2];
+        return rate.Contains('/') ? rate : RawBackends.Rational(fps);
     }
 
     [JsonIgnore]

@@ -39,7 +39,7 @@ public static partial class HtmlReport
         "table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere}\n" +
         "table.clips{table-layout:fixed}table.clips td,table.clips th{padding:8px 6px;overflow-wrap:normal}table.clips td.clip{overflow-wrap:anywhere}table.clips td.st{overflow-wrap:normal;word-break:normal;hyphens:none}table.clips td.st a{color:inherit}table.clips td.num,table.clips th.num,table.clips td.nw{white-space:nowrap}\n" +
         "td.nw{white-space:nowrap}table:not(.clips) th{white-space:nowrap}\n" +
-        ".c-thumb{width:20%}.c-clip{width:19%}.c-codec{width:8%}.c-res{width:9%}.c-fps{width:5%}.c-dur{width:6%}.c-tc{width:9%}.c-audio{width:5%}.c-size{width:8%}.c-proxy{width:11%}\n" +
+        ".c-thumb{width:20%}.c-clip{width:17%}.c-codec{width:8%}.c-res{width:9%}.c-fps{width:7%}.c-dur{width:6%}.c-tc{width:9%}.c-audio{width:5%}.c-size{width:8%}.c-proxy{width:11%}\n" +
         "th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}tr{break-inside:avoid}\n" +
         "td.num{text-align:right;font-variant-numeric:tabular-nums}code,.mono{font:12px ui-monospace,Consolas,Menlo,monospace}\n" +
         "td.clip{min-width:0}.wrap{white-space:normal}\n" +
@@ -180,7 +180,7 @@ public static partial class HtmlReport
         h.Append("<div class=\"stats\">\n");
         Stat(h, r.TotalFiles.ToString(Inv), "souborů");
         Stat(h, Format.Bytes(r.TotalBytes), "data");
-        Stat(h, videoClips.Count.ToString(Inv), "klipů" + (totalDuration > 0 ? " · " + Duration(totalDuration) : ""));
+        Stat(h, videoClips.Count.ToString(Inv), "klipů" + (totalDuration > 0 ? " · stopáž " + Duration(totalDuration) : ""));
         Stat(h, Duration(r.CopySeconds), "kopírování · " + Format.Rate(r.TotalBytes, r.CopySeconds));
         Stat(h, r.Verified ? Duration(r.VerifySeconds) : "—", "ověření · " + (!r.Verified ? (r.VerifyPending == true ? "probíhá" : "neprovedeno")
             : inProxy ? "během proxy" : Format.Rate(r.TotalBytes, r.VerifySeconds)));
@@ -286,7 +286,7 @@ public static partial class HtmlReport
         h.Append("<col class=\"c-thumb\"><col class=\"c-clip\"><col class=\"c-codec hide-sm\"><col class=\"c-res hide-sm\">");
         h.Append("<col class=\"c-fps\"><col class=\"c-dur\"><col class=\"c-tc hide-sm\"><col class=\"c-audio hide-sm\">");
         h.Append("<col class=\"c-size\"><col class=\"c-proxy\"></colgroup>\n");
-        h.Append("<tr><th></th><th>Klip</th><th class=\"hide-sm\">Formát</th><th class=\"hide-sm\">Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Délka</th><th class=\"hide-sm\">TC</th><th class=\"num hide-sm\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n");
+        h.Append("<tr><th></th><th>Klip</th><th class=\"hide-sm\">Formát</th><th class=\"hide-sm\">Rozlišení</th><th class=\"num\">FPS</th><th class=\"num\">Stopáž</th><th class=\"hide-sm\">TC</th><th class=\"num hide-sm\">Audio</th><th class=\"num\">Velikost</th><th>Proxy</th></tr>\n");
         foreach (var c in r.Clips)
         {
             var img = c.Thumbnails.Count > 0
@@ -311,12 +311,15 @@ public static partial class HtmlReport
             var audio = i == null ? "" : (i.AudioChannels > 0 ? $"{i.AudioChannels} ch" : "—");
             h.Append($"<tr><td>{img}</td><td class=\"clip\"><div class=\"clipname\">{Esc(c.Clip.Name)}{cameraProxy}</div>");
             h.Append($"<div class=\"path\">{Esc(c.Clip.Path)}</div>{noteHtml}</td>");
-            h.Append($"<td class=\"wrap hide-sm\">{Esc(string.Join(" · ", codecParts))}</td><td class=\"nw hide-sm\">{Esc(i?.ResolutionLabel ?? "")}</td><td class=\"num\">{Esc(i?.FpsLabel ?? "")}</td>");
+            h.Append($"<td class=\"wrap hide-sm\">{Esc(string.Join(" · ", codecParts))}</td><td class=\"nw hide-sm\">{Esc(i?.ResolutionLabel ?? "")}</td><td class=\"num\">{Esc(i?.FpsSummary ?? "")}</td>");
             h.Append($"<td class=\"num\">{Esc(i?.DurationLabel ?? "")}</td><td class=\"mono hide-sm\">{Esc(i?.Timecode ?? "")}</td>");
             h.Append($"<td class=\"num hide-sm\">{audio}</td>");
             h.Append($"<td class=\"num\">{Format.Bytes(c.Clip.Bytes)}</td><td class=\"st {pc}\">{ProxyCell(c, pl)}</td></tr>\n");
         }
         h.Append("</table></div>\n");
+        // Task 2026-10-10: a clip shot at another rate than it plays at — the length is the editing one.
+        if (r.Clips.Any(c => c.Info?.CaptureDiffers == true))
+            h.Append("<p class=\"sub\">FPS: snímací rychlost z metadat prvního snímku, za ní přehrávací rychlost souboru, když se liší. Stopáž = počet snímků ÷ přehrávací fps (délka ve střižně).</p>\n");
         if (r.Proxy is { Enabled: true } p)
         {
             var lut = LutResolver.EffectiveMode(p) switch
