@@ -35,12 +35,12 @@ public class UpdateCheckerTests
     {
         using var dir = new TempDir();
         var state = Path.Combine(dir.Path, "state", "update-check.json");
-        var source = Manifest(dir, """{"version":"0.5.0","url":"\\\\NAS\\Offload\\","notes":"Denní report, MD5…"}""");
+        var source = Manifest(dir, """{"version":"0.5.0","url":"\\\\NAS\\Offload\\","notes":"Day report, MD5…"}""");
 
         var r = await UpdateChecker.CheckAsync(source, "0.4.0-win", Now, state);
 
         Assert.Equal(UpdateStatus.NewVersion, r.Status);
-        Assert.Equal(new UpdateInfo("0.5.0", @"\\NAS\Offload\", "Denní report, MD5…"), r.Info);
+        Assert.Equal(new UpdateInfo("0.5.0", @"\\NAS\Offload\", "Day report, MD5…"), r.Info);
         Assert.Equal("Version 0.5.0 is available (you have 0.4.0).", r.Text("0.4.0-win"));
         using var doc = JsonDocument.Parse(File.ReadAllText(state));
         Assert.Equal(Now, doc.RootElement.GetProperty("lastCheck").GetDateTime().ToUniversalTime());

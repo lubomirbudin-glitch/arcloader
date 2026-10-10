@@ -165,7 +165,7 @@ public class JobCardTests
             [
                 File("XDROOT/Clip/B012C001.MXF", "verified", "verified"),
                 File("XDROOT/Clip/B012C015_261007_9QW1.MXF", "verified", "failed", "HASH MISMATCH: dest 1 != source 2"),
-                File("XDROOT/Clip/B012C016.MXF", "verified", "failed", "Zařízení není připojeno."),
+                File("XDROOT/Clip/B012C016.MXF", "verified", "failed", "The device is not connected."),
                 File("XDROOT/Clip/B012C017.MXF", "failed", "failed", "source: read failed", source: "read failed"),
             ],
         };

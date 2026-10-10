@@ -363,7 +363,7 @@ public sealed partial class OffloadEngine
             {
                 flushed = true;
                 FlushAtStop(ws, afterFlush);
-                continue;   // Pokračovat may have come meanwhile
+                continue;   // Resume may have come meanwhile
             }
             return worker.WaitWhilePaused(cts.Token);
         }

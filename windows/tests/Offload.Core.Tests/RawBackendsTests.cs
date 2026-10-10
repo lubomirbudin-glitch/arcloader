@@ -105,7 +105,7 @@ public class RawBackendsTests
     public void Arri_ArgsWithoutCrop_SphericalNoDesqueeze_Log()
     {
         var info = new ClipInfo { Camera = "ALEXA 35" };
-        var custom = new LutUse("custom", null, "look.cube", "vlastní LUT") { File = "look.cube" };
+        var custom = new LutUse("custom", null, "look.cube", "custom LUT") { File = "look.cube" };
         var (args, json, cropped) = ArriBackend.Args("in", "out", info, new ProxySettings { Height = 720, LutPath = "look.cube" }, ProxyRenderer.LookFor(custom, info), "p.json");
         Assert.False(cropped);
         Assert.Null(json);
