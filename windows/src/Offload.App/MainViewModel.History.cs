@@ -35,7 +35,11 @@ public sealed partial class MainViewModel
         {
             historyLoading = false;
             if (closing) return;
-            if (t.IsCompletedSuccessfully) history = t.Result;
+            if (t.IsCompletedSuccessfully)
+            {
+                history = t.Result;
+                PruneSummary(t.Result);
+            }
             else
             {
                 AppLog.Write($"history load: {t.Exception?.GetBaseException().Message}");
@@ -116,10 +120,10 @@ public sealed partial class MainViewModel
     }
 
     /// DNES under the queue (UI návrh 7): the cards finished today, from history.json as loaded; null hides it.
-    public HistoryDay? Today => history is { } h ? HistoryView.Today(h, DateTime.Now) : null;
+    public HistoryDayItem? Today => history is { } h && HistoryView.Today(h, DateTime.Now) is { } day ? DayItem(day) : null;
 
-    /// The history tab: every day with a card, newest first.
-    public IReadOnlyList<HistoryDay> HistoryDays => history is { } h ? HistoryView.Days(h, DateTime.Now) : [];
+    /// The history tab: every day with a card, newest first; a card can be ticked for the summary report.
+    public IReadOnlyList<HistoryDayItem> HistoryDays => history is { } h ? HistoryView.Days(h, DateTime.Now).Select(DayItem).ToList() : [];
 
     /// The last look at the card that is at `path` now, or null.
     internal CardInsight? Insight(string path) => inspections.Result(path, IdentityOf(path));

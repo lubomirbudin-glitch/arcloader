@@ -504,6 +504,27 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
       nese: XML vedle klipu (`CONTENTS\CLIPS001\…\*.XML`), `ffprobe -show_format -show_streams` (tagy MXF) — kde je snímací
       rychlost, poslat vzorek; podle něj doplnit čtení do `ProxyRenderer.Probe` (jako Sony `M01.XML`).
 
+Souhrnný report z vybraných záloh (úkol 2026-10-09):
+
+- [ ] 76. **Souhrnný report v aplikaci:** Historie karet → zaškrtnout 3 karty ze dvou dnů a dvou disků → „Souhrnný report
+      (3)…“ (i v DNES) → otázka „Uložit … i na vybraný disk?“ → Ne: otevře se
+      `Dokumenty\Offload reporty\souhrn\<datum>_<čas>_souhrn.html`, vedle PDF (A4 na šířku, nic neuříznuté); natáčecí dny,
+      tabulka dnů a karet s klipy, soubory, daty, stopáží, první a poslední klapkou (TC + klip; ALEXA „TC denní doby“),
+      kamery, ověření, „Kde je co zálohované“ (disk, cesta, připojen, ověřeno, kopie reportu na počítači). Ano → vybrat
+      disk → soubory i tam; podruhé tamtéž → `_2`, nic se nepřepíše; vybrat složku karty se zálohou (i rozpracované —
+      jen prázdný `_REPORT`), kartu ve čtečce (i mimo frontu), flash disk nebo disk jen pro čtení → česká hláška proč,
+      report jen na počítači (totéž `offload summary-report … -o <karta>` → kód 1). Tutéž kartu zálohovanou dvěma
+      úlohami na dva disky zaškrtnout obě → v součtech jednou, v „Kde je co zálohované“ oba disky. „Zrušit výběr“ odškrtne
+      vše; během tvorby odkaz „Vytvářím souhrnný report…“ a okno reaguje; 200 karet do pár sekund.
+- [ ] 77. **Odpojený disk:** jednu z vybraných karet zálohovat na disk, který pak odpojit → v souhrnu údaje z kopie reportu na
+      počítači („kopie reportu na počítači“, disk „nepřipojen“, ověřeno „podle reportu“); smazat i kopii v `Offload reporty`
+      → karta v reportu je, „report není k dispozici“, soubory a velikost podle historie, report vznikne. Karty, disky ani
+      `Offload reporty\<datum>` se nezmění (porovnat časy souborů).
+- [ ] 78. **Klapky ze skutečných karet:** karta Sony/Canon (MXF/MP4 s `creation_time`) s klipy natočenými přes půlnoc nebo
+      s resetovaným číslováním → první a poslední klapka podle času záznamu (`clips[].info.recorded` v reportu); ARRIRAW /
+      BRAW (bez času záznamu) → podle čísla klipu; ALEXA → časy první a poslední klapky odpovídají TC denní doby na
+      klapce. `offload summary-report <složka dne> -o <složka>` vypíše obě cesty.
+
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
 ## Použití
@@ -524,6 +545,7 @@ offload append E:\ --into D:\Zaloha\2026-10-06\A001 --into F:\Zaloha\2026-10-06\
 offload verify D:\Zaloha\2026-10-06 --report                # ověřit všechny karty dne proti ASC MHL + report ověření
 offload E:\ -d D:\Zaloha -d F:\Zaloha --hash both --ale     # xxHash64 + MD5, seznam klipů i pro Avid
 offload day-report D:\Zaloha\2026-10-06                     # denní report znovu (HTML, PDF, seznam klipů dne)
+offload summary-report D:\Zaloha\2026-10-06\A001 F:\Zaloha\2026-10-07 -o G:\   # souhrnný report vybraných záloh (+ kopie na G:\)
 offload bench --hash md5                                    # rychlost MD5 proti xxh64 (CPU)
 offload E:\ --project "Film X"                              # nastavení projektu z aplikace; volby z příkazové řádky mají přednost
 offload E:\ -d D:\Zaloha --proxy --lut-rule camera=FX6:sony-slog3-sgamut3cine --lut-rule "folder=A00*/*:C:\luts\show.cube"
@@ -547,6 +569,14 @@ přidá `<karta>_clips.ale` pro Avid) a na každém cíli znovu denní report `<
 se seznamem klipů dne (`--no-day-report` vypne); CLI vypíše „Denní report: …“. `--hash both` počítá navíc MD5
 (`<karta>.md5`, MD5 v reportu a ASC MHL); `append` volbu nemá — doplnění počítá součty dřívější zálohy. `day-report
 <složka>` vytvoří denní report znovu (složka dne, nebo karty v ní), kód 0/1.
+`summary-report <složky karet | složky dne | id z historie…> [-o <složka>]` (úkol 2026-10-09) udělá jeden souhrnný
+report (HTML + PDF, bez náhledů) z vybraných záloh — i z různých dnů a disků: natáčecí dny, za kartu a celkem klipy,
+soubory, velikost, stopáž, první a poslední klapka (startovní TC prvního a posledního nahraného klipu, u ALEXY TC denní
+doby), kamery, ověření a kde je co zálohované. Čte reporty `offload_report*.json` ze zálohy (všechny generace), když disk
+není připojený, z kopie v `Dokumenty\Offload reporty`; když není ani ta, řekne to v reportu. Uloží se vždy do
+`<Offload reporty>\souhrn\<datum>_<čas>_souhrn.html/.pdf`, s `-o` i do zadané složky (nikdy přes existující soubor —
+přípona `_2`, `_3` …; do složky karty se zálohou nikdy). Vypíše „Souhrnný report: …“; kód 0, kód 1 = nic nevzniklo nebo
+se nepovedlo `-o`.
 
 Historie (`%APPDATA%\Offload\history.json`): `copy` před plánem vypíše „Zálohováno … — ověřeno“, když kartu zná (bez
 dotazu), a po dokončené kopii ji zapíše; `--no-history` čtení i zápis vypne. `append` bez `--into` najde složky zálohy

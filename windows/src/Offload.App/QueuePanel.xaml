@@ -528,15 +528,19 @@
             <Border BorderBrush="{DynamicResource RowLine}" BorderThickness="0,0,0,1" Padding="16,12">
                 <Grid>
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="2*" />
                         <ColumnDefinition Width="1*" />
                         <ColumnDefinition Width="1*" />
                         <ColumnDefinition Width="1.2*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding CardName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Project}" />
-                    <TextBlock Grid.Column="1" Text="{Binding Size}" Foreground="{DynamicResource Text2}" />
-                    <TextBlock Grid.Column="2" Text="{Binding Time}" Foreground="{DynamicResource Text2}" />
-                    <TextBlock Grid.Column="3" Text="{Binding Status}" FontSize="13" TextTrimming="CharacterEllipsis">
+                    <!-- Task 2026-10-09: tick cards for one summary report -->
+                    <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="Vybrat do souhrnného reportu"
+                              AutomationProperties.Name="{Binding CardName}" AutomationProperties.AutomationId="HistorySummaryCheck" />
+                    <TextBlock Grid.Column="1" Text="{Binding CardName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Project}" />
+                    <TextBlock Grid.Column="2" Text="{Binding Size}" Foreground="{DynamicResource Text2}" />
+                    <TextBlock Grid.Column="3" Text="{Binding Time}" Foreground="{DynamicResource Text2}" />
+                    <TextBlock Grid.Column="4" Text="{Binding Status}" FontSize="13" TextTrimming="CharacterEllipsis">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{DynamicResource Text2}" />
@@ -566,6 +570,11 @@
                     Visibility="{Binding HasFinished, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="ClearFinishedButton" />
             <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Denní report…" Command="{Binding DayReportCommand}" Margin="0,0,16,0"
                     Visibility="{Binding QueueTab, Converter={StaticResource EqualsToVisible}, ConverterParameter=history}" AutomationProperties.AutomationId="HistoryDayReportButton" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="{Binding SummaryButtonText}" Command="{Binding SummaryReportCommand}" Margin="0,0,16,0"
+                    ToolTip="Jeden report (HTML + PDF) ze zaškrtnutých karet: dny, klipy, velikost, stopáž, první a poslední klapka, kde je co zálohované"
+                    Visibility="{Binding QueueTab, Converter={StaticResource EqualsToVisible}, ConverterParameter=history}" AutomationProperties.AutomationId="HistorySummaryButton" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Zrušit výběr" Command="{Binding ClearSummaryCommand}" Margin="0,0,16,0"
+                    Visibility="{Binding HasSummarySelection, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="HistorySummaryClear" />
             <StackPanel Orientation="Horizontal">
                 <RadioButton Style="{StaticResource TabButton}" IsChecked="{Binding QueueTab, Converter={StaticResource Equals}, ConverterParameter=queue}"
                              AutomationProperties.AutomationId="QueueTab">
@@ -737,6 +746,8 @@
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Denní report…" Command="{Binding DayReportCommand}" Margin="14,0,0,0"
                                     AutomationProperties.AutomationId="DayReportButton" />
+                            <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="{Binding SummaryButtonText}" Command="{Binding SummaryReportCommand}" Margin="14,0,0,0"
+                                    Visibility="{Binding HasSummarySelection, Converter={StaticResource BoolToVisible}}" AutomationProperties.AutomationId="TodaySummaryButton" />
                             <TextBlock DockPanel.Dock="Right" Text="{Binding Today.Summary}" FontSize="13" Foreground="{DynamicResource Text3}" VerticalAlignment="Center"
                                        AutomationProperties.AutomationId="TodaySummary" />
                             <TextBlock Text="DNES" Style="{StaticResource StepTitle}" />

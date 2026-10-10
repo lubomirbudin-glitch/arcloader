@@ -86,6 +86,19 @@ public sealed class ClipInfo
     /// the editing length. Report key `clips[].info.captureFrameRate`, absent when unknown — then capture = playback.
     [JsonPropertyName("captureFrameRate"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CaptureFrameRate { get; set; }
 
+    /// When the camera recorded the clip (UTC), from its metadata: ffprobe `creation_time` (QuickTime, MXF, MP4). Report key
+    /// `clips[].info.recorded`, absent when unknown (RAW decoders, older reports) — the summary report then orders the
+    /// clips by their number (task 2026-10-09).
+    /// Read leniently (review S-8): a value this version cannot read (a number, another shape) is unknown, never a report
+    /// that cannot be read.
+    [JsonPropertyName("recorded"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull), JsonConverter(typeof(LenientDateConverter))]
+    public DateTime? Recorded { get; set; }
+
+    /// A record time a camera could have meant (review S-7): from 2000 on and at most a day ahead of now. A camera without
+    /// its clock set writes 1904-01-01 (QuickTime) or 1970-01-01 — unknown, never the first clapper.
+    public static DateTime? Plausible(DateTime? t) =>
+        t is DateTime v && v.Year >= 2000 && v.ToUniversalTime() <= DateTime.UtcNow.AddDays(1) ? v : null;
+
     /// The playback rate as people read it: "23.976", "25"; "" when unknown.
     [JsonIgnore]
     public string FpsLabel => Label(FrameRate);
@@ -147,6 +160,26 @@ public sealed class ClipInfo
             int s = (int)Math.Round(d, MidpointRounding.AwayFromZero);
             return $"{s / 3600}:{s / 60 % 60:00}:{s % 60:00}";
         }
+    }
+}
+
+/// An optional ISO 8601 date written to the second in UTC ("2026-10-06T08:15:30Z", as `started`); anything else reads as
+/// null instead of failing the whole report.
+public sealed class LenientDateConverter : JsonConverter<DateTime?>
+{
+    public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String
+            && DateTime.TryParse(reader.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var t))
+            return t;
+        reader.Skip();
+        return null;
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
+    {
+        if (value is DateTime v) writer.WriteStringValue(v.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture));
+        else writer.WriteNullValue();
     }
 }
 
