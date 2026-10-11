@@ -16,7 +16,7 @@ a Mac mají české texty). Slovník pojmů: [ui-text-glossary.md](ui-text-gloss
 ## Struktura složek
 
 ```
-<cíl>/<YYYY-MM-DD>/_REPORT/          denní report (Windows od 0.3.0, Mac naplánováno) — viz „Denní report“
+<cíl>/<YYYY-MM-DD>/_REPORT/          denní report (Windows od 0.3.0, Mac od buildu po 0.7.0 D6) — viz „Denní report“
     <YYYY-MM-DD>_day_report.html
     <YYYY-MM-DD>_day_report.pdf
     <YYYY-MM-DD>_clips.csv           seznam klipů dne (když je CSV zapnuté)
@@ -362,13 +362,15 @@ kamera), bez TC začátek `00:00:00:00`, `Tracks` = `V` + `A1…An` podle zvukov
 smíšené fps → soubor na každé, `<název>_clips_25.ale`, `<název>_clips_23.976.ale` (klip bez fps patří k nejčastějšímu;
 když fps nezná žádný klip, hlavička `FPS 25`). ALE, které se při novém zápisu už nevytváří (změnily se frekvence), se smaže — jen když ALE je zapnuté nebo už existuje. Seznam, který je vypnutý, ale už je ve složce (CSV i ALE, u ALE všechny soubory frekvencí), se při dalším zápisu přesto přepíše (odvozený soubor: jinak by ukazoval jen dřívější generace); nikdy se nemaže a nově se nevytvoří.
 
-## Denní report (Windows od 0.3.0, Mac naplánováno)
+## Denní report (Windows od 0.3.0, Mac od buildu po 0.7.0 D6 — zatím bez seznamů klipů dne)
 
 `<cíl>/<YYYY-MM-DD>/_REPORT/<YYYY-MM-DD>_day_report.html/.pdf` + seznam klipů dne. Odvozené soubory (přepisují se celé,
 poslední zápis vyhraje — i proti Macu, který by zapisoval do stejného dne). Karty dne = podsložky `<datum>/` kromě
 `_REPORT` a skrytých; složka bez `_REPORT/offload_report.json` je v reportu „bez reportu (probíhá, nebo byl přerušen)“.
 Vytváří se znovu po každé úloze na každém jejím cíli (i doplnění a zrušená úloha) a na vyžádání; jeden zapisovatel na den
-(Windows: pojmenovaný mutex `Local\Offload-day-<sha1(klíč dne)>`, klíč viz „Pravidla“). `_REPORT` ve složce dne nemá `offload_report.json` ani
+(Windows: pojmenovaný mutex `Local\Offload-day-<sha1(klíč dne)>`, klíč viz „Pravidla“; Mac: `flock`
+`~/Library/Application Support/Offload/locks/day-<sha1(klíč složky dne)>.lock` — se zámkem Windows se nevylučuje, poslední zápis
+vyhraje). `_REPORT` ve složce dne nemá `offload_report.json` ani
 `.xxh64`, takže ho `verify` za kartu nepovažuje; sdílí ho report ověření cizí zálohy (`<karta>_verify_<stamp>Z.*`).
 
 Pravidla (Windows od 0.3.0):

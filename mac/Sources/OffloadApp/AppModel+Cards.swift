@@ -208,6 +208,7 @@ extension AppModel {
             config.analyzeClips = settings.analyzeClips
             config.proxy = settings.proxy
             config.tools = settings.tools
+            config.dayReport = settings.outputs.dayReport
             var sourceName = names[src]?.name ?? defaultName(src)
             if appendChosen(src), let m = insights[src]?.match {
                 // Into the backup's own card folders (step 2 is not used); the project of the earlier backup.

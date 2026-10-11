@@ -222,6 +222,10 @@ final class AppModel: ObservableObject {
     @Published var cameraLabels: [String: String] = [:]
     /// What this session's jobs really took: the time estimate in the start bar (memory only).
     let rates = RateMemory()
+    /// Day reports being written (after a job or on request) — quitting waits for them.
+    @Published var dayReportsRunning = 0
+    /// Day reports, one at a time, off the main thread (the PDF prints on the main run loop meanwhile).
+    let dayQueue = DispatchQueue(label: "app.day", qos: .userInitiated)
     var inspecting: Set<String> = []
     var inspectAgain: Set<String> = []
     let inspectQueue = DispatchQueue(label: "app.inspect", qos: .userInitiated, attributes: .concurrent)
@@ -702,10 +706,16 @@ final class AppModel: ObservableObject {
             if needsPost {
                 self?.postQueue.async {
                     item.job.runPost()
-                    DispatchQueue.main.async { self?.jobFinished(item) }
+                    DispatchQueue.main.async {
+                        self?.jobFinished(item)
+                        self?.writeDayReports(item)
+                    }
                 }
             } else {
-                DispatchQueue.main.async { self?.jobFinished(item) }
+                DispatchQueue.main.async {
+                    self?.jobFinished(item)
+                    self?.writeDayReports(item)
+                }
             }
         }
     }
@@ -831,7 +841,9 @@ final class AppModel: ObservableObject {
     // MARK: Quit while copying
 
     /// A job that has not finished, or an eject in flight.
-    var hasBusyJobs: Bool { jobs.contains { !$0.isFinished || $0.ejecting } || verifies.contains { !$0.isFinished } }
+    var hasBusyJobs: Bool {
+        jobs.contains { !$0.isFinished || $0.ejecting } || verifies.contains { !$0.isFinished } || dayReportsRunning > 0
+    }
 
     /// Asked by the app delegate. With unfinished jobs: confirm, cancel them all and quit once they have cleaned up.
     func shouldTerminate() -> NSApplication.TerminateReply {

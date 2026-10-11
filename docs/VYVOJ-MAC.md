@@ -147,6 +147,19 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
 
+- **Denní report** (úkol 53 plánu parity 2, přizpůsobený dnešnímu kódu): `<cíl>/<datum>/_REPORT/<datum>_day_report.html`
+  a `.pdf` jako Windows (`DayReport`, `DayReportService`; stejné anglické texty — „Day report — 2026-10-11“, ALL VERIFIED /
+  NEEDS ATTENTION, dlaždice, tabulka karet se sloupcem FPS „35 fps · playback 24“, Problems, LUTs). Vytvoří se znovu po
+  každé úloze na každém jejím cíli (celá kopie, doplnění, zrušená i selhaná, pokud složky karet existují) pod zámkem dne
+  (`flock` `locks/day-<sha1>.lock`, nejvýš 5 s, pak přeskočí — jen do logu, úlohu nikdy neshodí); v aplikaci na vlastní
+  frontě po skončení úlohy (Quit na něj počká), v CLI na konci `copy`/`append` („Day report: …“). Na vyžádání `offload
+  day-report <složka dne | karty>` a „Day report…“ (záložka historie, Today, Nastavení › Report). Volba Nastavení ›
+  Report „Day report after each card“ (`outputs.dayReport`), CLI `--no-day-report`. Odmítne kořen disku, složku bez karty
+  s reportem a den s kartou jménem `_REPORT`; soubory ověření v `_REPORT` dne nechá být. Jména karet `_REPORT`, `_PROXY`,
+  `ascmhl` dostanou na konec `_` (`Layout.sanitize`). `_REPORT` karty vzniká na Macu s prvním záznamem manifestu (ne
+  explicitně prázdný na začátku kopie jako Windows). **Seznamy klipů CSV/ALE (úkol 52) zatím ne** — ani karty, ani dne.
+  V testech se PDF po úloze netiskne (`DayReportService.jobPDF`), `DayReportTests` ho tiskne jednou.
+
 - **Dnes a historie karet** (Windows plán 9, úkoly 9 a 16): pravý sloupec má záložky „Queue“ / „Card history“; pod
   frontou „TODAY“ se souhrnem „3 cards · 412 GB · all verified“ a řádky karta · velikost · čas · stav („✓ 2 copies
   verified · safe to format“, „! not verified · do not format“, „✕ with errors (N files)“, „! unfinished“); záložka

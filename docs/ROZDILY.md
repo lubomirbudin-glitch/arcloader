@@ -49,7 +49,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | ✅ CLI `verify [--report]` + GUI „Verify backup“ v horní liště, Tools › Verify Backup… ⇧⌘O (GUI čeká ruční test) | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
 | **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | ✅ CLI + GUI (karty, fronta, po svazcích; GUI čeká ruční test) | ✅ CLI + GUI |
 | **Hlášky kontrol před kopií s kódy** (`PreflightCode`) | ✅ anglicky (od 2026-10-10, záměrně) | ✅ česky |
-| **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `offload day-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
+| **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `offload day-report`) | ✅ CLI + GUI po 0.7.0 D6 (po každé úloze na každém cíli, `--no-day-report`, Nastavení › Report „Day report after each card“, „Day report…“ v historii a Today; stejné texty jako Windows; zatím bez seznamů klipů dne CSV/ALE; zámek dne `flock`, s Windows se nevylučuje; čeká ruční test) | ✅ CLI + GUI (čeká ruční test) |
 | **Seznam klipů CSV / Avid ALE** (`_clips.csv/.ale` karty i dne) | ⏳ naplánováno | ✅ CLI + GUI (import do Resolve/Avid čeká ruční test) |
 | **Proxy pro přelinkování** (`reel_name` ve stopě TC, všechny zvukové stopy) | ⏳ naplánováno (1 zvuková stopa) | ✅ (Resolve/Premiere čeká ruční test) |
 | **MD5 navíc k xxh64** (`hash: both`, `--hash both`, `<karta>.md5`, MHL `<md5>`) | ⏳ naplánováno (MD5 ignoruje, xxh64 ověří) | ✅ CLI + GUI |

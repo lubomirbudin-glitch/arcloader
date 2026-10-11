@@ -73,6 +73,9 @@ struct QueueColumn: View {
             if !model.summarySelection.isEmpty {
                 Button("Clear selection") { model.clearSummarySelection() }.buttonStyle(.offload(.ghost, height: 32))
             }
+            if model.queueTab == .history {
+                Button("Day report…") { model.dayReportOnRequest() }.buttonStyle(.offload(.ghost, height: 32))
+            }
             if model.queueTab == .queue,
                model.jobs.contains(where: \.queueFinished) || model.verifies.contains(where: \.isFinished) {
                 Button("Clear finished") { model.clearFinished() }.buttonStyle(.offload(.ghost, height: 32))
@@ -100,7 +103,10 @@ struct TodaySection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             StepTitle(title: day.title) {
-                Text(day.summary).font(.ui(13)).foregroundStyle(p.text3)
+                HStack(spacing: 14) {
+                    Text(day.summary).font(.ui(13)).foregroundStyle(p.text3).lineLimit(1)
+                    LinkButton(title: "Day report…") { model.dayReportOnRequest() }
+                }
             }
             HistoryRows(rows: day.rows)
         }

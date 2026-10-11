@@ -31,6 +31,8 @@ public struct JobConfig: Codable, Equatable {
     public var verifyPrimary = "fastest"
     /// CLI --primary N (0-based); nil = by `verifyPrimary`.
     public var primaryDestination: Int?
+    /// The day report on every destination after the job (settings `outputs.dayReport`, CLI --no-day-report).
+    public var dayReport = true
 
     public init(source: String, destRoots: [String]) {
         self.source = source
@@ -279,9 +281,27 @@ public final class OffloadJob {
     /// Runs the whole job synchronously. Never throws: the outcome is in `status()` and the returned report.
     @discardableResult
     public func run(log: ((String) -> Void)? = nil) -> OffloadReport? {
-        guard runCopy() else { return report }
-        runPost(log: log)
+        if runCopy() { runPost(log: log) }
+        writeDayReports(log: log)
         return report
+    }
+
+    /// The day report on each destination of the job (FORMATY „Denní report“): after the whole job — also an append and a
+    /// cancelled or failed one, whenever its card folders exist. Waits at most 5 s for a busy day, then skips it (log);
+    /// never fails the job. Returns the HTML files written. Off with `config.dayReport == false`.
+    @discardableResult
+    public func writeDayReports(log: ((String) -> Void)? = nil) -> [String] {
+        guard config.dayReport, let plan else { return [] }
+        let written = DayReportService.afterJob(cardPaths: plan.cardPaths, pdf: DayReportService.jobPDF, log: log)
+        lock.lock(); dayReports = written; lock.unlock()
+        return written
+    }
+
+    private var dayReports: [String] = []
+    /// The day reports the last `writeDayReports` wrote (HTML paths).
+    public var writtenDayReports: [String] {
+        lock.lock(); defer { lock.unlock() }
+        return dayReports
     }
 
     /// Stage 1 — card → disks + verification. Returns true when stage 2 should follow.

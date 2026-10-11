@@ -26,7 +26,10 @@ public enum Layout {
     public static func sanitize(_ s: String) -> String {
         let cleaned = s.map { "/:\\".contains($0) ? "_" : $0 }
         let out = String(cleaned).trimmingCharacters(in: .whitespacesAndNewlines)
-        return out.isEmpty || out == "." || out == ".." ? "CARD" : out
+        if out.isEmpty || out == "." || out == ".." { return "CARD" }
+        // A card named like a folder of the tool (_REPORT, _PROXY, ascmhl, any case) gets "_" at the end, so it never
+        // merges with them — `<date>/_REPORT` is the day report's folder (FORMATY „Denní report“, Windows 0.3.0).
+        return [reportDirName, proxyDirName, "ascmhl"].contains { $0.lowercased() == out.lowercased() } ? out + "_" : out
     }
 
     /// Card folder name that is free on every destination (NAME, NAME_2, NAME_3 …),

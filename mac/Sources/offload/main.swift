@@ -8,7 +8,7 @@ struct Offload: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Camera card offload: read once, write to several disks, verify with xxh64.",
         version: OffloadVersion.string,
-        subcommands: [Copy.self, Append.self, Verify.self, Bench.self, Ports.self, Luts.self],
+        subcommands: [Copy.self, Append.self, Verify.self, DayReportCommand.self, Bench.self, Ports.self, Luts.self],
         defaultSubcommand: Copy.self)
 
     /// Errors of a command print as "Error: …" (the Mac is English; Windows prints them in Czech). Parser errors
@@ -83,6 +83,9 @@ struct StageTwo: ParsableArguments {
     @Option(help: "The destination verified through the proxies, 1… in the order of --dest (default: the fastest in the copy).")
     var primary: Int?
 
+    @Flag(help: "Do not write the day report (<dest>/<date>/_REPORT/<date>_day_report.html/.pdf) after the job.")
+    var noDayReport = false
+
     /// --primary as a 0-based index for `destinations` destinations; out of range: the message and exit 1.
     func primaryIndex(destinations: Int) throws -> Int? {
         do {
@@ -98,6 +101,7 @@ struct StageTwo: ParsableArguments {
         guard frameScale > 0 else { throw ValidationError(Msg.notPositiveNumber(numberText(frameScale))) }
         config.analyzeClips = !noAnalyze
         config.proxy.enabled = proxy
+        config.dayReport = !noDayReport
         // An empty --lut "" is "no LUT" (LutOption.parse → none), not the current folder.
         let choice = LutOption.parse(lut, fallback: lutFallback, catalog: LutCatalog.shared)
         if let e = choice.error { throw ValidationError(e) }
@@ -362,6 +366,7 @@ enum JobRun {
                 print(Texts.safeToEject(plan.cardPaths.count))
             }
         }
+        for day in job.writtenDayReports { print(Msg.dayReportWritten(day)) }
         if let n = status.note { print(n) }
         if let e = status.error { print(Msg.cliError + e) }
         if !HistoryRecorder.drain(timeout: 0) {
@@ -666,5 +671,30 @@ final class ProgressDisplay {
         }
         fputs("\r\u{1B}[K" + line, stderr)
         lastTime = now
+    }
+}
+
+struct DayReportCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "day-report",
+        abstract: "Write the day report of a day folder on a destination (<dest>/<date>, or a card folder in it).")
+
+    @Argument(help: "Day folder (<dest>/<date>) or a card folder in it.")
+    var folder: String
+
+    func run() throws {
+        var result: Result<String, Error>?
+        // The PDF prints with WebKit on the main run loop: the report is made on a worker thread meanwhile.
+        Thread.detachNewThread {
+            let r = Result { try DayReportService.regenerate(abs(folder)) }
+            DispatchQueue.main.async { result = r }
+        }
+        while result == nil { RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.1)) }
+        switch result! {
+        case .success(let html): print(Msg.dayReportWritten(html))
+        case .failure(let e):
+            fputs(Msg.cliError + "\(e)\n", stderr)
+            throw ExitCode(1)
+        }
     }
 }

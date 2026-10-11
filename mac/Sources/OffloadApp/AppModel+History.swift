@@ -43,6 +43,48 @@ extension AppModel {
         }
     }
 
+    // MARK: Day report
+
+    /// After a job (also an append, a cancelled or failed one): the day report on each of its destinations, off the main
+    /// thread; a busy day is skipped after 5 s, a failure only logged (FORMATY „Denní report“).
+    func writeDayReports(_ item: JobItem) {
+        guard !isPreview, item.job.config.dayReport, item.job.plan != nil else { return }
+        dayReportsRunning += 1
+        dayQueue.async { [weak self] in
+            item.job.writeDayReports(log: { NSLog("%@", $0) })
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.dayReportsRunning -= 1
+                self.checkTerminateReady()
+            }
+        }
+    }
+
+    /// "Day report…": a day folder (or a card folder in it) on a destination — written now and opened.
+    func dayReportOnRequest() {
+        guard !isPreview, !terminating else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Choose a day folder on a destination (or a card folder in it)"
+        panel.prompt = "Day report"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let path = url.path
+        dayReportsRunning += 1
+        dayQueue.async { [weak self] in
+            let result = Result { try DayReportService.regenerate(path, log: { NSLog("%@", $0) }) }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.dayReportsRunning -= 1
+                switch result {
+                case .success(let html): NSWorkspace.shared.open(URL(fileURLWithPath: html))
+                case .failure(let e): self.message = Msg.dayReportFailed("\(e)")
+                }
+                self.checkTerminateReady()
+            }
+        }
+    }
+
     /// "estimate ~8:00 incl. proxies" — only from what this session measured (RateMemory); nil shows only the size.
     var startEstimateText: String? {
         guard let bytes = selectedBytes, bytes > 0 else { return nil }

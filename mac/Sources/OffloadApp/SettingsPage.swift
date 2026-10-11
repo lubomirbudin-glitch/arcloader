@@ -265,6 +265,7 @@ struct AnalysisSettings: View {
 }
 
 struct ReportSettings: View {
+    @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
 
     var body: some View {
@@ -289,7 +290,16 @@ struct ReportSettings: View {
             }
             .overlay(RoundedRectangle(cornerRadius: Metrics.tileRadius).strokeBorder(p.line, lineWidth: 1))
             .frame(maxWidth: 620)
-            // TODO(outputs): day report, CSV and ALE clip lists once the Mac writes them (AppSettings.outputs, Windows plan 7).
+            FormRow(label: "Day report") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle("Day report after each card", isOn: $model.settings.outputs.dayReport).toggleStyle(.offloadCheckbox)
+                    Text("<date>/_REPORT/<date>_day_report.html and .pdf on every disk: every card of the day, verification, problems.")
+                        .font(.ui(12)).foregroundStyle(p.text3).fixedSize(horizontal: false, vertical: true)
+                    Button("Day report…") { model.dayReportOnRequest() }.buttonStyle(.offload(.secondary))
+                }
+            }
+            .frame(maxWidth: 620)
+            // TODO(outputs): CSV and ALE clip lists once the Mac writes them (AppSettings.outputs, Windows plan 7).
         }
     }
 
