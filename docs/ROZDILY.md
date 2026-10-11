@@ -66,7 +66,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Zkopírovat znovu** (oprava: jen nesouhlasné soubory, jen na postižený disk, generace ASC MHL N, `kind: "repair"`, `_REPORT/neshoda_NNNN/`) | ⏳ naplánováno | ✅ GUI (CLI ne) |
 | **Dnes a historie karet** (z `history.json`), štítek kamery a připojení, odhad času | ✅ GUI po 0.7.0 D6: „Today“ pod frontou a záložka „Card history“ (stejné texty a stavy jako Windows, zaškrtávání pro souhrnný report; Mac navíc pod názvem karty počet souborů a disky), štítek „ALEXA 35 · LogC4“, odhad „estimate ~… incl. proxies“ (čeká ruční test) | ✅ GUI |
 | **Proxy ve složkách jako na kartě** (`_PROXY/<složka klipu>/<klip>.mov`, plochá starší záloha zůstane plochá) | ✅ po 0.7.0 D6 (úkol 54; i odkaz „done“ v HTML) | ✅ 0.5.1 |
-| **Bez proxy, když je originál lehčí** (`proxy.skipLighterSources`, `--proxy-always`) | ⏳ naplánováno (renderuje vše) | ✅ CLI + GUI 0.5.1 |
+| **Bez proxy, když je originál lehčí** (`proxy.skipLighterSources`, `--proxy-always`) | ✅ CLI + GUI po 0.7.0 D6 (úkol 54; Nastavení › Proxy › More; GUI čeká ruční test) | ✅ CLI + GUI 0.5.1 |
 | **Verify-in-Proxy** (primární disk ověřený čtením pro proxy, ostatní na pozadí; `--classic-verify`, `--primary`) | ✅ CLI + GUI 0.7.0 (s kontrolou cache přes `mincore`; přepínač „Verify during proxy render“ i v kroku 3; čeká ruční test s kartou) | ✅ CLI + GUI 0.6.0 |
 | **Lze vyjmout × Lze formátovat** (dva stavy karty, oznámení „hotovo“ až po ověření všech disků) | ✅ GUI + CLI (od 0.7.0 i s ověřením během proxy) | ✅ GUI + CLI 0.6.0 |
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
@@ -206,12 +206,15 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   složce. Doplnění (obě verze) do starší zálohy s proxy přímo v `_PROXY` (Mac do 0.7.0 D6, Windows 0.5.0) pozná plochou
   zálohu z reportů a zůstane ploché (nic se nepřesouvá). `proxyPath` v reportu je relativní cesta jako dřív, jen
   s podsložkou. Rozdíl: kopii hotové proxy na ostatní cíle Mac nikdy nepřepisuje (Windows u plné kopie smí).
-- **Bez proxy, když je originál lehčí** (Windows od 0.5.1, `proxy.skipLighterSources`, výchozí zapnuto, jen u proxy
-  H.264/HEVC — s proxy ProRes se renderuje vždy — a jen když se nepoužije LUT ani ořez): H.264/HEVC originál ne větší než proxy a s datovým tokem nejvýš jako proxy nedostane proxy (`proxyStatus: skipped` + poznámka
-  „bez proxy — originál je lehčí (X Mb/s ≤ Y Mb/s)“); originál větší než proxy ji dostane vždy (rozhodnutí: 4K long-GOP
-  se ve střižně dekóduje těžce i s nízkým tokem). Mac klíč ignoruje a renderuje proxy pro všechny klipy.
+- **Bez proxy, když je originál lehčí** (Windows od 0.5.1, Mac po 0.7.0 D6 — úkol 54; `proxy.skipLighterSources`,
+  výchozí zapnuto, CLI `--proxy-always`, jen u proxy H.264/HEVC — s proxy ProRes se renderuje vždy — a jen když se
+  nepoužije LUT ani ořez): H.264/HEVC originál ne větší než proxy a s datovým tokem nejvýš jako proxy nedostane proxy
+  (`proxyStatus: skipped` + poznámka „no proxy — the original is lighter (X Mb/s ≤ Y Mb/s)“, Windows do 0.8.0 česky „bez
+  proxy — originál je lehčí …“ — obě verze čtou obojí); originál větší než proxy ji dostane vždy (rozhodnutí: 4K long-GOP
+  se ve střižně dekóduje těžce i s nízkým tokem). Obě verze stejně (náhledy, kontrola místa, souhrny, denní report);
+  s ověřením během proxy ověří takový klip na primárním disku dočtení (fill-in), obsahová kontrola dekodérem ho nečte.
 - **Odkaz na proxy v HTML reportu** (Windows od 0.5.1, Mac po 0.7.0 D6): stav „done“ odkazuje na soubor proxy
-  (`../_PROXY/…`). Šířky sloupců tabulky klipů (Windows `<colgroup>` 11 %) Mac nemá — sloupec Proxy se nezalamuje.
+  (`../_PROXY/…`). Sloupec Proxy se na Macu nezalamuje (buňky tabulky klipů jsou `nowrap`, Windows to řeší šířkou sloupce).
 - **Verify-in-Proxy** (Windows od 0.6.0, Mac od 0.7.0): s proxy a ověřením se primární disk ověří z čtení pro proxy
   (ffmpeg přes HTTP tap na 127.0.0.1, RAW přečtený před SDK), ostatní disky na pozadí; report ze stage 1 má
   `verifyPending` a generace ASC MHL se zapíše až po ověření (pak reporty, pak seznamy součtů). Obě verze zapisují

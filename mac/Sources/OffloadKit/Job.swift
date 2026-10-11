@@ -904,6 +904,13 @@ public final class OffloadJob {
                 update { $0.proxiesFailed += 1 }
                 continue
             }
+            if let lighter = LighterSource.note(clip, info: info, settings: config.proxy, lut: entries[i].lut) {
+                // Task 54 (Windows 0.5.1): the proxy would be no lighter than the original — none, and no failure (the
+                // thumbnails were made in the analysis).
+                entries[i].proxyStatus = .skipped
+                entries[i].proxyNote = lighter
+                continue
+            }
             let (rel, name) = ProxyPaths.pick(clip, tree: tree, used: &usedNames)
 
             let t0 = Date()
@@ -977,8 +984,12 @@ public final class OffloadJob {
     /// Nil when the proxies fit (or the free space cannot be asked); otherwise the warning text.
     private func proxySpaceProblem(_ entries: [ClipEntry], plan: OffloadPlan, tools: ExternalTools) -> String? {
         let infos = Dictionary(entries.map { ($0.clip.path, $0.info) }, uniquingKeysWith: { a, _ in a })
-        let bytes = SpaceEstimator.proxyBytes(entries.map(\.clip), config.proxy, renderable: { SpaceEstimator.renderable($0, tools) },
-                                              info: { infos[$0.path] ?? nil })
+        let luts = Dictionary(entries.map { ($0.clip.path, $0.lut) }, uniquingKeysWith: { a, _ in a })
+        let proxy = config.proxy
+        let bytes = SpaceEstimator.proxyBytes(entries.map(\.clip), proxy, renderable: { SpaceEstimator.renderable($0, tools) },
+                                              info: { infos[$0.path] ?? nil },
+                                              // The original is lighter: no proxy (task 54) — it needs no room.
+                                              noProxy: { c in (infos[c.path] ?? nil).map { LighterSource.note(c, info: $0, settings: proxy, lut: luts[c.path] ?? nil) != nil } ?? false })
         guard bytes > 0 else { return nil }
         let extra = SpaceExtra(proxy: bytes, report: 0, proxyOnAllDestinations: config.proxy.copyToAllDestinations,
                                proxyFolder: config.proxy.extraFolder)

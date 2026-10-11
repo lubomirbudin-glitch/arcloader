@@ -188,6 +188,7 @@ final class ProxyRelinkTests: XCTestCase {
         c.proxy.height = 360
         c.proxy.burnFilename = false
         c.proxy.burnTimecode = false
+        c.proxy.skipLighterSources = false   // the small test clips are lighter than any proxy (LighterSourceTests)
         c.tools = TestMedia.tools
         c.dayReport = false
         return c

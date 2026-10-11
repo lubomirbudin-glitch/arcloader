@@ -45,6 +45,8 @@ public struct DayCard {
     }
     public var proxiesDone: Int { record.clips.filter { $0.proxyStatus == .done }.count }
     public var proxiesFailed: Int { record.clips.filter { $0.proxyStatus == .failed }.count }
+    /// Clips without a proxy because the original is lighter (LighterSource, task 54 / Windows 0.5.1).
+    public var proxiesLighter: Int { record.clips.filter(\.originalLighter).count }
     public var totalFiles: Int { record.files.count }
     public var totalBytes: Int64 { record.files.values.reduce(0) { $0 + $1.file.size } }
 }
@@ -195,7 +197,8 @@ public enum DayReport {
             // Read back, but a file failed: not green. A verification with the proxies that has not ended says so.
             let (vClass, vText) = r.verifyPending ? ("warn", "VERIFYING") : r.incomplete ? ("warn", "UNFINISHED")
                 : !r.verified ? ("warn", "NOT VERIFIED") : failed > 0 ? ("warn", "verified, with errors") : ("ok", "verified")
-            let proxies = c.proxiesDone + c.proxiesFailed == 0 ? "—" : "\(c.proxiesDone) / \(c.proxiesFailed)"
+            var proxies = c.proxiesDone + c.proxiesFailed == 0 ? "—" : "\(c.proxiesDone) / \(c.proxiesFailed)"
+            if c.proxiesLighter > 0 { proxies += " · \(c.proxiesLighter) no proxy" }
             let lutNames = c.luts.isEmpty ? "—" : c.luts.map(\.name).joined(separator: ", ")
             let generations = r.generations.count > 1 ? String(r.generations.count) : "—"
             h += "<tr><td>\(e(c.name))</td><td>\(time(r.started!))–\(time(r.finished!))</td>"
@@ -206,7 +209,7 @@ public enum DayReport {
             h += "<td>\(proxies)</td><td class=\"wrap\">\(e(lutNames))</td><td class=\"num\">\(generations)</td></tr>\n"
         }
         h += "</table></div>\n"
-        h += "<p class=\"sub\">Proxies: done / failed. Appends: the number of ASC MHL generations when the card was appended to.</p>\n"
+        h += "<p class=\"sub\">Proxies: done / failed (· no proxy = the original is lighter than a proxy). Appends: the number of ASC MHL generations when the card was appended to.</p>\n"
 
         let problems = self.problems(day)
         if !problems.isEmpty {

@@ -71,6 +71,9 @@ struct StageTwo: ParsableArguments {
     @Flag(help: "No burn-in of clip name and timecode.")
     var noBurnIn = false
 
+    @Flag(help: "Render a proxy also when the original is lighter (H.264/HEVC no bigger than the proxy and at most its bitrate; by default such a clip gets no H.264/HEVC proxy — a ProRes proxy is always rendered; only when no LUT and no frame-lines crop is used).")
+    var proxyAlways = false
+
     @Option(help: "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto.")
     var lutFallback: String?
 
@@ -122,6 +125,7 @@ struct StageTwo: ParsableArguments {
         config.proxy.frameScale = frameScale / 100
         config.proxy.burnFilename = !noBurnIn
         config.proxy.burnTimecode = !noBurnIn
+        config.proxy.skipLighterSources = !proxyAlways
         config.proxy.extraFolder = proxyFolder.map(abs)
         // Plan 10: with proxies the copies verify while they render, unless --classic-verify.
         config.verifyInProxy = !classicVerify
@@ -354,7 +358,9 @@ enum JobRun {
             print("\n" + report.summary)
             if !report.clips.isEmpty {
                 let done = report.clips.filter { $0.proxyStatus == .done }.count
-                print("Clips: \(report.clips.count)" + (config.proxy.enabled ? "  proxies OK \(done), failed \(status.proxiesFailed)" : ""))
+                let lighter = report.clips.filter(\.originalLighter).count
+                print("Clips: \(report.clips.count)" + (config.proxy.enabled ? "  proxies OK \(done), failed \(status.proxiesFailed)"
+                    + (lighter > 0 ? ", none (original lighter) \(lighter)" : "") : ""))
                 for c in report.clips where c.proxyStatus == .failed || c.proxyStatus == .unsupported {
                     print("  \(c.clip.name): \(c.proxyStatus.rawValue) — \(c.proxyNote ?? "")")
                 }

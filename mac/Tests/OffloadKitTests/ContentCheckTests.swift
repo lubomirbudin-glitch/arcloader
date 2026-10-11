@@ -150,6 +150,7 @@ final class ContentCheckTests: XCTestCase {
         var cfg = JobConfig(source: card, destRoots: [dir.sub("d1")])
         cfg.proxy.enabled = true
         cfg.proxy.height = 360
+        cfg.proxy.skipLighterSources = false   // the 640×360 test clip is lighter than the proxy: it would get none (task 54)
         cfg.tools = TestMedia.tools
         var o = OffloadJob.engineOptions(cfg)
         o.allowSourceVolume = true

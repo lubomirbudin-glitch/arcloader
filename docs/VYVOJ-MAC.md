@@ -93,8 +93,8 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   ověřeno ano/ne, kopie reportu na počítači). Zdroj dat: `history.json` + reporty `offload_report*.json` (z disků, nebo
   z lokální kopie `Offload reporty`, když disk už odešel). Uložit lokálně a volitelně na vybraný disk. **Mac hotovo 2026-10-11 (po D6, viz níže).**
 
-- **Dorovnání 2 s Windows 0.6.0 — zbývají úkoly 52–60 a 62–64** (stav 2026-10-11: hotové 32–50, 51 zúžený, 61, 65–70 =
-  verze 0.7.0; zbývají seznamy klipů, denní report, proxy ve složkách a lehčí originál, HTML lišta PDF, projekty, pravidla
+- **Dorovnání 2 s Windows 0.6.0 — zbývají úkoly 52, 55–60 a 62–64** (stav 2026-10-11: hotové 32–50, 51 zúžený, 53, 54, 61,
+  65–70 = verze 0.7.0 a buildy po D6; zbývají seznamy klipů, HTML lišta PDF, projekty, pravidla
   LUTů, `--gen5`, oznámení, aktualizace, podpis a notarizace, Zkopírovat znovu, zbytek nového vzhledu; z úkolu 51 XXH3-128
   u souborů, MD5 a `--hash`). Původní odrážka (2026-10-08): návrh — oddíl „Doplněk 3“ (D.21–D.28)
   v [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
@@ -146,6 +146,21 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 ## 2026-10-11 — po D6: dorovnání s Windows 0.8.0 (snímací fps, historie karet, denní a souhrnný report)
 
 Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
+
+- **Úkol 54 — bez proxy, když je originál lehčí** (Windows 0.5.1, `LighterSource`): `proxy.skipLighterSources` (výchozí
+  zapnuto, chybějící klíč = zapnuto; Nastavení › Proxy › More „No proxy when the original is lighter (H.264/HEVC proxies
+  only)“, CLI `--proxy-always` vypne). Jen u proxy H.264/HEVC a jen bez LUTu (`lut.source` `none`) a bez ořezu
+  (`frameAspect`, `frameScale` < 1): originál H.264/HEVC, výška ≤ výška proxy, šířka ≤ výška × 16/9 a tok videa (nové
+  `ClipInfo.videoBitrate`: `bit_rate` proudu, jinak kontejneru minus zvukové proudy; v reportu není) ≤ `bitrateMbps` →
+  `skipped` + poznámka „no proxy — the original is lighter (5.2 Mb/s ≤ 10 Mb/s)“ (texty Windows; české poznámky starších
+  Windows reportů se poznají také — `ClipEntry.originalLighter`). Neznámý tok/rozměr, větší originál (4K), jiné kodeky a
+  RAW = proxy. Náhledy vznikají; kontrola místa před renderem takový klip nepočítá (před kopií počítá opatrně); HTML
+  „no proxy“ a poznámka šedě (ne červeně); karta úlohy „Proxy x / y“ ho nepočítá do y, souhrn „…, 1 without proxy
+  (lighter original)“, denní report „1 / 0 · 2 no proxy“, CLI „none (original lighter) N“. S ověřením během proxy ho na
+  primárním disku ověří dočtení (fill-in) — ověřeno a „Safe to format“ jako dřív (test). Testy `LighterSourceTests`
+  (pravidlo, poznámka, nastavení, místo, HTML, celá úloha, `--proxy-always` / ProRes / LUT / ořez = proxy); testy proxy
+  s malými zkušebními klipy (`ProxyRelinkTests`, `ContentCheckTests`) mají `skipLighterSources = false`. Ručně: CLI na
+  obrazu disku (2 klipy 640×360 → „none (original lighter) 2“, s `--proxy-always` 2 proxy v `_PROXY/idle/`).
 
 - **Úkol 54 — proxy pro přelinkování a ve složkách jako na kartě** (Windows 0.3.0 a 0.5.1): cívka `clips[].info.reel`
   (`ReelResolver`: tag kamery `reel_name` / `tape_name` / `reel` z ffprobe, jinak z názvu klipu, jinak složka karty) a

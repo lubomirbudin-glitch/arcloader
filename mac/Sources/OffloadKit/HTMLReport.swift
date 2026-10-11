@@ -65,6 +65,7 @@ public enum HTMLReport {
         case .done: return ("ok", "done")
         case .failed: return ("bad", "failed")
         case .unsupported: return ("warn", "unsupported")
+        case .skipped where c.originalLighter: return ("muted", "no proxy")
         case .skipped: return ("muted", "skipped")
         case .none: return ("muted", "—")
         }
@@ -227,9 +228,11 @@ public enum HTMLReport {
                 let codec = codecParts.joined(separator: " · ")
                 let (pc, pl) = proxyLabel(c)
                 var notes: [String] = []
-                for n in [c.probeError, c.proxyNote].compactMap({ $0 }) where !notes.contains(n) { notes.append(n) }
+                // The lighter original's reason is neutral (grey), not a problem (red) — task 54, Windows 0.5.1.
+                for n in [c.probeError, c.originalLighter ? nil : c.proxyNote].compactMap({ $0 }) where !notes.contains(n) { notes.append(n) }
                 let note = notes.joined(separator: " · ")
                 var noteHTML = note.isEmpty ? "" : "<div class=\"path err\">\(esc(note))</div>"
+                if c.originalLighter, let n = c.proxyNote { noteHTML += "<div class=\"note\">\(esc(n))</div>" }
                 // Which LUT and why — also "no LUT (reason)", unless the user switched LUTs off.
                 if let lu = c.lut, lu.source != "none" {
                     noteHTML += "<div class=\"note\">LUT: \(esc(lu.name)) (\(esc(lu.reason)))</div>"

@@ -214,6 +214,8 @@ public final class JobProgress {
             var proxy = "proxy \(count(.done))"
             if count(.failed) > 0 { proxy += ", \(count(.failed)) failed" }
             if count(.unsupported) > 0 { proxy += ", \(count(.unsupported)) unsupported" }
+            let lighter = r.clips.filter(\.originalLighter).count
+            if lighter > 0 { proxy += ", \(lighter) without proxy (lighter original)" }
             parts.append(proxy)
         }
         return parts.joined(separator: " · ")

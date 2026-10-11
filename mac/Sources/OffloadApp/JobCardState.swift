@@ -399,7 +399,8 @@ struct JobCardState {
         let proxy: String
         if r.proxy?.enabled == true {
             let done = r.clips.filter { $0.proxyStatus == .done }.count
-            let total = r.clips.filter { !($0.proxyStatus == .skipped && $0.proxyNote == nil) && !$0.clip.isCameraProxy }.count
+            // A lighter original (task 54) is no proxy the job owes — not counted, like a skipped camera proxy.
+            let total = r.clips.filter { !($0.proxyStatus == .skipped && ($0.proxyNote == nil || $0.originalLighter)) && !$0.clip.isCameraProxy }.count
             proxy = "\(done) / \(total)"
         } else {
             proxy = "off"

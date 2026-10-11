@@ -40,6 +40,8 @@ dekodérem. Úkoly 52–60 a 62–64 zatím vynechané.
    jen při shodě jmen ve stejné složce, s poznámkou), pro přelinkování v Resolve/Premiere: TC stopa s cívkou
    (`reel_name`: tag kamery, jinak z názvu klipu `A001C003…` → `A001`, jinak složka karty) a všechny zvukové stopy zdroje.
    Doplnění do starší zálohy s proxy přímo v `_PROXY/` zůstane ploché (nic se nepřesouvá). Kopie na všechny cíle.
+   Originál H.264/HEVC, který není větší než proxy a má datový tok nejvýš jako proxy, proxy H.264/HEVC nedostane
+   („no proxy — the original is lighter …“; jen bez LUTu a ořezu; Nastavení › Proxy › More, CLI `--proxy-always`).
 
 5. **Historie karet** – `~/Library/Application Support/Offload/history.json` (formát Windows): karta vložená znovu ukáže
    „Backed up on … — verified, safe to format“ a před celou kopií se aplikace zeptá („Card already backed up“: Copy again in
@@ -102,6 +104,7 @@ offload append /Volumes/A001 [--into /Volumes/RAID_A/2026-10-03/A001 --into …]
                                                                 # i „Finish interrupted backup“: dokončí nepotvrzenou generaci
 offload copy /Volumes/A001 -d … -d … --proxy --primary 2         # ověření během proxy na 2. cíli (výchozí: nejrychlejší)
 offload copy /Volumes/A001 -d … --proxy --classic-verify         # zpětné čtení po kopii místo ověření během proxy
+offload copy /Volumes/A001 -d … --proxy --proxy-always           # proxy i pro lehčí originály H.264/HEVC
 offload verify /Volumes/RAID_A/2026-10-03/A001 [--report]       # nebo složka dne = každá karta; kód 1 = problém
 offload bench --read /Volumes/A001 --write /Volumes/RAID_A --write /Volumes/SHUTTLE_B
 ```

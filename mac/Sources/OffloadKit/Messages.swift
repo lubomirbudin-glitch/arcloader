@@ -183,6 +183,22 @@ public enum Msg {
     // Clip notes
     public static let noVerifiedCopy = "no verified copy"
     public static func proxyRenamed(_ name: String) -> String { "Proxy renamed to \(name) (name clash) — relink it by hand." }
+
+    /// LighterSource (task 54, Windows 0.5.1): the note of a clip without a proxy because its original is lighter — neutral,
+    /// not a failure. Same words as Windows.
+    public static let proxyLighterPrefix = "no proxy — the original is lighter"
+    /// The same note as Windows wrote it before 0.9.0 (in Czech): such reports still say it and must still count.
+    public static let proxyLighterPrefixOld = "bez proxy — origin\u{e1}l je leh\u{10d}\u{ed}"
+
+    public static func proxyLighter(_ sourceMbps: Double, _ targetMbps: Double) -> String {
+        "\(proxyLighterPrefix) (\(mbps(sourceMbps)) Mb/s ≤ \(mbps(targetMbps)) Mb/s)"
+    }
+
+    /// One decimal at most, no trailing zero, a decimal point ("5.2", "10") — .NET "0.#" with the invariant culture.
+    static func mbps(_ v: Double) -> String {
+        let s = String(format: "%.1f", locale: Locale(identifier: "en_US_POSIX"), v)
+        return s.hasSuffix(".0") ? String(s.dropLast(2)) : s
+    }
     public static let ffmpegNotFound = "ffmpeg not found"
     public static let ffprobeNotFound = "ffprobe not found"
     public static let unknownFormat = "unknown format"

@@ -125,16 +125,17 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `xxh128`? (XXH3-128, 32 malých hex, Windows od 0.6.0), `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
 | `skipped[]` | string | vynechané systémové položky |
 | `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`? (relativní k složce karty, např. `_PROXY/idle/1.mov` — viz „Proxy ve složkách jako na kartě“), `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje), `content`? {`state` (`ok` / `warn`), `kind` (`decode`, `audio`, `timestamps`, `frames`, `end`), `frame`, `timecode`, `message`, `framesDecoded`, `framesExpected`} (Windows od 0.6.0, Mac od 0.7.0: co dekodér hlásil při tvorbě proxy — `warn` je vada souboru z kamery, kopie přitom souhlasí s kartou; chybí u klipu bez proxy) |
-| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `skipLighterSources` (jen Windows od 0.5.1), `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5`, od 2026-10-09 `hardwareDecode` — viz níže) |
+| `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `skipLighterSources` (Windows od 0.5.1, Mac po 0.7.0 D6), `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5`, od 2026-10-09 `hardwareDecode` — viz níže) |
 | `proxyEncoder` | string? | jen Windows: enkodér ffmpeg, kterým se renderovaly proxy (`h264_nvenc`, `libx264`, `prores_ks` …); chybí, když se žádná proxy nevyrenderovala |
 
 Hodnoty výčtů:
 
 - stav souboru na cíli: `pending`, `written`, `verified`, `failed`
 - `clip.format`: `video`, `braw`, `r3d`, `arriraw`, `canonRaw`, `unknown`
-- `proxyStatus`: `none`, `skipped`, `unsupported`, `done`, `failed`. Windows od 0.5.1: `skipped` s `proxyNote`
-  „bez proxy — originál je lehčí (5,2 Mb/s ≤ 10 Mb/s)“ = proxy se nedělala, protože by nebyla lehčí než originál (viz
-  `proxy.skipLighterSources`); není to chyba (HTML „bez proxy“ šedě). Nová hodnota výčtu nepřibyla, takže to Mac přečte.
+- `proxyStatus`: `none`, `skipped`, `unsupported`, `done`, `failed`. Windows od 0.5.1, Mac po 0.7.0 D6: `skipped` s `proxyNote`
+  „no proxy — the original is lighter (5.2 Mb/s ≤ 10 Mb/s)“ (Windows do 0.8.0 česky „bez proxy — originál je lehčí (5,2 Mb/s
+  ≤ 10 Mb/s)“; obě verze poznají obě podoby podle začátku textu) = proxy se nedělala, protože by nebyla lehčí než originál (viz
+  `proxy.skipLighterSources`); není to chyba (HTML „no proxy“ šedě). Nová hodnota výčtu nepřibyla, takže to starší Mac přečte.
 - `proxy.codec`: `h264`, `hevc`, `proresProxy`, `proresLT`, `prores422`, `prores422HQ`
 - `proxy.lutMode`: `auto`, `builtin`, `custom`, `none`. Chybí-li (starší soubor): s neprázdným `lutPath` → `custom`
   (vlastní LUT jako dřív), bez `lutPath` → `auto` se záložním „bez LUT“. `lutFallback` je id vestavěného LUTu nebo `null`.
@@ -200,7 +201,7 @@ se jen zapnuté): originály H.264/HEVC dekóduje pro proxy grafická karta (`-h
 softwarové dekódování — Mac dostal z hardwarového dekodéru zelené snímky bez jakékoli chyby. Kódování proxy (NVENC/QSV/AMF)
 se tím nemění. Mac klíč nezná.
 
-`proxy.skipLighterSources` (bool, chybí = `true`, Windows od 0.5.1; i v `settings.json`, CLI `--proxy-always` = `false`;
+`proxy.skipLighterSources` (bool, chybí = `true`, Windows od 0.5.1, Mac po 0.7.0 D6; i v `settings.json`, CLI `--proxy-always` = `false`;
 platí **jen u proxy H.264/HEVC** — s kodekem proxy ProRes se proxy renderuje vždy, ProRes se volí kvůli plynulému střihu —
 a **jen když se nepoužije LUT ani ořez**: klip, jehož `lut.source` není `none`, nebo nastavený výřez (`frameAspect`, `frameScale`
 < 1) proxy dostane vždy, proxy je pak i vzhled; samotný burn-in nevadí):
@@ -208,7 +209,7 @@ klip bez proxy, když je originál H.264 nebo HEVC (`info.codec` začíná `h264
 (výška ≤ `height`, šířka ≤ `height` × 16/9) a jeho datový tok videa (ffprobe: `bit_rate` proudu, jinak kontejneru minus
 zvukové proudy) je nejvýš datový tok proxy (`bitrateMbps`). Ostatní kodeky (ProRes, DNx, MJPEG, MPEG-2, RAW) a originály větší než proxy — i s nízkým tokem —
 proxy dostanou vždy; neznámý tok nebo rozměr = proxy. Náhledy klipu vznikají dál, kontrola místa s jeho proxy nepočítá.
-Mac klíč nezná a ignoruje ho (renderuje vše).
+Mac do 0.7.0 D6 klíč nezná a ignoruje ho (renderuje vše); po něm (úkol 54) stejně jako Windows.
 
 ## ASC MHL v2
 

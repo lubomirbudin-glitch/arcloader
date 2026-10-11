@@ -533,6 +533,10 @@ struct ProxySettingsView: View {
             StepTitle("More")
             Toggle("Audio in proxies", isOn: proxy.audio).toggleStyle(.offloadCheckbox)
             Toggle("Skip proxies the camera recorded (SUB / PROXY)", isOn: proxy.skipCameraProxies).toggleStyle(.offloadCheckbox)
+            // Task 54 (Windows 0.5.1): an H.264/HEVC original no bigger than the proxy and at most its bitrate gets none.
+            Toggle("No proxy when the original is lighter (H.264/HEVC proxies only)", isOn: proxy.skipLighterSources)
+                .toggleStyle(.offloadCheckbox)
+                .help("An H.264/HEVC original no bigger than the proxy and at most its bitrate gets no proxy — only when no LUT and no frame-lines crop is used. A ProRes proxy is always rendered.")
             Toggle("Copy proxies to every destination", isOn: proxy.copyToAllDestinations).toggleStyle(.offloadCheckbox)
             HStack(spacing: 10) {
                 Text("Also copy proxies to").font(.ui(14)).foregroundStyle(p.text)

@@ -75,6 +75,9 @@ public struct ProxySettings: Codable, Equatable {
     public var audio = true
     /// Skip the low-res files cameras record themselves (Sony SUB, PROXY folders).
     public var skipCameraProxies = true
+    /// Task 54 (Windows 0.5.1): no H.264/HEVC proxy for an H.264/HEVC original that is lighter than the proxy would be
+    /// (`LighterSource`); CLI --proxy-always turns it off. Absent in older settings and reports = true.
+    public var skipLighterSources = true
     /// Proxies are rendered once, onto the first destination, then copied to the others.
     public var copyToAllDestinations = true
     /// Optional: every proxy is also copied to `<folder>/<date>/<card>/` (never overwriting). nil = off (key absent).
@@ -102,6 +105,7 @@ public struct ProxySettings: Codable, Equatable {
         burnTimecode = try c.decodeIfPresent(Bool.self, forKey: .burnTimecode) ?? d.burnTimecode
         audio = try c.decodeIfPresent(Bool.self, forKey: .audio) ?? d.audio
         skipCameraProxies = try c.decodeIfPresent(Bool.self, forKey: .skipCameraProxies) ?? d.skipCameraProxies
+        skipLighterSources = try c.decodeIfPresent(Bool.self, forKey: .skipLighterSources) ?? d.skipLighterSources
         copyToAllDestinations = try c.decodeIfPresent(Bool.self, forKey: .copyToAllDestinations) ?? d.copyToAllDestinations
         extraFolder = try c.decodeIfPresent(String.self, forKey: .extraFolder)
         frameAspect = try c.decodeIfPresent(Double.self, forKey: .frameAspect)
