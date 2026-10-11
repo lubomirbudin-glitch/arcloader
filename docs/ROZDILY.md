@@ -1,4 +1,4 @@
-# Offload — rozdíly mezi Mac a Windows verzí
+# ArcLoader (dříve Offload) — rozdíly mezi Mac a Windows verzí
 
 Obě verze dělají totéž a zapisují **stejné výstupy na disk** (viz [FORMATY.md](FORMATY.md)) — kopii udělanou
 na Macu ověří Windows a naopak. Liší se technologií, některými platformními detaily a stavem vývoje.
@@ -18,7 +18,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
 | Verze | 0.3.0 | 0.9.0-win (ve vývoji) |
 | Jazyk aplikace | anglicky (od 2026-10-10) | anglicky (od 0.9.0) |
-| Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
+| Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) — přejmenování na ArcLoader ⏳ naplánováno | `ArcLoader.exe` + CLI `bin\arcloader.exe` (od 0.10.0; dříve `Offload.exe`, `bin\offload.exe`) |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
 ## Funkce a stav
@@ -72,8 +72,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
 | **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ⏳ naplánováno | ✅ 0.6.0 |
 | **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ⏳ naplánováno | ✅ 0.6.0 |
-| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ✅ 0.2.0C (`~/Documents/Offload reporty`) | ✅ CLI + GUI (čeká ruční test) |
-| **Souhrnný report z vybraných záloh** (zaškrtnuté karty v historii → jeden HTML + PDF do `Offload reporty\souhrn\`, volitelně na vybraný disk; `offload summary-report`; `clips[].info.recorded`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
+| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\ArcLoader reports\<datum>\<karta>\` (Windows; do 0.9.x `Offload reports`, čte se dál), obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ✅ 0.2.0C (`~/Documents/Offload reporty`) | ✅ CLI + GUI (čeká ruční test) |
+| **Souhrnný report z vybraných záloh** (zaškrtnuté karty v historii → jeden HTML + PDF do `ArcLoader reports\summary\`, volitelně na vybraný disk; `offload summary-report`; `clips[].info.recorded`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
 | **Automatické načtení disků** (externí USB disk → cíl, karta ve čtečce → zaškrtnutá; odebraný disk si pamatuje, `autoDrives`) | ✅ 0.2.0C (zapisovatelné externí disky do cílů, `ignoredVolumes`) | ✅ GUI (čeká ruční test se skutečným diskem a čtečkou) |
 | **Snímací fps z metadat prvního snímku** (`clips[].info.captureFrameRate`; „35 fps · přehrávání 24“ v HTML/PDF, TXT, denním reportu; CSV `Capture FPS`, ALE `Sensor_fps`; stopáž z přehrávací rychlosti) | ⏳ naplánováno (report uvádí přehrávací fps souboru) | ✅ 0.8.0: ARRIRAW `sensorSampleRate`, BRAW `sensorRate` (braw-decode --info), RED record fps (přehrávací = projektová), Sony `M01.XML` `captureFps`; Canon zatím jen přehrávací rychlost (chybí vzorek metadat); ostatní video = přehrávací. Čeká ruční test s art-cmd / REDline / vzorkem BRAW |
 
@@ -96,12 +96,12 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | PDF | WebKit tisk; co je širší než A4 na šířku, se před tiskem zmenší | Edge headless `--print-to-pdf`; co je širší než A4 na šířku, se před tiskem zmenší |
 | Detekce karet | `NSWorkspace` notifikace | `WM_DEVICECHANGE` |
 | Vysunutí | `unmountAndEjectDevice` | `FSCTL_LOCK/DISMOUNT_VOLUME` + `CM_Request_Device_Eject` |
-| Nastavení | `UserDefaults` (stejné schéma vč. `portNames`, `proxy.lutMode/lutBuiltin/lutFallback/extraFolder`) | `%APPDATA%\Offload\settings.json` (stejné schéma) |
+| Nastavení | `UserDefaults` (stejné schéma vč. `portNames`, `proxy.lutMode/lutBuiltin/lutFallback/extraFolder`) | `%APPDATA%\ArcLoader\settings.json` (stejné schéma; starou složku `%APPDATA%\Offload` jednou zkopíruje) |
 | USB topologie | IOKit (IORegistry) | cfgmgr32 + IOCTL hubů |
 | Kde sedí svazek | DiskArbitration + IORegistry | IOCTL_STORAGE_QUERY_PROPERTY |
 | Identita karty | UUID svazku | GUID svazku + sériové číslo FS |
 | Ikona aplikace | Offload.icns z shared/icon/Offload.iconset (iconutil) | Offload.ico ze shared/icon (exe i okna) |
-| Vestavěné LUTy v balíčku | Offload.app/Contents/Resources/luts | Offload\luts |
+| Vestavěné LUTy v balíčku | Offload.app/Contents/Resources/luts | ArcLoader\luts |
 | Dekodér BRAW | braw-decode (C++ nad BlackmagicRawAPI.framework, CFBundle) | braw-decode.exe (C# nad COM BlackmagicRawAPI.dll) |
 
 ## Záměrné rozdíly
@@ -118,7 +118,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Skryté systémové soubory:** Windows navíc přeskakuje `System Volume Information`, `$RECYCLE.BIN`,
   `desktop.ini`, `Thumbs.db`.
 - **Rozpracované soubory** mají na Windows kromě tečky na začátku i atribut „skrytý“.
-- **CLI na Windows je v `bin\`**, protože `Offload.exe` a `offload.exe` by ve stejné složce kolidovaly
+- **CLI na Windows je v `bin\`**, protože `ArcLoader.exe` a `arcloader.exe` by ve stejné složce kolidovaly
   (NTFS nerozlišuje velikost písmen).
 - **USB rychlosti a porty (obě verze):** 10 vs 20 Gb/s se nerozlišuje — zobrazuje se „10 Gb/s a víc“; fyzickou polohu
   portu systém spolehlivě nezná, porty pojmenuje uživatel. Windows: rychlost bez neověřeného IOCTL nehlásí. Mac: schopnost
@@ -145,7 +145,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   vyměnitelná média a USB/SD disky) — kartu v takové čtečce přidejte tlačítkem „Složka…“.
 - **GUI navíc na Windows:** zkratka Ctrl+Enter pro spuštění, tlačítko „Průzkumník“, upozornění „Doporučeno NTFS“
   u cíle na exFAT/FAT32 (Mac doporučuje APFS) — jen na Windows.
-- **Složka jako argument:** aplikace přijme složku jako argument, takže ji lze přetáhnout na `Offload.exe`.
+- **Složka jako argument:** aplikace přijme složku jako argument, takže ji lze přetáhnout na `ArcLoader.exe`.
   `--no-hw-prompt` se přijímá, ale nic nedělá (kontrola USB portů se při startu nespouští).
 - **R3D/ARRI bez proxy** zatím nemají náhledy (stejně jako na Macu).
 - **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
@@ -157,7 +157,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Odkazy na stažení dekodérů** (2026-10-10): Windows u chybějícího nástroje ukáže „Stáhnout…“ (Nastavení →
   Dekodéry RAW) a adresu výrobce i v poznámce klipu bez proxy; Mac zatím ne (VYVOJ-MAC, Naplánováno).
 - **Vlastní soubor místo vestavěného LUTu:** obě verze — Mac `~/Library/Application Support/Offload/luts/<id>.cube`,
-  Windows `%APPDATA%\Offload\luts\<id>.cube`; v seznamu „(vlastní soubor)“. Windows navíc zapíše cestu k souboru do
+  Windows `%APPDATA%\ArcLoader\luts\<id>.cube`; v seznamu „(vlastní soubor)“. Windows navíc zapíše cestu k souboru do
   důvodu LUTu v reportu (`clips[].lut.reason`).
 - **Rychlá analýza ARRIRAW** (2026-10-09): obě verze exportují art-cmd metadata jen prvního snímku (`--duration 1`)
   a počet snímků berou z ffprobe (sekvence `.ari`: počet souborů). Rozdíly: Windows má limit exportu 120 s a ffprobe
@@ -222,7 +222,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Chyby souborů v HTML česky** (Windows): JSON je sdílený, takže chyby v něm zůstávají anglicky (`size mismatch`,
   `HASH MISMATCH` …); HTML/PDF report je zobrazí česky.
 - **Historie karet** (obě verze; Mac od 0.3.0, `~/Library/Application Support/Offload/history.json`, zámek `flock`):
-  `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,
+  `%APPDATA%\ArcLoader\history.json` (formát ve FORMATY.md,
   „Místní soubory“) — řádek „Zálohováno … — ověřeno“ u karty, dotaz „Karty už jsou zálohované“ před celou kopií, CLI
   vypíše řádek před plánem (bez dotazu); `--no-history` historii vypne. Karta se pozná podle sériového čísla souborového
   systému + kapacity, ne podle GUID svazku. Mac čte sériové číslo z boot sektoru (`Volume.swift`) jen tam, kde smí

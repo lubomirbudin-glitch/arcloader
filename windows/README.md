@@ -1,6 +1,8 @@
-# Offload pro Windows
+# ArcLoader pro Windows
 
-Port Mac aplikace Offload (viz [`../mac/`](../mac/), [`../mac/README.md`](../mac/README.md)) na Windows 10/11 x64, .NET 10.
+*(dříve Offload — od verze 0.10.0 se produkt jmenuje ArcLoader; interní názvy projektů a jmenných prostorů `Offload.*` zůstávají staré.)*
+
+Port Mac aplikace Offload (Mac verze zatím nese starý název; viz [`../mac/`](../mac/), [`../mac/README.md`](../mac/README.md)) na Windows 10/11 x64, .NET 10.
 Kopie karty na více disků najednou, ověření zpětným čtením (xxHash64), report a ASC MHL —
 ve stejném formátu jako Mac verze, takže kopii z Windows ověří Mac a naopak.
 Ve vývoji — stav a historie v [`../docs/VYVOJ-WINDOWS.md`](../docs/VYVOJ-WINDOWS.md), rozdíly proti Macu
@@ -10,12 +12,12 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 
 | Část | Stav |
 |---|---|
-| Jádro + CLI (`bin\offload.exe`) | hotovo (plán 1) — ostrý test na skutečné kartě a měření rychlostí zatím chybí |
+| Jádro + CLI (`bin\arcloader.exe`) | hotovo (plán 1) — ostrý test na skutečné kartě a měření rychlostí zatím chybí |
 | Analýza klipů, 3 snímky, proxy, PDF | hotovo (plán 2) — QSV/AMF a ostrý test na médiu neověřeno |
 | RAW | R3D/ARRI: kód hotový, neověřeno se skutečnými nástroji (REDline, art-cmd nejsou nainstalované); BRAW: hotovo (plán 3), čeká ověření se vzorkem .braw / kartou |
 | BRAW dekodér (C#, Blackmagic RAW SDK) | hotovo (plán 3, `bin\braw-decode.exe`) — ověřeno jen s knihovnou z DaVinci Resolve, dekódování snímků a rozložení VARIANT (gama/gamut) čeká na vzorek .braw; Film Gen 4 zatím bez LUTu (provizorně); v GUI v seznamu nástrojů řádek "braw-decode" je zelený i bez knihovny `BlackmagicRawAPI.dll` (BRAW je pak jen zkopírovaný a ověřený, důvod je v poznámce u klipu) |
-| HW diagnostika USB | hotovo (CLI `offload ports`, v GUI okno Hardware a kontrola na vyžádání) |
-| GUI `Offload.exe` | hotovo (čeká ruční test s kartou) |
+| HW diagnostika USB | hotovo (CLI `arcloader ports`, v GUI okno Hardware a kontrola na vyžádání) |
+| GUI `ArcLoader.exe` | hotovo (čeká ruční test s kartou) |
 | Vestavěné LUTy (plán 5) | hotovo (čeká ruční test s klipy z kamer) |
 | Karty a bezpečnost dat (plán 6, 0.2.0): historie, doplnění, název z klipů, ověření zálohy, místo, hlášky (od 0.9.0 anglicky) | hotovo (čeká ruční test s kartou) |
 | Výstupy pro produkci a střih (plán 7, 0.3.0): denní report, seznam klipů CSV/ALE, proxy pro přelinkování, MD5 | hotovo (čeká ruční test v Resolve, Premiere, Avid, Excelu) |
@@ -28,11 +30,11 @@ v [`../docs/ROZDILY.md`](../docs/ROZDILY.md).
 ```powershell
 cd windows
 dotnet test
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1   # → build\Offload\Offload.exe, build\Offload\bin\offload.exe, build\Offload-win-x64-<verze>.zip
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1   # → build\ArcLoader\ArcLoader.exe, build\ArcLoader\bin\arcloader.exe, build\ArcLoader-win-x64-<verze>.zip
 ```
 
-Balíček `build\Offload-win-x64-<verze>.zip` (verze z `Directory.Build.props`) obsahuje složku `Offload` (`Offload.exe` + `bin\` s `offload.exe`, `braw-decode.exe`, `ffmpeg.exe`, `ffprobe.exe`);
-stačí ho rozbalit kamkoli a spustit `Offload.exe`. Neobsahuje nic, co by se muselo instalovat. Knihovnu `BlackmagicRawAPI.dll`
+Balíček `build\ArcLoader-win-x64-<verze>.zip` (verze z `Directory.Build.props`) obsahuje složku `ArcLoader` (`ArcLoader.exe` + `bin\` s `arcloader.exe`, `braw-decode.exe`, `ffmpeg.exe`, `ffprobe.exe`);
+stačí ho rozbalit kamkoli a spustit `ArcLoader.exe`. Neobsahuje nic, co by se muselo instalovat. Knihovnu `BlackmagicRawAPI.dll`
 balíček neobsahuje — bez ní se BRAW jen zkopíruje a ověří, proxy a náhledy se přeskočí.
 
 ### Vydání verze
@@ -43,23 +45,24 @@ zvyšují poslední číslo, 1.0.0 po ostrém testu s kartou.
 
 1. Zvyšte verzi v `Directory.Build.props` (obě hodnoty) a spusťte `dotnet test`.
 2. `powershell -ExecutionPolicy Bypass -File scripts\build.ps1 [-Sign …] -ReleaseUrl <kam zip dáte> [-Notes "<co je nového>"]`
-   — vznikne `build\Offload-win-x64-<verze>.zip` a `build\offload-update.json` (`{"version", "url", "notes"}`, UTF-8).
-   `-ReleaseUrl` je adresa, kterou uživatel otevře tlačítkem *Open* (https adresa, `\\NAS\Offload\`, sdílená složka).
+   — vznikne `build\ArcLoader-win-x64-<verze>.zip` a `build\offload-update.json` (`{"version", "url", "notes"}`, UTF-8).
+   `-ReleaseUrl` je adresa, kterou uživatel otevře tlačítkem *Open* (https adresa, `\\NAS\ArcLoader\`, sdílená složka).
 3. Nahrajte zip na web / NAS a **až potom** manifest (manifest nesmí ukazovat na zip, který tam ještě není).
 4. **GitHub Releases** (stálé odkazy, vždy na nejnovější build kanálu): po pushnutí commitu, ze kterého je zip sestavený,
    `powershell -ExecutionPolicy Bypass -File scripts\publish.ps1 -Channel dev` (vývojová verze) nebo `-Channel stable`
    (stabilní; `-Since <předchozí stabilní>` vypíše do popisu změny všech verzí od ní, `-DryRun` jen ukáže popis). Skript
-   nahraje archiv `windows-v<verze>` (Offload-win-x64-<verze>.zip), posune značku kanálu `stable`/`dev` na commit a nahradí
+   nahraje archiv `windows-v<verze>` (ArcLoader-win-x64-<verze>.zip), posune značku kanálu `stable`/`dev` na commit a nahradí
    v jeho release soubor se stálým jménem; u stabilní i `offload-update.json`. Popis verze bere z `docs/VYVOJ-WINDOWS.md`.
-   - stabilní: https://github.com/lubomirbudin-glitch/offload/releases/download/stable/Offload-Windows.zip
-     (stránka https://github.com/lubomirbudin-glitch/offload/releases/tag/stable, také `/releases/latest`)
-   - vývojová: https://github.com/lubomirbudin-glitch/offload/releases/download/dev/Offload-Windows-dev.zip
-     (stránka https://github.com/lubomirbudin-glitch/offload/releases/tag/dev)
-   - manifest pro kontrolu aktualizací: https://github.com/lubomirbudin-glitch/offload/releases/download/stable/offload-update.json
+   - stabilní: https://github.com/lubomirbudin-glitch/arcloader/releases/download/stable/ArcLoader-Windows.zip
+     (stránka https://github.com/lubomirbudin-glitch/arcloader/releases/tag/stable, také `/releases/latest`)
+   - vývojová: https://github.com/lubomirbudin-glitch/arcloader/releases/download/dev/ArcLoader-Windows-dev.zip
+     (stránka https://github.com/lubomirbudin-glitch/arcloader/releases/tag/dev)
+   - manifest pro kontrolu aktualizací: https://github.com/lubomirbudin-glitch/arcloader/releases/download/stable/offload-update.json
+   - Staré odkazy (`Offload-Windows.zip`, `Offload-Windows-dev.zip`) dál fungují: skript nahrává i kopie pod starými jmény; vedle `offload-update.json` (čtou ho starší verze) publikuje stejný soubor jako `arcloader-update.json`.
    - Mac verze může do stejných release přidat `Offload-Mac.zip` / `Offload-Mac-dev.zip`.
 
 Kontrola aktualizací v aplikaci (Settings → App → Updates…) čte manifest z adresy, kterou tam zadáte (`https://…`,
-`\\NAS\Offload\offload-update.json`, místní cesta); nejvýš jednou za 24 h, 5 s po startu, nic nestahuje ani nespouští,
+`\\NAS\ArcLoader\offload-update.json`, místní cesta); nejvýš jednou za 24 h, 5 s po startu, nic nestahuje ani nespouští,
 čte nejvýš 64 KB. Tlačítko *Open* otevře jen adresu `https://…` nebo existující složku / zip (v Průzkumníku); cokoli
 jiného se jen zobrazí. Prázdná adresa = vypnuto (výchozí). Kontrola nečte GitHub (balíčky se tam nezveřejňují).
 
@@ -67,8 +70,8 @@ jiného se jen zobrazí. Prázdná adresa = vypnuto (výchozí). Kontrola nečte
 
 Logika vydání (verze, manifest, hledání signtoolu a certifikátu, podpis) je v `scripts\release.ps1`, který `build.ps1` načítá. Podpis je volitelný a nic se při něm nekupuje ani nestahuje.
 
-`build.ps1 -Sign` podepíše `Offload.exe`, `bin\offload.exe` a `bin\braw-decode.exe` (ffmpeg ne — není náš) před
-zabalením: `signtool sign /fd SHA256 /td SHA256 /tr <razítko> /d Offload …`, pak `signtool verify /pa /all`.
+`build.ps1 -Sign` podepíše `ArcLoader.exe`, `bin\arcloader.exe` a `bin\braw-decode.exe` (ffmpeg ne — není náš) před
+zabalením: `signtool sign /fd SHA256 /td SHA256 /tr <razítko> /d ArcLoader …`, pak `signtool verify /pa /all`.
 
 ```powershell
 # certifikát v úložišti Windows (CurrentUser\My, pak LocalMachine\My; funguje i s hardwarovým tokenem)
@@ -123,7 +126,7 @@ Testy, které potřebují skutečný klip, se bez vzorku přeskočí. Vzorek:
 1. `setx OFFLOAD_BRAW_SAMPLE "<cesta ke klipu>.braw"`, nové okno PowerShellu, ve složce `windows`:
    `dotnet test tests\Offload.Core.Tests --filter "FullyQualifiedName~Braw"` — očekává se vše PASS a **0 přeskočených** testů
    (přeskočený test znamená, že chybí proměnná, knihovna `BlackmagicRawAPI.dll`, ffmpeg nebo ffprobe).
-2. Stále ve složce `windows`: `build\Offload\bin\braw-decode.exe --info --scale eighth $env:OFFLOAD_BRAW_SAMPLE`
+2. Stále ve složce `windows`: `build\ArcLoader\bin\braw-decode.exe --info --scale eighth $env:OFFLOAD_BRAW_SAMPLE`
    (po `scripts\build.ps1`; nebo `tools\bin\braw-decode.exe`). **Nejdřív zkontrolovat stderr:** nečekaný typ VARIANT
    u atributu se vypíše tam (např. `braw-decode: gamut: clip attribute 'gamt' is a number, expected a string`) a klíč
    v JSON pak chybí; potichu chybí klíč jen tehdy, když selže samotné volání `GetClipAttribute`. Pak očima zkontrolovat
@@ -131,7 +134,7 @@ Testy, které potřebují skutečný klip, se bez vzorku přeskočí. Vzorek:
    `width`/`height` odpovídají zmenšení, `frames`, `fps`, `timecode`, `camera` dávají smysl. Chybí-li `gamma`/`gamut`
    s hláškou na stderr, je typ VARIANT jiný, než SDK dokumentuje — porovnat s IDL SDK; bez hlášky atribut SDK u klipu
    nevrátilo. Do opravy se LUT chová jako dosud (gama neuvedena → předpoklad Film Gen 5).
-3. `offload copy <složka se vzorkem> <cíl> --proxy`: v reportu klip se **třemi snímky**, LUT „Blackmagic RAW: Blackmagic Design
+3. `arcloader copy <složka se vzorkem> <cíl> --proxy`: v reportu klip se **třemi snímky**, LUT „Blackmagic RAW: Blackmagic Design
    Film Gen 5“ (u klipu v Gen 5), proxy `.mov` se vizuálně shoduje s Blackmagic RAW Playerem s LUTem Film → Rec.709
    (barvy, kontrast, orientace, bez posunu o snímek; první/prostřední/poslední snímek v reportu odpovídají časům).
 4. Nainstaluje-li uživatel SDK nebo Player, ověřit, že `BrawLibrary.Find` najde jejich cestu (pořadí: vedle exe, SDK, Player, Resolve);
@@ -142,22 +145,22 @@ Při vývoji (GUI/CLI z `bin\Debug`) se `braw-decode.exe` hledá ve `windows\too
 
 ## Aplikace (GUI)
 
-Spuštění: `Offload\Offload.exe` (jeden soubor, .NET v něm je; první start trvá déle, protože se rozbalí nativní knihovny WPF).
+Spuštění: `ArcLoader\ArcLoader.exe` (jeden soubor, .NET v něm je; první start trvá déle, protože se rozbalí nativní knihovny WPF).
 Bez podpisu (build bez `-Sign`, viz Podepisování) Windows při prvním spuštění ukáže "Windows protected your PC" — klikněte na "More info" → "Run anyway".
 
 - **Vzhled (0.5.0, návrh `docs/ui-navrh/`):** horní lišta (Project, stav fronty, Verify backup, Hardware s tečkou, Settings), vlevo kroky "1 · CARDS", "2 · DESTINATIONS", "3 · AFTER COPY" s připnutou lištou Start offload, vpravo Queue / Card history a "TODAY"; volby jsou na stránce Settings (ikona s posuvníky, Ctrl+,; Esc zavře). Tmavé
   i světlé téma podle Windows (`Themes/Dark.xaml`, `Light.xaml`); `OFFLOAD_THEME=dark|light` téma vynutí (pro snímky).
-  Ukázkový režim pro vizuální kontrolu: `Offload.exe --demo pripraveno|probiha|hotovo|nastaveni` (stavy obrazovek
+  Ukázkový režim pro vizuální kontrolu: `ArcLoader.exe --demo pripraveno|probiha|hotovo|nastaveni` (stavy obrazovek
   z `docs/ui-navrh/screeny`; výchozí vypnutý) a `--demo overuje` (plán 10: karta zkopírovaná a ověřovaná s proxy "Safe to eject", karta s vadou obsahu a zelená "Safe to format"). Demo je zapečetěné: vlastní složka dat v %TEMP% (nastavení, historie i log;
   `OFFLOAD_SETTINGS_DIR` se ignoruje), nic nekopíruje ani nezapisuje, Start offload, Append, Copy again, měření portů, úpravy projektů, oznámení, aktualizace, Verify backup, Day report i Eject card jsou vypnuté; jen Pause / Resume / Cancel na ukázkové úloze mění, co karta ukazuje. Snímky přes `scripts\app-drive.ps1` (`Start-Offload -Arguments '--demo probiha'`,
   `Resize-Offload $p 1000 900`).
 - **Projekt:** rozbalovací "Project <název> ▾" v horní liště — pojmenovaná nastavení (cíle, kontrola, součet, název
-  z klipů, výstupy, oznámení, proxy včetně LUTu, pravidel LUTů a složky pro proxy). V seznamu: "Save as new project…", "Rename…", "Delete…"; "Edit project" u kroku 3 otevře Settings. Titulek okna "Offload — Film X". Přepnutí nezmění úlohy ve frontě (mají svou
+  z klipů, výstupy, oznámení, proxy včetně LUTu, pravidel LUTů a složky pro proxy). V seznamu: "Save as new project…", "Rename…", "Delete…"; "Edit project" u kroku 3 otevře Settings. Titulek okna "ArcLoader — Film X". Přepnutí nezmění úlohy ve frontě (mají svou
   kopii nastavení); během přípravy startu je přepínač i menu zamčené (a když se projekt přesto změní, start se
   zruší s hláškou). Doplnění karty se řídí projektem dřívější zálohy; když ten už neexistuje (smazaný, přejmenovaný),
   běží s nastavením "No project" a karta úlohy to napíše. Start kontroluje jen LUTy a složky, které se opravdu
   použijí. Cesty k nástrojům, názvy USB portů a kontrola aktualizací jsou společné.
-- **Pravidla LUTů:** u "Automatic by camera" tlačítko "LUT rules… (N)" — řádky *camera / serial number / reel / folder → LUT*, zkoušejí se shora dolů před rozpoznáním kamery; report u klipu ukáže "rule 2: …". Cíl "No LUT" dá klipu bez LUTu. Pravidlo z novější verze Offloadu (neznámý druh, např. `lens`) editor ukáže jen ke čtení,
+- **Pravidla LUTů:** u "Automatic by camera" tlačítko "LUT rules… (N)" — řádky *camera / serial number / reel / folder → LUT*, zkoušejí se shora dolů před rozpoznáním kamery; report u klipu ukáže "rule 2: …". Cíl "No LUT" dá klipu bez LUTu. Pravidlo z novější verze ArcLoaderu (neznámý druh, např. `lens`) editor ukáže jen ke čtení,
   přeskočí ho a při OK ho zapíše beze změny.
 - **Oznámení:** Settings → Notifications → Edit notifications… — oznámení Windows (když okno není v popředí) a volitelně ntfy
   na telefon (jen název karty, výsledek a počty, nikdy cesty). Selhání kopie se oznámí hned, když kopie skončí.
@@ -166,7 +169,7 @@ Bez podpisu (build bez `-Sign`, viz Podepisování) Windows při prvním spušt�
   se nikdy neotevírají, jen zobrazí k ručnímu zkopírování.
 
 - **Karty:** karta vložená do čtečky se objeví sama a je zaškrtnutá; složku lze přidat tlačítkem "From folder…" nebo přetažením
-  složky na `Offload.exe`. Dlaždice ukáže kameru ("ALEXA 35 · LogC4" z prvního klipu, ffprobe nejvýš 5 s, jen čtení)
+  složky na `ArcLoader.exe`. Dlaždice ukáže kameru ("ALEXA 35 · LogC4" z prvního klipu, ffprobe nejvýš 5 s, jen čtení)
   a připojení ("reader USB 3 · 5 Gb/s" z HW diagnostiky; Thunderbolt Windows nerozliší). Název složky v cíli lze upravit ("Folder name"); "Append" přepne kartu na doplnění nových klipů.
 - **Cíle:** tlačítkem "Add disk" (pamatují se; zobrazí "… free of … · FS · connection" a pruh místa, u disku exFAT/FAT32 aplikace upozorní "NTFS recommended — more reliable than exFAT/FAT32").
 - **Proxy:** "Also copy proxies to a folder" → "Choose…": každá hotová proxy se kromě `_PROXY` na cílech zkopíruje
@@ -178,7 +181,7 @@ Bez podpisu (build bez `-Sign`, viz Podepisování) Windows při prvním spušt�
   RED → Log3G10. Canon, Panasonic, DJI a Fuji se zatím nepoznají (chybí vzorové klipy), D-Log M vestavěný LUT nemá —
   takové klipy dostanou záložní LUT. U ARRI jde o předpoklad pro ProRes: klip nahraný přímo v Rec.709 by LUT dostal
   neprávem, pak zvolte "No LUT". Report ukáže u každého klipu použitý LUT a důvod. Vlastní soubor
-  `%APPDATA%\Offload\luts\<id>.cube` (např. oficiální `arri-logc4-awg4.cube` od ARRI) nahradí vestavěný LUT se stejným
+  `%APPDATA%\ArcLoader\luts\<id>.cube` (např. oficiální `arri-logc4-awg4.cube` od ARRI) nahradí vestavěný LUT se stejným
   id v aplikaci i CLI — v seznamu má "(custom file)", v reportu je jeho cesta v důvodu LUTu. Na vzorcích z kamer se ještě
   ověří rozsah: R3D a ARRIRAW (přes ProRes/MXF mezisoubor) a ProRes z ALEXA 35 (LogC4) se berou jako legální video.
 - **Spuštění:** tlačítko "Start offload" (s úlohou ve frontě "Add to queue") nebo Ctrl+Enter; nad ním "1 card → 2 disks · 1.70 GB" a odhad času (jen z rychlostí naměřených v tomto spuštění; jinak jen velikost). Každá karta
@@ -192,8 +195,9 @@ Bez podpisu (build bez `-Sign`, viz Podepisování) Windows při prvním spušt�
   Zrušená úloha je šedá. Upozornění: zvuk a blikání tlačítka v hlavním panelu. Pod frontou "TODAY", záložka "Card history" (z `history.json`).
 - **Hardware:** kontrola USB portů se nespouští při startu, jen na vyžádání — tlačítko "Hardware" v horní liště (Ctrl+U; tečka = výsledek posledního testu) nebo Settings → App → "Test USB ports…". Okno Hardware ukazuje Connections, Advice, Measurement
   (s potvrzením) a USB porty s vlastními názvy. Přepínač `--no-hw-prompt` se stále přijímá, ale nic nedělá.
-- **Soubory:** nastavení `%APPDATA%\Offload\settings.json`, historie offloadů `history.json` + `history\` (seznamy souborů),
-  log `%APPDATA%\Offload\app.log`, poslední test HW `hwtest.json`
+- **Přechod ze starého názvu:** když `%APPDATA%\ArcLoader` neexistuje a `%APPDATA%\Offload` ano, aplikace starou složku při startu **zkopíruje** (nikdy nepřesouvá ani nemaže, takže starší verze dál fungují).
+- **Soubory:** nastavení `%APPDATA%\ArcLoader\settings.json`, historie offloadů `history.json` + `history\` (seznamy souborů),
+  log `%APPDATA%\ArcLoader\app.log`, poslední test HW `hwtest.json`
   (složku lze přesměrovat proměnnou `OFFLOAD_SETTINGS_DIR`).
 
 ### Checklist ručního testu (s kartou)
@@ -229,11 +233,11 @@ Plán 6 (karty a bezpečnost dat, 0.2.0):
       na obou cílech `_REPORT\offload_report_0002.json/.txt`, `<karta>_report_0002.html/.pdf`, `ascmhl\0002_…Z.mhl`,
       `ascmhl_chain.xml` se dvěma záznamy, `<karta>.xxh64` delší; původní `offload_report.json`, HTML/PDF a
       `0001_…mhl` beze změny (datum změny souboru); nové proxy v `_PROXY` bez přepsání starých; kartu vložit znovu →
-      "Backed up on … — verified, safe to format" bez nových souborů; doplnit znovu z CLI `offload append E:\` → "Nothing new — the backup is complete.", kód 0
-- [ ] 14b. Doplnění odmítnuté s anglickou hláškou, nic se nezapíše: jeden z dřívějších cílů odpojit → tlačítko "Append" se nenabídne (po ⟳); z CLI `offload append E:\` → "Error: The earlier backup is not available: … — connect the disk, or make a full copy."; spustit doplnění v GUI a hned v PowerShellu `offload append E:\` téže karty → druhé skončí "Another job is working with this backup right now — an append, a repair or a verification during proxies (…) — wait until it finishes."
+      "Backed up on … — verified, safe to format" bez nových souborů; doplnit znovu z CLI `arcloader append E:\` → "Nothing new — the backup is complete.", kód 0
+- [ ] 14b. Doplnění odmítnuté s anglickou hláškou, nic se nezapíše: jeden z dřívějších cílů odpojit → tlačítko "Append" se nenabídne (po ⟳); z CLI `arcloader append E:\` → "Error: The earlier backup is not available: … — connect the disk, or make a full copy."; spustit doplnění v GUI a hned v PowerShellu `arcloader append E:\` téže karty → druhé skončí "Another job is working with this backup right now — an append, a repair or a verification during proxies (…) — wait until it finishes."
 - [ ] 15. **`ascmhl verify` po doplnění** (na macOS/Linuxu, kapitola „ASC MHL a ascmhl na Windows“): `ascmhl verify
       <cíl>/<datum>/<karta>` projde bez chyb přes obě generace (a `ascmhl info` ukáže generace 1 a 2); na Windows
-      `offload verify <cíl>\<datum>\<karta>` → "… — all OK.", kód 0
+      `arcloader verify <cíl>\<datum>\<karta>` → "… — all OK.", kód 0
 - [ ] 16. **Posun času na FAT32:** kartu naformátovanou ve FAT32 (např. malá SD) zkopírovat, pak ve Windows změnit
       časové pásmo o hodinu (Nastavení → Čas a jazyk; simuluje přechod letní/zimní čas) a kartu vložit znovu → stále "Backed up on … — verified, safe to format" (ne "the card has changed since"); přidat na kartu nový soubor a doplnit → projde bez konfliktu (žádné "different size or date"); pásmo vrátit
 - [ ] 16b. **Posun času na exFAT (karta z kamery):** totéž s kartou exFAT, na kterou **natáčela kamera** (karta
@@ -241,7 +245,7 @@ Plán 6 (karty a bezpečnost dat, 0.2.0):
       stane: a) "Backed up on … — verified, safe to format" = kamera zapisuje čas s posunem UTC, v pořádku; b) "…, but the card has changed since (N files differ) — cannot append, only a full copy" = kamera zapisuje místní čas bez posunu → nález M27:
       rozšířit toleranci celých hodin (R3) i na exFAT (`FileTimes.StoresLocalTime`, `AppendPlanner`). Kameru a model
       uvést v nálezu. Pásmo vrátit
-- [ ] 17. Název z klipů: karta ARRI/Venice/RED/Blackmagic → šedě "A001" + "from the clip names (A001C001…)"; CLI `offload E:\ -d D:\Backup --name auto --dry-run` u téže karty vypíše "Card name: A001 (from the clips)" a cestu `…\A001`; karta Sony XAVC (`C0001`) po kartě `A001` téhož dne → GUI "A002" + "next after A001 (today)" (CLI `--name auto` "next after …" neumí: vypíše "No name suggestion found; the volume label is used."); **dvě neznámé karty najednou** (obě XAVC, po `A001`) → řádky ukážou "A002" a "A003" a po Startu vzniknou složky `A002` a `A003` (ne `A002_2`); volba "Suggest the card name from the clips" vypnutá → jmenovka svazku
+- [ ] 17. Název z klipů: karta ARRI/Venice/RED/Blackmagic → šedě "A001" + "from the clip names (A001C001…)"; CLI `arcloader E:\ -d D:\Backup --name auto --dry-run` u téže karty vypíše "Card name: A001 (from the clips)" a cestu `…\A001`; karta Sony XAVC (`C0001`) po kartě `A001` téhož dne → GUI "A002" + "next after A001 (today)" (CLI `--name auto` "next after …" neumí: vypíše "No name suggestion found; the volume label is used."); **dvě neznámé karty najednou** (obě XAVC, po `A001`) → řádky ukážou "A002" a "A003" a po Startu vzniknou složky `A002` a `A003` (ne `A002_2`); volba "Suggest the card name from the clips" vypnutá → jmenovka svazku
 - [ ] 18. Verify backup (horní lišta) (Ctrl+Shift+O) na složku karty i na složku dne → položky "Verification …" ve frontě po kopiích, "Verified: all N files match (ASC MHL, 2 generations, xxHash64).", tlačítko "Verification report" otevře
       `_REPORT\<karta>_verify_…Z.html`; ve zkušební kopii změnit bajt souboru → červeně "Mismatch 1 file, missing 0, unreadable 0 — details in the verification report."; během ověření odpojit disk → nečitelné soubory, "… the disk may have been disconnected."; "Cancel" → "Verification cancelled after …" bez reportu; složka zálohy z jiného programu (MHL bez `_REPORT`
       v ignore) → poznámka "The verification report is saved outside the card folder so it does not disturb its ASC MHL history: …" a report v `<datum>\_REPORT\`
@@ -250,12 +254,12 @@ Plán 6 (karty a bezpečnost dat, 0.2.0):
       běžící úlohy; skoro plný disk → oranžově "Only … will be left on destination … after the offload — less than the 5 % reserve, and the proxy estimate is approximate." (Start jde); uvolnit místo → červený text do pár sekund zmizí
 - [ ] 19b. Start hned po vložení velké karty, kterou historie zná (řádek ještě "Checking whether the card is already backed up…") → pod lištou "Checking the card before the copy starts…", pak okno "Card already backed up" (ne tichá celá kopie); pomalá karta, která se do
       10 s neprověří → otázka "Card … is still being checked — it is not known yet whether it is backed up. Start a full copy anyway?", "No" nic nespustí; zavřít okno během čekání → zavře se bez hlášky
-- [ ] 20. Hlášky anglicky: odpojený cíl při startu z CLI (`offload E:\ -d X:\missing`) → "Error: Destination not found: X:\missing — is the disk connected?"; neznámá volba (`offload E:\ -d D:\ --xyz`) → chyba parseru anglicky; v GUI chyba před kopií na kartě úlohy anglicky
+- [ ] 20. Hlášky anglicky: odpojený cíl při startu z CLI (`arcloader E:\ -d X:\missing`) → "Error: Destination not found: X:\missing — is the disk connected?"; neznámá volba (`arcloader E:\ -d D:\ --xyz`) → chyba parseru anglicky; v GUI chyba před kopií na kartě úlohy anglicky
 
 Plán 7 (výstupy pro produkci a střih, 0.3.0):
 
 - [ ] 21. **MD5:** Settings → Verification → Checksum "xxHash64 + MD5" → pod volbou oranžové "MD5 is slower — with fast cards (CFexpress) it may slow the copy down.", řádek "Verification by reading back" v kroku 3 ukáže "xxHash64 + MD5"; offload karty → `_REPORT\<karta>.md5`, v HTML dlaždice "XXH64 + MD5" a sloupec md5; Verify backup (horní lišta) → "… (ASC MHL, 1 generation, xxHash64 + MD5)."; **rychlá karta
-      (CFexpress)**: změřit dobu kopie s xxHash64 a s MD5 (a `offload bench --hash md5`) a zapsat do části Naměřeno
+      (CFexpress)**: změřit dobu kopie s xxHash64 a s MD5 (a `arcloader bench --hash md5`) a zapsat do části Naměřeno
 - [ ] 22. **Proxy v Resolve:** naimportovat originály, proxy z `_PROXY` připojit (Link Proxy Media) — sedí jméno, TC; sloupec
       Reel ukazuje cívku (u ARRI/RED/Blackmagic `A001`, jinak tag kamery nebo složku karty)
 - [ ] 23. **Proxy v Premiere:** Sony MXF se 4–8 mono stopami → proxy se stejným počtem stop; „Attach Proxies“ projde;
@@ -265,7 +269,7 @@ Plán 7 (výstupy pro produkci a střih, 0.3.0):
 - [ ] 25. **ALE:** volba "Clip list for Avid (ALE)" → `<karta>_clips.ale` jde importovat do Avid Media Composeru (Start,
       End, Tape, Tracks); karta se smíšenými fps (25 a 23.976) → dva soubory `_clips_25.ale`, `_clips_23.976.ale`
 - [ ] 26. **Day report:** dvě karty týž den na dva cíle → na obou `<datum>\_REPORT\<datum>_day_report.html/.pdf` s oběma
-      kartami, dlaždice "verified cards 2 / 2"; během kopie třetí karty ji denní report ukáže "no report (running, or it was interrupted)"; "Day report…" (Settings → Report, nebo odkaz u TODAY) na složku dne (i na složku karty) report vytvoří a otevře; na složku bez karty s reportem → chyba "Folder … has no card with a report — select a day folder on a destination (<destination>\<date>).", na kořen disku "… is the root of a disk, not a day folder — …"; nic se nezapíše; GUI a `offload day-report` téhož dne zároveň → oba projdou
+      kartami, dlaždice "verified cards 2 / 2"; během kopie třetí karty ji denní report ukáže "no report (running, or it was interrupted)"; "Day report…" (Settings → Report, nebo odkaz u TODAY) na složku dne (i na složku karty) report vytvoří a otevře; na složku bez karty s reportem → chyba "Folder … has no card with a report — select a day folder on a destination (<destination>\<date>).", na kořen disku "… is the root of a disk, not a day folder — …"; nic se nezapíše; GUI a `arcloader day-report` téhož dne zároveň → oba projdou
 - [ ] 27. **Otevřené v Excelu:** denní CSV a `<karta>_clips.csv` otevřít v Excelu, pak doplnit kartu → úloha "Done", v `app.log` řádky "clip list …" / "day report …"; po zavření Excelu "Day report…" (Settings → Report, nebo odkaz u TODAY) soubory obnoví; volba "Day report after every card" vypnutá → po úloze se denní report nezmění
 - [ ] 28. **Doplnění s MD5:** záloha s "xxHash64 + MD5", pak doplnit kartu → `<karta>.md5` je delší o nové řádky (dřívější
       řádky beze změny; je to třetí soubor, který doplnění přepíše, vedle `.xxh64` a řetězu ascmhl), Verify backup projde s "xxHash64 + MD5"; ostatní dřívější soubory zálohy beze změny
@@ -276,7 +280,7 @@ Plán 7 (výstupy pro produkci a střih, 0.3.0):
 
 Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
 
-- [ ] 31. **Projekty:** "Save as new project…" "Film X" → titulek "Offload — Film X"; změnit cíle a proxy, přepnout na "No project" a zpět — obojí má svoje hodnoty; přejmenovat a smazat (dotaz "Delete project …? The project's settings will be lost; the backups on the disks stay.", po smazání "No project"); jméno prázdné ("The name must not be empty.") / "no project" / už použité ("A project with this name already exists.") → červeně pod polem, OK nejde; stisknout "Start offload" a hned (během kontrol) zkusit přepínač a menu Project → jsou zamčené
+- [ ] 31. **Projekty:** "Save as new project…" "Film X" → titulek "ArcLoader — Film X"; změnit cíle a proxy, přepnout na "No project" a zpět — obojí má svoje hodnoty; přejmenovat a smazat (dotaz "Delete project …? The project's settings will be lost; the backups on the disks stay.", po smazání "No project"); jméno prázdné ("The name must not be empty.") / "no project" / už použité ("A project with this name already exists.") → červeně pod polem, OK nejde; stisknout "Start offload" a hned (během kontrol) zkusit přepínač a menu Project → jsou zamčené
 - [ ] 32. **Přepnutí s frontou:** dvě karty ve frontě z "Film X" (s proxy) → během renderu proxy přepnout na jiný projekt
       s jinými cíli a kodekem → úlohy dokončí cíle, kodek, LUT i oznámení "Film X"; report a `history.json` mají `project` "Film X"; "next after …" (A002 …) se počítá zvlášť v každém projektu; denní report dne jen z "Film X" má v hlavičce "Project: Film X". **Doplnění:** karta zálohovaná ve "Film X" a doplněná při jiném zobrazeném projektu používá nastavení "Film X" (proxy, výstupy, ntfy téma), report si ponechá "Film X"; po smazání "Film X" doplnění běží s "No project" a karta úlohy to napíše ("Project Film X no longer exists — the append runs with the settings of No project")
 - [ ] 33. **Starší / ručně upravený settings.json:** dva projekty stejného jména → platí první, druhý po uložení zůstane
@@ -287,12 +291,12 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
       počítají i s ním; neplatné známé pravidlo (prázdná hodnota) se při načtení zahodí
 - [ ] 35. **BRAW Gen 4 (až bude vzorek; do té doby neověřeno):** `OFFLOAD_BRAW_SAMPLE=<klip Gen 4>` → `dotnet test
       --filter BrawSampleTests` (Gen5_ConvertsAGen4Clip_LeavesGen5); v GUI RAW decoders → "Convert Blackmagic RAW Film Gen 4 to Gen 5 (the Gen 5 LUT is used)" → proxy má LUT a vypadá jako v Blackmagic RAW Playeru s Gen 5; v reportu "Blackmagic RAW: Film Gen 4 → Gen 5 (SDK conversion)"; klip Video / Extended Video Gen 4 se nepřevede. Teprve pak zvážit zapnutí jako výchozí (R26)
-- [ ] 36. **Oznámení Windows (TrayNotifier, jen ručně):** okno na pozadí → po kopii "Offload: A001 — safe to eject" (s proxy), po konci "Offload: A001 done"; s chybou červená ikona; selhaná kopie ohlásí "Offload: A001 — ERROR" hned po konci kopie; kliknutí na oznámení / ikonu vrátí okno; okno v popředí → žádné oznámení, jen zvuk a blikání; oznámení zůstane
+- [ ] 36. **Oznámení Windows (TrayNotifier, jen ručně):** okno na pozadí → po kopii "ArcLoader: A001 — safe to eject" (s proxy), po konci "ArcLoader: A001 done"; s chybou červená ikona; selhaná kopie ohlásí "ArcLoader: A001 — ERROR" hned po konci kopie; kliknutí na oznámení / ikonu vrátí okno; okno v popředí → žádné oznámení, jen zvuk a blikání; oznámení zůstane
       v Centru oznámení; po zavření aplikace ikona zmizí; restart Průzkumníka → další oznámení ikonu přidá znovu;
       Settings → Notifications → Edit notifications… → "Windows notifications" vypnout → nic
 - [ ] 37. **ntfy:** téma `offload-<náhodné>` → "Send a test notification" → "Sent." a zpráva v aplikaci ntfy na telefonu; server `https://nic.invalid` → "Failed: …" do 10 s, aplikace celou dobu reaguje; téma s diakritikou → OK nejde, důvod anglicky ("The topic may contain only letters without accents, digits, - and _ (at most 64 characters)."); v textu na telefonu žádná cesta ani jméno PC (jen název karty, výsledek, počty); CLI
       `--ntfy https://ntfy.sh/<téma>` (po konci čeká nejvýš 11 s, i s nedostupným serverem)
-- [ ] 38. **Aktualizace:** `build.ps1 -ReleaseUrl \\NAS\Offload\` → `offload-update.json`; Settings → App → Updates… → cesta k manifestu → "Check now" → "Version … is available (you have …)." / "You have the latest version …", odkaz "New version …" vpravo v horní liště; s `https://` adresou v manifestu *Open* otevře prohlížeč, s místní složkou nebo zipem Průzkumník
+- [ ] 38. **Aktualizace:** `build.ps1 -ReleaseUrl \\NAS\ArcLoader\` → `offload-update.json`; Settings → App → Updates… → cesta k manifestu → "Check now" → "Version … is available (you have …)." / "You have the latest version …", odkaz "New version …" vpravo v horní liště; s `https://` adresou v manifestu *Open* otevře prohlížeč, s místní složkou nebo zipem Průzkumník
       s výběrem; **adresa na NAS (`\\NAS\…`) nebo namapovaný síťový disk → bez tlačítka, jen text a "Network path — copy it and open it by hand."**; odpojený NAS → "Cannot read the manifest: … did not respond within 5 s" a okno nezamrzne;
       prázdná adresa → žádná kontrola; po 24 h se čte znovu
 - [ ] 39. **Podpis:** (a) stroj s Windows SDK: `build.ps1 -Sign` bez signtoolu / s neznámým otiskem → česká chyba hned na
@@ -313,51 +317,51 @@ Plán 8 (nastavení, oznámení, distribuce, 0.4.0):
 - [ ] 45. **Copy again:** po bodu 44 připojit disk → Copy again → úloha "A001 · repair" zkopíruje jen selhané
       soubory na druhý disk, první disk se jen přečte (Správce úloh: zápis jen na druhý); zelená karta; ve složce karty
       `_REPORT\offload_report_0002.json` s `"kind": "repair"`, `ascmhl\0002_…mhl` na obou discích (`verified` na prvním,
-      `original` na druhém), řádek u karty zase "— verified, safe to format"; `offload verify` a `ascmhl verify` (na macOS) projdou.
+      `original` na druhém), řádek u karty zase "— verified, safe to format"; `arcloader verify` a `ascmhl verify` (na macOS) projdou.
       Ručně poškodit jeden soubor na disku (hex editor, stejná velikost) → Verify backup → nesedí; nová kopie → žlutá → Copy again → poškozený soubor je v `_REPORT\neshoda_0003\…`, nový sedí
 - [ ] 46. **Copy again odmítne:** vyměnit kartu ve čtečce → tlačítko zmizí; zformátovat a nahrát jiný klip stejného jména → "Repair stopped — nothing was copied. …", na discích se nic nezměnilo
 - [ ] 47. **Odhad a dnešek:** první karta po spuštění → lišta jen "1 card → 2 disks · … GB"; po první dokončené kartě (od 200 MB) druhá karta stejného projektu → "estimate ~… incl. proxies", po dokončení porovnat se skutečností (±30 %); TODAY ukazuje obě karty, Card history včerejší karty pod "Yesterday", "Day report…" otevře report dne
 - [ ] 48. **Pozastavená úloha drží PC vzhůru (M6) a frontu:** nastavit v systému uspání po 1–2 min nečinnosti, spustit dvě karty,
       první pozastavit → druhá čeká ("Waiting for a paused job."), PC po uplynutí doby neusne (`powercfg /requests`
-      ukáže Offload u SYSTEM) a disky zůstanou připojené; Resume → první doběhne, pak se rozběhne druhá; Pause a Cancel → po zrušení `powercfg /requests` Offload už neukazuje
-- [ ] 49. **Ukázkový režim (`--demo`):** `Offload.exe --demo pripraveno` / `probiha` / `hotovo` / `nastaveni` ukáže čtyři
+      ukáže ArcLoader u SYSTEM) a disky zůstanou připojené; Resume → první doběhne, pak se rozběhne druhá; Pause a Cancel → po zrušení `powercfg /requests` ArcLoader už neukazuje
+- [ ] 49. **Ukázkový režim (`--demo`):** `ArcLoader.exe --demo pripraveno` / `probiha` / `hotovo` / `nastaveni` ukáže čtyři
       obrazovky z `docs/ui-navrh/screeny` (01–04), srovnat se snímky v tmavém i světlém tématu (`OFFLOAD_THEME`) a v úzkém okně
-      (`Resize-Offload $p 1000 900`); Start offload, Append, Copy again, Eject card a Verify backup jsou vypnuté, v `%APPDATA%\Offload`
+      (`Resize-Offload $p 1000 900`); Start offload, Append, Copy again, Eject card a Verify backup jsou vypnuté, v `%APPDATA%\ArcLoader`
       se nic nezměnilo (nastavení, historie ani log), složka dat je `%TEMP%\Offload-demo-…`; bez `--demo` se okno chová jako dřív
 - [ ] 50. **Verify-in-Proxy na kartě (0.6.0):** karta s MOV/MP4/MXF, proxy zapnuté, 2 disky (NVMe + USB HDD) → po kopii
       čip "Safe to eject" neutrálně (ne zeleně) a "Verifying…"; Správce úloh: disk primárního cíle (nejrychlejší) se během proxy čte jen
-      jednou (Monitor prostředků: čtení ≈ velikost klipů), druhý disk se čte souběžně; po proxy krátce "Finishing verification", pak "Safe to format" zeleně a oznámení "Offload: A001 done" ("Verified on 2 disks — the card is safe to format."); report: Verification "during proxies" u primárního cíle, "read back" u druhého, sériová čísla svazků, "until “safe to format”"
-- [ ] 51. **Čas proti samotné proxy (spec 11):** stejná karta jednou s `offload copy --proxy --classic-verify` a jednou
+      jednou (Monitor prostředků: čtení ≈ velikost klipů), druhý disk se čte souběžně; po proxy krátce "Finishing verification", pak "Safe to format" zeleně a oznámení "ArcLoader: A001 done" ("Verified on 2 disks — the card is safe to format."); report: Verification "during proxies" u primárního cíle, "read back" u druhého, sériová čísla svazků, "until “safe to format”"
+- [ ] 51. **Čas proti samotné proxy (spec 11):** stejná karta jednou s `arcloader copy --proxy --classic-verify` a jednou
       bez → čas do "Safe to format" (`safeToFormatSeconds`) s jedním cílem nejvýš o 5 % delší než render proxy samotný;
       se dvěma cíli proxy nezpomalí o víc než 5 %
 - [ ] 52. **RAW (režim B):** karta BRAW (a R3D/ARRIRAW, když je nástroj) → Monitor prostředků: soubor klipu se z disku
-      přečte asi 2× (ruling B1: Offload ho ověří čtením mimo cache a SDK si ho pak přečte z disku znovu, ne z paměti —
+      přečte asi 2× (ruling B1: ArcLoader ho ověří čtením mimo cache a SDK si ho pak přečte z disku znovu, ne z paměti —
       zrychlení 1,05× se u RAW nesplňuje), report "during proxies"; klip větší než polovina volné RAM → ověří ho dorovnání zpětným čtením (report pořád správně)
 - [ ] 53. **Test cache s přímým zápisem na zařízení (vyžaduje správce, spec 11):** VHDX 4 GB (Správa disků → Vytvořit
       VHD), NTFS, jako druhý cíl; po kopii (čip "Safe to eject") zapsat jeden bajt doprostřed klipu **přímo na zařízení**
       (`\\.\PhysicalDriveN`, HxD → Otevřít disk, bez souborového systému, takže cache Windows o změně neví) → cíl na VHDX
       musí skončit "block … mismatch (destination …, card …)", žádné "Safe to format"; totéž pro primární cíl (změna před proxy)
 - [ ] 54. **Vada obsahu:** klip z kamery s poškozeným snímkem (nebo uříznutý MP4) → kopie "verified", žlutý štítek vady s timecodem, Preview otevře obrázek místa; "Safe to format after checking defects", po "Checked — the card is safe to format" zeleně
-- [ ] 55. **Pád během kopie:** velká karta, během kopie velkého klipu ukončit Offload ve Správci úloh → znovu spustit,
+- [ ] 55. **Pád během kopie:** velká karta, během kopie velkého klipu ukončit ArcLoader ve Správci úloh → znovu spustit,
       vložit kartu → řádek "Unfinished backup on … to … — the copy was interrupted; it can be finished" a zaškrtávátko "Finish interrupted backup"; Start →
       dokončené soubory se znovu nečtou (Monitor prostředků: karta se čte jen pro zbytek), rozepsaný klip pokračuje, výsledek
       ověřený, `ascmhl verify` projde
-- [ ] 56. **Pád během ověření:** s proxy zavřít Offload ve Správci úloh během "Verifying…" → report `verifyPending`, denní report "VERIFYING"; Append / Finish interrupted backup → karta se nečte, disky se ověří a generace se zapíše
+- [ ] 56. **Pád během ověření:** s proxy zavřít ArcLoader ve Správci úloh během "Verifying…" → report `verifyPending`, denní report "VERIFYING"; Append / Finish interrupted backup → karta se nečte, disky se ověří a generace se zapíše
 - [ ] 57. **Odpojený disk během ověření:** během proxy odpojit druhý disk → jeho soubory "✕ read", "Do not format", primární cíl ověřený, záloha "unfinished" (výsledek se do odpojeného disku nezapsal; Copy again se zatím odmítne s odkazem na Finish interrupted backup); po připojení vložit kartu → nejdřív "Finish interrupted backup" → karta se nečte, druhý disk se přečte a ověří, "Safe to format"; jen když tam pak některé soubory nesouhlasí, Copy again
-- [ ] 58. **Nastavení a CLI:** Settings → Verification → vypnout "Verify the primary disk during proxies" → ověření zase hned po kopii; `offload copy … --primary 2` → report "during proxies" u cíle 2; `--primary 3` se dvěma cíli → chyba "--primary 3: there are only 2 destinations (numbered from 1 in the order of --dest)." a kód 1, nic se nekopíruje; síťový cíl (NAS) → "network destination — verified by reading back"
+- [ ] 58. **Nastavení a CLI:** Settings → Verification → vypnout "Verify the primary disk during proxies" → ověření zase hned po kopii; `arcloader copy … --primary 2` → report "during proxies" u cíle 2; `--primary 3` se dvěma cíli → chyba "--primary 3: there are only 2 destinations (numbered from 1 in the order of --dest)." a kód 1, nic se nekopíruje; síťový cíl (NAS) → "network destination — verified by reading back"
 - [ ] 59. **Automatické načtení disků — USB disk:** připojit externí USB disk (NTFS, prázdný nebo se staršími zálohami
       `<datum>\<karta>\…`) → do 2 s se sám objeví v "2 · DESTINATIONS" (a zmizí z "1 · CARDS"); odpojit ho → z cílů zmizí; připojit znovu → zase je tam; křížkem ho odebrat → po odpojení a připojení se už nepřidá (Settings → Folder structure → "Forget removed disks (1)" to vrátí); disk s méně než 1 GB volna nebo jen pro čtení (`diskpart` →
       `attributes volume set readonly`) → nepřidá se, pod cíli oranžově "Disk … is full — not added as a destination." / "Disk … is read-only — not added as a destination."; interní disk SATA/NVMe ani systémový disk se nepřidá nikdy; záložní disk s klipy ve složce (uživatelův
       E: WD Elements) → přidá se (v "1 · CARDS" zůstane jen do přidání); SSD z kamery s klipy BRAW/MOV přímo v kořeni nebo
-      disk se strukturou kamery v kořeni (PRIVATE, DCIM, CLIP, ARRI, RED…) → nepřidá se; disk se zálohou z Offloadu
+      disk se strukturou kamery v kořeni (PRIVATE, DCIM, CLIP, ARRI, RED…) → nepřidá se; disk se zálohou z ArcLoaderu
       (`_REPORT` nebo `ascmhl` do 3 složek) → přidá se vždy
 - [ ] 60. **Automatické načtení disků — čtečka:** čtečka SD/CFexpress s kartou z kamery → karta je v "1 · CARDS" zaškrtnutá
       a **nikdy** není v cílech (ani CFexpress čtečka, kterou Windows hlásí jako pevný disk USB — rozhodne struktura kamery,
       název výrobku čtečky nebo víc slotů na jednom zařízení); karta ze zvukového rekordéru (jen WAV) → zaškrtnutá; prázdná
       karta → v seznamu, nezaškrtnutá; vypnout "Automatically select cards in readers as sources" → nová karta se nezaškrtne; během kontrol "Start offload" připojit disk → přidá se až po spuštění (ruling I1); `--demo` → nic se nepřidá
-- [ ] 61. **Kopie reportu na počítači:** po kopii karty je `Documents\Offload reports\<datum>\<karta>\` s `_REPORT`
+- [ ] 61. **Kopie reportu na počítači:** po kopii karty je `Documents\ArcLoader reports\<datum>\<karta>\` s `_REPORT`
       (HTML, PDF, JSON, TXT, `.xxh64`, CSV, manifest) a `ascmhl`, bez klipů a proxy; po proxy/analýze se HTML s náhledy
-      obnoví; denní report v `…\<datum>\_REPORT\`; Append / Copy again / Finish interrupted backup / Verify backup → kopie se obnoví; druhá karta téhož jména téhož dne → `A001_2`; Settings → Report → "Copy of the report on this computer too" vypnout nebo "Change…" složku (síťová složka, odpojený disk) → úloha doběhne, na kartě úlohy jen šedá poznámka "Could not copy the report to this computer: … — the report is only on the destination disks."; Dokumenty přesunuté na OneDrive/jiný disk → kopie jde tam; `offload copy … --no-local-report` → nic
+      obnoví; denní report v `…\<datum>\_REPORT\`; Append / Copy again / Finish interrupted backup / Verify backup → kopie se obnoví; druhá karta téhož jména téhož dne → `A001_2`; Settings → Report → "Copy of the report on this computer too" vypnout nebo "Change…" složku (síťová složka, odpojený disk) → úloha doběhne, na kartě úlohy jen šedá poznámka "Could not copy the report to this computer: … — the report is only on the destination disks."; Dokumenty přesunuté na OneDrive/jiný disk → kopie jde tam; `arcloader copy … --no-local-report` → nic
 
 Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na vývojovém PC nejsou — testy jen s náhradami):
 
@@ -367,7 +371,7 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
 - [ ] 63. **ARRIRAW sférický / anamorfní (art-cmd):** sférický klip ALEXA 35 4.6K OG → art-cmd bez `--desqueeze`
       (Správce úloh → Podrobnosti → příkazový řádek), rychlost dekódování ~2× vyšší než dřív; anamorfní klip (2×) →
       s `--desqueeze`, proxy roztažená na správný poměr stran.
-- [ ] 64. **Priorita nástrojů:** spustit Offload s nízkou prioritou (`start /belownormal Offload.exe`) → během proxy
+- [ ] 64. **Priorita nástrojů:** spustit ArcLoader s nízkou prioritou (`start /belownormal ArcLoader.exe`) → během proxy
       ve Správci úloh (Podrobnosti → Priorita, Process Explorer → I/O priorita) ffmpeg, art-cmd, REDline a braw-decode
       „Normální“; ARRIRAW 4.6K dekóduje stejně rychle jako stejné volání art-cmd z terminálu.
 - [ ] 65. **Průběh ARRIRAW:** proxy klipu ARRIRAW → pruh klipu během art-cmd plynule roste do ~76 %, pak ffmpeg do 100 %;
@@ -409,43 +413,43 @@ Zjištění z ostrého nasazení Mac verze (2026-10-09; art-cmd ani REDline na v
 
 Souhrnný report z vybraných záloh (úkol 2026-10-09):
 
-- [ ] 76. **Souhrnný report v aplikaci:** Card history → zaškrtnout 3 karty ze dvou dnů a dvou disků → "Summary report (3)…" (i v TODAY) → otázka "Also save the summary report (3 cards) to a disk of your choice?" → No: otevře se `Documents\Offload reports\summary\<datum>_<čas>_summary.html`, vedle PDF (A4 na šířku, nic neuříznuté); natáčecí dny,
+- [ ] 76. **Souhrnný report v aplikaci:** Card history → zaškrtnout 3 karty ze dvou dnů a dvou disků → "Summary report (3)…" (i v TODAY) → otázka "Also save the summary report (3 cards) to a disk of your choice?" → No: otevře se `Documents\ArcLoader reports\summary\<datum>_<čas>_summary.html`, vedle PDF (A4 na šířku, nic neuříznuté); natáčecí dny,
       tabulka dnů a karet s klipy, soubory, daty, stopáží, první a poslední klapkou (TC + klip; ALEXA "time-of-day TC"), kamery, ověření, "Where everything is backed up" (Disk, Path, Disk connected, Verified, Report copy on this computer). Yes → vybrat disk → soubory i tam; podruhé tamtéž → `_2`, nic se nepřepíše; vybrat složku karty se zálohou (i rozpracované —
-      jen prázdný `_REPORT`), kartu ve čtečce (i mimo frontu), flash disk nebo disk jen pro čtení → anglická hláška proč (např. "… is on removable media (a card in a reader, a flash drive) — the summary report is not saved there; select a disk."), report jen na počítači (totéž `offload summary-report … -o <karta>` → kód 1). Tutéž kartu zálohovanou dvěma
+      jen prázdný `_REPORT`), kartu ve čtečce (i mimo frontu), flash disk nebo disk jen pro čtení → anglická hláška proč (např. "… is on removable media (a card in a reader, a flash drive) — the summary report is not saved there; select a disk."), report jen na počítači (totéž `arcloader summary-report … -o <karta>` → kód 1). Tutéž kartu zálohovanou dvěma
       úlohami na dva disky zaškrtnout obě → v součtech jednou, v "Where everything is backed up" oba disky. "Clear selection" odškrtne vše; během tvorby odkaz "Making summary report…" a okno reaguje; 200 karet do pár sekund.
-- [ ] 77. **Odpojený disk:** jednu z vybraných karet zálohovat na disk, který pak odpojit → v souhrnu údaje z kopie reportu na počítači ("the backup disk is not connected — data from the report copy on this computer", sloupec Disk connected "not connected", sloupec Verified s poznámkou o zdroji v závorce); smazat i kopii v `Offload reports` → karta v reportu je, "report not available", soubory a velikost podle historie, report vznikne. Karty, disky ani `Offload reports\<datum>` se nezmění (porovnat časy souborů).
+- [ ] 77. **Odpojený disk:** jednu z vybraných karet zálohovat na disk, který pak odpojit → v souhrnu údaje z kopie reportu na počítači ("the backup disk is not connected — data from the report copy on this computer", sloupec Disk connected "not connected", sloupec Verified s poznámkou o zdroji v závorce); smazat i kopii v `ArcLoader reports` → karta v reportu je, "report not available", soubory a velikost podle historie, report vznikne. Karty, disky ani `ArcLoader reports\<datum>` se nezmění (porovnat časy souborů).
 - [ ] 78. **Klapky ze skutečných karet:** karta Sony/Canon (MXF/MP4 s `creation_time`) s klipy natočenými přes půlnoc nebo
       s resetovaným číslováním → první a poslední klapka podle času záznamu (`clips[].info.recorded` v reportu); ARRIRAW /
       BRAW (bez času záznamu) → podle čísla klipu; ALEXA → časy první a poslední klapky odpovídají TC denní doby na
-      klapce. `offload summary-report <složka dne> -o <složka>` vypíše obě cesty.
+      klapce. `arcloader summary-report <složka dne> -o <složka>` vypíše obě cesty.
 
 Návrh: `docs/superpowers/specs/`, plány: `docs/superpowers/plans/`.
 
 ## Použití
 
 ```powershell
-offload E:\ -d D:\Backup -d F:\Backup          # karta E: na dva disky, ověření, report
-offload verify D:\Backup\2026-10-04\A001        # znovu ověřit hotovou kopii
-offload bench --read E:\ --write D:\ --gb 2     # rychlost karty a disků
-offload ports                                 # porty, kde a jak rychle jsou disky připojené, doporučení
-offload ports --measure --card E:\ --dest D:\   # + změřit skutečnou rychlost
-offload E:\ -d D:\Backup -d F:\Backup --proxy --lut look.cube --frame-aspect 1.85   # + proxy s LUT a výřezem
-offload E:\ -d D:\Backup --proxy --proxy-folder G:\Proxy   # proxy navíc do G:\Proxy\<datum>\<karta>\
-offload E:\ -d D:\Backup --proxy --lut sony-slog3-sgamut3   # vestavěný LUT podle id
-offload luts                                                # seznam vestavěných LUTů (id — název)
-offload E:\ -d D:\Backup -d F:\Backup --name auto            # název složky z názvů klipů (A001C003… → A001)
-offload append E:\                                          # doplnit jen nové klipy do dřívější zálohy (cíle z historie)
-offload append E:\ --into D:\Backup\2026-10-06\A001 --into F:\Backup\2026-10-06\A001
-offload verify D:\Backup\2026-10-06 --report                # ověřit všechny karty dne proti ASC MHL + report ověření
-offload E:\ -d D:\Backup -d F:\Backup --hash both --ale     # xxHash64 + MD5, seznam klipů i pro Avid
-offload day-report D:\Backup\2026-10-06                     # denní report znovu (HTML, PDF, seznam klipů dne)
-offload summary-report D:\Backup\2026-10-06\A001 F:\Backup\2026-10-07 -o G:\   # souhrnný report vybraných záloh (+ kopie na G:\)
-offload bench --hash md5                                    # rychlost MD5 proti xxh64 (CPU)
-offload E:\ --project "Film X"                              # nastavení projektu z aplikace; volby z příkazové řádky mají přednost
-offload E:\ -d D:\Backup --proxy --lut-rule camera=FX6:sony-slog3-sgamut3cine --lut-rule "folder=A00*/*:C:\luts\show.cube"
-offload E:\ -d D:\Backup --proxy --braw-gen5                 # BRAW Film Gen 4 jako Gen 5 (neověřeno, čeká vzorek Gen 4)
-offload E:\ -d D:\Backup --proxy --hw-decode                 # H.264/HEVC dekóduje grafická karta (experimentální)
-offload E:\ -d D:\Backup --ntfy https://ntfy.sh/my-secret-channel   # výsledek na telefon (jen název karty, výsledek, počty)
+arcloader E:\ -d D:\Backup -d F:\Backup          # karta E: na dva disky, ověření, report
+arcloader verify D:\Backup\2026-10-04\A001        # znovu ověřit hotovou kopii
+arcloader bench --read E:\ --write D:\ --gb 2     # rychlost karty a disků
+arcloader ports                                 # porty, kde a jak rychle jsou disky připojené, doporučení
+arcloader ports --measure --card E:\ --dest D:\   # + změřit skutečnou rychlost
+arcloader E:\ -d D:\Backup -d F:\Backup --proxy --lut look.cube --frame-aspect 1.85   # + proxy s LUT a výřezem
+arcloader E:\ -d D:\Backup --proxy --proxy-folder G:\Proxy   # proxy navíc do G:\Proxy\<datum>\<karta>\
+arcloader E:\ -d D:\Backup --proxy --lut sony-slog3-sgamut3   # vestavěný LUT podle id
+arcloader luts                                                # seznam vestavěných LUTů (id — název)
+arcloader E:\ -d D:\Backup -d F:\Backup --name auto            # název složky z názvů klipů (A001C003… → A001)
+arcloader append E:\                                          # doplnit jen nové klipy do dřívější zálohy (cíle z historie)
+arcloader append E:\ --into D:\Backup\2026-10-06\A001 --into F:\Backup\2026-10-06\A001
+arcloader verify D:\Backup\2026-10-06 --report                # ověřit všechny karty dne proti ASC MHL + report ověření
+arcloader E:\ -d D:\Backup -d F:\Backup --hash both --ale     # xxHash64 + MD5, seznam klipů i pro Avid
+arcloader day-report D:\Backup\2026-10-06                     # denní report znovu (HTML, PDF, seznam klipů dne)
+arcloader summary-report D:\Backup\2026-10-06\A001 F:\Backup\2026-10-07 -o G:\   # souhrnný report vybraných záloh (+ kopie na G:\)
+arcloader bench --hash md5                                    # rychlost MD5 proti xxh64 (CPU)
+arcloader E:\ --project "Film X"                              # nastavení projektu z aplikace; volby z příkazové řádky mají přednost
+arcloader E:\ -d D:\Backup --proxy --lut-rule camera=FX6:sony-slog3-sgamut3cine --lut-rule "folder=A00*/*:C:\luts\show.cube"
+arcloader E:\ -d D:\Backup --proxy --braw-gen5                 # BRAW Film Gen 4 jako Gen 5 (neověřeno, čeká vzorek Gen 4)
+arcloader E:\ -d D:\Backup --proxy --hw-decode                 # H.264/HEVC dekóduje grafická karta (experimentální)
+arcloader E:\ -d D:\Backup --ntfy https://ntfy.sh/my-secret-channel   # výsledek na telefon (jen název karty, výsledek, počty)
 ```
 
 Plán 8: `--project <název>` vezme projekt uložený v aplikaci (`settings.json`; cíle, ověření, součet, výstupy, oznámení,
@@ -466,12 +470,12 @@ se seznamem klipů dne (`--no-day-report` vypne); CLI vypíše "Day report: …"
 report (HTML + PDF, bez náhledů) z vybraných záloh — i z různých dnů a disků: natáčecí dny, za kartu a celkem klipy,
 soubory, velikost, stopáž, první a poslední klapka (startovní TC prvního a posledního nahraného klipu, u ALEXY TC denní
 doby), kamery, ověření a kde je co zálohované. Čte reporty `offload_report*.json` ze zálohy (všechny generace), když disk
-není připojený, z kopie v `Documents\Offload reports` (čte i starou složku `Offload reporty`); když není ani ta, řekne to v reportu. Uloží se vždy do
-`<Offload reports>\summary\<datum>_<čas>_summary.html/.pdf`, s `-o` i do zadané složky (nikdy přes existující soubor —
+není připojený, z kopie v `Documents\ArcLoader reports` (čte i staré složky `Offload reports` a `Offload reporty`); když není ani ta, řekne to v reportu. Uloží se vždy do
+`<ArcLoader reports>\summary\<datum>_<čas>_summary.html/.pdf`, s `-o` i do zadané složky (nikdy přes existující soubor —
 přípona `_2`, `_3` …; do složky karty se zálohou nikdy). Vypíše "Summary report: …"; kód 0, kód 1 = nic nevzniklo nebo
 se nepovedlo `-o`.
 
-Historie (`%APPDATA%\Offload\history.json`): `copy` před plánem vypíše "Backed up on … to … — verified, safe to format", když kartu zná (bez
+Historie (`%APPDATA%\ArcLoader\history.json`): `copy` před plánem vypíše "Backed up on … to … — verified, safe to format", když kartu zná (bez
 dotazu), a po dokončené kopii ji zapíše; `--no-history` čtení i zápis vypne. `append` bez `--into` najde složky zálohy
 v historii (jinak "Error: The card is not in the history — give the backup folders with --into."; s `--no-history` je `--into`
 povinné); kód 0 = doplněno, nebo "Nothing new — the backup is complete.", kód 1 = odmítnuto (jiná karta, změněné soubory, nedostupný dřívější cíl, běží jiné doplnění téže zálohy …, anglicky s důvodem). `--dry-run` plán jen vypíše (běh plánuje
@@ -480,11 +484,11 @@ strojové (`MISMATCH`, `MISSING`, `ERROR`, `EXTRA`, `FAILED-AT-COPY`, `FAILED-SU
 které `_REPORT` neignoruje, vedle složky karty). Celé CLI (nápověda, průběh, chyby i souhrny) je anglicky.
 
 `--lut auto|none|<id>|<cesta.cube>` (výchozí `auto`): `auto` vybere LUT podle kamery každého klipu, `none` žádný,
-`<id>` vestavěný LUT, cesta s `.cube` nebo lomítkem vlastní LUT. Seznam id vypíše `offload luts` — samostatný příkaz,
+`<id>` vestavěný LUT, cesta s `.cube` nebo lomítkem vlastní LUT. Seznam id vypíše `arcloader luts` — samostatný příkaz,
 protože `copy` vyžaduje kartu a cíl, takže `copy --lut list` by neprošlo parsováním. `--lut-fallback <id|none>` je LUT
 pro klipy, které `auto` nepozná (výchozí `none`). Neznámé id skončí chybou (exit 1). Vestavěné LUTy jsou v balíčku
-ve složce `luts\` vedle `Offload.exe` (11 souborů `.cube` + `luts.json`); chybějící složka nic neshodí, `auto` pak
-LUT nepoužije. Soubor `%APPDATA%\Offload\luts\<id>.cube` nahradí vestavěný LUT se stejným id (`offload luts` ho vypíše s "(custom file)").
+ve složce `luts\` vedle `ArcLoader.exe` (11 souborů `.cube` + `luts.json`); chybějící složka nic neshodí, `auto` pak
+LUT nepoužije. Soubor `%APPDATA%\ArcLoader\luts\<id>.cube` nahradí vestavěný LUT se stejným id (`arcloader luts` ho vypíše s "(custom file)").
 
 `--proxy-folder <složka>` (jen s `--proxy`): každá hotová proxy se kromě `_PROXY` na cílech zkopíruje i do
 `<složka>\<datum>\<karta>\<složka klipu>\` (od 0.5.1 stejné podsložky jako `_PROXY`, tedy jako na kartě; stejný název
@@ -501,13 +505,13 @@ byly všechny snímky v pořádku a 4K H.264 bylo softwarově rychlejší (3,3�
 `--proxy-always` (od 0.5.1): proxy i pro klip, jehož originál je lehčí — ve výchozím stavu (`proxy.skipLighterSources`, jen u proxy
 H.264/HEVC — s `--proxy-codec prores…` se proxy renderuje vždy — a jen když se nepoužije LUT ani ořez) originál H.264/HEVC, který není větší než proxy a nemá vyšší datový tok, proxy nedostane ("no proxy — the original is lighter (X Mb/s ≤ Y Mb/s)" v reportu, souhrn "none (original lighter) N").
 
-`offload ports` pojmenuje každý USB konektor jedním popiskem, který platí všude (řádek disku, seznam portů,
+`arcloader ports` pojmenuje každý USB konektor jedním popiskem, který platí všude (řádek disku, seznam portů,
 doporučení): „port 6“ (číslo USB 2 poloviny konektoru), port za hubem „port 7 › 2“, při více řadičích s řadičem
 „Intel USB 3.20 xHCI · port 3“. U portu je písmeno disku, který v něm je („← E:“). Cíl na stejném svazku jako karta
 se neměří (na kartu se nikdy nezapisuje); Ctrl+C při `--measure` dokončí měření aktuálního zařízení a smaže jeho
 dočasný soubor.
 
-Stavový řádek `offload copy` ukazuje, který článek brzdí ("bottleneck: D1", "bottleneck: card", "(link full)") — podle toho,
+Stavový řádek `arcloader copy` ukazuje, který článek brzdí ("bottleneck: D1", "bottleneck: card", "(link full)") — podle toho,
 kolik bloků čeká na zápis na každý disk, ne podle okamžité rychlosti (karta i disky jedou v kopii stejným tempem).
 Seznam "Connections:" nad ním ukazuje, co je co ("D1 = Destination 1: WD Elements 25A2 — USB 3 (5 Gb/s), port 6").
 
@@ -515,7 +519,7 @@ Na Windows se čte i zapisuje mimo systémovou cache (`FILE_FLAG_NO_BUFFERING`),
 `FlushFileBuffers`; ověření tak čte data z disku, ne z RAM. Svazky, které to neumí (některé síťové),
 přejdou na běžný zápis a report to uvede.
 
-PDF tiskne Microsoft Edge v režimu bez okna (je ve Windows vždy). ffmpeg/ffprobe jsou v `bin\` vedle `offload.exe` (build skript je vezme z `windows\tools\bin`, jinak z PATH —
+PDF tiskne Microsoft Edge v režimu bez okna (je ve Windows vždy). ffmpeg/ffprobe jsou v `bin\` vedle `arcloader.exe` (build skript je vezme z `windows\tools\bin`, jinak z PATH —
 na tomto PC build gyan.dev, licence GPL; při dalším šíření je třeba přiložit licenci a zdroj ffmpeg).
 
 ## ASC MHL a `ascmhl` na Windows
@@ -523,14 +527,14 @@ na tomto PC build gyan.dev, licence GPL; při dalším šíření je třeba při
 Nástroj `ascmhl` 1.0.1 má příkaz `verify` jen ve skriptu `ascmhl-debug` (`python -m ascmhl` nemá vstupní bod).
 Na Windows hlásí falešné „new/missing file“, protože porovnává cesty s `\` s cestami s `/` v MHL (MHL je
 v tom správně). Po pouhé normalizaci oddělovačů ověřil všechny hashe složek vytvořených na Windows.
-Plné `ascmhl verify` proto pouštějte na macOS/Linuxu; na Windows použijte `offload verify`.
+Plné `ascmhl verify` proto pouštějte na macOS/Linuxu; na Windows použijte `arcloader verify`.
 
 ## Ruční test (checklist)
 
 Ostrý test na skutečné kartě:
 
 - [ ] kopie ze skutečné karty na 2 disky
-- [ ] `offload verify` na hotovou kopii
+- [ ] `arcloader verify` na hotovou kopii
 - [ ] Ctrl+C během kopie a během ověření — nezůstane žádný `.offload-part`, report říká "NOT VERIFIED"
 - [ ] vytažení karty uprostřed kopie
 - [ ] vytažení cílového disku uprostřed kopie
