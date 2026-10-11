@@ -348,6 +348,12 @@ public final class OffloadEngine {
     private var plan: OffloadPlan?
     /// Tests only: called in DestWriter.finish right before a finished file is renamed into place.
     var testBeforeRename: ((String) -> Void)?
+    /// Tests only: the free space of a path (nil = ask the volume).
+    var testFreeSpace: ((String) -> Int64?)?
+    /// Space warnings of the last `prepare` / `checkSpace` (less than 5 % would be left) — never blocking.
+    public private(set) var spaceWarnings: [String] = []
+    /// What every volume needs and has free (the CLI's --dry-run).
+    public private(set) var spaceLines: [SpaceLine] = []
 
     public init(options: OffloadOptions = OffloadOptions()) { self.options = options }
 
@@ -360,7 +366,9 @@ public final class OffloadEngine {
     }
 
     /// Scans the card and checks the destinations before a single byte is written.
-    public func prepare(source: String, destRoots: [String], cardName: String?, date: String?) throws -> OffloadPlan {
+    /// `extra`: what the job needs besides the card on the destinations (proxies, report) — from the scan.
+    public func prepare(source: String, destRoots: [String], cardName: String?, date: String?,
+                        extra: ((SourceScan) -> SpaceExtra?)? = nil) throws -> OffloadPlan {
         guard options.chunkSize > 0, options.chunkSize % 4096 == 0, options.chunkSize <= 1 << 30 else {
             throw OffloadError.preflight(Msg.chunkSize(options.chunkSize), code: .chunkSize)
         }
@@ -414,17 +422,24 @@ public final class OffloadEngine {
 
         let scan = try Scanner.scan(source)
         guard !scan.files.isEmpty else { throw OffloadError.preflight(Msg.emptySource, code: .emptySource) }
-        let needed = scan.totalBytes + Int64(scan.files.count) * 64 * 1024 + 64 << 20
-        for root in destRoots {
-            let free = IO.availableBytes(root) ?? 0
-            if free < needed {
-                throw OffloadError.preflight(Msg.noSpace(root, total: needed, parts: "cards \(formatBytesShort(needed))", free: free), code: .noSpace)
-            }
-        }
+        try checkSpace(destRoots, card: SpaceEstimator.cardBytes(scan.totalBytes, files: scan.files.count), extra: extra?(scan))
 
         let day = date ?? Layout.today()
         let name = Layout.uniqueCardFolder(roots: destRoots, date: day, name: cardName.map(Layout.sanitize) ?? Layout.defaultCardName(for: source))
         return OffloadPlan(source: source, scan: scan, date: day, cardName: name, destRoots: destRoots)
+    }
+
+    /// Spec 2.5 per volume (two destinations on one volume add up; the proxy folder is a place of its own): blocking →
+    /// `noSpace` before anything is written; less than 5 % left → `spaceWarnings`. Unknown free space counts as 0 here —
+    /// the engine is the last word.
+    public func checkSpace(_ roots: [String], card: Int64, extra: SpaceExtra?) throws {
+        let places = SpacePlanner.places(roots, extra: extra, card: card, label: HistoryText.diskName)
+        let (problems, lines) = SpacePlanner.checkPlaces(places, freeOf: { self.testFreeSpace?($0) ?? IO.availableBytes($0) })
+        spaceLines = lines
+        spaceWarnings = problems.filter { $0.severity == .warning }.map(\.text)
+        if let block = problems.first(where: { $0.severity == .blocking }) {
+            throw OffloadError.preflight(block.text, code: .noSpace)
+        }
     }
 
     public func cancel() {

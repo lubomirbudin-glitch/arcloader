@@ -129,6 +129,14 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 48 — kontrola místa po svazcích (`SpaceEstimator`/`SpacePlanner` z proudu A, teď zapojené): karta + 64 KiB na
+  soubor + 64 MiB, proxy z odhadu (délka z velikosti a typického toku, ProRes podle výšky, AAC/PCM), report 32 MiB + 1 MiB
+  na klip, složka pro proxy jako vlastní místo; dva cíle na jednom svazku se sečtou; `OffloadEngine.prepare(extra:)`
+  a `checkSpace` (i u doplnění pro nové soubory) — blokuje `noSpace` dřív, než se cokoli zapíše, méně než 5 % rezervy =
+  `spaceWarnings` (úloha je dá do `JobStatus.warning`, CLI „Warning: …“ a pokračuje); před renderem přepočet ze skutečných
+  délek — nevejde-li se, proxy se nerenderují (`skipped` s poznámkou, varování, kopie zůstane ověřená); CLI `--dry-run`
+  vypíše `Space: …` za každý svazek. Ověřeno CLI na obrazu disku: dva cíle na jednom svazku → součet v jednom řádku, tři →
+  „Not enough space on D1, second (D1), third (D1): needs 314 MB (cards 204 MB, report 110 MB), free 312 MB.“
 - Úkol 47 — doplnění: zámek složek před plánem (obsazená = `appendBusy` hned, nic se nezapíše), plán pod zámkem, jen
   nové soubory do stejných složek karty bez přepsání (`DestWriter` u doplnění přejmenuje `.offload-part` přes
   `renamex_np` RENAME_EXCL; soubor, který se mezitím objeví, zůstane a kopie je `failed` „file appeared meanwhile“),

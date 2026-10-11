@@ -139,9 +139,16 @@ public final class OffloadJob {
             lock.lock(); _plan = p; lock.unlock()
             return p
         }
-        let p = try engine.prepare(source: config.source, destRoots: config.destRoots, cardName: config.cardName, date: config.date)
+        let p = try engine.prepare(source: config.source, destRoots: config.destRoots, cardName: config.cardName, date: config.date,
+                                   extra: spaceExtra)
         lock.lock(); _plan = p; lock.unlock()
+        for w in engine.spaceWarnings { update { $0.addWarning(w) } }
         return p
+    }
+
+    /// Proxies (estimated from the clip names and sizes) and the report on top of the card (spec 2.5, R10).
+    private func spaceExtra(_ scan: SourceScan) -> SpaceExtra {
+        SpaceEstimator.extra(ClipDetector.detect(scan.files), config.proxy, config.tools.resolved())
     }
 
     public func cancel() {
@@ -295,6 +302,14 @@ public final class OffloadJob {
         var plan = OffloadPlan.from(ap)
         if plan.project == nil { plan.project = config.project }
         lock.lock(); _plan = plan; lock.unlock()
+        do {
+            try engine.checkSpace(plan.cardPaths, card: SpaceEstimator.cardBytes(plan.scan.totalBytes, files: plan.scan.files.count),
+                                  extra: spaceExtra(plan.scan))
+        } catch {
+            fail(error)
+            return false
+        }
+        for w in engine.spaceWarnings { update { $0.addWarning(w) } }
         if plan.unverifiedEarlier > 0 { update { $0.addWarning(Msg.unverifiedEarlier(plan.unverifiedEarlier)) } }
         update { $0.phase = .copying }
         let report: OffloadReport
@@ -491,6 +506,19 @@ public final class OffloadJob {
         rewriteReports(report, plan: plan)
 
         guard config.proxy.enabled, !isCancelled else { return report }
+        // Spec 2.5: the need again from the real clip lengths — proxies that do not fit are not rendered (the copy stays
+        // verified; the job needs attention).
+        if let problem = proxySpaceProblem(entries, plan: plan, tools: tools) {
+            update { $0.addWarning(problem) }
+            log?("proxies skipped: \(problem)")
+            for i in entries.indices where entries[i].proxyStatus == .none {
+                entries[i].proxyStatus = .skipped
+                entries[i].proxyNote = problem
+            }
+            report.clips = entries
+            rewriteReports(report, plan: plan)
+            return report
+        }
         update {
             $0.phase = .proxies
             $0.clipCount = entries.count
@@ -575,6 +603,21 @@ public final class OffloadJob {
         report.clips = entries
         rewriteReports(report, plan: plan)
         return report
+    }
+
+    /// Nil when the proxies fit (or the free space cannot be asked); otherwise the warning text.
+    private func proxySpaceProblem(_ entries: [ClipEntry], plan: OffloadPlan, tools: ExternalTools) -> String? {
+        let infos = Dictionary(entries.map { ($0.clip.path, $0.info) }, uniquingKeysWith: { a, _ in a })
+        let bytes = SpaceEstimator.proxyBytes(entries.map(\.clip), config.proxy, renderable: { SpaceEstimator.renderable($0, tools) },
+                                              info: { infos[$0.path] ?? nil })
+        guard bytes > 0 else { return nil }
+        let extra = SpaceExtra(proxy: bytes, report: 0, proxyOnAllDestinations: config.proxy.copyToAllDestinations,
+                               proxyFolder: config.proxy.extraFolder)
+        let places = SpacePlanner.places(plan.cardPaths, extra: extra, card: 0, label: HistoryText.diskName)
+        let free = { (p: String) in self.engine.testFreeSpace?(p) ?? IO.availableBytes(p) }
+        let (problems, _) = SpacePlanner.checkPlaces(places, freeOf: free)
+        guard let block = problems.first(where: { $0.severity == .blocking }) else { return nil }
+        return Msg.proxiesSkippedForSpace(block.label, need: block.need.total, free: block.free)
     }
 
     /// PDF copy of the report on every destination. Rendered once, then copied; a failure here never fails the offload.

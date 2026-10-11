@@ -275,6 +275,11 @@ enum JobRun {
             print(planLine(plan))
             for p in plan.cardPaths { print("  → \(p)") }
             if plan.unverifiedEarlier > 0 { print(Msg.cliWarning + Msg.unverifiedEarlier(plan.unverifiedEarlier)) }
+            // R11: less than 5 % left never blocks — a warning, and the copy goes on.
+            for w in job.engine.spaceWarnings { print(Msg.cliWarning + w) }
+            if dryRun {
+                for l in job.engine.spaceLines { print(Msg.spaceLine(l.label, total: l.need.total, parts: l.need.partsText("card"), free: l.free)) }
+            }
             if let extra = ProxyPreflight.extraFolderInUse(config.proxy) {
                 let target = URL(fileURLWithPath: extra).appendingPathComponent(plan.date).appendingPathComponent(plan.cardName).path
                 print("  proxy also → \(target)")
@@ -338,7 +343,7 @@ enum JobRun {
         if !HistoryRecorder.drain(timeout: 0) {
             // The history stayed busy for 60 s: the CLI does not wait in the background.
             print(Msg.cliWarning + Msg.historyNotWritten)
-        } else if let w = status.warning, w != Msg.historyDelayed {
+        } else if let w = status.warning, w != Msg.historyDelayed, !job.engine.spaceWarnings.contains(w) {
             print(Msg.cliWarning + w)
         }
         if exitCode(config, status, report) != 0 { throw ExitCode(1) }

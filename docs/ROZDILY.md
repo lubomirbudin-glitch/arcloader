@@ -47,7 +47,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ✅ CLI `offload append` (GUI úkol 49) | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
 | **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ✅ CLI `--name auto` (GUI úkol 49) | ✅ CLI + GUI |
 | **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | ✅ CLI `verify [--report]` (GUI úkol 49) | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
-| **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | jen velikost karty | ✅ CLI + GUI |
+| **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | ✅ CLI + úloha (fronta v GUI úkol 49) | ✅ CLI + GUI |
 | **Hlášky kontrol před kopií s kódy** (`PreflightCode`) | ✅ anglicky (od 2026-10-10, záměrně) | ✅ česky |
 | **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `offload day-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
 | **Seznam klipů CSV / Avid ALE** (`_clips.csv/.ale` karty i dne) | ⏳ naplánováno | ✅ CLI + GUI (import do Resolve/Avid čeká ruční test) |
@@ -241,8 +241,9 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   soubory (druhé ověření v téže sekundě report nepřepíše).
 - **Kontrola místa** (chování, ne formát): Windows sčítá požadavky po svazcích (karta + 64 KiB na soubor + 64 MiB, proxy
   podle odhadu z délky a datového toku, report 32 MiB + 1 MiB na klip, čekající a běžící úlohy, složka pro proxy) a před
-  renderem proxy přepočítá podle skutečné délky klipů (nevejde-li se, proxy se přeskočí, kopie zůstane ověřená). Mac
-  kontroluje jen kartu.
+  renderem proxy přepočítá podle skutečné délky klipů (nevejde-li se, proxy se přeskočí, kopie zůstane ověřená). Mac od
+  0.3.0 stejně (svazek = `st_dev`, jméno v hlášce „složka (svazek)“); jeho proxy mají jednu zvukovou stopu, odhad proto
+  počítá jeden proud kanálů klipu.
 - **Jazyk hlášek:** kontroly před kopií a chyby CLI jsou na Windows česky („Chyba: …“), na Macu od 2026-10-10
   anglicky („Error: …“, viz první bod oddílu „Záměrné rozdíly“) — se stejným významem a stejnými kódy; Mac píše cesty
   s `/`. Logy, TXT report a `--help` jsou anglicky v obou verzích. Chyby parseru jsou česky jen na Windows (kde je

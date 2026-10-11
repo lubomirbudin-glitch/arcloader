@@ -15,7 +15,7 @@ public struct SpaceNeed: Equatable {
     public static let none = SpaceNeed(card: 0, proxy: 0, report: 0)
 
     /// "cards 380 GB, proxy ~30 GB, report 2 GB" — the parts in Msg.noSpace ("cards") and Msg.spaceLine ("card").
-    func partsText(_ cards: String) -> String {
+    public func partsText(_ cards: String) -> String {
         var p: [String] = []
         if card > 0 { p.append("\(cards) \(formatBytesShort(card))") }
         if proxy > 0 { p.append("proxy ~\(formatBytesShort(proxy))") }
