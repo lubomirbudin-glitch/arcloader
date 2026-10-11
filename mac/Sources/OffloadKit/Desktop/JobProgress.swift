@@ -62,7 +62,17 @@ public final class JobProgress {
 
     public var isRunning: Bool { status.phase != .waiting && !status.phase.isFinished }
 
+    /// When stage 2 (analysis / proxies) began and how long the job had stood paused by then.
+    private var stage2Began: (at: Date, paused: TimeInterval)?
+    /// How long stage 2 ran without pauses, once the job finished (RateMemory learns the next estimate from it); nil
+    /// without a stage 2.
+    public private(set) var stage2Elapsed: TimeInterval?
+
     public func update(_ s: JobStatus, now: Date) {
+        if stage2Began == nil && (s.phase == .analyzing || s.phase == .proxies) { stage2Began = (now, s.pausedTotal) }
+        if stage2Elapsed == nil, s.phase.isFinished, let b = stage2Began {
+            stage2Elapsed = max(0, now.timeIntervalSince(b.at) - max(0, s.pausedTotal - b.paused))
+        }
         if s.paused {
             // Paused (or pausing): no speeds, no estimate, no bottleneck — measured again from Resume.
             readRate = 0

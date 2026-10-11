@@ -212,6 +212,16 @@ final class AppModel: ObservableObject {
     @Published var saveVerifyReport = true
     /// Verify backup items of the queue.
     @Published var verifies: [VerifyItem] = []
+    /// The right column's tab: the queue or the card history.
+    @Published var queueTab: QueueTab = .queue
+    /// History ids ticked for the summary report (in "Today" and "Card history" alike).
+    @Published var summarySelection: Set<String> = []
+    /// A summary report is being made (off the main thread).
+    @Published var makingSummary = false
+    /// "ALEXA 35 · LogC4" per card in step 1, from one clip (CameraHints), once known.
+    @Published var cameraLabels: [String: String] = [:]
+    /// What this session's jobs really took: the time estimate in the start bar (memory only).
+    let rates = RateMemory()
     var inspecting: Set<String> = []
     var inspectAgain: Set<String> = []
     let inspectQueue = DispatchQueue(label: "app.inspect", qos: .userInitiated, attributes: .concurrent)
@@ -709,6 +719,11 @@ final class AppModel: ObservableObject {
     func jobFinished(_ item: JobItem) {
         item.refresh()
         loadHistory()   // the card's line follows ("Backed up … — verified, safe to format")
+        // The next estimate (Windows ruling M2: a cancelled job or an unfinished stage 2 teaches nothing).
+        if let r = item.report {
+            rates.learn(r, analyze: item.job.config.analyzeClips, proxy: item.job.config.proxy,
+                        stage2: item.progress.stage2Elapsed, cancelled: item.isCancelled, done: item.status.phase == .done)
+        }
         // Verify-in-proxy: the card is safe to format only now, after the proxies (spec D.22.7 — the chime with it).
         if !terminating, item.status.verifyInProxy, JobProgress.chime(item.status) { NSSound(named: "Glass")?.play() }
         if !terminating {

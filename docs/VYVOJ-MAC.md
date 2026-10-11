@@ -147,6 +147,18 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
 
+- **Dnes a historie karet** (Windows plán 9, úkoly 9 a 16): pravý sloupec má záložky „Queue“ / „Card history“; pod
+  frontou „TODAY“ se souhrnem „3 cards · 412 GB · all verified“ a řádky karta · velikost · čas · stav („✓ 2 copies
+  verified · safe to format“, „! not verified · do not format“, „✕ with errors (N files)“, „! unfinished“); záložka
+  historie po dnech („Today“, „Yesterday“, `2026-10-06`, nejvýš 300 karet) — vše z `history.json`, které aplikace už
+  načítá mimo hlavní vlákno (`HistoryView`, port Windows). Každý řádek má zaškrtávátko pro souhrnný report (sdílené
+  v Today i v historii, „Clear selection“). Mac navíc pod názvem karty ukazuje počet souborů a disky (jméno svazku
+  z cesty, disk se nečte; počet klipů `history.json` nemá). Štítek kamery u karty v kroku 1 („ALEXA 35 · LogC4“,
+  `CameraHints`: první klip, který není kamerová proxy, ffprobe nejvýš 5 s a křivka z automatického LUTu; RAW podle
+  formátu) a odhad v liště Start („estimate ~0:56 incl. proxies“, `RateMemory` z rychlostí úloh této relace, čas
+  2. fáze bez pauz z `JobProgress.stage2Elapsed`; bez měření jen velikost). Prázdná fronta v úzkém okně má užší
+  řetěz ikon (dřív přetékal). Snímek UI `history`. Testy `HistoryViewTests`.
+
 - **Snímací fps z metadat prvního snímku** (chyba z natáčení: ALEXA 35 natočená 35 fps měla v reportu 24 fps): nový klíč
   `clips[].info.captureFrameRate` jako Windows 0.8.0 — ARRIRAW `Sensor State.sensorSampleRate` prvního snímku z rychlé
   sondy `art-cmd export --start 0 --duration 1` (žádný průchod celým klipem; tisíciny `35000` → `35`), BRAW `sensorRate`

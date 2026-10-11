@@ -64,7 +64,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Pozastavit / Pokračovat** (kopie, ověření, 2. fáze mezi klipy; `copyPausedSeconds`, `verifyPausedSeconds`) | ✅ GUI na kartě úlohy ve frontě (CLI ne; čeká ruční test) | ✅ GUI (CLI ne) |
 | **Pauza po dokončení souboru / klipu** (rozpracovaný soubor kopie — na všech cílech — a ověření, klip analýzy a proxy doběhne, pak „Pozastaveno“; „Pozastavuji (dokončuji …)“; čas pauzy jen doba stání) | ✅ GUI rovnou takto, ne mezi bloky (čeká ruční test) | ✅ GUI 0.8.0 (čeká ruční test) |
 | **Zkopírovat znovu** (oprava: jen nesouhlasné soubory, jen na postižený disk, generace ASC MHL N, `kind: "repair"`, `_REPORT/neshoda_NNNN/`) | ⏳ naplánováno | ✅ GUI (CLI ne) |
-| **Dnes a historie karet** (z `history.json`), štítek kamery a připojení, odhad času | ⏳ naplánováno | ✅ GUI |
+| **Dnes a historie karet** (z `history.json`), štítek kamery a připojení, odhad času | ✅ GUI po 0.7.0 D6: „Today“ pod frontou a záložka „Card history“ (stejné texty a stavy jako Windows, zaškrtávání pro souhrnný report; Mac navíc pod názvem karty počet souborů a disky), štítek „ALEXA 35 · LogC4“, odhad „estimate ~… incl. proxies“ (čeká ruční test) | ✅ GUI |
 | **Proxy ve složkách jako na kartě** (`_PROXY/<složka klipu>/<klip>.mov`, plochá starší záloha zůstane plochá) | ⏳ naplánováno (proxy přímo v `_PROXY`) | ✅ 0.5.1 |
 | **Bez proxy, když je originál lehčí** (`proxy.skipLighterSources`, `--proxy-always`) | ⏳ naplánováno (renderuje vše) | ✅ CLI + GUI 0.5.1 |
 | **Verify-in-Proxy** (primární disk ověřený čtením pro proxy, ostatní na pozadí; `--classic-verify`, `--primary`) | ✅ CLI + GUI 0.7.0 (s kontrolou cache přes `mincore`; přepínač „Verify during proxy render“ i v kroku 3; čeká ruční test s kartou) | ✅ CLI + GUI 0.6.0 |

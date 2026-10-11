@@ -15,6 +15,9 @@ extension AppModel {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.history = entries
+                // Ticks of entries that are gone are dropped.
+                let ids = Set(entries.map(\.id))
+                if !self.summarySelection.isSubset(of: ids) { self.summarySelection.formIntersection(ids) }
                 for path in self.allSources { self.inspect(path) }
             }
         }
@@ -27,6 +30,7 @@ extension AppModel {
     func syncInspections() {
         let current = Set(allSources)
         for gone in insights.keys where !current.contains(gone) { insights[gone] = nil }
+        for gone in cameraLabels.keys where !current.contains(gone) { cameraLabels[gone] = nil }
         appendSelected = appendSelected.filter { current.contains($0) }
         for path in allSources where insights[path] == nil && !inspecting.contains(path) { inspect(path) }
         // A card swapped in the same slot: another identity than the one inspected.
@@ -54,6 +58,7 @@ extension AppModel {
                 if self.allSources.contains(path) {
                     self.insights[path] = insight
                     if !self.canAppend(path) { self.appendSelected.remove(path) }
+                    if let insight { self.probeCamera(path, insight) }
                 }
                 if self.inspectAgain.remove(path) != nil { self.inspect(path) }
                 self.objectWillChange.send()

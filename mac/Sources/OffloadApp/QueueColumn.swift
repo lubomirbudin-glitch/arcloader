@@ -7,7 +7,7 @@ import SwiftUI
 /// cancelled (grey); an empty queue shows the flow Card → disks → Verify → Proxy → Report.
 ///
 /// Verify backup items (⇧⌘O) are cards of the same queue — they run one after another with the copies.
-/// Not on the Mac yet (hidden): the "Card history" tab and "Today" table, "Copy again" (repair), the time estimate for
+/// The "Card history" tab and "Today" come from history.json. Not on the Mac yet: "Copy again" (repair), the time estimate for
 /// the whole job.
 struct QueueColumn: View {
     @EnvironmentObject var model: AppModel
@@ -24,6 +24,16 @@ struct QueueColumn: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             tabs.padding(.horizontal, 28).padding(.top, 22).padding(.bottom, 18)
+            if model.queueTab == .history {
+                CardHistoryTab()
+            } else {
+                queue
+            }
+        }
+        .background(p.bg)
+    }
+
+    private var queue: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     if model.jobs.isEmpty && model.verifies.isEmpty {
@@ -39,29 +49,137 @@ struct QueueColumn: View {
                             VerifyCardContainer(item: item)
                         }
                     }
-                    // TODO(history): "Today" — the cards backed up today, from the card history (Windows plan 9).
+                    // Today (new item 7): the cards finished today, from history.json.
+                    if let day = model.today { TodaySection(day: day).padding(.top, 4) }
                 }
                 .padding(.horizontal, 28).padding(.bottom, 28)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }
-        .background(p.bg)
     }
 
     private var tabs: some View {
         HStack(spacing: 4) {
             let open = model.jobs.filter { !$0.queueFinished }.count + model.verifies.filter { !$0.isFinished }.count
-            HStack(spacing: 6) {
-                Text("Queue").font(.ui(13, .semibold)).foregroundStyle(p.text)
-                if open > 0 { Text("\(open)").font(.ui(13, .semibold)).foregroundStyle(p.accentText) }
+            tab(.queue) {
+                HStack(spacing: 6) {
+                    Text("Queue").font(.ui(13, .semibold)).foregroundStyle(model.queueTab == .queue ? p.text : p.text2)
+                    if open > 0 { Text("\(open)").font(.ui(13, .semibold)).foregroundStyle(p.accentText) }
+                }
             }
-            .padding(.horizontal, 14).frame(height: 32)
-            .background(RoundedRectangle(cornerRadius: 8).fill(p.tabActive))
-            // TODO(history): the "Card history" tab once the Mac keeps a card history.
+            tab(.history) {
+                Text("Card history").font(.ui(13, .semibold)).foregroundStyle(model.queueTab == .history ? p.text : p.text2)
+            }
             Spacer()
-            if model.jobs.contains(where: \.queueFinished) || model.verifies.contains(where: \.isFinished) {
+            if !model.summarySelection.isEmpty {
+                Button("Clear selection") { model.clearSummarySelection() }.buttonStyle(.offload(.ghost, height: 32))
+            }
+            if model.queueTab == .queue,
+               model.jobs.contains(where: \.queueFinished) || model.verifies.contains(where: \.isFinished) {
                 Button("Clear finished") { model.clearFinished() }.buttonStyle(.offload(.ghost, height: 32))
             }
+        }
+    }
+
+    private func tab<L: View>(_ t: QueueTab, @ViewBuilder label: () -> L) -> some View {
+        Button { model.queueTab = t } label: {
+            label()
+                .padding(.horizontal, 14).frame(height: 32)
+                .background(RoundedRectangle(cornerRadius: 8).fill(model.queueTab == t ? p.tabActive : .clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// "TODAY" under the queue: summary on the right, one row per card.
+struct TodaySection: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.palette) private var p
+    let day: HistoryDay
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            StepTitle(title: day.title) {
+                Text(day.summary).font(.ui(13)).foregroundStyle(p.text3)
+            }
+            HistoryRows(rows: day.rows)
+        }
+    }
+}
+
+/// The "Card history" tab: every day with a card, newest first; a card can be ticked for the summary report.
+struct CardHistoryTab: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                let days = model.historyDays
+                if model.history == nil {
+                    Text("Loading the card history…").font(.ui(14)).foregroundStyle(p.text2)
+                } else if days.isEmpty {
+                    Text("No card backed up yet.").font(.ui(14)).foregroundStyle(p.text2)
+                }
+                ForEach(days) { day in
+                    VStack(alignment: .leading, spacing: 10) {
+                        StepTitle(title: day.title) {
+                            Text(day.summary).font(.ui(13)).foregroundStyle(p.text3)
+                        }
+                        HistoryRows(rows: day.rows)
+                    }
+                }
+            }
+            .padding(.horizontal, 28).padding(.bottom, 28)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// One bordered list of history rows: tick · name · size · time · state; files and disks under the name.
+struct HistoryRows: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.palette) private var p
+    let rows: [HistoryRow]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                HStack(alignment: .center, spacing: 12) {
+                    Toggle("", isOn: Binding(get: { model.isInSummary(row.id) }, set: { model.setInSummary(row.id, $0) }))
+                        .labelsHidden().toggleStyle(.offloadCheckbox)
+                        .help("Select for the summary report")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.cardName).font(.ui(14, .semibold)).foregroundStyle(p.text)
+                            .lineLimit(1).truncationMode(.middle)
+                        Text(([row.files, row.disks] + (row.project.map { ["project \($0)"] } ?? [])).filter { !$0.isEmpty }
+                                .joined(separator: " · "))
+                            .font(.ui(12)).foregroundStyle(p.text3).lineLimit(1).truncationMode(.tail)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(row.size).font(.ui(14)).foregroundStyle(p.text2).frame(width: 78, alignment: .leading)
+                    Text(row.time).font(.ui(14)).foregroundStyle(p.text2).frame(width: 52, alignment: .leading)
+                    Text(row.status).font(.ui(13)).foregroundStyle(color(row.tone))
+                        .lineLimit(1).truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .help(row.status)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 11)
+                .overlay(alignment: .bottom) {
+                    if i < rows.count - 1 { Rectangle().fill(p.rowLine).frame(height: 1) }
+                }
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 12).fill(p.panel))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(p.line, lineWidth: 1))
+    }
+
+    private func color(_ t: HistoryTone) -> Color {
+        switch t {
+        case .ok: return p.success
+        case .warning: return p.warn
+        case .error: return p.dangerText
+        case .neutral: return p.text2
         }
     }
 }
@@ -81,17 +199,10 @@ struct EmptyQueue: View {
         steps.append(("doc.text", "Report"))
         let ready = !cards.isEmpty && disks > 0
         return VStack(spacing: 26) {
-            HStack(alignment: .top, spacing: 10) {
-                ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
-                    if i > 0 { Rectangle().fill(p.flowLine).frame(width: 34, height: 1).padding(.top, 26) }
-                    VStack(spacing: 8) {
-                        IconTile(systemImage: step.0, size: 52, radius: 14, iconSize: 22,
-                                 fg: i == 0 ? p.accentText : p.text2, bg: i == 0 ? p.accentSoft : p.raised,
-                                 border: i == 0 ? .clear : p.lineStrong)
-                        Text(step.1).font(.ui(13)).foregroundStyle(p.text2).multilineTextAlignment(.center)
-                    }
-                    .frame(width: 92)
-                }
+            // A narrow window gets a tighter flow (the full one is ~680 pt wide).
+            ViewThatFits(in: .horizontal) {
+                flow(steps, step: 92, line: 34, spacing: 10)
+                flow(steps, step: 64, line: 6, spacing: 5)
             }
             VStack(spacing: 6) {
                 Text(ready ? "Ready — \(cards.count == 1 ? model.sourceName(cards[0]) : Fmt.count(cards.count, "card")) to \(Fmt.count(disks, "disk"))"
@@ -107,6 +218,21 @@ struct EmptyQueue: View {
         .padding(.vertical, 44).padding(.horizontal, 32)
         .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(p.bgHeader))
         .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(p.lineSoft, lineWidth: 1))
+    }
+
+    private func flow(_ steps: [(String, String)], step: CGFloat, line: CGFloat, spacing: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: spacing) {
+            ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
+                if i > 0 { Rectangle().fill(p.flowLine).frame(width: line, height: 1).padding(.top, 26) }
+                VStack(spacing: 8) {
+                    IconTile(systemImage: s.0, size: 52, radius: 14, iconSize: 22,
+                             fg: i == 0 ? p.accentText : p.text2, bg: i == 0 ? p.accentSoft : p.raised,
+                             border: i == 0 ? .clear : p.lineStrong)
+                    Text(s.1).font(.ui(13)).foregroundStyle(p.text2).multilineTextAlignment(.center)
+                }
+                .frame(width: step)
+            }
+        }
     }
 
     private func sentence(disks: Int, verify: Bool) -> String {

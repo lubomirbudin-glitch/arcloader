@@ -28,6 +28,11 @@ public struct Clip: Codable {
     public let segments: [String]
     public let bytes: Int64
     public let isCameraProxy: Bool
+
+    public init(name: String, path: String, format: ClipFormat, segments: [String], bytes: Int64, isCameraProxy: Bool) {
+        self.name = name; self.path = path; self.format = format; self.segments = segments; self.bytes = bytes
+        self.isCameraProxy = isCameraProxy
+    }
 }
 
 public struct ClipInfo: Codable {
@@ -58,6 +63,8 @@ public struct ClipInfo: Codable {
     /// frameRate) is the editing length. Report key `clips[].info.captureFrameRate`, absent when unknown — then
     /// capture = playback.
     public var captureFrameRate: String?
+
+    public init() {}
 
     /// The playback rate as people read it: "23.976", "25"; "" when unknown.
     public var fpsLabel: String { ClipInfo.label(frameRate) }
@@ -164,9 +171,9 @@ public enum ClipDetector {
 }
 
 enum FFProbe {
-    static func probe(_ ffprobe: String, _ path: String) throws -> ClipInfo {
+    static func probe(_ ffprobe: String, _ path: String, timeout: TimeInterval = 120) throws -> ClipInfo {
         let out = try ToolProcess.run(ffprobe, ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", path],
-                                      timeout: 120)
+                                      timeout: timeout)
         return try parse(Data(out.utf8))
     }
 

@@ -8,7 +8,7 @@ import SwiftUI
 ///
 /// Each card is looked at off the main thread (CardInspector): its clips and size, the line from the card history
 /// ("Backed up on … — verified, safe to format"), "Append" for new clips, and the folder name the clips suggest.
-/// Not on the Mac yet (hidden): the camera chip ("ALEXA 35 · LogC4"), the time estimate.
+/// The camera chip ("ALEXA 35 · LogC4") comes from one clip of the card; the time estimate from this session's jobs.
 struct SetupColumn: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
@@ -115,9 +115,18 @@ struct CardTile: View {
                 IconTile(systemImage: icon, size: 38, radius: 9, iconSize: 18,
                          fg: selected ? p.accentText : p.text2, bg: selected ? p.accentSoft : p.chip)
                 VStack(alignment: .leading, spacing: 3) {
-                    // TODO(camera-chip): "ALEXA 35 · LogC4" once the Mac checks a clip of the card first (Windows plan 9).
-                    Text(title).font(.ui(15, .semibold)).foregroundStyle(selected ? p.text : p.textSoft)
-                        .lineLimit(1).truncationMode(.middle)
+                    HStack(spacing: 8) {
+                        Text(title).font(.ui(15, .semibold)).foregroundStyle(selected ? p.text : p.textSoft)
+                            .lineLimit(1).truncationMode(.middle)
+                        // "ALEXA 35 · LogC4" from one clip of the card (CameraHints).
+                        if let camera = model.cameraLabels[path] {
+                            Text(camera).font(.ui(12, .semibold)).foregroundStyle(p.textSoft)
+                                .lineLimit(1)
+                                .padding(.horizontal, 8).padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(p.chip))
+                                .layoutPriority(-1)
+                        }
+                    }
                     Text(detail).font(.ui(13)).foregroundStyle(p.text2)
                         .lineLimit(isFolder ? 1 : 2).truncationMode(.middle)
                         .fixedSize(horizontal: false, vertical: true)
@@ -543,7 +552,9 @@ struct StartBar: View {
                     + Text(model.selectedBytes.map { $0 > 0 ? " · \(Fmt.bytes($0))" : "" } ?? "").font(.ui(13)).foregroundColor(p.text2))
             }
             Spacer()
-            // TODO(estimate): "estimate ~0:08 incl. proxy" once the Mac estimates from this session's speeds (Windows plan 9).
+            if cards > 0, let estimate = model.startEstimateText {
+                Text(estimate).font(.ui(13)).foregroundStyle(p.text2).lineLimit(1)
+            }
         }
     }
 }

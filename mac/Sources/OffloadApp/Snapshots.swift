@@ -50,6 +50,7 @@ enum Snapshots {
 
     static var scenarios: [(String, () -> AppModel)] {
         [("ready", ready),
+         ("history", history),
          ("ready-warnings", readyWarnings),
          ("empty", base),
          ("running", running),
@@ -201,7 +202,58 @@ enum Snapshots {
         m.previewState(volumes: [a, b], connections: [a.path: "USB 3 (5 Gb/s)", b.path: "SD reader"],
                        destinations: m.destStatus)
         m.selectedSources = [a.path]
+        m.cameraLabels = [a.path: "ALEXA 35 · LogC4", b.path: "FX6 · S-Log3"]
+        m.history = madeUpHistory()
+        teachRates(m)
         return m
+    }
+
+    /// The "Card history" tab: today, yesterday and an older day; two cards ticked for the summary report.
+    static func history() -> AppModel {
+        let m = ready()
+        m.queueTab = .history
+        m.summarySelection = Set((m.history ?? []).prefix(2).map(\.id))
+        return m
+    }
+
+    /// Cards of today (as in obr. 1), yesterday and a week ago, one not verified, one with errors, one unfinished.
+    static func madeUpHistory() -> [HistoryEntry] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        func entry(_ name: String, day: Int, hour: Int, minute: Int, gb bytes: Double, files: Int,
+                   success: Bool = true, verified: Bool = true, unfinished: Bool = false, failed: Int? = nil) -> HistoryEntry {
+            let at = cal.date(byAdding: DateComponents(day: -day, hour: hour, minute: minute), to: today)!
+            var e = HistoryEntry(id: "snap-\(name)-\(day)", source: "/Volumes/\(name)", cardName: name,
+                                 date: HistoryText.when(at).prefix(10).description, finished: at)
+            e.success = success; e.verified = verified; e.unfinished = unfinished; e.failedFiles = failed
+            e.bytes = Int64(bytes * 1e9); e.files = files
+            e.destinations = [HistoryDestination(root: raid, cardPath: raid + "/x/" + name),
+                              HistoryDestination(root: shuttle, cardPath: shuttle + "/x/" + name)]
+            return e
+        }
+        return [
+            entry("A034_ARRI", day: 0, hour: 18, minute: 12, gb: 256, files: 212),
+            entry("B011_FX6", day: 0, hour: 16, minute: 47, gb: 118, files: 96),
+            entry("SND_DAY03", day: 0, hour: 14, minute: 5, gb: 38, files: 44),
+            entry("A033_ARRI", day: 1, hour: 19, minute: 40, gb: 241, files: 198, verified: false),
+            entry("B010_FX6", day: 1, hour: 17, minute: 2, gb: 96.4, files: 80, success: false, failed: 1),
+            entry("A029_ARRI", day: 6, hour: 12, minute: 30, gb: 188, files: 150, verified: false, unfinished: true),
+        ]
+    }
+
+    /// One measured job, so the start bar shows "estimate ~… incl. proxies".
+    static func teachRates(_ m: AppModel) {
+        let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+        var r = OffloadReport(cardName: "A034_ARRI", date: "2026-10-10", source: "/Volumes/A034_ARRI", sourceFilesystem: "exfat",
+                              started: t0, copyFinished: t0.addingTimeInterval(4), finished: t0.addingTimeInterval(6),
+                              verified: true, totalFiles: 1, totalBytes: 2_400_000_000, destinations: [], files: [], skipped: [])
+        var clip = ClipEntry(clip: Clip(name: "A034C001", path: "A034C001.mxf", format: .video, segments: ["A034C001.mxf"],
+                                        bytes: 2_400_000_000, isCameraProxy: false))
+        var info = ClipInfo()
+        info.duration = 120
+        clip.info = info
+        r.clips = [clip]
+        m.rates.learn(r, analyze: m.settings.analyzeClips, proxy: m.settings.proxy, stage2: 40)
     }
 }
 

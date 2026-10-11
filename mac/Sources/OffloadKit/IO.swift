@@ -156,6 +156,20 @@ public func formatBytes(_ b: Int64) -> String {
     return i == 0 ? "\(b) B" : String(format: "%.2f %@", v, units[i])
 }
 
+/// Three significant digits: "1.70 GB", "14.2 GB", "412 GB", "1.00 GB" for 999.6 MB (Windows `Format.Bytes3`).
+public func formatBytes3(_ b: Int64) -> String {
+    let units = ["B", "KB", "MB", "GB", "TB"]
+    var v = Double(b)
+    var i = 0
+    while v >= 1000 && i < units.count - 1 { v /= 1000; i += 1 }
+    if i == 0 { return "\(b) B" }
+    func round(_ x: Double, _ digits: Int) -> Double { let m = pow(10, Double(digits)); return (x * m).rounded() / m }
+    if round(v, 2) < 10 { return String(format: "%.2f %@", round(v, 2), units[i]) }
+    if round(v, 1) < 100 { return String(format: "%.1f %@", round(v, 1), units[i]) }
+    if v.rounded() < 1000 || i == units.count - 1 { return String(format: "%.0f %@", v.rounded(), units[i]) }
+    return String(format: "%.2f %@", v / 1000, units[i + 1])
+}
+
 /// A size inside a sentence: "3.2 GB", "2 GB", "412 GB", "850 MB", "12 B" (English decimal point).
 public func formatBytesShort(_ b: Int64) -> String {
     let units = ["B", "KB", "MB", "GB", "TB"]
