@@ -328,6 +328,8 @@ public final class OffloadJob {
                 throw error
             }
             pausedAtCopyEnd = engine.pauses.pausedTotal
+            // A read-back through the macOS cache (spec D.23.1): never a silent green.
+            if let note = report.verifyNotes?.first { update { $0.addWarning(note) } }
             // The record of the copy (report, hashes, MHL) on this Mac too, right after verification.
             LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
             setReport(report)
@@ -463,6 +465,7 @@ public final class OffloadJob {
             return false
         }
         pausedAtCopyEnd = engine.pauses.pausedTotal
+        if let note = report.verifyNotes?.first { update { $0.addWarning(note) } }
         if report.verifyPending == true && !isCancelled {
             keepHeld = true
             lock.lock(); verifyLock = held; lock.unlock()
@@ -596,6 +599,7 @@ public final class OffloadJob {
         lock.lock(); let held = verifyLock; verifyLock = nil; let s = session; lock.unlock()
         defer {
             held?.release()
+            s?.close()
             lock.lock(); session = nil; lock.unlock()
         }
         guard let s else { return report }
@@ -734,13 +738,17 @@ public final class OffloadJob {
 
         let verified = report.verified
         let fileIndex = Dictionary(uniqueKeysWithValues: report.files.enumerated().map { ($0.element.path, $0.offset) })
-        /// First destination that holds a good copy of every segment — clips are read from disk, never from the card.
+        lock.lock(); let verifying = session; lock.unlock()
+        /// First destination that holds a good copy of every segment — clips are read from disk, never from the card. With
+        /// verify-in-proxy the primary first: its copy is what the proxies verify.
         func goodDest(_ clip: Clip) -> Int? {
-            report.destinations.indices.first { d in
+            func good(_ d: Int) -> Bool {
                 clip.segments.allSatisfy { seg in
                     fileIndex[seg].map { OffloadReport.isGood(report.files[$0].destinations[d], verified: verified) } ?? false
                 }
             }
+            if let p = verifying?.primary, report.destinations.indices.contains(p), good(p) { return p }
+            return report.destinations.indices.first(where: good)
         }
 
         var entries = clips.map(ClipEntry.init)
@@ -855,10 +863,14 @@ public final class OffloadJob {
 
             let t0 = Date()
             do {
+                // Verify-in-proxy (task 68): the primary's copy read through the tap (mode A) or read before the SDK (mode B).
+                let lease = verifying?.prepare(clip, dest: d)
+                defer { lease?.end() }
                 try renderer.render(clip, cardPath: plan.cardPaths[d], info: info, lut: entries[i].lut,
                                     output: plan.cardPaths[d] + "/" + rel,
                                     progress: { f in self.update { $0.clipFraction = f } },
-                                    isCancelled: { self.isCancelled })
+                                    isCancelled: { self.isCancelled },
+                                    inputURL: lease?.url, activity: lease?.activity)
                 entries[i].proxyStatus = .done
                 entries[i].proxyPath = rel
                 if config.proxy.copyToAllDestinations {

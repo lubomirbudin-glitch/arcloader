@@ -237,6 +237,8 @@ final class DestWriter {
     private var awaitingFlush: [ManifestRecord] = []
     /// The last `flushDevice` went through (F_FULLFSYNC or fsync).
     private(set) var deviceFlushed = false
+    /// Copies verified by a read-back that may have come from the cache (they stayed resident after one eviction).
+    private(set) var cachedReads = 0
     /// Time spent in writes (the destination's own write rate — the primary of verify-in-proxy is the fastest).
     private var busyNanos: UInt64 = 0
     /// Bytes per second while writing; 0 when nothing was written. Read after `wait()`.
@@ -396,6 +398,9 @@ final class DestWriter {
             let path = cardPath + "/" + f.relPath
             setVerifying(f.relPath)
             defer { setVerifying(nil) }
+            // Spec D.23.1 rule 3: a copy still in memory after one eviction may be read from there — read anyway (as
+            // Offload always did), but never silently: the report notes it and the job is not green.
+            let fromDisk = CacheProbe.readsFromDisk(path)
             do {
                 let r = try hashFile(path, chunkSize: options.chunkSize, buffer: buf) { self.verified.add($0) }
                 if r.size != f.size {
@@ -404,6 +409,7 @@ final class DestWriter {
                     results[i] = DestFileResult(state: .failed, error: "HASH MISMATCH: dest \(hex64(r.hashes.xxh64!)) != source \(sourceHashes[i].map(hex64) ?? "-")")
                 } else {
                     results[i].state = .verified
+                    if !fromDisk { cachedReads += 1 }
                 }
             } catch {
                 results[i] = DestFileResult(state: .failed, error: "verify: \(error)")
@@ -754,6 +760,10 @@ public final class OffloadEngine {
         report.copyPausedSeconds = OffloadEngine.pausedField(copyPaused)
         report.verifyPausedSeconds = OffloadEngine.pausedField(verifyPaused)
         if deferring { report.verifyPending = true }
+        let cached = plan.destRoots.indices.compactMap { d in
+            ws[d].cachedReads > 0 ? VIPMsg.verifiedThroughCache(HistoryText.diskName(plan.destRoots[d]), ws[d].cachedReads) : nil
+        }
+        if !cached.isEmpty { report.verifyNotes = cached }
         var reportErrors: [String] = []
         if deferring {
             // Spec D.22.5: the reports say verifyPending — no ASC MHL generation, no hash lists until the commit. A later

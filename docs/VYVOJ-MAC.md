@@ -138,6 +138,23 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 68 — ověření během proxy: HTTP tap jen na 127.0.0.1 (BSD sockety, náhodný port, 128bit token + náhodné id, žádná
+  cesta v URL, jen GET/HEAD a jeden rozsah, `Host` přesně `127.0.0.1:<port>` jinak 400, protistrana mimo loopback se
+  zahodí, nejvýš 8 spojení, hlavička celá do 30 s); ffmpeg čte klip MOV/MP4/MXF primárního cíle přes tap
+  (`-short_seek_size 65536`), `TapFile` čte celé 16MiB bloky s F_NOCACHE do ověřovače, 6 bloků v paměti a **jeden blok
+  dopředu** (bez něj synchronní čtení brzdilo ffmpeg o 37 %), hlídač zaseknutí proxy bere čtení tapu jako pokrok. RAW (BRAW,
+  R3D, ARRIRAW): soubor se před SDK přečte jednou s F_NOCACHE do ověřovače (SDK pak čte samo z disku), bez nového bloku
+  60 s = vzdát, rozhodne dorovnání. **Review focus 9:** tap ani předčtení se nikdy nepoužijí pro soubor, který má stránky
+  v paměti i po `msync(MS_INVALIDATE)` — ověří ho dorovnání s poznámkou „Verified by reading through the macOS cache …“
+  a varováním (nikdy tiché zelené); totéž hlídá i klasické zpětné čtení fáze 1. Primární disk = nejrychlejší při kopii
+  nebo zvolený, ostatní cíle a soubory primárního disku bez proxy čte pozadí po svazcích (vlákno svazku primárního disku
+  čeká, dokud proxy čte primární disk); po proxy dorovnání chybějících bloků; poznámky spec 10 (nestabilní čtení, stejný
+  blok špatně na víc cílech → blok karty znovu, jen když je ve čtečce tatáž karta). Naměřeno 2026-10-11 (ffmpeg 9.0.2
+  z Tools/bin, interní SSD): přes tap přečteno MOV s `moov` na konci 1,000×, MP4 faststart 1,000×, MXF (MPEG-2) 1,019×;
+  60s 1080p klip 257 MB: dekódování přes tap +12 %, proxy H.264 1080p (videotoolbox) přes tap **+3,0 %** (cíl ≤ 5 %).
+  Čtení na pozadí (D.27 ř. 9, druhý cíl na obrazu HFS+): `PRIO_DARWIN_BG` drží i samotné čtení na 155 MB/s místo 630 →
+  použitá úroveň `setiopolicy_np(IOPOL_UTILITY)` (samo 634 MB/s, ustoupí kopii další karty); proxy se čtením na pozadí
+  zpomalí o −0,3 až +2,4 % (šum). Ffmpeg z Homebrew a skutečné Sony XAVC / ARRI MXF nevyzkoušené
 - Úkol 67 — odložené ověření: s ověřením během proxy (`JobConfig.verifyInProxy`, výchozí zapnuto; jen s proxy, ověřením
   a nalezeným ffmpeg) fáze 1 nečte zpět, zapíše a vyprázdní, manifest, reporty s `verifyPending` **bez generace ASC MHL
   a bez `.xxh64`** (doplnění generace ≥ 2 je zakládá jen nové); karta „Safe to eject“, ne „Safe to format“. Zámek složek

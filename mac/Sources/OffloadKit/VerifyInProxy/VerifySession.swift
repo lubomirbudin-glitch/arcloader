@@ -32,11 +32,24 @@ public final class VerifySession {
     public let classicWhy: [String?]
     /// Per destination the bytes there are to verify.
     public let toVerify: [Int64]
-    /// Files of the primary that a proxy reads (the background leaves them to the tap and the fill-in) — task 68.
-    var proxyFiles = Set<String>()
+    /// Files of the primary that a proxy reads (lower-cased): the background leaves them to the tap, the pre-read and the
+    /// fill-in (task 68).
+    private(set) var proxyFiles = Set<String>()
+    /// Index of every file by its path (lower-cased).
+    private var indexOf: [String: Int] = [:]
+    /// Proxies reading the primary now (the primary volume's background reader waits meanwhile).
+    private let tapIdle = NSCondition()
+    private var taps = 0
+    private var server: RangeServer?
+    /// Clips served through the tap so far (tests, the log).
+    private(set) var tapsServed = 0
+    /// Mode B: how long the pre-read of a clip may go without a block before it is given up on (a hung primary disk) —
+    /// the proxy's stall limit. Tests shorten it.
+    var stallTimeout: TimeInterval = ProxyRenderer.defaultStallTimeout
     /// How long a reader may go without reading a block before its disk counts as hung. Tests shorten it.
     var readStallTimeout: TimeInterval = ProxyRenderer.defaultStallTimeout
-    /// Background readers at PRIO_DARWIN_BG (I/O throttled under other I/O — spec D.27 row 9). Tests may turn it off.
+    /// Background readers at the utility I/O tier (`setiopolicy_np` IOPOL_UTILITY): full speed alone, they yield to the next
+    /// card's copy. Not PRIO_DARWIN_BG — measured 2026-10-11 (D.27 row 9) it held a lone read at 155 MB/s instead of 630.
     static var backgroundPriority = true
 
     /// One background thread: the work of one volume.
@@ -109,6 +122,17 @@ public final class VerifySession {
         }
         primary = p
         self.classicWhy = (0..<dests).map { d in d == p ? nil : (d < classicWhy.count ? classicWhy[d] : nil) ?? VIPMsg.classicSecondary }
+        for (i, f) in entries.enumerated() where indexOf[f.path.lowercased()] == nil { indexOf[f.path.lowercased()] = i }
+        if p >= 0 {
+            let sources = entries.map { SourceFile(relPath: $0.path, size: $0.size, modified: $0.modified) }
+            for clip in ClipDetector.detect(sources) {
+                switch TapRegistry.mode(for: clip) {
+                case .http: proxyFiles.insert(clip.path.lowercased())
+                case .preRead: proxyFiles.formUnion(clip.segments.map { $0.lowercased() })
+                case .none: break
+                }
+            }
+        }
     }
 
     static func stateOf(_ f: OffloadReport.FileEntry, _ d: Int) -> DestFileResult {
@@ -170,24 +194,25 @@ public final class VerifySession {
                 byVolume[v, default: []].append((d, i))
             }
         }
-        for v in order {
-            let work = byVolume[v]!
-            let reader = Reader(volume: v, dests: Array(Set(work.map(\.dest))).sorted(), work: work, gated: v == primaryVolume)
-            reader.worker = gate.work()   // joined before its thread starts: the job never stands while it has yet to begin
-            let t = Thread { [weak self] in
-                self?.background(reader)
-                reader.with { reader.done = true }
-                reader.worker?.leave()
-            }
-            t.name = "offload.verify." + String(work[0].dest)
-            reader.thread = t
-            lock.lock(); readers.append(reader); lock.unlock()
-            t.start()
+        for v in order { startReader(volume: v, work: byVolume[v]!, gated: v == primaryVolume) }
+    }
+
+    private func startReader(volume: String, work: [(dest: Int, file: Int)], gated: Bool) {
+        let reader = Reader(volume: volume, dests: Array(Set(work.map(\.dest))).sorted(), work: work, gated: gated)
+        reader.worker = gate.work()   // joined before its thread starts: the job never stands while it has yet to begin
+        let t = Thread { [weak self] in
+            self?.background(reader)
+            reader.with { reader.done = true }
+            reader.worker?.leave()
         }
+        t.name = "offload.verify." + volume
+        reader.thread = t
+        lock.lock(); readers.append(reader); lock.unlock()
+        t.start()
     }
 
     private func background(_ reader: Reader) {
-        if VerifySession.backgroundPriority { setpriority(PRIO_DARWIN_THREAD, 0, PRIO_DARWIN_BG) }
+        if VerifySession.backgroundPriority { setiopolicy_np(IOPOL_TYPE_DISK, IOPOL_SCOPE_THREAD, IOPOL_UTILITY) }
         for (d, i) in reader.work {
             if isStopped || reader.isAbandoned { return }
             // Pause, before the next file (the one in progress is finished).
@@ -202,8 +227,134 @@ public final class VerifySession {
         }
     }
 
-    /// Hook between blocks of a gated reader (task 68: waits while a proxy reads the primary); true = go on.
-    func beforeBlock(_ reader: Reader) -> Bool { !isStopped && !reader.isAbandoned }
+    /// Before every block: a gated reader (the primary's volume) waits while a proxy reads the primary — waiting is not
+    /// reading (the watchdog does not count it). False = stop.
+    func beforeBlock(_ reader: Reader) -> Bool {
+        if isStopped || reader.isAbandoned { return false }
+        guard reader.gated else { return true }
+        tapIdle.lock()
+        if taps > 0 { reader.with { reader.waiting = true } }
+        while taps > 0 && !isStopped && !reader.isAbandoned { _ = tapIdle.wait(until: Date().addingTimeInterval(0.1)) }
+        tapIdle.unlock()
+        reader.with { reader.waiting = false }
+        reader.tick()
+        return !isStopped && !reader.isAbandoned
+    }
+
+    private func tapBusy() {
+        tapIdle.lock(); taps += 1; tapIdle.unlock()
+    }
+
+    private func tapDone() {
+        tapIdle.lock()
+        taps = max(0, taps - 1)
+        tapIdle.broadcast()
+        tapIdle.unlock()
+    }
+
+    /// What the proxy of one clip gets from the session: mode A — the URL ffmpeg reads the clip from (and the tap's
+    /// activity for the stall watchdog); mode B — nothing (the clip's files were read and verified before the SDK).
+    public final class Lease {
+        public let url: String?
+        public let activity: (() -> Int64)?
+        private let release: () -> Void
+        private let once = NSLock()
+        private var done = false
+
+        init(url: String?, activity: (() -> Int64)?, release: @escaping () -> Void) {
+            self.url = url
+            self.activity = activity
+            self.release = release
+        }
+
+        /// The render ended (or failed): the tap stops serving the file.
+        public func end() {
+            once.lock()
+            let first = !done
+            done = true
+            once.unlock()
+            if first { release() }
+        }
+
+        deinit { end() }
+    }
+
+    func fileIndex(_ rel: String) -> Int? { indexOf[rel.lowercased()] }
+
+    /// Before the proxy of `clip` renders from destination `dest`. Mode A: the URL to read it from — only when its copy is
+    /// "written" and none of its pages is in memory (Review focus 9; else nil — ffmpeg reads the file itself and the
+    /// fill-in verifies it, noting the cache). Mode B: its files are read now straight from the disk (F_NOCACHE), every
+    /// block into the verifier; the SDK then reads them from the disk again (ruling B1) — a pre-read without a block for
+    /// `stallTimeout` is given up on (the fill-in decides). Nil when the proxy reads another destination or the clip is not
+    /// read through the session.
+    public func prepare(_ clip: Clip, dest: Int) -> Lease? {
+        lock.lock(); let over = finished || stopped; lock.unlock()
+        guard !over, dest == primary, primary >= 0 else { return nil }
+        switch TapRegistry.mode(for: clip) {
+        case .http:
+            guard let i = fileIndex(clip.path), isWritten(primary, i), let v = verifier(primary, i) else { return nil }
+            let tap: TapFile
+            do { tap = try TapFile(path: cardPaths[primary] + "/" + files[i].path, verifier: v) } catch { return nil }
+            let srv: RangeServer
+            lock.lock()
+            if let have = server {
+                srv = have
+            } else if let made = try? RangeServer() {
+                server = made
+                srv = made
+            } else {
+                lock.unlock()
+                tap.close()
+                return nil
+            }
+            lock.unlock()
+            let url = srv.register(tap, name: (clip.path as NSString).lastPathComponent)
+            lock.lock(); tapsServed += 1; lock.unlock()
+            tapBusy()
+            let counter = verifiedCounters[primary]
+            return Lease(url: url, activity: { srv.activity(url) ?? 0 }, release: { [weak self] in
+                srv.unregister(url)
+                tap.close()
+                counter.add(Int(v.verifiedBytes))
+                self?.tapDone()
+            })
+        case .preRead:
+            let segments = clip.segments.compactMap(fileIndex).filter { isWritten(primary, $0) }
+            guard !segments.isEmpty else { return nil }
+            tapBusy()
+            let reader = Reader(volume: "pre-read", dests: [primary], work: segments.map { (primary, $0) }, gated: false)
+            let t = Thread { [weak self] in
+                guard let self else { return }
+                for (d, i) in reader.work {
+                    if self.isStopped || reader.isAbandoned { break }
+                    // Never "verified" from a read that may come from memory: a resident file is left to the fill-in.
+                    guard CacheProbe.readsFromDisk(self.cardPaths[d] + "/" + self.files[i].path) else { continue }
+                    self.verify(d, i, reader)
+                }
+                reader.with { reader.done = true }
+            }
+            t.name = "offload.verify.pre-read"
+            reader.thread = t
+            t.start()
+            var seen: Int64 = -1
+            var since = Date()
+            while !reader.with({ reader.done }) {
+                let now = reader.with { reader.progress }
+                if now != seen {
+                    seen = now
+                    since = Date()
+                } else if Date().timeIntervalSince(since) >= stallTimeout || isStopped {
+                    reader.with { reader.abandoned = true }   // stops at its next block, or stays in the read it hangs in
+                    break
+                }
+                usleep(50_000)
+            }
+            tapDone()
+            return Lease(url: nil, activity: nil, release: {})
+        case .none:
+            return nil
+        }
+    }
 
     /// Reads what destination `d`'s copy of file `i` still lacks and records the verdict; a cancel leaves it "written",
     /// any error (an unplugged disk, a vanished copy) fails it — never a verdict without the whole read.
@@ -280,6 +431,14 @@ public final class VerifySession {
     /// Stops every reader at its next block (a cancel, the job closed).
     public func stop() {
         lock.lock(); stopped = true; lock.unlock()
+        tapIdle.lock(); tapIdle.broadcast(); tapIdle.unlock()
+    }
+
+    /// The end of the session (the job's stage 2 ended in any way): every reader stops at its next block, the tap closes.
+    public func close() {
+        stop()
+        lock.lock(); let srv = server; server = nil; lock.unlock()
+        srv?.close()
     }
 
     /// After the proxies: the background reads end (waiting while paused), then the notes of spec 10. `pausing`: the
@@ -288,7 +447,18 @@ public final class VerifySession {
     public func finish(pausing: PauseGate.Worker? = nil, isCancelled: @escaping () -> Bool)
         -> (results: [[DestFileResult]], verified: Bool, notes: [String], throughCache: [Int]) {
         startBackground()   // nothing started yet (no proxies): every copy is read now
-        lock.lock(); finished = true; let all = readers; lock.unlock()
+        lock.lock(); finished = true; lock.unlock()
+        // No proxy reads the primary any more: its volume's reader goes on.
+        tapIdle.lock(); taps = 0; tapIdle.broadcast(); tapIdle.unlock()
+        // The fill-in (spec 6): on the primary, what the proxies did not read of the files they were meant to read (a clip
+        // without a proxy, a failed or cancelled render, a file left to it because it was in memory).
+        if primary >= 0 {
+            let fill = files.indices.filter { proxyFiles.contains(files[$0].path.lowercased()) && isWritten(primary, $0) }
+            if !fill.isEmpty && !isStopped && !isCancelled() {
+                startReader(volume: "fill-in", work: fill.map { (primary, $0) }, gated: false)
+            }
+        }
+        lock.lock(); let all = readers; lock.unlock()
         if let pausing { pausing.whileIdle { waitFor(all, isCancelled: isCancelled) } } else { waitFor(all, isCancelled: isCancelled) }
         let cancelled = isCancelled() || isStopped
         let notes = cancelled ? [] : annotate()
@@ -335,7 +505,7 @@ public final class VerifySession {
         return notes
     }
 
-    private func verifiersSnapshot(_ d: Int, _ i: Int) -> BlockVerifier? {
+    func verifiersSnapshot(_ d: Int, _ i: Int) -> BlockVerifier? {
         lock.lock(); defer { lock.unlock() }
         return verifiers[d][i]
     }
@@ -343,7 +513,7 @@ public final class VerifySession {
     /// The XXH3-64 of block `block` (of `blockSize` bytes) of `path` on the card, read with F_NOCACHE. Only reads.
     public static func readCardBlock(_ path: String, block: Int, blockSize: Int) -> UInt64? {
         guard let fd = try? IO.openRead(path) else { return nil }
-        defer { close(fd) }
+        defer { Darwin.close(fd) }
         let buf = IO.allocateAligned(max(blockSize, 4096))
         defer { free(buf) }
         guard let n = try? IO.pread(fd, buf, blockSize, Int64(block) * Int64(blockSize), path: path) else { return nil }

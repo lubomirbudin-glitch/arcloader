@@ -335,11 +335,14 @@ public final class ProxyRenderer {
     }
 
     private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, look: RawLook, singleFrameAt: Double?,
-                             hwaccel: Bool) throws -> FrameSource {
+                             hwaccel: Bool, inputURL: String? = nil) throws -> FrameSource {
         let path = cardPath + "/" + clip.path
         if clip.format == .video {
+            // Verify-in-proxy (task 68): the clip through Offload's tap; -short_seek_size keeps ffmpeg from reading a MOV
+            // with moov at the end or an MXF twice (measured on Windows with ffmpeg 8.1).
+            let input = inputURL.map { ["-short_seek_size", "65536", "-i", $0] } ?? ["-i", path]
             // VideoToolbox only for H.264/HEVC proxies (usesHardwareDecode); thumbnails always decode in software.
-            return FrameSource(inputArgs: hwaccel ? ["-hwaccel", "videotoolbox", "-i", path] : ["-i", path])
+            return FrameSource(inputArgs: hwaccel ? ["-hwaccel", "videotoolbox"] + input : input)
         }
         guard let b = backends[clip.format] else { throw ToolError(tool: clip.format.label, status: -1, message: "no decoder") }
         return try logged { try b.source(path, info: info, settings: settings, look: look, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt) }
@@ -426,8 +429,11 @@ public final class ProxyRenderer {
     /// Renders the proxy. A render that stalls (no progress for `stallTimeout`) is killed. With hardware decoding the clip
     /// is then retried once in software — as is one that failed with it; without, the stall fails the proxy. Cancelling
     /// never retries. Notes and log lines as on Windows.
+    /// `inputURL`: verify-in-proxy's tap for the clip (mode A) — ffmpeg reads it from there instead of the file; `activity`:
+    /// the tap's reads, which the stall watchdog takes as progress (a slow destination does not kill the proxy).
     public func render(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil, output: String,
-                       progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
+                       progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool,
+                       inputURL: String? = nil, activity: (() -> Int64)? = nil) throws {
         guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
         let lutFile = try prepareLUT(lut)
         let look = ProxyRenderer.lookFor(lutFile != nil ? lut : nil, info: info)
@@ -435,7 +441,7 @@ public final class ProxyRenderer {
         let first: Error
         do {
             try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, lut: lut, lutFile: lutFile, look: look, hwaccel: hw,
-                           output: output, progress: progress, isCancelled: isCancelled)
+                           output: output, progress: progress, isCancelled: isCancelled, inputURL: inputURL, activity: activity)
             return
         } catch let e as FFmpegStall where !hw && !isCancelled() {
             throw FFmpegStall(note: e.note + "; proxy not created")
@@ -446,7 +452,7 @@ public final class ProxyRenderer {
         log?("proxy \(clip.name): with hardware decoding: \(first) — retrying in software")
         do {
             try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, lut: lut, lutFile: lutFile, look: look, hwaccel: false,
-                           output: output, progress: progress, isCancelled: isCancelled)
+                           output: output, progress: progress, isCancelled: isCancelled, inputURL: inputURL, activity: activity)
             log?("proxy \(clip.name): software decoding succeeded")
         } catch where (error is FFmpegStall || error is ToolError) && !isCancelled() {
             log?("proxy \(clip.name): software decoding failed too: \(error)")
@@ -463,13 +469,15 @@ public final class ProxyRenderer {
 
     private func renderOnce(_ ffmpeg: String, _ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse?, lutFile: String?,
                             look: RawLook, hwaccel: Bool, output: String,
-                            progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool) throws {
+                            progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool,
+                            inputURL: String? = nil, activity: (() -> Int64)? = nil) throws {
         // ARRIRAW: art-cmd first writes a ProRes LT intermediate and reports no progress itself — estimate it from the
         // intermediate's size (0–80 %); ffmpeg's own progress covers the rest.
         let arriMonitor = clip.format == .arriraw ? intermediateProgress(info: info, progress: progress) : nil
         let src: FrameSource
         do {
-            src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: nil, hwaccel: hwaccel)
+            src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: nil, hwaccel: hwaccel,
+                                  inputURL: inputURL)
         } catch {
             arriMonitor?.cancel()
             throw error
@@ -495,7 +503,7 @@ public final class ProxyRenderer {
         args += ["-f", "mov", part]
         do {
             try runFFmpeg(ffmpeg, args, feeder: src.feeder, explainFeederError: src.explainFeederError, duration: info.duration,
-                          progress: progress, isCancelled: isCancelled, stallAfter: stallTimeout)
+                          progress: progress, isCancelled: isCancelled, stallAfter: stallTimeout, activity: activity)
             // Never over a proxy that is already there (an append writes next to earlier proxies; a name taken meanwhile).
             do {
                 try ProxyCopy.renameNoReplace(part, output)
@@ -563,7 +571,7 @@ public final class ProxyRenderer {
     /// note); one that was terminated, or whose stdout the pump closed because ffmpeg had stopped reading, is not.
     func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, explainFeederError: ((ToolError) -> Error)? = nil,
                    duration: Double?, progress: ((Double) -> Void)?, isCancelled: () -> Bool,
-                   stallAfter: TimeInterval? = nil) throws {
+                   stallAfter: TimeInterval? = nil, activity: (() -> Int64)? = nil) throws {
         let p = ToolProcess(ffmpeg, args)
         p.captureStderr()
         let watch = ProgressWatch()
@@ -628,7 +636,13 @@ public final class ProxyRenderer {
             throw error
         }
         pump?.start()
+        var lastActivity = activity?() ?? 0
         while p.process.isRunning {
+            // The tap read from the disk (verify-in-proxy): a slow destination is alive, a hung one is not.
+            if let a = activity?(), a != lastActivity {
+                lastActivity = a
+                watch.dataFlowed()
+            }
             if isCancelled() {
                 stop(p, feeder)
                 throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled")
