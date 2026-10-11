@@ -129,6 +129,12 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 39 — dva stavy karty: Safe to eject (vše zapsané) × Safe to format (vše ověřené a zapsané); zelená (tón karty,
+  zelený pruh, štítky `JobProgress.chips`), zvuk Glass (`JobProgress.chime`) a CLI 0 jen při Safe to format
+  (`--no-verify` zůstává 0); `JobStatus.warning`; HTML odznak VERIFIED zeleně jen při `safeToFormat` (COPIED — VERIFYING,
+  UNFINISHED) a věta Texts.safeToFormat / safeToEject pod hlavičkou; texty anglicky podle Windows `JobCard.cs`
+  („Safe to eject“, „Do not format“, „Verifying…“); starší testy úkolů 8/11 čekají `safeToFormat`; GUI se nespouštělo
+  (jen build), ruční kontrola se dvěma cíli a zvukem čeká
 - Úkol 38 — CardRecord (všechny generace, reporty z Windows i Macu) a jediná definice „ověřeno“ (verifyPending/
   verifyIncomplete nikdy; cizí cesty = všechny sloupce; podle sériového čísla disku, R12); BackupState;
   `OffloadReport.isFailed` jako Windows `IsFailed` („written“ v ověřeném reportu = selhání, ne „neověřeno“ — testy plánu,

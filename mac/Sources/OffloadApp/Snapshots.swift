@@ -94,6 +94,11 @@ enum Snapshots {
         proxies.fileCaption = "Proxy 15 / 24"
         proxies.fileValue = "A034C015_261007_R1AB.mxf · 40 %"
         proxies.safeWhileRunning = true
+        proxies.safeFormat = true
+        proxies.ejectChip = CardChip(text: "Safe to eject", tone: .ok)
+        proxies.formatChip = CardChip(text: "Safe to format", tone: .ok)
+        run.ejectChip = CardChip(text: "Do not eject yet", tone: .waiting)
+        run.formatChip = CardChip(text: "Do not format yet", tone: .waiting)
         proxies.showEject = true
         proxies.canCancel = true
         m.jobs = [job("A034_ARRI", proxies), job("A035_ARRI", run), job("B012_FX6", wait)]
@@ -105,7 +110,9 @@ enum Snapshots {
     static func finished() -> AppModel {
         let m = base()
         var done = JobCardState(kind: .done, phase: .done, name: "A035_ARRI", sub: "24 files · 1.70 GB")
-        done.title = "A035_ARRI — safe to eject"
+        done.title = "A035_ARRI — safe to format"
+        done.ejectChip = CardChip(text: "Safe to eject", tone: .ok)
+        done.formatChip = CardChip(text: "Safe to format", tone: .ok)
         done.text = "All 24 files are on 2 disks and verified (xxHash64)."
         done.summary = [SummaryField(label: "Copy", value: "602 MB/s"), SummaryField(label: "Verify", value: "799 MB/s"),
                         SummaryField(label: "Proxy", value: "24 / 24"), SummaryField(label: "Total", value: "6 min 12 s")]
@@ -120,6 +127,8 @@ enum Snapshots {
         problem.text = "1 file on SHUTTLE_B doesn't match the card. RAID_A is fine."
         problem.failed = [FailedFileRow(id: 0, path: "XDROOT/Clip/B012C015_261007_9QW1.MXF",
                                         disks: [.init(ok: true, text: "RAID_A ✓"), .init(ok: false, text: "SHUTTLE_B ✕ hash")])]
+        problem.ejectChip = CardChip(text: "Do not eject", tone: .error)
+        problem.formatChip = CardChip(text: "Do not format", tone: .error)
         problem.hasReport = true
         problem.path = "…/2026-10-10/B012_FX6/"
         var failed = JobCardState(kind: .failed, phase: .failed, name: "C007_VENICE", sub: "2 disks")

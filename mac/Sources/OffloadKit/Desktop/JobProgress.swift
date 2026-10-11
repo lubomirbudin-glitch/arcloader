@@ -2,6 +2,39 @@ import Foundation
 
 public enum CardTone: Equatable { case waiting, active, ok, warning, error }
 
+/// One of the card row's two verdicts (Windows R5): "Safe to eject" or "Safe to format" and how it looks.
+public struct CardChip: Equatable {
+    public let text: String
+    public let tone: CardTone
+
+    public init(text: String, tone: CardTone) {
+        self.text = text
+        self.tone = tone
+    }
+}
+
+extension JobProgress {
+    /// The card row's two verdicts, never merged (R5). Green only where the card may be formatted (ruling I2); "Safe
+    /// to eject" alone is neutral. A waiting job shows none (the caller hides them). `contentWarnings` (task 70): the
+    /// copy is exact but the decoder found defects — yellow until the user has looked.
+    public static func chips(_ s: JobStatus, contentConfirmed: Bool = true, contentWarnings: Int = 0) -> (eject: CardChip, format: CardChip) {
+        let running = s.phase != .waiting && !s.phase.isFinished
+        let format: CardChip = s.safeToFormat
+            ? (contentWarnings > 0 && !contentConfirmed ? CardChip(text: "Safe to format after checking defects", tone: .warning)
+                                                        : CardChip(text: "Safe to format", tone: .ok))
+            : running ? CardChip(text: s.safeToEject ? "Verifying…" : "Do not format yet", tone: .waiting)
+            : CardChip(text: "Do not format", tone: s.safeToEject ? .warning : .error)
+        let eject: CardChip = s.safeToEject ? CardChip(text: "Safe to eject", tone: format.tone == .ok ? .ok : .waiting)
+            : running ? CardChip(text: "Do not eject yet", tone: .waiting) : CardChip(text: "Do not eject", tone: .error)
+        return (eject, format)
+    }
+
+    /// The success sound (and the "done" notification): formattable everywhere and nothing to look at.
+    public static func chime(_ s: JobStatus) -> Bool {
+        s.safeToFormat && s.warning == nil && s.phase != .cancelled && s.phase != .failed
+    }
+}
+
 /// What a job card shows, from successive `JobStatus` snapshots (port of Windows `Desktop/JobProgress.cs`;
 /// the logic of the app's former `JobItem.refresh` and `JobCard` texts, now testable).
 public final class JobProgress {
@@ -84,9 +117,13 @@ public final class JobProgress {
     /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound).
     public var isError: Bool { tone == .error }
 
+    /// Spec D.22.7 (Windows ruling I2): green only when the card may be formatted and nothing needs a look; copied
+    /// alone ("Safe to eject") or a warning is orange.
     public var tone: CardTone {
         switch status.phase {
-        case .done: return status.copySucceeded == false ? .error : .ok
+        case .done:
+            if status.copySucceeded == false { return .error }
+            return status.safeToFormat && status.warning == nil ? .ok : .warning
         case .failed: return .error
         case .cancelled: return .warning
         case .waiting: return .waiting

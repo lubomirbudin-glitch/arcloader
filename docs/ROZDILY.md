@@ -68,7 +68,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Proxy ve složkách jako na kartě** (`_PROXY/<složka klipu>/<klip>.mov`, plochá starší záloha zůstane plochá) | ⏳ naplánováno (proxy přímo v `_PROXY`) | ✅ 0.5.1 |
 | **Bez proxy, když je originál lehčí** (`proxy.skipLighterSources`, `--proxy-always`) | ⏳ naplánováno (renderuje vše) | ✅ CLI + GUI 0.5.1 |
 | **Verify-in-Proxy** (primární disk ověřený čtením pro proxy, ostatní na pozadí; `--classic-verify`, `--primary`) | ⏳ naplánováno (zpětné čtení) | ✅ CLI + GUI 0.6.0 |
-| **Lze vyjmout × Lze formátovat** (dva stavy karty, oznámení „hotovo“ až po ověření všech disků) | ⏳ naplánováno („kartu lze vysunout“ po ověření) | ✅ GUI + CLI 0.6.0 |
+| **Lze vyjmout × Lze formátovat** (dva stavy karty, oznámení „hotovo“ až po ověření všech disků) | ✅ GUI + CLI (bez ověření během proxy — úkol 67) | ✅ GUI + CLI 0.6.0 |
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
 | **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ⏳ naplánováno | ✅ 0.6.0 |
 | **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ⏳ naplánováno | ✅ 0.6.0 |
@@ -215,8 +215,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   na Macu ověří z `<karta>.xxh64` nebo xxh64 v ASC MHL jako dřív. Report s `verifyPending` (aplikace spadla během ověření)
   Mac považuje za neověřený.
 - **CLI `--classic-verify` a `--primary N`** (Windows od 0.6.0, `copy` i `append`): `--primary` mimo 1…počet cílů (`--dest`) skončí českou chybou a kódem 1, nikdy tichým návratem k nejrychlejšímu disku. Kód 1 má i kopie, po které kartu nelze formátovat (výsledek ověření nezapsán, neověřené dřívější soubory; `--no-verify` zůstává 0).
-- **Lze vyjmout × Lze formátovat** (Windows od 0.6.0): „kartu lze vysunout“ se rozdělilo — vyjmout po zapsání, formátovat
-  až po ověření všech disků; Mac zatím hlásí jen „kartu lze vysunout“ po zpětném čtení.
+- **Lze vyjmout × Lze formátovat** (Windows od 0.6.0, Mac od úkolu 39): „kartu lze vysunout“ se rozdělilo — vyjmout po
+  zapsání, formátovat až po ověření všech disků; zelená, zvuk úspěchu a CLI kód 0 jen při „Safe to format“. Mac zatím
+  ověřuje jen zpětným čtením (ověření během proxy — úkol 67), takže „Safe to eject“ bez „Safe to format“ vidí jen
+  s vypnutým nebo zrušeným ověřením.
 - **Chyby souborů v HTML česky** (Windows): JSON je sdílený, takže chyby v něm zůstávají anglicky (`size mismatch`,
   `HASH MISMATCH` …); HTML/PDF report je zobrazí česky.
 - **Historie karet** (zatím jen Windows, pro Mac naplánováno): `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,

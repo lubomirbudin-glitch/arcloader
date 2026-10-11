@@ -51,12 +51,20 @@ public struct JobStatus {
     public var clipFraction = 0.0
     public var proxiesDone = 0
     public var proxiesFailed = 0
-    /// All files are on all destinations and verified — the card may be ejected even while proxies render.
+    /// Everything is written (and flushed) on every destination: the card may be taken out ("Safe to eject", Windows
+    /// R5) — also while the verification still runs or when it is off. Never green on its own.
     public var safeToEject = false
+    /// Every file verified on every destination and the result written everywhere ("Safe to format", R5); for an
+    /// append or a repair the whole backup (BackupState). The only state that is green, chimes and exits 0.
+    public var safeToFormat = false
+    /// The first warning (orange, "needs attention"): no success chime, no green.
+    public var warning: String?
     public var copySucceeded: Bool?
     public var error: String?
 
     public init() {}
+
+    mutating func addWarning(_ w: String) { if warning == nil { warning = w } }
 }
 
 /// One card: copy → verify → report → clip analysis → optional proxies. Used by both the CLI and the app.
@@ -171,7 +179,8 @@ public final class OffloadJob {
             LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
             setReport(report)
             update {
-                $0.safeToEject = report.safeToFormat
+                $0.safeToEject = report.success
+                $0.safeToFormat = report.safeToFormat
                 $0.copySucceeded = report.success
                 $0.copy = engine.snapshot()
             }

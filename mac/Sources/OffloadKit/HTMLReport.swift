@@ -65,8 +65,15 @@ public enum HTMLReport {
 
     public static func render(_ r: OffloadReport, forPrint: Bool = false) -> String {
         let ok = r.success
-        let status = !ok ? "FAILED" : (r.verified ? "VERIFIED" : "COPIED — NOT VERIFIED")
-        let statusClass = !ok ? "bad" : (r.verified ? "ok" : "warn")
+        // Spec D.22.7: green only when the card may be formatted — never while the verification with the proxies runs
+        // (verifyPending) or its result is not in every folder yet (verifyIncomplete).
+        let incomplete = r.verifyIncomplete == true
+        let status = !ok ? "FAILED" : r.verifyPending == true ? "COPIED — VERIFYING" : incomplete ? "UNFINISHED"
+            : (r.verified ? "VERIFIED" : "COPIED — NOT VERIFIED")
+        let statusClass = !ok ? "bad" : (r.safeToFormat ? "ok" : "warn")
+        let verdict = !ok ? "" : r.safeToFormat
+            ? "<p class=\"ok\">\(esc(Texts.safeToFormat(r.destinations.count)))</p>\n"
+            : "<p class=\"muted\">\(esc(Texts.safeToEject(r.destinations.count)))</p>\n"
         let failed = r.failedFiles
         let videoClips = r.clips.filter { !$0.clip.isCameraProxy }
         let totalDuration = videoClips.compactMap { $0.info?.duration }.reduce(0, +)
@@ -106,6 +113,7 @@ public enum HTMLReport {
         </style></head><body><main>
         <header><h1>\(esc(r.cardName))</h1><span class="badge \(statusClass)">\(status)</span>
         <span class="sub">\(dateTime(r.started)) – \(timeOnly(r.finished))</span></header>
+        \(verdict)
         <div class="stats">
         <div class="stat"><b>\(r.totalFiles)</b><span>\(r.totalFiles == 1 ? "file" : "files")</span></div>
         <div class="stat"><b>\(formatBytes(r.totalBytes))</b><span>data</span></div>

@@ -159,6 +159,7 @@ struct RunningCard: View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 22) {
                 header
+                VerdictChips(state: state)
                 if !state.steps.isEmpty { phases }
                 if !state.rows.isEmpty { speedTable }
                 footer
@@ -255,21 +256,53 @@ struct RunningCard: View {
     }
 
     /// Proxies still render, but the copy is verified: the card may go.
+    /// Green only when the card may be formatted too (spec D.22.7); copied alone is neutral.
     private var safeStrip: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "checkmark.shield.fill").foregroundStyle(p.success)
-            Text(state.ejected ? "Card ejected — the copy is verified." : "The copy is verified — safe to eject the card.")
-                .font(.ui(13)).foregroundStyle(p.success)
+        let green = state.safeFormat
+        let text = state.ejected
+            ? (green ? "Card ejected — the copy is verified." : "Card ejected — don't format it until the copy is verified.")
+            : (green ? "The copy is verified — the card is safe to eject and format."
+                     : "Everything is copied — the card is safe to eject. Don't format it yet.")
+        return HStack(spacing: 12) {
+            Image(systemName: green ? "checkmark.shield.fill" : "shield.lefthalf.filled").foregroundStyle(green ? p.success : p.text2)
+            Text(text).font(.ui(13)).foregroundStyle(green ? p.success : p.text2)
             Spacer(minLength: 8)
             if state.showEject {
                 Button(state.ejecting ? "Ejecting…" : "Eject card", action: actions.eject)
-                    .buttonStyle(.offload(.successSoft, height: 32))
+                    .buttonStyle(.offload(green ? .successSoft : .secondary, height: 32))
                     .disabled(state.ejecting)
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10).fill(p.successBg))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(p.successBorder, lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10).fill(green ? p.successBg : p.chip))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(green ? p.successBorder : p.lineSoft, lineWidth: 1))
+    }
+}
+
+/// The card row's two verdicts (Windows R5), never merged: "Safe to eject" and "Safe to format" — green only when the
+/// card may be formatted (JobProgress.chips).
+struct VerdictChips: View {
+    @Environment(\.palette) private var p
+    let state: JobCardState
+
+    var body: some View {
+        if let eject = state.ejectChip, let format = state.formatChip {
+            HStack(spacing: 8) {
+                chip(eject)
+                chip(format)
+            }
+        }
+    }
+
+    private func chip(_ c: CardChip) -> some View {
+        let colors: (fg: Color, bg: Color)
+        switch c.tone {
+        case .ok: colors = (p.success, p.successBg)
+        case .warning: colors = (p.warnSoftText, p.warnSoftBg)
+        case .error: colors = (p.dangerText, p.dangerBg)
+        case .waiting, .active: colors = (p.text2, p.chip)
+        }
+        return Pill(text: c.text, fg: colors.fg, bg: colors.bg)
     }
 }
 
@@ -313,6 +346,7 @@ struct DoneCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(state.title).font(.ui(20, .semibold)).foregroundStyle(p.text)
                     Text(state.text).font(.ui(14)).foregroundStyle(p.successText2).fixedSize(horizontal: false, vertical: true)
+                    VerdictChips(state: state).padding(.top, 4)
                 }
                 Spacer(minLength: 12)
                 if state.ejected {
@@ -436,6 +470,7 @@ struct ProblemCard: View {
                     Text(state.title).font(.ui(16, .semibold)).foregroundStyle(p.text)
                     Text(state.text).font(.ui(14)).foregroundStyle(c.text2).fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
+                    if state.kind != .failed { VerdictChips(state: state).padding(.top, 4) }
                 }
                 Spacer(minLength: 12)
                 // TODO(repair): "Copy again" (only the failed files, only where they failed) once the Mac can repair.

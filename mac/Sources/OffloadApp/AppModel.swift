@@ -669,7 +669,8 @@ final class AppModel: ObservableObject {
     }
 
     private func copyFinished(_ item: JobItem) {
-        guard !terminating, item.status.safeToEject else { return }
+        // Spec D.22.7: the success sound only when the card may be formatted (copied alone is not a success).
+        guard !terminating, JobProgress.chime(item.status) else { return }
         NSSound(named: "Glass")?.play()
     }
 

@@ -197,9 +197,17 @@ struct Copy: ParsableCommand {
                 }
             }
             print("Report: \(plan.cardPaths[0])/\(Layout.reportDirName)/\(plan.cardName)_report.html")
+            if status.safeToFormat {
+                print(Texts.safeToFormat(plan.cardPaths.count))
+            } else if status.safeToEject {
+                print(Texts.safeToEject(plan.cardPaths.count))
+            }
         }
         if let e = status.error { print(Msg.cliError + e) }
         if status.phase != .done || report?.success != true { throw ExitCode(1) }
+        // Spec D.22.7: exit 0 after a verified copy only when the card may be formatted; --no-verify stays 0 (the user
+        // turned the verification off), like Windows 0.6.0.
+        if !noVerify && !status.safeToFormat { throw ExitCode(1) }
     }
 
     /// The "LUT: …" line before the copy (same wording as Windows).
@@ -459,7 +467,7 @@ final class ProgressDisplay {
             lastVerified = s.verifiedBytes
         } else if st.phase == .analyzing || st.phase == .proxies {
             line = String(format: "%@ %d/%d  %3.0f%%  %@", st.phase.rawValue, st.clipIndex + 1, st.clipCount, st.clipFraction * 100, st.clipName)
-            if st.safeToEject { line += "  (card safe to eject)" }
+            if st.safeToFormat { line += "  (card safe to format)" } else if st.safeToEject { line += "  (card safe to eject)" }
         } else {
             line = st.phase.rawValue
         }

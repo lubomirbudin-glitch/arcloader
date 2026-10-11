@@ -72,6 +72,7 @@ final class JobTests: XCTestCase {
         }
         XCTAssertEqual(job.status().phase, .cancelled)
         XCTAssertFalse(job.status().safeToEject)
+        XCTAssertFalse(job.status().safeToFormat)
         XCTAssertEqual(TestFS.files(in: dir.path + "/d1").filter { $0.hasSuffix(".offload-part") }, [])
     }
 
@@ -87,6 +88,7 @@ final class JobTests: XCTestCase {
         let report = try XCTUnwrap(job.run())
         XCTAssertEqual(job.status().phase, .done)
         XCTAssertTrue(job.status().safeToEject)
+        XCTAssertTrue(job.status().safeToFormat)
         XCTAssertTrue(report.safeToFormat)
         for path in try XCTUnwrap(job.plan).cardPaths {
             XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path + "/CLIP/A.bin")), a)

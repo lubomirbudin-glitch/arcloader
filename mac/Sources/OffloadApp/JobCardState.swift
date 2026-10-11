@@ -56,8 +56,13 @@ struct JobCardState {
     var fileCaption = ""
     var fileValue = ""
     var brake: String?
-    /// The copy is verified while clips are still analysed / proxies rendered: the card may already go.
+    /// Everything is copied while clips are still analysed / proxies rendered: the card may already go.
     var safeWhileRunning = false
+    /// …and verified everywhere: the card may also be formatted (the strip is green only then).
+    var safeFormat = false
+    /// The two verdicts of the card row (Windows R5), never merged; none while the job waits.
+    var ejectChip: CardChip?
+    var formatChip: CardChip?
     var summary: [SummaryField] = []
     var thumbs: [ClipThumb] = []
     var moreThumbs = 0
@@ -98,6 +103,11 @@ struct JobCardState {
         c.ejected = item.ejected
         c.hasReport = report != nil && plan != nil
         c.hasProxies = report?.proxy?.enabled == true && s.proxiesDone > 0
+        if c.kind != .waiting {
+            let chips = JobProgress.chips(s)
+            c.ejectChip = chips.eject
+            c.formatChip = chips.format
+        }
         switch c.kind {
         case .waiting:
             c.title = "Waiting in queue"
@@ -109,6 +119,7 @@ struct JobCardState {
             (c.fileCaption, c.fileValue) = fileLine(s)
             if s.phase == .copying, let chain = item.chain { c.brake = brakeSentence(item.progress.brake, chain, names) }
             c.safeWhileRunning = s.safeToEject
+            c.safeFormat = s.safeToFormat
         case .done, .problem, .failed, .cancelled:
             (c.title, c.text) = headline(c.kind, name, s, report, names)
             if c.kind != .cancelled, let r = report {
@@ -132,7 +143,8 @@ struct JobCardState {
         case .cancelled: return .cancelled
         case .done, .failed:
             guard let r else { return s.phase == .failed ? .failed : .done }
-            if !r.success || !r.verified || !s.safeToEject { return .problem }
+            // Spec D.22.7: green (done) only when the card may be formatted; copied alone is a problem card.
+            if !r.success || !r.verified || !s.safeToFormat || s.warning != nil { return .problem }
             return .done   // a failed stage 2 after a good copy: still safe, the text says what failed
         default: return .running
         }
@@ -141,21 +153,26 @@ struct JobCardState {
     static func headline(_ kind: Kind, _ card: String, _ s: JobStatus, _ r: OffloadReport?, _ names: [String]) -> (String, String) {
         switch kind {
         case .cancelled:
-            return ("\(card) — cancelled", s.safeToEject
+            return ("\(card) — cancelled", s.safeToFormat
                 ? "The copy is done and verified; only the processing after it was cancelled."
+                : s.safeToEject
+                ? "The copy is done but not verified — the card is safe to eject; don't format it."
                 : "The card isn't fully backed up — copy it again in full.")
         case .failed:
             return ("\(card) — offload failed", s.error ?? "The copy didn't finish.")
         case .problem:
-            guard let r else { return ("\(card) — don't eject the card yet", s.error ?? "The backup isn't complete yet.") }
-            if !r.success { return ("\(card) — don't eject the card yet", problemText(r, names)) }
+            let notYet = s.safeToEject ? "\(card) — safe to eject, don't format yet" : "\(card) — don't eject the card yet"
+            guard let r else { return (notYet, s.error ?? "The backup isn't complete yet.") }
+            if !r.success { return (notYet, problemText(r, names)) }
             if !r.verified { return ("\(card) — copied without verification", AfterCopyTexts.verifyOffWarning) }
-            return ("\(card) — don't eject the card yet", "The backup isn't complete yet.")
+            if let w = s.warning { return (notYet, w) }
+            if r.verifyPending == true { return (notYet, "The verification hasn't finished yet.") }
+            return (notYet, "The verification result isn't written on every destination yet.")
         case .done:
             guard let r else { return ("\(card) — done", "Nothing new to copy.") }
             var safe = safeText(r.totalFiles, r.destinations.count)
             if s.phase == .failed { safe += " Processing after the copy failed: \(s.error ?? "unknown error")" }
-            return ("\(card) — safe to eject", safe)
+            return ("\(card) — safe to format", safe)
         default:
             return (card, "")
         }

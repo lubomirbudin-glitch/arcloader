@@ -40,6 +40,7 @@ final class StageTwoTests: XCTestCase {
         let s = job.status()
         XCTAssertEqual(s.phase, .done)
         XCTAssertTrue(s.safeToEject)
+        XCTAssertTrue(s.safeToFormat)
         XCTAssertEqual(s.proxiesDone, 2)
         XCTAssertEqual(s.proxiesFailed, 0)
         XCTAssertEqual(report.clips.count, 3)
@@ -99,7 +100,8 @@ final class StageTwoTests: XCTestCase {
         let job = OffloadJob(config: config, options: o)
         let report = try XCTUnwrap(job.run())
         XCTAssertEqual(job.status().phase, .done)
-        XCTAssertFalse(job.status().safeToEject)
+        XCTAssertTrue(job.status().safeToEject, "written and flushed: the card may be taken out")
+        XCTAssertFalse(job.status().safeToFormat, "never formattable without verification")
         XCTAssertEqual(report.clips.first?.proxyStatus, .done)
     }
 

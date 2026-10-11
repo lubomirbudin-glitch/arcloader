@@ -121,6 +121,8 @@ final class JobProgressTests: XCTestCase {
             var s = JobStatus()
             s.phase = phase
             s.copySucceeded = ok
+            s.safeToEject = ok == true
+            s.safeToFormat = ok == true
             p.update(s, now: t0)
             XCTAssertEqual(p.statusText, text, "\(phase)")
             XCTAssertEqual(p.tone, tone, "\(phase)")
@@ -167,8 +169,9 @@ final class JobProgressTests: XCTestCase {
         XCTAssertEqual(Texts.clips(1), "1 clip")
         XCTAssertEqual(Texts.clips(4), "4 clips")
         XCTAssertEqual(Texts.clips(7), "7 clips")
-        XCTAssertEqual(Texts.safeToEject(1), "All files are on 1 drive and verified — safe to eject.")
-        XCTAssertEqual(Texts.safeToEject(2), "All files are on 2 drives and verified — safe to eject.")
+        XCTAssertEqual(Texts.safeToFormat(1), "All files are on 1 drive and verified — the card is safe to eject and format.")
+        XCTAssertEqual(Texts.safeToFormat(2), "All files are on 2 drives and verified — the card is safe to eject and format.")
+        XCTAssertEqual(Texts.safeToEject(2), "All files are on 2 drives — the card is safe to eject. Format it only after verification.")
         XCTAssertEqual(Texts.failed(3), "3 files failed — the card is NOT safely backed up. See the report for details.")
         XCTAssertEqual(Texts.failed(1), "1 file failed — the card is NOT safely backed up. See the report for details.")
         XCTAssertEqual(Texts.warnings(0), "no warnings")

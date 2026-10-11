@@ -12,8 +12,14 @@ public enum Texts {
 
     public static func clips(_ n: Int) -> String { "\(n) \(plural(n, "clip", "clips"))" }
 
+    /// "Safe to eject" (Windows R5): copied everywhere, the verification may still run or be off.
     public static func safeToEject(_ disks: Int) -> String {
-        "All files are on \(disks) \(plural(disks, "drive", "drives")) and verified — safe to eject."
+        "All files are on \(disks) \(plural(disks, "drive", "drives")) — the card is safe to eject. Format it only after verification."
+    }
+
+    /// "Safe to format" (Windows R5): verified everywhere and the result written.
+    public static func safeToFormat(_ disks: Int) -> String {
+        "All files are on \(disks) \(plural(disks, "drive", "drives")) and verified — the card is safe to eject and format."
     }
 
     public static func failed(_ n: Int) -> String {
