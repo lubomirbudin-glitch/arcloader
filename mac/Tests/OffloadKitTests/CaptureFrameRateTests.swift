@@ -104,6 +104,8 @@ final class CaptureFrameRateTests: XCTestCase {
         XCTAssertNil(BRAWBackend.clipInfo(try BRAWBackend.parseInfo(old)).captureFrameRate, "an older braw-decode")
         let zero = line.replacingOccurrences(of: "48.000000", with: "0.000000")
         XCTAssertNil(BRAWBackend.clipInfo(try BRAWBackend.parseInfo(zero)).captureFrameRate)
+        let one = line.replacingOccurrences(of: "48.000000", with: "1.000000")
+        XCTAssertNil(BRAWBackend.clipInfo(try BRAWBackend.parseInfo(one)).captureFrameRate, "profile.braw reports 1.0")
     }
 
     // RED: record fps = capture, project fps / timebase = playback; without a project rate the record rate is both.

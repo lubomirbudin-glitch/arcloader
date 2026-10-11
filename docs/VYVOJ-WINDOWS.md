@@ -25,6 +25,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
+- **BRAW snímací fps — nesmyslná hodnota (zjištění z Macu 2026-10-11):** vzorek `profile.braw` (Blackmagic RAW Speed
+  Test) hlásí `sensorRate` 1.0 → report by ukázal „1 fps · playback …“. Mac bere hodnotu pod 2 fps jako neznámou
+  (ukáže přehrávací rychlost); udělat totéž ve Windows (`braw-decode --info` → `captureFrameRate`).
+
 - **Ověřování během proxy jako volba u každé kopie (zadání uživatele 2026-10-11, obě verze):** dnes jen Nastavení →
   Verification „Verify primary drive during proxy“. Přidat přepínač „Verify during proxy render“ do kroku 3 „After copy“
   (klikací řádek jako ostatní volby po kopii, 0.5.2), výchozí hodnota z nastavení/projektu (`verifyInProxy`), změna platí

@@ -91,8 +91,9 @@ struct BRAWBackend: RawBackend {
         c.gamma = i.gamma.flatMap { $0.isEmpty ? nil : $0 }
         c.gamut = i.gamut.flatMap { $0.isEmpty ? nil : $0 }
         c.colorScienceGen = i.colorScienceGen
-        // The capture rate: frame 0's sensor rate; absent (an older braw-decode) or 0 = unknown.
-        if let r = i.sensorRate, r > 0 { c.captureFrameRate = RawBackends.rational(r) }
+        // The capture rate: frame 0's sensor rate; absent (an older braw-decode), 0 or an implausible value below 2 fps
+        // (the Blackmagic RAW Speed Test sample reports 1.0) = unknown, the report then shows the playback rate.
+        if let r = i.sensorRate, r >= 2 { c.captureFrameRate = RawBackends.rational(r) }
         return c
     }
 
