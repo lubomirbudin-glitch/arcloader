@@ -175,6 +175,39 @@ public enum SonyXML {
         return ((items.values["CaptureGammaEquation"] ?? nil), (items.values["CaptureColorPrimaries"] ?? nil))
     }
 
+    /// The rate the camera recorded at, from the same sidecar: `<VideoFrame captureFps="119.88p" formatFps="23.98p"/>`
+    /// (S&Q: captureFps is the capture rate, formatFps the file's) → "120000/1001", written like `ClipInfo.frameRate`.
+    /// "59.94i" counts frames, not fields (→ 29.97). Nil without the XML or the attribute. As Windows `SonyXml`.
+    public static func captureFrameRate(_ clipFullPath: String) -> String? {
+        let clip = URL(fileURLWithPath: clipFullPath)
+        let xml = clip.deletingLastPathComponent().appendingPathComponent(clip.deletingPathExtension().lastPathComponent + "M01.XML")
+        guard FileManager.default.fileExists(atPath: xml.path), let parser = XMLParser(contentsOf: xml) else { return nil }
+        let frame = FirstElement(localName: "VideoFrame")
+        parser.delegate = frame
+        _ = parser.parse()
+        guard let text = frame.attributes?["captureFps"]?.trimmingCharacters(in: .whitespaces).lowercased(), !text.isEmpty
+        else { return nil }
+        let interlaced = text.hasSuffix("i")
+        var digits = text
+        while let last = digits.last, last == "p" || last == "i" { digits.removeLast() }
+        guard let fps = Double(digits), fps > 0 else { return nil }
+        return RawBackends.rational(interlaced ? fps / 2 : fps)
+    }
+
+    /// The attributes of the first element with this local name (any namespace prefix).
+    private final class FirstElement: NSObject, XMLParserDelegate {
+        let localName: String
+        var attributes: [String: String]?
+        init(localName: String) { self.localName = localName }
+
+        func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
+                    qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+            guard attributes == nil else { return }
+            let local = elementName.split(separator: ":").last.map(String.init) ?? elementName
+            if local == localName { attributes = attributeDict; parser.abortParsing() }
+        }
+    }
+
     /// The first element carrying each `name` attribute, and its `value` attribute (namespace-agnostic).
     private final class ItemCollector: NSObject, XMLParserDelegate {
         var values: [String: String?] = [:]

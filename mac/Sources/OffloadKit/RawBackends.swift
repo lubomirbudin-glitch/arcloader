@@ -65,11 +65,13 @@ struct BRAWBackend: RawBackend {
     }
 
     /// One line of `braw-decode --info`. gamma / gamut / colorScienceGen only when the SDK reports them (braw-decode
-    /// since task 27, and Windows); an older decoder leaves them out.
+    /// since task 27, and Windows); an older decoder leaves them out. `sensorRate`: the rate frame 0 was captured at
+    /// (IBlackmagicRawFrame::GetSensorRate; braw-decode since Mac 0.8.0 / Windows 0.8.0), absent when the SDK does not say.
     struct Info: Decodable {
         let width: Int, height: Int, sourceWidth: Int, sourceHeight: Int
         let fps: Double, frames: Int, timecode: String, camera: String
         let gamma: String?, gamut: String?, colorScienceGen: Int?
+        let sensorRate: Double?
     }
 
     static func parseInfo(_ json: String) throws -> Info {
@@ -89,6 +91,8 @@ struct BRAWBackend: RawBackend {
         c.gamma = i.gamma.flatMap { $0.isEmpty ? nil : $0 }
         c.gamut = i.gamut.flatMap { $0.isEmpty ? nil : $0 }
         c.colorScienceGen = i.colorScienceGen
+        // The capture rate: frame 0's sensor rate; absent (an older braw-decode) or 0 = unknown.
+        if let r = i.sensorRate, r > 0 { c.captureFrameRate = RawBackends.rational(r) }
         return c
     }
 
@@ -171,23 +175,39 @@ struct R3DBackend: RawBackend {
 
     /// `--printMeta 1` prints "Key: value" lines; the key names differ between versions, so match loosely.
     func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo {
-        let out = try ToolProcess.run(tools.redline!, ["--i", path, "--printMeta", "1"])
-        var meta: [String: String] = [:]
+        R3DBackend.parseMeta(try ToolProcess.run(tools.redline!, ["--i", path, "--printMeta", "1"]))
+    }
+
+    /// The "Key: value" lines of `--printMeta 1`, in their order (the first of a key wins), as Windows `R3dBackend`.
+    static func parseMeta(_ out: String) -> ClipInfo {
+        var meta: [(key: String, value: String)] = []
         for line in out.split(separator: "\n") {
             guard let colon = line.firstIndex(of: ":") else { continue }
             let k = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
-            let v = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-            if meta[k] == nil { meta[k] = v }
+            let v = line[line.index(after: colon)...].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !meta.contains(where: { $0.key == k }) { meta.append((k, v)) }
         }
         func find(_ needles: [String]) -> String? {
             for n in needles { if let hit = meta.first(where: { $0.key.contains(n) })?.value, !hit.isEmpty { return hit } }
             return nil
         }
+        func exact(_ name: String) -> String? { meta.first { $0.key == name }.flatMap { $0.value.isEmpty ? nil : $0.value } }
+        func rate(_ v: String?) -> Double? {
+            guard let v, let r = Double(v.split(separator: " ").first ?? ""), r > 0 else { return nil }
+            return r
+        }
         var c = ClipInfo()
         c.codec = "REDCODE RAW"
         c.width = find(["frame width", "width"]).flatMap { Int($0.filter(\.isNumber)) }
         c.height = find(["frame height", "height"]).flatMap { Int($0.filter(\.isNumber)) }
-        if let fps = find(["record fps", "timebase", "fps", "frame rate"]).flatMap({ Double($0.split(separator: " ").first ?? "") }) {
+        // The record (sensor) rate is the capture rate; the project rate / timebase is the playback rate the length is
+        // counted in — without one (an older REDline) the record rate stands for both, as before. The generic key only
+        // when it is exactly "FPS" / "Frame Rate", never another key that merely contains "fps" (Windows review F-3).
+        let record = rate(find(["record fps", "record frame rate", "sensor fps", "sensor frame rate"]))
+        let project = rate(find(["project fps", "project frame rate", "timebase", "playback fps"]))
+            ?? rate(exact("fps")) ?? rate(exact("frame rate"))
+        if let record { c.captureFrameRate = RawBackends.rational(record) }
+        if let fps = project ?? record {
             c.frameRate = RawBackends.rational(fps)
             if let n = find(["total frames", "frame count", "frames"]).flatMap({ Int($0.filter(\.isNumber)) }) {
                 c.frames = n
@@ -243,10 +263,21 @@ struct ARRIRAWBackend: RawBackend {
         try ToolProcess.run(tools.artCmd!, ["export", "--input", path, "--output", json, "--skip-audio", "--skip-look",
                                             "--start", "0", "--duration", "1"],
                             cwd: NSTemporaryDirectory(), timeout: 180)
-        guard var root = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: json))) as? [String: Any] else {
+        guard let root = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: json))) as? [String: Any] else {
             throw ToolError(tool: "art-cmd", status: -1, message: "unreadable metadata")
         }
-        // Only the first frame matters (start timecode); the rest would just slow the walk down.
+        var c = ARRIRAWBackend.parse(root)
+        let fps = Timecode.fps(c.frameRate)
+        if c.frames == nil { c.frames = ARRIRAWBackend.frameCount(path, fps: fps, tools: tools) }
+        if let n = c.frames, let fps, fps > 0 { c.duration = Double(n) / fps }
+        return c
+    }
+
+    /// The clip's facts from art-cmd's metadata JSON (first frame only). `frames` only when art-cmd's clipDuration is
+    /// larger than 1 (with --duration 1 it reports 1); `duration` is left to the caller, which knows the frame count.
+    static func parse(_ json: [String: Any]) -> ClipInfo {
+        var root = json
+        // Only the first frame matters (start timecode, sensor rate); the rest would just slow the walk down.
         if var fb = root["frameBasedMetadata"] as? [String: Any], let frames = fb["frames"] as? [Any] {
             fb["frames"] = Array(frames.prefix(1))
             root["frameBasedMetadata"] = fb
@@ -268,12 +299,14 @@ struct ARRIRAWBackend: RawBackend {
         if let rate = value("nativePictureEssenceDescriptor.file.sampleRate") as? String {
             c.frameRate = rate.hasSuffix("/1") ? String(rate.dropLast(2)) : rate
         }
-        let parts = (c.frameRate ?? "").split(separator: "/").compactMap { Double($0) }
-        let fps = parts.count == 2 ? parts[0] / parts[1] : parts.first
+        // The capture rate: the first frame's Sensor State — an ALEXA 35 at 35 fps writes 35/1 there and 24/1 as the
+        // file's sampleRate (the playback rate, which the length is counted in). Some fields are in thousandths.
+        let sensor = flat.first { $0.key.hasPrefix("frameBasedMetadata.") && $0.key.hasSuffix("sensorSampleRate") }?.value
+            ?? value("sensorSampleRate")
+        if let s = sensor as? String { c.captureFrameRate = ClipInfo.normalizeRate(s) }
+        else if let n = sensor as? NSNumber { c.captureFrameRate = ClipInfo.normalizeRate(String(n.doubleValue)) }
         // With --duration 1 art-cmd reports clipDuration = 1; trust it only when it is larger.
         if let n = int("clipDuration"), n > 1 { c.frames = n }
-        else { c.frames = ARRIRAWBackend.frameCount(path, fps: fps, tools: tools) }
-        if let n = c.frames, let fps, fps > 0 { c.duration = Double(n) / fps }
         c.timecode = value("frames.timecode") as? String
         c.camera = value("cameraModel") as? String
         c.logEncoding = value("sceneColorEncodingTransferCurve") as? String

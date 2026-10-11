@@ -158,7 +158,7 @@ Hodnoty výčtů:
 - `clips[].info.colorScienceGenOriginal` (volitelné, Windows od 0.4.0): u BRAW Film dekódovaného s převodem Gen 4 → Gen 5
   generace, ve které byl klip natočený (`colorScienceGen` je pak účinná, `5`); chybí, když se převod nepodařil (klip se
   dekódoval tak, jak byl natočený). Mac ignoruje.
-- `clips[].info.captureFrameRate` (volitelné, string; Windows od 0.8.0, Mac ⏳ naplánováno — stejný klíč a tvar):
+- `clips[].info.captureFrameRate` (volitelné, string; Windows od 0.8.0, Mac od buildu po 0.7.0 D6 — stejný klíč a tvar):
   **snímací** rychlost klipu z metadat jeho **prvního snímku**, zapsaná stejně jako `frameRate` (racionální číslo jako
   pro ffmpeg: `"35"`, `"24000/1001"`, `"120000/1001"`; celé číslo bez `/1`). `frameRate` zůstává **přehrávací** rychlost
   souboru a `duration` = počet snímků ÷ `frameRate` (stopáž ve střižně). Zdroje: ARRIRAW `frameBasedMetadata` →

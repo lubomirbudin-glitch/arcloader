@@ -75,6 +75,7 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   („35 fps · přehrávání 24“); délku klipu brát z počtu snímků a přehrávací rychlosti (stopáž ve střižně) a označit
   ji tak. Totéž ověřit u BRAW (`sensorRate` / GetSensorRate), RED (record vs. project fps) a Sony/Canon (S&Q,
   `captureFps` v XML/metadatech). Nový klíč JSON doplnit do `docs/FORMATY.md` pro obě verze.
+  **Mac hotovo 2026-10-11 (po D6, viz níže); denní a souhrnný report s ním počítají.**
 
 - **Pauza zálohy (zadání uživatele 2026-10-09, obě verze):** tlačítko Pozastavit nechá **doběhnout rozpracovaný dílčí
   krok** — soubor při kopii a ověření, klip při analýze a renderu proxy — a teprve pak úlohu zastaví (žádný napůl
@@ -141,6 +142,21 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
       „Vlastní…“ ponechá volbu; vestavěný LUT přežije restart; výběr složky pro proxy, červená hláška po odpojení, křížek
       ji smaže; kontrola odpojení těsně před startem; ostrý offload se složkou → řádky v reportu;
     - úkol 25: ikona v Docku, ⌘⇥ a Finderu; 11 LUTů v *Proxy › LUT*.
+
+## 2026-10-11 — po D6: dorovnání s Windows 0.8.0 (snímací fps, historie karet, denní a souhrnný report)
+
+Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
+
+- **Snímací fps z metadat prvního snímku** (chyba z natáčení: ALEXA 35 natočená 35 fps měla v reportu 24 fps): nový klíč
+  `clips[].info.captureFrameRate` jako Windows 0.8.0 — ARRIRAW `Sensor State.sensorSampleRate` prvního snímku z rychlé
+  sondy `art-cmd export --start 0 --duration 1` (žádný průchod celým klipem; tisíciny `35000` → `35`), BRAW `sensorRate`
+  (C++ `braw-decode --info` nově volá `IBlackmagicRawFrame::GetSensorRate` snímku 0, klíč na konci řádku, jen když je > 0),
+  RED `Record FPS` = snímací a `Project FPS` / `Timebase` / přesně `FPS` = přehrávací (dřív se record fps bral jako
+  přehrávací; seznam klíčů REDline teď drží pořadí), Sony `M01.XML` `<VideoFrame captureFps>` (`59.94i` → `30000/1001`);
+  Canon a ostatní video jen přehrávací (klíč chybí). Stopáž dál z přehrávací rychlosti. HTML/PDF: sloupec FPS „35 fps“
+  a pod tím šedě „playback 24“ + vysvětlivka pod tabulkou; TXT `Frame rate:  35 fps capture, 24 playback (2 clips); 25 fps
+  (1 clip)`. Testy `CaptureFrameRateTests` (i skutečné vzorky ARRIRAW v `TestMedia` — oba 24 fps). Vzorek
+  `profile.braw` z Blackmagic RAW Speed Test hlásí `sensorRate` 1 (syntetický klip) — stejně jako Windows se nehlídá.
 
 ## 2026-10-11 — build „Offload D6“ (0.7.0D6): tmavý vzhled jako výchozí
 

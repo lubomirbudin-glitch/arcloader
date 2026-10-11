@@ -189,6 +189,25 @@ public struct OffloadReport: Codable {
     /// Task 70: the clips whose decoder reported a defect (the copy matches the card).
     public var contentWarnings: [ClipEntry] { clips.filter { $0.content?.isWarn == true } }
     public var success: Bool { failedFiles.isEmpty }
+
+    /// The clips' frame rates for the TXT report: "35 fps capture, 24 playback (2 clips); 25 fps (1 clip)" — the capture
+    /// rate first when it differs from the playback rate; camera proxies and clips without a known rate are left out;
+    /// nil when no clip has one. Same text as Windows `OffloadReport.FrameRateSummary`.
+    public var frameRateSummary: String? {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        for c in clips where !c.clip.isCameraProxy {
+            guard let i = c.info else { continue }
+            let capture = ClipInfo.label(i.captureFrameRate)
+            guard !i.fpsLabel.isEmpty || !capture.isEmpty else { continue }
+            let key = i.captureDiffers ? "\(capture) fps capture, \(i.fpsLabel) playback"
+                : "\(i.fpsLabel.isEmpty ? capture : i.fpsLabel) fps"
+            if counts[key] == nil { order.append(key) }
+            counts[key, default: 0] += 1
+        }
+        guard !order.isEmpty else { return nil }
+        return order.map { "\($0) (\(counts[$0]!) \(counts[$0]! == 1 ? "clip" : "clips"))" }.joined(separator: "; ")
+    }
     /// Spec D.22.7: every file on every destination verified, and the result written everywhere.
     public var safeToFormat: Bool { success && verified && verifyPending != true && verifyIncomplete != true }
 
@@ -254,7 +273,7 @@ public struct OffloadReport: Codable {
         Started:     \(ts.string(from: started))
         Finished:    \(ts.string(from: finished))
         Files:       \(totalFiles)  (\(formatBytes(totalBytes)))
-        Copy:        \(String(format: "%.1f s", copySeconds))  \(formatRate(totalBytes, copySeconds))
+        \(frameRateSummary.map { "Frame rate:  \($0)\n" } ?? "")Copy:       \(String(format: "%.1f s", copySeconds))  \(formatRate(totalBytes, copySeconds))
         Verify:      \(verified ? String(format: "%.1f s", verifySeconds) + "  " + formatRate(totalBytes, verifySeconds) : verifyPending == true ? "PENDING (with the proxies)" : "NOT VERIFIED")
 
         """

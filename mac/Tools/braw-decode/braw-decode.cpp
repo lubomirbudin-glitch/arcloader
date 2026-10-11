@@ -2,7 +2,8 @@
 //
 //   braw-decode --info [--scale S] clip.braw
 //       one JSON line: width, height (of the processed image at scale S), sourceWidth, sourceHeight, fps, frames,
-//       timecode, camera, and when the SDK reports them gamma, gamut, colorScienceGen
+//       timecode, camera, and when the SDK reports them gamma, gamut, colorScienceGen, then sensorRate (the rate frame 0
+//       was captured at, IBlackmagicRawFrame::GetSensorRate, 6 decimals like fps — last key, as Windows 0.8.0)
 //   braw-decode [--scale S] [--start N] [--count N] clip.braw
 //       writes frames to stdout as raw interleaved RGB 16-bit little endian (ffmpeg: -f rawvideo -pix_fmt rgb48le)
 //
@@ -75,11 +76,17 @@ public:
     std::vector<FrameSlot>* slots = nullptr;
     uint64_t base = 0;
     std::atomic<int> errors{0};
+    // The rate frame 0 was captured at (--info); 0 when the SDK does not say.
+    std::atomic<float> sensorRate{0};
 
     void ReadComplete(IBlackmagicRawJob* readJob, HRESULT result, IBlackmagicRawFrame* frame) override {
         IBlackmagicRawJob* decodeJob = nullptr;
         void* user = nullptr;
         readJob->GetUserData(&user);
+        if (result == S_OK && frame && (uintptr_t)user == 0) {
+            float rate = 0;
+            if (frame->GetSensorRate(&rate) == S_OK && rate > 0) sensorRate = rate;
+        }
         if (result == S_OK) result = frame->SetResourceFormat(blackmagicRawResourceFormatRGBU16);
         if (result == S_OK) result = frame->SetResolutionScale(scale);
         if (result == S_OK) result = frame->CreateJobDecodeAndProcessFrame(nullptr, nullptr, &decodeJob);
@@ -403,6 +410,12 @@ int main(int argc, char** argv) {
         if (hasGamma) json += ",\"gamma\":\"" + jsonEscape(gamma) + "\"";
         if (hasGamut) json += ",\"gamut\":\"" + jsonEscape(gamut) + "\"";
         if (hasGen) json += ",\"colorScienceGen\":" + std::to_string(gen);
+        float sensor = cb.sensorRate;
+        if (sensor > 0) {
+            char rate[64];
+            snprintf(rate, sizeof rate, ",\"sensorRate\":%.6f", (double)sensor);
+            json += rate;
+        }
         json += "}\n";
         if (tc) CFRelease(tc);
         if (cam) CFRelease(cam);

@@ -236,7 +236,10 @@ public final class ProxyRenderer {
         let path = cardPath + "/" + clip.path
         if clip.format == .video {
             guard let ffprobe = tools.ffprobe else { throw ToolError(tool: "ffprobe", status: -1, message: "ffprobe not found") }
-            return try FFProbe.probe(ffprobe, path)
+            var info = try FFProbe.probe(ffprobe, path)
+            // S&Q: the capture rate is only in Sony's XML; other video says nothing — capture = playback.
+            if info.captureFrameRate == nil { info.captureFrameRate = SonyXML.captureFrameRate(path) }
+            return info
         }
         guard let b = backends[clip.format], b.isAvailable(tools) else {
             throw ToolError(tool: clip.format.label, status: -1, message: unsupportedReason(clip) ?? "")

@@ -46,6 +46,16 @@ public enum HTMLReport {
         }
     }
 
+    /// The FPS cell: a rate that differs is two lines in the narrow column — "35 fps", then "playback 24" small and
+    /// muted; otherwise the one rate as before (Windows `HtmlReport.FpsCell`).
+    static func fpsCell(_ i: ClipInfo?) -> String {
+        guard let i else { return "" }
+        if i.captureDiffers {
+            return "\(esc(ClipInfo.label(i.captureFrameRate))) fps<div class=\"note\">playback \(esc(i.fpsLabel))</div>"
+        }
+        return esc(i.fpsSummary)
+    }
+
     static let stateLabel: [String: String] = [
         "verified": "verified", "written": "written", "failed": "FAILED", "pending": "pending",
     ]
@@ -215,12 +225,16 @@ public enum HTMLReport {
                 }
                 h += "<tr><td>\(img)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))\(c.clip.isCameraProxy ? " <span class=\"muted\">(camera proxy)</span>" : "")</div>"
                 h += "<div class=\"path\">\(esc(c.clip.path))</div>\(noteHTML)</td>"
-                h += "<td class=\"wrap fmt\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num\">\(esc(i?.fpsLabel ?? ""))</td>"
+                h += "<td class=\"wrap fmt\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num fps\">\(fpsCell(i))</td>"
                 h += "<td class=\"num\">\(esc(i?.durationLabel ?? ""))</td><td class=\"mono tc\">\(esc(i?.timecode ?? ""))</td>"
                 h += "<td class=\"num\">\(i.map { $0.audioChannels > 0 ? "\($0.audioChannels) ch" : "—" } ?? "")</td>"
                 h += "<td class=\"num\">\(formatBytes(c.clip.bytes))</td><td class=\"\(pc)\">\(pl)</td></tr>\n"
             }
             h += "</table></div>\n"
+            // A clip shot at another rate than it plays at — the length is the editing one (Windows 0.8.0 wording).
+            if r.clips.contains(where: { $0.info?.captureDiffers == true }) {
+                h += "<p class=\"sub\">FPS: the capture rate from the metadata of the first frame, followed by the file's playback rate when it differs. Duration = frame count ÷ playback fps (the length in the edit).</p>\n"
+            }
             if let p = r.proxy, p.enabled {
                 let lut: String
                 switch LutResolver.effectiveMode(p) {

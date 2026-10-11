@@ -52,12 +52,52 @@ public struct ClipInfo: Codable {
     public var gamma: String?
     public var gamut: String?
     public var colorScienceGen: Int?
+    /// The rate the camera recorded at, from the metadata of the clip's first frame (Windows 0.8.0): ARRIRAW `Sensor
+    /// State.sensorSampleRate`, BRAW `sensorRate` (braw-decode --info), RED record fps, Sony M01.XML `captureFps`. Written
+    /// like `frameRate` ("35", "120000/1001"). `frameRate` stays the file's playback rate, so `duration` (frames ÷
+    /// frameRate) is the editing length. Report key `clips[].info.captureFrameRate`, absent when unknown — then
+    /// capture = playback.
+    public var captureFrameRate: String?
 
-    public var fpsLabel: String {
-        guard let r = frameRate else { return "" }
-        let parts = r.split(separator: "/").compactMap { Double($0) }
-        let v = parts.count == 2 && parts[1] != 0 ? parts[0] / parts[1] : (parts.first ?? 0)
+    /// The playback rate as people read it: "23.976", "25"; "" when unknown.
+    public var fpsLabel: String { ClipInfo.label(frameRate) }
+
+    /// "24000/1001" → "23.976", "25/1" → "25"; "" for nil or anything unusable.
+    public static func label(_ rate: String?) -> String {
+        guard let v = Timecode.fps(rate) else { return "" }
         return v == v.rounded() ? String(Int(v)) : String(format: "%.3f", v)
+    }
+
+    /// The capture rate is known and is not the playback rate (overcranked, undercranked, S&Q).
+    public var captureDiffers: Bool {
+        guard let c = Timecode.fps(captureFrameRate), let p = Timecode.fps(frameRate) else { return false }
+        return abs(c - p) > 0.001
+    }
+
+    /// What a report shows for the clip's fps: "35 fps · playback 24" when the rates differ, else the playback rate
+    /// ("25"); "48 fps" when only the capture rate is known; "" when neither is. Wording as Windows `FpsSummary`.
+    public var fpsSummary: String {
+        if captureDiffers { return "\(ClipInfo.label(captureFrameRate)) fps · playback \(fpsLabel)" }
+        let capture = ClipInfo.label(captureFrameRate)
+        if fpsLabel.isEmpty && !capture.isEmpty { return capture + " fps" }
+        return fpsLabel
+    }
+
+    /// A rate from camera metadata as `frameRate` writes it: "35/1" → "35", "24000/1001" stays, "23.976" →
+    /// "24000/1001"; thousandths (ARRI: 35000, 23976) are divided by 1000. Nil when it is no camera rate.
+    /// Same as Windows `ClipInfo.NormalizeRate`.
+    public static func normalizeRate(_ rate: String?) -> String? {
+        guard let r = rate?.trimmingCharacters(in: .whitespaces), let raw = Timecode.fps(r), let fps = plausibleRate(raw) else { return nil }
+        if fps == raw && r.hasSuffix("/1") && !r.dropLast(2).contains(".") { return String(r.dropLast(2)) }
+        if fps == raw && r.hasSuffix("/1001") { return r }
+        return RawBackends.rational(fps)
+    }
+
+    /// ARRI writes some rates in thousandths of a frame per second: above 1000 the value is divided by 1000
+    /// (35000 → 35, 23976 → 23.976); nil when even then it is no camera rate (0 or above 1000 fps).
+    static func plausibleRate(_ value: Double) -> Double? {
+        let fps = value > 1000 ? value / 1000 : value
+        return fps > 0 && fps <= 1000 ? fps : nil
     }
 
     public var resolutionLabel: String {
