@@ -41,7 +41,7 @@ struct SettingsPage: View {
             .keyboardShortcut(.cancelAction)
             Rectangle().fill(p.line).frame(width: 1, height: 22)
             VStack(alignment: .leading, spacing: 0) {
-                Text("Offload").font(.ui(12)).foregroundStyle(p.text3)
+                Text(Product.name).font(.ui(12)).foregroundStyle(p.text3)
                 Text("Settings").font(.ui(14, .semibold)).foregroundStyle(p.text)
             }
             Spacer(minLength: 20)

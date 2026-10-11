@@ -151,7 +151,7 @@ public enum HTMLReport {
         var h = """
         <!doctype html>
         <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Offload \(esc(r.cardName)) – \(esc(r.date))</title>
+        <title>\(Product.name) \(esc(r.cardName)) – \(esc(r.date))</title>
         <style>
         \(styles(forPrint: forPrint))
         </style></head><body><main>
@@ -281,7 +281,8 @@ public enum HTMLReport {
         if !r.skipped.isEmpty {
             h += "<p class=\"sub\">Skipped system files: \(esc(r.skipped.joined(separator: ", ")))</p>\n"
         }
-        h += "<footer>\(esc(r.tool)) \(esc(r.version)) · ASC MHL in ascmhl/ · \(dateTime(Date()))</footer></main></body></html>\n"
+        // `tool` stays "offload" in the JSON (FORMATY); a report of this app (or of Offload, or Windows) says ArcLoader.
+        h += "<footer>\(esc(Product.toolName(r.tool))) \(esc(r.version)) · ASC MHL in ascmhl/ · \(dateTime(Date()))</footer></main></body></html>\n"
         return h
     }
 }

@@ -42,6 +42,9 @@ enum Launcher {
             return
         }
 #endif
+        // The rename (Windows 0.10.0): ~/Library/Application Support/Offload is copied once to …/ArcLoader before anything
+        // reads it (the old folder stays as it was). Settings stay in UserDefaults under the unchanged bundle id.
+        AppSupport.migrateFromOffload { NSLog("%@", $0) }
         OffloadApp.main()
     }
 }
@@ -51,7 +54,7 @@ struct OffloadApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("Offload") {
+        WindowGroup(Product.name) {
             ContentView()
                 .environmentObject(model)
                 .preferredColorScheme(model.colorScheme)
@@ -97,7 +100,7 @@ struct VerifyBackupMenuItem: View {
     }
 }
 
-/// Offload › Settings… (⌘,): the settings page in the main window.
+/// ArcLoader › Settings… (⌘,): the settings page in the main window.
 struct SettingsMenuItem: View {
     @ObservedObject var model: AppModel
 

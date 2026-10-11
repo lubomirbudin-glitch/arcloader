@@ -17,8 +17,9 @@ public struct ExternalTools: Codable, Equatable {
         self.brawDecoder = brawDecoder
     }
 
-    /// Folders searched in order. The app bundle and ~/Library/Application Support/Offload/bin come first,
-    /// so a bundled ffmpeg wins over whatever happens to be on the system.
+    /// Folders searched in order. The app bundle and the app's own `bin` (~/Library/Application Support/ArcLoader/bin,
+    /// then …/Offload/bin of builds before the rename — art-cmd is installed there) come first, so a bundled ffmpeg wins
+    /// over whatever happens to be on the system.
     public static var searchDirs: [String] {
         var dirs: [String] = []
         if let res = Bundle.main.resourcePath { dirs.append(res + "/bin") }
@@ -29,13 +30,16 @@ public struct ExternalTools: Codable, Equatable {
             dir = dir.deletingLastPathComponent()
             dirs.append(dir.appendingPathComponent("Tools/bin").path)
         }
-        dirs.append(supportDir + "/bin")
+        dirs += supportDirs.map { $0 + "/bin" }
         dirs += ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"]
         return dirs
     }
 
-    public static var supportDir: String {
-        (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/Offload")
+    /// ~/Library/Application Support/ArcLoader, then …/Offload (before the rename) — only read. Always the user's real
+    /// folders, as before the rename: a tool installed there is found in tests and manual runs too.
+    public static var supportDirs: [String] {
+        let base = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support")
+        return [base + "/" + AppSupport.folderName, base + "/" + AppSupport.oldFolderName]
     }
 
     static let knownPaths: [String: [String]] = [

@@ -26,7 +26,7 @@ public enum HistoryRecorder {
         guard config.recordHistory else { return nil }
         if let f = config.historyFolder { return f }
         let underTests = NSClassFromString("XCTestCase") != nil
-        if underTests && ProcessInfo.processInfo.environment["OFFLOAD_SETTINGS_DIR"] == nil { return nil }
+        if underTests && AppSupport.settingsDirVariable == nil { return nil }
         return AppSupport.folder
     }
 

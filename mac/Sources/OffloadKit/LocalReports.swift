@@ -1,13 +1,21 @@
 import Foundation
 
-/// A copy of every card's report on this Mac — `~/Documents/Offload reporty/<date>/<card>/` (`_REPORT` and `ascmhl`).
+/// A copy of every card's report on this Mac — `~/Documents/ArcLoader reports/<date>/<card>/` (`_REPORT` and `ascmhl`).
 /// The drives with the footage leave the set and the report must not leave with them (2026-10-09: the reports of
 /// drives 1 and 2 were gone). Refreshed after every report write; the drives are only read; a failure is only logged
 /// and never fails the job. Off inside XCTest so tests never write to the user's Documents.
 public enum LocalReports {
-    /// OFFLOAD_REPORTS_DIR moves it (manual CLI checks against temporary folders, like OFFLOAD_SETTINGS_DIR).
-    public static var root = ProcessInfo.processInfo.environment["OFFLOAD_REPORTS_DIR"].flatMap { $0.isEmpty ? nil : $0 }
-        ?? (NSHomeDirectory() as NSString).appendingPathComponent("Documents/Offload reporty")
+    /// The folder in Documents (Windows 0.10.0: `Dokumenty\ArcLoader reports`).
+    public static let folderName = Product.name + " reports"
+    /// The folder's names of earlier builds: "Offload reporty" (the Mac before the rename and Windows before 0.9.0) and
+    /// "Offload reports" (Windows 0.9.x). Copies there are still read (the summary report's fallback), never written.
+    public static let oldFolderNames = ["Offload reporty", "Offload reports"]
+
+    /// ARCLOADER_REPORTS_DIR or OFFLOAD_REPORTS_DIR (the first one set) moves it — manual CLI checks against temporary
+    /// folders, like the settings-folder variables.
+    public static var root = ["ARCLOADER_REPORTS_DIR", "OFFLOAD_REPORTS_DIR"].lazy
+        .compactMap { ProcessInfo.processInfo.environment[$0] }.first { !$0.isEmpty }
+        ?? (NSHomeDirectory() as NSString).appendingPathComponent("Documents/" + folderName)
     public static var enabled = NSClassFromString("XCTestCase") == nil
 
     /// Copies `_REPORT` and `ascmhl` of the first destination that has them. Returns the local folder, or nil.

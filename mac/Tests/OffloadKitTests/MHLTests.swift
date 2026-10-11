@@ -44,7 +44,8 @@ final class MHLTests: XCTestCase {
         XCTAssertEqual(h.files["b.bin"]?.hashes.map(\.algorithm), ["xxh64", "xxh128"])
         XCTAssertTrue(h.ignoresReportFolder)
         let gen2 = try String(contentsOfFile: card + "/ascmhl/" + h.chain[1].path, encoding: .utf8)
-        XCTAssertTrue(gen2.contains("<comment>Offload append: 1 new file from /Volumes/A001</comment>"), gen2)
+        XCTAssertTrue(gen2.contains("<comment>ArcLoader append: 1 new file from /Volumes/A001</comment>"), gen2)
+        XCTAssertTrue(gen2.contains(">ArcLoader</tool>"), "creatorinfo tool name as Windows 0.10.0 writes it")
         XCTAssertTrue(gen2.contains("<xxh128 action=\"original\""))
         XCTAssertTrue(gen2.contains("<pattern>_REPORT</pattern>"), "ignore patterns of generation 1")
         XCTContext.runActivity(named: "ascmhl verify \(card)") { _ in }
@@ -57,7 +58,8 @@ final class MHLTests: XCTestCase {
         try MHL.write(report: r, cardPath: card)
         let h = try XCTUnwrap(MHLReader.read(cardPath: card))
         let gen1 = try String(contentsOfFile: card + "/ascmhl/" + h.chain[0].path, encoding: .utf8)
-        XCTAssertTrue(gen1.contains("<comment>Offload of A001 from /Volumes/A001 · verification: read-back</comment>"), gen1)
+        XCTAssertTrue(gen1.contains("<comment>ArcLoader offload of A001 from /Volumes/A001 · verification: read-back</comment>"), gen1)
+        XCTAssertTrue(gen1.contains("<tool version=\"\(r.version)\">ArcLoader</tool>"), gen1)
         XCTAssertTrue(gen1.contains("<process>transfer</process>"))
     }
 

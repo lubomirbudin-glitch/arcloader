@@ -43,19 +43,12 @@ public final class FileLock {
     }
 }
 
-/// Offload's own folder of this Mac user (history, locks, hardware test, update check); OFFLOAD_SETTINGS_DIR moves
-/// it (tests), like `%APPDATA%\Offload` on Windows.
-public enum AppSupport {
-    public static var folder: String {
-        if let d = ProcessInfo.processInfo.environment["OFFLOAD_SETTINGS_DIR"], !d.isEmpty { return d }
-        return NSHomeDirectory() + "/Library/Application Support/Offload"
-    }
-}
-
 /// Names of the local lock files (spec D.23.4). Never a lock file on a destination: that is the FORMATY contract and
 /// may be a network drive.
 public enum Locks {
-    public static var folder: String { AppSupport.folder + "/locks" }
+    /// `AppSupport.lockFolder` — after the rename to ArcLoader still `~/Library/Application Support/Offload/locks`, so an
+    /// older Offload and ArcLoader keep excluding each other (a lock is its file's path).
+    public static var folder: String { AppSupport.lockFolder }
 
     static func hex<H: HashFunction>(_ h: H.Type, _ s: String) -> String {
         H.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined()

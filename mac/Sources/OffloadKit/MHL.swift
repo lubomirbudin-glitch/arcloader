@@ -44,8 +44,8 @@ public enum MHL {
         let copied = report.files.filter { $0.xxh64 != nil && ($0.rewritten?.contains(true) ?? false) }.count
         var comment = report.isRepair ? Msg.mhlRepairComment(copied: copied, readBack: listed - copied, source: report.source)
             : generation > 1
-            ? "Offload append: \(listed) new \(plural(listed, "file", "files")) from \(report.source)"
-            : "Offload of \(report.cardName) from \(report.source)"
+            ? "\(Product.name) append: \(listed) new \(plural(listed, "file", "files")) from \(report.source)"
+            : "\(Product.name) offload of \(report.cardName) from \(report.source)"   // the words of Windows 0.10.0
         // How this destination was verified. `<process>` stays "transfer" — the ASC MHL v2 schema allows only in-place /
         // transfer / flatten there — so the method goes into the generation's comment (as Windows).
         if let method = report.destinations[d].verifyMethod { comment += " · verification: \(method)" }
@@ -58,7 +58,7 @@ public enum MHL {
           <creatorinfo>
             <creationdate>\(stamp)</creationdate>
             <hostname>\(esc(host))</hostname>
-            <tool version="\(esc(report.version))">\(esc(report.tool))</tool>
+            <tool version="\(esc(report.version))">\(Product.name)</tool>
             <comment>\(esc(comment))</comment>
           </creatorinfo>
           <processinfo>

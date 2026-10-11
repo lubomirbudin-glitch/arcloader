@@ -20,7 +20,7 @@ struct TopBar: View {
                     .foregroundStyle(p.onAccent)
                     .frame(width: 28, height: 28)
                     .background(RoundedRectangle(cornerRadius: 7).fill(p.accent))
-                Text("Offload").font(.ui(15, .semibold)).foregroundStyle(p.text)
+                Text(Product.name).font(.ui(15, .semibold)).foregroundStyle(p.text)
             }
             // TODO(projects): the project switcher goes here once the Mac has projects (Windows plan 8, Mac task 56).
             Spacer(minLength: 20)

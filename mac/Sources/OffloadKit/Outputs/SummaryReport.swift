@@ -158,7 +158,7 @@ public enum SummaryReport {
     public static var localRoots: [String] {
         let docs = (NSHomeDirectory() as NSString).appendingPathComponent("Documents")
         var out: [String] = []
-        for r in [LocalReports.root, docs + "/Offload reporty", docs + "/Offload reports", docs + "/ArcLoader reports"]
+        for r in [LocalReports.root, docs + "/" + LocalReports.folderName] + LocalReports.oldFolderNames.map({ docs + "/" + $0 })
             where !out.contains(r) { out.append(r) }
         return out
     }
@@ -586,7 +586,7 @@ public enum SummaryReport {
             for n in notes { h += "<tr><td>\(e(n.card))</td><td class=\"\(n.bad ? "err" : "warn wrap")\">\(e(n.text))</td></tr>\n" }
             h += "</table></div>\n"
         }
-        h += "<footer>Offload \(e(OffloadVersion.string)) · summary report · \(HTMLReport.dateTime(created))</footer></main></body></html>\n"
+        h += "<footer>\(Product.name) \(e(OffloadVersion.string)) · summary report · \(HTMLReport.dateTime(created))</footer></main></body></html>\n"
         return h
     }
 

@@ -26,12 +26,12 @@ extension Msg {
     public static func summaryTargetIsCard(_ p: String) -> String {
         "\(p) is inside the backup folder of a card (even an unfinished or interrupted one) — the summary report is never written into a backup; select another folder."
     }
-    public static func summaryTargetCameraCard(_ p: String) -> String { "\(p) looks like a camera card — Offload never writes to a card." }
+    public static func summaryTargetCameraCard(_ p: String) -> String { "\(p) looks like a camera card — \(Product.name) never writes to a card." }
     public static func summaryTargetRemovable(_ p: String) -> String {
         "\(p) is on removable media (a card in a reader, a flash drive) — the summary report is not saved there; select a disk."
     }
     public static func summaryTargetReadOnly(_ p: String) -> String { "\(p) is on a read-only disk." }
-    public static func summaryTargetIsSource(_ p: String) -> String { "\(p) is on the card — Offload never writes to a card." }
+    public static func summaryTargetIsSource(_ p: String) -> String { "\(p) is on the card — \(Product.name) never writes to a card." }
     public static func summaryWritten(_ p: String) -> String { "Summary report: \(p)" }
     public static func summaryExtraWritten(_ p: String) -> String { "Summary report also on the selected disk: \(p)" }
     public static func summaryExtraFailed(_ detail: String) -> String {

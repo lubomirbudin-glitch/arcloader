@@ -2,7 +2,7 @@
 
 > Produkt se od Windows 0.10.0 jmenuje ArcLoader; názvy souborů v záloze (`offload_report.json` …) zůstávají kvůli kompatibilitě
 > (starší verze a Mac je čtou a ověřují). Totéž platí pro názvy zámků a mutexů (`Local\Offload-history-…`, `Local\Offload-append-…`) a klíče JSON.
-> Mac zatím nese starý název Offload.
+> Mac se jmenuje ArcLoader od buildu po 0.7.0 D6 (stejná pravidla: v záloze se nic nemění, `tool` zůstává `"offload"`; ASC MHL `<tool>ArcLoader</tool>`).
 
 Tohle je **smlouva mezi Mac a Windows verzí**. Co tu je, musí obě verze zapisovat stejně, aby šlo kopii
 udělanou jednou verzí ověřit druhou (`offload verify`) i nástroji třetích stran (`ascmhl`, Silverstack, ShotPut).
@@ -284,7 +284,7 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
   mezi dvěma počítači) se zámek neuplatní;
 - Mac (od 0.3.0) nový soubor přejmenuje z `.offload-part` přes `renamex_np(RENAME_EXCL)` (exFAT/FAT bez podpory: kontrola
   těsně před přejmenováním) a proxy doplnění dostanou jména, která v `_PROXY` žádného cíle ještě nejsou; render ani kopie
-  proxy existující soubor nikdy nepřepíše. Komentář generace MHL Macu: `Offload append: 12 new files from /Volumes/A001`.
+  proxy existující soubor nikdy nepřepíše. Komentář generace MHL Macu: `ArcLoader append: 12 new files from /Volumes/A001` (do přejmenování `Offload append: …`), první generace `ArcLoader offload of <karta> from <zdroj>` jako Windows.
 
 ### Oprava — „Zkopírovat znovu“ (Windows od 0.5.0, Mac naplánováno)
 
@@ -395,8 +395,8 @@ Pravidla (Windows od 0.3.0):
 
 ## Souhrnný report (Windows od 0.8.0, Mac od buildu po 0.7.0 D6)
 
-Mac: `~/Documents/Offload reporty/summary/<YYYY-MM-DD>_<HHmmss>_summary.html/.pdf` (složka `LocalReports.root`, proměnná
-`OFFLOAD_REPORTS_DIR`); lokální kopie hledá v `Offload reporty`, `Offload reports` i `ArcLoader reports`. Mac kopie reportu
+Mac: `~/Documents/ArcLoader reports/summary/<YYYY-MM-DD>_<HHmmss>_summary.html/.pdf` (složka `LocalReports.root`, proměnná
+`ARCLOADER_REPORTS_DIR` / `OFFLOAD_REPORTS_DIR`; do přejmenování `Offload reporty`); lokální kopie hledá v `Offload reporty`, `Offload reports` i `ArcLoader reports`. Mac kopie reportu
 `.offload-origin` nezapisuje — původ lokální kopie bere z jejího `offload_report.json` (`<started UTC>|<cardName>|<source>`),
 existující `.offload-origin` (kopie z Windows) má přednost. Výměnné médium = `volumeIsRemovable`, kamerová karta =
 `Volumes.looksLikeCameraCard` kořene svazku bez složky s datem (výstup Offloadu) v kořeni nebo o úroveň níž.
@@ -476,7 +476,7 @@ Mac: zámek historie `flock` na `~/Library/Application Support/Offload/locks/his
 jednoho uživatele na jednom Macu); `card.fsSerial` z boot sektoru svazku (jako Windows), když ho smí číst (obrazy disků),
 jinak `uuid:<UUID svazku>` — historie přenesená z Windows kartu na Macu nespáruje; `card.identity` = `uuid:<UUID>`.
 
-`%APPDATA%\ArcLoader\history.json` + `%APPDATA%\ArcLoader\history\<id>.files.gz` (od 0.10.0; při prvním startu se starší složka `%APPDATA%\Offload` zkopíruje, nikdy nepřesouvá; Mac: `~/Library/Application Support/Offload/`)
+`%APPDATA%\ArcLoader\history.json` + `%APPDATA%\ArcLoader\history\<id>.files.gz` (od 0.10.0; při prvním startu se starší složka `%APPDATA%\Offload` zkopíruje, nikdy nepřesouvá; Mac: `~/Library/Application Support/ArcLoader/`, při prvním startu zkopírováno z `…/Offload/` bez `bin/`, `arri/` a `locks/` — nikdy nepřesouváno; zámky Macu zůstávají v `…/Offload/locks/`)
 — historie offloadů, nikam se neposílá (složku lze přesměrovat proměnnou `OFFLOAD_SETTINGS_DIR`). UTF-8 bez BOM,
 odsazené, data ISO 8601 UTC na sekundy; zapisuje GUI i CLI (`--no-history` vypne) pod pojmenovaným mutexem
 `Local\Offload-history-<sha256 plné cesty složky velkými písmeny>` (jeden na složku historie, GUI i CLI nad stejnou

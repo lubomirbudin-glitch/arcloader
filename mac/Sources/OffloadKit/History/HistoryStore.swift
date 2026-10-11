@@ -85,7 +85,7 @@ public final class HistoryStore {
         var entries: [HistoryEntry]
         switch read() {
         case .newer:
-            log?("history: written by a newer version of Offload — read only")
+            log?("history: written by a newer version of \(Product.name) — read only")
             return .failed
         case .corrupt:
             setAsideCorrupt()

@@ -37,7 +37,7 @@ public enum VIPMsg {
     /// The job's warning when the verified generation could not be written into a card folder (it stays uncommitted:
     /// "Finish interrupted backup", an append, finishes it).
     public static func verifyNotCommitted(_ detail: String) -> String {
-        "Could not write the verification result (\(detail)) — do not format the card yet; \"Finish interrupted backup\" (Append, offload append) finishes the backup."
+        "Could not write the verification result (\(detail)) — do not format the card yet; \"Finish interrupted backup\" (Append, \(Product.cli) append) finishes the backup."
     }
 
     /// A destination's disk stopped answering while it was verified (its unread files fail, the job finishes).
@@ -57,7 +57,7 @@ public enum VIPMsg {
     public static func resumeDiverged(_ cardPath: String, _ generation: Int) -> String {
         "\(cardPath): the unfinished backup (generation \(generation)) does not match the other destinations — check it by hand."
     }
-    public static let repairUnfinished = "The backup was not finished (the app ended during the copy or the verification) — finish it first with \"Finish interrupted backup\" on the card (offload append)."
+    public static let repairUnfinished = "The backup was not finished (the app ended during the copy or the verification) — finish it first with \"Finish interrupted backup\" on the card (\(Product.cli) append)."
 
     /// A card folder gone before the verification results were written into it (an unplugged disk) — never made anew.
     public static let cardFolderGone = "the card folder on the destination disappeared (disk disconnected?)"

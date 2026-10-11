@@ -47,7 +47,7 @@ public enum Msg {
     public static func cardNameAuto(_ n: String) -> String { "Card name: \(n) (from the clips)" }
     public static func cardUnreadable(_ d: String) -> String { "Cannot read the card: \(d)" }
     /// Where a backup is checked (the new look: the window toolbar; before it: the Tools menu).
-    public static let verifyHint = "Verify backup (window toolbar; on the command line: offload verify)"
+    public static let verifyHint = "Verify backup (window toolbar; on the command line: \(Product.cli) verify)"
 
     // Space (task 48 fills the parts)
     public static func noSpace(_ whereTo: String, total: Int64, parts: String, free: Int64) -> String {
@@ -139,7 +139,7 @@ public enum Msg {
     public static func repairCardUnreadable(_ p: String, _ d: String) -> String { "\(p): cannot read it on the card (\(d))" }
     public static let repairNeedsVerify = "A repair is always verified by reading back — it cannot run without verification."
     public static func mhlRepairComment(copied: Int, readBack: Int, source: String) -> String {
-        "Offload repair: \(copied) \(plural(copied, "file", "files")) again from \(source)"
+        "\(Product.name) repair: \(copied) \(plural(copied, "file", "files")) again from \(source)"
             + (readBack > 0 ? "; \(readBack) \(plural(readBack, "file", "files")) only read back" : "")
     }
     public static let repairOtherCard =

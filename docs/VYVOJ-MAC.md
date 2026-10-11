@@ -28,6 +28,9 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   - **Odkazy:** repozitář `https://github.com/lubomirbudin-glitch/arcloader` (starý název přesměrovává); stahovací soubory
     kanálů `ArcLoader-Mac.zip` / `ArcLoader-Mac-dev.zip` (a dál nahrávat i staré názvy `Offload-Mac*.zip`).
   - Po přejmenování upravit `mac/README.md`, `docs/ROZDILY.md` (řádek Aplikace: ⏳ → ✅) a přidat záznam do historie.
+  - **Mac hotovo 2026-10-11 (po D6, viz níže)** s odchylkami: `locks/` zůstávají v `…/Offload/locks` (jinak by se starý
+    Offload a ArcLoader nevylučovaly — zámek je cesta), `bin/` a `arri/` se nekopírují, ale hledají v obou složkách. Zbývá:
+    zip a readme/návod balíčku, odkazy na stahování, repozitář (Mac zatím balíček nedělá).
 
 - **Ověřování během proxy jako volba u každé kopie (zadání uživatele 2026-10-11, obě verze):** přepínač
   „Verify during proxy render“ v kroku 3 „After copy“ levého sloupce (klikací řádek jako ostatní volby po kopii), ne jen
@@ -146,6 +149,27 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 ## 2026-10-11 — po D6: dorovnání s Windows 0.8.0 (snímací fps, historie karet, denní a souhrnný report)
 
 Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
+
+- **Přejmenování na ArcLoader** (zadání 2026-10-11, jako Windows 0.10.0; `Product.name` / `Product.cli`): `build-app.sh
+  <štítek>` staví `build/ArcLoader-<štítek>.app` („ArcLoader <štítek>“, spustitelný soubor `ArcLoader`, ikona
+  `ArcLoader.icns`, CLI `Contents/Resources/bin/arcloader`, texty přístupu ke svazkům anglicky); obsazený název skončí
+  chybou (nic se nepřepíše ani nesmaže, starší `build/Offload*.app` zůstávají), sestavuje se do `build/.partial-…app` a
+  přejmenuje až na konci. Bundle id zůstává `cz.budin.offload` (nastavení v UserDefaults se přenese). Produkt SwiftPM
+  CLI `arcloader` (cíl `offload` zůstává), nápověda `arcloader copy …`, hlášky `arcloader verify/append/luts`. Okno,
+  horní lišta, dialogy a Nastavení „ArcLoader“; HTML `<title>ArcLoader <karta> – <datum>`, zápatí reportů karty, dne,
+  souhrnu a ověření „ArcLoader 0.7.0“ (`tool` v JSON zůstává `"offload"`, zápatí ho ukáže jako ArcLoader); ASC MHL
+  `<tool>ArcLoader</tool>`, komentáře `ArcLoader offload of …` / `ArcLoader append: …` / `ArcLoader repair: …` jako
+  Windows. Kopie reportů do `~/Documents/ArcLoader reports` (`ARCLOADER_REPORTS_DIR` před `OFFLOAD_REPORTS_DIR`), souhrnný
+  report čte i `Offload reporty` a `Offload reports`. Data aplikace `~/Library/Application Support/ArcLoader`
+  (`ARCLOADER_SETTINGS_DIR` před `OFFLOAD_SETTINGS_DIR`): aplikace i CLI při startu jednou zkopírují `…/Offload` (přes
+  dočasnou složku a přejmenování bez přepsání; stará složka zůstane beze změny, zapíše se do logu / stderr) **bez**
+  `bin/`, `arri/` (nástroje se hledají v `…/ArcLoader/bin` i `…/Offload/bin`) a `locks/` (zámky zůstávají v
+  `…/Offload/locks`, aby se starší Offload a ArcLoader vylučovaly); vlastní LUTy z `…/ArcLoader/luts`, pak
+  `…/Offload/luts`. TXT report dál `OFFLOAD REPORT` (jako Windows). Beze změny: jména v záloze, klíče JSON, interní
+  jména SwiftPM. Testy `RenameTests` (jména, report, kopie staré složky jednou a bez změny staré, odkazy, proměnné,
+  LUTy), upravené `MHLTests`, `VersionTests`. `build-app.sh` se nespouštěl (zadání) — ověřen `zsh -n` a rozbor;
+  aplikace jen offscreen `--ui-snapshots` (horní lišta a Nastavení „ArcLoader“). Migrace na skutečné složce uživatele
+  nevyzkoušena (jen v testech na dočasných složkách).
 
 - **Úkol 54 — bez proxy, když je originál lehčí** (Windows 0.5.1, `LighterSource`): `proxy.skipLighterSources` (výchozí
   zapnuto, chybějící klíč = zapnuto; Nastavení › Proxy › More „No proxy when the original is lighter (H.264/HEVC proxies

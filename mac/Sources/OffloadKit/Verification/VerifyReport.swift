@@ -178,7 +178,7 @@ public enum VerifyReport {
         section("The newest record failed during the copy (verified against an older generation)", "warn", r.failedSuperseded)
         section(r.basis == "ascmhl" ? "Extra (not in the MHL)" : "Extra (not in the checksum list)", "warn", r.extra)
         section("ASC MHL chain", "warn", r.chainProblems)
-        h += "<footer>offload \(esc(OffloadVersion.string)) · verification report · \(HTMLReport.dateTime(Date()))</footer></main></body></html>\n"
+        h += "<footer>\(Product.name) \(esc(OffloadVersion.string)) · verification report · \(HTMLReport.dateTime(Date()))</footer></main></body></html>\n"
         return h
     }
 

@@ -26,7 +26,7 @@ public struct BuiltinLut: Codable, Equatable {
     }
 }
 
-/// The built-in LUTs shipped in Offload.app/Contents/Resources/luts or, in a development build, the repo's shared/luts.
+/// The built-in LUTs shipped in ArcLoader.app/Contents/Resources/luts or, in a development build, the repo's shared/luts.
 public struct LutCatalog {
     public let folder: String?
     public let luts: [BuiltinLut]
@@ -45,15 +45,19 @@ public struct LutCatalog {
     public static let shared = LutCatalog.load(defaultFolder).withUserOverrides()
 
     /// The user's own file for a camera log wins over the built-in approximation — e.g. the official ARRI LUT saved as
-    /// `~/Library/Application Support/Offload/luts/arri-logc4-awg4.cube` (vendor LUTs may not be bundled with the app,
-    /// but anyone may use them on their own Mac). Applied to the app's/CLI's catalog only, never in `load`.
-    public func withUserOverrides(_ folder: String = LutCatalog.userLutFolder) -> LutCatalog {
+    /// `~/Library/Application Support/ArcLoader/luts/arri-logc4-awg4.cube` (vendor LUTs may not be bundled with the app,
+    /// but anyone may use them on their own Mac). Applied to the app's/CLI's catalog only, never in `load`. `folders` in
+    /// order: the first valid file for an id wins (ArcLoader's, then …/Offload/luts of builds before the rename).
+    public func withUserOverrides(_ folders: [String] = LutCatalog.userLutFolders) -> LutCatalog {
         let luts = self.luts.map { l -> BuiltinLut in
             var l = l
-            let own = folder + "/" + l.id + ".cube"
-            if FileManager.default.fileExists(atPath: own), LutCatalog.isValidCube(own) {
-                l.path = own
-                l.name += " (own file)"
+            for folder in folders {
+                let own = folder + "/" + l.id + ".cube"
+                if FileManager.default.fileExists(atPath: own), LutCatalog.isValidCube(own) {
+                    l.path = own
+                    l.name += " (own file)"
+                    break
+                }
             }
             return l
         }
@@ -104,10 +108,12 @@ public struct LutCatalog {
         return LutCatalog(folder: ok.isEmpty ? nil : folder, luts: ok)
     }
 
-    /// `~/Library/Application Support/Offload/luts` — `<id>.cube` there replaces the built-in LUT with that id.
-    public static var userLutFolder: String {
-        (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/Offload/luts")
-    }
+    /// `~/Library/Application Support/ArcLoader/luts` — `<id>.cube` there replaces the built-in LUT with that id.
+    public static var userLutFolder: String { ExternalTools.supportDirs[0] + "/luts" }
+
+    /// Where user LUTs are looked for, in order: ArcLoader's folder, then …/Offload/luts (builds before the rename; the
+    /// first start copies it, but a file put there later still counts).
+    public static var userLutFolders: [String] { ExternalTools.supportDirs.map { $0 + "/luts" } }
 
     /// A 3D .cube whose data rows match its LUT_3D_SIZE.
     public static func isValidCube(_ path: String) -> Bool {

@@ -34,7 +34,7 @@ private struct RootView: View {
         .background(p.bg)
         .ignoresSafeArea()
         .frame(minWidth: 940, minHeight: 640)
-        .alert("Offload", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
+        .alert(Product.name, isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
             Button("OK") { model.message = nil }
         } message: {
             Text(model.message ?? "")

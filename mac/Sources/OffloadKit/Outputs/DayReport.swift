@@ -230,7 +230,7 @@ public enum DayReport {
             for l in luts { h += "<tr><td>\(e(l.name))</td><td class=\"num\">\(l.clips)</td></tr>\n" }
             h += "</table></div>\n"
         }
-        h += "<footer>Offload \(e(OffloadVersion.string)) · day report · \(HTMLReport.dateTime(Date()))</footer></main></body></html>\n"
+        h += "<footer>\(Product.name) \(e(OffloadVersion.string)) · day report · \(HTMLReport.dateTime(Date()))</footer></main></body></html>\n"
         return h
     }
 

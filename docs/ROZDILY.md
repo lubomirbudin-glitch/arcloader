@@ -18,7 +18,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
 | Verze | 0.7.0 | 0.10.0-win (ve vývoji) |
 | Jazyk aplikace | anglicky (od 2026-10-10) | anglicky (od 0.9.0) |
-| Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) — přejmenování na ArcLoader ⏳ naplánováno | `ArcLoader.exe` + CLI `bin\arcloader.exe` (od 0.10.0; dříve `Offload.exe`, `bin\offload.exe`) |
+| Aplikace | `ArcLoader.app` + CLI `Contents/Resources/bin/arcloader` (po 0.7.0 D6; dříve `Offload.app`, `bin/offload`) | `ArcLoader.exe` + CLI `bin\arcloader.exe` (od 0.10.0; dříve `Offload.exe`, `bin\offload.exe`) |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
 ## Funkce a stav
@@ -40,16 +40,16 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | ARRIRAW / HDE / ARRICORE (art-cmd) | ✅ ověřeno se skutečným art-cmd (ALEXA 35, ALEXA Mini) | ✅ kód, neověřeno s nástroji (bez LUTu jen `--embedded-look` jako Mac `3b43352`; kód 0 bez výstupu = chyba s poznámkou) |
 | Canon RAW Light, Sony X-OCN | kopie + ověření, bez proxy | totéž |
 | GUI: detekce karet, fronta, vysunutí | ✅ | ✅ (WPF; čeká ruční test s kartou, vysunutí zatím nevyzkoušené) |
-| **Test USB portů na vyžádání + doporučení** | ✅ CLI (`offload ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
-| **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
+| **Test USB portů na vyžádání + doporučení** | ✅ CLI (`arcloader ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
+| **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `arcloader luts`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test) |
 | **Karta už zálohovaná** (`history.json`, řádek u karty, dotaz před celou kopií) | ✅ CLI + GUI (řádek u karty, dotaz před celou kopií; GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s kartou) |
-| **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ✅ CLI `offload append` + GUI tlačítko „Append“ (GUI čeká ruční test) | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
+| **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `arcloader append`) | ✅ CLI `arcloader append` + GUI tlačítko „Append“ (GUI čeká ruční test) | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
 | **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ✅ CLI `--name auto` + GUI (zástupný text a nápověda pole „Folder name“) | ✅ CLI + GUI |
 | **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | ✅ CLI `verify [--report]` + GUI „Verify backup“ v horní liště, Tools › Verify Backup… ⇧⌘O (GUI čeká ruční test) | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
 | **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | ✅ CLI + GUI (karty, fronta, po svazcích; GUI čeká ruční test) | ✅ CLI + GUI |
 | **Hlášky kontrol před kopií s kódy** (`PreflightCode`) | ✅ anglicky (od 2026-10-10, záměrně) | ✅ česky |
-| **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `offload day-report`) | ✅ CLI + GUI po 0.7.0 D6 (po každé úloze na každém cíli, `--no-day-report`, Nastavení › Report „Day report after each card“, „Day report…“ v historii a Today; stejné texty jako Windows; zatím bez seznamů klipů dne CSV/ALE; zámek dne `flock`, s Windows se nevylučuje; čeká ruční test) | ✅ CLI + GUI (čeká ruční test) |
+| **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `arcloader day-report`) | ✅ CLI + GUI po 0.7.0 D6 (po každé úloze na každém cíli, `--no-day-report`, Nastavení › Report „Day report after each card“, „Day report…“ v historii a Today; stejné texty jako Windows; zatím bez seznamů klipů dne CSV/ALE; zámek dne `flock`, s Windows se nevylučuje; čeká ruční test) | ✅ CLI + GUI (čeká ruční test) |
 | **Seznam klipů CSV / Avid ALE** (`_clips.csv/.ale` karty i dne) | ⏳ naplánováno | ✅ CLI + GUI (import do Resolve/Avid čeká ruční test) |
 | **Proxy pro přelinkování** (`reel_name` ve stopě TC, všechny zvukové stopy) | ✅ po 0.7.0 D6 (úkol 54; Resolve/Premiere čeká ruční test) | ✅ (Resolve/Premiere čeká ruční test) |
 | **MD5 navíc k xxh64** (`hash: both`, `--hash both`, `<karta>.md5`, MHL `<md5>`) | ⏳ naplánováno (MD5 ignoruje, xxh64 ověří) | ✅ CLI + GUI |
@@ -70,10 +70,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Verify-in-Proxy** (primární disk ověřený čtením pro proxy, ostatní na pozadí; `--classic-verify`, `--primary`) | ✅ CLI + GUI 0.7.0 (s kontrolou cache přes `mincore`; přepínač „Verify during proxy render“ i v kroku 3; čeká ruční test s kartou) | ✅ CLI + GUI 0.6.0 |
 | **Lze vyjmout × Lze formátovat** (dva stavy karty, oznámení „hotovo“ až po ověření všech disků) | ✅ GUI + CLI (od 0.7.0 i s ověřením během proxy) | ✅ GUI + CLI 0.6.0 |
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
-| **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ✅ 0.7.0 (manifest, „Finish interrupted backup“ v GUI, `offload append`; oprava na Macu zatím není; čeká ruční test s `kill -9`) | ✅ 0.6.0 |
+| **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ✅ 0.7.0 (manifest, „Finish interrupted backup“ v GUI, `arcloader append`; oprava na Macu zatím není; čeká ruční test s `kill -9`) | ✅ 0.6.0 |
 | **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ✅ 0.7.0 (potvrzení na kartě úlohy) | ✅ 0.6.0 |
-| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\ArcLoader reports\<datum>\<karta>\` (Windows; do 0.9.x `Offload reports`, čte se dál), obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ✅ 0.2.0C (`~/Documents/Offload reporty`) | ✅ CLI + GUI (čeká ruční test) |
-| **Souhrnný report z vybraných záloh** (zaškrtnuté karty v historii → jeden HTML + PDF do `ArcLoader reports\summary\`, volitelně na vybraný disk; `offload summary-report`; `clips[].info.recorded`) | ✅ CLI + GUI po 0.7.0 D6 (zaškrtnuté karty v Card history / Today → „Summary report (N)…“, do `~/Documents/Offload reporty/summary/`, volitelně do vybrané složky; `offload summary-report <složky | id…> [-o složka]`; `recorded` z ffprobe; stejné texty jako Windows; čeká ruční test) | ✅ CLI + GUI (čeká ruční test) |
+| **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\ArcLoader reports\<datum>\<karta>\` (Windows; do 0.9.x `Offload reports`, čte se dál), obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ✅ 0.2.0C (`~/Documents/ArcLoader reports` po přejmenování; do té doby `Offload reporty`, čte se dál) | ✅ CLI + GUI (čeká ruční test) |
+| **Souhrnný report z vybraných záloh** (zaškrtnuté karty v historii → jeden HTML + PDF do `ArcLoader reports\summary\`, volitelně na vybraný disk; `arcloader summary-report`; `clips[].info.recorded`) | ✅ CLI + GUI po 0.7.0 D6 (zaškrtnuté karty v Card history / Today → „Summary report (N)…“, do `~/Documents/ArcLoader reports/summary/`, volitelně do vybrané složky; `arcloader summary-report <složky | id…> [-o složka]`; `recorded` z ffprobe; stejné texty jako Windows; čeká ruční test) | ✅ CLI + GUI (čeká ruční test) |
 | **Automatické načtení disků** (externí USB disk → cíl, karta ve čtečce → zaškrtnutá; odebraný disk si pamatuje, `autoDrives`) | ✅ 0.2.0C (zapisovatelné externí disky do cílů, `ignoredVolumes`) | ✅ GUI (čeká ruční test se skutečným diskem a čtečkou) |
 | **Snímací fps z metadat prvního snímku** (`clips[].info.captureFrameRate`; „35 fps · přehrávání 24“ v HTML/PDF, TXT, denním reportu; CSV `Capture FPS`, ALE `Sensor_fps`; stopáž z přehrávací rychlosti) | ✅ po 0.7.0 D6 (zatím bez nové verze): stejné zdroje jako Windows — ARRIRAW `sensorSampleRate` z rychlého `art-cmd export --duration 1` (ověřeno na vzorcích ALEXA 35 a Mini, oba 24 fps), BRAW `sensorRate` (Mac `braw-decode --info` ho nově vypisuje), RED record / projektová fps, Sony `M01.XML` `captureFps`; Canon jen přehrávací; HTML/PDF a TXT; CSV/ALE Mac zatím nemá. Čeká ruční test s klipem natočeným jinou rychlostí | ✅ 0.8.0: ARRIRAW `sensorSampleRate`, BRAW `sensorRate` (braw-decode --info), RED record fps (přehrávací = projektová), Sony `M01.XML` `captureFps`; Canon zatím jen přehrávací rychlost (chybí vzorek metadat); ostatní video = přehrávací. Čeká ruční test s art-cmd / REDline / vzorkem BRAW |
 
@@ -96,12 +96,12 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | PDF | WebKit tisk; co je širší než A4 na šířku, se před tiskem zmenší | Edge headless `--print-to-pdf`; co je širší než A4 na šířku, se před tiskem zmenší |
 | Detekce karet | `NSWorkspace` notifikace | `WM_DEVICECHANGE` |
 | Vysunutí | `unmountAndEjectDevice` | `FSCTL_LOCK/DISMOUNT_VOLUME` + `CM_Request_Device_Eject` |
-| Nastavení | `UserDefaults` (stejné schéma vč. `portNames`, `proxy.lutMode/lutBuiltin/lutFallback/extraFolder`) | `%APPDATA%\ArcLoader\settings.json` (stejné schéma; starou složku `%APPDATA%\Offload` jednou zkopíruje) |
+| Nastavení | `UserDefaults` pod nezměněným bundle id `cz.budin.offload` (přejmenování ho nemění; stejné schéma vč. `portNames`, `proxy.lutMode/lutBuiltin/lutFallback/extraFolder`) | `%APPDATA%\ArcLoader\settings.json` (stejné schéma; starou složku `%APPDATA%\Offload` jednou zkopíruje) |
 | USB topologie | IOKit (IORegistry) | cfgmgr32 + IOCTL hubů |
 | Kde sedí svazek | DiskArbitration + IORegistry | IOCTL_STORAGE_QUERY_PROPERTY |
 | Identita karty | UUID svazku | GUID svazku + sériové číslo FS |
-| Ikona aplikace | Offload.icns z shared/icon/Offload.iconset (iconutil) | Offload.ico ze shared/icon (exe i okna) |
-| Vestavěné LUTy v balíčku | Offload.app/Contents/Resources/luts | ArcLoader\luts |
+| Ikona aplikace | ArcLoader.icns z shared/icon/Offload.iconset (iconutil) | Offload.ico ze shared/icon (exe i okna) |
+| Vestavěné LUTy v balíčku | ArcLoader.app/Contents/Resources/luts | ArcLoader\luts |
 | Dekodér BRAW | braw-decode (C++ nad BlackmagicRawAPI.framework, CFBundle) | braw-decode.exe (C# nad COM BlackmagicRawAPI.dll) |
 
 ## Záměrné rozdíly
@@ -156,7 +156,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   dekódování (experimentální)“ / `--hw-decode` (`proxy.hardwareDecode`), Mac volbu nemá.
 - **Odkazy na stažení dekodérů** (2026-10-10): Windows u chybějícího nástroje ukáže „Stáhnout…“ (Nastavení →
   Dekodéry RAW) a adresu výrobce i v poznámce klipu bez proxy; Mac zatím ne (VYVOJ-MAC, Naplánováno).
-- **Vlastní soubor místo vestavěného LUTu:** obě verze — Mac `~/Library/Application Support/Offload/luts/<id>.cube`,
+- **Vlastní soubor místo vestavěného LUTu:** obě verze — Mac `~/Library/Application Support/ArcLoader/luts/<id>.cube` (i `…/Offload/luts` z doby před přejmenováním),
   Windows `%APPDATA%\ArcLoader\luts\<id>.cube`; v seznamu „(vlastní soubor)“. Windows navíc zapíše cestu k souboru do
   důvodu LUTu v reportu (`clips[].lut.reason`).
 - **Rychlá analýza ARRIRAW** (2026-10-09): obě verze exportují art-cmd metadata jen prvního snímku (`--duration 1`)
@@ -239,7 +239,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   během proxy (obě verze) je karta „Safe to eject“ hned po kopii a „Safe to format“ až po proxy a ověření všech disků.
 - **Chyby souborů v HTML česky** (Windows): JSON je sdílený, takže chyby v něm zůstávají anglicky (`size mismatch`,
   `HASH MISMATCH` …); HTML/PDF report je zobrazí česky.
-- **Historie karet** (obě verze; Mac od 0.3.0, `~/Library/Application Support/Offload/history.json`, zámek `flock`):
+- **Historie karet** (obě verze; Mac od 0.3.0, `~/Library/Application Support/ArcLoader/history.json`, do přejmenování `…/Offload/` — při prvním startu zkopírováno, zámek `flock`):
   `%APPDATA%\ArcLoader\history.json` (formát ve FORMATY.md,
   „Místní soubory“) — řádek „Zálohováno … — ověřeno“ u karty, dotaz „Karty už jsou zálohované“ před celou kopií, CLI
   vypíše řádek před plánem (bez dotazu); `--no-history` historii vypne. Karta se pozná podle sériového čísla souborového
@@ -274,3 +274,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   Mac: `flock` na místním souboru v `~/Library/Application Support/Offload/locks/` (klíč = UUID svazku a cesta pod jeho
   kořenem, takže symlink ani jiný zápis cesty nevytvoří jiný zámek) — platí pro všechny procesy jednoho uživatele na
   jednom Macu (GUI i CLI); Mac a Windows se navzájem nevylučují (jiný mechanismus), stejně jako dva Windows počítače.
+  Po přejmenování na ArcLoader zůstávají zámky Macu v `…/Offload/locks/` (zámek = cesta k souboru), aby se starší
+  Offload a ArcLoader dál vylučovaly — obdoba Windows, které ponechalo jména mutexů.
+- **Přejmenování na ArcLoader** (Windows 0.10.0, Mac po 0.7.0 D6): Windows při prvním startu zkopíruje celou
+  `%APPDATA%\Offload`; Mac zkopíruje `~/Library/Application Support/Offload` bez nástrojů (`bin/`, `arri/` — hledají se
+  v obou složkách, ať se nekopírují stovky MB a nerozbije odkaz `bin/art-cmd`) a bez `locks/` (zůstávají ve staré
+  složce, viz výše); vlastní LUTy hledá v obou složkách (nová má přednost). Nastavení Macu je v UserDefaults pod
+  nezměněným bundle id, takže se nepřenáší. TXT report začíná v obou verzích dál `OFFLOAD REPORT`.
