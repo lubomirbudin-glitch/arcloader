@@ -16,22 +16,37 @@ final class AppendEngineTests: XCTestCase {
 
     func bytes(_ paths: [String]) throws -> [Data] { try paths.map { try Data(contentsOf: URL(fileURLWithPath: $0)) } }
 
-    /// Every file of the card folders with its bytes — except the two FORMATY lets an append extend: the hash list (only
-    /// extended, checked on its own) and the chain (its earlier entries the same, checked on its own).
+    /// Every file of the card folders with its bytes — except the three FORMATY lets an append extend: the hash list (only
+    /// extended, checked on its own), the chain (its earlier entries the same, checked on its own) and the block manifest
+    /// (only appended to — `assertManifestsOnlyExtended`).
     func earlierFiles(_ s: AppendPlannerTests.Setup) throws -> [String: Data] {
         var out: [String: Data] = [:]
         for p in s.cardPaths {
-            for f in TestFS.files(in: p) where !f.hasSuffix(".xxh64") && f != "ascmhl/ascmhl_chain.xml" {
+            for f in TestFS.files(in: p) where !f.hasSuffix(".xxh64") && f != "ascmhl/ascmhl_chain.xml"
+                && f != "_REPORT/" + ManifestFile.fileName {
                 out[p + "/" + f] = try Data(contentsOf: URL(fileURLWithPath: p + "/" + f))
             }
         }
         return out
     }
 
+    /// The block manifests of the card folders as they are now (absent = empty).
+    func manifests(_ s: AppendPlannerTests.Setup) -> [Data] {
+        s.cardPaths.map { FileManager.default.contents(atPath: ManifestFile.path(in: $0)) ?? Data() }
+    }
+
+    /// FORMATY „Blokový manifest“: an append only adds lines — every earlier byte stays where it was.
+    func assertManifestsOnlyExtended(_ s: AppendPlannerTests.Setup, _ before: [Data], file: StaticString = #filePath, line: UInt = #line) {
+        for (i, now) in manifests(s).enumerated() {
+            XCTAssertEqual(now.prefix(before[i].count), before[i], "the manifest is only appended to", file: file, line: line)
+        }
+    }
+
     // Review focus 1.
     func testOriginalReportsAndGeneration1ByteIdentical() throws {
         let s = try AppendPlannerTests().setup(tempDir())
         let before = try earlierFiles(s)
+        let manifestsBefore = manifests(s)
         let lists = try bytes(s.cardPaths.map { $0 + "/_REPORT/A001.xxh64" })
         let chains = s.cardPaths.map { MHLReader.readChain(ascmhlDir: $0 + "/ascmhl") }
         _ = TestFS.writeRandom(s.card + "/CLIP/A001C003.mov", size: 3000, seed: 3)
@@ -48,6 +63,7 @@ final class AppendEngineTests: XCTestCase {
         for (path, data) in before {
             XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), data, path)
         }
+        assertManifestsOnlyExtended(s, manifestsBefore)
         for (i, p) in s.cardPaths.enumerated() {
             XCTAssertTrue(FileManager.default.fileExists(atPath: p + "/_REPORT/offload_report_0002.json"))
             XCTAssertTrue(FileManager.default.fileExists(atPath: p + "/_REPORT/A001_report_0002.html"))
@@ -151,6 +167,7 @@ final class AppendEngineTests: XCTestCase {
     func testCancelledAppendKeepsEverythingEarlier() throws {
         let s = try AppendPlannerTests().setup(tempDir())
         let before = try earlierFiles(s)
+        let manifestsBefore = manifests(s)
         _ = TestFS.writeRandom(s.card + "/CLIP/A001C003.mov", size: 3000, seed: 3)
         _ = TestFS.writeRandom(s.card + "/CLIP/A001C004.mov", size: 3000, seed: 4)
         var cfg = JobConfig(source: s.card, destRoots: [])
@@ -168,6 +185,7 @@ final class AppendEngineTests: XCTestCase {
         XCTAssertEqual(job.status().phase, .cancelled)
         XCTAssertFalse(job.status().safeToFormat)
         for (path, data) in before { XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), data, path) }
+        assertManifestsOnlyExtended(s, manifestsBefore)
         for p in s.cardPaths {
             XCTAssertFalse(TestFS.files(in: p).contains { $0.hasSuffix(".offload-part") })
             XCTAssertFalse(FileManager.default.fileExists(atPath: p + "/CLIP/A001C004.mov"))

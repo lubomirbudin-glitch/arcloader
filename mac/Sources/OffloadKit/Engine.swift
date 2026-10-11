@@ -21,6 +21,9 @@ public struct OffloadOptions {
     /// Tests only (internal): called on the copy thread after every block read from the card (with the file's index) —
     /// a deterministic point inside a file.
     var afterChunkRead: ((Int) -> Void)?
+    /// A `part` checkpoint goes into the block manifest after this many blocks of a file being written (64 × 16 MiB =
+    /// 1 GiB) — after an F_FULLFSYNC of the file: F_NOCACHE does not promise the medium (spec D.23.1).
+    public var checkpointBlocks = 64
 
     public init() {}
 }
@@ -196,6 +199,9 @@ final class SourceHasher {
         }
     }
 
+    /// The xxh64 of file `i` once the hasher is past it (a writer asks after `finish(i)` was queued).
+    func hash(_ i: Int) -> UInt64? { queue.sync { hashes[i] } }
+
     func abort() { queue.async { self.stream = nil } }
     func wait() { queue.sync {} }
 }
@@ -210,10 +216,23 @@ final class DestWriter {
     let beforeRename: ((String) -> Void)?
     let written = Counter()
     let verified = Counter()
+    /// The ASC MHL generation the copy writes — what its manifest records say (R6).
+    let generation: Int
+    /// The card's xxh64 of file `i` (from the hasher) — for the manifest's `file` record.
+    var hashOf: ((Int) -> UInt64?)?
     private let queue: DispatchQueue
     private var fd: Int32 = -1
     private var partPath = ""
     private var currentError: String?
+    /// XXH3-64 of every block of the file being written, as written (the card's bytes); `checkpointed` of them are in
+    /// the manifest already.
+    private var blockHashes: [UInt64] = []
+    private var checkpointed = 0
+    private var current: SourceFile?
+    /// `file` records of files only fsync'd: written into the manifest after the next F_FULLFSYNC of the drive.
+    private var awaitingFlush: [ManifestRecord] = []
+    /// The last `flushDevice` went through (F_FULLFSYNC or fsync).
+    private(set) var deviceFlushed = false
     private(set) var results: [DestFileResult]
     private let verifyingLock = NSLock()
     private var verifyingNow: String?
@@ -221,11 +240,12 @@ final class DestWriter {
     var verifyingFile: String? { verifyingLock.lock(); defer { verifyingLock.unlock() }; return verifyingNow }
 
     init(index: Int, cardPath: String, fileCount: Int, options: OffloadOptions, noReplace: Bool = false,
-         beforeRename: ((String) -> Void)? = nil) {
+         beforeRename: ((String) -> Void)? = nil, generation: Int = 1) {
         self.cardPath = cardPath
         self.options = options
         self.noReplace = noReplace
         self.beforeRename = beforeRename
+        self.generation = generation
         queue = DispatchQueue(label: "offload.dest\(index)")
         results = Array(repeating: DestFileResult(), count: fileCount)
     }
@@ -239,6 +259,9 @@ final class DestWriter {
     func begin(_ file: SourceFile) {
         queue.async {
             self.currentError = nil
+            self.current = file
+            self.blockHashes = []
+            self.checkpointed = 0
             self.partPath = self.cardPath + "/" + DestWriter.partName(file.relPath)
             do {
                 self.fd = try IO.openWrite(self.partPath)
@@ -257,6 +280,8 @@ final class DestWriter {
             do {
                 try IO.pwrite(self.fd, c.buf, c.length, c.offset, path: self.partPath)
                 self.written.add(c.length)
+                self.blockHashes.append(BlockHash.xxh3(c.buf, c.length))
+                if self.blockHashes.count - self.checkpointed >= max(1, self.options.checkpointBlocks) { try self.checkpoint() }
             } catch {
                 self.currentError = "\(error)"
                 self.closeAndRemovePart()
@@ -292,11 +317,34 @@ final class DestWriter {
                     guard rename(self.partPath, finalPath) == 0 else { throw IOError("rename", finalPath) }
                 }
                 self.results[i].state = .written
+                self.record(i, file, flushedAlone: file.size >= self.options.fullSyncThreshold)
             } catch {
                 self.closeAndRemovePart()
                 self.results[i] = DestFileResult(state: .failed, error: "\(error)")
             }
+            self.current = nil
         }
+    }
+
+    /// R6: the blocks written since the last checkpoint go into the manifest — once F_FULLFSYNC has put them on the medium
+    /// (F_NOCACHE alone does not). A sync that fails is a write error; a manifest line that cannot be written only means a
+    /// resume starts earlier.
+    private func checkpoint() throws {
+        guard let f = current else { return }
+        try IO.fullSync(fd, path: partPath)
+        let record = ManifestRecord(kind: ManifestRecord.partKind, gen: generation, path: f.relPath, size: f.size,
+                                    modified: f.modifiedUtc, blockSize: options.chunkSize, first: checkpointed,
+                                    blocks: ManifestRecord.hex(Array(blockHashes[checkpointed...])))
+        if (try? ManifestFile.append(cardPath, [record])) != nil { checkpointed = blockHashes.count }
+    }
+
+    /// The `file` record of a file in its place: now when the file had its own F_FULLFSYNC, else after the next flush of
+    /// the drive (its data may still be in the drive's cache). Only with the card's hashes and blocks that fit the file.
+    private func record(_ i: Int, _ f: SourceFile, flushedAlone: Bool) {
+        guard let x = hashOf?(i), blockHashes.count == BlockManifest.countFor(f.size, options.chunkSize) else { return }
+        let r = ManifestRecord(gen: generation, path: f.relPath, size: f.size, modified: f.modifiedUtc, xxh64: hex64(x),
+                               blockSize: options.chunkSize, blocks: ManifestRecord.hex(blockHashes))
+        if flushedAlone { try? ManifestFile.append(cardPath, [r]) } else { awaitingFlush.append(r) }
     }
 
     func abort(_ i: Int, reason: String) {
@@ -306,15 +354,21 @@ final class DestWriter {
         }
     }
 
-    /// One F_FULLFSYNC flushes the whole drive cache, covering all the small files at once.
+    /// One F_FULLFSYNC flushes the whole drive cache, covering all the small files at once; then the manifest learns the
+    /// files that waited for it (none when the flush failed — that data may never have reached the disk).
     func flushDevice() {
         queue.sync {
             let path = self.cardPath + "/.offload-flush"
+            self.deviceFlushed = false
             guard let fd = try? IO.openWrite(path) else { return }
             _ = "x".withCString { Darwin.write(fd, $0, 1) }
-            try? IO.fullSync(fd, path: path)
+            self.deviceFlushed = (try? IO.fullSync(fd, path: path)) != nil
             close(fd)
             unlink(path)
+            if self.deviceFlushed && !self.awaitingFlush.isEmpty {
+                // Best effort: without its record a file is only copied again by a resume, never trusted blindly.
+                if (try? ManifestFile.append(self.cardPath, self.awaitingFlush)) != nil { self.awaitingFlush = [] }
+            }
         }
     }
 
@@ -565,12 +619,13 @@ public final class OffloadEngine {
         }
         let ws = plan.cardPaths.enumerated().map {
             DestWriter(index: $0.offset, cardPath: $0.element, fileCount: files.count, options: options,
-                       noReplace: plan.mode != .full, beforeRename: testBeforeRename)
+                       noReplace: plan.mode != .full, beforeRename: testBeforeRename, generation: plan.generation)
         }
         lock.lock(); self.plan = plan; writers = ws; lock.unlock()
 
         let pool = BufferPool(count: options.bufferCount, size: options.chunkSize)
         let hasher = SourceHasher(fileCount: files.count, blockSize: options.chunkSize)
+        for w in ws { w.hashOf = { hasher.hash($0) } }
         var sourceErrors: [String?] = Array(repeating: nil, count: files.count)
         let pausedBefore = pauses.pausedTotal
         var requestsChecked = pauses.requests

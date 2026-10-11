@@ -21,7 +21,7 @@ public struct OffloadReport: Codable {
         public var unbuffered: Bool?
         /// "verify-in-proxy" or "read-back"; absent without verification.
         public var verifyMethod: String?
-        /// Czech: why this destination was read back although verify-in-proxy ran.
+        /// Why this destination was read back although verify-in-proxy ran (English on the Mac; Czech in older reports).
         public var verifyNote: String?
         /// "1A2B-3C4D" (FAT/exFAT/NTFS) or "uuid:<volume UUID>" (Mac, other file systems) — spec D.23.2.
         public var volumeSerial: String?
@@ -212,10 +212,13 @@ public struct OffloadReport: Codable {
                       destinations: destResults.map { $0[i].state.rawValue },
                       errors: destResults.map { $0[i].error })
         }
-        let dests = plan.destRoots.enumerated().map { d, root in
-            Destination(root: root, cardPath: plan.cardPaths[d], filesystem: IO.filesystemType(root),
-                        filesOK: destResults[d].filter { isGood($0.state.rawValue, verified: verified) }.count,
-                        filesFailed: destResults[d].filter { !isGood($0.state.rawValue, verified: verified) }.count)
+        let dests = plan.destRoots.enumerated().map { d, root -> Destination in
+            var x = Destination(root: root, cardPath: plan.cardPaths[d], filesystem: IO.filesystemType(root),
+                                filesOK: destResults[d].filter { isGood($0.state.rawValue, verified: verified) }.count,
+                                filesFailed: destResults[d].filter { !isGood($0.state.rawValue, verified: verified) }.count)
+            // R12: the destination is known by its volume even under another name (spec D.23.2).
+            x.volumeSerial = VolumeFacts.volumeSerialText(plan.cardPaths[d])
+            return x
         }
         return OffloadReport(cardName: plan.cardName, date: plan.date, source: plan.source,
                              sourceFilesystem: IO.filesystemType(plan.source),

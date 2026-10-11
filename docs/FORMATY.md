@@ -28,7 +28,7 @@ a Mac mají české texty). Slovník pojmů: [ui-text-glossary.md](ui-text-gloss
         <karta>.md5                   jen s xxh64 + MD5 (Windows od 0.3.0)
         <karta>_clips.csv             seznam klipů (Windows od 0.3.0)
         <karta>_clips.ale             seznam klipů pro Avid (Windows od 0.3.0, když je zapnutý)
-        offload-manifest.jsonl        blokový manifest (Windows od 0.6.0) — viz „Blokový manifest“
+        offload-manifest.jsonl        blokový manifest (Windows od 0.6.0, Mac od 0.7.0) — viz „Blokový manifest“
         offload_report_0002.json      jen po doplnění (generace 2, 3 …): report jen nových souborů
         offload_report_0002.txt
         <karta>_report_0002.html
@@ -117,7 +117,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `safeToFormatSeconds` | číslo? | jen Windows od 0.6.0: sekundy od startu do chvíle, kdy byl každý soubor ověřený na každém cíli (bez pauz); chybí, když to nenastalo |
 | `verifyNotes[]` | string? | jen Windows od 0.6.0: volný text (do 0.8.0 česky, od 0.9.0 anglicky) — nestabilní čtení (blok se při opakovaném čtení lišil), stejný blok špatně na více cílech a co dává karta při novém čtení |
 | `totalFiles`, `totalBytes` | číslo | |
-| `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows); Windows od 0.6.0 `verifyMethod` (`verify-in-proxy` = čtením pro proxy a dorovnáním, `read-back` = zpětným čtením; chybí bez ověření), `verifyNote` (česky, proč zpětným čtením, i když běželo ověření během proxy) a `volumeSerial` (`1A2B-3C4D`, sériové číslo svazku cíle — podle něj se cíl pozná i pod jiným písmenem, R12; Mac od 0.3.0: u FAT/exFAT/NTFS stejně jako Windows, když smí číst boot sektor, jinak a u ostatních FS `uuid:<UUID svazku>`) |
+| `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows); Windows od 0.6.0 `verifyMethod` (`verify-in-proxy` = čtením pro proxy a dorovnáním, `read-back` = zpětným čtením; chybí bez ověření), `verifyNote` (česky, proč zpětným čtením, i když běželo ověření během proxy) a `volumeSerial` (`1A2B-3C4D`, sériové číslo svazku cíle — podle něj se cíl pozná i pod jiným písmenem, R12; Mac čte od 0.3.0 a zapisuje od 0.7.0 (úkol 65 — dřívější Mac reporty ho nemají): u FAT/exFAT/NTFS stejně jako Windows, když smí číst boot sektor, jinak a u ostatních FS `uuid:<UUID svazku>`) |
 | `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `xxh128`? (XXH3-128, 32 malých hex, Windows od 0.6.0), `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
 | `skipped[]` | string | vynechané systémové položky |
 | `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`? (relativní k složce karty, např. `_PROXY/idle/1.mov` — viz „Proxy ve složkách jako na kartě“), `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje), `content`? {`state` (`ok` / `warn`), `kind` (`decode`, `audio`, `timestamps`, `frames`, `end`), `frame`, `timecode`, `message`, `framesDecoded`, `framesExpected`} (Windows od 0.6.0: co dekodér hlásil při tvorbě proxy — `warn` je vada souboru z kamery, kopie přitom souhlasí s kartou; Mac ignoruje) |
@@ -218,7 +218,7 @@ Mac klíč nezná a ignoruje ho (renderuje vše).
   `<creatorinfo><comment>` (`· ověření: verify-in-proxy` / `· ověření: read-back`; Windows od 0.9.0 anglicky `· verification: verify-in-proxy` / `· verification: read-back`) — `<process>` zůstává `transfer`,
   schéma ASC MHL v2 jiné hodnoty nepovoluje. S ověřením během proxy se generace zapíše až po ověření (`verifyPending`).
 
-## Blokový manifest — `_REPORT/offload-manifest.jsonl` (Windows od 0.6.0, Mac ignoruje)
+## Blokový manifest — `_REPORT/offload-manifest.jsonl` (Windows od 0.6.0, Mac od 0.7.0)
 
 Na každém cíli, **jen připisovaný** (řádek se zapíše přes `WRITE_THROUGH` a flush, nic v souboru se nepřepisuje; řádek
 přerušený pádem se při čtení přeskočí a další zápis začne na novém řádku). Jeden JSON objekt na řádek:
@@ -235,6 +235,11 @@ přerušený pádem se při čtení přeskočí a další zápis začne na nové
 | `first` | jen `part`: index prvního bloku v `blocks` (záznam s `first` 0 začíná nový pokus) |
 
 Kontrolní bod se zapíše po každých 64 blocích (1 GiB) souboru zapisovaného mimo cache — ty bloky jsou už na disku.
+Mac (od 0.7.0, úkol 65): kontrolní bod `part` až po `F_FULLFSYNC` zapisovaného souboru (`F_NOCACHE` na macOS nezaručuje,
+že data jsou na médiu — Windows tu má `WRITE_THROUGH`); záznam `file` po přejmenování souboru na jeho místo — u souborů
+s vlastním `F_FULLFSYNC` (od 256 MiB) hned, u menších až po `F_FULLFSYNC` celého disku (konec kopie, Pozastavit); řádky
+se zapisují `O_APPEND` a `F_FULLFSYNC`. Mac zatím nepíše `xxh128` ani `md5` (zúžený úkol 51), jen `xxh64` a bloky; čte
+záznamy s nimi i bez nich.
 Navázání (R6): doplnění (`offload append`, v GUI „Dokončit přerušenou zálohu“) do složky, jejíž generace N není
 v řetězu ASC MHL (nemá report vůbec, nebo jen s `verifyPending`) a manifest ji zná, dokončí **tutéž** generaci N:
 soubor na místě se záznamem `file` na všech cílech se znovu nečte, soubor na místě bez záznamu se z karty jen

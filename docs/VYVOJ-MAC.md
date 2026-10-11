@@ -138,6 +138,17 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 65 — kontrola cache na macOS (`CacheProbe`: `mincore` nad sdíleným mapováním, `evict` = `msync(MS_INVALIDATE)`;
+  sonda `.offload-cachecheck-*` zapsaná s F_NOCACHE + F_FULLFSYNC v `_REPORT` nesmí zůstat v paměti, síťový svazek nikdy,
+  slepé `mincore` = vše klasicky), blokový manifest `_REPORT/offload-manifest.jsonl` jen připisovaný (`O_APPEND` +
+  F_FULLFSYNC, přetržený řádek se přeskočí; `part` po 64 blocích až po F_FULLFSYNC souboru, `file` po přejmenování —
+  velké soubory hned, malé po F_FULLFSYNC disku na konci kopie i při Pozastavit, jako Windows), `volumeSerial` cílů
+  v reportu (Mac ho dřív jen četl), anglické texty `VIPMsg` podle Windows 0.9.0. Ověřeno 2026-10-11 (macOS 26.6, Intel):
+  `CacheProbeTests` na interním APFS (`$TMPDIR`) a s `OFFLOAD_TEST_DEST` na obrazech `hdiutil` HFS+, exFAT (FSKit) a APFS
+  připojených `-nobrowse` pod dočasnou složkou — `mincore` vidí normálně zapsaný soubor (vše rezidentní), zápis i čtení
+  s F_NOCACHE v cache nic nenechají, `msync(MS_INVALIDATE)` čisté stránky vyhodí; skutečné USB/Thunderbolt/RAID/SMB disky
+  čekají na ruční test (README-START ř. 24, D.27 ř. 3, 4, 8). Bez XXH3-128 a MD5 v záznamech (zúžený úkol 51).
+  `AppendEngineTests` (Review focus 1) teď manifest kontrolují zvlášť: jen prodloužený, dřívější bajty beze změny
 - Úkol 61 (vytažený dopředu s úkolem 51) — Pozastavit / Pokračovat podle zadání uživatele 2026-10-09 a Windows 0.8.0,
   ne podle plánu (ten pozastavoval i mezi 16MB bloky): `PauseGate` (pracovníci `work()`; úloha „stojí“ až když čeká
   a žádný přihlášený pracovník nedokončuje krok; `pausedTotal` jen doba stání; `requests`, `holds`, `end()`); kopie
