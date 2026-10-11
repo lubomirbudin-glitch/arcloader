@@ -16,7 +16,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.3.0 | 0.9.0-win (ve vývoji) |
+| Verze | 0.3.0 | 0.10.0-win (ve vývoji) |
 | Jazyk aplikace | anglicky (od 2026-10-10) | anglicky (od 0.9.0) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) — přejmenování na ArcLoader ⏳ naplánováno | `ArcLoader.exe` + CLI `bin\arcloader.exe` (od 0.10.0; dříve `Offload.exe`, `bin\offload.exe`) |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
