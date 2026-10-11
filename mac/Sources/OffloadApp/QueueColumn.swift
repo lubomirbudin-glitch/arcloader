@@ -6,8 +6,9 @@ import SwiftUI
 /// indicator and speed table), waiting (compact), done (green, safe to eject), problem (yellow), failed (red),
 /// cancelled (grey); an empty queue shows the flow Card → disks → Verify → Proxy → Report.
 ///
-/// Not on the Mac yet (hidden): the "Card history" tab and "Today" table (no card history), Pause, "Copy again"
-/// (repair), the time estimate for the whole job.
+/// Verify backup items (⇧⌘O) are cards of the same queue — they run one after another with the copies.
+/// Not on the Mac yet (hidden): the "Card history" tab and "Today" table, Pause, "Copy again" (repair), the time
+/// estimate for the whole job.
 struct QueueColumn: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
@@ -25,11 +26,17 @@ struct QueueColumn: View {
             tabs.padding(.horizontal, 28).padding(.top, 22).padding(.bottom, 18)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if model.jobs.isEmpty {
+                    if model.jobs.isEmpty && model.verifies.isEmpty {
                         EmptyQueue()
                     } else {
+                        ForEach(model.verifies.filter { !$0.isFinished }) { item in
+                            VerifyCardContainer(item: item)
+                        }
                         ForEach(ordered) { item in
                             JobCardContainer(item: item)
+                        }
+                        ForEach(model.verifies.filter(\.isFinished).reversed()) { item in
+                            VerifyCardContainer(item: item)
                         }
                     }
                     // TODO(history): "Today" — the cards backed up today, from the card history (Windows plan 9).
@@ -43,7 +50,7 @@ struct QueueColumn: View {
 
     private var tabs: some View {
         HStack(spacing: 4) {
-            let open = model.jobs.filter { !$0.queueFinished }.count
+            let open = model.jobs.filter { !$0.queueFinished }.count + model.verifies.filter { !$0.isFinished }.count
             HStack(spacing: 6) {
                 Text("Queue").font(.ui(13, .semibold)).foregroundStyle(p.text)
                 if open > 0 { Text("\(open)").font(.ui(13, .semibold)).foregroundStyle(p.accentText) }
@@ -52,7 +59,7 @@ struct QueueColumn: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(p.tabActive))
             // TODO(history): the "Card history" tab once the Mac keeps a card history.
             Spacer()
-            if model.jobs.contains(where: \.queueFinished) {
+            if model.jobs.contains(where: \.queueFinished) || model.verifies.contains(where: \.isFinished) {
                 Button("Clear finished") { model.clearFinished() }.buttonStyle(.offload(.ghost, height: 32))
             }
         }
@@ -510,5 +517,72 @@ struct ProblemCard: View {
         .padding(.horizontal, 14).padding(.vertical, 10)
         .background(RoundedRectangle(cornerRadius: 10).fill(p.warnListBg))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(p.warnListBorder, lineWidth: 1))
+    }
+}
+
+// MARK: - Verify backup
+
+/// One Verify backup item of the queue (Windows QueuePanel verify template): title, state pill, progress while it runs,
+/// the result (green / orange / red), orange warnings, the note on where the report went, and its buttons.
+struct VerifyCardContainer: View {
+    @EnvironmentObject var model: AppModel
+    @ObservedObject var item: VerifyItem
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        let s = item.status
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 14) {
+                IconTile(systemImage: "checkmark.shield", size: 40, radius: 10, iconSize: 19, fg: p.accentText, bg: p.accentSoft)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(VerifyJobView.title(item.job.cardName)).font(.ui(16, .semibold)).foregroundStyle(p.text)
+                    Text(item.job.cardPath).font(.mono(12)).foregroundStyle(p.text3).lineLimit(1).truncationMode(.middle)
+                        .help(item.job.cardPath)
+                }
+                Spacer(minLength: 12)
+                Pill(text: VerifyJobView.statusText(s), fg: p.textSoft, bg: p.chip)
+            }
+            if s.state == .running {
+                VStack(alignment: .leading, spacing: 8) {
+                    ThinBar(height: 4, segments: [(VerifyJobView.fraction(s.progress), p.accentBar)])
+                    Text(VerifyJobView.detail(s.progress, bytesPerSecond: item.rate)).font(.ui(13)).foregroundStyle(p.text2)
+                }
+            }
+            if let result = VerifyJobView.result(s) {
+                Text(result.text).font(.ui(14)).foregroundStyle(color(result.tone))
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+            if let r = s.result {
+                ForEach(Array(VerifyReport.warnings(r).enumerated()), id: \.offset) { _, w in
+                    Text(w).font(.ui(13)).foregroundStyle(p.warn).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let note = VerifyJobView.reportNote(s) {
+                Text(note).font(.ui(13)).foregroundStyle(p.warn).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+            HStack(spacing: 8) {
+                if s.reportPath != nil {
+                    Button { model.openVerifyReport(item) } label: { Label("Verification report", systemImage: "doc.text") }.fixedSize()
+                }
+                Button { model.revealVerify(item) } label: { Label("Show in Finder", systemImage: "folder") }.fixedSize()
+                Spacer(minLength: 8)
+                if !item.isFinished {
+                    Button("Cancel") { model.cancelVerify(item) }.buttonStyle(.offload(.danger, height: 36))
+                }
+            }
+            .buttonStyle(.offload(.secondary, height: 36))
+        }
+        .padding(.horizontal, 22).padding(.vertical, 18)
+        .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(p.bgHeader))
+        .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(p.lineSoft, lineWidth: 1))
+    }
+
+    private func color(_ tone: CardTone) -> Color {
+        switch tone {
+        case .ok: return p.success
+        case .warning: return p.warn
+        case .error: return p.dangerText
+        case .waiting, .active: return p.text2
+        }
     }
 }

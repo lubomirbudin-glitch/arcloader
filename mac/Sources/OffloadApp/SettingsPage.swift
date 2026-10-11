@@ -173,8 +173,12 @@ struct FoldersSettings: View {
                     }
                 }
                 FormRow(label: "Card name") {
-                    Text("Set per card in step 1 — empty uses the card's own name.")
-                        .font(.ui(13)).foregroundStyle(p.text3)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Toggle("Suggest the card name from the clips", isOn: $model.settings.naming.suggestFromClips)
+                            .toggleStyle(.offloadCheckbox)
+                        Text("Set per card in step 1. Empty uses the reel of the clip names (A001C003… → A001), the next in line of the day (A002 after A001), or the card's own name.")
+                            .font(.ui(12)).foregroundStyle(p.text3).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 FormRow(label: "Disks") {
                     VStack(alignment: .leading, spacing: 6) {
@@ -185,7 +189,6 @@ struct FoldersSettings: View {
                     }
                 }
             }
-            // TODO(naming): "Suggest the card name from the clips" once the Mac reads clips before the copy (Windows plan 6).
         }
     }
 }
@@ -203,6 +206,16 @@ struct VerifySettings: View {
             }
             // TODO(hash): xxHash64 + MD5 once the Mac engine writes both (AppSettings.hash is kept, not used yet).
             if !model.settings.verify { Notice(kind: .warn, text: AfterCopyTexts.verifyOffWarning) }
+            FormRow(label: "Verify backup") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Checks an earlier backup on a destination against its ASC MHL, without the card (⇧⌘O).")
+                        .font(.ui(12)).foregroundStyle(p.text3).fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 18) {
+                        Button("Verify backup…") { model.verifyBackup() }.buttonStyle(.offload(.secondary))
+                        Toggle("Save a verification report", isOn: $model.saveVerifyReport).toggleStyle(.offloadCheckbox)
+                    }
+                }
+            }
         }
     }
 }

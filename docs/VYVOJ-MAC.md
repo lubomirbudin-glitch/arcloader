@@ -129,6 +129,23 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 49 — GUI plánu 6 v novém vzhledu (jako Windows 0.9): karta v kroku 1 se prohlédne mimo hlavní vlákno
+  (`CardInspector`, jedna prohlídka na cestu, žádost během běhu = ještě jednou, výsledek zahozený pro zdroj, který zmizel,
+  jiná identita karty ve slotu = znovu); pod kartou řádek historie v barvě tónu („Checking whether the card is already backed
+  up…“ dokud historie a prohlídka neskončí), u karty počet klipů a velikost; tlačítko „Append“ (jen svazek s novými
+  soubory a dosažitelnou zálohou, nápověda „Append new clips only to the earlier backup (12 files · 3.2 GB)“) — zaškrtnuté
+  místo pole názvu ukáže „Folder: 2026-10-06/A001 on 2 destinations“ a úloha jde do složek zálohy (krok 2 smí být prázdný),
+  karta úlohy „A001 · append“, „Nothing new“ zeleně jen při Safe to format; pole „Folder name“ má zástupný text z klipů /
+  další v řadě (`CardNaming.resolve` — co je vidět, to se zkopíruje) a šedou nápovědu, v Nastavení › Folders „Suggest the card
+  name from the clips“; dialog „Card(s) already backed up“ (Copy again in full / Skip backed-up / Cancel); hlášky místa pod
+  Startem (červená blokuje, oranžová varuje; vybrané karty z prohlídky, jinak obsazené místo svazku, fronta jako zbytek
+  běžících úloh, svazek a jméno cíle z probíhající kontroly cílů); Start čeká na prohlídku vybraných karet nejvýš 10 s;
+  „Verify backup“ v horní liště, Tools › Verify Backup… ⇧⌘O a v Nastavení › Verify („Save a verification report“, i v
+  dialogu) — každá karta je položka kopírovací fronty (`VerifyJob`, `VerifyJobView` v OffloadKit/Desktop, test), karta ve
+  frontě s průběhem, výsledkem, varováními, poznámkou o reportu mimo kartu, „Verification report“, „Show in Finder“,
+  „Cancel“; po skončení úlohy se historie načte znovu; před ukončením aplikace se čeká nejvýš 10 s na zápis historie (pak
+  log). Pravidla bez UI v OffloadKit (`BackedUpPrompt`, `AppendRules`, `CardNaming`, `SpaceCheck`, testy `CardRulesTests`).
+  GUI se nespouštělo (jen build) — ruční kontrola README-START oddíl 7 body 14–18 s kartou čeká
 - Úkol 48 — kontrola místa po svazcích (`SpaceEstimator`/`SpacePlanner` z proudu A, teď zapojené): karta + 64 KiB na
   soubor + 64 MiB, proxy z odhadu (délka z velikosti a typického toku, ProRes podle výšky, AAC/PCM), report 32 MiB + 1 MiB
   na klip, složka pro proxy jako vlastní místo; dva cíle na jednom svazku se sečtou; `OffloadEngine.prepare(extra:)`

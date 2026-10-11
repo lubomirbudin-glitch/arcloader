@@ -1,6 +1,15 @@
 import Darwin
 import Foundation
 
+/// How far a verification got: the file being read (0-based of `fileCount`) and the bytes read of `totalBytes`.
+public struct VerifyProgress: Equatable {
+    public let file: String
+    public let fileIndex: Int
+    public let fileCount: Int
+    public let bytes: Int64
+    public let totalBytes: Int64
+}
+
 /// What a verification of one card folder found (FORMATY „Report ověření“).
 public struct VerifyResult {
     public var cardPath: String
@@ -49,7 +58,7 @@ public enum BackupVerifier {
     /// Offload's own folders in a card folder (never "extra").
     static let ours = [Layout.reportDirName + "/", Layout.proxyDirName + "/", MHL.dirName + "/"]
 
-    public static func verify(_ cardPath: String, chunkSize: Int = 16 << 20, progress: ((String, Int64) -> Void)? = nil,
+    public static func verify(_ cardPath: String, chunkSize: Int = 16 << 20, progress: ((VerifyProgress) -> Void)? = nil,
                               isCancelled: () -> Bool = { false }) throws -> VerifyResult {
         var r = VerifyResult(cardPath: cardPath)
         r.started = Date()
@@ -117,7 +126,7 @@ public enum BackupVerifier {
                     running.forEach { $0.1.update(buf, n) }
                     off += Int64(n)
                     r.bytesRead += Int64(n)
-                    progress?(e.path, r.bytesRead)
+                    progress?(VerifyProgress(file: e.path, fileIndex: r.checked - 1, fileCount: expected.count, bytes: r.bytesRead, totalBytes: r.totalBytes))
                 }
                 if r.cancelled { break }
                 let sizeOK = e.size.map { $0 == off } ?? true

@@ -12,6 +12,9 @@ struct DestinationStatus: Equatable {
     var checking = true
     /// "Thunderbolt", "USB 3 (5 Gb/s)", "NVMe" — resolved once per destination (DriveLinks), nil until known.
     var connection: String?
+    /// Which volume it is on (two destinations on one volume add up in the space check) and how messages name it.
+    var volume: String?
+    var label: String?
 }
 
 /// One clip thumbnail of a finished card (decoded off the main thread).
@@ -44,6 +47,12 @@ final class JobItem: ObservableObject, Identifiable {
     /// Snapshot rendering only: the card as it should look, instead of the job's status.
     var preview: JobCardState?
 #endif
+
+    /// An append into an earlier backup ("A001 · append").
+    var isAppend: Bool { job.config.appendInto != nil }
+    /// What this job needs on the destination volumes (from the card's inspection when it was queued); the space check
+    /// counts what is still left of it (SpaceCheck.remaining).
+    var spaceDemands: [(demand: VolumeDemand, destination: Int?)] = []
 
     init(job: OffloadJob, sourceName: String, canEject: Bool, estimatedBytes: Int64? = nil) {
         self.job = job
@@ -190,7 +199,20 @@ final class AppModel: ObservableObject {
     @Published private(set) var terminating = false
     @Published private(set) var folderExists: Bool?
     /// The LUT and proxy folder are being checked right before a start (at most 5 s each).
-    @Published private(set) var starting = false
+    @Published var starting = false
+    /// The card history (history.json), loaded off the main thread; nil until it is.
+    @Published var history: [HistoryEntry]?
+    /// One look at every card / folder in step 1 (history match, size, clips, the name from the clips).
+    @Published var insights: [String: CardInsight] = [:]
+    /// Cards ticked for "Append" (only the new clips into the earlier backup).
+    @Published var appendSelected: Set<String> = []
+    /// "Save a verification report" for Verify backup (on by default).
+    @Published var saveVerifyReport = true
+    /// Verify backup items of the queue.
+    @Published var verifies: [VerifyItem] = []
+    var inspecting: Set<String> = []
+    var inspectAgain: Set<String> = []
+    let inspectQueue = DispatchQueue(label: "app.inspect", qos: .userInitiated, attributes: .concurrent)
     /// The built-in LUTs (the app bundle's Resources/luts; already loaded by SettingsStore.decode at launch).
     let luts = LutCatalog.shared
     /// Snapshot rendering: no disks, no timers, nothing saved.
@@ -206,7 +228,7 @@ final class AppModel: ObservableObject {
     /// Destination connections already resolved (they do not change while the disk stays mounted).
     private var destConnections: [String: String] = [:]
 
-    private let copyQueue = DispatchQueue(label: "app.copy", qos: .userInitiated)
+    let copyQueue = DispatchQueue(label: "app.copy", qos: .userInitiated)
     private let postQueue = DispatchQueue(label: "app.post", qos: .userInitiated)  // proxies: the user waits for dailies
     /// Volume scans (cards). Separate from destination checks, so a hung network destination never blocks them.
     private let probeQueue = DispatchQueue(label: "app.probe", qos: .userInitiated)
@@ -220,6 +242,7 @@ final class AppModel: ObservableObject {
         settings = preview ? AppSettings() : SettingsStore.decode(UserDefaults.standard.data(forKey: SettingsStore.defaultsKey))
         tools = settings.tools.resolved()
         guard !preview else { return }
+        loadHistory()
         refreshVolumes()
         refreshDestinations()
         let nc = NSWorkspace.shared.notificationCenter
@@ -253,6 +276,7 @@ final class AppModel: ObservableObject {
     }
 
     private func tick() {
+        for v in verifies where !v.isFinished { v.refresh() }
         for j in jobs where !j.isFinished {
             j.refresh()
             j.resolveChainIfNeeded(portNames: settings.portNames)
@@ -332,6 +356,7 @@ final class AppModel: ObservableObject {
                                                         selected: selectedSources, manual: manualSources)
         volumes = found
         if connections != volumeConnections { volumeConnections = connections }
+        syncInspections()
         for j in jobs { j.objectWillChange.send() }   // "Eject card" follows the scan
     }
 
@@ -386,8 +411,11 @@ final class AppModel: ObservableObject {
         var fs = statfs()
         guard statfs(path, &fs) == 0 else { return DestinationStatus(checking: false) }
         let format = withUnsafeBytes(of: fs.f_fstypename) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
-        return DestinationStatus(free: Int64(fs.f_bavail) * Int64(fs.f_bsize), total: Int64(fs.f_blocks) * Int64(fs.f_bsize),
-                                 format: format, exists: true, checking: false)
+        var s = DestinationStatus(free: Int64(fs.f_bavail) * Int64(fs.f_bsize), total: Int64(fs.f_blocks) * Int64(fs.f_bsize),
+                                  format: format, exists: true, checking: false)
+        s.volume = SpacePlanner.volumeKey(path)
+        s.label = HistoryText.diskName(path)
+        return s
     }
 
     /// "Thunderbolt", "USB 3 (5 Gb/s)", "NVMe"…: the USB link speed, else the bus.
@@ -421,11 +449,13 @@ final class AppModel: ObservableObject {
         guard let path = pickFolder(title: "Choose a card or a folder with footage") else { return }
         if !manualSources.contains(path) { manualSources.append(path) }
         selectedSources.insert(path)
+        syncInspections()
     }
 
     func removeManualSource(_ path: String) {
         manualSources.removeAll { $0 == path }
         selectedSources.remove(path)
+        syncInspections()
     }
 
     func addDestination() {
@@ -515,9 +545,9 @@ final class AppModel: ObservableObject {
         return panel.runModal() == .OK ? panel.url?.path : nil
     }
 
-    /// The card folder name: the typed name (blank = default), else the default name.
+    /// The card folder name: the typed name, else the suggestion (clips, next in line), else the default name.
     func sourceName(_ path: String) -> String {
-        customName(path) ?? defaultName(path)
+        cardNames(for: selectedInOrder.contains(path) ? selectedInOrder : selectedInOrder + [path])[path]?.name ?? defaultName(path)
     }
 
     /// The default card folder name without touching the disk (main thread): the scanned volume's name, else the
@@ -526,7 +556,7 @@ final class AppModel: ObservableObject {
         Layout.sanitize(volumes.first { $0.path == path }?.name ?? (path as NSString).lastPathComponent)
     }
 
-    private func customName(_ path: String) -> String? {
+    func customName(_ path: String) -> String? {
         let t = cardNames[path]?.trimmingCharacters(in: .whitespaces) ?? ""
         return t.isEmpty ? nil : t
     }
@@ -552,10 +582,14 @@ final class AppModel: ObservableObject {
     // MARK: Jobs
 
     var canStart: Bool {
-        !terminating && !starting && !selectedSources.isEmpty && !settings.destRoots.isEmpty
-            && settings.destRoots.allSatisfy { destStatus[$0]?.exists == true }
+        !terminating && !starting && !selectedSources.isEmpty
+            && (!needsDestinations || (!settings.destRoots.isEmpty && settings.destRoots.allSatisfy { destStatus[$0]?.exists == true }))
             && lutProblem == nil && proxyFolderProblem == nil
+            && !spaceProblems.contains { $0.severity == .blocking }
     }
+
+    /// A selection made only of appends goes to the destinations in history: step 2 may then be empty.
+    var needsDestinations: Bool { selectedInOrder.contains { !appendChosen($0) } }
 
     /// Why Start is disabled, in one line (nil when it can start or nothing is ticked yet).
     var startProblem: String? {
@@ -563,6 +597,7 @@ final class AppModel: ObservableObject {
         if let p = lutProblem { return p }
         if let p = proxyFolderProblem { return p }
         if selectedSources.isEmpty { return nil }
+        if !needsDestinations { return nil }
         if settings.destRoots.isEmpty { return "Add a destination disk." }
         if let missing = settings.destRoots.first(where: { destStatus[$0].map { !$0.exists && !$0.checking } ?? false }) {
             return "\(AppModel.diskName(missing)) is not connected."
@@ -571,7 +606,7 @@ final class AppModel: ObservableObject {
     }
 
     /// A copy writes or verifies the destinations — no speed measurement now.
-    var copyRunning: Bool { QueueRules.measureBlocked(jobs.map(\.status.phase)) }
+    var copyRunning: Bool { QueueRules.measureBlocked(jobs.map(\.status.phase)) || verifies.contains { $0.isRunning } }
 
     /// Running, waiting: the top bar's pill and the queue's count.
     var queueCounts: (running: Int, waiting: Int) {
@@ -579,6 +614,9 @@ final class AppModel: ObservableObject {
         for j in jobs {
             let p = j.queuePhase
             if p == .waiting { waiting += 1 } else if !p.isFinished { running += 1 }
+        }
+        for v in verifies where !v.isFinished {
+            if v.isRunning { running += 1 } else { waiting += 1 }
         }
         return (running, waiting)
     }
@@ -594,7 +632,7 @@ final class AppModel: ObservableObject {
         guard canStart, !isPreview else { return }
         let lut = ProxyPreflight.lutInUse(settings.proxy, analyzeClips: settings.analyzeClips)
         let folder = ProxyPreflight.extraFolderInUse(settings.proxy)
-        guard lut != nil || folder != nil else { return startJobs() }
+        guard lut != nil || folder != nil else { return startAfterInspections() }
         starting = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let lutOK = lut.map { path in AppModel.answer(within: 5) { FileManager.default.fileExists(atPath: path) } }
@@ -611,7 +649,7 @@ final class AppModel: ObservableObject {
                     self.folderExists = folderOK
                     self.folderChecked = folder
                 }
-                if self.canStart { self.startJobs() }   // otherwise the red text says why
+                if self.canStart { self.startAfterInspections() }   // otherwise the red text says why
             }
         }
     }
@@ -628,42 +666,29 @@ final class AppModel: ObservableObject {
         return done.wait(timeout: .now() + seconds) == .success && box.value
     }
 
-    private func startJobs() {
-        for src in selectedInOrder {
-            var config = JobConfig(source: src, destRoots: settings.destRoots)
-            config.cardName = customName(src)
-            config.date = dateString
-            config.verify = settings.verify
-            config.analyzeClips = settings.analyzeClips
-            config.proxy = settings.proxy
-            config.tools = settings.tools
-            let volume = volumes.first { $0.path == src }
-            let item = JobItem(job: OffloadJob(config: config), sourceName: sourceName(src),
-                               canEject: volume != nil && volume?.ejectProblem == nil, estimatedBytes: usedBytes(src))
-            jobs.append(item)
-            selectedSources.remove(src)
-            // Copies run one after another (they share the destination disks); post-processing runs
-            // in parallel on its own queue, so the next card starts copying while proxies render.
-            copyQueue.async { [weak self] in
-                // Cancelled while queued: it never runs, but the queue still reports it finished.
-                if item.job.isCancelled {
-                    DispatchQueue.main.async { self?.jobFinished(item) }
-                    return
-                }
-                item.recordCopiedCard()
-                let needsPost = item.job.runCopy()
-                DispatchQueue.main.async {
-                    item.refresh()
-                    self?.copyFinished(item)
-                }
-                if needsPost {
-                    self?.postQueue.async {
-                        item.job.runPost()
-                        DispatchQueue.main.async { self?.jobFinished(item) }
-                    }
-                } else {
+    /// Queues one job: copies run one after another (they share the destination disks); post-processing runs in
+    /// parallel on its own queue, so the next card starts copying while proxies render.
+    func enqueue(_ item: JobItem) {
+        jobs.append(item)
+        copyQueue.async { [weak self] in
+            // Cancelled while queued: it never runs, but the queue still reports it finished.
+            if item.job.isCancelled {
+                DispatchQueue.main.async { self?.jobFinished(item) }
+                return
+            }
+            item.recordCopiedCard()
+            let needsPost = item.job.runCopy()
+            DispatchQueue.main.async {
+                item.refresh()
+                self?.copyFinished(item)
+            }
+            if needsPost {
+                self?.postQueue.async {
+                    item.job.runPost()
                     DispatchQueue.main.async { self?.jobFinished(item) }
                 }
+            } else {
+                DispatchQueue.main.async { self?.jobFinished(item) }
             }
         }
     }
@@ -674,8 +699,9 @@ final class AppModel: ObservableObject {
         NSSound(named: "Glass")?.play()
     }
 
-    private func jobFinished(_ item: JobItem) {
+    func jobFinished(_ item: JobItem) {
         item.refresh()
+        loadHistory()   // the card's line follows ("Backed up … — verified, safe to format")
         if !terminating {
             if item.isError { NSSound(named: "Basso")?.play() }   // a job the user cancelled is not an error
             NSApp.requestUserAttention(.informationalRequest)
@@ -688,7 +714,10 @@ final class AppModel: ObservableObject {
         item.refresh()
     }
 
-    func clearFinished() { jobs.removeAll { $0.isFinished && !$0.ejecting } }
+    func clearFinished() {
+        jobs.removeAll { $0.isFinished && !$0.ejecting }
+        verifies.removeAll { $0.isFinished }
+    }
 
     /// "Eject card" only while the copied card is in its slot per the last scan.
     func canShowEject(_ item: JobItem) -> Bool {
@@ -766,11 +795,12 @@ final class AppModel: ObservableObject {
     // MARK: Quit while copying
 
     /// A job that has not finished, or an eject in flight.
-    var hasBusyJobs: Bool { jobs.contains { !$0.isFinished || $0.ejecting } }
+    var hasBusyJobs: Bool { jobs.contains { !$0.isFinished || $0.ejecting } || verifies.contains { !$0.isFinished } }
 
     /// Asked by the app delegate. With unfinished jobs: confirm, cancel them all and quit once they have cleaned up.
     func shouldTerminate() -> NSApplication.TerminateReply {
         for j in jobs { j.refresh() }
+        for v in verifies { v.refresh() }
         guard hasBusyJobs else { return .terminateNow }
         if terminating {
             // An NSAlert, not `message`: the main window (and its alert) may already be closed.
@@ -779,7 +809,7 @@ final class AppModel: ObservableObject {
             notice.runModal()
             return .terminateCancel
         }
-        if jobs.contains(where: { !$0.isFinished }) {
+        if jobs.contains(where: { !$0.isFinished }) || verifies.contains(where: { !$0.isFinished }) {
             let alert = NSAlert()
             alert.messageText = "An offload is running. Quit anyway?"
             alert.informativeText = "Files in progress are deleted; finished files stay."
@@ -792,11 +822,15 @@ final class AppModel: ObservableObject {
             j.job.cancel()
             j.refresh()
         }
+        for v in verifies {
+            v.job.cancel()
+            v.refresh()
+        }
         if !hasBusyJobs { return .terminateNow }
         return .terminateCancel   // checkTerminateReady() quits once everything has cleaned up
     }
 
-    private func checkTerminateReady() {
+    func checkTerminateReady() {
         guard terminating, !hasBusyJobs else { return }
         NSApp.terminate(nil)
     }

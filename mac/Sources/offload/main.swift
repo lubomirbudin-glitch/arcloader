@@ -385,17 +385,16 @@ struct Verify: ParsableCommand {
         sigint.resume()
         var allGood = true
         for (i, card) in cards.enumerated() {
-            if cards.count > 1 { print("\n\(card)") }
+            if cards.count > 1 { print("\n\(i + 1)/\(cards.count)  \(card)") }
             let t0 = Date()
             var last = Date.distantPast
-            var index = 0, lastFile = ""
             let r: VerifyResult
             do {
-                r = try BackupVerifier.verify(card, progress: { file, bytes in
-                    if file != lastFile { index += 1; lastFile = file }
+                r = try BackupVerifier.verify(card, progress: { p in
                     if Date().timeIntervalSince(last) > 0.5 {
                         last = Date()
-                        fputs("\r\u{1B}[K\(i + 1)/\(cards.count)  \(index)  \(formatBytes(bytes))  \(file)", stderr)
+                        // "<file>/<files>  <bytes>  <path>" on one line.
+                        fputs("\r\u{1B}[K\(p.fileIndex + 1)/\(p.fileCount)  \(formatBytes(p.bytes))  \(p.file)", stderr)
                     }
                 }, isCancelled: { flag.isCancelled })
             } catch {

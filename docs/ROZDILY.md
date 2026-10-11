@@ -43,11 +43,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Test USB portů na vyžádání + doporučení** | ✅ CLI (`offload ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
 | **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test) |
-| **Karta už zálohovaná** (`history.json`, řádek u karty, dotaz před celou kopií) | ✅ CLI (řádek historie, `--no-history`; GUI úkol 49) | ✅ CLI + GUI (GUI čeká ruční test s kartou) |
-| **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ✅ CLI `offload append` (GUI úkol 49) | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
-| **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ✅ CLI `--name auto` (GUI úkol 49) | ✅ CLI + GUI |
-| **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | ✅ CLI `verify [--report]` (GUI úkol 49) | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
-| **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | ✅ CLI + úloha (fronta v GUI úkol 49) | ✅ CLI + GUI |
+| **Karta už zálohovaná** (`history.json`, řádek u karty, dotaz před celou kopií) | ✅ CLI + GUI (řádek u karty, dotaz před celou kopií; GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s kartou) |
+| **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ✅ CLI `offload append` + GUI tlačítko „Append“ (GUI čeká ruční test) | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
+| **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ✅ CLI `--name auto` + GUI (zástupný text a nápověda pole „Folder name“) | ✅ CLI + GUI |
+| **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | ✅ CLI `verify [--report]` + GUI „Verify backup“ v horní liště, Tools › Verify Backup… ⇧⌘O (GUI čeká ruční test) | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
+| **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | ✅ CLI + GUI (karty, fronta, po svazcích; GUI čeká ruční test) | ✅ CLI + GUI |
 | **Hlášky kontrol před kopií s kódy** (`PreflightCode`) | ✅ anglicky (od 2026-10-10, záměrně) | ✅ česky |
 | **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `offload day-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
 | **Seznam klipů CSV / Avid ALE** (`_clips.csv/.ale` karty i dne) | ⏳ naplánováno | ✅ CLI + GUI (import do Resolve/Avid čeká ruční test) |
