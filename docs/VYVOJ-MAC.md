@@ -7,6 +7,14 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Ověřování během proxy jako volba u každé kopie (zadání uživatele 2026-10-11, obě verze):** přepínač
+  „Verify during proxy render“ v kroku 3 „After copy“ levého sloupce (klikací řádek jako ostatní volby po kopii), ne jen
+  v Nastavení → Verification; výchozí hodnota z nastavení/projektu (`verifyInProxy`), změna platí pro další přidanou kartu.
+  Vypnuto nebo bez proxy → zpětné čtení po kopii jako dosud. CLI `--classic-verify` (vypne). Smysl: kopie naplno, po ní
+  „Safe to eject“, ověření všech disků celé během renderu proxy (disky jinak stojí), „Safe to format“ až po něm — u karty 9
+  (855 GB) odhad 68 min místo 91. Ověření se nikdy nedělí mezi disky (každý disk se čte celý). Mac: pořadí 42–50 → 51 →
+  61 → 65–70 (build D5).
+
 - **Aplikace jen anglicky (zadání uživatele 2026-10-10, obě verze; Windows 0.9.0):** celá aplikace bude **natrvalo jen
   anglicky** — čeština zmizí ze všeho, co uživatel vidí: GUI, hlášky, poznámky u klipů, texty kontroly před startem,
   oznámení (systémová i ntfy), reporty (HTML/PDF/TXT karty, denní report, report ověření, souhrnný report, lidsky čitelné

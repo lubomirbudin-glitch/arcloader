@@ -25,6 +25,12 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
+- **Ověřování během proxy jako volba u každé kopie (zadání uživatele 2026-10-11, obě verze):** dnes jen Nastavení →
+  Verification „Verify primary drive during proxy“. Přidat přepínač „Verify during proxy render“ do kroku 3 „After copy“
+  (klikací řádek jako ostatní volby po kopii, 0.5.2), výchozí hodnota z nastavení/projektu (`verifyInProxy`), změna platí
+  pro další přidanou kartu; v kartě úlohy ve frontě vidět, kterou metodou se ověřuje. CLI beze změny (`--classic-verify`).
+  Mac dělá totéž (VYVOJ-MAC, Naplánováno).
+
 - **Snímací fps, pauza po souboru/klipu, souhrnný report (zadání 2026-10-09/10)** — hotovo ve verzi 0.8.0, viz níže.
 
 - **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzích 0.7.0 a 0.7.1, viz níže.
