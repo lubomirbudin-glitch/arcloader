@@ -151,15 +151,25 @@ final class Chunk {
     }
 }
 
-/// Hashes the source stream. Runs on its own serial queue so hashing never blocks the card read.
+/// Hashes the source stream in the one read of the card: xxh64 of every file and the XXH3-64 of every `blockSize` block
+/// (the block manifest of verify-in-proxy, task 65) — `MultiHasher` on its own serial queue, so hashing never blocks
+/// the card read.
 final class SourceHasher {
     private let queue = DispatchQueue(label: "offload.hash")
-    private var stream: XXH64Stream?
+    private let blockSize: Int
+    private var stream: MultiHasher?
     private(set) var hashes: [UInt64?]
+    /// Per file the XXH3-64 of its blocks as the card gave them; empty when the file was not read to its end.
+    /// Read after `wait()`.
+    private(set) var blocks: [[UInt64]]
 
-    init(fileCount: Int) { hashes = Array(repeating: nil, count: fileCount) }
+    init(fileCount: Int, blockSize: Int) {
+        self.blockSize = blockSize
+        hashes = Array(repeating: nil, count: fileCount)
+        blocks = Array(repeating: [], count: fileCount)
+    }
 
-    func begin() { queue.async { self.stream = XXH64Stream() } }
+    func begin() { queue.async { self.stream = MultiHasher(kinds: .xxh64, blockSize: self.blockSize, xxh128: false) } }
 
     func update(_ c: Chunk) {
         queue.async {
@@ -168,7 +178,16 @@ final class SourceHasher {
         }
     }
 
-    func finish(_ i: Int) { queue.async { self.hashes[i] = self.stream?.digest(); self.stream = nil } }
+    func finish(_ i: Int) {
+        queue.async {
+            if let r = self.stream?.finish() {
+                self.hashes[i] = r.hashes.xxh64
+                self.blocks[i] = r.blocks
+            }
+            self.stream = nil
+        }
+    }
+
     func abort() { queue.async { self.stream = nil } }
     func wait() { queue.sync {} }
 }
@@ -348,6 +367,9 @@ public final class OffloadEngine {
     private var plan: OffloadPlan?
     /// Tests only: called in DestWriter.finish right before a finished file is renamed into place.
     var testBeforeRename: ((String) -> Void)?
+    /// After `run`: per file, the XXH3-64 of its blocks (`chunkSize`) as the card gave them — empty when the file was
+    /// not read to its end. The block manifest of verify-in-proxy (task 65) is made from it.
+    public private(set) var fileBlocks: [[UInt64]] = []
     /// Tests only: the free space of a path (nil = ask the volume).
     var testFreeSpace: ((String) -> Int64?)?
     /// Space warnings of the last `prepare` / `checkSpace` (less than 5 % would be left) — never blocking.
@@ -446,6 +468,9 @@ public final class OffloadEngine {
         lock.lock(); cancelled = true; lock.unlock()
     }
 
+    /// The XXH3-64 block hashes of file `i` of the last run (empty when it was not read to its end).
+    public func blocks(_ i: Int) -> [UInt64] { fileBlocks.indices.contains(i) ? fileBlocks[i] : [] }
+
     private var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
 
     public func snapshot() -> ProgressSnapshot {
@@ -478,7 +503,7 @@ public final class OffloadEngine {
         lock.lock(); self.plan = plan; writers = ws; lock.unlock()
 
         let pool = BufferPool(count: options.bufferCount, size: options.chunkSize)
-        let hasher = SourceHasher(fileCount: files.count)
+        let hasher = SourceHasher(fileCount: files.count, blockSize: options.chunkSize)
         var sourceErrors: [String?] = Array(repeating: nil, count: files.count)
 
         // Copy: the card is read exactly once; every block fans out to the hasher and all destinations.
@@ -530,6 +555,7 @@ public final class OffloadEngine {
         }
         hasher.wait()
         ws.forEach { $0.wait() }
+        fileBlocks = hasher.blocks
 
         setPhase(.flush)
         DispatchQueue.concurrentPerform(iterations: ws.count) { ws[$0].flushDevice() }

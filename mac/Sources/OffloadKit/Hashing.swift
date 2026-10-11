@@ -85,13 +85,15 @@ final class MultiHasher {
     private let kinds: HashKinds
     private let blockSize: Int
     private let x64 = XXH64Stream()
-    private let x128 = XXH128Stream()
+    private let x128: XXH128Stream?
     private var md5: Insecure.MD5?
     private var block: UnsafeMutableRawPointer
     private var inBlock = 0
     private(set) var blocks: [UInt64] = []
 
-    init(kinds: HashKinds, blockSize: Int) {
+    /// `xxh128: false` leaves XXH3-128 out (the copy needs only xxh64 and the block hashes).
+    init(kinds: HashKinds, blockSize: Int, xxh128: Bool = true) {
+        x128 = xxh128 ? XXH128Stream() : nil
         precondition(blockSize > 0)
         self.kinds = kinds
         self.blockSize = blockSize
@@ -104,7 +106,7 @@ final class MultiHasher {
     func update(_ p: UnsafeRawPointer, _ n: Int) {
         guard n > 0 else { return }
         x64.update(p, n)
-        x128.update(p, n)
+        x128?.update(p, n)
         md5?.update(bufferPointer: UnsafeRawBufferPointer(start: p, count: n))
         var done = 0
         while done < n {
@@ -130,7 +132,7 @@ final class MultiHasher {
             inBlock = 0
         }
         let m = md5.map { Data($0.finalize()) }
-        return (FileHashes(xxh64: x64.digest(), md5: m, xxh128: x128.hex()), blocks)
+        return (FileHashes(xxh64: x64.digest(), md5: m, xxh128: x128?.hex()), blocks)
     }
 }
 

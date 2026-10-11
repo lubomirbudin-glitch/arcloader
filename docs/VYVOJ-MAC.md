@@ -137,6 +137,13 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 51 — **zúžený rozsah (rozhodnutí uživatele 2026-10-11)**: vytažený dopředu kvůli Verify-in-Proxy (úkoly 52–60
+  zatím vynechané, verze zůstává 0.3.0) a jen v tom, co úkoly 65–68 potřebují: kopie počítá v jednom čtení karty
+  k xxh64 i XXH3-64 každého bloku (`SourceHasher.blocks` přes `MultiHasher` bez XXH3-128, blok = `chunkSize`;
+  `OffloadEngine.blocks(i)` / `fileBlocks`; soubor nedočtený do konce bloky nemá). Report, ASC MHL, `.xxh64`, GUI a CLI
+  beze změny. Z plánu úkolu 51 se **nedělá**: XXH3-128 u každého souboru (`files[].xxh128`, MHL `<xxh128>`), MD5 /
+  `hash: both`, `--hash`, `bench --hash md5`, volba „Checksum“ v GUI; proto zůstává otevřená i poznámka úkolu 47
+  (doplnění do zálohy s MD5 z Windows doplní jen xxh64)
 - Úkol 50 — verze 0.3.0 (plán 6): FORMATY (verze, `volumeSerial` Macu, místní soubory a zámek historie, report
   ověření a `.xxh64` Mac od 0.3.0), ROZDILY (verze, jazyk, řádky plánu 6), README (historie, Append, Verify backup, místo,
   `offload append`, `verify [--report]`, `--name auto`, `--no-history`, `--dry-run`). Závěrečné ověření:
