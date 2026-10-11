@@ -436,7 +436,7 @@ public class SettingsStoreTests
         Assert.Null(ProxyPreflight.Warning(new ProxySettings { Enabled = true }, true, new ExternalTools { Ffmpeg = "f", Ffprobe = "p" }));
     }
 
-    // %APPDATA%\ArcLoader\luts — in the tests the folder OFFLOAD_SETTINGS_DIR points to (TestEnvironment), never the real one.
+    // %APPDATA%\mmMover\luts — in the tests the folder OFFLOAD_SETTINGS_DIR points to (TestEnvironment), never the real one.
     [Fact]
     public void UserFolder_IsInAppData_DefaultCatalogReadsIt()
     {
@@ -463,36 +463,49 @@ public class SettingsStoreTests
     public void AppDataFolder_Override()
     {
         _ = LutCatalog.Default;   // never first loaded from the real %APPDATA% in the moment below
+        var oldMm = Environment.GetEnvironmentVariable("MMMOVER_SETTINGS_DIR");
         var oldNew = Environment.GetEnvironmentVariable("ARCLOADER_SETTINGS_DIR");
         var old = Environment.GetEnvironmentVariable("OFFLOAD_SETTINGS_DIR");
         var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         try
         {
+            Environment.SetEnvironmentVariable("MMMOVER_SETTINGS_DIR", null);
             Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", null);
             Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", @"X:\iso");
             Assert.Equal(@"X:\iso", AppData.Folder);
             Assert.Equal(@"X:\iso\settings.json", SettingsStore.DefaultPath);
             Assert.Equal(@"X:\iso\hwtest.json", Hardware.HwTest.DefaultPath);
             Assert.Equal(@"X:\iso\luts", LutCatalog.UserFolder);
-            // The new name wins over the old one (0.10.0); the old one keeps working alone (above).
+            // ARCLOADER_ wins over OFFLOAD_ (0.10.0), MMMOVER_ over both (0.11.0); each older one keeps working alone.
             Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", @"X:\arc");
             Assert.Equal(@"X:\arc", AppData.Folder);
             Assert.Equal(@"X:\arc\settings.json", SettingsStore.DefaultPath);
-            Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", null);
-            Assert.Equal(@"X:\arc", AppData.Folder);
-            // Unset (also when the shell running the tests has them set): %APPDATA%\ArcLoader.
+            Environment.SetEnvironmentVariable("MMMOVER_SETTINGS_DIR", @"X:\mm");
+            Assert.Equal(@"X:\mm", AppData.Folder);
+            Assert.Equal(@"X:\mm\settings.json", SettingsStore.DefaultPath);
+            Assert.Equal(@"X:\mm\luts", LutCatalog.UserFolder);
             Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", null);
-            Assert.Equal(Path.Combine(roaming, "ArcLoader"), AppData.Folder);
+            Assert.Equal(@"X:\mm", AppData.Folder);
+            Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", null);
+            Assert.Equal(@"X:\mm", AppData.Folder);
+            Environment.SetEnvironmentVariable("MMMOVER_SETTINGS_DIR", null);
+            Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", @"X:\arc");
+            Assert.Equal(@"X:\arc", AppData.Folder);
+            // Unset (also when the shell running the tests has them set): %APPDATA%\mmMover.
+            Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", null);
+            Assert.Equal(Path.Combine(roaming, "mmMover"), AppData.Folder);
+            Environment.SetEnvironmentVariable("MMMOVER_SETTINGS_DIR", "");
             Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", "");
             Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", "");
-            Assert.EndsWith(@"\ArcLoader", AppData.Folder);
+            Assert.EndsWith(@"\mmMover", AppData.Folder);
         }
         finally
         {
+            Environment.SetEnvironmentVariable("MMMOVER_SETTINGS_DIR", oldMm);
             Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", oldNew);
             Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", old);
         }
-        Assert.Equal(oldNew is { Length: > 0 } ? oldNew : old is { Length: > 0 } ? old : Path.Combine(roaming, "ArcLoader"), AppData.Folder);
+        Assert.Equal(oldMm is { Length: > 0 } ? oldMm : oldNew is { Length: > 0 } ? oldNew : old is { Length: > 0 } ? old : Path.Combine(roaming, "mmMover"), AppData.Folder);
     }
 
     [Fact]

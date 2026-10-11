@@ -15,10 +15,10 @@ static class Program
         var en = CultureInfo.GetCultureInfo("en-US");
         CultureInfo.DefaultThreadCurrentUICulture = en;
         CultureInfo.CurrentUICulture = en;
-        // 0.10.0: the settings and history of Offload (%APPDATA%\Offload) copied to %APPDATA%\ArcLoader once, before
-        // any command reads them; the note goes to stderr (stdout stays the command's own).
-        Offload.Core.Desktop.AppData.MigrateFromOffload(line => Console.Error.WriteLine($"{Offload.Core.Product.Cli}: {line}"));
-        // Like the Mac CLI, `copy` is the default command: `arcloader E:\ -d D:\ -d F:\` works.
+        // 0.11.0: the settings and history of an earlier version (%APPDATA%\ArcLoader, else %APPDATA%\Offload) copied to
+        // %APPDATA%\mmMover once, before any command reads them; the note goes to stderr (stdout stays the command's own).
+        Offload.Core.Desktop.AppData.MigrateFromOlder(line => Console.Error.WriteLine($"{Offload.Core.Product.Cli}: {line}"));
+        // Like the Mac CLI, `copy` is the default command: `mmmover E:\ -d D:\ -d F:\` works.
         if (args.Length > 0 && !Commands.Contains(args[0]) && !args[0].StartsWith('-')) args = ["copy", .. args];
         var root = new RootCommand($"{Offload.Core.Product.Name}: camera card offload — read once, write to several disks, verify with xxh64.");
         root.Subcommands.Add(CopyCommand.Create());

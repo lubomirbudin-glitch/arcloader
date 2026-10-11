@@ -13,7 +13,7 @@ public sealed record SummaryInput(HistoryEntry? Entry, string? Folder)
 }
 
 /// Where the numbers of a card come from: its folder on a destination, the copy of its report on this computer
-/// (`ArcLoader reports`, the disk went away), or nothing but the history entry.
+/// (`mmMover reports`, the disk went away), or nothing but the history entry.
 public enum SummarySource { Destination, LocalCopy, None }
 
 /// One copy of the backup: the destination card folder, whether it is connected now, and whether it was verified —
@@ -39,7 +39,7 @@ public sealed class SummaryCard
     public SummarySource Source { get; init; }
     /// The folder the reports were read from (a destination card folder or the local copy).
     public string? ReadFrom { get; init; }
-    /// The copy of the card's report on this computer (`<ArcLoader reports>\<datum>\<karta>`), null when there is none.
+    /// The copy of the card's report on this computer (`<mmMover reports>\<datum>\<karta>`), null when there is none.
     public string? LocalCopy { get; init; }
     public IReadOnlyList<SummaryCopy> Copies { get; init; } = [];
 
@@ -143,7 +143,7 @@ public sealed record SummaryFiles(string Html, string? Pdf, string? ExtraHtml, s
 /// Task "Souhrnný report z vybraných záloh" (2026-10-09): one HTML + PDF (no thumbnails) from backups picked in the card
 /// history — cards of different days and disks. Read from the cards' reports on the destinations (every generation),
 /// else from their copy on this computer (LocalReports), else only what history.json says — never an error. Reads only;
-/// writes nothing but `<ArcLoader reports>\summary\` and, when the user picks one, a folder on a disk (never over a file).
+/// writes nothing but `<mmMover reports>\summary\` and, when the user picks one, a folder on a disk (never over a file).
 public static class SummaryReport
 {
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -151,7 +151,7 @@ public static class SummaryReport
     public const string FolderName = "summary";
 
     /// Where the summary is saved on this computer: the folder of the local report copies (setting
-    /// `outputs.localReportFolder`, default `<Documents>\ArcLoader reports`) — also when that copy is switched off.
+    /// `outputs.localReportFolder`, default `<Documents>\mmMover reports`) — also when that copy is switched off.
     public static string LocalRoot(OutputSettings o) =>
         string.IsNullOrWhiteSpace(o.LocalReportFolder) ? LocalReports.DefaultRoot : o.LocalReportFolder.Trim();
 

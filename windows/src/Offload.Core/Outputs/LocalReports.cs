@@ -4,18 +4,18 @@ using System.Text.Json;
 namespace Offload.Core.Outputs;
 
 /// Task "Kopie reportu i na počítači" (2026-10-09): every card's `_REPORT` and `ascmhl` are copied to
-/// `<Documents>\ArcLoader reports\<date>\<card>\` (the layout of the destination), and copied again whenever the report
+/// `<Documents>\mmMover reports\<date>\<card>\` (the layout of the destination), and copied again whenever the report
 /// is rewritten — the disks with the footage are handed on, the report stays here. Reads the destinations only, never
 /// copies media (a repair's `neshoda_NNNN` copies, clips, proxies) and never writes outside the local folder. Derived
 /// files: a failure throws, the job only notes it.
 public static class LocalReports
 {
-    public const string FolderName = "ArcLoader reports";
+    public const string FolderName = Product.Name + " reports";
 
-    /// The folder's names of earlier versions: "Offload reports" (0.9.x, before the rename to ArcLoader) and
-    /// "Offload reporty" (before 0.9.0, Czech). Copies there are still read (the summary report's fallback, the
-    /// `.offload-origin` markers), never written.
-    public static readonly IReadOnlyList<string> OldFolderNames = ["Offload reports", "Offload reporty"];
+    /// The folder's names of earlier versions, newest first: "ArcLoader reports" (0.10.x, before the rename to mmMover),
+    /// "Offload reports" (0.9.x, before the rename to ArcLoader) and "Offload reporty" (before 0.9.0, Czech). Copies there
+    /// are still read (the summary report's fallback, the `.offload-origin` markers), never written.
+    public static readonly IReadOnlyList<string> OldFolderNames = ["ArcLoader reports", "Offload reports", "Offload reporty"];
 
     /// The marker in a local card folder: which backup it holds (OriginOf) — the `_2` rule tells cards apart by it.
     internal const string Marker = ".offload-origin";
@@ -26,11 +26,11 @@ public static class LocalReports
     /// The user's Documents folder (the known folder, wherever it was moved — OneDrive, another disk).
     public static string Documents => DocumentsOverride ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
-    /// `<Documents>\ArcLoader reports`.
+    /// `<Documents>\mmMover reports`.
     public static string DefaultRoot => Path.Combine(Documents, FolderName);
 
-    /// `<Documents>\Offload reports` and `<Documents>\Offload reporty`: where earlier versions copied the reports —
-    /// read only.
+    /// `<Documents>\ArcLoader reports`, `<Documents>\Offload reports` and `<Documents>\Offload reporty`: where earlier
+    /// versions copied the reports — read only.
     public static IReadOnlyList<string> OldDefaultRoots => OldFolderNames.Select(n => Path.Combine(Documents, n)).ToList();
 
     /// The folder a job copies into, or null when the copy is switched off (`outputs.localReport`).

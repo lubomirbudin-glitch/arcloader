@@ -1,10 +1,11 @@
-# Builds windows\build\ArcLoader: ArcLoader.exe (GUI) + bin\arcloader.exe (CLI) + bin\braw-decode.exe + bin\ffmpeg.exe, ffprobe.exe (all self-contained),
-# zipped as build\ArcLoader-win-x64-<version>.zip (the version from Directory.Build.props).
-# -Staging builds into build\staging\ArcLoader instead (e.g. while build\ArcLoader\ArcLoader.exe is running); same zip.
-# -Sign signs ArcLoader.exe, bin\arcloader.exe and bin\braw-decode.exe before zipping (spec 4.5): -CertThumbprint <sha1>
+# Builds windows\build\mmMover: mmMover.exe (GUI) + bin\mmmover.exe (CLI) + bin\braw-decode.exe + bin\ffmpeg.exe, ffprobe.exe (all self-contained),
+# READ-ME.txt and mmMover-manual.pdf, zipped as build\mmMover-win-x64-<version>.zip (the version from Directory.Build.props).
+# -Staging builds into build\staging\mmMover instead (e.g. while build\mmMover\mmMover.exe is running); same zip.
+# -Sign signs mmMover.exe, bin\mmmover.exe and bin\braw-decode.exe before zipping (spec 4.5): -CertThumbprint <sha1>
 #   (CurrentUser\My, then LocalMachine\My) or the variables OFFLOAD_SIGN_PFX + OFFLOAD_SIGN_PFX_PASSWORD; -TimestampUrl.
-# -ReleaseUrl <where the zip will be> also writes build\arcloader-update.json and build\offload-update.json (the same
-#   content; versions before 0.10.0 read the second) for the update check (spec 4.4); -Notes.
+# -ReleaseUrl <where the zip will be> also writes build\mmmover-update.json, build\arcloader-update.json and
+#   build\offload-update.json (the same content; 0.10.x reads the second, versions before 0.10.0 the third) for the
+#   update check (spec 4.4); -Notes.
 param(
     [switch]$Staging,
     [switch]$Sign,
@@ -19,7 +20,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $version = Get-OffloadVersion (Join-Path $root 'Directory.Build.props')
 # Checked before anything is built: a missing signtool or certificate stops at once.
 $signSetup = if ($Sign) { Get-OffloadSignSetup -CertThumbprint $CertThumbprint } else { $null }
-$out = Join-Path $root $(if ($Staging) { 'build\staging\ArcLoader' } else { 'build\ArcLoader' })
+$out = Join-Path $root $(if ($Staging) { 'build\staging\mmMover' } else { 'build\mmMover' })
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 dotnet publish (Join-Path $root 'src\Offload.Cli\Offload.Cli.csproj') -c Release -r win-x64 --self-contained `
     -p:PublishSingleFile=true -p:DebugType=none -o (Join-Path $out 'bin')
@@ -28,7 +29,7 @@ if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 dotnet publish (Join-Path $root 'src\Offload.BrawDecode\Offload.BrawDecode.csproj') -c Release -r win-x64 --self-contained `
     -p:PublishSingleFile=true -p:DebugType=none -o (Join-Path $out 'bin')
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish (braw-decode) failed' }
-# GUI: ArcLoader.exe next to bin\ (single file; WPF native libraries are extracted at first start).
+# GUI: mmMover.exe next to bin\ (single file; WPF native libraries are extracted at first start).
 dotnet publish (Join-Path $root 'src\Offload.App\Offload.App.csproj') -c Release -r win-x64 --self-contained `
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o $out
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish (app) failed' }
@@ -65,7 +66,7 @@ foreach ($t in 'ffmpeg.exe', 'ffprobe.exe') {
 # Instructions for whoever unpacks the zip.
 Copy-Item (Join-Path $root 'package\READ-ME.txt') $out
 # User manual (PDF, printed from package\manual\manual.html by package\manual\render.ps1).
-Copy-Item (Join-Path $root 'package\ArcLoader-manual.pdf') $out
+Copy-Item (Join-Path $root 'package\mmMover-manual.pdf') $out
 # Built-in LUTs (shared with the Mac version).
 $luts = Join-Path (Split-Path -Parent $root) 'shared\luts'
 New-Item -ItemType Directory -Force (Join-Path $out 'luts') | Out-Null

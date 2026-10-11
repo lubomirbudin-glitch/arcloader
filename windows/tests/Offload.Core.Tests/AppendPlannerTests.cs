@@ -151,7 +151,7 @@ public class AppendPlannerTests
         File.Delete(Layout.Join(paths[1], "CLIP/A001C002.mov"));
         var e = Refused(card, paths);
         Assert.Equal(PreflightCode.AppendMissingFile, e.Code);
-        Assert.Equal($"A file of the earlier backup is missing on {AppendPlanner.Disk(paths[1])}: CLIP/A001C002.mov — check the backup with Verify backup (top bar of the window; on the command line arcloader verify)", e.Message);
+        Assert.Equal($"A file of the earlier backup is missing on {AppendPlanner.Disk(paths[1])}: CLIP/A001C002.mov — check the backup with Verify backup (top bar of the window; on the command line mmmover verify)", e.Message);
     }
 
     static void MarkFailed(string cardPath, string rel)
@@ -202,7 +202,7 @@ public class AppendPlannerTests
 
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
         var disk = AppendPlanner.Disk(paths[0]);
-        Assert.Equal($"The backups on the destinations differ ({disk} has 1 MHL generation, {disk} 2) — check them with Verify backup (top bar of the window; on the command line arcloader verify); cannot append.", e.Message);
+        Assert.Equal($"The backups on the destinations differ ({disk} has 1 MHL generation, {disk} 2) — check them with Verify backup (top bar of the window; on the command line mmmover verify); cannot append.", e.Message);
     }
 
     // Ruling I1: an append whose reports landed but whose MHL generation did not — the next one must not reuse 0002.
@@ -223,7 +223,7 @@ public class AppendPlannerTests
 
         Assert.Equal(PreflightCode.AppendDiverged, e.Code);
         Assert.Equal($"The reports in {paths[0]} do not match the ASC MHL (the last report is generation 2, the last MHL generation 1) — an earlier append did not finish. "
-            + "Check the backup with Verify backup (top bar of the window; on the command line arcloader verify) and fix the folder by hand; cannot append.", e.Message);
+            + "Check the backup with Verify backup (top bar of the window; on the command line mmmover verify) and fix the folder by hand; cannot append.", e.Message);
     }
 
     [Fact]
@@ -353,7 +353,7 @@ public class AppendPlannerTests
         var e = Refused(card, paths);
 
         Assert.Equal(PreflightCode.AppendMhlDamaged, e.Code);
-        Assert.Equal($"The ASC MHL history in {paths[1]} is damaged — check it with Verify backup (top bar of the window; on the command line arcloader verify); cannot append.", e.Message);
+        Assert.Equal($"The ASC MHL history in {paths[1]} is damaged — check it with Verify backup (top bar of the window; on the command line mmmover verify); cannot append.", e.Message);
 
         File.WriteAllText(gen1, File.ReadAllText(gen1)[..^1]);
         Assert.Single(AppendPlanner.Plan(card, paths).NewFiles);   // repaired: fine again

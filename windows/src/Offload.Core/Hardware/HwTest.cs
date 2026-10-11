@@ -111,7 +111,7 @@ public static class HwTest
             .ToDictionary(x => x.Role, x => x.Value!.Value);
         return onCard
             .Select(x => new Advice(AdviceKind.Warning,
-                $"{x.Role} is on the same volume as {x.Card} — ArcLoader never writes to a card, so the write speed is not measured; choose another destination disk."))
+                $"{x.Role} is on the same volume as {x.Card} — mmMover never writes to a card, so the write speed is not measured; choose another destination disk."))
             .Concat(Advisor.Advise(drives, connectors, pace.Count > 0 ? pace : null, portNames))
             .OrderBy(a => a.Kind).ToList();
     }

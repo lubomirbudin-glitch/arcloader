@@ -83,7 +83,7 @@ public class VerifyVerdictTests
     {
         var copied = new JobStatus { Phase = JobPhase.Proxies, SafeToEject = true };
         var eject = JobOutcomes.CopyDone("A001", copied, proxies: true)!;
-        Assert.Equal(("ArcLoader: A001 — safe to eject", "Verifying with the proxies — format only after it finishes."), (eject.Title, eject.Message));
+        Assert.Equal(("mmMover: A001 — safe to eject", "Verifying with the proxies — format only after it finishes."), (eject.Title, eject.Message));
         Assert.False(eject.ForPhone);
 
         var done = JobOutcomes.Final("A001", new JobStatus { Phase = JobPhase.Done, SafeToEject = true, SafeToFormat = true }, Report())!;

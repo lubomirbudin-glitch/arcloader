@@ -40,11 +40,11 @@ public class MhlTests
         Assert.Equal(2, hashes.Count);
         Assert.All(hashes, h => Assert.Equal("original", h.Element(Ns + "xxh64")!.Attribute("action")!.Value));
         Assert.Contains(doc.Descendants(Ns + "pattern"), p => p.Value == "_REPORT");
-        // The rename (0.10.0): the creatorinfo names ArcLoader (free text); the report's own `tool` stays "offload".
+        // The renames (0.10.0, 0.11.0): the creatorinfo names mmMover (free text); the report's own `tool` stays "offload".
         var tool = doc.Descendants(Ns + "tool").Single();
-        Assert.Equal(("ArcLoader", report.Version), (tool.Value, tool.Attribute("version")!.Value));
+        Assert.Equal(("mmMover", report.Version), (tool.Value, tool.Attribute("version")!.Value));
         Assert.Equal("offload", report.Tool);
-        Assert.StartsWith("ArcLoader offload of A001 from ", doc.Descendants(Ns + "comment").Single().Value);
+        Assert.StartsWith("mmMover offload of A001 from ", doc.Descendants(Ns + "comment").Single().Value);
 
         var chain = XDocument.Load(Path.Combine(mhlDir, "ascmhl_chain.xml"));
         XNamespace dirNs = "urn:ASC:MHL:DIRECTORY:v2.0";

@@ -94,7 +94,7 @@ public static class Projects
     /// The project's name, or null for "No project" — what a job, history and the report record.
     public static string? ActiveName(AppSettings s) => Find(s, s.ActiveProject)?.Name;
 
-    /// The window title: "ArcLoader", or "ArcLoader — Film X".
+    /// The window title: "mmMover", or "mmMover — Film X".
     public static string WindowTitle(string? project) => project == null ? Product.Name : $"{Product.Name} — {project}";
 
     public static string DeleteQuestion(string name) => $"Delete project {name}? The project's settings will be lost; the backups on the disks stay.";

@@ -4,7 +4,7 @@ using Offload.Core.Outputs;
 
 namespace Offload.Cli;
 
-/// `arcloader day-report <day folder>` (spec 3.2): makes the day report again and prints where it is. Exit 0 / 1.
+/// `mmmover day-report <day folder>` (spec 3.2): makes the day report again and prints where it is. Exit 0 / 1.
 static class DayReportCommand
 {
     public static Command Create()
