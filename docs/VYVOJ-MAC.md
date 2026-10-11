@@ -129,6 +129,18 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 45 — Ověřit zálohu (`BackupVerifier`): všechny generace ASC MHL a hashe xxh64, md5, sha1, xxh3, xxh128, c4
+  (každý soubor čtený jednou s F_NOCACHE, velikost zvlášť), záloha bez MHL proti .xxh64/.md5 (i CRLF), nejnovější záznam
+  „failed“ ověřený proti starší platné generaci, nedokončená generace nikdy „v pořádku“ (oranžově, CLI kód 1), soubory
+  navíc mimo `_REPORT`/`_PROXY`/`ascmhl` a ignore vzory MHL (přesunuté z `MHLReader` do `BackupVerifier.ignored`), složka
+  dne = každá karta; report ověření (`VerifyReport`, anglické texty Windows `VerifyTexts`, CSS sdílené s reportem karty
+  přes `HTMLReport.styles`, PDF přes nové `PDFReport.writeHTML`) do `_REPORT` karty, u cizího MHL vedle karty, nic do
+  `ascmhl/`, HTML a JSON jen jako nové soubory; CLI `verify <karta|den> [--report]` (report jen s volbou, jako Windows),
+  strojové řádky, souhrn, průběh; starý `Verifier` smazán. Ověřeno CLI na obrazech disků: karta i den OK s HTML/PDF/JSON,
+  poškozený bajt (`dd conv=notrunc`) → MISMATCH a kód 1; `ascmhl create` (1.2, na kopii složky) po reportu ověření projde.
+  Zjištění (není z tohoto úkolu): na cíli exFAT (fskit) vznikají k souborům i složkám AppleDouble `._*` (rozšířené atributy
+  macOS) — `ascmhl diff` je hlásí jako nové soubory; Offload je přeskakuje (`Scanner`), ignore vzory MHL je neznají.
+  Report ověření z Windows 0.6.0 a záloha ze Silverstacku/ShotPutu neověřeny (nejsou po ruce)
 - Úkol 44 — úloha i CLI zapisují historii (záznam „unfinished“ od startu celé kopie, na konci nahrazený; zrušená
   kopie se smaže; „ověřeno“ z `BackupState` = jediná definice; zaneprázdněná historie = 60 s čekání, pak zápis na pozadí
   v pořadí s varováním `Msg.historyDelayed`, které po zápisu zmizí; `HistoryRecorder.drain` pro aplikaci a CLI), CLI řádek

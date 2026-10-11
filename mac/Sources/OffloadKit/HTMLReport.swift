@@ -63,26 +63,9 @@ public enum HTMLReport {
         + ".thumbs figcaption{font-size:7.5px}td.num,td.tc{white-space:nowrap;overflow-wrap:normal}"
         + "td.clip div{font-size:8.5px}td.clip .clipname{font-size:10px}"
 
-    public static func render(_ r: OffloadReport, forPrint: Bool = false) -> String {
-        let ok = r.success
-        // Spec D.22.7: green only when the card may be formatted — never while the verification with the proxies runs
-        // (verifyPending) or its result is not in every folder yet (verifyIncomplete).
-        let incomplete = r.verifyIncomplete == true
-        let status = !ok ? "FAILED" : r.verifyPending == true ? "COPIED — VERIFYING" : incomplete ? "UNFINISHED"
-            : (r.verified ? "VERIFIED" : "COPIED — NOT VERIFIED")
-        let statusClass = !ok ? "bad" : (r.safeToFormat ? "ok" : "warn")
-        let verdict = !ok ? "" : r.safeToFormat
-            ? "<p class=\"ok\">\(esc(Texts.safeToFormat(r.destinations.count)))</p>\n"
-            : "<p class=\"muted\">\(esc(Texts.safeToEject(r.destinations.count)))</p>\n"
-        let failed = r.failedFiles
-        let videoClips = r.clips.filter { !$0.clip.isCameraProxy }
-        let totalDuration = videoClips.compactMap { $0.info?.duration }.reduce(0, +)
-
-        var h = """
-        <!doctype html>
-        <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Offload \(esc(r.cardName)) – \(esc(r.date))</title>
-        <style>
+    /// The report's CSS — shared with the verification report (VerifyReport).
+    static func styles(forPrint: Bool) -> String {
+        """
         :root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e3e3e0;--ok:#1f8a4c;--okbg:#e5f4ea;--bad:#c62828;--badbg:#fdeaea;--warn:#a86400;--warnbg:#fdf2dc;--accent:#3a5bd9}
         \(forPrint ? "" : darkCSS)
         *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
@@ -110,6 +93,30 @@ public enum HTMLReport {
         footer{margin-top:40px;color:var(--muted);font-size:12px}
         @media print{body{background:#fff}.panel,.stat{border-color:#ccc}details{display:block}}
         \(forPrint ? printCSS : "")
+        """
+    }
+
+    public static func render(_ r: OffloadReport, forPrint: Bool = false) -> String {
+        let ok = r.success
+        // Spec D.22.7: green only when the card may be formatted — never while the verification with the proxies runs
+        // (verifyPending) or its result is not in every folder yet (verifyIncomplete).
+        let incomplete = r.verifyIncomplete == true
+        let status = !ok ? "FAILED" : r.verifyPending == true ? "COPIED — VERIFYING" : incomplete ? "UNFINISHED"
+            : (r.verified ? "VERIFIED" : "COPIED — NOT VERIFIED")
+        let statusClass = !ok ? "bad" : (r.safeToFormat ? "ok" : "warn")
+        let verdict = !ok ? "" : r.safeToFormat
+            ? "<p class=\"ok\">\(esc(Texts.safeToFormat(r.destinations.count)))</p>\n"
+            : "<p class=\"muted\">\(esc(Texts.safeToEject(r.destinations.count)))</p>\n"
+        let failed = r.failedFiles
+        let videoClips = r.clips.filter { !$0.clip.isCameraProxy }
+        let totalDuration = videoClips.compactMap { $0.info?.duration }.reduce(0, +)
+
+        var h = """
+        <!doctype html>
+        <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Offload \(esc(r.cardName)) – \(esc(r.date))</title>
+        <style>
+        \(styles(forPrint: forPrint))
         </style></head><body><main>
         <header><h1>\(esc(r.cardName))</h1><span class="badge \(statusClass)">\(status)</span>
         <span class="sub">\(dateTime(r.started)) – \(timeOnly(r.finished))</span></header>

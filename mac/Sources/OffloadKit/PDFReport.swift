@@ -10,7 +10,11 @@ public enum PDFReport {
     /// Safe to call from any thread. Rendering happens on the main thread, which must be running
     /// its run loop (the app always does; the CLI keeps it spinning while a job runs).
     public static func write(_ report: OffloadReport, to path: String, timeout: TimeInterval = 60) throws {
-        let html = HTMLReport.render(report, forPrint: true)
+        try writeHTML(HTMLReport.render(report, forPrint: true), to: path, timeout: timeout)
+    }
+
+    /// Any HTML page (the verification report) as the same A4 landscape PDF.
+    public static func writeHTML(_ html: String, to path: String, timeout: TimeInterval = 60) throws {
         var failure: Error?
         let work = {
             do { try MainActor.assumeIsolated { try render(html: html, to: URL(fileURLWithPath: path), timeout: timeout) } }

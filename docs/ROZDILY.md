@@ -43,10 +43,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Test USB portů na vyžádání + doporučení** | ✅ CLI (`offload ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
 | **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test) |
-| **Karta už zálohovaná** (`history.json`, řádek u karty, dotaz před celou kopií) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test s kartou) |
+| **Karta už zálohovaná** (`history.json`, řádek u karty, dotaz před celou kopií) | ✅ CLI (řádek historie, `--no-history`; GUI úkol 49) | ✅ CLI + GUI (GUI čeká ruční test s kartou) |
 | **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ⏳ naplánováno | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
-| **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ⏳ naplánováno | ✅ CLI + GUI |
-| **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | `verify` jen proti `.xxh64` | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
+| **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ✅ CLI `--name auto` (GUI úkol 49) | ✅ CLI + GUI |
+| **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | ✅ CLI `verify [--report]` (GUI úkol 49) | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
 | **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | jen velikost karty | ✅ CLI + GUI |
 | **Hlášky kontrol před kopií s kódy** (`PreflightCode`) | ✅ anglicky (od 2026-10-10, záměrně) | ✅ česky |
 | **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `offload day-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
@@ -221,7 +221,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   s vypnutým nebo zrušeným ověřením.
 - **Chyby souborů v HTML česky** (Windows): JSON je sdílený, takže chyby v něm zůstávají anglicky (`size mismatch`,
   `HASH MISMATCH` …); HTML/PDF report je zobrazí česky.
-- **Historie karet** (zatím jen Windows, pro Mac naplánováno): `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,
+- **Historie karet** (obě verze; Mac od 0.3.0, `~/Library/Application Support/Offload/history.json`, zámek `flock`):
+  `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,
   „Místní soubory“) — řádek „Zálohováno … — ověřeno“ u karty, dotaz „Karty už jsou zálohované“ před celou kopií, CLI
   vypíše řádek před plánem (bez dotazu); `--no-history` historii vypne. Karta se pozná podle sériového čísla souborového
   systému + kapacity, ne podle GUID svazku. Mac čte sériové číslo z boot sektoru (`Volume.swift`) jen tam, kde smí
@@ -231,11 +232,12 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Doplnění** (zatím jen Windows): generace ASC MHL N a `offload_report_NNNN.*` (FORMATY.md). Mac `verify` čte jen
   `<karta>.xxh64`, který doplnění rozšíří — doplněnou zálohu tedy ověří i Mac. Doplnění drží zámek složky karty (viz
   níže) a odmítne kartu, na které není žádný soubor dřívější zálohy, i zálohu s nedokončeným dřívějším doplněním.
-- **Ověření zálohy:** Windows ověřuje proti ASC MHL (všechny generace, i MHL ze Silverstacku/ShotPutu), bez `ascmhl/`
-  proti `.xxh64`; Mac zatím jen proti `.xxh64`. Report ověření jde do `_REPORT` karty, a když MHL složky `_REPORT`
-  neignoruje (cizí program), do `_REPORT` vedle složky karty — do karty ani do `ascmhl/` se nezapisuje. Výstup `verify`
-  na Windows: strojové řádky (`MISMATCH`, `MISSING`, `ERROR`, `EXTRA`, nově `FAILED-AT-COPY`, `FAILED-SUPERSEDED`,
-  `CHAIN`) a český souhrn místo `OK`/`FAILED`.
+- **Ověření zálohy** (obě verze; Mac od 0.3.0): proti ASC MHL (všechny generace, i MHL ze Silverstacku/ShotPutu), bez
+  `ascmhl/` proti `.xxh64`/`.md5` (i s `\r\n`). Report ověření jde do `_REPORT` karty, a když MHL složky `_REPORT`
+  neignoruje (cizí program), do `_REPORT` vedle složky karty — do karty ani do `ascmhl/` se nezapisuje. Výstup `verify`:
+  strojové řádky (`MISMATCH`, `MISSING`, `ERROR`, `EXTRA`, `FAILED-AT-COPY`, `FAILED-SUPERSEDED`, `CHAIN`) a souhrn
+  (Windows česky, Mac anglicky); report jen s `--report` v obou verzích. Mac zapíše HTML a JSON reportu jen jako nové
+  soubory (druhé ověření v téže sekundě report nepřepíše).
 - **Kontrola místa** (chování, ne formát): Windows sčítá požadavky po svazcích (karta + 64 KiB na soubor + 64 MiB, proxy
   podle odhadu z délky a datového toku, report 32 MiB + 1 MiB na klip, čekající a běžící úlohy, složka pro proxy) a před
   renderem proxy přepočítá podle skutečné délky klipů (nevejde-li se, proxy se přeskočí, kopie zůstane ověřená). Mac

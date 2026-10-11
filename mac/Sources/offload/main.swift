@@ -262,29 +262,66 @@ struct Copy: ParsableCommand {
 }
 
 struct Verify: ParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Re-verify an existing card folder against its _REPORT hash list.")
+    static let configuration = CommandConfiguration(
+        abstract: "Verify a backup: a card folder (<root>/<date>/<card>) or a whole date folder, against every ASC MHL generation (or the _REPORT checksum lists).")
 
-    @Argument(help: "Card folder (<root>/<date>/<card>).")
-    var cardPath: String
+    @Argument(help: "Card folder (<root>/<date>/<card>) or a date folder (every card folder in it).")
+    var folder: String
+
+    @Flag(help: "Write the verification report (HTML, PDF, JSON) into each card's _REPORT folder.")
+    var report = false
 
     func run() throws {
-        let t0 = Date()
-        var last = Date.distantPast
-        let r = try Verifier.verify(cardPath: abs(cardPath)) { file, bytes in
-            if Date().timeIntervalSince(last) > 0.5 {
-                last = Date()
-                fputs("\r\u{1B}[K\(formatBytes(bytes))  \(file)", stderr)
-            }
+        let root = abs(folder)
+        let cards = BackupVerifier.cardFolders(in: root)
+        guard !cards.isEmpty else {
+            throw OffloadError.preflight(Msg.noHashRecord(root + "/" + Layout.reportDirName), code: .noHashRecord)
         }
-        let secs = Date().timeIntervalSince(t0)
-        fputs("\r\u{1B}[K", stderr)
-        print("Verified \(r.ok.count) files, \(formatBytes(r.bytes)) in \(String(format: "%.1f", secs)) s (\(formatRate(r.bytes, secs)))")
-        for m in r.mismatched { print("MISMATCH  \(m)") }
-        for m in r.missing { print("MISSING   \(m)") }
-        for m in r.unreadable { print("ERROR     \(m)") }
-        for m in r.extra { print("EXTRA     \(m) (not in hash list)") }
-        print(r.success ? "OK" : "FAILED")
-        if !r.success { throw ExitCode(1) }
+        let flag = CancelFlag()
+        signal(SIGINT, SIG_IGN)
+        let sigint = DispatchSource.makeSignalSource(signal: SIGINT, queue: .global())
+        sigint.setEventHandler {
+            fputs("\n" + Msg.cancelling + "\n", stderr)
+            flag.cancel()
+        }
+        sigint.resume()
+        var allGood = true
+        for (i, card) in cards.enumerated() {
+            if cards.count > 1 { print("\n\(card)") }
+            let t0 = Date()
+            var last = Date.distantPast
+            var index = 0, lastFile = ""
+            let r: VerifyResult
+            do {
+                r = try BackupVerifier.verify(card, progress: { file, bytes in
+                    if file != lastFile { index += 1; lastFile = file }
+                    if Date().timeIntervalSince(last) > 0.5 {
+                        last = Date()
+                        fputs("\r\u{1B}[K\(i + 1)/\(cards.count)  \(index)  \(formatBytes(bytes))  \(file)", stderr)
+                    }
+                }, isCancelled: { flag.isCancelled })
+            } catch {
+                fputs("\r\u{1B}[K", stderr)
+                print(Msg.cliError + "\(error)")
+                allGood = false
+                continue
+            }
+            fputs("\r\u{1B}[K", stderr)
+            for line in VerifyReport.machineLines(r) { print(line) }
+            for w in VerifyReport.warnings(r) where !w.isEmpty { print(Msg.cliWarning + w) }
+            print(VerifyReport.cliSummary(r, seconds: Date().timeIntervalSince(t0)))
+            if report && !r.cancelled {
+                do {
+                    let (html, _, inside) = try VerifyReport.write(r, log: { fputs($0 + "\n", stderr) })
+                    print(inside ? "Report: \(html)" : VerifyReport.reportOutsideNote(html))
+                } catch {
+                    print(Msg.cliWarning + Msg.reportNotWritten("\(error)"))
+                }
+            }
+            if !r.success || r.unfinished || r.cancelled { allGood = false }
+            if flag.isCancelled { break }
+        }
+        if !allGood { throw ExitCode(1) }
     }
 }
 
