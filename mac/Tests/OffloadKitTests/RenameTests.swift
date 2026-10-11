@@ -1,35 +1,35 @@
 import XCTest
 @testable import OffloadKit
 
-/// The rename to ArcLoader (user decision 2026-10-11, Windows 0.10.0): what users see says ArcLoader; names inside a
+/// The rename to mmMover (user decision 2026-10-11, Windows 0.10.0): what users see says mmMover; names inside a
 /// backup, JSON keys and `tool: "offload"` stay; the old app folder is copied once and never touched; locks stay where an
 /// older Offload takes them; old report copies and user LUTs are still read.
 final class RenameTests: XCTestCase {
     func testProductNames() {
-        XCTAssertEqual(Product.name, "ArcLoader")
-        XCTAssertEqual(Product.cli, "arcloader")
-        XCTAssertEqual(Product.toolName("offload"), "ArcLoader")
-        XCTAssertEqual(Product.toolName("Offload"), "ArcLoader")
+        XCTAssertEqual(Product.name, "mmMover")
+        XCTAssertEqual(Product.cli, "mmmover")
+        XCTAssertEqual(Product.toolName("offload"), "mmMover")
+        XCTAssertEqual(Product.toolName("Offload"), "mmMover")
         XCTAssertEqual(Product.toolName("Silverstack"), "Silverstack", "another tool's report keeps its name")
     }
 
-    func testReportSaysArcLoaderButKeepsTheFormat() throws {
+    func testReportSaysmmMoverButKeepsTheFormat() throws {
         let r = Reports.sample()
         let html = HTMLReport.render(r)
-        XCTAssertTrue(html.contains("<title>ArcLoader \(r.cardName) – \(r.date)</title>"))
+        XCTAssertTrue(html.contains("<title>mmMover \(r.cardName) – \(r.date)</title>"))
         XCTAssertFalse(html.contains("Offload"), "no old product name anywhere in the card report")
         let json = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(r)) as? [String: Any]
         XCTAssertEqual(json?["tool"] as? String, "offload", "FORMATY: the value never changes")
         XCTAssertEqual(OffloadReport.jsonName(1), "offload_report.json")
-        XCTAssertTrue(Msg.verifyHint.contains("arcloader verify"))
-        XCTAssertTrue(Msg.summaryTargetIsSource("/x").hasSuffix("ArcLoader never writes to a card."))
+        XCTAssertTrue(Msg.verifyHint.contains("mmmover verify"))
+        XCTAssertTrue(Msg.summaryTargetIsSource("/x").hasSuffix("mmMover never writes to a card."))
     }
 
     func testLocalReportFolderNewNameOldNamesStillRead() {
-        XCTAssertEqual(LocalReports.folderName, "ArcLoader reports")
+        XCTAssertEqual(LocalReports.folderName, "mmMover reports")
         let docs = NSHomeDirectory() + "/Documents"
         let roots = SummaryReport.localRoots
-        for name in ["ArcLoader reports", "Offload reports", "Offload reporty"] {
+        for name in ["mmMover reports", "Offload reports", "Offload reporty"] {
             XCTAssertTrue(roots.contains(docs + "/" + name), name)
         }
         XCTAssertEqual(roots.first, LocalReports.root)
@@ -45,14 +45,14 @@ final class RenameTests: XCTestCase {
         XCTAssertEqual(AppSupport.lockFolder, testSettingsDir + "/locks")
         XCTAssertFalse(AppSupport.migrateFromOffload(log: nil), "never migrates with a settings-folder variable")
         let other = tempDir().path
-        setenv("ARCLOADER_SETTINGS_DIR", other, 1)
-        defer { unsetenv("ARCLOADER_SETTINGS_DIR") }
-        XCTAssertEqual(AppSupport.folder, other, "ARCLOADER_SETTINGS_DIR wins over OFFLOAD_SETTINGS_DIR")
+        setenv("MMMOVER_SETTINGS_DIR", other, 1)
+        defer { unsetenv("MMMOVER_SETTINGS_DIR") }
+        XCTAssertEqual(AppSupport.folder, other, "MMMOVER_SETTINGS_DIR wins over OFFLOAD_SETTINGS_DIR")
         XCTAssertEqual(Locks.folder, other + "/locks")
         // The real folders, as the app would use them without the variables: the new one, the old one for the locks.
         let base = NSHomeDirectory() + "/Library/Application Support"
-        XCTAssertEqual(ExternalTools.supportDirs, [base + "/ArcLoader", base + "/Offload"])
-        XCTAssertEqual(LutCatalog.userLutFolders, [base + "/ArcLoader/luts", base + "/Offload/luts"])
+        XCTAssertEqual(ExternalTools.supportDirs, [base + "/mmMover", base + "/ArcLoader", base + "/Offload"])
+        XCTAssertEqual(LutCatalog.userLutFolders, [base + "/mmMover/luts", base + "/ArcLoader/luts", base + "/Offload/luts"])
     }
 
     private func tree(_ root: String) -> [String: Data] {
@@ -75,7 +75,7 @@ final class RenameTests: XCTestCase {
     func testOldFolderIsCopiedOnceNeverChanged() throws {
         let dir = tempDir()
         let old = dir.sub("Application Support", "Offload")
-        let new = dir.path + "/Application Support/ArcLoader"
+        let new = dir.path + "/Application Support/mmMover"
         try Data(#"{"version":1,"entries":[]}"#.utf8).write(to: URL(fileURLWithPath: old + "/history.json"))
         TestFS.writeRandom(old + "/history/20261011T080000Z-1a2b3c4d.files.gz", size: 300, seed: 1)
         TestMedia.identityLUT(dir.sub("Application Support", "Offload", "luts") + "/arri-logc4-awg4.cube")
@@ -99,7 +99,7 @@ final class RenameTests: XCTestCase {
         XCTAssertNil(copied["locks"], "locks stay where an older Offload takes them")
         XCTAssertEqual(lines.count, 1)
         XCTAssertTrue(lines[0].hasPrefix("settings copied from \(old) to \(new)"), lines[0])
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path + "/Application Support").sorted(), ["ArcLoader", "Offload"],
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path + "/Application Support").sorted(), ["Offload", "mmMover"],
                        "no temporary folder left")
         XCTAssertEqual(HistoryStore(folder: new).load().count, 0, "the copy reads as a history")
 
@@ -114,13 +114,13 @@ final class RenameTests: XCTestCase {
 
     func testNothingToCopyNothingMade() {
         let dir = tempDir()
-        XCTAssertFalse(AppSupport.copyOldFolder(dir.path + "/Offload", to: dir.path + "/ArcLoader", log: nil))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.path + "/ArcLoader"))
+        XCTAssertFalse(AppSupport.copyOldFolder(dir.path + "/Offload", to: dir.path + "/mmMover", log: nil))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.path + "/mmMover"))
     }
 
     func testUserLutsFromTheNewFolderThenTheOld() throws {
         let dir = tempDir()
-        let newLuts = dir.sub("ArcLoader", "luts"), oldLuts = dir.sub("Offload", "luts")
+        let newLuts = dir.sub("mmMover", "luts"), oldLuts = dir.sub("Offload", "luts")
         TestMedia.identityLUT(oldLuts + "/arri-logc4-awg4.cube")
         TestMedia.identityLUT(oldLuts + "/sony-slog3-sgamut3cine.cube")
         TestMedia.identityLUT(newLuts + "/sony-slog3-sgamut3cine.cube")

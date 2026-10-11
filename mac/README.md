@@ -1,4 +1,4 @@
-# ArcLoader pro Mac (dříve Offload)
+# mmMover pro Mac (dříve Offload)
 
 Kopírování paměťových karet z kamery na více disků najednou, s ověřením, reportem a volitelnými proxy s LUT. macOS 13+.
 
@@ -27,7 +27,7 @@ dekodérem. Úkoly 52–60 a 62–64 zatím vynechané.
    Karta má dva stavy: **Safe to eject** (vše zapsané) a **Safe to format** (vše ověřené na všech discích a výsledek zapsaný).
    **Verify-in-Proxy** (od 0.7.0, výchozí zapnuto, řádek „Verify during proxy render“ v kroku 3, CLI `--classic-verify`
    vypne): s proxy se zpětné čtení po kopii nedělá — karta je „Safe to eject“ hned po kopii, ffmpeg čte klipy primárního
-   disku přes místní HTTP tap ArcLoaderu (127.0.0.1) a každý přečtený 16MiB blok se porovná s XXH3-64 z karty, RAW (BRAW,
+   disku přes místní HTTP tap mmMoveru (127.0.0.1) a každý přečtený 16MiB blok se porovná s XXH3-64 z karty, RAW (BRAW,
    R3D, ARRIRAW) se před SDK přečte jednou z disku, ostatní disky se čtou celé na pozadí, chybějící bloky dočte dorovnání;
    „Safe to format“ až po ověření všech disků a zápisu výsledku (ASC MHL, reporty, `.xxh64`). Soubor, který macOS drží
    v paměti (`mincore`), se z tapu nikdy neověří — ověří ho zpětné čtení s poznámkou v reportu. Bez proxy nebo vypnuto:
@@ -43,7 +43,7 @@ dekodérem. Úkoly 52–60 a 62–64 zatím vynechané.
    Originál H.264/HEVC, který není větší než proxy a má datový tok nejvýš jako proxy, proxy H.264/HEVC nedostane
    („no proxy — the original is lighter …“; jen bez LUTu a ořezu; Nastavení › Proxy › More, CLI `--proxy-always`).
 
-5. **Historie karet** – `~/Library/Application Support/ArcLoader/history.json` (formát Windows): karta vložená znovu ukáže
+5. **Historie karet** – `~/Library/Application Support/mmMover/history.json` (formát Windows): karta vložená znovu ukáže
    „Backed up on … — verified, safe to format“ a před celou kopií se aplikace zeptá („Card already backed up“: Copy again in
    full / Skip backed-up / Cancel). Na kartě s novými klipy tlačítko **Append** doplní jen nové soubory do **stejné**
    složky karty jako další generaci ASC MHL (`offload_report_0002.*`, `ascmhl/0002_…`, `.xxh64` jen prodloužený — nic
@@ -62,7 +62,7 @@ Na kartu se nikdy nezapisuje. Během offloadu se nespí.
 | ProRes, H.264/H.265, XAVC, XF-AVC, DNx, AVC-Intra (MOV/MP4/MXF) | ffmpeg | přibaleno |
 | Blackmagic RAW | `braw-decode` → ffmpeg (LUT podle gamy klipu) | Blackmagic RAW Player, SDK nebo DaVinci Resolve (bez knihovny se BRAW jen zkopíruje a ověří) |
 | RED R3D | REDline → ProRes LT → ffmpeg | REDCINE-X PRO |
-| ARRIRAW, ARRIRAW HDE, ARRICORE (MXF, .ari) | art-cmd → ProRes LT (log) → ffmpeg | ARRI Reference Tool CMD – nainstalováno v `~/Library/Application Support/Offload/arri/` (odkaz v `…/Offload/bin/art-cmd`; hledá se v `…/ArcLoader/bin` i `…/Offload/bin`) |
+| ARRIRAW, ARRIRAW HDE, ARRICORE (MXF, .ari) | art-cmd → ProRes LT (log) → ffmpeg | ARRI Reference Tool CMD – nainstalováno v `~/Library/Application Support/Offload/arri/` (odkaz v `…/Offload/bin/art-cmd`; hledá se v `…/mmMover/bin` i `…/Offload/bin`) |
 | Canon Cinema RAW Light, Sony X-OCN | – | na macOS Intel neexistuje CLI dekodér; zkopíruje a ověří se, proxy se přeskočí |
 
 S LUT se RAW dekóduje do logu (RED: IPP2 Log3G10/RWG; ARRI: podle názvu LUT – „LogC4“/„LogC3“ – jinak nativní log klipu z metadat).
@@ -75,14 +75,14 @@ Bez LUT se použije look z kamery.
 ## Build
 
 ```sh
-scripts/build-app.sh <štítek> # → build/ArcLoader-<štítek>.app „ArcLoader <štítek>“ (+ CLI Contents/Resources/bin/arcloader); obsazený štítek skončí chybou, nic nepřepíše
+scripts/build-app.sh <štítek> # → build/mmMover-<štítek>.app „mmMover <štítek>“ (+ CLI Contents/Resources/bin/mmmover); obsazený štítek skončí chybou, nic nepřepíše
 ```
 
-**Přejmenování na ArcLoader** (jako Windows 0.10.0): aplikace `ArcLoader.app`, CLI `arcloader`, kopie reportů
-v `~/Documents/ArcLoader reports` (staré `Offload reporty` / `Offload reports` se dál čtou). Data aplikace v
-`~/Library/Application Support/ArcLoader`: při prvním startu (aplikace i CLI) se `…/Offload` jednou **zkopíruje**
+**Přejmenování na mmMover** (jako Windows 0.10.0): aplikace `mmMover.app`, CLI `mmmover`, kopie reportů
+v `~/Documents/mmMover reports` (staré `Offload reporty` / `Offload reports` se dál čtou). Data aplikace v
+`~/Library/Application Support/mmMover`: při prvním startu (aplikace i CLI) se `…/Offload` jednou **zkopíruje**
 (historie, LUTy, hwtest; nic se nepřesouvá ani nemaže), nástroje (`bin/`, `arri/`) a vlastní LUTy se hledají v obou
-složkách, zámky zůstávají v `…/Offload/locks` (starý Offload a ArcLoader se vylučují). Nastavení zůstává v UserDefaults
+složkách, zámky zůstávají v `…/Offload/locks` (starý Offload a mmMover se vylučují). Nastavení zůstává v UserDefaults
 pod stejným bundle id `cz.budin.offload`. Uvnitř záloh se nic nemění (`offload_report.json`, `tool: "offload"` …).
 Proměnné `ARCLOADER_SETTINGS_DIR` / `ARCLOADER_REPORTS_DIR` mají přednost před `OFFLOAD_*`.
 
@@ -104,17 +104,17 @@ Ukázkové klipy: stránka Blackmagic RAW → „Download RAW Samples“ (formul
 ## CLI
 
 ```sh
-arcloader /Volumes/A001 -d /Volumes/RAID_A -d /Volumes/SHUTTLE_B [--proxy --lut look.cube --proxy-codec h264]
-arcloader copy /Volumes/A001 -d /Volumes/RAID_A --name auto      # název složky z klipů (A001C003… → A001)
-arcloader copy /Volumes/A001 -d /Volumes/RAID_A --dry-run         # plán a místo po svazcích, nic se nekopíruje
-arcloader copy … --no-history                                     # historii karet nečte ani nezapisuje
-arcloader append /Volumes/A001 [--into /Volumes/RAID_A/2026-10-03/A001 --into …]   # jen nové soubory, generace N
+mmmover /Volumes/A001 -d /Volumes/RAID_A -d /Volumes/SHUTTLE_B [--proxy --lut look.cube --proxy-codec h264]
+mmmover copy /Volumes/A001 -d /Volumes/RAID_A --name auto      # název složky z klipů (A001C003… → A001)
+mmmover copy /Volumes/A001 -d /Volumes/RAID_A --dry-run         # plán a místo po svazcích, nic se nekopíruje
+mmmover copy … --no-history                                     # historii karet nečte ani nezapisuje
+mmmover append /Volumes/A001 [--into /Volumes/RAID_A/2026-10-03/A001 --into …]   # jen nové soubory, generace N
                                                                 # i „Finish interrupted backup“: dokončí nepotvrzenou generaci
-arcloader copy /Volumes/A001 -d … -d … --proxy --primary 2         # ověření během proxy na 2. cíli (výchozí: nejrychlejší)
-arcloader copy /Volumes/A001 -d … --proxy --classic-verify         # zpětné čtení po kopii místo ověření během proxy
-arcloader copy /Volumes/A001 -d … --proxy --proxy-always           # proxy i pro lehčí originály H.264/HEVC
-arcloader verify /Volumes/RAID_A/2026-10-03/A001 [--report]       # nebo složka dne = každá karta; kód 1 = problém
-arcloader bench --read /Volumes/A001 --write /Volumes/RAID_A --write /Volumes/SHUTTLE_B
+mmmover copy /Volumes/A001 -d … -d … --proxy --primary 2         # ověření během proxy na 2. cíli (výchozí: nejrychlejší)
+mmmover copy /Volumes/A001 -d … --proxy --classic-verify         # zpětné čtení po kopii místo ověření během proxy
+mmmover copy /Volumes/A001 -d … --proxy --proxy-always           # proxy i pro lehčí originály H.264/HEVC
+mmmover verify /Volumes/RAID_A/2026-10-03/A001 [--report]       # nebo složka dne = každá karta; kód 1 = problém
+mmmover bench --read /Volumes/A001 --write /Volumes/RAID_A --write /Volumes/SHUTTLE_B
 ```
 
 ## Testy
@@ -131,7 +131,7 @@ OFFLOAD_TAP_BENCH=1 swift test --filter TapFFmpegTests            # měření ta
   připojené, rychlost linky, doporučení zapojení, volitelné měření (z karty se jen čte, na cíl se zapíše a smaže 1 GB),
   vlastní názvy portů. Při startu se nic nespouští.
 - Během kopie karta úlohy ukazuje řetěz připojení s rychlostí, % linky a úzkým hrdlem.
-- CLI: `arcloader ports [--measure] [--card /Volumes/A001] [--dest /Volumes/RAID]`; `arcloader copy` ukáže připojení
+- CLI: `mmmover ports [--measure] [--card /Volumes/A001] [--dest /Volumes/RAID]`; `mmmover copy` ukáže připojení
   a ve stavovém řádku „bottleneck: D1“.
 - Omezení: zařízení 10 Gb/s běžící na 5 Gb/s se nepozná (macOS neprozradí schopnost bez BOS deskriptoru);
   fyzickou polohu portu macOS nezná — porty si pojmenujte.
@@ -139,9 +139,9 @@ OFFLOAD_TAP_BENCH=1 swift test --filter TapFFmpegTests            # měření ta
 ## LUTy, proxy a složka pro proxy
 
 - Proxy i náhledy v reportu dostanou LUT podle kamery každého klipu: 11 vestavěných LUTů Log → Rec.709
-  (`ArcLoader.app/Contents/Resources/luts`, sdílené s Windows ve `shared/luts`). Aplikace: *Proxy › LUT* — Automaticky podle
+  (`mmMover.app/Contents/Resources/luts`, sdílené s Windows ve `shared/luts`). Aplikace: *Proxy › LUT* — Automaticky podle
   kamery (+ „Když kameru nepoznám:“), vestavěný LUT, Bez LUT, Vlastní… (`.cube`). Použitý LUT a důvod je v reportu u klipu.
-- CLI: `arcloader luts` (seznam id), `arcloader copy … --proxy --lut auto|none|<id>|<cesta.cube> [--lut-fallback <id>|none]`;
+- CLI: `mmmover luts` (seznam id), `mmmover copy … --proxy --lut auto|none|<id>|<cesta.cube> [--lut-fallback <id>|none]`;
   bez `--lut` platí `auto`.
 - Složka pro proxy navíc: *Proxy › Kopírovat proxy i do složky* nebo `--proxy-folder <složka>` — každá proxy i do
   `<složka>/<datum>/<karta>/<složka klipu>/` (stejné podsložky jako v `_PROXY`; při shodě jména `_2`, `_3`…, nic se

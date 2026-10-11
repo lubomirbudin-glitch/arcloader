@@ -26,7 +26,7 @@ public struct BuiltinLut: Codable, Equatable {
     }
 }
 
-/// The built-in LUTs shipped in ArcLoader.app/Contents/Resources/luts or, in a development build, the repo's shared/luts.
+/// The built-in LUTs shipped in mmMover.app/Contents/Resources/luts or, in a development build, the repo's shared/luts.
 public struct LutCatalog {
     public let folder: String?
     public let luts: [BuiltinLut]
@@ -45,9 +45,9 @@ public struct LutCatalog {
     public static let shared = LutCatalog.load(defaultFolder).withUserOverrides()
 
     /// The user's own file for a camera log wins over the built-in approximation — e.g. the official ARRI LUT saved as
-    /// `~/Library/Application Support/ArcLoader/luts/arri-logc4-awg4.cube` (vendor LUTs may not be bundled with the app,
+    /// `~/Library/Application Support/mmMover/luts/arri-logc4-awg4.cube` (vendor LUTs may not be bundled with the app,
     /// but anyone may use them on their own Mac). Applied to the app's/CLI's catalog only, never in `load`. `folders` in
-    /// order: the first valid file for an id wins (ArcLoader's, then …/Offload/luts of builds before the rename).
+    /// order: the first valid file for an id wins (mmMover's, then …/Offload/luts of builds before the rename).
     public func withUserOverrides(_ folders: [String] = LutCatalog.userLutFolders) -> LutCatalog {
         let luts = self.luts.map { l -> BuiltinLut in
             var l = l
@@ -108,10 +108,10 @@ public struct LutCatalog {
         return LutCatalog(folder: ok.isEmpty ? nil : folder, luts: ok)
     }
 
-    /// `~/Library/Application Support/ArcLoader/luts` — `<id>.cube` there replaces the built-in LUT with that id.
+    /// `~/Library/Application Support/mmMover/luts` — `<id>.cube` there replaces the built-in LUT with that id.
     public static var userLutFolder: String { ExternalTools.supportDirs[0] + "/luts" }
 
-    /// Where user LUTs are looked for, in order: ArcLoader's folder, then …/Offload/luts (builds before the rename; the
+    /// Where user LUTs are looked for, in order: mmMover's folder, then …/Offload/luts (builds before the rename; the
     /// first start copies it, but a file put there later still counts).
     public static var userLutFolders: [String] { ExternalTools.supportDirs.map { $0 + "/luts" } }
 

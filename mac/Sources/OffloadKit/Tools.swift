@@ -17,7 +17,7 @@ public struct ExternalTools: Codable, Equatable {
         self.brawDecoder = brawDecoder
     }
 
-    /// Folders searched in order. The app bundle and the app's own `bin` (~/Library/Application Support/ArcLoader/bin,
+    /// Folders searched in order. The app bundle and the app's own `bin` (~/Library/Application Support/mmMover/bin,
     /// then …/Offload/bin of builds before the rename — art-cmd is installed there) come first, so a bundled ffmpeg wins
     /// over whatever happens to be on the system.
     public static var searchDirs: [String] {
@@ -35,11 +35,11 @@ public struct ExternalTools: Codable, Equatable {
         return dirs
     }
 
-    /// ~/Library/Application Support/ArcLoader, then …/Offload (before the rename) — only read. Always the user's real
+    /// ~/Library/Application Support/mmMover, then …/Offload (before the rename) — only read. Always the user's real
     /// folders, as before the rename: a tool installed there is found in tests and manual runs too.
     public static var supportDirs: [String] {
         let base = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support")
-        return [base + "/" + AppSupport.folderName, base + "/" + AppSupport.oldFolderName]
+        return [base + "/" + AppSupport.folderName, base + "/" + AppSupport.arcLoaderFolderName, base + "/" + AppSupport.oldFolderName]
     }
 
     static let knownPaths: [String: [String]] = [

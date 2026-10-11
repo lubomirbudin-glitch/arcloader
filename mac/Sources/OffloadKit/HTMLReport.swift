@@ -281,7 +281,7 @@ public enum HTMLReport {
         if !r.skipped.isEmpty {
             h += "<p class=\"sub\">Skipped system files: \(esc(r.skipped.joined(separator: ", ")))</p>\n"
         }
-        // `tool` stays "offload" in the JSON (FORMATY); a report of this app (or of Offload, or Windows) says ArcLoader.
+        // `tool` stays "offload" in the JSON (FORMATY); a report of this app (or of Offload, or Windows) says mmMover.
         h += "<footer>\(esc(Product.toolName(r.tool))) \(esc(r.version)) · ASC MHL in ascmhl/ · \(dateTime(Date()))</footer></main></body></html>\n"
         return h
     }

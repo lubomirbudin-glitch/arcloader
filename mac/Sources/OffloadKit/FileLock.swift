@@ -46,8 +46,8 @@ public final class FileLock {
 /// Names of the local lock files (spec D.23.4). Never a lock file on a destination: that is the FORMATY contract and
 /// may be a network drive.
 public enum Locks {
-    /// `AppSupport.lockFolder` — after the rename to ArcLoader still `~/Library/Application Support/Offload/locks`, so an
-    /// older Offload and ArcLoader keep excluding each other (a lock is its file's path).
+    /// `AppSupport.lockFolder` — after the rename to mmMover still `~/Library/Application Support/Offload/locks`, so an
+    /// older Offload and mmMover keep excluding each other (a lock is its file's path).
     public static var folder: String { AppSupport.lockFolder }
 
     static func hex<H: HashFunction>(_ h: H.Type, _ s: String) -> String {

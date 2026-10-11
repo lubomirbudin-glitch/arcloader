@@ -25,6 +25,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
+- **Přejmenování na mmMover (zadání uživatele 2026-10-11, Mac hotovo v buildu D12):** Mac se jmenuje **mmMover** (CLI
+  `mmmover`, složky `mmMover`, `Documents/mmMover reports`, proměnné `MMMOVER_*` před `ARCLOADER_*`/`OFFLOAD_*`). Windows
+  je zatím ArcLoader (0.10.0) — přejmenovat stejně, se čtením starých složek ArcLoader i Offload; formát zálohy beze změny.
+
 - **Celý řetěz připojení u každé rychlosti (zadání uživatele 2026-10-11, Mac hotovo v buildu D11):** v tabulce rychlostí
   karty úlohy pod každým řádkem (čtení karty, každý cíl) „zařízení · linka (kabel) · port“ a „NN % of link“ (výrazně od
   85 %), ne jen v tooltipu; při ověření během proxy tabulka disků s průběhem ověření a rychlostí čtení každého disku.

@@ -42,7 +42,7 @@ enum Launcher {
             return
         }
 #endif
-        // The rename (Windows 0.10.0): ~/Library/Application Support/Offload is copied once to …/ArcLoader before anything
+        // The rename (Offload → ArcLoader → mmMover, 2026-10-11): the newest earlier app folder is copied once to …/mmMover before anything
         // reads it (the old folder stays as it was). Settings stay in UserDefaults under the unchanged bundle id.
         AppSupport.migrateFromOffload { NSLog("%@", $0) }
         OffloadApp.main()
@@ -100,7 +100,7 @@ struct VerifyBackupMenuItem: View {
     }
 }
 
-/// ArcLoader › Settings… (⌘,): the settings page in the main window.
+/// mmMover › Settings… (⌘,): the settings page in the main window.
 struct SettingsMenuItem: View {
     @ObservedObject var model: AppModel
 

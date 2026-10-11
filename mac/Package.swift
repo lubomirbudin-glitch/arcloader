@@ -5,8 +5,8 @@ let package = Package(
     name: "Offload",
     platforms: [.macOS(.v13)],
     products: [
-        // The CLI as users type it (ArcLoader, Windows 0.10.0); the target and its folder keep the old internal name.
-        .executable(name: "arcloader", targets: ["offload"]),
+        // The CLI as users type it (mmMover, user decision 2026-10-11); the target and its folder keep the old internal name.
+        .executable(name: "mmmover", targets: ["offload"]),
         .library(name: "OffloadKit", targets: ["OffloadKit"]),
     ],
     dependencies: [

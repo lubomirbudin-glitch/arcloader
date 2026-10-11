@@ -250,6 +250,16 @@ Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
   (1 clip)`. Testy `CaptureFrameRateTests` (i skutečné vzorky ARRIRAW v `TestMedia` — oba 24 fps). Vzorek
   `profile.braw` z Blackmagic RAW Speed Test hlásí `sensorRate` 1 (syntetický klip) — stejně jako Windows se nehlídá.
 
+## 2026-10-11 — build „mmMover D12“: přejmenování na mmMover
+
+- **Zadání uživatele:** aplikace se jmenuje **mmMover** (CLI `mmmover`). Všude, kde je vidět jméno (okna, nastavení,
+  hlášky, CLI, patičky a `<title>` reportů, ASC MHL `<tool>`), je `Product.name`. Build: `build/mmMover-<label>.app`.
+- Složka aplikace `~/Library/Application Support/mmMover`: při prvním startu se jednou zkopíruje nejnovější předchozí
+  (`…/ArcLoader`, jinak `…/Offload`); staré se nikdy nemění ani nemažou. Nástroje (art-cmd), uživatelské LUTy a zámky se
+  hledají/drží i v `…/ArcLoader` a `…/Offload`. Kopie reportů `~/Documents/mmMover reports`; souhrnný report čte i
+  `ArcLoader reports`, `Offload reporty`, `Offload reports`. Proměnné `MMMOVER_*`, pak `ARCLOADER_*`, `OFFLOAD_*`.
+- Formát zálohy beze změny (`tool: "offload"`, jména souborů a složek v záloze) — staré zálohy i Windows je čtou dál.
+
 ## 2026-10-11 — build „ArcLoader D11“: celý řetěz připojení u každé rychlosti
 
 - **Zadání uživatele:** vidět během kopie všechny části řetězu — disk/čtečka, kabel (linka), port Macu, záložní disky.

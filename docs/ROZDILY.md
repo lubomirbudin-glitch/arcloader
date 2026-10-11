@@ -18,7 +18,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
 | Verze | 0.7.0 | 0.10.0-win (ve vývoji) |
 | Jazyk aplikace | anglicky (od 2026-10-10) | anglicky (od 0.9.0) |
-| Aplikace | `ArcLoader.app` + CLI `Contents/Resources/bin/arcloader` (po 0.7.0 D6; dříve `Offload.app`, `bin/offload`) | `ArcLoader.exe` + CLI `bin\arcloader.exe` (od 0.10.0; dříve `Offload.exe`, `bin\offload.exe`) |
+| Aplikace | `mmMover.app` (CLI uvnitř `Contents/Resources/bin/mmmover`; build D12, 2026-10-11 — dříve Offload, v D8–D11 ArcLoader) | `ArcLoader.exe` + CLI `bin\arcloader.exe` (od 0.10.0; dříve `Offload.exe`, `bin\offload.exe`) |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
 ## Funkce a stav

@@ -15,7 +15,7 @@ struct Offload: ParsableCommand {
     /// Errors of a command print as "Error: …" (the Mac is English; Windows prints them in Czech). Parser errors
     /// (unknown option, a value that is not a number …) and --help stay as swift-argument-parser prints them.
     static func main() {
-        // The rename (Windows 0.10.0): the old app folder is copied once, before anything reads it (never moved).
+        // The renames (Offload → ArcLoader → mmMover): the old app folder is copied once, before anything reads it (never moved).
         AppSupport.migrateFromOffload { fputs("\(Product.cli): \($0)\n", stderr) }
         var command: ParsableCommand
         do {
@@ -53,7 +53,7 @@ struct StageTwo: ParsableArguments {
     @Flag(help: "Render proxies after the copy; the copies are verified while they render (see --classic-verify).")
     var proxy = false
 
-    @Option(help: "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (arcloader luts prints them) or a .cube path.")
+    @Option(help: "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (mmmover luts prints them) or a .cube path.")
     var lut: String?
 
     @Option(help: "Proxy height in pixels.")
@@ -711,9 +711,9 @@ struct DayReportCommand: ParsableCommand {
 struct SummaryReportCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "summary-report",
-        abstract: "One summary report (HTML + PDF) from several backups: shooting days, clips, files, size, duration, first and last slate, cameras, verification, where each card is backed up. Always saved into ~/Documents/ArcLoader reports/summary.")
+        abstract: "One summary report (HTML + PDF) from several backups: shooting days, clips, files, size, duration, first and last slate, cameras, verification, where each card is backed up. Always saved into ~/Documents/mmMover reports/summary.")
 
-    @Argument(help: "Card folders (on a destination, or their copy in ~/Documents/ArcLoader reports — or Offload reporty of builds before the rename), date folders (every card in them), or history ids.")
+    @Argument(help: "Card folders (on a destination, or their copy in ~/Documents/mmMover reports — or Offload reporty of builds before the rename), date folders (every card in them), or history ids.")
     var backups: [String]
 
     @Option(name: [.short, .long], help: "Also save the summary into this folder (a suffix _2, _3 … instead of overwriting).")
