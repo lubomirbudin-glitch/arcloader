@@ -56,6 +56,26 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 - **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzích 0.7.0 a 0.7.1, viz níže.
 
+## 2026-10-11 — 0.11.0: přejmenování na mmMover
+
+Verze **0.11.0** (zadání uživatele: jméno ArcLoader už používá jiný produkt — arcloader.com, nástroj pro Neo Geo; po
+prověření domén a obsazenosti jmen zvoleno **mmMover**, doména `mmmover.video`, repozitář `lubomirbudin-glitch/mmmover`).
+
+- Aplikace se jmenuje **mmMover** — `mmMover.exe`, příkazová řádka `bin\mmmover.exe` (`mmmover copy …`); mmMover je
+  v titulcích oken, dialozích, oznámeních (i ntfy), patičkách reportů, HTML `<title>`, User-Agentu a v `<creatorinfo>` ASC MHL.
+- Nastavení a historie v `%APPDATA%\mmMover`; při prvním startu se jednou **zkopíruje** nejnovější starší složka —
+  `%APPDATA%\ArcLoader`, jinak `%APPDATA%\Offload` (původní zůstanou); přednost `MMMOVER_SETTINGS_DIR`, pak
+  `ARCLOADER_SETTINGS_DIR` a `OFFLOAD_SETTINGS_DIR`.
+- Kopie reportů v `Documents\mmMover reports`; starší `ArcLoader reports`, `Offload reports` a `Offload reporty` se dál čtou.
+- Balík `mmMover-win-x64-<verze>.zip` (složka `mmMover\`, `mmMover-manual.pdf`); vydání `mmMover-Windows(-dev).zip`
+  + kopie pod jmény `ArcLoader-` a `Offload-Windows(-dev).zip`; manifest `mmmover-update.json` + starší jména.
+- Web: nahrává se `mmMover-Windows(-dev).zip`, `ArcLoader-Windows(-dev).zip` vytvoří úložiště kopií na serveru (S3
+  CopyObject); `channels.json` uvádí nové jméno.
+- Oprava: `publish.ps1` načítal `web-upload.ps1` tečkou a jeho parametry mu vymazaly `$Channel`, `$zip` a `$version` —
+  nahrání na web by dostalo prázdné hodnoty; teď se spouští jako samostatný skript.
+- Beze změny: názvy v záloze (`offload_report.json` …), `tool: "offload"`, zámky, interní názvy `Offload.*`, bucket
+  `arcloader-dl`.
+
 ## 2026-10-11 — 0.10.0: přejmenování na ArcLoader
 
 Verze **0.10.0** (zadání uživatele: „a přejmenuj to na ArcLoader“; repozitář také → `lubomirbudin-glitch/arcloader`).

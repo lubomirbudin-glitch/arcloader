@@ -13,7 +13,7 @@ public class UpdateCheckerTests
     [Theory]
     [InlineData("0.4.0", "0.3.0-win", true)]
     [InlineData("0.10.0", "0.9.0", true)]
-    [InlineData("0.9.0", "0.10.0-win", false)]
+    [InlineData("0.9.0", "0.11.0-win", false)]
     [InlineData("1.0.0", "0.99.99", true)]
     [InlineData("0.4.0", "0.4.0-win", false)]
     [InlineData("0.4.0-beta", "0.4.0", false)]
