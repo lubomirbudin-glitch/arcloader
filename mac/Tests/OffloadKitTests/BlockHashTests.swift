@@ -66,6 +66,23 @@ final class BlockHashTests: XCTestCase {
         XCTAssertEqual(e.blocks(1), [], "not read: no block hashes")
     }
 
+    // Cancel during the read-back stops inside a big file, not after it; the file is not verified.
+    func testCancelDuringReadBackStopsInsideTheFile() throws {
+        let dir = tempDir()
+        let card = dir.sub("card"), dest = dir.sub("dest")
+        TestFS.writeRandom(card + "/A.bin", size: 16 << 20, seed: 3)
+        var o = OffloadOptions(); o.allowSourceVolume = true; o.chunkSize = 1 << 20
+        var e: OffloadEngine!
+        o.afterVerifyChunk = { e.cancel() }
+        e = OffloadEngine(options: o)
+        let plan = try e.prepare(source: card, destRoots: [dest], cardName: "A001", date: "2026-10-08")
+        let r = try e.run(plan)
+        let read = e.snapshot().verifiedBytes[0]
+        XCTAssertGreaterThan(read, 0)
+        XCTAssertLessThanOrEqual(read, 2 << 20, "stopped within a block or two of 16")
+        XCTAssertNotEqual(r.files[0].destinations[0], "verified", "a cancelled read-back never verifies the file")
+    }
+
     func testMultiHasherWithoutXxh128() {
         let d = Data("abcdefgh".utf8)
         let h = MultiHasher(kinds: .xxh64, blockSize: 4, xxh128: false)

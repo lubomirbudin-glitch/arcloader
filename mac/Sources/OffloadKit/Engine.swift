@@ -21,6 +21,8 @@ public struct OffloadOptions {
     /// Tests only (internal): called on the copy thread after every block read from the card (with the file's index) —
     /// a deterministic point inside a file.
     var afterChunkRead: ((Int) -> Void)?
+    /// Tests only (internal): called on a writer's verify thread after every block read back (a point inside a file).
+    var afterVerifyChunk: (() -> Void)?
     /// Tests only (internal, task 69): a crash — after block `(file, block)` was read and every writer wrote what it had,
     /// `run` throws `SimulatedCrash` and leaves everything as it is (parts on the disk, no reports).
     var crashAfterBlock: ((Int, Int) -> Bool)?
@@ -474,7 +476,11 @@ final class DestWriter {
             // Offload always did), but never silently: the report notes it and the job is not green.
             let fromDisk = CacheProbe.readsFromDisk(path)
             do {
-                let r = try hashFile(path, chunkSize: options.chunkSize, buffer: buf) { self.verified.add($0) }
+                // Cancel stops inside the file at the next block (an ARRIRAW clip can be tens of GB — a check only
+                // between files kept Cancel waiting for the whole clip); the file stays "written", never verified.
+                let r = try hashFile(path, chunkSize: options.chunkSize, buffer: buf,
+                                     progress: { self.verified.add($0); self.options.afterVerifyChunk?() },
+                                     isCancelled: isCancelled)
                 if r.size != f.size {
                     results[i] = DestFileResult(state: .failed, error: "size mismatch: \(r.size) != \(f.size)")
                 } else if r.hashes.xxh64! != sourceHashes[i] {
@@ -483,6 +489,8 @@ final class DestWriter {
                     results[i].state = .verified
                     if !fromDisk { cachedReads += 1 }
                 }
+            } catch is CancellationError {
+                return
             } catch {
                 results[i] = DestFileResult(state: .failed, error: "verify: \(error)")
             }

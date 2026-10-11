@@ -250,6 +250,13 @@ Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
   (1 clip)`. Testy `CaptureFrameRateTests` (i skutečné vzorky ARRIRAW v `TestMedia` — oba 24 fps). Vzorek
   `profile.braw` z Blackmagic RAW Speed Test hlásí `sensorRate` 1 (syntetický klip) — stejně jako Windows se nehlídá.
 
+## 2026-10-11 — build „ArcLoader D9“: Cancel během ověřování
+
+- **Chyba z ostrého provozu (build C):** Cancel během zpětného čtení po kopii zabral až po dočtení celého souboru —
+  u ARRIRAW klipu o desítkách GB to vypadalo, že ověřování nejde zrušit. Zpětné čtení teď kontroluje zrušení před každým
+  blokem (16 MB); rozečtený soubor zůstane „written“, nikdy „verified“ (`BlockHashTests.testCancelDuringReadBackStopsInsideTheFile`).
+  Ověření během proxy a Ověřit zálohu rušily po blocích už dřív.
+
 ## 2026-10-11 — build „Offload D6“ (0.7.0D6): tmavý vzhled jako výchozí
 
 - Aplikace je **tmavá i na Macu ve světlém režimu** (jako návrh `docs/ui-navrh` a Windows screeny); Nastavení → Folders →

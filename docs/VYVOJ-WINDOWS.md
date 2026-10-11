@@ -25,6 +25,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
+- **Cancel během ověřování (zjištění z Macu 2026-10-11):** na Macu zrušení zpětného čtení zabralo až po dočtení celého
+  souboru (ARRIRAW klip = desítky GB → „nejde zrušit“). Zkontrolovat, že Windows zpětné čtení po kopii kontroluje zrušení
+  uvnitř souboru (po blocích), ne jen mezi soubory.
+
 - **BRAW snímací fps — nesmyslná hodnota (zjištění z Macu 2026-10-11):** vzorek `profile.braw` (Blackmagic RAW Speed
   Test) hlásí `sensorRate` 1.0 → report by ukázal „1 fps · playback …“. Mac bere hodnotu pod 2 fps jako neznámou
   (ukáže přehrávací rychlost); udělat totéž ve Windows (`braw-decode --info` → `captureFrameRate`).
