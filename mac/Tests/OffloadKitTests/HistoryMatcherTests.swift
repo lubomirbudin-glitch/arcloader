@@ -35,6 +35,15 @@ final class HistoryMatcherTests: XCTestCase {
         XCTAssertEqual(HistoryMatcher.match(shifted, fingerprint: "x", candidate: entry("y"), candidateFiles: stored, filesystem: "exfat").kind, .changed)
     }
 
+    /// APFS keeps nanoseconds; the stored list keeps .NET ticks (100 ns): the same file must stay the same.
+    func testNanosecondsBeyondTicksAreTheSameTime() throws {
+        let card = SourceFile(relPath: "A", size: 1, mtime: timespec(tv_sec: 1_791_000_000, tv_nsec: 123_456_789))
+        let dir = tempDir()
+        try FileListStore.write(dir.file("l.gz"), [card])
+        let stored = try XCTUnwrap(FileListStore.read(dir.file("l.gz")))
+        XCTAssertEqual(HistoryMatcher.match(scan([card]), fingerprint: "x", candidate: entry("y"), candidateFiles: stored, filesystem: "apfs").kind, .identical)
+    }
+
     func testAnotherCardIsChangedNeverNewFiles() {
         let m = HistoryMatcher.match(scan([f("X", 1, t)]), fingerprint: "x", candidate: entry("y"), candidateFiles: [f("A", 1, t)], filesystem: "exfat")
         XCTAssertEqual(m.kind, .changed)

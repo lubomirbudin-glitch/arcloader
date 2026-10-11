@@ -129,6 +129,23 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 47 — doplnění: zámek složek před plánem (obsazená = `appendBusy` hned, nic se nezapíše), plán pod zámkem, jen
+  nové soubory do stejných složek karty bez přepsání (`DestWriter` u doplnění přejmenuje `.offload-part` přes
+  `renamex_np` RENAME_EXCL; soubor, který se mezitím objeví, zůstane a kopie je `failed` „file appeared meanwhile“),
+  generace N s projektem dřívější zálohy, nic nového = Hotovo s poznámkou + doplnění chybějících řádků .xxh64 + obnova
+  záznamu historie, neověřené dřívější soubory = nelze formátovat (varování), historie dostane generaci `append`
+  (sjednocený seznam souborů, karta teď, projekt beze změny); zrušené doplnění zapíše generaci s `failed` u nedokončených
+  a historii ne. Proxy: jména obsazená v `_PROXY` všech cílů, render i kopie proxy na další cíle nikdy nepřepíšou
+  (`renameNoReplace`, `copyFile(replace: false)`) — platí i pro celou kopii. CLI `offload append <zdroj> [--into …]`
+  (bez `--into` složky z historie), volby fáze 2 sdílené s `copy` (`StageTwo`), společné spuštění úlohy a kód návratu jako
+  Windows (`JobRun`); `JobStatus.note`, `errorCode`. Odchylka od plánu: report doplnění do zálohy s MD5 (z Windows)
+  nepíše `hashAlgorithms` s md5 — Mac zatím MD5 při kopii nepočítá (úkol 51), takže by v reportu chyběly hodnoty.
+  Ověřeno CLI na obrazech disků (FAT32 karta, dva exFAT cíle): `offload append` → generace 2, `offload_report_0002.*`,
+  `ascmhl/0002_…`, `.xxh64` prodloužený, všech 10 dřívějších souborů bajtově stejných (`shasum -c`), podruhé „Nothing
+  new — the backup is complete.“ (kód 0), `offload verify` dne → 3 soubory OK, `ascmhl create` (kopie složky) přes obě
+  generace projde. Doplnění odmítlo zálohu, u níž se na jednom cíli změnil čas souboru (konflikt, nic nezkopírováno).
+  Windows `verify`/`append` téže složky neověřeno (Windows není po ruce). Oprava úkolu 43: shoda s historií porovnává
+  časy v .NET ticks z `timespec` (APFS má nanosekundy, seznam v historii 100 ns — přes `Date` občas „změněná“ karta)
 - Úkol 46 — plánovač doplnění (`AppendPlanner`): jedna záloha (`<kořen>/<datum>/<karta>` všude stejně), dostupné
   složky s čitelnými reporty a nepoškozeným řetězem ASC MHL stejné délky, nejvyšší číslo reportu = poslední generace;
   karta proti každé záloze (velikost, čas, FAT tolerance karty i cíle), soubor dobrý jen na části cílů, cizí soubor na

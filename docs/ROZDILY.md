@@ -44,7 +44,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test) |
 | **Karta už zálohovaná** (`history.json`, řádek u karty, dotaz před celou kopií) | ✅ CLI (řádek historie, `--no-history`; GUI úkol 49) | ✅ CLI + GUI (GUI čeká ruční test s kartou) |
-| **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ⏳ naplánováno | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
+| **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ✅ CLI `offload append` (GUI úkol 49) | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
 | **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ✅ CLI `--name auto` (GUI úkol 49) | ✅ CLI + GUI |
 | **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | ✅ CLI `verify [--report]` (GUI úkol 49) | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
 | **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | jen velikost karty | ✅ CLI + GUI |
@@ -229,9 +229,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   číst `/dev/rdiskN` (obrazy disků); skutečné disky a karty mají uzel `root:operator`, takže Mac bez sudo použije
   `uuid:<UUID svazku>` — historie přenesená z Windows kartu na Macu nespáruje (Mac pozná kartu jen ze své historie).
   Totéž `destinations[].volumeSerial` v reportu: Mac píše `1A2B-3C4D` jen po přečtení boot sektoru, jinak `uuid:…`.
-- **Doplnění** (zatím jen Windows): generace ASC MHL N a `offload_report_NNNN.*` (FORMATY.md). Mac `verify` čte jen
-  `<karta>.xxh64`, který doplnění rozšíří — doplněnou zálohu tedy ověří i Mac. Doplnění drží zámek složky karty (viz
-  níže) a odmítne kartu, na které není žádný soubor dřívější zálohy, i zálohu s nedokončeným dřívějším doplněním.
+- **Doplnění** (obě verze; Mac od 0.3.0): generace ASC MHL N a `offload_report_NNNN.*` (FORMATY.md); doplnění z Macu
+  ověří Windows a naopak (`verify` čte všechny generace). Doplnění drží zámek složky karty (viz níže) a odmítne kartu, na
+  které není žádný soubor dřívější zálohy, i zálohu s nedokončeným dřívějším doplněním. Mac zatím nepočítá MD5: do
+  zálohy s MD5 (z Windows) doplní jen xxh64 — `.md5` se nerozšíří, generace MHL má jen `<xxh64>` (doplní úkol 51).
 - **Ověření zálohy** (obě verze; Mac od 0.3.0): proti ASC MHL (všechny generace, i MHL ze Silverstacku/ShotPutu), bez
   `ascmhl/` proti `.xxh64`/`.md5` (i s `\r\n`). Report ověření jde do `_REPORT` karty, a když MHL složky `_REPORT`
   neignoruje (cizí program), do `_REPORT` vedle složky karty — do karty ani do `ascmhl/` se nezapisuje. Výstup `verify`:

@@ -42,7 +42,35 @@ public struct OffloadPlan {
     public var hashKinds: HashKinds = .xxh64
     /// The project of the report and of history (an append keeps the earlier backup's).
     public var project: String?
-    public var cardPaths: [String] { destRoots.map { "\($0)/\(date)/\(cardName)" } }
+    /// Card files no report of the backup records (a repair, a resume of a committed generation): not safe to format.
+    public var notInBackup = 0
+    /// Files of the earlier backup that were never read back (an append): not safe to format.
+    public var unverifiedEarlier = 0
+    /// Append/repair: the backup's card folders (the same on every destination); a full copy derives them.
+    public var fixedCardPaths: [String]?
+    public var cardPaths: [String] { fixedCardPaths ?? destRoots.map { "\($0)/\(date)/\(cardName)" } }
+
+    public init(source: String, scan: SourceScan, date: String, cardName: String, destRoots: [String]) {
+        self.source = source
+        self.scan = scan
+        self.date = date
+        self.cardName = cardName
+        self.destRoots = destRoots
+    }
+
+    /// An append: only the new files (and their folders) into the backup's own card folders, as generation N, with the
+    /// checksums and the project of the earlier backup.
+    public static func from(_ a: AppendPlan) -> OffloadPlan {
+        var p = OffloadPlan(source: a.source, scan: SourceScan(root: a.source, files: a.newFiles, dirs: a.newDirs, skipped: a.fullScan.skipped),
+                            date: a.date, cardName: a.cardName, destRoots: a.destRoots)
+        p.mode = .append
+        p.generation = a.generation
+        p.hashKinds = HashKinds.from(names: a.hashAlgorithms)
+        p.unverifiedEarlier = a.unverifiedEarlier
+        p.project = a.project
+        p.fixedCardPaths = a.cardPaths
+        return p
+    }
 }
 
 public struct ProgressSnapshot {
@@ -149,6 +177,10 @@ final class SourceHasher {
 final class DestWriter {
     let cardPath: String
     let options: OffloadOptions
+    /// An append or a repair writes into an existing card folder: a file that appeared meanwhile is never replaced.
+    let noReplace: Bool
+    /// Tests only: called right before a finished file is renamed into place (with its final path).
+    let beforeRename: ((String) -> Void)?
     let written = Counter()
     let verified = Counter()
     private let queue: DispatchQueue
@@ -157,9 +189,12 @@ final class DestWriter {
     private var currentError: String?
     private(set) var results: [DestFileResult]
 
-    init(index: Int, cardPath: String, fileCount: Int, options: OffloadOptions) {
+    init(index: Int, cardPath: String, fileCount: Int, options: OffloadOptions, noReplace: Bool = false,
+         beforeRename: ((String) -> Void)? = nil) {
         self.cardPath = cardPath
         self.options = options
+        self.noReplace = noReplace
+        self.beforeRename = beforeRename
         queue = DispatchQueue(label: "offload.dest\(index)")
         results = Array(repeating: DestFileResult(), count: fileCount)
     }
@@ -214,7 +249,17 @@ final class DestWriter {
                 IO.setModificationTime(self.fd, file.mtime)
                 guard close(self.fd) == 0 else { throw IOError("close", self.partPath) }
                 self.fd = -1
-                guard rename(self.partPath, finalPath) == 0 else { throw IOError("rename", finalPath) }
+                self.beforeRename?(finalPath)
+                if self.noReplace {
+                    // Never over a file that appeared on the destination meanwhile: it stays, this copy fails.
+                    do {
+                        try ProxyCopy.renameNoReplace(self.partPath, finalPath)
+                    } catch is ProxyCopy.Taken {
+                        throw IOError(message: "file appeared meanwhile: \(file.relPath)")
+                    }
+                } else {
+                    guard rename(self.partPath, finalPath) == 0 else { throw IOError("rename", finalPath) }
+                }
                 self.results[i].state = .written
             } catch {
                 self.closeAndRemovePart()
@@ -301,6 +346,8 @@ public final class OffloadEngine {
     private let readCounter = Counter()
     private var writers: [DestWriter] = []
     private var plan: OffloadPlan?
+    /// Tests only: called in DestWriter.finish right before a finished file is renamed into place.
+    var testBeforeRename: ((String) -> Void)?
 
     public init(options: OffloadOptions = OffloadOptions()) { self.options = options }
 
@@ -410,7 +457,8 @@ public final class OffloadEngine {
             for d in plan.scan.dirs { try IO.mkdirs(path + "/" + d) }
         }
         let ws = plan.cardPaths.enumerated().map {
-            DestWriter(index: $0.offset, cardPath: $0.element, fileCount: files.count, options: options)
+            DestWriter(index: $0.offset, cardPath: $0.element, fileCount: files.count, options: options,
+                       noReplace: plan.mode != .full, beforeRename: testBeforeRename)
         }
         lock.lock(); self.plan = plan; writers = ws; lock.unlock()
 
@@ -482,9 +530,11 @@ public final class OffloadEngine {
         let finished = Date()
 
         setPhase(.report)
-        let report = OffloadReport.build(plan: plan, hashes: hasher.hashes, sourceErrors: sourceErrors,
+        var report = OffloadReport.build(plan: plan, hashes: hasher.hashes, sourceErrors: sourceErrors,
                                          destResults: ws.map(\.results), verified: options.verify && !isCancelled,
                                          started: started, copyFinished: copyFinished, finished: finished)
+        report.generation = plan.generation > 1 ? plan.generation : nil
+        report.project = plan.project
         var reportErrors: [String] = []
         for path in plan.cardPaths {
             do { try report.write(cardPath: path, includeHashRecords: true) } catch { reportErrors.append("\(error)") }

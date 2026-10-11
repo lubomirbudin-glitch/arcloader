@@ -40,7 +40,7 @@ public enum HistoryMatcher {
                 added.append(f)
                 continue
             }
-            if k.size != f.size || !FileTimes.same(k.modifiedUtc, f.modifiedUtc, localTime: local) { changed.append(f.relPath) }
+            if k.size != f.size || !FileTimes.same(ticks: k.ticks, f.ticks, localTime: local) { changed.append(f.relPath) }
         }
         // Ruling I3: nothing of the stored list is on the card, yet the card has files — another card, not "new files".
         if storedCount > 0 && known.count == storedCount && !added.isEmpty {

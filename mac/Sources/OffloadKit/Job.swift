@@ -20,6 +20,9 @@ public struct JobConfig: Codable, Equatable {
     public var historyFolder: String?
     /// The project the job was started in (nil = no project): into history and the report.
     public var project: String?
+    /// The card folders of an earlier backup to append the card's new files to (`<root>/<date>/<card>` on every
+    /// destination); nil = a full copy into `destRoots`.
+    public var appendInto: [String]?
 
     public init(source: String, destRoots: [String]) {
         self.source = source
@@ -67,6 +70,10 @@ public struct JobStatus {
     public var warning: String?
     public var copySucceeded: Bool?
     public var error: String?
+    /// Which check stopped the job (failed before anything was written), nil otherwise.
+    public var errorCode: PreflightCode?
+    /// A grey line of a finished job that is not a warning ("Nothing new — the backup is complete.").
+    public var note: String?
 
     public init() {}
 
@@ -123,6 +130,15 @@ public final class OffloadJob {
     @discardableResult
     public func prepare() throws -> OffloadPlan {
         if let p = plan { return p }
+        if let into = config.appendInto {
+            // Shown before the run (CLI, GUI); the run plans again under the card folders' lock.
+            let ap = try AppendPlanner.plan(config.source, cardPaths: into)
+            if ap.newFiles.isEmpty { throw OffloadError.preflight(Msg.nothingNew, code: .nothingNew) }
+            var p = OffloadPlan.from(ap)
+            if p.project == nil { p.project = config.project }
+            lock.lock(); _plan = p; lock.unlock()
+            return p
+        }
         let p = try engine.prepare(source: config.source, destRoots: config.destRoots, cardName: config.cardName, date: config.date)
         lock.lock(); _plan = p; lock.unlock()
         return p
@@ -182,6 +198,7 @@ public final class OffloadJob {
         let activity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .idleSystemSleepDisabled], reason: "Offloading camera card")
         defer { ProcessInfo.processInfo.endActivity(activity) }
+        if let into = config.appendInto { return runAppend(into) }
         do {
             var plan = try prepare()
             if plan.project == nil && config.project != nil {
@@ -218,12 +235,97 @@ public final class OffloadJob {
             update { $0.phase = .analyzing }
             return true
         } catch {
+            fail(error)
+            return false
+        }
+    }
+
+    private func fail(_ error: Error) {
+        update {
+            $0.phase = .failed
+            $0.error = "\(error)"
+            $0.errorCode = (error as? OffloadError)?.code
+        }
+    }
+
+    /// An append (FORMATY „Doplnění“): the card folders' lock first (busy = refused at once, nothing written), the plan
+    /// under it, then only the new files into the same card folders as generation N. The lock is held for stage 1.
+    private func runAppend(_ into: [String]) -> Bool {
+        let held: FolderLocks
+        do {
+            held = try FolderLocks.acquire(into)
+        } catch {
+            fail(error)
+            return false
+        }
+        defer { held.release() }
+        let ap: AppendPlan
+        do {
+            ap = try AppendPlanner.plan(config.source, cardPaths: into, isCancelled: { self.isCancelled })
+        } catch is CancellationError {
+            update { $0.phase = .cancelled }
+            return false
+        } catch {
+            fail(error)
+            return false
+        }
+        let historyFolder = HistoryRecorder.folder(config)
+        let volume = historyFolder == nil ? nil : CardVolume.of(ap.source)
+        if ap.newFiles.isEmpty {
+            // Not an error: the backup already has every file of the card. A hash list whose write failed in an earlier
+            // append gets its missing lines now; nothing copied does not make an earlier copy verified.
+            for p in ap.cardPaths {
+                do { _ = try OffloadReport.healHashList(cardPath: p, cardName: ap.cardName) } catch {
+                    update { $0.addWarning(Msg.hashListNotHealed(p, "\(error)")) }
+                }
+            }
+            let whole = BackupState.of(ap.cardPaths)
+            if whole.failed > 0 { update { $0.addWarning(Msg.backupStillFailed(whole.failed)) } }
+            if whole.unverified > 0 { update { $0.addWarning(Msg.unverifiedEarlier(whole.unverified)) } }
+            if let historyFolder { recordRefresh(ap, whole: whole, volume: volume, folder: historyFolder) }
             update {
-                $0.phase = .failed
-                $0.error = "\(error)"
+                $0.note = Msg.nothingNew
+                $0.safeToEject = whole.failed == 0
+                $0.safeToFormat = whole.failed == 0 && whole.unverified == 0
+                $0.copySucceeded = true
+                $0.phase = .done
             }
             return false
         }
+        var plan = OffloadPlan.from(ap)
+        if plan.project == nil { plan.project = config.project }
+        lock.lock(); _plan = plan; lock.unlock()
+        if plan.unverifiedEarlier > 0 { update { $0.addWarning(Msg.unverifiedEarlier(plan.unverifiedEarlier)) } }
+        update { $0.phase = .copying }
+        let report: OffloadReport
+        do {
+            report = try engine.run(plan)
+        } catch {
+            fail(error)
+            return false
+        }
+        LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
+        setReport(report)
+        // The whole backup as its card folders' reports say it now (the one definition of "verified").
+        let whole = BackupState.of(plan.cardPaths)
+        update {
+            $0.safeToEject = report.success && whole.failed == 0
+            $0.safeToFormat = report.safeToFormat && whole.failed == 0 && whole.unverified == 0 && plan.unverifiedEarlier == 0
+            $0.copySucceeded = report.success
+            $0.copy = engine.snapshot()
+        }
+        if isCancelled {
+            update { $0.phase = .cancelled }
+            return false
+        }
+        if let historyFolder { recordFinished(plan, report: report, volume: volume, card: ap.fullScan, folder: historyFolder) }
+        guard config.analyzeClips || config.proxy.enabled else {
+            writePDFReports(report, plan: plan)
+            update { $0.phase = .done }
+            return false
+        }
+        update { $0.phase = .analyzing }
+        return true
     }
 
     /// Stage 2 — clip analysis, report with thumbnails, optional proxies. Reads only from the destinations.
@@ -271,6 +373,20 @@ public final class OffloadJob {
         lock.unlock()
         guard let id, let folder = HistoryRecorder.folder(config) else { return }
         historyRecord("removal", folder: folder) { $0.remove(id: id) }
+    }
+
+    /// "Nothing new": the entry of that backup learns the card as it is now — no new generation.
+    private func recordRefresh(_ ap: AppendPlan, whole: BackupState, volume: CardVolume?, folder: String) {
+        historyRecord("refresh", folder: folder) { store in
+            guard let found = HistoryRecorder.entryOf(store.load(), ap.cardPaths) else { return .unchanged }
+            return store.update(id: found.id) { existing in
+                guard var e = existing else { return nil }
+                e.success = whole.failed == 0
+                e.failedFiles = whole.failed == 0 ? nil : whole.failed
+                e.verified = whole.failed == 0 && whole.unverified == 0
+                return HistoryRecorder.withCard(e, volume: volume, card: ap.fullScan, storedFiles: store.readFileList(e))
+            }
+        }
     }
 
     /// The finished stage 1 (with failed files too) into history.json — never fails the job. `card`: the whole card
@@ -379,7 +495,9 @@ public final class OffloadJob {
             $0.phase = .proxies
             $0.clipCount = entries.count
         }
-        var usedNames = Set<String>()
+        // An append writes next to earlier proxies: every name already in _PROXY on any destination is taken. (A full
+        // copy has new card folders; a name taken there meanwhile still fails the render instead of replacing it.)
+        var usedNames = plan.mode == .full ? Set<String>() : JobFiles.proxyNames(plan.cardPaths)
         for i in entries.indices {
             if isCancelled { break }
             let clip = entries[i].clip  // may have been reclassified during analysis (MXF → ARRIRAW)
@@ -421,7 +539,7 @@ public final class OffloadJob {
                     // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.
                     for (o, other) in plan.cardPaths.enumerated() where o != d {
                         do {
-                            try ProxyCopy.copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel)
+                            try ProxyCopy.copyFile(plan.cardPaths[d] + "/" + rel, to: other + "/" + rel, replace: false)
                         } catch {
                             let note = "copy to \(other) failed: \(error)"
                             entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note

@@ -8,7 +8,7 @@ struct Offload: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Camera card offload: read once, write to several disks, verify with xxh64.",
         version: OffloadVersion.string,
-        subcommands: [Copy.self, Verify.self, Bench.self, Ports.self, Luts.self],
+        subcommands: [Copy.self, Append.self, Verify.self, Bench.self, Ports.self, Luts.self],
         defaultSubcommand: Copy.self)
 
     /// Errors of a command print as "Error: …" (the Mac is English; Windows prints them in Czech). Parser errors
@@ -23,6 +23,7 @@ struct Offload: ParsableCommand {
         do {
             try command.run()
         } catch let e as ValidationError {
+            fflush(stdout)
             fputs(Msg.cliError + e.message + "\n", stderr)
             Darwin.exit(Self.exitCode(for: e).rawValue)
         } catch let e as ExitCode {
@@ -34,8 +35,79 @@ struct Offload: ParsableCommand {
             // the parser prints it (before, it printed as "Error: CommandError(… helpRequested …)").
             Self.exit(withError: error)
         } catch {
+            fflush(stdout)
             fputs(Msg.cliError + "\(error)\n", stderr)
             Darwin.exit(1)
+        }
+    }
+}
+
+/// Clip analysis and proxies — the same options for `copy` and `append`.
+struct StageTwo: ParsableArguments {
+    @Flag(help: "Skip clip analysis (metadata + thumbnails in the report).")
+    var noAnalyze = false
+
+    @Flag(help: "Render proxies after the copy is verified.")
+    var proxy = false
+
+    @Option(help: "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path.")
+    var lut: String?
+
+    @Option(help: "Proxy height in pixels.")
+    var proxyHeight = 1080
+
+    @Option(help: "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.")
+    var frameAspect: Double?
+
+    @Option(help: "Frame lines size in % of the image (90 = 10% overscan).")
+    var frameScale: Double = 100
+
+    @Option(help: "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.")
+    var proxyCodec = "h264"
+
+    @Option(help: "Proxy bitrate (Mb/s) for H.264/HEVC.")
+    var proxyBitrate = 10
+
+    @Flag(help: "No burn-in of clip name and timecode.")
+    var noBurnIn = false
+
+    @Option(help: "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto.")
+    var lutFallback: String?
+
+    @Option(help: "Also copy every proxy to <folder>/<date>/<card name>/ (with --proxy; never overwrites).")
+    var proxyFolder: String?
+
+    func apply(to config: inout JobConfig) throws {
+        if let a = frameAspect, !(a > 0) { throw ValidationError(Msg.notPositiveNumber(numberText(a))) }
+        guard frameScale > 0 else { throw ValidationError(Msg.notPositiveNumber(numberText(frameScale))) }
+        config.analyzeClips = !noAnalyze
+        config.proxy.enabled = proxy
+        // An empty --lut "" is "no LUT" (LutOption.parse → none), not the current folder.
+        let choice = LutOption.parse(lut, fallback: lutFallback, catalog: LutCatalog.shared)
+        if let e = choice.error { throw ValidationError(e) }
+        config.proxy.lutMode = choice.mode
+        config.proxy.lutBuiltin = choice.builtin
+        config.proxy.lutPath = choice.path.map(abs)
+        config.proxy.lutFallback = choice.fallback
+        if let p = config.proxy.lutPath, !FileManager.default.fileExists(atPath: p) {
+            throw ValidationError(Msg.lutNotFound(p))
+        }
+        config.proxy.height = proxyHeight
+        guard let codec = ProxyCodec(rawValue: proxyCodec) else {
+            throw ValidationError(Msg.unknownProxyCodec(proxyCodec))
+        }
+        config.proxy.codec = codec
+        config.proxy.bitrateMbps = proxyBitrate
+        config.proxy.frameAspect = frameAspect
+        config.proxy.frameScale = frameScale / 100
+        config.proxy.burnFilename = !noBurnIn
+        config.proxy.burnTimecode = !noBurnIn
+        config.proxy.extraFolder = proxyFolder.map(abs)
+        if config.proxy.extraFolder != nil && !proxy {
+            fputs(Msg.proxyFolderNoEffect + "\n", stderr)
+        }
+        if let folder = ProxyPreflight.extraFolderInUse(config.proxy), !ProxyPreflight.isDirectory(folder) {
+            throw ValidationError(Msg.proxyFolderNotFound(folder))
         }
     }
 }
@@ -73,43 +145,10 @@ struct Copy: ParsableCommand {
     @Flag(help: "Only scan and check, do not copy.")
     var dryRun = false
 
-    @Flag(help: "Skip clip analysis (metadata + thumbnails in the report).")
-    var noAnalyze = false
-
-    @Flag(help: "Render proxies after the copy is verified.")
-    var proxy = false
-
-    @Option(help: "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path.")
-    var lut: String?
-
-    @Option(help: "Proxy height in pixels.")
-    var proxyHeight = 1080
-
-    @Option(help: "Crop proxies to the frame lines: aspect ratio, e.g. 1.66.")
-    var frameAspect: Double?
-
-    @Option(help: "Frame lines size in % of the image (90 = 10% overscan).")
-    var frameScale: Double = 100
-
-    @Option(help: "Proxy codec: h264, hevc, proresProxy, proresLT, prores422, prores422HQ.")
-    var proxyCodec = "h264"
-
-    @Option(help: "Proxy bitrate (Mb/s) for H.264/HEVC.")
-    var proxyBitrate = 10
-
-    @Flag(help: "No burn-in of clip name and timecode.")
-    var noBurnIn = false
-
-    @Option(help: "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto.")
-    var lutFallback: String?
-
-    @Option(help: "Also copy every proxy to <folder>/<date>/<card name>/ (with --proxy; never overwrites).")
-    var proxyFolder: String?
+    @OptionGroup var stage: StageTwo
 
     func run() throws {
         guard chunkMb > 0 else { throw ValidationError(Msg.notPositiveNumber(String(chunkMb))) }
-        if let a = frameAspect, !(a > 0) { throw ValidationError(Msg.notPositiveNumber(numberText(a))) }
-        guard frameScale > 0 else { throw ValidationError(Msg.notPositiveNumber(numberText(frameScale))) }
         var config = JobConfig(source: abs(source), destRoots: dest.map(abs))
         config.cardName = name
         config.date = date
@@ -132,58 +171,127 @@ struct Copy: ParsableCommand {
         config.buffers = buffers
         config.verify = !noVerify
         config.allowSameDevice = allowSameDevice
-        config.analyzeClips = !noAnalyze
-        config.proxy.enabled = proxy
-        // An empty --lut "" is "no LUT" (LutOption.parse → none), not the current folder.
-        let choice = LutOption.parse(lut, fallback: lutFallback, catalog: LutCatalog.shared)
-        if let e = choice.error { throw ValidationError(e) }
-        config.proxy.lutMode = choice.mode
-        config.proxy.lutBuiltin = choice.builtin
-        config.proxy.lutPath = choice.path.map(abs)
-        config.proxy.lutFallback = choice.fallback
-        if let p = config.proxy.lutPath, !FileManager.default.fileExists(atPath: p) {
-            throw ValidationError(Msg.lutNotFound(p))
-        }
-        config.proxy.height = proxyHeight
-        guard let codec = ProxyCodec(rawValue: proxyCodec) else {
-            throw ValidationError(Msg.unknownProxyCodec(proxyCodec))
-        }
-        config.proxy.codec = codec
-        config.proxy.bitrateMbps = proxyBitrate
-        config.proxy.frameAspect = frameAspect
-        config.proxy.frameScale = frameScale / 100
-        config.proxy.burnFilename = !noBurnIn
-        config.proxy.burnTimecode = !noBurnIn
-        config.proxy.extraFolder = proxyFolder.map(abs)
-        if config.proxy.extraFolder != nil && !proxy {
-            fputs(Msg.proxyFolderNoEffect + "\n", stderr)
-        }
-        if let folder = ProxyPreflight.extraFolderInUse(config.proxy), !ProxyPreflight.isDirectory(folder) {
-            throw ValidationError(Msg.proxyFolderNotFound(folder))
-        }
-        // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all (Windows LutOption.PlanLine).
-        if proxy || config.analyzeClips { print("LUT: " + Copy.lutLine(config.proxy)) }
+        try stage.apply(to: &config)
+        try JobRun.run(config, dryRun: dryRun)
+    }
 
+    /// One look at the card (never written to): history match and the name from the clips. Nil when it cannot be read.
+    static func inspect(_ source: String, history: Bool) -> CardInsight? {
+        let store = history ? HistoryStore() : nil
+        return try? CardInspector.inspect(source, store: store, history: store?.load())
+    }
+
+    /// The history line with full destination paths, or nil when history does not know the card.
+    static func historyLine(_ insight: CardInsight) -> String? {
+        guard let m = insight.match else { return nil }
+        return insight.isEmptied ? HistoryText.emptied(m).0 : HistoryText.line(m, fullPaths: true).0
+    }
+
+    /// The "LUT: …" line before the copy (same wording as Windows).
+    static func lutLine(_ p: ProxySettings) -> String {
+        switch LutResolver.effectiveMode(p) {
+        case .off: return "none"
+        case .custom: return p.lutPath ?? ""
+        case .builtin: return p.lutBuiltin ?? ""
+        case .auto: return "auto" + (p.lutFallback.map { " (fallback \($0))" } ?? "")
+        }
+    }
+}
+
+struct Append: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Copy only the new files of a card into its earlier backup (same card folders, next ASC MHL generation).")
+
+    @Argument(help: "Card mount point or source folder.")
+    var source: String
+
+    @Option(help: "Card folder of the earlier backup (<root>/<date>/<card>); repeat for each destination. Default: from the card history.")
+    var into: [String] = []
+
+    @Option(help: "Block size in MB.")
+    var chunkMb = 16
+
+    @Option(help: "Blocks in flight.")
+    var buffers = 16
+
+    @Flag(help: "Skip read-back verification (not recommended).")
+    var noVerify = false
+
+    @Flag(help: "Only scan and check, do not copy (the real run plans again under the folder lock, so it may differ).")
+    var dryRun = false
+
+    @Flag(help: "Do not read or write the card history (needs --into).")
+    var noHistory = false
+
+    @OptionGroup var stage: StageTwo
+
+    func run() throws {
+        guard chunkMb > 0 else { throw ValidationError(Msg.notPositiveNumber(String(chunkMb))) }
+        var config = JobConfig(source: abs(source), destRoots: [])
+        config.chunkMB = chunkMb
+        config.buffers = buffers
+        config.verify = !noVerify
+        config.recordHistory = !noHistory
+        try stage.apply(to: &config)
+        var folders = into.map(abs)
+        let insight = noHistory ? nil : Copy.inspect(config.source, history: true)
+        if let line = insight.flatMap(Copy.historyLine) { print(line) }
+        if folders.isEmpty {
+            guard let known = insight?.match else { throw ValidationError(Msg.cardNotInHistory) }
+            folders = known.entry.destinations.map(\.cardPath)
+            config.project = known.entry.project
+        }
+        config.appendInto = folders
+        try JobRun.run(config, dryRun: dryRun)
+    }
+}
+
+/// Runs a copy or an append job for the CLI: the plan, the connection chain, the progress line, the summary and the
+/// exit code.
+enum JobRun {
+    /// "Card A001: 3 files, 1 GB" for a full copy; "Append to card A001 (generation 2), plan (may still change): 1 file · …".
+    static func planLine(_ plan: OffloadPlan) -> String {
+        plan.mode == .append
+            ? "Append to card \(plan.cardName) (generation \(plan.generation)), plan (may still change): \(Texts.files(plan.scan.files.count, plan.scan.totalBytes))"
+            : "Card \(plan.cardName): \(plan.scan.files.count) files, \(formatBytes(plan.scan.totalBytes))"
+    }
+
+    static func run(_ config: JobConfig, dryRun: Bool) throws {
+        // Only when proxies or clip analysis (thumbnails) are on — otherwise no LUT is used at all (Windows LutOption.PlanLine).
+        if config.proxy.enabled || config.analyzeClips { print("LUT: " + Copy.lutLine(config.proxy)) }
         let job = OffloadJob(config: config)
-        let plan = try job.prepare()
-        print("Card \(plan.cardName): \(plan.scan.files.count) files, \(formatBytes(plan.scan.totalBytes))")
-        for p in plan.cardPaths { print("  → \(p)") }
-        if let extra = ProxyPreflight.extraFolderInUse(config.proxy) {
-            let target = URL(fileURLWithPath: extra).appendingPathComponent(plan.date).appendingPathComponent(plan.cardName).path
-            print("  proxy also → \(target)")
+        var plan: OffloadPlan?
+        do {
+            plan = try job.prepare()
+        } catch let e as OffloadError where e.code == .nothingNew {
+            // Not an error — the run still refreshes history and heals the hash list, so it goes on (and plans again).
+            if dryRun {
+                print(e.description)
+                return
+            }
         }
-        let tools = config.tools.resolved()
-        if config.analyzeClips || proxy {
-            print("  ffmpeg: \(tools.ffmpeg ?? "NOT FOUND")")
+        var chain: [RoleLink]?
+        if let plan {
+            print(planLine(plan))
+            for p in plan.cardPaths { print("  → \(p)") }
+            if plan.unverifiedEarlier > 0 { print(Msg.cliWarning + Msg.unverifiedEarlier(plan.unverifiedEarlier)) }
+            if let extra = ProxyPreflight.extraFolderInUse(config.proxy) {
+                let target = URL(fileURLWithPath: extra).appendingPathComponent(plan.date).appendingPathComponent(plan.cardName).path
+                print("  proxy also → \(target)")
+            }
+            if config.analyzeClips || config.proxy.enabled {
+                print("  ffmpeg: \(config.tools.resolved().ffmpeg ?? "NOT FOUND")")
+            }
+            // Connection chain: informational only — resolving it never fails the copy.
+            var links = [RoleLink(role: RoleLink.card, link: DriveLinks.resolve(plan.source))]
+            links += plan.destRoots.enumerated().map { RoleLink(role: RoleLink.destination($0.offset + 1), link: DriveLinks.resolve($0.element)) }
+            let connectors = UsbScanner.scan().connectors
+            // Status-line names first ("card", "D1"), so "bottleneck: D1" there reads against this list.
+            print("  Connections:")
+            for (i, l) in links.enumerated() { print("    \(ProgressDisplay.shortName(i)) = \(l.role): \(l.link.describe(connectors))") }
+            for a in Advisor.advise(links, connectors: connectors) where a.kind == .warning { print("  ! \(a.text)") }
+            chain = links
         }
-        // Connection chain: informational only — resolving it never fails the copy.
-        var chain = [RoleLink(role: RoleLink.card, link: DriveLinks.resolve(plan.source))]
-        chain += plan.destRoots.enumerated().map { RoleLink(role: RoleLink.destination($0.offset + 1), link: DriveLinks.resolve($0.element)) }
-        let connectors = UsbScanner.scan().connectors
-        // Status-line names first ("card", "D1"), so "bottleneck: D1" there reads against this list.
-        print("  Connections:")
-        for (i, l) in chain.enumerated() { print("    \(ProgressDisplay.shortName(i)) = \(l.role): \(l.link.describe(connectors))") }
-        for a in Advisor.advise(chain, connectors: connectors) where a.kind == .warning { print("  ! \(a.text)") }
         fflush(stdout)
         if dryRun { return }
 
@@ -209,22 +317,23 @@ struct Copy: ParsableCommand {
         display.stop()
 
         let status = job.status()
-        if let report {
+        if let report, let plan = job.plan {
             print("\n" + report.summary)
             if !report.clips.isEmpty {
                 let done = report.clips.filter { $0.proxyStatus == .done }.count
-                print("Clips: \(report.clips.count)" + (proxy ? "  proxies OK \(done), failed \(status.proxiesFailed)" : ""))
+                print("Clips: \(report.clips.count)" + (config.proxy.enabled ? "  proxies OK \(done), failed \(status.proxiesFailed)" : ""))
                 for c in report.clips where c.proxyStatus == .failed || c.proxyStatus == .unsupported {
                     print("  \(c.clip.name): \(c.proxyStatus.rawValue) — \(c.proxyNote ?? "")")
                 }
             }
-            print("Report: \(plan.cardPaths[0])/\(Layout.reportDirName)/\(plan.cardName)_report.html")
+            print("Report: \(plan.cardPaths[0])/\(Layout.reportDirName)/\(OffloadReport.htmlName(plan.cardName, plan.generation))")
             if status.safeToFormat {
                 print(Texts.safeToFormat(plan.cardPaths.count))
             } else if status.safeToEject {
                 print(Texts.safeToEject(plan.cardPaths.count))
             }
         }
+        if let n = status.note { print(n) }
         if let e = status.error { print(Msg.cliError + e) }
         if !HistoryRecorder.drain(timeout: 0) {
             // The history stayed busy for 60 s: the CLI does not wait in the background.
@@ -232,32 +341,16 @@ struct Copy: ParsableCommand {
         } else if let w = status.warning, w != Msg.historyDelayed {
             print(Msg.cliWarning + w)
         }
-        if status.phase != .done || report?.success != true { throw ExitCode(1) }
-        // Spec D.22.7: exit 0 after a verified copy only when the card may be formatted; --no-verify stays 0 (the user
-        // turned the verification off), like Windows 0.6.0.
-        if !noVerify && !status.safeToFormat { throw ExitCode(1) }
+        if exitCode(config, status, report) != 0 { throw ExitCode(1) }
     }
 
-    /// One look at the card (never written to): history match and the name from the clips. Nil when it cannot be read.
-    static func inspect(_ source: String, history: Bool) -> CardInsight? {
-        let store = history ? HistoryStore() : nil
-        return try? CardInspector.inspect(source, store: store, history: store?.load())
-    }
-
-    /// The history line with full destination paths, or nil when history does not know the card.
-    static func historyLine(_ insight: CardInsight) -> String? {
-        guard let m = insight.match else { return nil }
-        return insight.isEmptied ? HistoryText.emptied(m).0 : HistoryText.line(m, fullPaths: true).0
-    }
-
-    /// The "LUT: …" line before the copy (same wording as Windows).
-    static func lutLine(_ p: ProxySettings) -> String {
-        switch LutResolver.effectiveMode(p) {
-        case .off: return "none"
-        case .custom: return p.lutPath ?? ""
-        case .builtin: return p.lutBuiltin ?? ""
-        case .auto: return "auto" + (p.lutFallback.map { " (fallback \($0))" } ?? "")
-        }
+    /// 0 = the card is backed up (spec D.22.7): every copy verified everywhere and the results written — the whole backup
+    /// so for an append. "Nothing new" ends Done without a report: 0 when the backup is complete. With --no-verify
+    /// nothing can be verified: every file copied is success, like Windows 0.6.0.
+    static func exitCode(_ config: JobConfig, _ status: JobStatus, _ report: OffloadReport?) -> Int32 {
+        guard status.phase == .done else { return 1 }
+        guard let report else { return status.note != nil && status.safeToFormat ? 0 : 1 }
+        return report.success && (status.safeToFormat || !config.verify) ? 0 : 1
     }
 }
 

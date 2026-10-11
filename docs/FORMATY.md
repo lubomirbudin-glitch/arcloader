@@ -241,7 +241,7 @@ přepočítá, rozepsaný `.offload-part` pokračuje od společného kontrolníh
 zbytek se zkopíruje; pak ověření a zápis generace jako u každé kopie. Reporty generace N z přerušeného běhu se přitom
 nahradí (ještě nebyly potvrzené). Oprava („Zkopírovat znovu“) takovou zálohu odmítne, dokud ji doplnění nedokončí.
 
-### Doplnění (Windows od 0.2.0, Mac naplánováno)
+### Doplnění (Windows od 0.2.0, Mac od 0.3.0)
 
 Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **stejné** složky karty na všech cílech
 (`offload append`, v GUI zaškrtávátko „Doplnit jen nové klipy do dřívější zálohy“):
@@ -266,7 +266,12 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
   na každou složku karty, bez čekání (druhé skončí „S touto zálohou právě pracuje jiná úloha …“); celá kopie bere zámek
   jen s ověřením během proxy (od zápisu reportů s `verifyPending` do zápisu výsledku ověření; report složky, kam se
   výsledek zapsal, když jinam ne, nese `verifyIncomplete: true` — nikdy „ověřeno“, dokud ho navázání nepřepíše; doplnění ho tehdy drží i
-  přes 2. fázi — plán 10, I4).
+  přes 2. fázi — plán 10, I4). Mac: `flock` na místním souboru
+  `~/Library/Application Support/Offload/locks/append-<sha256(UUID svazku|cesta)>.lock` — mezi Macem a Windows (ani
+  mezi dvěma počítači) se zámek neuplatní;
+- Mac (od 0.3.0) nový soubor přejmenuje z `.offload-part` přes `renamex_np(RENAME_EXCL)` (exFAT/FAT bez podpory: kontrola
+  těsně před přejmenováním) a proxy doplnění dostanou jména, která v `_PROXY` žádného cíle ještě nejsou; render ani kopie
+  proxy existující soubor nikdy nepřepíše. Komentář generace MHL Macu: `Offload append: 12 new files from /Volumes/A001`.
 
 ### Oprava — „Zkopírovat znovu“ (Windows od 0.5.0, Mac naplánováno)
 
@@ -439,7 +444,7 @@ nebo formát `arriraw`) je to TC denní doby. Stopáž = součet `info.duration`
   64 KB; `version` nejvýš 32 znaků, `url` nejvýš 1000, `notes` se zkrátí na 2000; řídicí a formátovací znaky ve verzi
   nebo adrese manifest vyřadí.
 
-## Místní soubory (jen tento počítač, Mac převezme stejný tvar)
+## Místní soubory (jen tento počítač; Mac od 0.3.0 stejný tvar)
 
 `%APPDATA%\Offload\history.json` + `%APPDATA%\Offload\history\<id>.files.gz` (Mac: `~/Library/Application Support/Offload/`)
 — historie offloadů, nikam se neposílá (složku lze přesměrovat proměnnou `OFFLOAD_SETTINGS_DIR`). UTF-8 bez BOM,

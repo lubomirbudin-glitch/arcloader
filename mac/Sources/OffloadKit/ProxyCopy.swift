@@ -5,7 +5,9 @@ import Foundation
 /// Port of Windows `ProxyCopy.cs`.
 public enum ProxyCopy {
     /// The target name is taken (`copyFile(…, replace: false)` found something there).
-    struct Taken: Error {}
+    struct Taken: Error, CustomStringConvertible {
+        var description: String { "the name is already taken" }
+    }
 
     /// Copies `src` to `dst` via `.<name>.part`; a failure leaves no temporary file behind.
     /// `replace: false` never overwrites: an existing `dst` throws `Taken`.
