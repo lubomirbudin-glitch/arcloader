@@ -129,6 +129,12 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 50 — verze 0.3.0 (plán 6): FORMATY (verze, `volumeSerial` Macu, místní soubory a zámek historie, report
+  ověření a `.xxh64` Mac od 0.3.0), ROZDILY (verze, jazyk, řádky plánu 6), README (historie, Append, Verify backup, místo,
+  `offload append`, `verify [--report]`, `--name auto`, `--no-history`, `--dry-run`). Závěrečné ověření:
+  `swift build -c release` a `swift test` zelené — 452 testů, 6 přeskočených, 0 selhání; `offload --version` → 0.3.0.
+  `scripts/build-app.sh` se nespouštěl (zadání). Křížové ověření s Windows 0.6.0+ (verify/append obousměrně) neproběhlo —
+  Windows není po ruce; `ascmhl create` 1.2 na kopii složky doplněné Macem (generace 1 + 2) prošel
 - Úkol 49 — GUI plánu 6 v novém vzhledu (jako Windows 0.9): karta v kroku 1 se prohlédne mimo hlavní vlákno
   (`CardInspector`, jedna prohlídka na cestu, žádost během běhu = ještě jednou, výsledek zahozený pro zdroj, který zmizel,
   jiná identita karty ve slotu = znovu); pod kartou řádek historie v barvě tónu („Checking whether the card is already backed

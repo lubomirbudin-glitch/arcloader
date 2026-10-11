@@ -16,8 +16,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.2.0C | 0.9.0-win (ve vývoji) |
-| Jazyk aplikace | česky (anglicky ⏳ naplánováno) | anglicky (od 0.9.0) |
+| Verze | 0.3.0 | 0.9.0-win (ve vývoji) |
+| Jazyk aplikace | anglicky (od 2026-10-10) | anglicky (od 0.9.0) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
@@ -150,7 +150,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **R3D/ARRI bez proxy** zatím nemají náhledy (stejně jako na Macu).
 - **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
   a ukazuje ho v řádku „Proxy: H.264 (h264_nvenc), …“ v HTML/PDF. Mac klíč nezná a ignoruje ho.
-- **Verze v reportu:** Mac `0.2.0`, Windows `0.3.0-win` — z reportu je vidět, která verze kopírovala.
+- **Verze v reportu:** Mac `0.3.0`, Windows `0.x.y-win` — z reportu je vidět, která verze kopírovala.
 - **Hardwarové dekódování proxy** (2026-10-08/09): obě verze dekódují H.264/HEVC softwarově (Mac na Intelu dostal
   z VideoToolboxu zelené snímky bez chyby); kódování zůstává hardwarové. Windows ho umí zapnout volbou „Hardwarové
   dekódování (experimentální)“ / `--hw-decode` (`proxy.hardwareDecode`), Mac volbu nemá.
