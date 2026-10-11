@@ -1,14 +1,14 @@
-ArcLoader for Windows — portable version (no installation)
+mmMover for Windows — portable version (no installation)
 ==========================================================
 
-(ArcLoader was called Offload before version 0.10.0.)
+(mmMover was called ArcLoader in version 0.10.x and Offload before that.)
 
-Full manual: ArcLoader-manual.pdf
+Full manual: mmMover-manual.pdf
 
 Starting
 --------
-1. Unpack the whole ZIP into an ordinary folder (e.g. Documents\ArcLoader). Do not run it straight from the archive.
-2. Run ArcLoader.exe.
+1. Unpack the whole ZIP into an ordinary folder (e.g. Documents\mmMover). Do not run it straight from the archive.
+2. Run mmMover.exe.
 3. On the first start Windows may show a blue window "Windows protected your PC"
    (the app is not digitally signed). Click "More info" → "Run anyway".
    The first start takes a few seconds longer (libraries are unpacked); later starts do not.
@@ -35,9 +35,9 @@ The app has a "Download…" link too: Settings → RAW decoders, next to the too
 
 What is in the folder
 ---------------------
-ArcLoader.exe            the app
-ArcLoader-manual.pdf     user manual
-bin\arcloader.exe        command line (arcloader --help)
+mmMover.exe            the app
+mmMover-manual.pdf     user manual
+bin\mmmover.exe        command line (mmmover --help)
 bin\braw-decode.exe    Blackmagic RAW decoder (the Blackmagic library is not bundled)
 bin\ffmpeg.exe,
 bin\ffprobe.exe        FFmpeg (GPL v3 licence, see licence\ffmpeg)
@@ -46,11 +46,11 @@ licence\               licences of the bundled programs
 
 Settings and log
 ----------------
-The app's settings and log are in %APPDATA%\ArcLoader. Deleting the ArcLoader folder uninstalls the app;
-the settings stay in %APPDATA%\ArcLoader until you delete them.
-If you used Offload before, the old %APPDATA%\Offload folder is copied there on the first start (and left untouched).
+The app's settings and log are in %APPDATA%\mmMover. Deleting the mmMover folder uninstalls the app;
+the settings stay in %APPDATA%\mmMover until you delete them.
+If you used ArcLoader or Offload before, the newest old folder (%APPDATA%\ArcLoader, else %APPDATA%\Offload) is copied there on the first start (and left untouched).
 
 File names inside your backups (offload_report.json, .offload-part, …) keep the old "offload" spelling so that older
 backups and older versions stay compatible.
 
-ArcLoader never writes to the source card.
+mmMover never writes to the source card.
