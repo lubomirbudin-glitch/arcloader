@@ -21,7 +21,7 @@ public enum Verifier {
         }
         let text = try String(contentsOfFile: reportDir + "/" + listName, encoding: .utf8)
         var expected: [(hash: String, path: String)] = []
-        for line in text.split(separator: "\n") where !line.isEmpty {
+        for line in OffloadReport.listLines(Data(text.utf8)) {   // "\r\n" too (one Character in Swift)
             guard let sep = line.range(of: "  ") else { continue }
             expected.append((String(line[..<sep.lowerBound]), String(line[sep.upperBound...])))
         }

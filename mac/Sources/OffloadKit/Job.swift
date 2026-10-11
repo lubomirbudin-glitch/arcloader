@@ -384,7 +384,7 @@ public final class OffloadJob {
 
     /// PDF copy of the report on every destination. Rendered once, then copied; a failure here never fails the offload.
     private func writePDFReports(_ report: OffloadReport, plan: OffloadPlan) {
-        let name = "\(plan.cardName)_report.pdf"
+        let name = OffloadReport.pdfName(report.cardName, report.generationNumber)
         let first = plan.cardPaths[0] + "/" + Layout.reportDirName + "/" + name
         do {
             try PDFReport.write(report, to: first)

@@ -225,8 +225,15 @@ public struct OffloadReport: Codable {
     }
 
     /// Plain hash list, one "<xxh64>  <path>" per line — readable by humans and by `offload verify`.
-    public var hashList: String {
-        files.compactMap { f in f.xxh64.map { "\($0)  \(f.path)" } }.joined(separator: "\n") + "\n"
+    public var hashList: String { hashList(of: "xxh64") }
+
+    /// "<hash>  <path>\n" per file that has `algorithm` ("xxh64" or "md5", the md5sum format).
+    public func hashList(of algorithm: String) -> String {
+        files.compactMap { f in (algorithm == "md5" ? f.md5 : f.xxh64).map { "\($0)  \(f.path)\n" } }.joined()
+    }
+
+    static func hashListPath(_ cardPath: String, _ cardName: String, _ algorithm: String) -> String {
+        cardPath + "/" + Layout.reportDirName + "/" + cardName + "." + algorithm
     }
 
     public var summary: String {
@@ -275,25 +282,112 @@ public struct OffloadReport: Codable {
         return try enc.encode(self)
     }
 
-    /// Writes all report files into `<card>/_REPORT`. The hash list and MHL are the record of the copy itself,
-    /// so they are written once (`includeHashRecords`); the HTML/JSON are refreshed as clips get analysed.
-    public func write(cardPath: String, includeHashRecords: Bool) throws {
+    /// Writes this generation into `<card>` in the order of spec D.22.2 — every failure leaves the folder in a state the
+    /// next append refuses or completes correctly:
+    /// 1. this generation's reports (JSON, TXT, HTML; the job writes the PDF after them) — the first write of a
+    ///    generation ≥ 2 only creates new files (an existing one stops everything before a shared file is touched);
+    ///    the job's own refresh of its generation (`includeHashRecords == false`) replaces them;
+    /// 2. the ASC MHL generation and the chain (the commit point);
+    /// 3. the hash lists last (`<card>.xxh64`, `<card>.md5` only with MD5) — only extended after generation 1.
+    public func write(cardPath: String, includeHashRecords: Bool, createNew: Bool? = nil) throws {
+        try writeReports(cardPath, create: createNew ?? (generationNumber > 1 && includeHashRecords))
+        guard includeHashRecords else { return }
+        try MHL.write(report: self, cardPath: cardPath)
+        try writeHashLists(cardPath)
+    }
+
+    /// The verification result of a generation that verified with its proxies (task 67): the MHL generation and chain
+    /// first (unless a retry finds them written), then the reports written with verifyPending are replaced, then the hash
+    /// lists (merged — an existing list keeps its bytes, even of generation 1). A report still pending is never committed.
+    public func commit(cardPath: String) throws {
+        if verifyPending == true { throw OffloadError.failed("A report whose verification is still pending is never committed.") }
+        if !(try MHL.hasGeneration(self, cardPath: cardPath)) { try MHL.write(report: self, cardPath: cardPath) }
+        try writeReports(cardPath, create: false)
+        try writeHashLists(cardPath, merge: true)
+    }
+
+    func writeReports(_ cardPath: String, create: Bool) throws {
         let dir = cardPath + "/" + Layout.reportDirName
         try IO.mkdirs(dir)
-        var outputs: [(String, Data)] = [
-            ("offload_report.json", try jsonData()),
-            ("offload_report.txt", Data(summary.utf8)),
-            ("\(cardName)_report.html", Data(HTMLReport.render(self).utf8)),
+        let g = generationNumber
+        let outputs: [(String, Data)] = [
+            (OffloadReport.jsonName(g), try jsonData()),
+            (OffloadReport.textName(g), Data(summary.utf8)),
+            (OffloadReport.htmlName(cardName, g), Data(HTMLReport.render(self).utf8)),
         ]
-        if includeHashRecords {
-            outputs.append(("\(cardName).xxh64", Data(hashList.utf8)))
+        if create {
+            // Every name is checked before the first is written: a taken one stops the generation with nothing new.
+            for (name, _) in outputs where FileManager.default.fileExists(atPath: dir + "/" + name) {
+                throw FileExists(path: dir + "/" + name)
+            }
         }
         for (name, data) in outputs {
-            try IO.writeFileDurably(dir + "/" + name, data)
+            if create { try IO.writeFileNew(dir + "/" + name, data) } else { try IO.writeFileDurably(dir + "/" + name, data) }
         }
-        if includeHashRecords {
-            try MHL.write(report: self, cardPath: cardPath)
+    }
+
+    /// Generation 1 writes the lists whole; later generations (and `merge`) keep the earlier bytes, add the lines the ASC
+    /// MHL knows and the list does not (an earlier append whose list step failed), then this generation's lines the list
+    /// does not have word for word (a repair repeats none). Nothing new = the file is not touched.
+    func writeHashLists(_ cardPath: String, merge: Bool = false) throws {
+        for algorithm in algorithms where algorithm == "xxh64" || algorithm == "md5" {
+            let path = OffloadReport.hashListPath(cardPath, cardName, algorithm)
+            let lines = hashList(of: algorithm)
+            if generationNumber == 1 && !(merge && FileManager.default.fileExists(atPath: path)) {
+                try IO.writeFileDurably(path, Data(lines.utf8))
+                continue
+            }
+            let (earlier, missed) = OffloadReport.listAndMissed(path, cardPath: cardPath, alsoListed: files.map(\.path), algorithm: algorithm)
+            let added = missed + OffloadReport.notIn(earlier, lines)
+            if added.isEmpty && FileManager.default.fileExists(atPath: path) { continue }
+            try IO.writeFileDurably(path, earlier + Data(added.utf8))
         }
+    }
+
+    /// The lines of `lines` the list does not have word for word.
+    static func notIn(_ earlier: Data, _ lines: String) -> String {
+        let have = Set(listLines(earlier))
+        return listLines(Data(lines.utf8)).filter { !have.contains($0) }.map { $0 + "\n" }.joined()
+    }
+
+    /// The lines of a hash list without their "\n" or "\r\n" (a Windows tool may write CRLF). Not `split(separator:)`:
+    /// Swift reads "\r\n" as one Character, which is not "\n".
+    static func listLines(_ data: Data) -> [String] {
+        String(decoding: data, as: UTF8.self).components(separatedBy: "\n")
+            .map { $0.hasSuffix("\r") ? String($0.dropLast()) : $0 }
+            .filter { !$0.isEmpty }
+    }
+
+    /// The list as it is (exact bytes, a final "\n" added when missing) and the lines of every path the ASC MHL history
+    /// records (newest good record) but neither the list nor `alsoListed` has.
+    static func listAndMissed(_ path: String, cardPath: String, alsoListed: [String], algorithm: String) -> (Data, String) {
+        var earlier = FileManager.default.contents(atPath: path) ?? Data()
+        if let last = earlier.last, last != UInt8(ascii: "\n") { earlier.append(UInt8(ascii: "\n")) }
+        var listed = Set(alsoListed.map { $0.lowercased() })
+        for l in listLines(earlier) {
+            if let r = l.range(of: "  ") { listed.insert(String(l[r.upperBound...]).lowercased()) }
+        }
+        var missed = ""
+        if let mhl = MHLReader.read(cardPath: cardPath) {
+            for rec in mhl.lastGood.values.sorted(by: { $0.path < $1.path }) where !listed.contains(rec.path.lowercased()) {
+                if let h = rec.hashes.first(where: { $0.algorithm == algorithm }) { missed += "\(h.value)  \(rec.path)\n" }
+            }
+        }
+        return (earlier, missed)
+    }
+
+    /// An append with nothing new: add the lines the hash lists missed (`.md5` only when the ASC MHL history has MD5).
+    /// True when something was added.
+    public static func healHashList(cardPath: String, cardName: String) throws -> Bool {
+        var healed = false
+        for algorithm in ["xxh64", "md5"] {
+            let path = hashListPath(cardPath, cardName, algorithm)
+            let (earlier, missed) = listAndMissed(path, cardPath: cardPath, alsoListed: [], algorithm: algorithm)
+            guard !missed.isEmpty else { continue }
+            try IO.writeFileDurably(path, earlier + Data(missed.utf8))
+            healed = true
+        }
+        return healed
     }
 }
 

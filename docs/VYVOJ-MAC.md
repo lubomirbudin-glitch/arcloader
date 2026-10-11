@@ -129,6 +129,12 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 41 — zápis generace: reporty (jména generace; u generace ≥ 2 jen nové, všechna jména se zkontrolují dřív, než
+  se zapíše první) → MHL → řetěz → seznamy součtů; .xxh64/.md5 jen prodloužit (dřívější bajty zůstanou, chybějící
+  `\n` se doplní, chybějící řádky z MHL, bez opakování), commit výsledku ověření (MHL nejdřív, idempotentní,
+  verifyPending nikdy), healHashList; PDF úlohy se jmenuje podle generace. Pozor na Swift: „\r\n“ je jeden Character,
+  `split(separator: "\n")` ho nerozdělí — seznamy čte `OffloadReport.listLines` (opraveno i v CLI `verify`, kde by
+  seznam s CRLF vypadal jako chybějící soubory)
 - Úkol 40 — ASC MHL: čtení všech generací už bylo (`MHLReader`, XMLDocument s jmennými prostory, problémy anglicky,
   previousPath), přibylo `ignoresReportFolder` a vzory ignore (gitwildmatch, `MHLReader.ignored`, úkol 45 přesune);
   zápis generace N podle Windows `Mhl.Write`: generace 1 nikdy přes řetěz, jen N = poslední + 1, ignore z generace 1,
