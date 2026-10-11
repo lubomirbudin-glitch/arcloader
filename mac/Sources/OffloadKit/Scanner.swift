@@ -39,14 +39,18 @@ public enum Scanner {
         name == ".DS_Store" || name.hasPrefix("._")
     }
 
-    public static func scan(_ root: String) throws -> SourceScan {
+    /// `isCancelled` is asked every 1 000 entries (a card swapped while it is inspected); then CancellationError.
+    public static func scan(_ root: String, isCancelled: () -> Bool = { false }) throws -> SourceScan {
         guard let en = FileManager.default.enumerator(atPath: root) else {
             throw IOError("scan", root, ENOENT)
         }
         var files: [SourceFile] = []
         var dirs: [String] = []
         var skipped: [String] = []
+        var seen = 0
         while let rel = en.nextObject() as? String {
+            seen += 1
+            if seen % 1000 == 0 && isCancelled() { throw CancellationError() }
             let name = (rel as NSString).lastPathComponent
             let full = root + "/" + rel
             var st = stat()

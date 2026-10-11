@@ -129,6 +129,12 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 43 — shoda karty s historií (stejná / nové soubory / změněná / jiná karta, FAT tolerance celých hodin), texty
+  řádku historie anglicky podle Windows `HistoryText` („Backed up on 2026-10-06 08:15 to Zaloha (RAID) — verified, safe to
+  format“; datum `yyyy-MM-dd HH:mm` místně; Mac `diskName` = „složka (svazek)“, kořen svazku jen jméno), název karty
+  z klipů a „další v řadě“ (`ReelNames`, `ReelSuggestion`), prohlídka karty `CardInspector` (jeden zrušitelný sken,
+  výměna karty během skenu = chyba, nečitelný svazek = chyba, ne složka; `appendReachable` jen u svazku);
+  `Scanner.scan(isCancelled:)`
 - Úkol 42 — historie karet: history.json ve formátu Windows (verze 1, 5 000 záznamů, poškozený → .corrupt-…, vyšší
   verze jen číst) pod flock zámkem, otisk karty (SHA-256, .NET ticks, ordinální řazení v UTF-16), history/<id>.files.gz
   (gzip kolem raw DEFLATE, čte i soubor z `gzip -n` / .NET GZipStream — fixture z `gzip -n`, skutečný soubor z Windows
