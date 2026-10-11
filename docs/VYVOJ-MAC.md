@@ -129,6 +129,12 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 46 — plánovač doplnění (`AppendPlanner`): jedna záloha (`<kořen>/<datum>/<karta>` všude stejně), dostupné
+  složky s čitelnými reporty a nepoškozeným řetězem ASC MHL stejné délky, nejvyšší číslo reportu = poslední generace;
+  karta proti každé záloze (velikost, čas, FAT tolerance karty i cíle), soubor dobrý jen na části cílů, cizí soubor na
+  cíli, selhaný soubor na disku, chybějící soubor, jiná karta, obsazené dočasné jméno `.…offload-part`; neověřené dřívější
+  soubory (jediná definice `CardRecord.readBack`), součty a projekt dřívější zálohy; jen čte (test: nic nezapíše). Texty
+  konfliktů anglicky podle Windows („different size or date (card 1.2 GB · 10-06 09:14, RAID …)“, disk = jméno svazku)
 - Úkol 45 — Ověřit zálohu (`BackupVerifier`): všechny generace ASC MHL a hashe xxh64, md5, sha1, xxh3, xxh128, c4
   (každý soubor čtený jednou s F_NOCACHE, velikost zvlášť), záloha bez MHL proti .xxh64/.md5 (i CRLF), nejnovější záznam
   „failed“ ověřený proti starší platné generaci, nedokončená generace nikdy „v pořádku“ (oranžově, CLI kód 1), soubory
