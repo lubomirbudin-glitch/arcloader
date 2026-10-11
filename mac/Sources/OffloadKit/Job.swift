@@ -99,6 +99,9 @@ public struct JobStatus {
     /// Stage 2's verification: bytes verified so far and to verify, summed over the destinations.
     public var verifyDone: Int64 = 0
     public var verifyTotal: Int64 = 0
+    /// …and per destination (the speed table during the proxies).
+    public var verifyDoneByDest: [Int64] = []
+    public var verifyTotalByDest: [Int64] = []
     /// Task 70: clips whose decoder reported a defect (the copy matches the card) — "Safe to format" waits for a look.
     public var contentWarnings = 0
 
@@ -234,8 +237,10 @@ public final class OffloadJob {
         if s.phase == .waiting && !wasStarted && wasCancelled { s.phase = .cancelled }
         lock.lock(); let verifying = session; lock.unlock()
         if let verifying {
-            s.verifyDone = verifying.verifiedBytes.reduce(0, +)
-            s.verifyTotal = verifying.toVerify.reduce(0, +)
+            s.verifyDoneByDest = verifying.verifiedBytes
+            s.verifyTotalByDest = verifying.toVerify
+            s.verifyDone = s.verifyDoneByDest.reduce(0, +)
+            s.verifyTotal = s.verifyTotalByDest.reduce(0, +)
         }
         let gate = engine.pauses
         let running = s.phase != .waiting && !s.phase.isFinished

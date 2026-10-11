@@ -20,6 +20,11 @@ struct TransferRow: Identifiable, Equatable {
     let share: Double
     let rate: String
     var tooltip: String?
+    /// The connection under the name: "Samsung PSSD T7 · USB 3 (10 Gb/s) · USB controller XHC2 · port 4" (device, link /
+    /// cable, the Mac's port), nil while unknown.
+    var link: String?
+    /// The share of the link's realistic ceiling in use (0…1+), nil without a USB link.
+    var linkUse: Double?
 }
 
 /// One number of a finished card: "Copy" / "602 MB/s".
@@ -342,31 +347,57 @@ struct JobCardState {
         return "~\(Fmt.clock(eta)) left · \(phase == .copying ? "copy" : "verify")"
     }
 
-    /// The speed table while the card is read and written or read back.
+    /// "Samsung PSSD T7 · USB 3 (10 Gb/s) · USB controller XHC2 · port 4" — device, link (cable) and the Mac's port.
+    static func linkText(_ e: ChainElement) -> String {
+        let parts = e.connection.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+        return ([e.product] + parts).filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// The speed table while the card is read and written or read back — with verify-in-proxy also while the proxies
+    /// render (each destination read back). Every row names its device, link and port (user requirement 2026-10-11).
     @MainActor
     static func rows(_ item: JobItem, _ names: [String]) -> [TransferRow] {
         let s = item.status
+        let p = item.progress
+        func element(_ i: Int) -> ChainElement? {
+            guard let chain = item.chain, i < chain.count else { return nil }
+            return chain[i]
+        }
+        func tip(_ i: Int) -> String? { element(i).map { "\($0.role) \($0.product) — \($0.connection)" } }
+        func row(_ id: Int, _ name: String, _ number: Int?, _ share: Double, _ rate: Double) -> TransferRow {
+            TransferRow(id: id, name: name, number: number, share: share, rate: Fmt.rate(rate), tooltip: tip(id),
+                        link: element(id).map(linkText), linkUse: element(id)?.utilization)
+        }
+        // Verify-in-proxy: each destination read back while the proxies render.
+        if s.verifyInProxy, [.analyzing, .proxies, .finishingVerification].contains(s.phase), !s.verifyTotalByDest.isEmpty {
+            var rows: [TransferRow] = []
+            for (d, name) in names.enumerated() where d < s.verifyTotalByDest.count {
+                let total = max(1, s.verifyTotalByDest[d])
+                let done = d < s.verifyDoneByDest.count ? s.verifyDoneByDest[d] : 0
+                let rate = d < p.verifyRates.count ? p.verifyRates[d] : 0
+                rows.append(row(d + 1, name, d + 1, min(1, Double(done) / Double(total)), rate))
+            }
+            guard s.paused else { return rows }
+            return rows.map { TransferRow(id: $0.id, name: $0.name, number: $0.number, share: $0.share, rate: "—", tooltip: $0.tooltip,
+                                          link: $0.link, linkUse: nil) }
+        }
         guard let c = s.copy, [.copying, .flushing, .verifying].contains(s.phase) else { return [] }
         let verifying = s.phase == .verifying
-        let p = item.progress
         let total = max(1, c.totalBytes)
         func share(_ v: Int64) -> Double { min(1, max(0, Double(v) / Double(total))) }
-        func tip(_ i: Int) -> String? {
-            guard let chain = item.chain, i < chain.count else { return nil }
-            return "\(chain[i].role) \(chain[i].product) — \(chain[i].connection)"
-        }
         var rows: [TransferRow] = []
         if !verifying {
-            rows.append(TransferRow(id: 0, name: "Card read", number: nil, share: share(c.readBytes), rate: Fmt.rate(p.readRate), tooltip: tip(0)))
+            rows.append(row(0, "Card read", nil, share(c.readBytes), p.readRate))
         }
         for (d, name) in names.enumerated() {
             let done = verifying ? (d < c.verifiedBytes.count ? c.verifiedBytes[d] : 0) : (d < c.writtenBytes.count ? c.writtenBytes[d] : 0)
             let rate = d < p.destRates.count ? p.destRates[d] : 0
-            rows.append(TransferRow(id: d + 1, name: name, number: d + 1, share: share(done), rate: Fmt.rate(rate), tooltip: tip(d + 1)))
+            rows.append(row(d + 1, name, d + 1, share(done), rate))
         }
         if s.paused {
             // Paused: no speeds (they are measured again from Resume).
-            rows = rows.map { TransferRow(id: $0.id, name: $0.name, number: $0.number, share: $0.share, rate: "—", tooltip: $0.tooltip) }
+            rows = rows.map { TransferRow(id: $0.id, name: $0.name, number: $0.number, share: $0.share, rate: "—", tooltip: $0.tooltip,
+                                          link: $0.link, linkUse: nil) }
         }
         return rows
     }

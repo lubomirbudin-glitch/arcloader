@@ -77,9 +77,12 @@ enum Snapshots {
                      PhaseStep(number: 2, label: "Verify", state: .pending, fill: 0),
                      PhaseStep(number: 3, label: "Proxy", state: .pending, fill: 0),
                      PhaseStep(number: 4, label: "Report", state: .pending, fill: 0)]
-        run.rows = [TransferRow(id: 0, name: "Card read", number: nil, share: 0.38, rate: "661 MB/s"),
-                    TransferRow(id: 1, name: "RAID_A", number: 1, share: 0.38, rate: "661 MB/s"),
-                    TransferRow(id: 2, name: "SHUTTLE_B", number: 2, share: 0.37, rate: "655 MB/s")]
+        run.rows = [TransferRow(id: 0, name: "Card read", number: nil, share: 0.38, rate: "661 MB/s",
+                                link: "Codex Compact Drive Reader · USB 3 (10 Gb/s) · USB controller XHC2 · port 3", linkUse: 0.73),
+                    TransferRow(id: 1, name: "RAID_A", number: 1, share: 0.38, rate: "661 MB/s",
+                                link: "Thunderbolt RAID · Thunderbolt"),
+                    TransferRow(id: 2, name: "SHUTTLE_B", number: 2, share: 0.37, rate: "655 MB/s",
+                                link: "Samsung PSSD T7 · USB 3 (10 Gb/s) · USB controller XHC2 · port 4", linkUse: 0.72)]
         run.fileCaption = "File 10 / 24"
         run.fileValue = "A035C010_261007_R2KQ.mxf"
         run.brake = "Slowest link: card reader (USB 3 (5 Gb/s)). The disks could go faster."
@@ -93,6 +96,10 @@ enum Snapshots {
                          PhaseStep(number: 2, label: "Verify", state: .active, fill: 0.55),
                          PhaseStep(number: 3, label: "Proxy", state: .active, fill: 0.61),
                          PhaseStep(number: 4, label: "Report", state: .pending, fill: 0)]
+        proxies.rows = [TransferRow(id: 1, name: "RAID_A", number: 1, share: 0.58, rate: "812 MB/s",
+                                    link: "Thunderbolt RAID · Thunderbolt"),
+                        TransferRow(id: 2, name: "SHUTTLE_B", number: 2, share: 0.52, rate: "604 MB/s",
+                                    link: "Samsung PSSD T7 · USB 3 (10 Gb/s) · USB controller XHC2 · port 4", linkUse: 0.66)]
         proxies.fileCaption = "Proxy 15 / 24"
         proxies.fileValue = "A034C015_261007_R1AB.mxf · 40 %"
         // Verify-in-proxy (tasks 65–70): copied, safe to eject; verified during the proxy render, format only after it.
