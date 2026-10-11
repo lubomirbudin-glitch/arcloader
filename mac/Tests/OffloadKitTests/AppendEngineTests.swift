@@ -234,6 +234,7 @@ final class AppendEngineTests: XCTestCase {
         let dir = tempDir()
         _ = TestFS.writeRandom(dir.path + "/D/2026-10-08/A001/_PROXY/A001C001.mov", size: 1, seed: 1)
         _ = TestFS.writeRandom(dir.path + "/E/2026-10-08/A001/_PROXY/CLIP/A001C002.MOV", size: 1, seed: 1)
-        XCTAssertEqual(JobFiles.proxyNames([dir.path + "/D/2026-10-08/A001", dir.path + "/E/2026-10-08/A001"]), ["a001c001", "a001c002"])
+        // Keys are the path below _PROXY (task 54: proxies in folders as on the card), any case.
+        XCTAssertEqual(ProxyPaths.existing([dir.path + "/D/2026-10-08/A001", dir.path + "/E/2026-10-08/A001"]), ["a001c001", "clip/a001c002"])
     }
 }

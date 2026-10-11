@@ -43,9 +43,15 @@ public enum ProxyCodec: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var audioArgs: [String] {
+    /// Every audio stream of the source becomes a track of the proxy (Windows R14, `Encoders.AudioArgs`): H.264/HEVC AAC
+    /// at 64 kb/s a channel of each stream (128–512 kb/s), ProRes 16-bit PCM. `streamChannels` empty (unknown) = 192k.
+    func audioArgs(_ streamChannels: [Int]) -> [String] {
         switch self {
-        case .h264, .hevc: return ["-c:a", "aac", "-b:a", "192k"]
+        case .h264, .hevc:
+            var args = ["-c:a", "aac"]
+            if streamChannels.isEmpty { args += ["-b:a", "192k"] }
+            for (i, ch) in streamChannels.enumerated() { args += ["-b:a:\(i)", "\(SpaceEstimator.aacKbps(ch))k"] }
+            return args
         case .proresProxy, .proresLT, .prores422, .prores422HQ: return ["-c:a", "pcm_s16le"]
         }
     }
@@ -517,10 +523,15 @@ public final class ProxyRenderer {
         var args = ["-hide_banner", "-loglevel", content != nil ? "warning" : "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
         args += ["-map", "0:v:0"]
         if settings.audio && info.audioChannels > 0 && src.audioFromInput {
-            args += ["-map", "0:a:0?"] + settings.codec.audioArgs
+            args += ["-map", "0:a?"] + settings.codec.audioArgs(info.audioStreams)   // every audio stream (Windows R14)
         }
         args += ["-vf", vf] + settings.codec.encoderArgs(bitrateMbps: settings.bitrateMbps) + FilterGraph.rec709Args
-        if let tc = info.timecode, Timecode.isValid(tc) { args += ["-timecode", tc] }
+        if let tc = info.timecode, Timecode.isValid(tc) {
+            args += ["-timecode", tc]
+            // The MOV muxer writes it into the timecode track (tmcd) as its source reference: Premiere reads it as Tape
+            // Name, Resolve as Reel (ffprobe shows `reel_name` on the data stream). Without TC there is no tmcd.
+            if let reel = info.reel, !reel.isEmpty { args += ["-metadata:s:v:0", "reel_name=\(reel)"] }
+        }
 
         let dir = (output as NSString).deletingLastPathComponent
         try IO.mkdirs(dir)

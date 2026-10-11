@@ -46,8 +46,8 @@ a Mac mají české texty). Slovník pojmů: [ui-text-glossary.md](ui-text-gloss
         0002_<karta>_<YYYY-MM-DD_HHMMSS>Z.mhl     jen po doplnění nebo opravě
         ascmhl_chain.xml
     _PROXY/                           jen když se renderují proxy
-        <složka klipu>/<klip>.mov     Windows od 0.5.1: složky jako na kartě (idle/1.mov, PRIVATE/M4ROOT/CLIP/C0001.mov)
-        <klip>.mov                    Mac a Windows do 0.5.0: všechny proxy přímo v _PROXY
+        <složka klipu>/<klip>.mov     Windows od 0.5.1, Mac po 0.7.0 D6: složky jako na kartě (idle/1.mov, PRIVATE/M4ROOT/CLIP/C0001.mov)
+        <klip>.mov                    Mac do 0.7.0 D6 a Windows do 0.5.0: všechny proxy přímo v _PROXY
 ```
 
 - Stejná karta podruhé týž den → `<karta>_2`, `<karta>_3` … (nikdy se nepřepíše starší offload).
@@ -58,12 +58,12 @@ a Mac mají české texty). Slovník pojmů: [ui-text-glossary.md](ui-text-gloss
 - Reporty se zapisují přes `.<jméno>.tmp` a přejmenování.
 - Datum a čas změny souborů na cíli = jako na kartě.
 - Na kartu se nikdy nezapisuje.
-- **Proxy ve složkách jako na kartě** (Windows od 0.5.1): proxy klipu `<složka>/<klip>.<ext>` je `_PROXY/<složka>/<klip>.mov`
+- **Proxy ve složkách jako na kartě** (Windows od 0.5.1, Mac po 0.7.0 D6 — úkol 54): proxy klipu `<složka>/<klip>.<ext>` je `_PROXY/<složka>/<klip>.mov`
   (klip v kořeni karty `_PROXY/<klip>.mov`; sekvence `.ari` je složka — proxy leží vedle ní, pojmenovaná po ní; R3D ve
   složce `.RDC`). Klipy stejného jména v různých složkách (`idle/1.mp4`, `listening/1.mp4`) tak dostanou stejně
   pojmenované proxy a přelinkují se podle jména. `_2`, `_3` … (a poznámka „Proxy přejmenována…“) jen při shodě ve stejné
   složce (`A.mov` + `A.mxf`) nebo s proxy, která tam už je. Složky kamery (`PRIVATE/M4ROOT/CLIP`, `XDROOT/Clip`,
-  `CONTENTS/CLIPS001/…`) se zachovají také. **Starší zálohy** (Mac, Windows do 0.5.0) mají proxy přímo v `_PROXY`; nic se
+  `CONTENTS/CLIPS001/…`) se zachovají také. **Starší zálohy** (Mac do 0.7.0 D6, Windows do 0.5.0) mají proxy přímo v `_PROXY`; nic se
   nepřesouvá. Doplnění pozná uspořádání zálohy z jejích reportů: plochá = některý klip z podsložky má `proxyPath`
   přímo v `_PROXY/` a žádný ve složce; pak i nové proxy jdou přímo do `_PROXY` se starým pravidlem `_2` (jedna záloha =
   jedno uspořádání). Bez proxy v záloze (nebo jen klipy v kořeni karty) = složky jako na kartě. Oprava proxy nerenderuje.
@@ -145,8 +145,9 @@ Hodnoty výčtů:
 - `clips[].info.gamma`, `gamut`, `colorScienceGen` (volitelné, obě verze): u Blackmagic RAW gama, gamut a generace
   barevné vědy, ve kterých byl klip natočený (z `braw-decode --info`, např. `"Blackmagic Design Film"`, `5`). Podle nich se
   volí LUT. Zapisují je obě verze, jen když je dekodér zná.
-- `clips[].info.reel` (volitelné, Windows od 0.3.0): cívka klipu — tag kamery (`reel_name`, `tape_name`, `reel` z ffprobe),
-  jinak cívka z názvu klipu (`A001C003…` → `A001`), jinak název složky karty. Je i v proxy (stopa timecodu). Mac ignoruje.
+- `clips[].info.reel` (volitelné, Windows od 0.3.0, Mac po 0.7.0 D6 — úkol 54): cívka klipu — tag kamery (`reel_name`,
+  `tape_name`, `reel` z ffprobe), jinak cívka z názvu klipu (`A001C003…` → `A001`), jinak název složky karty. Je i v proxy
+  (`reel_name` ve stopě timecodu `tmcd`, jen u klipu s platným TC).
 - `clips[].info.cameraSerial` (volitelné, Windows od 0.4.0): sériové číslo těla kamery — Sony `M01.XML` (`Device serialNo`),
   ffprobe `com.apple.quicktime.camera.identifier` / `camera_serial_number`; ARRI a BRAW zatím ne (ověří vzorky). Mac ignoruje.
 - `clips[].info.recorded` (volitelné, datum ISO 8601 UTC, Windows od 0.8.0): kdy kamera klip natočila — z metadat
@@ -191,7 +192,8 @@ Design Film, Video a Extended Video zůstanou. **Neověřeno** — čeká na vzo
 `proxy.extraFolder` (string, volitelný, obě verze): složka, do které se každá hotová proxy kopíruje navíc,
 jako `<extraFolder>\<datum>\<karta>\<složka klipu>\<klip>.mov` — stejné podsložky jako v `_PROXY` (před 0.5.1 a u ploché
 zálohy bez nich; při shodě jména ve složce `_2`, `_3`…). Chybí, když není nastavená. Stejný klíč
-je v sekci `proxy` souboru `settings.json`. Mac 0.2.0 kopíruje ještě bez podsložek (`<extraFolder>/<datum>/<karta>/<klip>.mov`).
+je v sekci `proxy` souboru `settings.json`. Mac do 0.7.0 D6 kopíruje ještě bez podsložek (`<extraFolder>/<datum>/<karta>/<klip>.mov`),
+po něm (úkol 54) se stejnými podsložkami jako Windows.
 
 `proxy.hardwareDecode` (bool, chybí = `false`, jen Windows od 2026-10-09; i v `settings.json`, CLI `--hw-decode`; zapisuje
 se jen zapnuté): originály H.264/HEVC dekóduje pro proxy grafická karta (`-hwaccel auto`; jiné kodeky nikdy). Výchozí je

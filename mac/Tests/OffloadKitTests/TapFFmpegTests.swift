@@ -33,7 +33,7 @@ final class TapFFmpegTests: XCTestCase {
         let url = server.register(tap, name: (path as NSString).lastPathComponent)
         let t0 = Date()
         try ToolProcess.run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-short_seek_size", "65536", "-i", url,
-                                     "-map", "0:v:0", "-map", "0:a:0?"] + output)
+                                     "-map", "0:v:0", "-map", "0:a?"] + output)
         let seconds = Date().timeIntervalSince(t0)
         tap.close()
         return (v.fedBytes, Int64(data.count), v.finish() == .verified, seconds)

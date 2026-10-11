@@ -36,7 +36,10 @@ dekodérem. Úkoly 52–60 a 62–64 zatím vynechané.
 3. **Report** – `<root>/<YYYY-MM-DD>/<karta>/_REPORT/`: HTML (náhledy, metadata, TC), JSON, TXT, seznam xxh64;
    `ascmhl/` = ASC MHL v2 (ověřitelné `ascmhl` / Silverstack / ShotPut …).
 4. **Proxy (volitelné)** – po ověření, čte se z disku (karta už není potřeba): scale → LUT (.cube) → burn-in název + TC
-   → H.264/HEVC (VideoToolbox) nebo ProRes Proxy/LT do `_PROXY/`, s TC stopou pro relink. Kopie na všechny cíle.
+   → H.264/HEVC (VideoToolbox) nebo ProRes Proxy/LT do `_PROXY/<složka klipu>/<klip>.mov` (složky jako na kartě; `_2`
+   jen při shodě jmen ve stejné složce, s poznámkou), pro přelinkování v Resolve/Premiere: TC stopa s cívkou
+   (`reel_name`: tag kamery, jinak z názvu klipu `A001C003…` → `A001`, jinak složka karty) a všechny zvukové stopy zdroje.
+   Doplnění do starší zálohy s proxy přímo v `_PROXY/` zůstane ploché (nic se nepřesouvá). Kopie na všechny cíle.
 
 5. **Historie karet** – `~/Library/Application Support/Offload/history.json` (formát Windows): karta vložená znovu ukáže
    „Backed up on … — verified, safe to format“ a před celou kopií se aplikace zeptá („Card already backed up“: Copy again in
@@ -130,7 +133,8 @@ OFFLOAD_TAP_BENCH=1 swift test --filter TapFFmpegTests            # měření ta
 - CLI: `offload luts` (seznam id), `offload copy … --proxy --lut auto|none|<id>|<cesta.cube> [--lut-fallback <id>|none]`;
   bez `--lut` platí `auto`.
 - Složka pro proxy navíc: *Proxy › Kopírovat proxy i do složky* nebo `--proxy-folder <složka>` — každá proxy i do
-  `<složka>/<datum>/<karta>/` (při shodě jména `_2`, `_3`…, nic se nepřepíše); nedostupná složka zablokuje start.
+  `<složka>/<datum>/<karta>/<složka klipu>/` (stejné podsložky jako v `_PROXY`; při shodě jména `_2`, `_3`…, nic se
+  nepřepíše); nedostupná složka zablokuje start.
 - Proxy jsou BT.709 v legálním rozsahu a tak i označené, náhledy JPEG BT.601 (JFIF). VideoToolbox dekóduje jen H.264/HEVC;
   render proxy bez pokroku 60 s (nový snímek nebo data z dekodéru RAW; do prvního pokroku 180 s) se ukončí — po hardwarovém
   dekódování se jednou zkusí znovu softwarově, jinak proxy selže s poznámkou „ffmpeg stalled (60 s without a new frame);

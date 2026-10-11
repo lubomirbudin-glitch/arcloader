@@ -51,7 +51,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Hlášky kontrol před kopií s kódy** (`PreflightCode`) | ✅ anglicky (od 2026-10-10, záměrně) | ✅ česky |
 | **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `offload day-report`) | ✅ CLI + GUI po 0.7.0 D6 (po každé úloze na každém cíli, `--no-day-report`, Nastavení › Report „Day report after each card“, „Day report…“ v historii a Today; stejné texty jako Windows; zatím bez seznamů klipů dne CSV/ALE; zámek dne `flock`, s Windows se nevylučuje; čeká ruční test) | ✅ CLI + GUI (čeká ruční test) |
 | **Seznam klipů CSV / Avid ALE** (`_clips.csv/.ale` karty i dne) | ⏳ naplánováno | ✅ CLI + GUI (import do Resolve/Avid čeká ruční test) |
-| **Proxy pro přelinkování** (`reel_name` ve stopě TC, všechny zvukové stopy) | ⏳ naplánováno (1 zvuková stopa) | ✅ (Resolve/Premiere čeká ruční test) |
+| **Proxy pro přelinkování** (`reel_name` ve stopě TC, všechny zvukové stopy) | ✅ po 0.7.0 D6 (úkol 54; Resolve/Premiere čeká ruční test) | ✅ (Resolve/Premiere čeká ruční test) |
 | **MD5 navíc k xxh64** (`hash: both`, `--hash both`, `<karta>.md5`, MHL `<md5>`) | ⏳ naplánováno (MD5 ignoruje, xxh64 ověří) | ✅ CLI + GUI |
 | **Projekty** (`projects`, `activeProject`, `--project`, `project` v reportu a historii) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
 | **Vlastní pravidla LUTů** (`proxy.lutRules`, `--lut-rule`, `lut.source = rule`, sériové číslo kamery) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
@@ -65,7 +65,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Pauza po dokončení souboru / klipu** (rozpracovaný soubor kopie — na všech cílech — a ověření, klip analýzy a proxy doběhne, pak „Pozastaveno“; „Pozastavuji (dokončuji …)“; čas pauzy jen doba stání) | ✅ GUI rovnou takto, ne mezi bloky (čeká ruční test) | ✅ GUI 0.8.0 (čeká ruční test) |
 | **Zkopírovat znovu** (oprava: jen nesouhlasné soubory, jen na postižený disk, generace ASC MHL N, `kind: "repair"`, `_REPORT/neshoda_NNNN/`) | ⏳ naplánováno | ✅ GUI (CLI ne) |
 | **Dnes a historie karet** (z `history.json`), štítek kamery a připojení, odhad času | ✅ GUI po 0.7.0 D6: „Today“ pod frontou a záložka „Card history“ (stejné texty a stavy jako Windows, zaškrtávání pro souhrnný report; Mac navíc pod názvem karty počet souborů a disky), štítek „ALEXA 35 · LogC4“, odhad „estimate ~… incl. proxies“ (čeká ruční test) | ✅ GUI |
-| **Proxy ve složkách jako na kartě** (`_PROXY/<složka klipu>/<klip>.mov`, plochá starší záloha zůstane plochá) | ⏳ naplánováno (proxy přímo v `_PROXY`) | ✅ 0.5.1 |
+| **Proxy ve složkách jako na kartě** (`_PROXY/<složka klipu>/<klip>.mov`, plochá starší záloha zůstane plochá) | ✅ po 0.7.0 D6 (úkol 54; i odkaz „done“ v HTML) | ✅ 0.5.1 |
 | **Bez proxy, když je originál lehčí** (`proxy.skipLighterSources`, `--proxy-always`) | ⏳ naplánováno (renderuje vše) | ✅ CLI + GUI 0.5.1 |
 | **Verify-in-Proxy** (primární disk ověřený čtením pro proxy, ostatní na pozadí; `--classic-verify`, `--primary`) | ✅ CLI + GUI 0.7.0 (s kontrolou cache přes `mincore`; přepínač „Verify during proxy render“ i v kroku 3; čeká ruční test s kartou) | ✅ CLI + GUI 0.6.0 |
 | **Lze vyjmout × Lze formátovat** (dva stavy karty, oznámení „hotovo“ až po ověření všech disků) | ✅ GUI + CLI (od 0.7.0 i s ověřením během proxy) | ✅ GUI + CLI 0.6.0 |
@@ -185,9 +185,10 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Denní report a seznamy klipů** (zatím jen Windows): `<datum>/_REPORT/` se denním reportem a `_clips.csv/.ale` karty
   i dne jsou odvozené soubory (přepisují se celé); Mac je nečte a jeho `UniqueCardFolder` s `_REPORT` ve složce dne
   nekoliduje. Kdyby Mac zapisoval stejný den, vyhraje poslední zápis.
-- **Proxy pro přelinkování** (zatím jen Windows): s timecodem `reel_name` ve stopě TC proxy (cívka: tag kamery, název
-  klipu, složka karty; v reportu `clips[].info.reel`), všechny zvukové stopy zdroje (AAC 64 kb/s na kanál, ProRes PCM);
-  přejmenovaná proxy (`_2`) má poznámku. Mac dává proxy jen první zvukovou stopu a bez cívky.
+- **Proxy pro přelinkování** (Windows od 0.3.0, Mac po 0.7.0 D6 — úkol 54): s timecodem `reel_name` ve stopě TC proxy
+  (cívka: tag kamery, název klipu, složka karty; v reportu `clips[].info.reel`), všechny zvukové stopy zdroje (AAC 64 kb/s
+  na kanál, 128–512 kb/s na stopu, ProRes PCM); přejmenovaná proxy (`_2`) má poznámku („Proxy renamed to … — relink it by
+  hand.“). Obě verze stejně.
 - **Oprava — „Zkopírovat znovu“** (zatím jen Windows GUI, od 0.5.0): další generace ASC MHL N ve stejné složce karty
   na **všech** cílech (jako doplnění, stejný zámek složky), report `offload_report_NNNN.*` s `kind: "repair"`,
   `files[].rewritten` a `setAside`; dobrá kopie má v MHL `action="verified"`, nová `original`; nesouhlasná kopie se
@@ -200,15 +201,17 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Vzhled** (Windows od 0.5.0): podle `docs/ui-navrh/` s přepínačem **projektů** místo presetů, systémovým písmem
   (Segoe UI, Cascadia Mono) a tmavým i světlým tématem podle Windows; Mac převezme po schválení Windows verze. Thunderbolt
   Windows nerozliší (čtečka za ním je „NVMe“ / „USB“), Mac ano.
-- **Proxy ve složkách jako na kartě** (Windows od 0.5.1): `_PROXY/idle/1.mov` místo `_PROXY/1.mov` (a `1_2.mov` pro
-  `listening/1.mp4`), stejně ve složce pro proxy navíc; `_2` jen při shodě ve stejné složce. Mac dává proxy přímo do
-  `_PROXY`. Doplnění na Windows do zálohy z Macu nebo z Windows 0.5.0 pozná plochou zálohu z reportů a zůstane ploché
-  (nic se nepřesouvá). `proxyPath` v reportu je relativní cesta jako dřív, jen s podsložkou — Mac ji jen zobrazí.
+- **Proxy ve složkách jako na kartě** (Windows od 0.5.1, Mac po 0.7.0 D6 — úkol 54): `_PROXY/idle/1.mov` místo
+  `_PROXY/1.mov` (a `1_2.mov` pro `listening/1.mp4`), stejně ve složce pro proxy navíc; `_2` jen při shodě ve stejné
+  složce. Doplnění (obě verze) do starší zálohy s proxy přímo v `_PROXY` (Mac do 0.7.0 D6, Windows 0.5.0) pozná plochou
+  zálohu z reportů a zůstane ploché (nic se nepřesouvá). `proxyPath` v reportu je relativní cesta jako dřív, jen
+  s podsložkou. Rozdíl: kopii hotové proxy na ostatní cíle Mac nikdy nepřepisuje (Windows u plné kopie smí).
 - **Bez proxy, když je originál lehčí** (Windows od 0.5.1, `proxy.skipLighterSources`, výchozí zapnuto, jen u proxy
   H.264/HEVC — s proxy ProRes se renderuje vždy — a jen když se nepoužije LUT ani ořez): H.264/HEVC originál ne větší než proxy a s datovým tokem nejvýš jako proxy nedostane proxy (`proxyStatus: skipped` + poznámka
   „bez proxy — originál je lehčí (X Mb/s ≤ Y Mb/s)“); originál větší než proxy ji dostane vždy (rozhodnutí: 4K long-GOP
   se ve střižně dekóduje těžce i s nízkým tokem). Mac klíč ignoruje a renderuje proxy pro všechny klipy.
-- **Odkaz na proxy v HTML reportu** (Windows od 0.5.1): stav „hotovo“ odkazuje na soubor proxy (`../_PROXY/…`).
+- **Odkaz na proxy v HTML reportu** (Windows od 0.5.1, Mac po 0.7.0 D6): stav „done“ odkazuje na soubor proxy
+  (`../_PROXY/…`). Šířky sloupců tabulky klipů (Windows `<colgroup>` 11 %) Mac nemá — sloupec Proxy se nezalamuje.
 - **Verify-in-Proxy** (Windows od 0.6.0, Mac od 0.7.0): s proxy a ověřením se primární disk ověří z čtení pro proxy
   (ffmpeg přes HTTP tap na 127.0.0.1, RAW přečtený před SDK), ostatní disky na pozadí; report ze stage 1 má
   `verifyPending` a generace ASC MHL se zapíše až po ověření (pak reporty, pak seznamy součtů). Obě verze zapisují
@@ -254,8 +257,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **Kontrola místa** (chování, ne formát): Windows sčítá požadavky po svazcích (karta + 64 KiB na soubor + 64 MiB, proxy
   podle odhadu z délky a datového toku, report 32 MiB + 1 MiB na klip, čekající a běžící úlohy, složka pro proxy) a před
   renderem proxy přepočítá podle skutečné délky klipů (nevejde-li se, proxy se přeskočí, kopie zůstane ověřená). Mac od
-  0.3.0 stejně (svazek = `st_dev`, jméno v hlášce „složka (svazek)“); jeho proxy mají jednu zvukovou stopu, odhad proto
-  počítá jeden proud kanálů klipu.
+  0.3.0 stejně (svazek = `st_dev`, jméno v hlášce „složka (svazek)“); od úkolu 54 i zvuk proxy po stopách jako Windows.
 - **Jazyk hlášek:** kontroly před kopií a chyby CLI jsou na Windows česky („Chyba: …“), na Macu od 2026-10-10
   anglicky („Error: …“, viz první bod oddílu „Záměrné rozdíly“) — se stejným významem a stejnými kódy; Mac píše cesty
   s `/`. Logy, TXT report a `--help` jsou anglicky v obou verzích. Chyby parseru jsou česky jen na Windows (kde je

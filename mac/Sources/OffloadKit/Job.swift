@@ -815,11 +815,14 @@ public final class OffloadJob {
                         entries[i].clip = arri
                         info = arriInfo
                     } else {
+                        info.reel = ReelResolver.resolve(clip, info: info, cardName: plan.cardName)
                         entries[i].info = info
                         entries[i].probeError = "codec not supported by ffmpeg (e.g. Sony X-OCN) — copied and verified, no proxy"
                         continue
                     }
                 }
+                // Task 54: the camera's tag, else the clip name, else the card folder — into the report and the proxy.
+                info.reel = ReelResolver.resolve(entries[i].clip, info: info, cardName: plan.cardName)
                 entries[i].info = info
                 // The Sony XML is read from the destination: it sits next to the clip on the card, so it was copied too.
                 entries[i].lut = LutResolver.resolve(entries[i].clip, info: info,
@@ -857,9 +860,12 @@ public final class OffloadJob {
             $0.phase = .proxies
             $0.clipCount = entries.count
         }
-        // An append writes next to earlier proxies: every name already in _PROXY on any destination is taken. (A full
-        // copy has new card folders; a name taken there meanwhile still fails the render instead of replacing it.)
-        var usedNames = plan.mode == .full ? Set<String>() : JobFiles.proxyNames(plan.cardPaths)
+        // Task 54 (Windows 0.5.1): _PROXY mirrors the card's folders. An append keeps the layout of the backup it goes into
+        // (an older flat one stays flat — its proxies are never moved) and writes next to earlier proxies: every proxy
+        // already in _PROXY on any destination is taken. (A full copy has new card folders; a name taken there meanwhile
+        // still fails the render instead of replacing it.)
+        let tree: ProxyTree = plan.mode == .full ? .mirror : ProxyPaths.of(plan.cardPaths)
+        var usedNames = plan.mode == .full ? Set<String>() : ProxyPaths.existing(plan.cardPaths)
         for i in entries.indices {
             // A pause waits between clips: the proxy being rendered finishes first.
             if isCancelled || !waitBetweenSteps() { break }
@@ -898,11 +904,7 @@ public final class OffloadJob {
                 update { $0.proxiesFailed += 1 }
                 continue
             }
-            var name = clip.name
-            var n = 2
-            while usedNames.contains(name.lowercased()) { name = "\(clip.name)_\(n)"; n += 1 }
-            usedNames.insert(name.lowercased())
-            let rel = Layout.proxyDirName + "/" + name + ".mov"
+            let (rel, name) = ProxyPaths.pick(clip, tree: tree, used: &usedNames)
 
             let t0 = Date()
             do {
@@ -924,6 +926,10 @@ public final class OffloadJob {
                 entries[i].content = verdict
                 entries[i].proxyStatus = .done
                 entries[i].proxyPath = rel
+                // Relinking goes by name — a proxy that had to be renamed must be attached by hand.
+                if name != clip.name {
+                    entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(Msg.proxyRenamed(name))" } ?? Msg.proxyRenamed(name)
+                }
                 if config.proxy.copyToAllDestinations {
                     // The proxy exists; a failed copy elsewhere is noted, not a failed proxy.
                     for (o, other) in plan.cardPaths.enumerated() where o != d {
@@ -938,8 +944,10 @@ public final class OffloadJob {
                 }
                 if let extra = config.proxy.extraFolder {
                     // The user's proxy folder: also never fails the proxy (the disk may have been disconnected).
+                    // The same folders as in _PROXY (task 54).
                     let (_, error) = ProxyCopy.toExtraFolder(plan.cardPaths[d] + "/" + rel, extraFolder: extra, date: plan.date,
-                                                             cardName: plan.cardName, fileName: name + ".mov")
+                                                             cardName: plan.cardName,
+                                                             fileName: String(rel.dropFirst(Layout.proxyDirName.count + 1)))
                     if let error {
                         let note = "copy to \(extra) failed: \(error)"
                         entries[i].proxyNote = entries[i].proxyNote.map { "\($0); \(note)" } ?? note

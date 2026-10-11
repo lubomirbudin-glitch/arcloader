@@ -47,8 +47,9 @@ final class StageTwoTests: XCTestCase {
         for c in report.clips { XCTAssertEqual(c.thumbnails.count, 3, c.clip.name) }
         XCTAssertEqual(report.clips.first { $0.clip.isCameraProxy }?.proxyStatus, .skipped)
         for cardPath in try XCTUnwrap(job.plan).cardPaths {
-            XCTAssertTrue(FileManager.default.fileExists(atPath: cardPath + "/_PROXY/C0001.mov"))
-            XCTAssertTrue(FileManager.default.fileExists(atPath: cardPath + "/_PROXY/C0002.mov"))
+            // Task 54: the camera's folders are kept in _PROXY (Windows 0.5.1).
+            XCTAssertTrue(FileManager.default.fileExists(atPath: cardPath + "/_PROXY/PRIVATE/M4ROOT/CLIP/C0001.mov"))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: cardPath + "/_PROXY/PRIVATE/M4ROOT/CLIP/C0002.mov"))
             let html = try String(contentsOfFile: cardPath + "/_REPORT/A001_report.html", encoding: .utf8)
             XCTAssertTrue(html.contains("<figcaption>01:00:10:00</figcaption>"))
         }

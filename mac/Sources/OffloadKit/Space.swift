@@ -126,9 +126,10 @@ public enum SpaceEstimator {
             if noProxy?(c) == true { continue }
             let i = info?(c)
             let seconds = i?.duration ?? Double(c.bytes) * 8 / (sourceMbps(c) * 1e6)
-            // Before the analysis one stereo stream is assumed; a probed clip has one stream of its channels (the Mac
-            // proxy carries one audio stream).
-            let audio: [Int] = !p.audio ? [] : i == nil ? [2] : (i!.audioChannels > 0 ? [i!.audioChannels] : [])
+            // Every audio stream becomes a track of the proxy (task 54, Windows R14); before the analysis one stereo stream
+            // is assumed, a probed clip without the stream list (a RAW intermediate) has one stream of its channels.
+            let audio: [Int] = !p.audio ? [] : i == nil ? [2]
+                : !i!.audioStreams.isEmpty ? i!.audioStreams : (i!.audioChannels > 0 ? [i!.audioChannels] : [])
             let height = min(p.height, i?.height ?? p.height)
             bytes += seconds * proxyMbps(p, audioStreams: audio, height: height) * 1e6 / 8
         }

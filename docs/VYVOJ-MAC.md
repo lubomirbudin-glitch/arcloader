@@ -147,6 +147,20 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
 
+- **Úkol 54 — proxy pro přelinkování a ve složkách jako na kartě** (Windows 0.3.0 a 0.5.1): cívka `clips[].info.reel`
+  (`ReelResolver`: tag kamery `reel_name` / `tape_name` / `reel` z ffprobe, jinak z názvu klipu, jinak složka karty) a
+  s platným TC `-metadata:s:v:0 reel_name=<cívka>` → stopa `tmcd` proxy (ffprobe ji ukáže u datového proudu); všechny
+  zvukové stopy (`-map 0:a?`, AAC 64 kb/s na kanál každé stopy, 128–512 kb/s; ProRes PCM), kontrola místa počítá stopy
+  zvlášť. Proxy do `_PROXY/<složka klipu>/<klip>.mov` (`ProxyPaths`: kořen karty → `_PROXY/<klip>.mov`, `.ari` vedle
+  sekvence, R3D ve složce `.RDC`), `_2` jen při shodě ve stejné složce nebo s proxy, která tam už je (bez ohledu na velikost
+  písmen), s poznámkou „Proxy renamed to … — relink it by hand.“; složka pro proxy navíc dostane stejné podsložky.
+  Doplnění pozná plochou zálohu (Mac do teď, Windows 0.5.0) z `proxyPath` v reportech všech generací a zůstane ploché;
+  obsazená jména = všechny `.mov` pod `_PROXY` všech cílů (`ProxyPaths.existing`, nahradilo `JobFiles.proxyNames`).
+  Nic se nepřesouvá ani nepřepisuje (render i kopie na další cíle a do složky jen bez přepsání). HTML: „done“ odkazuje
+  na proxy (`../_PROXY/…`, procentové kódování jako Windows). Testy `ProxyRelinkTests` (cesty, plochá/zrcadlená detekce,
+  ffprobe, zvuk, ffmpeg: dvě zvukové stopy a `reel_name` v proxy, doplnění do ploché i zrcadlené zálohy); upravené
+  `StageTwoTests` (Sony proxy v `_PROXY/PRIVATE/M4ROOT/CLIP/`). Přelinkování v Resolve/Premiere čeká ruční test.
+
 - **Souhrnný report z vybraných záloh** (zadání uživatele 2026-10-09; port Windows 0.8.0 `SummaryReport`): v Card history
   (nebo v Today) zaškrtnout karty → „Summary report (N)…“ → dotaz „Also save … to a disk of your choice?“ → HTML + PDF
   (bez náhledů) do `~/Documents/Offload reporty/summary/<datum>_<čas>_summary.*` (`OFFLOAD_REPORTS_DIR` platí), volitelně

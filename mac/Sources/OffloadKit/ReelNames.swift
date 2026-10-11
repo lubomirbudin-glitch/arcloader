@@ -26,6 +26,16 @@ public enum ReelNames {
     public static func fromClipName(_ name: String) -> String? { match(name)?.reel }
 }
 
+/// The reel of a clip (Windows spec 3.4) — what the proxy's timecode track and the report (`clips[].info.reel`) call it,
+/// like DIT tools do: (1) the camera's own tag (ffprobe `reel_name`, `tape_name`, `reel`, in `ClipInfo.reel`), (2) the reel
+/// in the clip name (`ReelNames`: "A001C003…" → "A001"), (3) the card folder's name. Port of Windows `ReelResolver`.
+public enum ReelResolver {
+    public static func resolve(_ clip: Clip, info: ClipInfo?, cardName: String) -> String {
+        if let tag = info?.reel?.trimmingCharacters(in: .whitespacesAndNewlines), !tag.isEmpty { return tag }
+        return ReelNames.fromClipName(clip.name) ?? cardName
+    }
+}
+
 /// A card folder name proposed instead of the volume label. `hint` is the grey line under the name field.
 public struct NameSuggestion: Equatable {
     public let name: String

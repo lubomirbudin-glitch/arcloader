@@ -45,6 +45,17 @@ public struct ClipInfo: Codable {
     public var frames: Int?
     public var timecode: String?
     public var audioChannels: Int = 0
+    /// Channels of each audio stream, in stream order (ffprobe) — the proxy gets every one of them (Windows R14). Known only
+    /// right after the probe (not in the report); empty for RAW decoders and reports read back.
+    public var audioStreams: [Int] = []
+    /// The video stream's data rate in bits per second (ffprobe: the stream's `bit_rate`, else the container's minus the
+    /// audio streams'); nil when not known. Decides LighterSource (Windows 0.5.1); known only right after the probe (not in
+    /// the report — the note of a clip without a proxy says it).
+    public var videoBitrate: Int64?
+    /// The reel (tape name): ffprobe's `reel_name` / `tape_name` / `reel` tag after the probe, then ReelResolver's answer
+    /// (tag, else the clip name, else the card folder) once the job has the clip. Report key `clips[].info.reel` (Windows
+    /// 0.3.0), absent when unknown. The proxy carries it in its timecode track (`reel_name`).
+    public var reel: String?
     public var camera: String?
     /// Log curve the camera recorded in (e.g. "LogC4"), when the format reports it.
     public var logEncoding: String?
@@ -73,7 +84,7 @@ public struct ClipInfo: Codable {
 
     enum CodingKeys: String, CodingKey {
         case codec, width, height, frameRate, duration, frames, timecode, audioChannels, camera, logEncoding, squeeze
-        case colorRange, gamma, gamut, colorScienceGen, captureFrameRate, recorded
+        case colorRange, gamma, gamut, colorScienceGen, captureFrameRate, recorded, reel
     }
 
     /// Tolerant like the report: a missing key is unknown; `recorded` of another shape (a number, another text) too.
@@ -96,6 +107,7 @@ public struct ClipInfo: Codable {
         colorScienceGen = try c.decodeIfPresent(Int.self, forKey: .colorScienceGen)
         captureFrameRate = try c.decodeIfPresent(String.self, forKey: .captureFrameRate)
         recorded = ClipInfo.plausible((try? c.decodeIfPresent(Date.self, forKey: .recorded)) ?? nil)
+        reel = (try? c.decodeIfPresent(String.self, forKey: .reel)) ?? nil
     }
 
     /// A record time a camera could have meant: from 2000 on and at most a day ahead of now. A camera without its clock
@@ -224,7 +236,8 @@ enum FFProbe {
         let streams = json["streams"] as? [[String: Any]] ?? []
         let format = json["format"] as? [String: Any] ?? [:]
         var info = ClipInfo()
-        if let v = streams.first(where: { $0["codec_type"] as? String == "video" && ($0["disposition"] as? [String: Any])?["attached_pic"] as? Int != 1 }) {
+        let videoStream = streams.first(where: { $0["codec_type"] as? String == "video" && ($0["disposition"] as? [String: Any])?["attached_pic"] as? Int != 1 })
+        if let v = videoStream {
             let name = v["codec_name"] as? String
             let profile = v["profile"] as? String
             info.codec = [name, profile].compactMap { $0 }.joined(separator: " ")
@@ -239,8 +252,18 @@ enum FFProbe {
             info.colorRange = v["color_range"] as? String
             if info.duration == nil { info.duration = (v["duration"] as? String).flatMap(Double.init) }
         }
-        info.audioChannels = streams.filter { $0["codec_type"] as? String == "audio" }.reduce(0) { $0 + ($1["channels"] as? Int ?? 0) }
+        let audio = streams.filter { $0["codec_type"] as? String == "audio" }
+        info.audioStreams = audio.map { $0["channels"] as? Int ?? 0 }
+        info.audioChannels = info.audioStreams.reduce(0, +)
         if let d = (format["duration"] as? String).flatMap(Double.init) { info.duration = d }
+        // MPEG-TS (AVCHD .MTS) and some MXF have no rate per stream: the container's minus what the audio streams take.
+        func rate(_ x: [String: Any]?) -> Int64? { (x?["bit_rate"] as? String).flatMap { Int64($0) }.flatMap { $0 > 0 ? $0 : nil } }
+        if let vb = rate(videoStream) {
+            info.videoBitrate = vb
+        } else if let fb = rate(format) {
+            let rest = fb - audio.reduce(Int64(0)) { $0 + (rate($1) ?? 0) }
+            info.videoBitrate = rest > 0 ? rest : nil
+        }
         let ftags = format["tags"] as? [String: Any] ?? [:]
         if info.timecode == nil {
             info.timecode = (ftags["timecode"] as? String)
@@ -250,10 +273,22 @@ enum FFProbe {
             ?? (ftags["product_name"] as? String) ?? (ftags["company_name"] as? String)
         // When the camera recorded it: `creation_time` of the container, else of a stream (the summary report's order).
         let tagSets = [ftags] + streams.map { $0["tags"] as? [String: Any] ?? [:] }
+        // The camera's reel (tape name): the container's tag, else a stream's (e.g. a timecode track's `reel_name`).
+        info.reel = tagSets.lazy.compactMap { reel($0) }.first
         info.recorded = tagSets.lazy.compactMap { tags in
             tags.first { $0.key.lowercased() == "creation_time" }.flatMap { ($0.value as? String).flatMap(recordedDate) }
         }.first
         return info
+    }
+
+    /// The reel a camera wrote into its tags: `reel_name`, `tape_name`, `reel` (in this order, any case), trimmed, not empty.
+    static func reel(_ tags: [String: Any]) -> String? {
+        for name in ["reel_name", "tape_name", "reel"] {
+            for (k, v) in tags where k.lowercased() == name {
+                if let s = (v as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { return s }
+            }
+        }
+        return nil
     }
 
     /// "2026-10-06T08:15:30.000000Z" (ffprobe `creation_time`) in UTC; nil when it is no date or not a plausible one.

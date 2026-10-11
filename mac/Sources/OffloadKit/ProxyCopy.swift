@@ -41,13 +41,19 @@ public enum ProxyCopy {
     }
 
     /// The extra copy of a proxy into the user's proxy folder: `<extraFolder>/<date>/<cardName>/<fileName>`, or
-    /// `<name>_2.mov`, `_3` … when the name is taken there — never overwrites. Never throws: a missing folder
-    /// (disconnected disk) or a failed copy comes back as the error text. At most `maxAttempts` names
+    /// `<name>_2.mov`, `_3` … when the name is taken there — never overwrites. `fileName` may carry the clip's folder as in
+    /// `_PROXY` (`idle/1.mov`, task 54): the copy goes into that subfolder and `_2` is looked for there. Never throws: a
+    /// missing folder (disconnected disk) or a failed copy comes back as the error text. At most `maxAttempts` names
     /// (`_2` … `_1000`) are tried; then it gives up with an error.
     public static func toExtraFolder(_ source: String, extraFolder: String, date: String, cardName: String,
                                      fileName: String, maxAttempts: Int = 1000) -> (path: String?, error: String?) {
         guard ProxyPreflight.isDirectory(extraFolder) else { return (nil, "folder is not available") }
-        let dir = URL(fileURLWithPath: extraFolder).appendingPathComponent(date).appendingPathComponent(cardName).path
+        var dir = URL(fileURLWithPath: extraFolder).appendingPathComponent(date).appendingPathComponent(cardName).path
+        var fileName = fileName
+        if let slash = fileName.lastIndex(of: "/") {
+            dir += "/" + fileName[..<slash]
+            fileName = String(fileName[fileName.index(after: slash)...])
+        }
         let stem = (fileName as NSString).deletingPathExtension
         let ext = (fileName as NSString).pathExtension
         func name(_ n: Int) -> String { n == 1 ? fileName : "\(stem)_\(n)" + (ext.isEmpty ? "" : "." + ext) }

@@ -70,6 +70,19 @@ public enum HTMLReport {
         }
     }
 
+    /// RFC 3986 unreserved characters — everything else in a link's path segment is percent-encoded (.NET
+    /// `Uri.EscapeDataString`, as Windows writes the link).
+    static let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+
+    /// The proxy status; a finished proxy links to its file (the report is in `_REPORT`, the proxy in `_PROXY` beside it —
+    /// Windows 0.5.1 `ProxyCell`).
+    static func proxyCell(_ c: ClipEntry, _ label: String) -> String {
+        guard c.proxyStatus == .done, let rel = c.proxyPath, !rel.isEmpty else { return label }
+        let href = rel.split(separator: "/", omittingEmptySubsequences: false)
+            .map { String($0).addingPercentEncoding(withAllowedCharacters: unreserved) ?? String($0) }.joined(separator: "/")
+        return "<a href=\"../\(esc(href))\" title=\"\(esc(rel))\">\(label)</a>"
+    }
+
     /// `forPrint`: light colours only and the full file list expanded (for the PDF).
     static let darkCSS = "@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2e33;--ok:#4cc27c;--okbg:#14301f;--bad:#ff6b6b;--badbg:#3a1717;--warn:#f0b04a;--warnbg:#382a10;--accent:#8aa2ff}}"
     /// Print (PDF) layout: everything must fit the A4 landscape width — cells wrap instead of the panel scrolling,
@@ -228,7 +241,7 @@ public enum HTMLReport {
                 h += "<td class=\"wrap fmt\">\(esc(codec))</td><td>\(esc(i?.resolutionLabel ?? ""))</td><td class=\"num fps\">\(fpsCell(i))</td>"
                 h += "<td class=\"num\">\(esc(i?.durationLabel ?? ""))</td><td class=\"mono tc\">\(esc(i?.timecode ?? ""))</td>"
                 h += "<td class=\"num\">\(i.map { $0.audioChannels > 0 ? "\($0.audioChannels) ch" : "—" } ?? "")</td>"
-                h += "<td class=\"num\">\(formatBytes(c.clip.bytes))</td><td class=\"\(pc)\">\(pl)</td></tr>\n"
+                h += "<td class=\"num\">\(formatBytes(c.clip.bytes))</td><td class=\"\(pc)\">\(proxyCell(c, pl))</td></tr>\n"
             }
             h += "</table></div>\n"
             // A clip shot at another rate than it plays at — the length is the editing one (Windows 0.8.0 wording).
