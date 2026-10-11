@@ -63,8 +63,48 @@ public struct ClipInfo: Codable {
     /// frameRate) is the editing length. Report key `clips[].info.captureFrameRate`, absent when unknown — then
     /// capture = playback.
     public var captureFrameRate: String?
+    /// When the camera recorded the clip (UTC), from its metadata: ffprobe `creation_time` (QuickTime, MXF, MP4). Report
+    /// key `clips[].info.recorded` (Windows 0.8.0), absent when unknown (RAW decoders, older reports) — the summary report
+    /// then orders the clips by their number. Read leniently: a value of another shape is unknown, never a report that
+    /// cannot be read.
+    public var recorded: Date?
 
     public init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case codec, width, height, frameRate, duration, frames, timecode, audioChannels, camera, logEncoding, squeeze
+        case colorRange, gamma, gamut, colorScienceGen, captureFrameRate, recorded
+    }
+
+    /// Tolerant like the report: a missing key is unknown; `recorded` of another shape (a number, another text) too.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        codec = try c.decodeIfPresent(String.self, forKey: .codec)
+        width = try c.decodeIfPresent(Int.self, forKey: .width)
+        height = try c.decodeIfPresent(Int.self, forKey: .height)
+        frameRate = try c.decodeIfPresent(String.self, forKey: .frameRate)
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration)
+        frames = try c.decodeIfPresent(Int.self, forKey: .frames)
+        timecode = try c.decodeIfPresent(String.self, forKey: .timecode)
+        audioChannels = try c.decodeIfPresent(Int.self, forKey: .audioChannels) ?? 0
+        camera = try c.decodeIfPresent(String.self, forKey: .camera)
+        logEncoding = try c.decodeIfPresent(String.self, forKey: .logEncoding)
+        squeeze = try c.decodeIfPresent(Double.self, forKey: .squeeze)
+        colorRange = try c.decodeIfPresent(String.self, forKey: .colorRange)
+        gamma = try c.decodeIfPresent(String.self, forKey: .gamma)
+        gamut = try c.decodeIfPresent(String.self, forKey: .gamut)
+        colorScienceGen = try c.decodeIfPresent(Int.self, forKey: .colorScienceGen)
+        captureFrameRate = try c.decodeIfPresent(String.self, forKey: .captureFrameRate)
+        recorded = ClipInfo.plausible((try? c.decodeIfPresent(Date.self, forKey: .recorded)) ?? nil)
+    }
+
+    /// A record time a camera could have meant: from 2000 on and at most a day ahead of now. A camera without its clock
+    /// set writes 1904-01-01 (QuickTime) or 1970-01-01 — unknown, never the first clapper (Windows review S-7).
+    public static func plausible(_ t: Date?) -> Date? {
+        guard let t else { return nil }
+        let y2000 = Date(timeIntervalSince1970: 946_684_800)
+        return t >= y2000 && t <= Date().addingTimeInterval(86_400) ? t : nil
+    }
 
     /// The playback rate as people read it: "23.976", "25"; "" when unknown.
     public var fpsLabel: String { ClipInfo.label(frameRate) }
@@ -208,7 +248,36 @@ enum FFProbe {
         }
         info.camera = camera(make: ftags["com.apple.quicktime.make"] as? String, model: ftags["com.apple.quicktime.model"] as? String)
             ?? (ftags["product_name"] as? String) ?? (ftags["company_name"] as? String)
+        // When the camera recorded it: `creation_time` of the container, else of a stream (the summary report's order).
+        let tagSets = [ftags] + streams.map { $0["tags"] as? [String: Any] ?? [:] }
+        info.recorded = tagSets.lazy.compactMap { tags in
+            tags.first { $0.key.lowercased() == "creation_time" }.flatMap { ($0.value as? String).flatMap(recordedDate) }
+        }.first
         return info
+    }
+
+    /// "2026-10-06T08:15:30.000000Z" (ffprobe `creation_time`) in UTC; nil when it is no date or not a plausible one.
+    static func recordedDate(_ text: String) -> Date? {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // ffprobe writes microseconds; ISO8601DateFormatter reads milliseconds — cut the fraction to three digits.
+        let trimmed = t.replacingOccurrences(of: #"(\.\d{3})\d+"#, with: "$1", options: .regularExpression)
+        var d = f.date(from: trimmed)
+        if d == nil {
+            f.formatOptions = [.withInternetDateTime]
+            d = f.date(from: t)
+        }
+        if d == nil {
+            // "2026-10-06 08:15:30" without a zone: UTC, as ffprobe means it.
+            let g = DateFormatter()
+            g.locale = Locale(identifier: "en_US_POSIX")
+            g.timeZone = TimeZone(identifier: "UTC")
+            g.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            d = g.date(from: t)
+        }
+        // Whole seconds, as the report writes dates.
+        return ClipInfo.plausible(d.map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded(.down)) })
     }
 
     /// Make and model together ("ARRI" + "ALEXA 35" → "ARRI ALEXA 35"), unless the model already starts with the make.

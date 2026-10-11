@@ -842,7 +842,7 @@ final class AppModel: ObservableObject {
 
     /// A job that has not finished, or an eject in flight.
     var hasBusyJobs: Bool {
-        jobs.contains { !$0.isFinished || $0.ejecting } || verifies.contains { !$0.isFinished } || dayReportsRunning > 0
+        jobs.contains { !$0.isFinished || $0.ejecting } || verifies.contains { !$0.isFinished } || dayReportsRunning > 0 || makingSummary
     }
 
     /// Asked by the app delegate. With unfinished jobs: confirm, cancel them all and quit once they have cleaned up.

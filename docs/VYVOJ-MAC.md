@@ -91,7 +91,7 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   2026-10-09; pořadí podle času záznamu z metadat kamery, jinak podle čísla klipu `A001C001…`; čas = startovní TC
   klipu, u ALEXY TC denní doby), kamery, stav ověření a **na kterých discích je co zálohované** (disk, cesta,
   ověřeno ano/ne, kopie reportu na počítači). Zdroj dat: `history.json` + reporty `offload_report*.json` (z disků, nebo
-  z lokální kopie `Offload reporty`, když disk už odešel). Uložit lokálně a volitelně na vybraný disk.
+  z lokální kopie `Offload reporty`, když disk už odešel). Uložit lokálně a volitelně na vybraný disk. **Mac hotovo 2026-10-11 (po D6, viz níže).**
 
 - **Dorovnání 2 s Windows 0.6.0 — zbývají úkoly 52–60 a 62–64** (stav 2026-10-11: hotové 32–50, 51 zúžený, 61, 65–70 =
   verze 0.7.0; zbývají seznamy klipů, denní report, proxy ve složkách a lehčí originál, HTML lišta PDF, projekty, pravidla
@@ -146,6 +146,20 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 ## 2026-10-11 — po D6: dorovnání s Windows 0.8.0 (snímací fps, historie karet, denní a souhrnný report)
 
 Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
+
+- **Souhrnný report z vybraných záloh** (zadání uživatele 2026-10-09; port Windows 0.8.0 `SummaryReport`): v Card history
+  (nebo v Today) zaškrtnout karty → „Summary report (N)…“ → dotaz „Also save … to a disk of your choice?“ → HTML + PDF
+  (bez náhledů) do `~/Documents/Offload reporty/summary/<datum>_<čas>_summary.*` (`OFFLOAD_REPORTS_DIR` platí), volitelně
+  i do vybrané složky; nikdy přes existující soubor (`_2`, `_3` …), nikdy do zálohy karty, na kartu ve čtečce, výměnné
+  médium nebo svazek jen pro čtení (`checkTarget`). Obsah: natáčecí dny, za den / kartu / celkem klipy, soubory,
+  velikost, stopáž, **první a poslední klapka** (startovní TC prvního a posledního nahraného klipu; pořadí podle nového
+  `clips[].info.recorded` z ffprobe `creation_time`, když ho mají všechny klipy, jinak podle dne a čísla klipu; ALEXA =
+  TC denní doby; kamerové proxy se nepočítají), kamery, ověření a „Where everything is backed up“ (disk, cesta,
+  připojeno, ověřeno — u odpojeného podle reportu nebo historie, kopie reportu na Macu). Stejná karta na více discích =
+  jedna karta. Data z reportů na připojeném disku, jinak z lokální kopie, jinak z historie s poznámkou. CLI
+  `offload summary-report <složky karet | dne | id z historie…> [-o složka]`. `clips[].info.recorded` se čte shovívavě
+  (jiný tvar = neznámý, report zůstane čitelný; data před 2000 a víc než den v budoucnosti = neznámé). Testy
+  `SummaryReportTests`. Mac nezapisuje `.offload-origin` — původ lokální kopie bere z jejího reportu.
 
 - **Denní report** (úkol 53 plánu parity 2, přizpůsobený dnešnímu kódu): `<cíl>/<datum>/_REPORT/<datum>_day_report.html`
   a `.pdf` jako Windows (`DayReport`, `DayReportService`; stejné anglické texty — „Day report — 2026-10-11“, ALL VERIFIED /

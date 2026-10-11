@@ -43,6 +43,60 @@ extension AppModel {
         }
     }
 
+    // MARK: Summary report
+
+    /// "Summary report (N)…": the ticked backups → one HTML + PDF in `<Offload reporty>/summary`, and, when the user
+    /// wants, in a folder they pick (never into a backup, onto a card or over a file). Made off the main thread; the HTML
+    /// is opened (Windows `MakeSummaryReport`).
+    func makeSummaryReport() {
+        guard !isPreview, !terminating, !makingSummary else { return }
+        let entries = (history ?? []).filter { summarySelection.contains($0.id) }
+        guard !entries.isEmpty else {
+            message = Msg.summaryNothing
+            return
+        }
+        let ask = NSAlert()
+        ask.messageText = "Also save the summary report (\(entries.count) \(entries.count == 1 ? "card" : "cards")) to a disk of your choice?"
+        ask.informativeText = "It is always saved on this computer: \(SummaryReport.localRoot)/\(SummaryReport.folderName)"
+        ask.addButton(withTitle: "No")
+        ask.addButton(withTitle: "Yes…")
+        ask.addButton(withTitle: "Cancel")
+        var extra: String?
+        switch ask.runModal() {
+        case .alertFirstButtonReturn: break
+        case .alertSecondButtonReturn:
+            let panel = NSOpenPanel()
+            panel.title = "Choose a disk or folder for the summary report"
+            panel.prompt = "Save here"
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+            panel.canCreateDirectories = true
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            extra = url.path
+        default: return
+        }
+        makingSummary = true
+        let cards = allSources   // never onto a card in a reader
+        dayQueue.async { [weak self] in
+            let result = Result { () throws -> SummaryFiles in
+                let model = SummaryReport.load(entries.map { SummaryInput.entry($0) })
+                return try SummaryReport.save(model, extraFolder: extra, cards: cards, log: { NSLog("summary report: %@", $0) })
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.makingSummary = false
+                switch result {
+                case .success(let saved):
+                    if let e = saved.extraError { self.message = Msg.summaryExtraFailed(e) }
+                    NSWorkspace.shared.open(URL(fileURLWithPath: saved.html))
+                case .failure(let e):
+                    self.message = Msg.summaryFailed("\(e)")
+                }
+                self.checkTerminateReady()
+            }
+        }
+    }
+
     // MARK: Day report
 
     /// After a job (also an append, a cancelled or failed one): the day report on each of its destinations, off the main

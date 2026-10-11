@@ -15,4 +15,27 @@ extension Msg {
     public static func dayReportBusy(_ p: String) -> String { "Another job is creating the day report in \(p) right now — try again in a moment." }
     public static func dayReportFailed(_ detail: String) -> String { "Could not create the day report: \(detail)" }
     public static func dayReportWritten(_ p: String) -> String { "Day report: \(p)" }
+
+    // Summary report of selected backups (2026-10-09)
+    public static func summaryNotACard(_ p: String) -> String {
+        "\(p) is not a card folder with a backup (\(Layout.reportDirName)/\(CardRecord.mainReport) is missing) nor a day folder with cards."
+    }
+    public static func summaryUnknown(_ arg: String) -> String { "\"\(arg)\" is neither a card folder nor a backup id in the history." }
+    public static let summaryNothing = "Select at least one backup."
+    public static func summaryTargetMissing(_ p: String) -> String { "Folder for the summary report not found: \(p)" }
+    public static func summaryTargetIsCard(_ p: String) -> String {
+        "\(p) is inside the backup folder of a card (even an unfinished or interrupted one) — the summary report is never written into a backup; select another folder."
+    }
+    public static func summaryTargetCameraCard(_ p: String) -> String { "\(p) looks like a camera card — Offload never writes to a card." }
+    public static func summaryTargetRemovable(_ p: String) -> String {
+        "\(p) is on removable media (a card in a reader, a flash drive) — the summary report is not saved there; select a disk."
+    }
+    public static func summaryTargetReadOnly(_ p: String) -> String { "\(p) is on a read-only disk." }
+    public static func summaryTargetIsSource(_ p: String) -> String { "\(p) is on the card — Offload never writes to a card." }
+    public static func summaryWritten(_ p: String) -> String { "Summary report: \(p)" }
+    public static func summaryExtraWritten(_ p: String) -> String { "Summary report also on the selected disk: \(p)" }
+    public static func summaryExtraFailed(_ detail: String) -> String {
+        "The summary report was not written to the selected disk: \(detail) — it is only on this computer."
+    }
+    public static func summaryFailed(_ detail: String) -> String { "Could not create the summary report: \(detail)" }
 }

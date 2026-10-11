@@ -69,11 +69,30 @@ struct QueueColumn: View {
             tab(.history) {
                 Text("Card history").font(.ui(13, .semibold)).foregroundStyle(model.queueTab == .history ? p.text : p.text2)
             }
-            Spacer()
+            Spacer(minLength: 8)
+            // A narrow window: "Clear selection" becomes an ✕ (its text as the tooltip).
+            ViewThatFits(in: .horizontal) {
+                actions(compact: false)
+                actions(compact: true)
+            }
+        }
+    }
+
+    private func actions(compact: Bool) -> some View {
+        HStack(spacing: 4) {
             if !model.summarySelection.isEmpty {
-                Button("Clear selection") { model.clearSummarySelection() }.buttonStyle(.offload(.ghost, height: 32))
+                if compact {
+                    IconButton(systemImage: "xmark", help: "Clear selection") { model.clearSummarySelection() }
+                } else {
+                    Button("Clear selection") { model.clearSummarySelection() }.buttonStyle(.offload(.ghost, height: 32))
+                }
             }
             if model.queueTab == .history {
+                // One report (HTML + PDF) from the ticked cards: days, clips, size, duration, first and last slate, disks.
+                Button(model.summaryButtonText) { model.makeSummaryReport() }
+                    .buttonStyle(.offload(.ghost, height: 32))
+                    .disabled(model.summarySelection.isEmpty || model.makingSummary)
+                    .help("One report (HTML + PDF) from the ticked cards: days, clips, size, duration, first and last slate, where everything is backed up")
                 Button("Day report…") { model.dayReportOnRequest() }.buttonStyle(.offload(.ghost, height: 32))
             }
             if model.queueTab == .queue,
@@ -81,11 +100,14 @@ struct QueueColumn: View {
                 Button("Clear finished") { model.clearFinished() }.buttonStyle(.offload(.ghost, height: 32))
             }
         }
+        .lineLimit(1)
+        .fixedSize()
     }
 
     private func tab<L: View>(_ t: QueueTab, @ViewBuilder label: () -> L) -> some View {
         Button { model.queueTab = t } label: {
             label()
+                .lineLimit(1).fixedSize()
                 .padding(.horizontal, 14).frame(height: 32)
                 .background(RoundedRectangle(cornerRadius: 8).fill(model.queueTab == t ? p.tabActive : .clear))
                 .contentShape(Rectangle())
@@ -105,6 +127,10 @@ struct TodaySection: View {
             StepTitle(title: day.title) {
                 HStack(spacing: 14) {
                     Text(day.summary).font(.ui(13)).foregroundStyle(p.text3).lineLimit(1)
+                    if !model.summarySelection.isEmpty || model.makingSummary {
+                        LinkButton(title: model.summaryButtonText) { model.makeSummaryReport() }
+                            .disabled(model.makingSummary)
+                    }
                     LinkButton(title: "Day report…") { model.dayReportOnRequest() }
                 }
             }

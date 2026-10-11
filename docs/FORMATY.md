@@ -154,7 +154,7 @@ Hodnoty výčtů:
   starších reportech. Tvar jako `started` (`YYYY-MM-DDTHH:MM:SSZ`); hodnota jiného tvaru (číslo, jiný text) se čte jako
   neznámá — report kvůli ní nikdy není nečitelný. Data před rokem 2000 (kamera bez nastavených hodin: 1904-01-01,
   1970-01-01) a víc než den v budoucnosti se berou jako neznámá. Souhrnný report podle něj řadí klipy (první a poslední
-  klapka); bez něj podle čísla klipu. Mac ignoruje (naplánováno).
+  klapka); bez něj podle čísla klipu. Mac od buildu po 0.7.0 D6 (ffprobe `creation_time`, stejně čtený).
 - `clips[].info.colorScienceGenOriginal` (volitelné, Windows od 0.4.0): u BRAW Film dekódovaného s převodem Gen 4 → Gen 5
   generace, ve které byl klip natočený (`colorScienceGen` je pak účinná, `5`); chybí, když se převod nepodařil (klip se
   dekódoval tak, jak byl natočený). Mac ignoruje.
@@ -390,7 +390,13 @@ Pravidla (Windows od 0.3.0):
   zápis vyhraje, soubory se přepisují celé).
 - Zrušená úloha čeká na obsazený den nejvýš 5 s na cíl, pak denní report přeskočí (do logu).
 
-## Souhrnný report (Windows od 0.8.0, Mac naplánováno)
+## Souhrnný report (Windows od 0.8.0, Mac od buildu po 0.7.0 D6)
+
+Mac: `~/Documents/Offload reporty/summary/<YYYY-MM-DD>_<HHmmss>_summary.html/.pdf` (složka `LocalReports.root`, proměnná
+`OFFLOAD_REPORTS_DIR`); lokální kopie hledá v `Offload reporty`, `Offload reports` i `ArcLoader reports`. Mac kopie reportu
+`.offload-origin` nezapisuje — původ lokální kopie bere z jejího `offload_report.json` (`<started UTC>|<cardName>|<source>`),
+existující `.offload-origin` (kopie z Windows) má přednost. Výměnné médium = `volumeIsRemovable`, kamerová karta =
+`Volumes.looksLikeCameraCard` kořene svazku bez složky s datem (výstup Offloadu) v kořeni nebo o úroveň níž.
 
 Jeden report z vybraných záloh (karty i z různých dnů a disků): `<ArcLoader reports>/summary/<YYYY-MM-DD>_<HHmmss>_summary.html` (do 0.8.0 `<Offload reporty>/souhrn/…_souhrn.html`)
 + `.pdf` (A4 na šířku, bez náhledů), volitelně i do složky, kterou uživatel vybere. `<ArcLoader reports>` =

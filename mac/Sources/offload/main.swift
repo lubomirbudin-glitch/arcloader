@@ -8,7 +8,7 @@ struct Offload: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Camera card offload: read once, write to several disks, verify with xxh64.",
         version: OffloadVersion.string,
-        subcommands: [Copy.self, Append.self, Verify.self, DayReportCommand.self, Bench.self, Ports.self, Luts.self],
+        subcommands: [Copy.self, Append.self, Verify.self, DayReportCommand.self, SummaryReportCommand.self, Bench.self, Ports.self, Luts.self],
         defaultSubcommand: Copy.self)
 
     /// Errors of a command print as "Error: …" (the Mac is English; Windows prints them in Czech). Parser errors
@@ -692,6 +692,52 @@ struct DayReportCommand: ParsableCommand {
         while result == nil { RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.1)) }
         switch result! {
         case .success(let html): print(Msg.dayReportWritten(html))
+        case .failure(let e):
+            fputs(Msg.cliError + "\(e)\n", stderr)
+            throw ExitCode(1)
+        }
+    }
+}
+
+struct SummaryReportCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "summary-report",
+        abstract: "One summary report (HTML + PDF) from several backups: shooting days, clips, files, size, duration, first and last slate, cameras, verification, where each card is backed up. Always saved into <Offload reporty>/summary.")
+
+    @Argument(help: "Card folders (on a destination, or their copy in ~/Documents/Offload reporty), date folders (every card in them), or history ids.")
+    var backups: [String]
+
+    @Option(name: [.short, .long], help: "Also save the summary into this folder (a suffix _2, _3 … instead of overwriting).")
+    var output: String?
+
+    func validate() throws {
+        if backups.isEmpty { throw ValidationError(Msg.summaryNothing) }
+    }
+
+    func run() throws {
+        var outcome: Result<SummaryFiles, Error>?
+        let args = backups.map { FileManager.default.fileExists(atPath: $0) ? abs($0) : $0 }
+        let extra = output.map(abs)
+        // The PDF prints with WebKit on the main run loop: the report is made on a worker thread meanwhile.
+        Thread.detachNewThread {
+            let r = Result { () throws -> SummaryFiles in
+                // History only when something is not a folder: an id (reading it never writes it).
+                let history = args.allSatisfy { FileManager.default.fileExists(atPath: $0) } ? [] : HistoryStore().load()
+                let model = SummaryReport.load(try SummaryReport.inputs(args, history: history))
+                return try SummaryReport.save(model, extraFolder: extra, log: { fputs($0 + "\n", stderr) })
+            }
+            DispatchQueue.main.async { outcome = r }
+        }
+        while outcome == nil { RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.1)) }
+        switch outcome! {
+        case .success(let saved):
+            print(Msg.summaryWritten(saved.html))
+            if let pdf = saved.pdf { print(Msg.summaryWritten(pdf)) }
+            if let h = saved.extraHTML { print(Msg.summaryExtraWritten(h)) }
+            if let e = saved.extraError {
+                fputs(Msg.cliError + Msg.summaryExtraFailed(e) + "\n", stderr)
+                throw ExitCode(1)
+            }
         case .failure(let e):
             fputs(Msg.cliError + "\(e)\n", stderr)
             throw ExitCode(1)
