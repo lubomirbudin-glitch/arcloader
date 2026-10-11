@@ -83,20 +83,23 @@ enum Snapshots {
         run.fileValue = "A035C010_261007_R2KQ.mxf"
         run.brake = "Slowest link: card reader (USB 3 (5 Gb/s)). The disks could go faster."
         run.canCancel = true
+        run.canPause = true
         var wait = JobCardState(kind: .waiting, phase: .waiting, name: "B012_FX6", sub: "~14.2 GB · 2 disks")
         wait.canCancel = true
         var proxies = JobCardState(kind: .running, phase: .proxies, name: "A034_ARRI", sub: "212 files · 256 GB")
         proxies.percent = 61
         proxies.steps = [PhaseStep(number: 1, label: "Copy", state: .done, fill: 1),
-                         PhaseStep(number: 2, label: "Verify", state: .done, fill: 1),
+                         PhaseStep(number: 2, label: "Verify", state: .active, fill: 0.55),
                          PhaseStep(number: 3, label: "Proxy", state: .active, fill: 0.61),
                          PhaseStep(number: 4, label: "Report", state: .pending, fill: 0)]
         proxies.fileCaption = "Proxy 15 / 24"
         proxies.fileValue = "A034C015_261007_R1AB.mxf · 40 %"
+        // Verify-in-proxy (tasks 65–70): copied, safe to eject; verified during the proxy render, format only after it.
+        proxies.sub += " · verify during proxy render"
         proxies.safeWhileRunning = true
-        proxies.safeFormat = true
         proxies.ejectChip = CardChip(text: "Safe to eject", tone: .ok)
-        proxies.formatChip = CardChip(text: "Safe to format", tone: .ok)
+        proxies.formatChip = CardChip(text: "Do not format yet", tone: .waiting)
+        proxies.canPause = true
         run.ejectChip = CardChip(text: "Do not eject yet", tone: .waiting)
         run.formatChip = CardChip(text: "Do not format yet", tone: .waiting)
         proxies.showEject = true

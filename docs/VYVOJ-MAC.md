@@ -142,6 +142,14 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
       ji smaže; kontrola odpojení těsně před startem; ostrý offload se složkou → řádky v reportu;
     - úkol 25: ikona v Docku, ⌘⇥ a Finderu; 11 LUTů v *Proxy › LUT*.
 
+## 2026-10-11 — build „Offload D6“ (0.7.0D6): tmavý vzhled jako výchozí
+
+- Aplikace je **tmavá i na Macu ve světlém režimu** (jako návrh `docs/ui-navrh` a Windows screeny); Nastavení → Folders →
+  „Appearance“: Dark (výchozí) / Light / System. Nový klíč `settings.json` `appearance` („dark“/„light“/„system“, jiná
+  hodnota = dark) — jen Mac; Windows ho jako neznámý klíč zachová. Uživatel měl spuštěný starý build C (starý vzhled)
+  a nový vzhled v D5 viděl bílý, protože systém je ve světlém režimu.
+- Snímky UI (`--ui-snapshots`): běžící karta ukazuje Pause a ověřování během proxy („Safe to eject“ / „Do not format yet“).
+
 ## 2026-10-10 — English UI and reports (user decision)
 
 Rozhodnutí uživatele 2026-10-10: Mac verze je **jen anglicky**, bez české volby. Anglicky jsou hlášky kontrol
