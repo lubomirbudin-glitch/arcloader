@@ -1,14 +1,17 @@
 ﻿# Publishes the built zip on GitHub Releases, so that fixed links always point to the newest build (user 2026-10-10):
-#   -Channel stable  → release "stable" (rolling tag, marked Latest): Offload-Windows.zip + offload-update.json
-#   -Channel dev     → release "dev" (rolling tag, pre-release):       Offload-Windows-dev.zip
-# and in both cases the versioned archive release "windows-v<version>" with Offload-win-x64-<version>.zip
+#   -Channel stable  → release "stable" (rolling tag, marked Latest): ArcLoader-Windows.zip + arcloader-update.json
+#   -Channel dev     → release "dev" (rolling tag, pre-release):       ArcLoader-Windows-dev.zip
+# and in both cases the versioned archive release "windows-v<version>" with ArcLoader-win-x64-<version>.zip
 # (pre-release while it is only a dev build; publishing the same version as stable makes it a normal release).
+# Since the rename (0.10.0, Offload → ArcLoader) the channel zip is also uploaded under its old name
+# (Offload-Windows.zip / Offload-Windows-dev.zip — links on the user's web point there), and stable also carries
+# offload-update.json (the same manifest — versions before 0.10.0 read it). The names: Get-ChannelAssetNames (release.ps1).
 # Run it in the checkout the zip was built from (scripts\build.ps1), after that commit is pushed to origin/main.
 # The release notes come from docs\VYVOJ-WINDOWS.md: the sections of the versions newer than -Since (default: this one).
 param(
     [Parameter(Mandatory = $true)][ValidateSet('stable', 'dev')][string]$Channel,
     [string]$Since,
-    [string]$Repo = 'lubomirbudin-glitch/offload',
+    [string]$Repo = 'lubomirbudin-glitch/arcloader',
     # Print the release notes and stop (nothing is uploaded).
     [switch]$DryRun
 )
@@ -17,7 +20,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent $root
 $version = Get-OffloadVersion (Join-Path $root 'Directory.Build.props')
-$zip = Join-Path $root "build\Offload-win-x64-$version.zip"
+$zip = Join-Path $root ('build\' + (Get-ReleaseZipName $version))
 if (-not (Test-Path $zip)) { throw "$zip not found - run scripts\build.ps1 first" }
 
 function Invoke-Gh {
@@ -61,26 +64,28 @@ function Get-VersionNotes([string]$From, [string]$To) {
 }
 
 $base = "https://github.com/$Repo/releases"
-$stableZip = "$base/download/stable/Offload-Windows.zip"
-$devZip = "$base/download/dev/Offload-Windows-dev.zip"
+$channelAssets = Get-ChannelAssetNames $Channel
+# The first name is the new one: the one the notes link to.
+$downloadName = $channelAssets.Zips[0]
+$download = "$base/download/$Channel/$downloadName"
 # Default: only this version's own section(s); -Since 0.6.1 also lists 0.7.0, 0.7.1 … up to this version.
 $notesBody = Get-VersionNotes -From $Since -To $version
 
 $intro = if ($Channel -eq 'stable') {
-    "**Stable version** — the latest released version of Offload for Windows; all automated tests passed.`n`n" +
-    "### ⬇️ Download: [Offload-Windows.zip]($stableZip)"
+    "**Stable version** — the latest released version of ArcLoader for Windows; all automated tests passed.`n`n" +
+    "### ⬇️ Download: [$downloadName]($download)"
 } else {
     "**Development version** — the newest development build. All automated tests passed, but it may contain unfinished " +
     "or not yet manually tested changes. On set, use the [stable version]($base/tag/stable).`n`n" +
-    "### ⬇️ Download: [Offload-Windows-dev.zip]($devZip)"
+    "### ⬇️ Download: [$downloadName]($download)"
 }
 $notes = @"
 $intro
 
 Version **$version** · commit [$short](https://github.com/$Repo/commit/$commit)
 
-**How to run:** Windows 10/11 x64. Unpack the ZIP anywhere and run ``Offload\Offload.exe`` — nothing is installed.
-The user manual is in the package (``Offload-manual.pdf``), a short intro in ``READ-ME.txt``. For an unsigned program
+**How to run:** Windows 10/11 x64. Unpack the ZIP anywhere and run ``ArcLoader\ArcLoader.exe`` — nothing is installed.
+The user manual is in the package (``ArcLoader-manual.pdf``), a short intro in ``READ-ME.txt``. For an unsigned program
 Windows may show SmartScreen: *More info → Run anyway*.
 
 **RAW decoders** (not in the package, the makers' licences do not allow it; without them clips are copied and verified, just without proxies):
@@ -96,7 +101,7 @@ all versions: [$base]($base) · source code (view only, all rights reserved): ht
 $notesBody
 "@
 if ($DryRun) { Write-Output $notes; return }
-$tmp = Join-Path ([IO.Path]::GetTempPath()) ("offload-publish-" + [guid]::NewGuid().ToString('N'))
+$tmp = Join-Path ([IO.Path]::GetTempPath()) ("arcloader-publish-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $tmp | Out-Null
 try {
     $notesFile = Join-Path $tmp 'notes.md'
@@ -104,7 +109,7 @@ try {
 
     # 1) Archive release windows-v<version>.
     $versionTag = "windows-v$version"
-    $title = "Offload for Windows $version" + $(if ($Channel -eq 'dev') { ' (development)' } else { '' })
+    $title = "ArcLoader for Windows $version" + $(if ($Channel -eq 'dev') { ' (development)' } else { '' })
     $released = (Test-Release $versionTag) -and -not [bool]((& gh release view $versionTag --repo $Repo --json isPrerelease | ConvertFrom-Json).isPrerelease)
     if ($Channel -eq 'dev' -and $released) {
         Write-Host "$versionTag is already a stable release - archive left as it is"
@@ -119,24 +124,27 @@ try {
         Invoke-Gh release create $versionTag $zip --repo $Repo @flags
     }
 
-    # 2) Rolling channel release: its tag moves to this commit, its asset keeps one name.
+    # 2) Rolling channel release: its tag moves to this commit, its assets keep their names.
     if (Test-Tag $Channel) {
         Invoke-Gh api -X PATCH "repos/$Repo/git/refs/tags/$Channel" -f "sha=$commit" -F force=true | Out-Null
     } else {
         Invoke-Gh api "repos/$Repo/git/refs" -f "ref=refs/tags/$Channel" -f "sha=$commit" | Out-Null
     }
-    $assetName = if ($Channel -eq 'stable') { 'Offload-Windows.zip' } else { 'Offload-Windows-dev.zip' }
-    $asset = Join-Path $tmp $assetName
-    Copy-Item $zip $asset
-    $assets = @($asset)
-    if ($Channel -eq 'stable') {
-        # The update check (Settings → App → Updates…) can read this manifest:
-        # https://github.com/<repo>/releases/download/stable/offload-update.json
-        $manifest = Join-Path $tmp 'offload-update.json'
-        Write-UpdateManifest -Path $manifest -Version $version -Url "$base/tag/stable" -Notes "Offload for Windows $version"
+    # The same zip under the new name and under the old one (a copy each: gh uploads a file under its own name).
+    $assets = @()
+    foreach ($name in $channelAssets.Zips) {
+        $asset = Join-Path $tmp $name
+        Copy-Item $zip $asset
+        $assets += $asset
+    }
+    # The update check (Settings → App → Updates…) can read these manifests (the same content under both names):
+    # https://github.com/<repo>/releases/download/stable/arcloader-update.json (and offload-update.json).
+    foreach ($name in $channelAssets.Manifests) {
+        $manifest = Join-Path $tmp $name
+        Write-UpdateManifest -Path $manifest -Version $version -Url "$base/tag/stable" -Notes "ArcLoader for Windows $version"
         $assets += $manifest
     }
-    $channelTitle = if ($Channel -eq 'stable') { "Offload for Windows — stable version ($version)" } else { "Offload for Windows — development version ($version)" }
+    $channelTitle = if ($Channel -eq 'stable') { "ArcLoader for Windows — stable version ($version)" } else { "ArcLoader for Windows — development version ($version)" }
     if (Test-Release $Channel) {
         Invoke-Gh release upload $Channel @assets --repo $Repo --clobber
         $flags = @('--title', $channelTitle, '--notes-file', $notesFile)
@@ -149,7 +157,8 @@ try {
     }
     Write-Host "published $version ($short) as $Channel"
     Write-Host "  page:     $base/tag/$Channel"
-    Write-Host "  download: $(if ($Channel -eq 'stable') { $stableZip } else { $devZip })"
+    Write-Host "  download: $download"
+    Write-Host "            $(($channelAssets.Zips | Select-Object -Skip 1 | ForEach-Object { "$base/download/$Channel/$_" }) -join ', ') (old name, the same zip)"
     Write-Host "  archive:  $base/tag/$versionTag"
 } finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue

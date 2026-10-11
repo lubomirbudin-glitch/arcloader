@@ -13,7 +13,7 @@ public sealed record SummaryInput(HistoryEntry? Entry, string? Folder)
 }
 
 /// Where the numbers of a card come from: its folder on a destination, the copy of its report on this computer
-/// (`Offload reporty`, the disk went away), or nothing but the history entry.
+/// (`ArcLoader reports`, the disk went away), or nothing but the history entry.
 public enum SummarySource { Destination, LocalCopy, None }
 
 /// One copy of the backup: the destination card folder, whether it is connected now, and whether it was verified —
@@ -39,7 +39,7 @@ public sealed class SummaryCard
     public SummarySource Source { get; init; }
     /// The folder the reports were read from (a destination card folder or the local copy).
     public string? ReadFrom { get; init; }
-    /// The copy of the card's report on this computer (`<Offload reporty>\<datum>\<karta>`), null when there is none.
+    /// The copy of the card's report on this computer (`<ArcLoader reports>\<datum>\<karta>`), null when there is none.
     public string? LocalCopy { get; init; }
     public IReadOnlyList<SummaryCopy> Copies { get; init; } = [];
 
@@ -143,7 +143,7 @@ public sealed record SummaryFiles(string Html, string? Pdf, string? ExtraHtml, s
 /// Task "Souhrnný report z vybraných záloh" (2026-10-09): one HTML + PDF (no thumbnails) from backups picked in the card
 /// history — cards of different days and disks. Read from the cards' reports on the destinations (every generation),
 /// else from their copy on this computer (LocalReports), else only what history.json says — never an error. Reads only;
-/// writes nothing but `<Offload reports>\summary\` and, when the user picks one, a folder on a disk (never over a file).
+/// writes nothing but `<ArcLoader reports>\summary\` and, when the user picks one, a folder on a disk (never over a file).
 public static class SummaryReport
 {
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -151,14 +151,14 @@ public static class SummaryReport
     public const string FolderName = "summary";
 
     /// Where the summary is saved on this computer: the folder of the local report copies (setting
-    /// `outputs.localReportFolder`, default `<Documents>\Offload reports`) — also when that copy is switched off.
+    /// `outputs.localReportFolder`, default `<Documents>\ArcLoader reports`) — also when that copy is switched off.
     public static string LocalRoot(OutputSettings o) =>
         string.IsNullOrWhiteSpace(o.LocalReportFolder) ? LocalReports.DefaultRoot : o.LocalReportFolder.Trim();
 
-    /// Every folder the local report copies may be in: the default one, the default of versions before 0.9.0
-    /// (`Offload reporty`, still read) and each profile's (projects may have their own).
+    /// Every folder the local report copies may be in: the default one, the defaults of earlier versions
+    /// (`Offload reports`, `Offload reporty`, still read) and each profile's (projects may have their own).
     public static IReadOnlyList<string> LocalRoots(AppSettings s) =>
-        new[] { LocalReports.DefaultRoot, LocalReports.OldDefaultRoot }.Concat(new SettingsProfile[] { s }.Concat(s.Projects).Select(p => LocalRoot(p.Outputs)))
+        new[] { LocalReports.DefaultRoot }.Concat(LocalReports.OldDefaultRoots).Concat(new SettingsProfile[] { s }.Concat(s.Projects).Select(p => LocalRoot(p.Outputs)))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     static bool HasReport(string folder)
@@ -573,7 +573,7 @@ public static class SummaryReport
                 h.Append($"<tr><td>{E(card)}</td><td class=\"{(bad ? "err" : "warn wrap")}\">{E(text)}</td></tr>\n");
             h.Append("</table></div>\n");
         }
-        h.Append($"<footer>offload {E(OffloadVersion.String)} · summary report · {HtmlReport.DateTimeText(createdLocal ?? DateTime.Now)}</footer></main></body></html>\n");
+        h.Append($"<footer>{Product.Name} {E(OffloadVersion.String)} · summary report · {HtmlReport.DateTimeText(createdLocal ?? DateTime.Now)}</footer></main></body></html>\n");
         return h.ToString();
     }
 

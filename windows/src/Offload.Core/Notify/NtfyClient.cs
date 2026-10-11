@@ -74,7 +74,7 @@ public static partial class NtfyClient
                 Content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(body.ToJsonString(Json))),
             };
             request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
-            request.Headers.UserAgent.ParseAdd($"Offload/{UpdateChecker.Plain(OffloadVersion.String)}");
+            request.Headers.UserAgent.ParseAdd($"{Product.Name}/{UpdateChecker.Plain(OffloadVersion.String)}");
             using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
             return response.IsSuccessStatusCode
                 ? new(true, null)
@@ -108,5 +108,5 @@ public static partial class NtfyClient
 
     /// "Send test notification".
     public static Task<NtfyResult> SendTestAsync(NtfySettings settings, TimeSpan? timeout = null) =>
-        SendAsync(settings.Server, settings.Topic, "Offload: test notification", "Notifications from Offload work.", 3, ["white_check_mark"], timeout);
+        SendAsync(settings.Server, settings.Topic, $"{Product.Name}: test notification", $"Notifications from {Product.Name} work.", 3, ["white_check_mark"], timeout);
 }

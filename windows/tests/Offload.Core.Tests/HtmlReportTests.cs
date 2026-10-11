@@ -15,7 +15,9 @@ public class HtmlReportTests
         Assert.Contains("<td class=\"ok\">verified</td>", html);
         Assert.Contains("<details><summary>All files (2)</summary>", html);
         Assert.Contains("prefers-color-scheme:dark", html);
-        Assert.Contains("offload 0.9.0-win", html);
+        Assert.Contains($"<footer>ArcLoader {OffloadVersion.String} · ", html);   // the report says tool "offload" (FORMATY), the footer the app's name
+        Assert.Contains("<title>ArcLoader ", html);
+        Assert.DoesNotContain("Offload", html);
     }
 
     [Fact]

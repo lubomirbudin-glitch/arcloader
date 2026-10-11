@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using Offload.Core;
 using Offload.Core.Notify;
 
 namespace Offload.App;
@@ -139,7 +140,7 @@ sealed unsafe partial class TrayNotifier : IDisposable
         var data = Data(NifMessage | NifIcon | NifTip);
         data.CallbackMessage = CallbackMessage;
         data.Icon = shown;
-        Copy("Offload", data.Tip, 128);
+        Copy(Product.Name, data.Tip, 128);
         // NIM_ADD fails when the icon is already there (e.g. a stale one): NIM_MODIFY then counts as added.
         added = ShellNotifyIcon(NimAdd, ref data) || ShellNotifyIcon(NimModify, ref data);
         if (!added)

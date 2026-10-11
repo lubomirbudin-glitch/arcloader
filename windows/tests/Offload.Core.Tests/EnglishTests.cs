@@ -122,27 +122,32 @@ public partial class EnglishTests
         }
     }
 
-    /// The local report copies of versions before 0.9.0 are in `Documents\Offload reporty`: the summary report still finds
-    /// them there (its fallback when the disk is gone), while new copies go to `Documents\Offload reports`.
-    [Fact]
-    public void OldLocalFolder_StillRead_NewCopiesGoToTheNewOne()
+    /// The local report copies of earlier versions are in `Documents\Offload reports` (0.9.x, before the rename) and
+    /// `Documents\Offload reporty` (before 0.9.0): the summary report still finds them in both (its fallback when the disk
+    /// is gone), while new copies go to `Documents\ArcLoader reports`.
+    [Theory]
+    [InlineData("Offload reports")]
+    [InlineData("Offload reporty")]
+    public void OldLocalFolder_StillRead_NewCopiesGoToTheNewOne(string oldName)
     {
         using var dir = new TempDir();
         var card = "Q" + Random.Shared.Next(100, 999);
         var root = dir.Sub("d1");
+        var oldRoot = Path.Combine(LocalReports.Documents, oldName);
         var d1 = SummaryReportTests.Backup(root, "2026-09-30", card, [SummaryReportTests.Clip(card + "C001", 60)]);
-        var mirrored = LocalReports.MirrorCard([d1], LocalReports.OldDefaultRoot);   // as an older version copied it
+        var mirrored = LocalReports.MirrorCard([d1], oldRoot);   // as an older version copied it
         try
         {
             Assert.NotNull(mirrored);
-            Assert.StartsWith(Path.Combine(LocalReports.Documents, "Offload reporty") + Path.DirectorySeparatorChar, mirrored);
+            Assert.StartsWith(oldRoot + Path.DirectorySeparatorChar, mirrored);
             Assert.True(File.Exists(Path.Combine(mirrored!, ".offload-origin")));
             Directory.Delete(root, recursive: true);   // the disk was handed on
 
             var roots = SummaryReport.LocalRoots(new AppSettings());
-            Assert.Contains(LocalReports.OldDefaultRoot, roots);
+            Assert.Contains(oldRoot, roots);
+            Assert.Contains(oldRoot, LocalReports.OldDefaultRoots);
             Assert.Equal(LocalReports.DefaultRoot, roots[0]);
-            Assert.Equal(Path.Combine(LocalReports.Documents, "Offload reports"), LocalReports.DefaultRoot);
+            Assert.Equal(Path.Combine(LocalReports.Documents, "ArcLoader reports"), LocalReports.DefaultRoot);
             Assert.Equal(LocalReports.DefaultRoot, LocalReports.RootFor(new OutputSettings()));
 
             var found = Assert.Single(SummaryReport.Load([SummaryInput.Of(SummaryReportTests.Entry(card, "2026-09-30", d1))], roots).Cards);
@@ -152,9 +157,19 @@ public partial class EnglishTests
         }
         finally
         {
-            try { Directory.Delete(Path.Combine(LocalReports.OldDefaultRoot, "2026-09-30", card), recursive: true); }
+            try { Directory.Delete(Path.Combine(oldRoot, "2026-09-30", card), recursive: true); }
             catch (IOException) { }
         }
+    }
+
+    /// The rename (0.10.0): every place a local copy may be — the new default first, then both folders of earlier versions.
+    [Fact]
+    public void LocalRoots_NewDefaultFirst_ThenBothOldFolders()
+    {
+        var roots = SummaryReport.LocalRoots(new AppSettings());
+        Assert.Equal(
+            [Path.Combine(LocalReports.Documents, "ArcLoader reports"), Path.Combine(LocalReports.Documents, "Offload reports"), Path.Combine(LocalReports.Documents, "Offload reporty")],
+            roots);
     }
 
     /// The summary report is saved as `<local root>\summary\<date>_<time>_summary.html`.

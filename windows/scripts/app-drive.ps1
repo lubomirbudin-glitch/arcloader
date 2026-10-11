@@ -1,12 +1,12 @@
-# Development helpers for the GUI: start Offload.exe, press its buttons (UI Automation), take screenshots.
+# Development helpers for the GUI: start ArcLoader.exe, press its buttons (UI Automation), take screenshots.
 #   . .\scripts\app-drive.ps1
-#   $env:OFFLOAD_SETTINGS_DIR = 'D:\tmp\offload-settings'   # isolated settings for the run
-#   $p = Start-Offload -Exe .\src\Offload.App\bin\Debug\net10.0-windows\Offload.exe
+#   $env:ARCLOADER_SETTINGS_DIR = 'D:\tmp\arcloader-settings'   # isolated settings for the run
+#   $p = Start-Offload -Exe .\src\Offload.App\bin\Debug\net10.0-windows\ArcLoader.exe
 #   Invoke-OffloadButton $p 'HardwareButton'                 # USB check on demand (Hardware in the top bar, or Ctrl+U)
 #   Invoke-OffloadButton $p 'StartButton'
 #   Save-OffloadScreenshot $p 'D:\tmp\shot.png'
 #   Stop-Offload $p
-#   $p = Start-Offload -Exe <Offload.exe> -Arguments '--demo probiha'   # a state of docs/ui-navrh/screeny (off by default)
+#   $p = Start-Offload -Exe <ArcLoader.exe> -Arguments '--demo probiha'   # a state of docs/ui-navrh/screeny (off by default)
 #   Resize-Offload $p 1000 900                                         # the narrow screenshot
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
 if (-not ('OffloadWin' -as [type])) {
@@ -38,13 +38,13 @@ function Start-Offload([string]$Exe, [string]$Arguments = '', [int]$TimeoutSecon
     $p = if ($Arguments) { Start-Process $Exe -ArgumentList $Arguments -PassThru } else { Start-Process $Exe -PassThru }
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ($p.MainWindowHandle -eq 0 -and -not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $p.Refresh() }
-    if ($p.HasExited) { throw "Offload exited during start (code $($p.ExitCode))" }
-    if ($p.MainWindowHandle -eq 0) { throw 'Offload window did not appear' }
+    if ($p.HasExited) { throw "ArcLoader exited during start (code $($p.ExitCode))" }
+    if ($p.MainWindowHandle -eq 0) { throw 'ArcLoader window did not appear' }
     Start-Sleep -Milliseconds 1000
     $p
 }
 
-# Windows of the process. Message boxes are Win32 dialogs (class #32770) titled "Offload" like the
+# Windows of the process. Message boxes are Win32 dialogs (class #32770) titled "ArcLoader" like the
 # main window, so they are told apart by class: -Dialog picks message boxes, without it they are skipped.
 # An owned window (the Hardware window, MessageBox.Show(window, ...)) is not under the desktop in UI Automation but a
 # child of its owner window, so the windows below each window are collected too (Hardware › its message box).
@@ -64,7 +64,7 @@ function Get-OffloadWindows($Process, [switch]$Dialog) {
     else { $all | Where-Object { $_.Current.ClassName -ne '#32770' } }
 }
 
-function Find-OffloadWindow($Process, [string]$TitlePattern = 'Offload', [switch]$Dialog, [int]$TimeoutSeconds = 10) {
+function Find-OffloadWindow($Process, [string]$TitlePattern = 'ArcLoader', [switch]$Dialog, [int]$TimeoutSeconds = 10) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
         $w = Get-OffloadWindows $Process -Dialog:$Dialog | Where-Object { $_.Current.Name -like $TitlePattern } | Select-Object -First 1
@@ -74,7 +74,7 @@ function Find-OffloadWindow($Process, [string]$TitlePattern = 'Offload', [switch
     throw "window '$TitlePattern' not found"
 }
 
-function Find-OffloadElement($Process, [string]$AutomationId, [string]$WindowTitle = 'Offload', [switch]$Dialog, [int]$TimeoutSeconds = 10) {
+function Find-OffloadElement($Process, [string]$AutomationId, [string]$WindowTitle = 'ArcLoader', [switch]$Dialog, [int]$TimeoutSeconds = 10) {
     $window = Find-OffloadWindow $Process $WindowTitle -Dialog:$Dialog -TimeoutSeconds $TimeoutSeconds
     $cond = New-Object System.Windows.Automation.PropertyCondition($AE::AutomationIdProperty, $AutomationId)
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -86,7 +86,7 @@ function Find-OffloadElement($Process, [string]$AutomationId, [string]$WindowTit
     throw "element '$AutomationId' not found in '$WindowTitle'"
 }
 
-function Invoke-OffloadButton($Process, [string]$AutomationId, [string]$WindowTitle = 'Offload', [switch]$Dialog) {
+function Invoke-OffloadButton($Process, [string]$AutomationId, [string]$WindowTitle = 'ArcLoader', [switch]$Dialog) {
     $el = Find-OffloadElement $Process $AutomationId $WindowTitle -Dialog:$Dialog
     $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
 }
@@ -101,7 +101,7 @@ function Invoke-OffloadDialogButton($Process, [string]$AutomationId = '6') {
 }
 
 # PrintWindow renders the window itself - works even when it is covered by other windows.
-function Save-OffloadScreenshot($Process, [string]$Path, [string]$WindowTitle = 'Offload', [switch]$Dialog) {
+function Save-OffloadScreenshot($Process, [string]$Path, [string]$WindowTitle = 'ArcLoader', [switch]$Dialog) {
     $h = [IntPtr]([int](Find-OffloadWindow $Process $WindowTitle -Dialog:$Dialog).Current.NativeWindowHandle)
     $r = New-Object OffloadWin+RECT
     [OffloadWin]::GetWindowRect($h, [ref]$r) | Out-Null
@@ -116,7 +116,7 @@ function Save-OffloadScreenshot($Process, [string]$Path, [string]$WindowTitle = 
 }
 
 # Sets the window's outer size in pixels (docs/ui-navrh: 1360 px wide, the narrow screen 1000 px), keeping its position.
-function Resize-Offload($Process, [int]$Width, [int]$Height, [string]$WindowTitle = 'Offload') {
+function Resize-Offload($Process, [int]$Width, [int]$Height, [string]$WindowTitle = 'ArcLoader') {
     $h = [IntPtr]([int](Find-OffloadWindow $Process $WindowTitle).Current.NativeWindowHandle)
     [OffloadWin]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, $Width, $Height, 0x0016) | Out-Null   # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
     Start-Sleep -Milliseconds 700

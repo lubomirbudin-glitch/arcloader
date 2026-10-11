@@ -8,7 +8,7 @@
         <TextBlock Text="Notifications" FontSize="17" FontWeight="SemiBold" />
         <TextBlock Text="{Binding ProfileText}" Style="{StaticResource Caption}" Margin="0,4,0,0" />
         <CheckBox Content="Windows notifications" IsChecked="{Binding Windows}" Margin="0,12,0,0" AutomationProperties.AutomationId="NotifyWindows" />
-        <TextBlock Text="Only when the Offload window is not in front; the sound and the flashing stay." Style="{StaticResource Caption}" Margin="24,0,0,0" TextWrapping="Wrap" />
+        <TextBlock Text="Only when the ArcLoader window is not in front; the sound and the flashing stay." Style="{StaticResource Caption}" Margin="24,0,0,0" TextWrapping="Wrap" />
         <CheckBox Content="Send to a phone via ntfy" IsChecked="{Binding NtfyEnabled}" Margin="0,10,0,0" AutomationProperties.AutomationId="NotifyNtfy" />
         <Grid Margin="24,6,0,0" IsEnabled="{Binding NtfyEnabled}">
             <Grid.ColumnDefinitions>

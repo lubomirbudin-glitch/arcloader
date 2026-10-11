@@ -81,6 +81,10 @@ public static partial class HtmlReport
         "<span class=\"hint\">in the print dialog choose \u201cSave as PDF\u201d</span>" +
         $"<a href=\"{Esc(Uri.EscapeDataString(pdfFileName))}\" title=\"The PDF is made at the end with Microsoft Edge; without it the file may not exist\">Open PDF report</a></div>\n";
 
+    /// The footer's tool name: a report written by this app (or by Offload before the rename, or by the Mac) says
+    /// `tool: "offload"` (the JSON value never changes, docs/FORMATY.md) — it is shown as ArcLoader; anything else as it is.
+    internal static string ToolName(string tool) => string.Equals(tool, "offload", StringComparison.OrdinalIgnoreCase) ? Product.Name : tool;
+
     internal static string DateTimeText(DateTime d) => d.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", Inv);
     static string TimeText(DateTime d) => d.ToLocalTime().ToString("HH:mm:ss", Inv);
 
@@ -171,7 +175,7 @@ public static partial class HtmlReport
 
         var h = new StringBuilder();
         h.Append("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
-        h.Append($"<title>Offload {Esc(r.CardName)} – {Esc(r.Date)}</title>\n<style>\n");
+        h.Append($"<title>{Product.Name} {Esc(r.CardName)} – {Esc(r.Date)}</title>\n<style>\n");
         h.Append(Styles(forPrint));
         h.Append("</style></head><body><main>\n");
         h.Append(Toolbar(OffloadReport.PdfName(r.CardName, r.Generation ?? 1), forPrint));
@@ -266,7 +270,7 @@ public static partial class HtmlReport
         h.Append("</table></div></details>\n");
         if (r.Skipped.Count > 0)
             h.Append($"<p class=\"sub\">Skipped system files: {Esc(string.Join(", ", r.Skipped))}</p>\n");
-        h.Append($"<footer>{Esc(r.Tool)} {Esc(r.Version)} · ASC MHL in ascmhl/ · {DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
+        h.Append($"<footer>{Esc(ToolName(r.Tool))} {Esc(r.Version)} · ASC MHL in ascmhl/ · {DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
         return h.ToString();
     }
 

@@ -48,8 +48,8 @@ public static class Mhl
         int copied = report.Files.Count(f => f.Xxh64 != null && f.Rewritten?.Any(w => w) == true);
         var comment = report.IsRepair ? Msg.MhlRepairComment(copied, listed - copied, report.Source)
             : generation > 1
-            ? $"Offload append: {Texts.N(listed, "new file")} from {report.Source}"
-            : $"Offload of {report.CardName} from {report.Source}";
+            ? $"{Product.Name} append: {Texts.N(listed, "new file")} from {report.Source}"
+            : $"{Product.Name} offload of {report.CardName} from {report.Source}";
         // Plan 10 (spec 9): how this destination was verified. `<process>` stays "transfer" — the ASC MHL v2 schema allows
         // only in-place / transfer / flatten there — so the method goes into the generation's comment.
         if (report.Destinations[d].VerifyMethod is string method) comment += $" · verification: {method}";
@@ -64,7 +64,7 @@ public static class Mhl
         Line("  <creatorinfo>");
         Line($"    <creationdate>{stamp}</creationdate>");
         Line($"    <hostname>{Esc(host)}</hostname>");
-        Line($"    <tool version=\"{Esc(report.Version)}\">{Esc(report.Tool)}</tool>");
+        Line($"    <tool version=\"{Esc(report.Version)}\">{Product.Name}</tool>");
         Line($"    <comment>{Esc(comment)}</comment>");
         Line("  </creatorinfo>");
         Line("  <processinfo>");

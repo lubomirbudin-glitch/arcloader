@@ -4,7 +4,7 @@ using Offload.Core.Desktop;
 
 namespace Offload.App;
 
-/// %APPDATA%\Offload\app.log - the app's own problems (job details are in each job's report).
+/// %APPDATA%\ArcLoader\app.log - the app's own problems (job details are in each job's report).
 static class AppLog
 {
     const long MaxBytes = 5 * 1024 * 1024;
@@ -20,7 +20,7 @@ static class AppLog
             }
             catch
             {
-                return System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Offload-app.log");
+                return System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ArcLoader-app.log");
             }
         }
     }

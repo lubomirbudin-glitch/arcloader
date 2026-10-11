@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using Offload.Core;
 
 namespace Offload.App;
 
@@ -24,10 +25,10 @@ public partial class MainWindow : Window
         vm.EditNotifyDialog = settings => NotifyWindow.Edit(this, settings, vm.ActiveProjectName);
         vm.ShowUpdatesDialog = m => UpdateWindow.Show(this, m);
         Closed += (_, _) => tray.Dispose();
-        vm.MessageRequested += text => MessageBox.Show(this, text, "Offload");
+        vm.MessageRequested += text => MessageBox.Show(this, text, Product.Name);
         Closed += (_, _) => vm.SaveNow();
         Closing += (_, e) => e.Cancel = !vm.TryClose(() => MessageBox.Show(this,
-            "An offload is running. Quit anyway?\n\nFiles in progress are deleted, finished files stay.", "Offload",
+            "An offload is running. Quit anyway?\n\nFiles in progress are deleted, finished files stay.", Product.Name,
             MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes);
         // Deferred and once: CloseReady can arrive from a dispatcher callback; Close() inside a Closing event throws.
         bool closed = false;
@@ -38,7 +39,7 @@ public partial class MainWindow : Window
         });
         vm.AttentionRequested += _ => NativeMethods.Flash(this);
         vm.AskBackedUp = model => BackedUpPromptWindow.Ask(this, model);
-        vm.AskYesNo = text => MessageBox.Show(this, text, "Offload", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
+        vm.AskYesNo = text => MessageBox.Show(this, text, Product.Name, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
         vm.AskProjectName = (title, initial, problem) => ProjectNameWindow.Ask(this, title, initial, problem);
         vm.EditLutRulesDialog = (rules, catalog) => LutRulesWindow.Edit(this, rules, catalog);
         // Spec 8a.2: the USB check is on demand only (menu Tools, Ctrl+U, the Hardware section) — no start-up question.
