@@ -77,6 +77,7 @@ Jeden řádek na soubor, UTF-8 bez BOM, konce řádků `\n`:
 Po doplnění (Windows od 0.2.0) se soubor nahradí atomicky (dočasné jméno + `ReplaceFile`): původní řádky zůstanou
 bajt po bajtu, za nimi přijdou řádky nových souborů (a řádky, které se z dřívějšího doplnění nedostaly do seznamu,
 ale MHL je zná). Starší `offload verify` (Mac i Windows 0.1.0), který čte jen tenhle seznam, tak ověří i doplněné soubory.
+Mac od 0.3.0 stejně (prodlouží soubor přes dočasné jméno + `rename`, dřívější bajty beze změny).
 
 ## `<karta>.md5` (Windows od 0.3.0, Mac naplánováno)
 
@@ -100,7 +101,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | Klíč | Typ | Význam |
 |---|---|---|
 | `tool` | string | `offload` |
-| `version` | string | `0.2.0` (Mac), `0.6.0-win` (Windows) |
+| `version` | string | `0.3.0` (Mac), `0.6.0-win` (Windows) |
 | `generation` | číslo? | jen Windows od 0.2.0 a jen v reportu doplnění nebo opravy (`offload_report_NNNN.json`): číslo generace ASC MHL; chybí = 1 (celá kopie) |
 | `kind` | string? | jen Windows od 0.5.0: `repair` u opravy („Zkopírovat znovu“); chybí u celé kopie a doplnění. Mac ignoruje |
 | `copyPausedSeconds`, `verifyPausedSeconds` | číslo? | jen Windows od 0.5.0: sekundy, které kopie / zpětné čtení stály pozastavené; chybí, když se nepozastavovalo. Od 0.8.0 (pauza po dokončení souboru / klipu, obě verze) se počítá jen doba, kdy úloha opravdu **stála** — od chvíle, kdy doběhl rozpracovaný soubor / klip, do Pokračovat; čas mezi stiskem Pozastavit a koncem souboru je práce a v rychlostech zůstává (do 0.7.x od stisku Pozastavit). Rychlosti a doby v TXT, HTML a PDF je odečítají; Mac ignoruje (⏳ převezme se stejným významem) |
@@ -116,7 +117,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `safeToFormatSeconds` | číslo? | jen Windows od 0.6.0: sekundy od startu do chvíle, kdy byl každý soubor ověřený na každém cíli (bez pauz); chybí, když to nenastalo |
 | `verifyNotes[]` | string? | jen Windows od 0.6.0: volný text (do 0.8.0 česky, od 0.9.0 anglicky) — nestabilní čtení (blok se při opakovaném čtení lišil), stejný blok špatně na více cílech a co dává karta při novém čtení |
 | `totalFiles`, `totalBytes` | číslo | |
-| `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows); Windows od 0.6.0 `verifyMethod` (`verify-in-proxy` = čtením pro proxy a dorovnáním, `read-back` = zpětným čtením; chybí bez ověření), `verifyNote` (česky, proč zpětným čtením, i když běželo ověření během proxy) a `volumeSerial` (`1A2B-3C4D`, sériové číslo svazku cíle — podle něj se cíl pozná i pod jiným písmenem, R12) |
+| `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows); Windows od 0.6.0 `verifyMethod` (`verify-in-proxy` = čtením pro proxy a dorovnáním, `read-back` = zpětným čtením; chybí bez ověření), `verifyNote` (česky, proč zpětným čtením, i když běželo ověření během proxy) a `volumeSerial` (`1A2B-3C4D`, sériové číslo svazku cíle — podle něj se cíl pozná i pod jiným písmenem, R12; Mac od 0.3.0: u FAT/exFAT/NTFS stejně jako Windows, když smí číst boot sektor, jinak a u ostatních FS `uuid:<UUID svazku>`) |
 | `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `xxh128`? (XXH3-128, 32 malých hex, Windows od 0.6.0), `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
 | `skipped[]` | string | vynechané systémové položky |
 | `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`? (relativní k složce karty, např. `_PROXY/idle/1.mov` — viz „Proxy ve složkách jako na kartě“), `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje), `content`? {`state` (`ok` / `warn`), `kind` (`decode`, `audio`, `timestamps`, `frames`, `end`), `frame`, `timecode`, `message`, `framesDecoded`, `framesExpected`} (Windows od 0.6.0: co dekodér hlásil při tvorbě proxy — `warn` je vada souboru z kamery, kopie přitom souhlasí s kartou; Mac ignoruje) |
@@ -241,7 +242,7 @@ přepočítá, rozepsaný `.offload-part` pokračuje od společného kontrolníh
 zbytek se zkopíruje; pak ověření a zápis generace jako u každé kopie. Reporty generace N z přerušeného běhu se přitom
 nahradí (ještě nebyly potvrzené). Oprava („Zkopírovat znovu“) takovou zálohu odmítne, dokud ji doplnění nedokončí.
 
-### Doplnění (Windows od 0.2.0, Mac naplánováno)
+### Doplnění (Windows od 0.2.0, Mac od 0.3.0)
 
 Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **stejné** složky karty na všech cílech
 (`offload append`, v GUI zaškrtávátko „Doplnit jen nové klipy do dřívější zálohy“):
@@ -266,7 +267,12 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
   na každou složku karty, bez čekání (druhé skončí „S touto zálohou právě pracuje jiná úloha …“); celá kopie bere zámek
   jen s ověřením během proxy (od zápisu reportů s `verifyPending` do zápisu výsledku ověření; report složky, kam se
   výsledek zapsal, když jinam ne, nese `verifyIncomplete: true` — nikdy „ověřeno“, dokud ho navázání nepřepíše; doplnění ho tehdy drží i
-  přes 2. fázi — plán 10, I4).
+  přes 2. fázi — plán 10, I4). Mac: `flock` na místním souboru
+  `~/Library/Application Support/Offload/locks/append-<sha256(UUID svazku|cesta)>.lock` — mezi Macem a Windows (ani
+  mezi dvěma počítači) se zámek neuplatní;
+- Mac (od 0.3.0) nový soubor přejmenuje z `.offload-part` přes `renamex_np(RENAME_EXCL)` (exFAT/FAT bez podpory: kontrola
+  těsně před přejmenováním) a proxy doplnění dostanou jména, která v `_PROXY` žádného cíle ještě nejsou; render ani kopie
+  proxy existující soubor nikdy nepřepíše. Komentář generace MHL Macu: `Offload append: 12 new files from /Volumes/A001`.
 
 ### Oprava — „Zkopírovat znovu“ (Windows od 0.5.0, Mac naplánováno)
 
@@ -293,7 +299,7 @@ selhaly — jako další generace ve stejné složce karty (jen GUI, tlačítko 
 - report `offload_report_NNNN.*` s `kind: "repair"`, `rewritten`, `setAside`; `<karta>.xxh64` (a `.md5`) se přepíše bez
   opakovaných řádků; nic k opravě = nic se nezapíše.
 
-## Report ověření (Windows od 0.2.0)
+## Report ověření (Windows od 0.2.0, Mac od 0.3.0)
 
 „Ověřit zálohu“ (GUI) a `offload verify --report` zapisují jen do složky `_REPORT`, nikdy do `ascmhl/` — `_REPORT` je
 v ignore vzorech MHL, takže další `ascmhl verify` projde. **Výjimka:** MHL z jiného programu (Silverstack, ShotPut,
@@ -307,7 +313,7 @@ a proto se uloží do `_REPORT` vedle složky karty (`<cíl>\<datum>\_REPORT\<ka
 
 | Klíč | Typ | Význam |
 |---|---|---|
-| `tool`, `version` | string | `offload`, `0.2.0-win` a novější |
+| `tool`, `version` | string | `offload`, `0.2.0-win` a novější, Mac `0.3.0` a novější |
 | `cardPath` | string | ověřená složka karty |
 | `started`, `finished` | datum | |
 | `basis` | string | `ascmhl` (všechny generace), `hashList` (jen `<karta>.xxh64` / `.md5`) nebo `pending` (Windows 0.6.0: generace 1 se ještě ověřuje, záznam není zapsaný — nic k porovnání) |
@@ -439,7 +445,11 @@ nebo formát `arriraw`) je to TC denní doby. Stopáž = součet `info.duration`
   64 KB; `version` nejvýš 32 znaků, `url` nejvýš 1000, `notes` se zkrátí na 2000; řídicí a formátovací znaky ve verzi
   nebo adrese manifest vyřadí.
 
-## Místní soubory (jen tento počítač, Mac převezme stejný tvar)
+## Místní soubory (jen tento počítač; Mac od 0.3.0 stejný tvar)
+
+Mac: zámek historie `flock` na `~/Library/Application Support/Offload/locks/history-<sha256>.lock` (jen GUI a CLI
+jednoho uživatele na jednom Macu); `card.fsSerial` z boot sektoru svazku (jako Windows), když ho smí číst (obrazy disků),
+jinak `uuid:<UUID svazku>` — historie přenesená z Windows kartu na Macu nespáruje; `card.identity` = `uuid:<UUID>`.
 
 `%APPDATA%\Offload\history.json` + `%APPDATA%\Offload\history\<id>.files.gz` (Mac: `~/Library/Application Support/Offload/`)
 — historie offloadů, nikam se neposílá (složku lze přesměrovat proměnnou `OFFLOAD_SETTINGS_DIR`). UTF-8 bez BOM,

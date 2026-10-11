@@ -16,8 +16,8 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.2.0C | 0.9.0-win (ve vývoji) |
-| Jazyk aplikace | česky (anglicky ⏳ naplánováno) | anglicky (od 0.9.0) |
+| Verze | 0.3.0 | 0.9.0-win (ve vývoji) |
+| Jazyk aplikace | anglicky (od 2026-10-10) | anglicky (od 0.9.0) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
 
@@ -43,11 +43,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Test USB portů na vyžádání + doporučení** | ✅ CLI (`offload ports`) + GUI (okno Hardware ⌘U, vlastní názvy portů; GUI čeká ruční test) | ✅ CLI + GUI |
 | **Vestavěné LUTy + automatický výběr podle kamery** (`proxy.lutMode`, `--lut auto`, `offload luts`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s klipy z kamer) |
 | **Složka pro proxy navíc** (`proxy.extraFolder`, `--proxy-folder`) | ✅ CLI + GUI (GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test) |
-| **Karta už zálohovaná** (`history.json`, řádek u karty, dotaz před celou kopií) | ⏳ naplánováno | ✅ CLI + GUI (GUI čeká ruční test s kartou) |
-| **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ⏳ naplánováno | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
-| **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ⏳ naplánováno | ✅ CLI + GUI |
-| **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | `verify` jen proti `.xxh64` | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
-| **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | jen velikost karty | ✅ CLI + GUI |
+| **Karta už zálohovaná** (`history.json`, řádek u karty, dotaz před celou kopií) | ✅ CLI + GUI (řádek u karty, dotaz před celou kopií; GUI čeká ruční test) | ✅ CLI + GUI (GUI čeká ruční test s kartou) |
+| **Doplnit jen nové klipy** (generace ASC MHL N, `offload_report_NNNN`, `offload append`) | ✅ CLI `offload append` + GUI tlačítko „Append“ (GUI čeká ruční test) | ✅ CLI + GUI (`ascmhl verify` po doplnění čeká ruční test) |
+| **Název karty z klipů** (`A001C003…` → `A001`, další v řadě, `--name auto`) | ✅ CLI `--name auto` + GUI (zástupný text a nápověda pole „Folder name“) | ✅ CLI + GUI |
+| **Ověřit zálohu** (všechny generace MHL, hashe xxh64/md5/sha1/xxh3/xxh128/c4, report ověření) | ✅ CLI `verify [--report]` + GUI „Verify backup“ v horní liště, Tools › Verify Backup… ⇧⌘O (GUI čeká ruční test) | ✅ CLI `verify` + GUI Nástroje → Ověřit zálohu… |
+| **Kontrola místa** (proxy, report, fronta, po svazcích, rezerva 5 %) | ✅ CLI + GUI (karty, fronta, po svazcích; GUI čeká ruční test) | ✅ CLI + GUI |
 | **Hlášky kontrol před kopií s kódy** (`PreflightCode`) | ✅ anglicky (od 2026-10-10, záměrně) | ✅ česky |
 | **Denní report** (`<datum>/_REPORT/<datum>_day_report.html/.pdf`, `offload day-report`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
 | **Seznam klipů CSV / Avid ALE** (`_clips.csv/.ale` karty i dne) | ⏳ naplánováno | ✅ CLI + GUI (import do Resolve/Avid čeká ruční test) |
@@ -150,7 +150,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 - **R3D/ARRI bez proxy** zatím nemají náhledy (stejně jako na Macu).
 - **Enkodér proxy v reportu:** Windows zapisuje do JSON volitelné `proxyEncoder` (např. `h264_nvenc`, `libx264`)
   a ukazuje ho v řádku „Proxy: H.264 (h264_nvenc), …“ v HTML/PDF. Mac klíč nezná a ignoruje ho.
-- **Verze v reportu:** Mac `0.2.0`, Windows `0.3.0-win` — z reportu je vidět, která verze kopírovala.
+- **Verze v reportu:** Mac `0.3.0`, Windows `0.x.y-win` — z reportu je vidět, která verze kopírovala.
 - **Hardwarové dekódování proxy** (2026-10-08/09): obě verze dekódují H.264/HEVC softwarově (Mac na Intelu dostal
   z VideoToolboxu zelené snímky bez chyby); kódování zůstává hardwarové. Windows ho umí zapnout volbou „Hardwarové
   dekódování (experimentální)“ / `--hw-decode` (`proxy.hardwareDecode`), Mac volbu nemá.
@@ -221,25 +221,29 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   s vypnutým nebo zrušeným ověřením.
 - **Chyby souborů v HTML česky** (Windows): JSON je sdílený, takže chyby v něm zůstávají anglicky (`size mismatch`,
   `HASH MISMATCH` …); HTML/PDF report je zobrazí česky.
-- **Historie karet** (zatím jen Windows, pro Mac naplánováno): `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,
+- **Historie karet** (obě verze; Mac od 0.3.0, `~/Library/Application Support/Offload/history.json`, zámek `flock`):
+  `%APPDATA%\Offload\history.json` (formát ve FORMATY.md,
   „Místní soubory“) — řádek „Zálohováno … — ověřeno“ u karty, dotaz „Karty už jsou zálohované“ před celou kopií, CLI
   vypíše řádek před plánem (bez dotazu); `--no-history` historii vypne. Karta se pozná podle sériového čísla souborového
   systému + kapacity, ne podle GUID svazku. Mac čte sériové číslo z boot sektoru (`Volume.swift`) jen tam, kde smí
   číst `/dev/rdiskN` (obrazy disků); skutečné disky a karty mají uzel `root:operator`, takže Mac bez sudo použije
   `uuid:<UUID svazku>` — historie přenesená z Windows kartu na Macu nespáruje (Mac pozná kartu jen ze své historie).
   Totéž `destinations[].volumeSerial` v reportu: Mac píše `1A2B-3C4D` jen po přečtení boot sektoru, jinak `uuid:…`.
-- **Doplnění** (zatím jen Windows): generace ASC MHL N a `offload_report_NNNN.*` (FORMATY.md). Mac `verify` čte jen
-  `<karta>.xxh64`, který doplnění rozšíří — doplněnou zálohu tedy ověří i Mac. Doplnění drží zámek složky karty (viz
-  níže) a odmítne kartu, na které není žádný soubor dřívější zálohy, i zálohu s nedokončeným dřívějším doplněním.
-- **Ověření zálohy:** Windows ověřuje proti ASC MHL (všechny generace, i MHL ze Silverstacku/ShotPutu), bez `ascmhl/`
-  proti `.xxh64`; Mac zatím jen proti `.xxh64`. Report ověření jde do `_REPORT` karty, a když MHL složky `_REPORT`
-  neignoruje (cizí program), do `_REPORT` vedle složky karty — do karty ani do `ascmhl/` se nezapisuje. Výstup `verify`
-  na Windows: strojové řádky (`MISMATCH`, `MISSING`, `ERROR`, `EXTRA`, nově `FAILED-AT-COPY`, `FAILED-SUPERSEDED`,
-  `CHAIN`) a český souhrn místo `OK`/`FAILED`.
+- **Doplnění** (obě verze; Mac od 0.3.0): generace ASC MHL N a `offload_report_NNNN.*` (FORMATY.md); doplnění z Macu
+  ověří Windows a naopak (`verify` čte všechny generace). Doplnění drží zámek složky karty (viz níže) a odmítne kartu, na
+  které není žádný soubor dřívější zálohy, i zálohu s nedokončeným dřívějším doplněním. Mac zatím nepočítá MD5: do
+  zálohy s MD5 (z Windows) doplní jen xxh64 — `.md5` se nerozšíří, generace MHL má jen `<xxh64>` (doplní úkol 51).
+- **Ověření zálohy** (obě verze; Mac od 0.3.0): proti ASC MHL (všechny generace, i MHL ze Silverstacku/ShotPutu), bez
+  `ascmhl/` proti `.xxh64`/`.md5` (i s `\r\n`). Report ověření jde do `_REPORT` karty, a když MHL složky `_REPORT`
+  neignoruje (cizí program), do `_REPORT` vedle složky karty — do karty ani do `ascmhl/` se nezapisuje. Výstup `verify`:
+  strojové řádky (`MISMATCH`, `MISSING`, `ERROR`, `EXTRA`, `FAILED-AT-COPY`, `FAILED-SUPERSEDED`, `CHAIN`) a souhrn
+  (Windows česky, Mac anglicky); report jen s `--report` v obou verzích. Mac zapíše HTML a JSON reportu jen jako nové
+  soubory (druhé ověření v téže sekundě report nepřepíše).
 - **Kontrola místa** (chování, ne formát): Windows sčítá požadavky po svazcích (karta + 64 KiB na soubor + 64 MiB, proxy
   podle odhadu z délky a datového toku, report 32 MiB + 1 MiB na klip, čekající a běžící úlohy, složka pro proxy) a před
-  renderem proxy přepočítá podle skutečné délky klipů (nevejde-li se, proxy se přeskočí, kopie zůstane ověřená). Mac
-  kontroluje jen kartu.
+  renderem proxy přepočítá podle skutečné délky klipů (nevejde-li se, proxy se přeskočí, kopie zůstane ověřená). Mac od
+  0.3.0 stejně (svazek = `st_dev`, jméno v hlášce „složka (svazek)“); jeho proxy mají jednu zvukovou stopu, odhad proto
+  počítá jeden proud kanálů klipu.
 - **Jazyk hlášek:** kontroly před kopií a chyby CLI jsou na Windows česky („Chyba: …“), na Macu od 2026-10-10
   anglicky („Error: …“, viz první bod oddílu „Záměrné rozdíly“) — se stejným významem a stejnými kódy; Mac píše cesty
   s `/`. Logy, TXT report a `--help` jsou anglicky v obou verzích. Chyby parseru jsou česky jen na Windows (kde je

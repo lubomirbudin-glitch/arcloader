@@ -13,6 +13,8 @@ Toto je Mac verze projektu; všechny příkazy níže se spouštějí ze složky
 Návrh dorovnání s Windows: [`docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
 plán po úkolech: [`docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](docs/superpowers/plans/2026-10-05-offload-mac-parity.md)
 (hotový ve verzi 0.2.0; ruční testy s hardwarem v [`README-START.md`](docs/superpowers/plans/README-START.md), oddíl 7).
+Verze 0.3.0 = plán 6 dorovnání 2 ([`2026-10-08-offload-mac-parity-2.md`](docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md),
+úkoly 32–50): historie karet, doplnění nových klipů, název z klipů, Ověřit zálohu, kontrola místa.
 
 ## Jak to funguje
 
@@ -24,6 +26,15 @@ plán po úkolech: [`docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](d
    `ascmhl/` = ASC MHL v2 (ověřitelné `ascmhl` / Silverstack / ShotPut …).
 4. **Proxy (volitelné)** – po ověření, čte se z disku (karta už není potřeba): scale → LUT (.cube) → burn-in název + TC
    → H.264/HEVC (VideoToolbox) nebo ProRes Proxy/LT do `_PROXY/`, s TC stopou pro relink. Kopie na všechny cíle.
+
+5. **Historie karet** – `~/Library/Application Support/Offload/history.json` (formát Windows): karta vložená znovu ukáže
+   „Backed up on … — verified, safe to format“ a před celou kopií se aplikace zeptá („Card already backed up“: Copy again in
+   full / Skip backed-up / Cancel). Na kartě s novými klipy tlačítko **Append** doplní jen nové soubory do **stejné**
+   složky karty jako další generaci ASC MHL (`offload_report_0002.*`, `ascmhl/0002_…`, `.xxh64` jen prodloužený — nic
+   dřívějšího se nepřepíše). Prázdné pole „Folder name“ navrhne název z klipů (`A001C003…` → `A001`) nebo další v řadě.
+6. **Ověřit zálohu** – „Verify backup“ v horní liště / Tools › Verify Backup… (⇧⌘O): složka karty na cíli nebo celý den,
+   proti všem generacím ASC MHL (i ze Silverstacku/ShotPutu), bez MHL proti `.xxh64`/`.md5`; report ověření do `_REPORT`.
+7. **Místo** – před startem po svazcích (karta, proxy z odhadu, report, fronta): červeně blokuje, oranžově varuje.
 
 Rozpracované soubory mají název `.<jméno>.offload-part`, nedokončená kopie tedy nikdy nevypadá jako hotová.
 Na kartu se nikdy nezapisuje. Během offloadu se nespí.
@@ -70,7 +81,11 @@ Ukázkové klipy: stránka Blackmagic RAW → „Download RAW Samples“ (formul
 
 ```sh
 offload /Volumes/A001 -d /Volumes/RAID_A -d /Volumes/SHUTTLE_B [--proxy --lut look.cube --proxy-codec h264]
-offload verify /Volumes/RAID_A/2026-10-03/A001
+offload copy /Volumes/A001 -d /Volumes/RAID_A --name auto      # název složky z klipů (A001C003… → A001)
+offload copy /Volumes/A001 -d /Volumes/RAID_A --dry-run         # plán a místo po svazcích, nic se nekopíruje
+offload copy … --no-history                                     # historii karet nečte ani nezapisuje
+offload append /Volumes/A001 [--into /Volumes/RAID_A/2026-10-03/A001 --into …]   # jen nové soubory, generace N
+offload verify /Volumes/RAID_A/2026-10-03/A001 [--report]       # nebo složka dne = každá karta; kód 1 = problém
 offload bench --read /Volumes/A001 --write /Volumes/RAID_A --write /Volumes/SHUTTLE_B
 ```
 

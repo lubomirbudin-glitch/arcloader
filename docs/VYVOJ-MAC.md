@@ -137,6 +137,92 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 50 — verze 0.3.0 (plán 6): FORMATY (verze, `volumeSerial` Macu, místní soubory a zámek historie, report
+  ověření a `.xxh64` Mac od 0.3.0), ROZDILY (verze, jazyk, řádky plánu 6), README (historie, Append, Verify backup, místo,
+  `offload append`, `verify [--report]`, `--name auto`, `--no-history`, `--dry-run`). Závěrečné ověření:
+  `swift build -c release` a `swift test` zelené — 452 testů, 6 přeskočených, 0 selhání; `offload --version` → 0.3.0.
+  `scripts/build-app.sh` se nespouštěl (zadání). Křížové ověření s Windows 0.6.0+ (verify/append obousměrně) neproběhlo —
+  Windows není po ruce; `ascmhl create` 1.2 na kopii složky doplněné Macem (generace 1 + 2) prošel
+- Úkol 49 — GUI plánu 6 v novém vzhledu (jako Windows 0.9): karta v kroku 1 se prohlédne mimo hlavní vlákno
+  (`CardInspector`, jedna prohlídka na cestu, žádost během běhu = ještě jednou, výsledek zahozený pro zdroj, který zmizel,
+  jiná identita karty ve slotu = znovu); pod kartou řádek historie v barvě tónu („Checking whether the card is already backed
+  up…“ dokud historie a prohlídka neskončí), u karty počet klipů a velikost; tlačítko „Append“ (jen svazek s novými
+  soubory a dosažitelnou zálohou, nápověda „Append new clips only to the earlier backup (12 files · 3.2 GB)“) — zaškrtnuté
+  místo pole názvu ukáže „Folder: 2026-10-06/A001 on 2 destinations“ a úloha jde do složek zálohy (krok 2 smí být prázdný),
+  karta úlohy „A001 · append“, „Nothing new“ zeleně jen při Safe to format; pole „Folder name“ má zástupný text z klipů /
+  další v řadě (`CardNaming.resolve` — co je vidět, to se zkopíruje) a šedou nápovědu, v Nastavení › Folders „Suggest the card
+  name from the clips“; dialog „Card(s) already backed up“ (Copy again in full / Skip backed-up / Cancel); hlášky místa pod
+  Startem (červená blokuje, oranžová varuje; vybrané karty z prohlídky, jinak obsazené místo svazku, fronta jako zbytek
+  běžících úloh, svazek a jméno cíle z probíhající kontroly cílů); Start čeká na prohlídku vybraných karet nejvýš 10 s;
+  „Verify backup“ v horní liště, Tools › Verify Backup… ⇧⌘O a v Nastavení › Verify („Save a verification report“, i v
+  dialogu) — každá karta je položka kopírovací fronty (`VerifyJob`, `VerifyJobView` v OffloadKit/Desktop, test), karta ve
+  frontě s průběhem, výsledkem, varováními, poznámkou o reportu mimo kartu, „Verification report“, „Show in Finder“,
+  „Cancel“; po skončení úlohy se historie načte znovu; před ukončením aplikace se čeká nejvýš 10 s na zápis historie (pak
+  log). Pravidla bez UI v OffloadKit (`BackedUpPrompt`, `AppendRules`, `CardNaming`, `SpaceCheck`, testy `CardRulesTests`).
+  GUI se nespouštělo (jen build) — ruční kontrola README-START oddíl 7 body 14–18 s kartou čeká
+- Úkol 48 — kontrola místa po svazcích (`SpaceEstimator`/`SpacePlanner` z proudu A, teď zapojené): karta + 64 KiB na
+  soubor + 64 MiB, proxy z odhadu (délka z velikosti a typického toku, ProRes podle výšky, AAC/PCM), report 32 MiB + 1 MiB
+  na klip, složka pro proxy jako vlastní místo; dva cíle na jednom svazku se sečtou; `OffloadEngine.prepare(extra:)`
+  a `checkSpace` (i u doplnění pro nové soubory) — blokuje `noSpace` dřív, než se cokoli zapíše, méně než 5 % rezervy =
+  `spaceWarnings` (úloha je dá do `JobStatus.warning`, CLI „Warning: …“ a pokračuje); před renderem přepočet ze skutečných
+  délek — nevejde-li se, proxy se nerenderují (`skipped` s poznámkou, varování, kopie zůstane ověřená); CLI `--dry-run`
+  vypíše `Space: …` za každý svazek. Ověřeno CLI na obrazu disku: dva cíle na jednom svazku → součet v jednom řádku, tři →
+  „Not enough space on D1, second (D1), third (D1): needs 314 MB (cards 204 MB, report 110 MB), free 312 MB.“
+- Úkol 47 — doplnění: zámek složek před plánem (obsazená = `appendBusy` hned, nic se nezapíše), plán pod zámkem, jen
+  nové soubory do stejných složek karty bez přepsání (`DestWriter` u doplnění přejmenuje `.offload-part` přes
+  `renamex_np` RENAME_EXCL; soubor, který se mezitím objeví, zůstane a kopie je `failed` „file appeared meanwhile“),
+  generace N s projektem dřívější zálohy, nic nového = Hotovo s poznámkou + doplnění chybějících řádků .xxh64 + obnova
+  záznamu historie, neověřené dřívější soubory = nelze formátovat (varování), historie dostane generaci `append`
+  (sjednocený seznam souborů, karta teď, projekt beze změny); zrušené doplnění zapíše generaci s `failed` u nedokončených
+  a historii ne. Proxy: jména obsazená v `_PROXY` všech cílů, render i kopie proxy na další cíle nikdy nepřepíšou
+  (`renameNoReplace`, `copyFile(replace: false)`) — platí i pro celou kopii. CLI `offload append <zdroj> [--into …]`
+  (bez `--into` složky z historie), volby fáze 2 sdílené s `copy` (`StageTwo`), společné spuštění úlohy a kód návratu jako
+  Windows (`JobRun`); `JobStatus.note`, `errorCode`. Odchylka od plánu: report doplnění do zálohy s MD5 (z Windows)
+  nepíše `hashAlgorithms` s md5 — Mac zatím MD5 při kopii nepočítá (úkol 51), takže by v reportu chyběly hodnoty.
+  Ověřeno CLI na obrazech disků (FAT32 karta, dva exFAT cíle): `offload append` → generace 2, `offload_report_0002.*`,
+  `ascmhl/0002_…`, `.xxh64` prodloužený, všech 10 dřívějších souborů bajtově stejných (`shasum -c`), podruhé „Nothing
+  new — the backup is complete.“ (kód 0), `offload verify` dne → 3 soubory OK, `ascmhl create` (kopie složky) přes obě
+  generace projde. Doplnění odmítlo zálohu, u níž se na jednom cíli změnil čas souboru (konflikt, nic nezkopírováno).
+  Windows `verify`/`append` téže složky neověřeno (Windows není po ruce). Oprava úkolu 43: shoda s historií porovnává
+  časy v .NET ticks z `timespec` (APFS má nanosekundy, seznam v historii 100 ns — přes `Date` občas „změněná“ karta)
+- Úkol 46 — plánovač doplnění (`AppendPlanner`): jedna záloha (`<kořen>/<datum>/<karta>` všude stejně), dostupné
+  složky s čitelnými reporty a nepoškozeným řetězem ASC MHL stejné délky, nejvyšší číslo reportu = poslední generace;
+  karta proti každé záloze (velikost, čas, FAT tolerance karty i cíle), soubor dobrý jen na části cílů, cizí soubor na
+  cíli, selhaný soubor na disku, chybějící soubor, jiná karta, obsazené dočasné jméno `.…offload-part`; neověřené dřívější
+  soubory (jediná definice `CardRecord.readBack`), součty a projekt dřívější zálohy; jen čte (test: nic nezapíše). Texty
+  konfliktů anglicky podle Windows („different size or date (card 1.2 GB · 10-06 09:14, RAID …)“, disk = jméno svazku)
+- Úkol 45 — Ověřit zálohu (`BackupVerifier`): všechny generace ASC MHL a hashe xxh64, md5, sha1, xxh3, xxh128, c4
+  (každý soubor čtený jednou s F_NOCACHE, velikost zvlášť), záloha bez MHL proti .xxh64/.md5 (i CRLF), nejnovější záznam
+  „failed“ ověřený proti starší platné generaci, nedokončená generace nikdy „v pořádku“ (oranžově, CLI kód 1), soubory
+  navíc mimo `_REPORT`/`_PROXY`/`ascmhl` a ignore vzory MHL (přesunuté z `MHLReader` do `BackupVerifier.ignored`), složka
+  dne = každá karta; report ověření (`VerifyReport`, anglické texty Windows `VerifyTexts`, CSS sdílené s reportem karty
+  přes `HTMLReport.styles`, PDF přes nové `PDFReport.writeHTML`) do `_REPORT` karty, u cizího MHL vedle karty, nic do
+  `ascmhl/`, HTML a JSON jen jako nové soubory; CLI `verify <karta|den> [--report]` (report jen s volbou, jako Windows),
+  strojové řádky, souhrn, průběh; starý `Verifier` smazán. Ověřeno CLI na obrazech disků: karta i den OK s HTML/PDF/JSON,
+  poškozený bajt (`dd conv=notrunc`) → MISMATCH a kód 1; `ascmhl create` (1.2, na kopii složky) po reportu ověření projde.
+  Zjištění (není z tohoto úkolu): na cíli exFAT (fskit) vznikají k souborům i složkám AppleDouble `._*` (rozšířené atributy
+  macOS) — `ascmhl diff` je hlásí jako nové soubory; Offload je přeskakuje (`Scanner`), ignore vzory MHL je neznají.
+  Report ověření z Windows 0.6.0 a záloha ze Silverstacku/ShotPutu neověřeny (nejsou po ruce)
+- Úkol 44 — úloha i CLI zapisují historii (záznam „unfinished“ od startu celé kopie, na konci nahrazený; zrušená
+  kopie se smaže; „ověřeno“ z `BackupState` = jediná definice; zaneprázdněná historie = 60 s čekání, pak zápis na pozadí
+  v pořadí s varováním `Msg.historyDelayed`, které po zápisu zmizí; `HistoryRecorder.drain` pro aplikaci a CLI), CLI řádek
+  historie s plnými cestami před plánem, `--no-history`, `--name auto` (cívka z klipů, jinak jmenovka). Historie se pod
+  XCTestem nikdy nezapíše do skutečné Application Support (bez `OFFLOAD_SETTINGS_DIR` vypnutá). Oprava: `offload copy --help`
+  (i `offload --help`) psalo „Error: CommandError(… helpRequested …)“ — nápověda se od swift-argument-parser 1.5 vrací jako
+  příkaz, jehož `run()` vyhodí žádost o nápovědu; teď ji vypíše parser. Nový `OFFLOAD_REPORTS_DIR` přesměruje místní kopie
+  reportů (ruční zkoušky CLI do dočasných složek). Ověřeno CLI na obrazech disků (karta FAT32 jako kořen svazku, dva cíle
+  exFAT, `hdiutil attach -nobrowse` do dočasné složky): `--name auto` → A001, podruhé řádek „Backed up on … — verified, safe to
+  format“, `fsSerial` z boot sektoru obrazu, `history/<id>.files.gz` čte systémový `gzip -dc`
+- Úkol 43 — shoda karty s historií (stejná / nové soubory / změněná / jiná karta, FAT tolerance celých hodin), texty
+  řádku historie anglicky podle Windows `HistoryText` („Backed up on 2026-10-06 08:15 to Zaloha (RAID) — verified, safe to
+  format“; datum `yyyy-MM-dd HH:mm` místně; Mac `diskName` = „složka (svazek)“, kořen svazku jen jméno), název karty
+  z klipů a „další v řadě“ (`ReelNames`, `ReelSuggestion`), prohlídka karty `CardInspector` (jeden zrušitelný sken,
+  výměna karty během skenu = chyba, nečitelný svazek = chyba, ne složka; `appendReachable` jen u svazku);
+  `Scanner.scan(isCancelled:)`
+- Úkol 42 — historie karet: history.json ve formátu Windows (verze 1, 5 000 záznamů, poškozený → .corrupt-…, vyšší
+  verze jen číst) pod flock zámkem, otisk karty (SHA-256, .NET ticks, ordinální řazení v UTF-16), history/<id>.files.gz
+  (gzip kolem raw DEFLATE, čte i soubor z `gzip -n` / .NET GZipStream — fixture z `gzip -n`, skutečný soubor z Windows
+  čeká); cesta seznamu vždy z `id`; prázdný seznam = platný gzip
 - Úkol 41 — zápis generace: reporty (jména generace; u generace ≥ 2 jen nové, všechna jména se zkontrolují dřív, než
   se zapíše první) → MHL → řetěz → seznamy součtů; .xxh64/.md5 jen prodloužit (dřívější bajty zůstanou, chybějící
   `\n` se doplní, chybějící řádky z MHL, bez opakování), commit výsledku ověření (MHL nejdřív, idempotentní,

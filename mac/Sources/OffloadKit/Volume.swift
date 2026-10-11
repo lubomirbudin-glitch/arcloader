@@ -169,7 +169,11 @@ public enum FileTimes {
     }
 
     public static func same(_ a: Date, _ b: Date, localTime: Bool) -> Bool {
-        let ta = ticks(a), tb = ticks(b)
+        same(ticks: ticks(a), ticks(b), localTime: localTime)
+    }
+
+    /// Exact ticks (from a timespec — a Date's Double loses the last 100 ns digits at today's dates).
+    public static func same(ticks ta: Int64, _ tb: Int64, localTime: Bool) -> Bool {
         if ta == tb { return true }
         guard localTime else { return false }
         let diff = abs(ta - tb), hour: Int64 = 36_000_000_000

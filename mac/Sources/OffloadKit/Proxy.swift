@@ -496,7 +496,12 @@ public final class ProxyRenderer {
         do {
             try runFFmpeg(ffmpeg, args, feeder: src.feeder, explainFeederError: src.explainFeederError, duration: info.duration,
                           progress: progress, isCancelled: isCancelled, stallAfter: stallTimeout)
-            guard rename(part, output) == 0 else { throw IOError("rename", output) }
+            // Never over a proxy that is already there (an append writes next to earlier proxies; a name taken meanwhile).
+            do {
+                try ProxyCopy.renameNoReplace(part, output)
+            } catch is ProxyCopy.Taken {
+                throw IOError(message: "proxy name taken meanwhile: \((output as NSString).lastPathComponent)")
+            }
         } catch {
             unlink(part)
             throw error

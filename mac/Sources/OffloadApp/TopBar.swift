@@ -4,8 +4,7 @@ import SwiftUI
 /// The bar over both columns (UI návrh, every screen): logo and name · running pill · Hardware with its status dot ·
 /// Settings. The window's title bar is hidden; the traffic lights sit over the bar's left inset.
 ///
-/// Not on the Mac yet (hidden, hooks for later): the project switcher ("Project  Film X ▾", Windows plan 8) and
-/// "Verify backup" (⇧⌘O, Windows plan 7).
+/// Not on the Mac yet (hidden, hooks for later): the project switcher ("Project  Film X ▾", Windows plan 8).
 struct TopBar: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
@@ -31,7 +30,14 @@ struct TopBar: View {
                     .padding(.horizontal, 4)
                     .frame(height: 34)
             }
-            // TODO(verify-backup): "Verify backup" (⇧⌘O) once the Mac can verify an existing backup (Windows plan 7).
+            Button { model.verifyBackup() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.shield").font(.system(size: 15))
+                    Text("Verify backup")
+                }
+            }
+            .buttonStyle(.offload(.ghost))
+            .help("Verify backup… (⇧⌘O) — check a backup on a destination against its ASC MHL, without the card")
             HardwareButton(hw: model.hardware) { openWindow(id: "hardware") }
             Button { model.openSettings() } label: {
                 Image(systemName: "slider.horizontal.3").font(.system(size: 15))

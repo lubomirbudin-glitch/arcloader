@@ -429,5 +429,5 @@ public struct ClipEntry: Codable {
 }
 
 public enum OffloadVersion {
-    public static let string = "0.2.0"
+    public static let string = "0.3.0"
 }

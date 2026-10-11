@@ -1,4 +1,5 @@
 import AppKit
+import OffloadKit
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -19,9 +20,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// "Keep running" after closing the window: a click on the Dock icon brings the window back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { true }
 
-    /// A running hardware measurement stops and deletes its temporary file before the process exits (≤ 10 s).
+    /// A running hardware measurement stops and deletes its temporary file before the process exits (≤ 10 s); a card
+    /// history record still waiting for the history lock gets 10 s more — never lost silently (logged).
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated { model?.waitForHardware() }
+        if !HistoryRecorder.drain(timeout: 10) {
+            NSLog("%@", "history: \(HistoryRecorder.waiting) record(s) not written before quitting — " + Msg.historyNotWritten)
+        }
     }
 }
 
@@ -58,6 +63,7 @@ struct OffloadApp: App {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appSettings) { SettingsMenuItem(model: model) }
             CommandGroup(before: .windowList) { HardwareMenuItem() }
+            CommandMenu("Tools") { VerifyBackupMenuItem(model: model) }
         }
         // One Hardware window: opening it again only brings it to the front (no second run).
         Window("Hardware — USB ports and disks", id: "hardware") {
@@ -76,6 +82,16 @@ struct HardwareMenuItem: View {
     var body: some View {
         Button("Hardware — USB Ports and Disks…") { openWindow(id: "hardware") }
             .keyboardShortcut("u", modifiers: .command)
+    }
+}
+
+/// Tools › Verify Backup… (⇧⌘O, like Ctrl+Shift+O on Windows): a card folder on a destination, or a whole day.
+struct VerifyBackupMenuItem: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        Button("Verify Backup…") { model.verifyBackup() }
+            .keyboardShortcut("o", modifiers: [.command, .shift])
     }
 }
 

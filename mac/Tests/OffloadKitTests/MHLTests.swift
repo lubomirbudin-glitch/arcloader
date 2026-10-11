@@ -134,14 +134,14 @@ final class MHLTests: XCTestCase {
     }
 
     func testIgnorePatterns() {
-        XCTAssertTrue(MHLReader.ignored("_REPORT/x", ["_REPORT"]))
-        XCTAssertTrue(MHLReader.ignored("CLIP/.DS_Store", [".DS_Store"]))
-        XCTAssertTrue(MHLReader.ignored("ascmhl/x.mhl", ["ascmhl/"]))
-        XCTAssertFalse(MHLReader.ignored("ascmhl", ["ascmhl/"]), "name/ only matches a folder")
-        XCTAssertTrue(MHLReader.ignored("a/b/c.tmp", ["**/*.tmp"]))
-        XCTAssertFalse(MHLReader.ignored("a/b.mov", ["/b.mov"]), "a pattern with / starts at the card root")
-        XCTAssertTrue(MHLReader.ignored("_report/x", ["_REPORT"]), "any case")
-        XCTAssertFalse(MHLReader.ignored("CLIP/A.mov", ["_REPORT", "*.tmp"]))
+        XCTAssertTrue(BackupVerifier.ignored("_REPORT/x", ["_REPORT"]))
+        XCTAssertTrue(BackupVerifier.ignored("CLIP/.DS_Store", [".DS_Store"]))
+        XCTAssertTrue(BackupVerifier.ignored("ascmhl/x.mhl", ["ascmhl/"]))
+        XCTAssertFalse(BackupVerifier.ignored("ascmhl", ["ascmhl/"]), "name/ only matches a folder")
+        XCTAssertTrue(BackupVerifier.ignored("a/b/c.tmp", ["**/*.tmp"]))
+        XCTAssertFalse(BackupVerifier.ignored("a/b.mov", ["/b.mov"]), "a pattern with / starts at the card root")
+        XCTAssertTrue(BackupVerifier.ignored("_report/x", ["_REPORT"]), "any case")
+        XCTAssertFalse(BackupVerifier.ignored("CLIP/A.mov", ["_REPORT", "*.tmp"]))
     }
 
     // Review focus 6.

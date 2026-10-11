@@ -6,8 +6,9 @@ import SwiftUI
 /// start bar pinned at the bottom (the steps scroll on their own). With no card in a reader while the queue has jobs,
 /// steps 2 and 3 shrink to a short list and one line (obr. 2, 3); a card coming in brings the full form back.
 ///
-/// Not on the Mac yet (hidden): the camera chip ("ALEXA 35 · LogC4") and clip count from a quick card check,
-/// "Already backed up … · Append" from the card history, the name suggested from clips, the time estimate.
+/// Each card is looked at off the main thread (CardInspector): its clips and size, the line from the card history
+/// ("Backed up on … — verified, safe to format"), "Append" for new clips, and the folder name the clips suggest.
+/// Not on the Mac yet (hidden): the camera chip ("ALEXA 35 · LogC4"), the time estimate.
 struct SetupColumn: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
@@ -62,9 +63,9 @@ struct CardsStep: View {
         }
     }
 
-    /// "1.70 GB · exFAT · USB 3 (5 Gb/s)" — the used space stands for the size (the card is not read before the copy).
+    /// "24 clips · 1.70 GB · exFAT · USB 3 (5 Gb/s)" — before the card was looked at, its used space stands for the size.
     private func detail(_ v: VolumeItem) -> String {
-        var parts = [Fmt.bytes(max(0, v.total - v.free)), DiskFormat.label(v.format)]
+        var parts = [model.clipFacts(v.path) ?? Fmt.bytes(max(0, v.total - v.free)), DiskFormat.label(v.format)]
         if let c = model.volumeConnections[v.path] { parts.append(c) }
         if !v.looksLikeCard { parts.append("doesn't look like a card") }
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
@@ -120,11 +121,28 @@ struct CardTile: View {
                     Text(detail).font(.ui(13)).foregroundStyle(p.text2)
                         .lineLimit(isFolder ? 1 : 2).truncationMode(.middle)
                         .fixedSize(horizontal: false, vertical: true)
-                    // TODO(history): "Already backed up Oct 6 21:40 · 2 new clips" + Append once the Mac keeps a card history.
+                    if isFolder, let facts = model.clipFacts(path) {
+                        Text(facts).font(.ui(13)).foregroundStyle(p.text2).lineLimit(1)
+                    }
+                    if let line = model.historyLine(path) {
+                        Text(line.text).font(.ui(13)).foregroundStyle(color(line.tone))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
                 .onTapGesture { isOn.wrappedValue.toggle() }
+                if let appendText = model.appendText(path) {
+                    // Only the new clips into the earlier backup (spec 2.2).
+                    let on = model.appendChosen(path)
+                    Button { model.setAppend(path, !on) } label: {
+                        Label("Append", systemImage: on ? "checkmark" : "plus").font(.ui(12, .semibold))
+                    }
+                    .buttonStyle(.offload(on ? .warnSoft : .secondary, height: 28))
+                    .help(appendText)
+                    .padding(.top, 2)
+                }
                 if isFolder {
                     IconButton(systemImage: "xmark", help: "Remove this folder") { model.removeManualSource(path) }
                 }
@@ -132,11 +150,19 @@ struct CardTile: View {
                     .help(selected ? "Don't offload this card" : "Offload this card")
                     .padding(.top, 2)
             }
-            if selected {
+            if selected, let folder = model.appendFolderText(path) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(folder).font(.mono(12)).foregroundStyle(p.textSoft)
+                    if let text = model.appendText(path) { Text(text).font(.ui(12)).foregroundStyle(p.text3) }
+                }
+            } else if selected {
+                let placeholder = model.namePlaceholder(path)
                 VStack(alignment: .leading, spacing: 6) {
-                    (Text("Folder name ").foregroundColor(p.text2) + Text("— empty uses the card's name").foregroundColor(p.text3))
+                    (Text("Folder name ").foregroundColor(p.text2)
+                        + Text(placeholder.hint.map { "— \($0)" } ?? "— empty uses the card's name").foregroundColor(p.text3))
                         .font(.ui(12))
-                    TextField(model.defaultName(path), text: Binding(
+                        .lineLimit(1).truncationMode(.tail)
+                    TextField(placeholder.name, text: Binding(
                         get: { model.cardNames[path] ?? "" },
                         set: { model.cardNames[path] = $0 }))
                         .textFieldStyle(.plain)
@@ -153,6 +179,15 @@ struct CardTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Metrics.tileRadius).fill(selected ? p.raised : p.raisedAlt))
         .overlay(RoundedRectangle(cornerRadius: Metrics.tileRadius).strokeBorder(selected ? p.accentBorder : p.line, lineWidth: 1))
+    }
+
+    private func color(_ tone: HistoryTone) -> Color {
+        switch tone {
+        case .ok: return p.success
+        case .warning: return p.warn
+        case .error: return p.dangerText
+        case .neutral: return p.text2
+        }
     }
 }
 
@@ -448,10 +483,15 @@ struct StartBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             summary
+            // Spec 2.5: red blocks the start, orange only warns (the engine checks again when each job starts).
+            ForEach(Array(model.spaceProblems.enumerated()), id: \.offset) { _, problem in
+                Text(problem.text).font(.ui(12)).foregroundStyle(problem.severity == .blocking ? p.dangerText : p.warn)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let problem = model.startProblem {
                 Text(problem).font(.ui(12)).foregroundStyle(p.dangerText).fixedSize(horizontal: false, vertical: true)
             } else if model.starting {
-                Text("Checking the LUT and the proxy folder…").font(.ui(12)).foregroundStyle(p.text2)
+                Text("Checking the cards, the LUT and the proxy folder…").font(.ui(12)).foregroundStyle(p.text2)
             }
             Button { model.start() } label: {
                 HStack(spacing: 10) {
