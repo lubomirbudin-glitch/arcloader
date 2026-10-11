@@ -31,6 +31,8 @@ final class JobItem: ObservableObject, Identifiable {
     let sourceName: String
     /// The source is a whole card volume that may be ejected (from the volume scan when the job was created).
     let canEject: Bool
+    /// Queued with "One card at a time": starts only after every earlier job has completely finished.
+    var oneAtATime = false
     /// The used space of the card volume when the job was queued (the size before the plan exists), nil for a folder.
     let estimatedBytes: Int64?
     @Published var ejected = false
@@ -642,9 +644,16 @@ final class AppModel: ObservableObject {
         PausedQueue.blocked(item.queuePhase, others: jobs.filter { $0 !== item }.map { ($0.queuePhase, $0.status.paused) })
     }
 
+    /// "One card at a time": a waiting job behind one that is still running (its proxies, verification or report).
+    func waitsForPreviousJob(_ item: JobItem) -> Bool {
+        item.oneAtATime && item.queuePhase == .waiting
+            && jobs.contains { $0 !== item && !$0.status.phase.isFinished && $0.queuePhase != .waiting }
+    }
+
     /// "Add to queue" while a card waits for or is in its copy — a new one then waits.
     var startQueues: Bool {
         jobs.contains { [.waiting, .copying, .flushing, .verifying].contains($0.queuePhase) }
+            || (settings.oneJobAtATime && jobs.contains { !$0.status.phase.isFinished })
     }
 
     /// The custom LUT and the proxy folder are checked once more right before the start (they may sit on a disk that
@@ -688,9 +697,12 @@ final class AppModel: ObservableObject {
     }
 
     /// Queues one job: copies run one after another (they share the destination disks); post-processing runs in
-    /// parallel on its own queue, so the next card starts copying while proxies render.
+    /// parallel on its own queue, so the next card starts copying while proxies render — or, with "One card at a time",
+    /// on the copy queue itself, so the next card waits until this one is completely finished.
     func enqueue(_ item: JobItem) {
         jobs.append(item)
+        let oneAtATime = settings.oneJobAtATime
+        item.oneAtATime = oneAtATime
         copyQueue.async { [weak self] in
             // Cancelled while queued: it never runs, but the queue still reports it finished.
             if item.job.isCancelled {
@@ -703,7 +715,13 @@ final class AppModel: ObservableObject {
                 item.refresh()
                 self?.copyFinished(item)
             }
-            if needsPost {
+            if needsPost && oneAtATime {
+                item.job.runPost()
+                DispatchQueue.main.async {
+                    self?.jobFinished(item)
+                    self?.writeDayReports(item)
+                }
+            } else if needsPost {
                 self?.postQueue.async {
                     item.job.runPost()
                     DispatchQueue.main.async {

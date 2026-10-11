@@ -250,6 +250,15 @@ Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
   (1 clip)`. Testy `CaptureFrameRateTests` (i skutečné vzorky ARRIRAW v `TestMedia` — oba 24 fps). Vzorek
   `profile.braw` z Blackmagic RAW Speed Test hlásí `sensorRate` 1 (syntetický klip) — stejně jako Windows se nehlídá.
 
+## 2026-10-11 — build „ArcLoader D10“: informace při zrušení, jedna karta po druhé
+
+- **Zrušení (zadání uživatele):** po Cancel karta úlohy ukáže „Cancelling — …“ podle fáze (co ještě dokončuje) a skryje
+  Cancel/Pause, dokud úloha neskončí. art-cmd (ARRIRAW → ProRes mezikrok) a REDline se při zrušení hned ukončí
+  (`ToolProcess.run/runCombined(isCancelled:)`, SIGTERM, po 2 s SIGKILL) — dřív se čekalo na celý klip.
+- **One card at a time (zadání uživatele):** Settings → Folders → Queue; `settings.json` `oneJobAtATime` (výchozí false).
+  Další karta začne, až je předchozí úplně hotová (proxy a ověření během proxy běží na frontě kopií místo souběžně);
+  čekající karta to říká. Windows: úkoly v VYVOJ-WINDOWS „Naplánováno“.
+
 ## 2026-10-11 — build „ArcLoader D9“: Cancel během ověřování
 
 - **Chyba z ostrého provozu (build C):** Cancel během zpětného čtení po kopii zabral až po dočtení celého souboru —

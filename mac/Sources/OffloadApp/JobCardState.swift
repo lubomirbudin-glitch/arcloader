@@ -134,6 +134,7 @@ struct JobCardState {
         case .waiting:
             c.title = "Waiting in queue"
             if model.waitsForPausedJob(item) { c.waitingHint = PausedQueue.waitingText }
+            else if model.waitsForPreviousJob(item) { c.waitingHint = PausedQueue.oneAtATimeText }
         case .running:
             c.canPause = item.isRunning
             c.paused = s.paused

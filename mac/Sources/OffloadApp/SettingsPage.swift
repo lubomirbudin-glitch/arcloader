@@ -180,6 +180,14 @@ struct FoldersSettings: View {
                             .font(.ui(12)).foregroundStyle(p.text3).fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                FormRow(label: "Queue") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Toggle("One card at a time", isOn: $model.settings.oneJobAtATime)
+                            .toggleStyle(.offloadCheckbox)
+                        Text("The next card starts only when the previous one is completely finished — copy, verification, proxies and report. Off: the next card copies while the previous one's proxies render. Applies to cards added from now on.")
+                            .font(.ui(12)).foregroundStyle(p.text3).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 FormRow(label: "Appearance") {
                     Picker("", selection: $model.settings.appearance) {
                         Text("Dark").tag("dark")

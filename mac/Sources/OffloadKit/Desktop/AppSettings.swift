@@ -51,6 +51,10 @@ public struct AppSettings: Codable, Equatable {
     public var verifyPrimary = VerifyOptions.fastest
     /// "dark" (default, the look of docs/ui-navrh), "light" or "system"; another value (a newer version's) reads as dark.
     public var appearance = "dark"
+    /// The queue runs one card at a time: the next card starts copying only after the previous one is completely
+    /// finished — verification, proxies, report (user requirement 2026-10-11). Off (default): the next card copies
+    /// while the previous one's proxies render.
+    public var oneJobAtATime = false
 
     /// The JSON object last read (unknown keys of newer versions); written back under the known keys on save.
     public var raw: [String: Any] = [:]
@@ -59,7 +63,7 @@ public struct AppSettings: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case destRoots, verify, analyzeClips, proxy, tools, portNames, autoDestinations, ignoredVolumes, naming, hash, outputs
-        case verifyInProxy, verifyPrimary, appearance
+        case verifyInProxy, verifyPrimary, appearance, oneJobAtATime
     }
 
     public init() {}
@@ -69,6 +73,7 @@ public struct AppSettings: Codable, Equatable {
             && a.tools == b.tools && a.portNames == b.portNames && a.autoDestinations == b.autoDestinations
             && a.ignoredVolumes == b.ignoredVolumes && a.naming == b.naming && a.hash == b.hash && a.outputs == b.outputs
             && a.verifyInProxy == b.verifyInProxy && a.verifyPrimary == b.verifyPrimary && a.appearance == b.appearance
+            && a.oneJobAtATime == b.oneJobAtATime
     }
 }
 
@@ -121,6 +126,7 @@ public enum SettingsStore {
             s.verifyPrimary = p.isEmpty ? VerifyOptions.fastest : p   // a newer value is kept; it reads as fastest
             return true
         }
+        read("oneJobAtATime") { v in bool(v).map { s.oneJobAtATime = $0 } != nil }
         read("appearance") { v in
             guard let a = v as? String else { return false }
             s.appearance = a.isEmpty ? "dark" : a

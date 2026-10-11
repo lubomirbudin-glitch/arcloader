@@ -22,6 +22,15 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(SettingsStore.decode(SettingsStore.encode(s)).appearance, "system")
     }
 
+    func testOneJobAtATimeDefaultsOffAndRoundTrips() throws {
+        XCTAssertFalse(AppSettings().oneJobAtATime)
+        XCTAssertTrue(load(#"{"oneJobAtATime":true}"#).oneJobAtATime)
+        XCTAssertFalse(load(#"{"oneJobAtATime":"yes"}"#).oneJobAtATime)
+        var s = AppSettings()
+        s.oneJobAtATime = true
+        XCTAssertTrue(SettingsStore.decode(SettingsStore.encode(s)).oneJobAtATime)
+    }
+
     // Review focus 3: what version 0.1.0 stored (no portNames) keeps the destinations after the update.
     func testOldMacSettingsWithoutPortNamesKeepDestinations() throws {
         var old = AppSettings()

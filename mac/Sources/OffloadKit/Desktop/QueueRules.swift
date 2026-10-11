@@ -21,6 +21,8 @@ public enum CardIdentity {
 /// after another (Windows `QueueRules.BlockedByPaused`).
 public enum PausedQueue {
     public static let waitingText = "Waiting for a paused job."
+    /// "One card at a time": the card before it still renders proxies, verifies or writes its report.
+    public static let oneAtATimeText = "Waiting until the previous card is completely finished (one card at a time)."
 
     public static func blocked(_ phase: JobStatus.Phase, others: [(phase: JobStatus.Phase, paused: Bool)]) -> Bool {
         phase == .waiting && others.contains { $0.paused && [.copying, .flushing, .verifying, .reporting].contains($0.phase) }

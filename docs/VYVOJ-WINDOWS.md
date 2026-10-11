@@ -25,6 +25,19 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
+- **Informace při zrušení (zadání uživatele 2026-10-11, Mac hotovo v buildu D10):** po kliknutí na Zrušit karta úlohy
+  hned ukáže, že se úloha ruší a na co čeká, dokud opravdu neskončí; tlačítka Zrušit a Pozastavit zmizí. Texty podle
+  fáze (Mac `JobProgress.cancellingText`): kopie „Cancelling — finishing the current block; partly copied files will be
+  deleted…“ (= Windows `Msg.Cancelling`, dosud jen v CLI), ověření „Cancelling — stopping the verification…“, analýza/proxy
+  „Cancelling — stopping the clip in progress…“, report „Cancelling — finishing the report being written…“. Zkontrolovat
+  i to, že zrušení ukončí hned i dekodér, který běží sám před ffmpeg (art-cmd → ProRes mezikrok, REDline) — na Macu
+  čekal na dokončení celého klipu (minuty u ARRIRAW).
+- **Kopírování úlohu po úloze (zadání uživatele 2026-10-11, Mac hotovo v buildu D10):** volba Nastavení → „Queue: One card
+  at a time“ (`settings.json` `oneJobAtATime`, výchozí `false`): další karta začne kopírovat, až je předchozí úplně hotová
+  (kopie, ověření včetně ověření během proxy, proxy, report). Vypnuto = jako dosud (další karta kopíruje během proxy
+  předchozí). Čekající karta: „Waiting until the previous card is completely finished (one card at a time).“ Platí pro
+  karty přidané od změny. Výhoda: disky nečtou ověření během proxy a nezapisují další kartu zároveň (méně tepla).
+
 - **Cancel během ověřování (zjištění z Macu 2026-10-11):** na Macu zrušení zpětného čtení zabralo až po dočtení celého
   souboru (ARRIRAW klip = desítky GB → „nejde zrušit“). Zkontrolovat, že Windows zpětné čtení po kopii kontroluje zrušení
   uvnitř souboru (po blocích), ne jen mezi soubory.
