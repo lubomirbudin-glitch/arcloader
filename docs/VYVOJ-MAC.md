@@ -138,6 +138,12 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 66 — ověřovač bloků `BlockVerifier` (libovolné pořadí, kusy bloku podle offsetu, nejvýš 8 rozpracovaných,
+  ověřený blok přečtený znovu s jinými daty = nesoulad a „nestabilní“, nesoulad, který při novém čtení sedí = ověřený
+  a nestabilní, jiná délka = `sizeDiffers`, bezpečný pro víc vláken) a dočtení `BlockReads.complete` jen chybějících
+  bloků s druhým čtením nesouhlasných (F_NOCACHE); před čtením kontrola cache — rezidentní soubor se jednou vyhodí, když
+  zůstane, čte se dál, ale `throughCache` to řekne (poznámka a varování, nikdy tiché zelené). Odchylka od plánu: místo
+  brány pauzy uvnitř souboru `beforeBlock` (Pozastavit podle zadání 2026-10-09 až mezi soubory, úkol 61)
 - Úkol 65 — kontrola cache na macOS (`CacheProbe`: `mincore` nad sdíleným mapováním, `evict` = `msync(MS_INVALIDATE)`;
   sonda `.offload-cachecheck-*` zapsaná s F_NOCACHE + F_FULLFSYNC v `_REPORT` nesmí zůstat v paměti, síťový svazek nikdy,
   slepé `mincore` = vše klasicky), blokový manifest `_REPORT/offload-manifest.jsonl` jen připisovaný (`O_APPEND` +
