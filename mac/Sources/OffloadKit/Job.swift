@@ -23,6 +23,14 @@ public struct JobConfig: Codable, Equatable {
     /// The card folders of an earlier backup to append the card's new files to (`<root>/<date>/<card>` on every
     /// destination); nil = a full copy into `destRoots`.
     public var appendInto: [String]?
+    /// Plan 10: verify the copies while the proxies render (settings `verifyInProxy`, the "Verify during proxy render" row
+    /// of step 3; CLI --classic-verify turns it off). Off, or without proxies: the classic read-back after the copy.
+    public var verifyInProxy = true
+    /// Which destination is verified through the proxies: "fastest" (the fastest in the copy) or "first" (settings
+    /// `verifyPrimary`; any other value reads as "fastest").
+    public var verifyPrimary = "fastest"
+    /// CLI --primary N (0-based); nil = by `verifyPrimary`.
+    public var primaryDestination: Int?
 
     public init(source: String, destRoots: [String]) {
         self.source = source
@@ -32,7 +40,7 @@ public struct JobConfig: Codable, Equatable {
 
 public struct JobStatus {
     public enum Phase: String {
-        case waiting, copying, flushing, verifying, reporting, analyzing, proxies, done, failed, cancelled
+        case waiting, copying, flushing, verifying, reporting, analyzing, proxies, finishingVerification, done, failed, cancelled
 
         public var label: String {
             switch self {
@@ -43,6 +51,7 @@ public struct JobStatus {
             case .reporting: return "Report"
             case .analyzing: return "Analysing clips"
             case .proxies: return "Rendering proxies"
+            case .finishingVerification: return "Finishing verification"
             case .done: return "Done"
             case .failed: return "Error"
             case .cancelled: return "Cancelled"
@@ -83,6 +92,13 @@ public struct JobStatus {
     public var pauseStep: String?
     /// How long the job has stood paused so far (from the end of the step it finished to Resume).
     public var pausedTotal: TimeInterval = 0
+    /// Plan 10: this job verifies its copies during the proxy render (stage 2), not by a read-back after the copy.
+    public var verifyInProxy = false
+    /// Stage 2's verification: bytes verified so far and to verify, summed over the destinations.
+    public var verifyDone: Int64 = 0
+    public var verifyTotal: Int64 = 0
+    /// Task 70: clips whose decoder reported a defect (the copy matches the card) — "Safe to format" waits for a look.
+    public var contentWarnings = 0
 
     public init() {}
 
@@ -106,6 +122,21 @@ public final class OffloadJob {
     private var startEntry: String?
     /// Stage 2's thread as a worker of the pause gate (it waits between clips), nil outside stage 2.
     private var postWorker: PauseGate.Worker?
+    /// Ruling I4: the card folders' lock of a copy whose reports say verifyPending — taken before they are written (stage
+    /// 1), let go once the verification result is written (stage 2, another thread).
+    private var verifyLock: FolderLocks?
+    /// Stage 2's verification while it runs.
+    private var session: VerifySession?
+    /// The paused time when the copy ended: what stage 2's verification stood is counted from it.
+    private var pausedAtCopyEnd: TimeInterval = 0
+    /// Tests only (internal): verify in stage 2 whatever the proxies (task 67 — without ffmpeg); nil = the rule.
+    var deferVerifyOverride: Bool?
+    /// Tests only (internal): called before the verification result is written into each card folder.
+    var beforeCommit: ((String) -> Void)?
+    /// Tests only (internal): the cache check of a destination (nil = CacheProbe.problem).
+    var cacheCheck: ((String) -> String?)?
+    /// Tests only (internal): called when stage 2's verification starts, with its session.
+    var onVerifySession: ((VerifySession) -> Void)?
 
     /// Set on a worker thread, read by the app's main thread — always under the lock.
     public var plan: OffloadPlan? { lock.lock(); defer { lock.unlock() }; return _plan }
@@ -199,6 +230,11 @@ public final class OffloadJob {
         }
         // Cancelled while still queued: it never runs, so say so instead of "Waiting" forever.
         if s.phase == .waiting && !wasStarted && wasCancelled { s.phase = .cancelled }
+        lock.lock(); let verifying = session; lock.unlock()
+        if let verifying {
+            s.verifyDone = verifying.verifiedBytes.reduce(0, +)
+            s.verifyTotal = verifying.toVerify.reduce(0, +)
+        }
         let gate = engine.pauses
         let running = s.phase != .waiting && !s.phase.isFinished
         s.paused = running && gate.isPaused
@@ -206,14 +242,14 @@ public final class OffloadJob {
         s.pausedTotal = gate.pausedTotal
         if s.paused && !s.pauseHeld {
             lock.lock(); let clipDone = postWorker?.isHolding == true; lock.unlock()
-            s.pauseStep = OffloadJob.finishing(s, clipDone: clipDone)
+            s.pauseStep = OffloadJob.finishing(s, clipDone: clipDone, verifying: verifying?.currentFiles ?? [])
         }
         return s
     }
 
     /// Paused, not standing yet: what the job still finishes — the file the copy is on, the files the read-backs read,
     /// the clip stage 2 analyses or renders (`clipDone`: its thread waits already); nil when none is known.
-    static func finishing(_ s: JobStatus, clipDone: Bool) -> String? {
+    static func finishing(_ s: JobStatus, clipDone: Bool, verifying: [String] = []) -> String? {
         func files(_ rel: [String]) -> String? {
             var names: [String] = []
             for r in rel where !r.isEmpty {
@@ -227,6 +263,7 @@ public final class OffloadJob {
         case .verifying: return files(s.copy?.verifyingFiles ?? [])
         case .analyzing where !clipDone && !s.clipName.isEmpty: return "clip " + s.clipName
         case .proxies where !clipDone && !s.clipName.isEmpty: return "the proxy of clip " + s.clipName
+        case .finishingVerification: return files(verifying)
         default: return nil
         }
     }
@@ -275,9 +312,22 @@ public final class OffloadJob {
             let historyFolder = HistoryRecorder.folder(config)
             // The card volume as it is now (history's key); a folder has none. Read before the copy, off the main thread.
             let volume = historyFolder == nil ? nil : CardVolume.of(plan.source)
+            // Plan 10 (R11): the read-back waits for stage 2, where the proxies read the copies. Ruling I4: the new card
+            // folders are locked before their reports say verifyPending, until the verification result is written.
+            let deferring = verifiesInProxy(plan)
+            engine.options.deferVerify = deferring
+            if deferring { engine.beforePendingReports = { [weak self] in self?.takeVerifyLock(plan.cardPaths) } }
+            update { $0.verifyInProxy = deferring }
             // R6: history knows the copy from its start — one the app never finishes can be resumed from its card.
             if let historyFolder, plan.mode == .full { recordStart(plan, volume: volume, folder: historyFolder) }
-            let report = try engine.run(plan)
+            let report: OffloadReport
+            do {
+                report = try engine.run(plan)
+            } catch {
+                releaseVerifyLock()
+                throw error
+            }
+            pausedAtCopyEnd = engine.pauses.pausedTotal
             // The record of the copy (report, hashes, MHL) on this Mac too, right after verification.
             LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
             setReport(report)
@@ -288,12 +338,27 @@ public final class OffloadJob {
                 $0.copy = engine.snapshot()
             }
             if isCancelled {
-                forgetStart()   // a cancelled copy is not recorded in history
+                if report.verifyPending == true, let historyFolder {
+                    // Cancelled once the reports said verifyPending: nothing was verified, the generation is not committed
+                    // — history keeps it "unfinished", "Finish interrupted backup" completes it.
+                    recordFinished(plan, report: report, volume: volume, card: plan.scan, folder: historyFolder)
+                } else {
+                    forgetStart()   // a cancelled copy is not recorded in history
+                }
+                releaseVerifyLock()
                 update { $0.phase = .cancelled }
                 return false
             }
             if let historyFolder { recordFinished(plan, report: report, volume: volume, card: plan.scan, folder: historyFolder) }
-            if engine.cardChanged { return endCardChanged(report, plan: plan) }
+            if engine.cardChanged {
+                // The files copied before the pause are verified now (no proxies follow), then the job fails.
+                if report.verifyPending == true { setReport(verifyNow(plan, report)) }
+                return endCardChanged(self.report ?? report, plan: plan)
+            }
+            if report.verifyPending == true && !(config.analyzeClips || config.proxy.enabled) {
+                update { $0.phase = .analyzing }
+                return true   // only the verification (tests: deferVerifyOverride)
+            }
             guard config.analyzeClips || config.proxy.enabled else {
                 writePDFReports(report, plan: plan)
                 update { $0.phase = .done }
@@ -337,7 +402,10 @@ public final class OffloadJob {
             fail(error)
             return false
         }
-        defer { held.release() }
+        // Released when stage 1 ends — unless its reports say verifyPending: then stage 2 holds it until the result is
+        // written (ruling I4).
+        var keepHeld = false
+        defer { if !keepHeld { held.release() } }
         let ap: AppendPlan
         do {
             ap = try AppendPlanner.plan(config.source, cardPaths: into, isCancelled: { self.isCancelled })
@@ -384,12 +452,20 @@ public final class OffloadJob {
         for w in engine.spaceWarnings { update { $0.addWarning(w) } }
         if plan.unverifiedEarlier > 0 { update { $0.addWarning(Msg.unverifiedEarlier(plan.unverifiedEarlier)) } }
         update { $0.phase = .copying }
+        let deferring = verifiesInProxy(plan)
+        engine.options.deferVerify = deferring
+        update { $0.verifyInProxy = deferring }
         let report: OffloadReport
         do {
             report = try engine.run(plan)
         } catch {
             fail(error)
             return false
+        }
+        pausedAtCopyEnd = engine.pauses.pausedTotal
+        if report.verifyPending == true && !isCancelled {
+            keepHeld = true
+            lock.lock(); verifyLock = held; lock.unlock()
         }
         LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
         setReport(report)
@@ -402,11 +478,21 @@ public final class OffloadJob {
             $0.copy = engine.snapshot()
         }
         if isCancelled {
+            if report.verifyPending == true, let historyFolder {
+                recordFinished(plan, report: report, volume: volume, card: ap.fullScan, folder: historyFolder)
+            }
             update { $0.phase = .cancelled }
             return false
         }
         if let historyFolder { recordFinished(plan, report: report, volume: volume, card: ap.fullScan, folder: historyFolder) }
-        if engine.cardChanged { return endCardChanged(report, plan: plan) }
+        if engine.cardChanged {
+            if report.verifyPending == true { setReport(verifyNow(plan, report)) }
+            return endCardChanged(self.report ?? report, plan: plan)
+        }
+        if report.verifyPending == true && !(config.analyzeClips || config.proxy.enabled) {
+            update { $0.phase = .analyzing }
+            return true
+        }
         guard config.analyzeClips || config.proxy.enabled else {
             writePDFReports(report, plan: plan)
             update { $0.phase = .done }
@@ -429,13 +515,135 @@ public final class OffloadJob {
             lock.lock(); postWorker = nil; lock.unlock()
             worker.leave()
         }
-        let final = analyzeAndRender(plan: plan, report: report, log: log)
+        let pending = report.verifyPending == true
+        // Plan 10: the copies verify while the clips are analysed and the proxies render (the background readers start
+        // now; the primary's clips are read through the tap — task 68).
+        if pending { startVerification(plan, report) }
+        var final = config.analyzeClips || config.proxy.enabled ? analyzeAndRender(plan: plan, report: report, log: log) : report
+        // The verification ends here — also when the analysis or the proxies were cancelled.
+        if pending { final = finishVerification(plan, final, log: log) }
         setReport(final)
         _ = waitBetweenSteps()   // not in the middle of the PDF; a cancel while paused still writes it, as before
         update { $0.phase = .reporting }
         writePDFReports(final, plan: plan)
         let finalPhase: JobStatus.Phase = isCancelled ? .cancelled : .done
         update { $0.phase = finalPhase }
+    }
+
+    // MARK: - Verification during the proxies (plan 10)
+
+    /// Plan 10 (R11): whether this job verifies with the proxies — verification and proxies on, verify-in-proxy not
+    /// switched off, ffmpeg found (a repair always reads back; the Mac has none yet).
+    func verifiesInProxy(_ plan: OffloadPlan) -> Bool {
+        guard config.verify, plan.mode != .repair else { return false }
+        if let forced = deferVerifyOverride { return forced }
+        return config.verifyInProxy && config.proxy.enabled && config.tools.resolved().ffmpeg != nil
+    }
+
+    /// Ruling I4 for a full copy: the new card folders' lock, right before their reports say verifyPending (the folders
+    /// exist then). Busy cannot really happen (new folders); then the commit takes it or does not commit.
+    private func takeVerifyLock(_ cardPaths: [String]) {
+        lock.lock(); let have = verifyLock != nil; lock.unlock()
+        guard !have, let held = try? FolderLocks.acquire(cardPaths) else { return }
+        lock.lock(); verifyLock = held; lock.unlock()
+    }
+
+    private func releaseVerifyLock() {
+        lock.lock(); let held = verifyLock; verifyLock = nil; lock.unlock()
+        held?.release()
+    }
+
+    /// The preferred primary destination: CLI --primary, else "first" = destination 1, else the fastest (nil).
+    var preferredPrimary: Int? {
+        if let p = config.primaryDestination { return p }
+        return config.verifyPrimary == "first" ? 0 : nil
+    }
+
+    /// The session of a copy whose reports say verifyPending: every destination's cache check first (spec D.23.1), then the
+    /// background reads start.
+    private func startVerification(_ plan: OffloadPlan, _ report: OffloadReport) {
+        let check = cacheCheck ?? CacheProbe.problem
+        let why: [String?] = plan.cardPaths.map { config.verifyInProxy || deferVerifyOverride == true ? check($0) : VIPMsg.classicSetting }
+        let source = plan.source
+        let files = plan.scan.files
+        let identity = engine.cardAtStart
+        let blockSize = engine.options.chunkSize
+        let s = VerifySession(report: report, cardPaths: plan.cardPaths, blocks: engine.fileBlocks, blockSize: blockSize,
+                              rates: engine.writeRates, preferred: preferredPrimary, classicWhy: why, gate: engine.pauses,
+                              cardBlock: { file, block in
+                                  // Only while the copied card is still at the source (a folder has no card to lose).
+                                  if let identity, OffloadEngine.cardFingerprint(source) != identity { return nil }
+                                  return VerifySession.readCardBlock(source + "/" + files[file].relPath, block: block, blockSize: blockSize)
+                              },
+                              diskName: { d in HistoryText.diskName(plan.destRoots[d]) })
+        lock.lock(); session = s; lock.unlock()
+        onVerifySession?(s)
+        s.startBackground()
+    }
+
+    /// Verifies the copies of a pending report right away (no proxies follow — the card changed while paused).
+    private func verifyNow(_ plan: OffloadPlan, _ report: OffloadReport) -> OffloadReport {
+        startVerification(plan, report)
+        return finishVerification(plan, report, log: nil)
+    }
+
+    /// The end of the verification (spec 6; Windows FinishVerification): the readers end, the report gets the verdicts and
+    /// is committed into every card folder while the job holds their lock (ruling I4) — ASC MHL generation and chain, then
+    /// reports, then hash lists; history learns it, the lock goes, and "Safe to format" is decided from the folders
+    /// (BackupState — the one definition of "verified"). Cancelled: nothing is committed — the reports stay verifyPending
+    /// (never verified; "Finish interrupted backup" completes them) and history keeps the backup "unfinished". Never throws.
+    private func finishVerification(_ plan: OffloadPlan, _ report: OffloadReport, log: ((String) -> Void)?) -> OffloadReport {
+        lock.lock(); let held = verifyLock; verifyLock = nil; let s = session; lock.unlock()
+        defer {
+            held?.release()
+            lock.lock(); session = nil; lock.unlock()
+        }
+        guard let s else { return report }
+        update { $0.phase = .finishingVerification }
+        lock.lock(); let worker = postWorker; lock.unlock()
+        let fin = s.finish(pausing: worker, isCancelled: { self.isCancelled })
+        if isCancelled || !fin.verified { return report }
+        let paused = max(0, engine.pauses.pausedTotal - pausedAtCopyEnd)
+        let final = report.withVerification(results: fin.results, verified: true, primary: s.primary, classicWhy: s.classicWhy,
+                                            notes: fin.notes, finished: Date(), verifyPaused: paused)
+        for n in fin.notes { log?(n) }
+        // Never without the folders' lock (another job may be at them): taken now, or not committed at all.
+        var lockNow: FolderLocks?
+        if held == nil {
+            do { lockNow = try FolderLocks.acquire(plan.cardPaths) } catch {
+                update { $0.addWarning(VIPMsg.verifyNotCommitted("\(error)")); $0.safeToFormat = false }
+                return report   // nothing written: the folders still say verifyPending, and so does the job's report
+            }
+        }
+        defer { lockNow?.release() }
+        let outcome = Verification.commit(final, cardPaths: plan.cardPaths, log: log, beforeCommit: beforeCommit)
+        LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
+        if let w = outcome.warning { update { $0.addWarning(w) } }
+        let whole = BackupState.of(plan.cardPaths)
+        recordVerified(plan, outcome.report, whole: whole, committed: outcome.committed)
+        var safe = outcome.committed && outcome.report.safeToFormat && whole.failed == 0 && whole.unverified == 0 && plan.notInBackup == 0
+        if plan.mode == .append { safe = safe && plan.unverifiedEarlier == 0 }
+        if let first = fin.notes.first { update { $0.addWarning(first) } }
+        update {
+            $0.safeToFormat = safe
+            $0.copySucceeded = $0.copySucceeded != false && outcome.report.success
+        }
+        // The job's report (its PDF, the app) never looks verified where the result is not written everywhere.
+        var mine = outcome.report
+        if !outcome.committed { mine.verifyIncomplete = true }
+        return mine
+    }
+
+    /// History learns the verification (I5): "unfinished" until the result is written into every folder.
+    private func recordVerified(_ plan: OffloadPlan, _ report: OffloadReport, whole: BackupState, committed: Bool) {
+        guard let folder = HistoryRecorder.folder(config) else { return }
+        historyRecord("verification", folder: folder) { store in
+            guard let found = HistoryRecorder.entryOf(store.load(), plan.cardPaths) else { return .unchanged }
+            return store.update(id: found.id) { existing in
+                guard let e = existing else { return nil }
+                return (HistoryRecorder.verifiedEntry(e, plan: plan, report: report, whole: whole, committed: committed), nil)
+            }
+        }
     }
 
     // MARK: - History
@@ -713,10 +921,13 @@ public final class OffloadJob {
     /// PDF copy of the report on every destination. Rendered once, then copied; a failure here never fails the offload.
     private func writePDFReports(_ report: OffloadReport, plan: OffloadPlan) {
         let name = OffloadReport.pdfName(report.cardName, report.generationNumber)
-        let first = plan.cardPaths[0] + "/" + Layout.reportDirName + "/" + name
+        // Only into card folders that are there: one gone with its disk is never made anew.
+        let present = plan.cardPaths.filter { FileManager.default.fileExists(atPath: $0) }
+        guard let firstFolder = present.first else { return }
+        let first = firstFolder + "/" + Layout.reportDirName + "/" + name
         do {
             try PDFReport.write(report, to: first)
-            for other in plan.cardPaths.dropFirst() {
+            for other in present.dropFirst() {
                 try? ProxyCopy.copyFile(first, to: other + "/" + Layout.reportDirName + "/" + name)
             }
         } catch {
@@ -727,7 +938,7 @@ public final class OffloadJob {
     }
 
     private func rewriteReports(_ report: OffloadReport, plan: OffloadPlan) {
-        for path in plan.cardPaths {
+        for path in plan.cardPaths where FileManager.default.fileExists(atPath: path) {
             try? report.write(cardPath: path, includeHashRecords: false)
         }
         LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)

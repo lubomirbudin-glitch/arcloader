@@ -24,6 +24,10 @@ public struct OffloadOptions {
     /// A `part` checkpoint goes into the block manifest after this many blocks of a file being written (64 × 16 MiB =
     /// 1 GiB) — after an F_FULLFSYNC of the file: F_NOCACHE does not promise the medium (spec D.23.1).
     public var checkpointBlocks = 64
+    /// Plan 10 (task 67): stage 1 does not read back — the copies verify in stage 2 with the proxies. The reports are
+    /// written with `verifyPending: true`, without the ASC MHL generation and without the hash lists (the commit after the
+    /// verification writes them, spec D.22.5).
+    public var deferVerify = false
 
     public init() {}
 }
@@ -233,6 +237,10 @@ final class DestWriter {
     private var awaitingFlush: [ManifestRecord] = []
     /// The last `flushDevice` went through (F_FULLFSYNC or fsync).
     private(set) var deviceFlushed = false
+    /// Time spent in writes (the destination's own write rate — the primary of verify-in-proxy is the fastest).
+    private var busyNanos: UInt64 = 0
+    /// Bytes per second while writing; 0 when nothing was written. Read after `wait()`.
+    var writeRate: Double { busyNanos > 0 ? Double(written.get()) / (Double(busyNanos) / 1e9) : 0 }
     private(set) var results: [DestFileResult]
     private let verifyingLock = NSLock()
     private var verifyingNow: String?
@@ -278,7 +286,9 @@ final class DestWriter {
             defer { c.release() }
             guard self.fd >= 0 else { return }
             do {
+                let t0 = DispatchTime.now().uptimeNanoseconds
                 try IO.pwrite(self.fd, c.buf, c.length, c.offset, path: self.partPath)
+                self.busyNanos += DispatchTime.now().uptimeNanoseconds - t0
                 self.written.add(c.length)
                 self.blockHashes.append(BlockHash.xxh3(c.buf, c.length))
                 if self.blockHashes.count - self.checkpointed >= max(1, self.options.checkpointBlocks) { try self.checkpoint() }
@@ -428,7 +438,8 @@ public enum OffloadError: Error, CustomStringConvertible {
 }
 
 public final class OffloadEngine {
-    public let options: OffloadOptions
+    /// Set before `run` (the job decides `deferVerify` once it has the plan); never while it runs.
+    public var options: OffloadOptions
     private let lock = NSLock()
     private var phase: ProgressSnapshot.Phase = .copy
     private var fileIndex = 0
@@ -443,6 +454,14 @@ public final class OffloadEngine {
     /// After `run`: per file, the XXH3-64 of its blocks (`chunkSize`) as the card gave them — empty when the file was
     /// not read to its end. The block manifest of verify-in-proxy (task 65) is made from it.
     public private(set) var fileBlocks: [[UInt64]] = []
+    /// After `run`: per destination its write rate in the copy (bytes/s) — verify-in-proxy's primary is the fastest.
+    public private(set) var writeRates: [Double] = []
+    /// The card's identity when the copy started (nil for a folder or an unreadable one) — stage 2 reads a block of the
+    /// card again only while it is still there (spec 10).
+    public private(set) var cardAtStart: String?
+    /// Called once the reports are about to be written with `verifyPending` (the job takes the card folders' lock then —
+    /// the folders exist, ruling I4).
+    public var beforePendingReports: (() -> Void)?
     /// Tests only: the free space of a path (nil = ask the volume).
     var testFreeSpace: ((String) -> Int64?)?
     /// "Pause": the copy and the read-back stop before their next file (the one in progress is finished on every
@@ -633,6 +652,7 @@ public final class OffloadEngine {
         // the same names, sizes and times are no proof). Nil = nothing to compare with: never asked again.
         let identify = options.cardIdentity ?? OffloadEngine.cardFingerprint
         let cardAtStart = identify(plan.source)
+        self.cardAtStart = cardAtStart
         // The copy is one worker of the pause gate: it stops only between files, once every destination has the file.
         let copying = pauses.work()
 
@@ -702,13 +722,16 @@ public final class OffloadEngine {
         ws.forEach { $0.wait() }
         copying.leave()   // past the last file: a pause pressed now stands before the read-back's first file (or in stage 2)
         fileBlocks = hasher.blocks
+        writeRates = ws.map(\.writeRate)
 
         setPhase(.flush)
         DispatchQueue.concurrentPerform(iterations: ws.count) { ws[$0].flushDevice() }
         let copyFinished = Date()
         let copyPaused = pauses.pausedTotal - pausedBefore
 
-        if options.verify && !isCancelled {
+        // Task 67: the read-back waits for stage 2 (the proxies read the copies) — unless the copy was cancelled.
+        let deferring = options.verify && options.deferVerify && !isCancelled
+        if options.verify && !deferring && !isCancelled {
             setPhase(.verify)
             let hashes = hasher.hashes
             // Every destination's read-back joins the gate before any starts (the job never looks standing while one of
@@ -724,15 +747,25 @@ public final class OffloadEngine {
 
         setPhase(.report)
         var report = OffloadReport.build(plan: plan, hashes: hasher.hashes, sourceErrors: sourceErrors,
-                                         destResults: ws.map(\.results), verified: options.verify && !isCancelled,
+                                         destResults: ws.map(\.results), verified: options.verify && !deferring && !isCancelled,
                                          started: started, copyFinished: copyFinished, finished: finished)
         report.generation = plan.generation > 1 ? plan.generation : nil
         report.project = plan.project
         report.copyPausedSeconds = OffloadEngine.pausedField(copyPaused)
         report.verifyPausedSeconds = OffloadEngine.pausedField(verifyPaused)
+        if deferring { report.verifyPending = true }
         var reportErrors: [String] = []
-        for path in plan.cardPaths {
-            do { try report.write(cardPath: path, includeHashRecords: true) } catch { reportErrors.append("\(error)") }
+        if deferring {
+            // Spec D.22.5: the reports say verifyPending — no ASC MHL generation, no hash lists until the commit. A later
+            // generation's reports are only created new (an earlier one is never replaced).
+            beforePendingReports?()
+            for path in plan.cardPaths {
+                do { try report.write(cardPath: path, includeHashRecords: false, createNew: plan.generation > 1) } catch { reportErrors.append("\(error)") }
+            }
+        } else {
+            for path in plan.cardPaths {
+                do { try report.write(cardPath: path, includeHashRecords: true) } catch { reportErrors.append("\(error)") }
+            }
         }
         setPhase(.done)
         if !reportErrors.isEmpty {

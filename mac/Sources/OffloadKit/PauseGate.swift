@@ -120,6 +120,15 @@ public final class PauseGate {
         busy += now ? 1 : -1
     }
 
+    /// A worker that only waits for others (stage 2 waiting for the verification's readers) is not busy meanwhile: the job
+    /// may stand while they wait at the gate.
+    fileprivate func setBusy(_ w: Worker, _ now: Bool) {
+        locked {
+            step(w, busy: now)
+            recount()
+        }
+    }
+
     fileprivate func leave(_ w: Worker) {
         locked {
             guard !w.gone else { return }
@@ -169,6 +178,13 @@ public final class PauseGate {
 
         /// The worker's work has ended: the job may stand without it.
         public func leave() { owner.leave(self) }
+
+        /// Runs `f` with this worker not busy (it only waits for other workers meanwhile), then busy again.
+        public func whileIdle<T>(_ f: () throws -> T) rethrows -> T {
+            owner.setBusy(self, false)
+            defer { owner.setBusy(self, true) }
+            return try f()
+        }
 
         private func setWaiting(_ v: Bool) { waitingFlag.lock(); waitingNow = v; waitingFlag.unlock() }
     }

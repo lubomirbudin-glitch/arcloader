@@ -191,7 +191,7 @@ public enum SpaceCheck {
         case .waiting: return need
         case .copying, .flushing, .verifying, .reporting:
             return SpaceNeed(card: max(0, need.card - written), proxy: need.proxy, report: need.report)
-        case .analyzing, .proxies: return SpaceNeed(card: 0, proxy: need.proxy, report: need.report)
+        case .analyzing, .proxies, .finishingVerification: return SpaceNeed(card: 0, proxy: need.proxy, report: need.report)
         case .done, .failed, .cancelled: return .none
         }
     }

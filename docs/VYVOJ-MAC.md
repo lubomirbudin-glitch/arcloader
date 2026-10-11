@@ -138,6 +138,21 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 67 — odložené ověření: s ověřením během proxy (`JobConfig.verifyInProxy`, výchozí zapnuto; jen s proxy, ověřením
+  a nalezeným ffmpeg) fáze 1 nečte zpět, zapíše a vyprázdní, manifest, reporty s `verifyPending` **bez generace ASC MHL
+  a bez `.xxh64`** (doplnění generace ≥ 2 je zakládá jen nové); karta „Safe to eject“, ne „Safe to format“. Zámek složek
+  karty (I4) se vezme těsně před zápisem reportů s `verifyPending` (u doplnění se drží z fáze 1) a pustí se až po zápisu
+  výsledku. Fáze 2: `VerifySession` čte všechny cíle na pozadí (vlákno na svazek, `PRIO_DARWIN_BG`, Pozastavit mezi soubory,
+  hlídač zaseknutého disku 60 s → `the disk stopped responding during verification`), primární cíl = nejrychlejší při kopii
+  nebo zvolený a jen ten, který prošel `CacheProbe.problem`; nová fáze `Finishing verification`. Potom `withVerification`
+  (`verifyMethod`, `verifyNote`, `safeToFormatSeconds`, `verifyNotes`, `verifyPausedSeconds`) a potvrzení do každé složky:
+  MHL + řetěz → reporty → seznamy (idempotentně); složka, která zmizela, se nikdy nevytvoří znovu (ani PDF, ani přepis
+  reportů analýzou); selže-li potvrzení kdekoli, zapsané složky dostanou `verifyIncomplete: true`, varování „Could not
+  write the verification result …“, nikdy zeleně. „Safe to format“ jen po potvrzení všude podle `BackupState`. Historie
+  „unfinished“ až do potvrzení (I5). Zrušení ve fázi 2 (i pád aplikace) nic nepotvrdí — reporty zůstanou `verifyPending`,
+  bez MHL, historie „unfinished“ (dokončí „Finish interrupted backup“, úkol 69). Odchylka od Windows: Windows po zrušení
+  generaci potvrdí neověřenou; plán Macu (a test `testCrashBeforeCommitLeavesPending`) ji nechává nepotvrzenou. Karta
+  vyměněná během pauzy: soubory zkopírované před pauzou se ověří hned (bez proxy), pak chyba jako dosud
 - Úkol 66 — ověřovač bloků `BlockVerifier` (libovolné pořadí, kusy bloku podle offsetu, nejvýš 8 rozpracovaných,
   ověřený blok přečtený znovu s jinými daty = nesoulad a „nestabilní“, nesoulad, který při novém čtení sedí = ověřený
   a nestabilní, jiná délka = `sizeDiffers`, bezpečný pro víc vláken) a dočtení `BlockReads.complete` jen chybějících

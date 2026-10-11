@@ -162,6 +162,22 @@ public enum HistoryRecorder {
         return withCard(e, volume: volume, card: card, storedFiles: storedFiles)
     }
 
+    /// Task 67 (ruling I5): the verification of stage 2 ended — the entry learns the backup as its card folders' reports
+    /// say it now (`whole`); it stays "unfinished" until the result is written into every folder (`committed`).
+    static func verifiedEntry(_ entry: HistoryEntry, plan: OffloadPlan, report: OffloadReport, whole: BackupState, committed: Bool) -> HistoryEntry {
+        var e = entry
+        e.finished = report.finished
+        e.success = e.success && report.success && whole.failed == 0
+        e.failedFiles = e.success ? nil : max(whole.failed, report.failedFiles.count)
+        e.verified = committed && e.success && whole.unverified == 0 && whole.failed == 0
+        if let k = e.generations.firstIndex(where: { $0.seq == plan.generation }) {
+            e.generations[k].finished = report.finished
+            e.generations[k].verified = committed && report.safeToFormat
+        }
+        e.unfinished = !committed
+        return e
+    }
+
     /// The card as it is now (fingerprint, shape, the volume) into `entry`; its file list, `files` and `bytes` are the
     /// union with the list stored before (an append).
     static func withCard(_ entry: HistoryEntry, volume: CardVolume?, card: SourceScan, storedFiles: [SourceFile]?) -> (HistoryEntry, [SourceFile]) {
