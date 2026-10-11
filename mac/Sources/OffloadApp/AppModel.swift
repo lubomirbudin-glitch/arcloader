@@ -134,11 +134,14 @@ final class JobItem: ObservableObject, Identifiable {
     }
 
     private func updateChain() {
-        guard let links, status.phase == .copying || status.phase == .verifying else {
+        let stage2Verify = status.verifyInProxy && !status.verifyDoneByDest.isEmpty
+            && [.analyzing, .proxies, .finishingVerification].contains(status.phase)
+        guard let links, status.phase == .copying || status.phase == .verifying || stage2Verify else {
             chain = nil
             return
         }
-        let rates = [status.phase == .copying ? progress.readRate / 1e6 : 0] + progress.destRates.map { $0 / 1e6 }
+        let dest = stage2Verify ? progress.verifyRates : progress.destRates
+        let rates = [status.phase == .copying ? progress.readRate / 1e6 : 0] + dest.map { $0 / 1e6 }
         chain = ChainView.build(links, mbps: rates, connectors: connectors, portNames: portNames)
     }
 

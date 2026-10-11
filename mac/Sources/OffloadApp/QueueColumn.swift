@@ -388,19 +388,34 @@ struct RunningCard: View {
     private var speedTable: some View {
         VStack(spacing: 0) {
             ForEach(Array(state.rows.enumerated()), id: \.element.id) { i, row in
-                HStack(spacing: 16) {
-                    HStack(spacing: 8) {
-                        if let n = row.number {
-                            NumberBadge(number: n, size: 18)
-                        } else {
-                            Image(systemName: "sdcard").font(.system(size: 12)).frame(width: 18)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 16) {
+                        HStack(spacing: 8) {
+                            if let n = row.number {
+                                NumberBadge(number: n, size: 18)
+                            } else {
+                                Image(systemName: "sdcard").font(.system(size: 12)).frame(width: 18)
+                            }
+                            Text(row.name).lineLimit(1).truncationMode(.middle)
                         }
-                        Text(row.name).lineLimit(1).truncationMode(.middle)
+                        .font(.ui(14)).foregroundStyle(p.textSoft)
+                        .frame(width: 150, alignment: .leading)
+                        ThinBar(segments: [(row.share, p.accentBar)])
+                        Text(row.rate).font(.mono(13)).foregroundStyle(p.text).frame(width: 90, alignment: .trailing)
                     }
-                    .font(.ui(14)).foregroundStyle(p.textSoft)
-                    .frame(width: 150, alignment: .leading)
-                    ThinBar(segments: [(row.share, p.accentBar)])
-                    Text(row.rate).font(.mono(13)).foregroundStyle(p.text).frame(width: 90, alignment: .trailing)
+                    // Device · link (cable) · the Mac's port — and how full the link is (user requirement 2026-10-11).
+                    if let link = row.link {
+                        HStack(spacing: 8) {
+                            Image(systemName: "cable.connector").font(.system(size: 10)).foregroundStyle(p.text3)
+                            Text(link).font(.ui(12)).foregroundStyle(p.text3).lineLimit(1).truncationMode(.middle)
+                            Spacer(minLength: 8)
+                            if let use = row.linkUse {
+                                Text("\(Int((use * 100).rounded())) % of link").font(.mono(11))
+                                    .foregroundStyle(use >= 0.85 ? p.warn : p.text3)
+                            }
+                        }
+                        .padding(.leading, 26)
+                    }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .overlay(alignment: .bottom) { if i < state.rows.count - 1 { Rectangle().fill(p.rowLine).frame(height: 1) } }

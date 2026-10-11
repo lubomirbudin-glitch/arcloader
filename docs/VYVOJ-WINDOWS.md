@@ -25,6 +25,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
+- **Celý řetěz připojení u každé rychlosti (zadání uživatele 2026-10-11, Mac hotovo v buildu D11):** v tabulce rychlostí
+  karty úlohy pod každým řádkem (čtení karty, každý cíl) „zařízení · linka (kabel) · port“ a „NN % of link“ (výrazně od
+  85 %), ne jen v tooltipu; při ověření během proxy tabulka disků s průběhem ověření a rychlostí čtení každého disku.
+
 - **Informace při zrušení (zadání uživatele 2026-10-11, Mac hotovo v buildu D10):** po kliknutí na Zrušit karta úlohy
   hned ukáže, že se úloha ruší a na co čeká, dokud opravdu neskončí; tlačítka Zrušit a Pozastavit zmizí. Texty podle
   fáze (Mac `JobProgress.cancellingText`): kopie „Cancelling — finishing the current block; partly copied files will be

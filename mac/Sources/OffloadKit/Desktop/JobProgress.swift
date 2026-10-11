@@ -49,6 +49,10 @@ public final class JobProgress {
     /// Bytes per second, smoothed: card read while copying, slowest destination while verifying.
     public private(set) var readRate: Double = 0
     public private(set) var destRates: [Double] = []
+    /// Verify-in-proxy: each destination's read speed while the proxies render (bytes per second, smoothed).
+    public private(set) var verifyRates: [Double] = []
+    private var lastVerify: [Int64] = []
+    private var lastVerifyTime: Date?
     public private(set) var eta: Double?
     /// The element braking the copy (0 = card, i = destination i); only while copying.
     public private(set) var brake: Brake?
@@ -73,10 +77,12 @@ public final class JobProgress {
         if stage2Elapsed == nil, s.phase.isFinished, let b = stage2Began {
             stage2Elapsed = max(0, now.timeIntervalSince(b.at) - max(0, s.pausedTotal - b.paused))
         }
+        updateVerifyRates(s, now: now)
         if s.paused {
             // Paused (or pausing): no speeds, no estimate, no bottleneck — measured again from Resume.
             readRate = 0
             destRates = destRates.map { _ in 0 }
+            verifyRates = verifyRates.map { _ in 0 }
             eta = nil
             brake = nil
             brakes?.reset()
@@ -173,6 +179,27 @@ public final class JobProgress {
         case .reporting: return "Cancelling — finishing the report being written…"
         case .done, .failed, .cancelled: return "Cancelling…"
         }
+    }
+
+    /// Stage 2 of verify-in-proxy: how fast each destination is read back while the proxies render.
+    private func updateVerifyRates(_ s: JobStatus, now: Date) {
+        let done = s.verifyDoneByDest
+        guard s.verifyInProxy, !done.isEmpty, !s.paused else {
+            lastVerify = []
+            lastVerifyTime = nil
+            return
+        }
+        guard let t = lastVerifyTime, lastVerify.count == done.count else {
+            verifyRates = Array(repeating: 0, count: done.count)
+            lastVerify = done
+            lastVerifyTime = now
+            return
+        }
+        let dt = now.timeIntervalSince(t)
+        guard dt > 0.2 else { return }
+        verifyRates = done.indices.map { JobProgress.smooth(verifyRates[$0], max(0, Double(done[$0] - lastVerify[$0]) / dt)) }
+        lastVerify = done
+        lastVerifyTime = now
     }
 
     /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound).

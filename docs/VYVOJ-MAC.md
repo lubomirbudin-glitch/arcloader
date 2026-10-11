@@ -250,6 +250,14 @@ Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
   (1 clip)`. Testy `CaptureFrameRateTests` (i skutečné vzorky ARRIRAW v `TestMedia` — oba 24 fps). Vzorek
   `profile.braw` z Blackmagic RAW Speed Test hlásí `sensorRate` 1 (syntetický klip) — stejně jako Windows se nehlídá.
 
+## 2026-10-11 — build „ArcLoader D11“: celý řetěz připojení u každé rychlosti
+
+- **Zadání uživatele:** vidět během kopie všechny části řetězu — disk/čtečka, kabel (linka), port Macu, záložní disky.
+  Každý řádek tabulky rychlostí má pod sebou „zařízení · linka · port“ (např. „Samsung PSSD T7 · USB 3 (10 Gb/s) · USB
+  controller XHC2 · port 4“) a „NN % of link“ (oranžově od 85 % = kabel/port je plný). Dřív jen v tooltipu.
+- **Ověření během proxy:** karta úlohy ukazuje i během renderu proxy tabulku disků — průběh ověření a rychlost čtení
+  každého disku (`JobStatus.verifyDoneByDest/verifyTotalByDest`, `JobProgress.verifyRates`), s tím samým řetězem.
+
 ## 2026-10-11 — build „ArcLoader D10“: informace při zrušení, jedna karta po druhé
 
 - **Zrušení (zadání uživatele):** po Cancel karta úlohy ukáže „Cancelling — …“ podle fáze (co ještě dokončuje) a skryje

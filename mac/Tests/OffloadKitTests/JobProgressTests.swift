@@ -188,4 +188,21 @@ final class JobProgressTests: XCTestCase {
         XCTAssertEqual(JobProgress.cancellingText(.proxies), "Cancelling — stopping the clip in progress…")
         XCTAssertEqual(JobProgress.cancellingText(.reporting), "Cancelling — finishing the report being written…")
     }
+
+    // Verify-in-proxy: each destination's read speed while the proxies render.
+    func testVerifyRatesDuringProxies() {
+        let t0 = Date()
+        let p = JobProgress(now: t0)
+        var s = JobStatus()
+        s.phase = .proxies
+        s.verifyInProxy = true
+        s.verifyTotalByDest = [1_000_000_000, 1_000_000_000]
+        s.verifyDoneByDest = [0, 0]
+        p.update(s, now: t0)
+        s.verifyDoneByDest = [500_000_000, 250_000_000]
+        p.update(s, now: t0.addingTimeInterval(1))
+        XCTAssertEqual(p.verifyRates.count, 2)
+        XCTAssertGreaterThan(p.verifyRates[0], p.verifyRates[1])
+        XCTAssertGreaterThan(p.verifyRates[1], 0)
+    }
 }
