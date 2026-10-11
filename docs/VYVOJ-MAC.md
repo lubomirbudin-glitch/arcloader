@@ -129,6 +129,10 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 42 — historie karet: history.json ve formátu Windows (verze 1, 5 000 záznamů, poškozený → .corrupt-…, vyšší
+  verze jen číst) pod flock zámkem, otisk karty (SHA-256, .NET ticks, ordinální řazení v UTF-16), history/<id>.files.gz
+  (gzip kolem raw DEFLATE, čte i soubor z `gzip -n` / .NET GZipStream — fixture z `gzip -n`, skutečný soubor z Windows
+  čeká); cesta seznamu vždy z `id`; prázdný seznam = platný gzip
 - Úkol 41 — zápis generace: reporty (jména generace; u generace ≥ 2 jen nové, všechna jména se zkontrolují dřív, než
   se zapíše první) → MHL → řetěz → seznamy součtů; .xxh64/.md5 jen prodloužit (dřívější bajty zůstanou, chybějící
   `\n` se doplní, chybějící řádky z MHL, bez opakování), commit výsledku ověření (MHL nejdřív, idempotentní,
