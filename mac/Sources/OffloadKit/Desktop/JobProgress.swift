@@ -160,6 +160,21 @@ public final class JobProgress {
         return "Pausing…"
     }
 
+    /// What a running job's card says from the moment Cancel is pressed until the job has really stopped — so nobody
+    /// presses again or pulls the card thinking nothing happens (user requirement 2026-10-11). Copy and read-back stop
+    /// at the next block, ffmpeg / art-cmd / REDline are stopped; the report being written is finished first.
+    public static func cancellingText(_ phase: JobStatus.Phase) -> String {
+        switch phase {
+        case .waiting: return "Cancelling…"
+        case .copying, .flushing:
+            return "Cancelling — finishing the current block; partly copied files will be deleted…"
+        case .verifying, .finishingVerification: return "Cancelling — stopping the verification…"
+        case .analyzing, .proxies: return "Cancelling — stopping the clip in progress…"
+        case .reporting: return "Cancelling — finishing the report being written…"
+        case .done, .failed, .cancelled: return "Cancelling…"
+        }
+    }
+
     /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound).
     public var isError: Bool { tone == .error }
 

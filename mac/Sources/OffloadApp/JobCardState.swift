@@ -138,6 +138,12 @@ struct JobCardState {
             c.canPause = item.isRunning
             c.paused = s.paused
             c.pauseText = item.progress.pauseText
+            if item.job.isCancelled {
+                // Cancel pressed, the job is stopping: say so, and no second Cancel or Pause meanwhile.
+                c.pauseText = JobProgress.cancellingText(s.phase)
+                c.canPause = false
+                c.canCancel = false
+            }
             c.steps = steps(s, config, item.phaseProgress)
             c.percent = Int((item.phaseProgress * 100).rounded(.down))
             c.remaining = s.paused ? nil : remaining(s.phase, item.progress.eta)

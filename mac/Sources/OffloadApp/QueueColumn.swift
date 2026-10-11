@@ -437,7 +437,8 @@ struct RunningCard: View {
     /// "Pausing (finishing file A001C003.mov…)" → "Paused — Resume continues with the next file."
     private var pauseLine: some View {
         HStack(spacing: 10) {
-            Image(systemName: state.pauseText?.hasPrefix("Paused") == true ? "pause.circle.fill" : "pause.circle")
+            Image(systemName: state.pauseText?.hasPrefix("Cancelling") == true ? "xmark.circle"
+                  : state.pauseText?.hasPrefix("Paused") == true ? "pause.circle.fill" : "pause.circle")
                 .font(.system(size: 14))
             Text(state.pauseText ?? "")
         }

@@ -146,7 +146,7 @@ struct BRAWBackend: RawBackend {
     }
 
     func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
-                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+                tempDir: String, singleFrameAt: Double?, isCancelled: () -> Bool) throws -> FrameSource {
         let target = singleFrameAt == nil ? settings.height : 180
         let s = scale(sourceHeight: c.height ?? 2160, target: target)
         let dims = try info(path, scale: s, tools: tools)
@@ -231,13 +231,14 @@ struct R3DBackend: RawBackend {
     }
 
     func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
-                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+                tempDir: String, singleFrameAt: Double?, isCancelled: () -> Bool) throws -> FrameSource {
         guard singleFrameAt == nil else {
             // Thumbnails come from the finished proxy instead (one REDline run per clip is enough).
             throw ToolError(tool: "REDline", status: -1, message: "thumbnail from proxy")
         }
         let dir = try RawBackends.freshDir(tempDir, "r3d")
-        try ToolProcess.run(tools.redline!, R3DBackend.args(input: path, outDir: dir, info: c, settings: settings, look: look))
+        try ToolProcess.run(tools.redline!, R3DBackend.args(input: path, outDir: dir, info: c, settings: settings, look: look),
+                            isCancelled: isCancelled)
         guard let mov = RawBackends.newestFile(in: dir, ext: "mov") else {
             throw ToolError(tool: "REDline", status: -1, message: "no output in \(dir)")
         }
@@ -413,7 +414,7 @@ struct ARRIRAWBackend: RawBackend {
     }
 
     func source(_ path: String, info c: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
-                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+                tempDir: String, singleFrameAt: Double?, isCancelled: () -> Bool) throws -> FrameSource {
         guard singleFrameAt == nil else { throw ToolError(tool: "art-cmd", status: -1, message: "thumbnail from proxy") }
         let dir = try RawBackends.freshDir(tempDir, "ari")
         let out = dir + "/intermediate.mxf"
@@ -421,7 +422,7 @@ struct ARRIRAWBackend: RawBackend {
         let a = ARRIRAWBackend.args(input: path, output: out, info: c, settings: settings, look: look, parametersFile: file)
         if let json = a.parameters { try json.write(to: URL(fileURLWithPath: file)) }
         // art-cmd logs (errors too) to stdout and may exit 0 without an output file: both cases quote its own lines.
-        let run = try ToolProcess.runCombined(tools.artCmd!, a.args, cwd: dir)
+        let run = try ToolProcess.runCombined(tools.artCmd!, a.args, cwd: dir, isCancelled: isCancelled)
         let log = ARRIRAWBackend.logTail(run.output)
         guard run.status == 0 else { throw ToolError(tool: "art-cmd", status: run.status, message: log) }
         guard FileManager.default.fileExists(atPath: out) else {
@@ -440,7 +441,7 @@ struct CanonRawBackend: RawBackend {
     func isAvailable(_ tools: ExternalTools) -> Bool { false }
     func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo { throw ToolError(tool: "Canon RAW", status: -1, message: missingHint) }
     func source(_ path: String, info: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
-                tempDir: String, singleFrameAt: Double?) throws -> FrameSource {
+                tempDir: String, singleFrameAt: Double?, isCancelled: () -> Bool) throws -> FrameSource {
         throw ToolError(tool: "Canon RAW", status: -1, message: missingHint)
     }
 }

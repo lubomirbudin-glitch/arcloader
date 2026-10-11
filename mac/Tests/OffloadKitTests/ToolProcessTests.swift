@@ -12,6 +12,22 @@ final class ToolProcessTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(t0), 10)
     }
 
+    // Cancel stops a decoder that runs on its own (art-cmd, REDline) at once instead of after the whole clip.
+    func testCancelStopsTheTool() {
+        let hang = BrawTest.script(tempDir(), "art-cmd", "exec sleep 30")
+        for combined in [false, true] {
+            let t0 = Date()
+            let cancel = { Date().timeIntervalSince(t0) > 0.5 }
+            XCTAssertThrowsError(try {
+                if combined { _ = try ToolProcess.runCombined(hang, [], isCancelled: cancel) }
+                else { _ = try ToolProcess.run(hang, [], isCancelled: cancel) }
+            }()) { e in
+                XCTAssertEqual((e as? ToolError)?.message, "cancelled")
+            }
+            XCTAssertLessThan(Date().timeIntervalSince(t0), 5)
+        }
+    }
+
     func testWithinTheTimeoutStdoutAsBefore() throws {
         let ok = BrawTest.script(tempDir(), "ok", "sleep 0.3\necho hello")
         XCTAssertEqual(try ToolProcess.run(ok, [], timeout: 5), "hello\n")

@@ -179,4 +179,13 @@ final class JobProgressTests: XCTestCase {
         XCTAssertEqual(Texts.warnings(2), "2 warnings")
         XCTAssertEqual(Texts.cancelled, "Cancelled — the card is not fully backed up.")
     }
+
+    // Cancel pressed: the card says the job is stopping and what it still finishes (user requirement 2026-10-11).
+    func testCancellingTextPerPhase() {
+        XCTAssertEqual(JobProgress.cancellingText(.copying),
+                       "Cancelling — finishing the current block; partly copied files will be deleted…")
+        XCTAssertEqual(JobProgress.cancellingText(.verifying), "Cancelling — stopping the verification…")
+        XCTAssertEqual(JobProgress.cancellingText(.proxies), "Cancelling — stopping the clip in progress…")
+        XCTAssertEqual(JobProgress.cancellingText(.reporting), "Cancelling — finishing the report being written…")
+    }
 }

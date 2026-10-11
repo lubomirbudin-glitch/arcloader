@@ -195,8 +195,11 @@ final class ToolProcess {
     /// Runs to completion and returns stdout (only when no line handler is installed). With `timeout`, a tool still
     /// running after it is killed (SIGKILL) and a ToolError says so — a hung tool must never hang the job (Windows
     /// `ToolProcess.Run(…, timeout)`; Windows kills the whole process tree, here the tool itself).
+    /// `isCancelled`: polled while the tool runs; true stops it (SIGTERM, SIGKILL after 2 s) and throws "cancelled" — a
+    /// cancelled job never waits for a decoder to finish a whole clip (art-cmd, REDline: minutes per ARRIRAW/R3D clip).
     @discardableResult
-    static func run(_ executable: String, _ args: [String], cwd: String? = nil, timeout: TimeInterval? = nil) throws -> String {
+    static func run(_ executable: String, _ args: [String], cwd: String? = nil, timeout: TimeInterval? = nil,
+                    isCancelled: () -> Bool = { false }) throws -> String {
         let p = ToolProcess(executable, args)
         if let cwd { p.process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
         let name = (executable as NSString).lastPathComponent
@@ -210,12 +213,18 @@ final class ToolProcess {
             output.data = out.fileHandleForReading.readDataToEndOfFile()
             output.done.signal()
         }.start()
-        if let timeout {
-            let deadline = Date().addingTimeInterval(timeout)
-            while p.process.isRunning && Date() < deadline { usleep(20_000) }
-            if p.process.isRunning {
-                kill(p.process.processIdentifier, SIGKILL)
-                throw ToolError(tool: name, status: -1, message: "no response within \(String(format: "%.0f", timeout)) s — stopped")
+        do {
+            let deadline = timeout.map { Date().addingTimeInterval($0) }
+            while p.process.isRunning {
+                if isCancelled() {
+                    p.stop()
+                    throw ToolError(tool: name, status: -1, message: "cancelled")
+                }
+                if let deadline, let timeout, Date() >= deadline {
+                    kill(p.process.processIdentifier, SIGKILL)
+                    throw ToolError(tool: name, status: -1, message: "no response within \(String(format: "%.0f", timeout)) s — stopped")
+                }
+                usleep(20_000)
             }
         }
         p.process.waitUntilExit()
@@ -228,7 +237,8 @@ final class ToolProcess {
 
     /// For tools that log to stdout and report failures there (art-cmd): stdout and stderr together, and the exit
     /// status — the caller decides what counts as failure (art-cmd may exit 0 without writing its output).
-    static func runCombined(_ executable: String, _ args: [String], cwd: String? = nil) throws -> (status: Int32, output: String) {
+    static func runCombined(_ executable: String, _ args: [String], cwd: String? = nil,
+                            isCancelled: () -> Bool = { false }) throws -> (status: Int32, output: String) {
         let p = ToolProcess(executable, args)
         if let cwd { p.process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
         let out = Pipe()
@@ -236,9 +246,32 @@ final class ToolProcess {
         p.process.standardError = out
         p.process.standardInput = FileHandle.nullDevice
         try p.process.run()
-        let data = out.fileHandleForReading.readDataToEndOfFile()
+        let output = Output()
+        Thread {
+            output.data = out.fileHandleForReading.readDataToEndOfFile()
+            output.done.signal()
+        }.start()
+        do {
+            while p.process.isRunning {
+                if isCancelled() {
+                    p.stop()
+                    throw ToolError(tool: (executable as NSString).lastPathComponent, status: -1, message: "cancelled")
+                }
+                usleep(20_000)
+            }
+        }
         p.process.waitUntilExit()
-        return (p.process.terminationStatus, String(decoding: data, as: UTF8.self))
+        output.done.wait()
+        return (p.process.terminationStatus, String(decoding: output.data, as: UTF8.self))
+    }
+
+    /// Ends the tool: SIGTERM, then SIGKILL if it is still running after 2 s.
+    func stop() {
+        guard process.isRunning else { return }
+        process.terminate()
+        let deadline = Date().addingTimeInterval(2)
+        while process.isRunning && Date() < deadline { usleep(20_000) }
+        if process.isRunning { kill(process.processIdentifier, SIGKILL) }
     }
 }
 

@@ -167,8 +167,9 @@ protocol RawBackend {
     func isAvailable(_ tools: ExternalTools) -> Bool
     func probe(_ path: String, tools: ExternalTools) throws -> ClipInfo
     /// `singleFrameAt` (seconds) asks for just one frame — used for report thumbnails.
+    /// `isCancelled`: a decoder that runs on its own first (art-cmd, REDline) stops when it turns true.
     func source(_ path: String, info: ClipInfo, settings: ProxySettings, look: RawLook, tools: ExternalTools,
-                tempDir: String, singleFrameAt: Double?) throws -> FrameSource
+                tempDir: String, singleFrameAt: Double?, isCancelled: () -> Bool) throws -> FrameSource
 }
 
 /// Where a report thumbnail is taken: frame number, its time, and whether it is the clip's last frame.
@@ -348,7 +349,8 @@ public final class ProxyRenderer {
     }
 
     private func frameSource(_ clip: Clip, cardPath: String, info: ClipInfo, look: RawLook, singleFrameAt: Double?,
-                             hwaccel: Bool, inputURL: String? = nil) throws -> FrameSource {
+                             hwaccel: Bool, inputURL: String? = nil,
+                             isCancelled: () -> Bool = { false }) throws -> FrameSource {
         let path = cardPath + "/" + clip.path
         if clip.format == .video {
             // Verify-in-proxy (task 68): the clip through Offload's tap; -short_seek_size keeps ffmpeg from reading a MOV
@@ -358,7 +360,8 @@ public final class ProxyRenderer {
             return FrameSource(inputArgs: hwaccel ? ["-hwaccel", "videotoolbox"] + input : input)
         }
         guard let b = backends[clip.format] else { throw ToolError(tool: clip.format.label, status: -1, message: "no decoder") }
-        return try logged { try b.source(path, info: info, settings: settings, look: look, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt) }
+        return try logged { try b.source(path, info: info, settings: settings, look: look, tools: tools, tempDir: tempDir, singleFrameAt: singleFrameAt,
+                                       isCancelled: isCancelled) }
     }
 
     /// A decoder error turned into a note for the clip (`RawDecoderError`): the decoder's own words — its stderr, e.g.
@@ -393,7 +396,8 @@ public final class ProxyRenderer {
             defer { unlink(out) }
             var src: FrameSource?
             do {
-                let s = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: pos.seconds, hwaccel: false)
+                let s = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: pos.seconds, hwaccel: false,
+                                          isCancelled: isCancelled)
                 src = s
                 defer { s.removeIntermediates() }
                 // The pre-map depends on the source (BRAW, full-range video).
@@ -511,7 +515,7 @@ public final class ProxyRenderer {
         let src: FrameSource
         do {
             src = try frameSource(clip, cardPath: cardPath, info: info, look: look, singleFrameAt: nil, hwaccel: hwaccel,
-                                  inputURL: inputURL)
+                                  inputURL: inputURL, isCancelled: isCancelled)
         } catch {
             arriMonitor?.cancel()
             throw error
