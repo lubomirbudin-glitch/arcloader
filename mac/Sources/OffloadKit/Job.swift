@@ -14,6 +14,12 @@ public struct JobConfig: Codable, Equatable {
     public var analyzeClips = true
     public var proxy = ProxySettings()
     public var tools = ExternalTools()
+    /// Write the copy into history.json (CLI --no-history turns it off).
+    public var recordHistory = true
+    /// Where history.json lives; nil = Application Support (tests give a temporary folder).
+    public var historyFolder: String?
+    /// The project the job was started in (nil = no project): into history and the report.
+    public var project: String?
 
     public init(source: String, destRoots: [String]) {
         self.source = source
@@ -65,6 +71,9 @@ public struct JobStatus {
     public init() {}
 
     mutating func addWarning(_ w: String) { if warning == nil { warning = w } }
+
+    /// A warning that no longer holds (a history record written later) goes.
+    mutating func removeWarning(_ w: String) { if warning == w { warning = nil } }
 }
 
 /// One card: copy → verify → report → clip analysis → optional proxies. Used by both the CLI and the app.
@@ -77,6 +86,8 @@ public final class OffloadJob {
     private var cancelled = false
     private var started = false
     private let lock = NSLock()
+    /// R6: the history entry a full copy wrote when it started ("unfinished"); finished or removed after the copy.
+    private var startEntry: String?
 
     /// Set on a worker thread, read by the app's main thread — always under the lock.
     public var plan: OffloadPlan? { lock.lock(); defer { lock.unlock() }; return _plan }
@@ -172,8 +183,17 @@ public final class OffloadJob {
             options: [.userInitiated, .idleSystemSleepDisabled], reason: "Offloading camera card")
         defer { ProcessInfo.processInfo.endActivity(activity) }
         do {
-            let plan = try prepare()
+            var plan = try prepare()
+            if plan.project == nil && config.project != nil {
+                plan.project = config.project
+                lock.lock(); _plan = plan; lock.unlock()
+            }
             update { $0.phase = .copying }
+            let historyFolder = HistoryRecorder.folder(config)
+            // The card volume as it is now (history's key); a folder has none. Read before the copy, off the main thread.
+            let volume = historyFolder == nil ? nil : CardVolume.of(plan.source)
+            // R6: history knows the copy from its start — one the app never finishes can be resumed from its card.
+            if let historyFolder, plan.mode == .full { recordStart(plan, volume: volume, folder: historyFolder) }
             let report = try engine.run(plan)
             // The record of the copy (report, hashes, MHL) on this Mac too, right after verification.
             LocalReports.sync(date: plan.date, cardName: plan.cardName, cardPaths: plan.cardPaths)
@@ -185,9 +205,11 @@ public final class OffloadJob {
                 $0.copy = engine.snapshot()
             }
             if isCancelled {
+                forgetStart()   // a cancelled copy is not recorded in history
                 update { $0.phase = .cancelled }
                 return false
             }
+            if let historyFolder { recordFinished(plan, report: report, volume: volume, card: plan.scan, folder: historyFolder) }
             guard config.analyzeClips || config.proxy.enabled else {
                 writePDFReports(report, plan: plan)
                 update { $0.phase = .done }
@@ -216,6 +238,61 @@ public final class OffloadJob {
         writePDFReports(final, plan: plan)
         let finalPhase: JobStatus.Phase = isCancelled ? .cancelled : .done
         update { $0.phase = finalPhase }
+    }
+
+    // MARK: - History
+
+    private func historyRecord(_ what: String, folder: String, _ write: @escaping (HistoryStore) -> HistoryWrite) {
+        HistoryRecorder.record(what, folder: folder, log: { NSLog("%@", $0) },
+                               delayed: { [weak self] in self?.update { $0.addWarning(Msg.historyDelayed) } },
+                               done: { [weak self] ok in
+                                   // The warning goes once nothing of this (or any) job waits any more.
+                                   let settled = HistoryRecorder.waiting == 0
+                                   self?.update {
+                                       if settled || !ok { $0.removeWarning(Msg.historyDelayed) }
+                                       if !ok { $0.addWarning(Msg.historyNotWritten) }
+                                   }
+                               }, write)
+    }
+
+    private func recordStart(_ plan: OffloadPlan, volume: CardVolume?, folder: String) {
+        let now = Date()
+        let id = HistoryStore.newId(finished: now)
+        let entry = HistoryRecorder.startEntry(id: id, plan: plan, config: config, volume: volume, started: now)
+        lock.lock(); startEntry = id; lock.unlock()
+        historyRecord("start", folder: folder) { $0.update(id: id) { _ in (entry, nil) } }
+    }
+
+    /// The start entry of a copy that was cancelled goes again.
+    private func forgetStart() {
+        lock.lock()
+        let id = startEntry
+        startEntry = nil
+        lock.unlock()
+        guard let id, let folder = HistoryRecorder.folder(config) else { return }
+        historyRecord("removal", folder: folder) { $0.remove(id: id) }
+    }
+
+    /// The finished stage 1 (with failed files too) into history.json — never fails the job. `card`: the whole card
+    /// as scanned at the start (an append: every file, not just the new ones).
+    private func recordFinished(_ plan: OffloadPlan, report: OffloadReport, volume: CardVolume?, card: SourceScan, folder: String) {
+        lock.lock()
+        let start = startEntry
+        startEntry = nil
+        lock.unlock()
+        // As the card folders' reports say it now — the one definition of "verified" (read before the lock is taken).
+        let whole = BackupState.of(plan.cardPaths)
+        let config = self.config
+        historyRecord(plan.mode == .full ? "copy" : "append", folder: folder) { store in
+            let entries = store.load()
+            let id = (plan.mode == .full ? start : HistoryRecorder.entryOf(entries, plan.cardPaths)?.id)
+                ?? HistoryStore.newId(finished: report.finished)
+            return store.update(id: id) { existing in
+                let stored = existing.flatMap { store.readFileList($0) }
+                return HistoryRecorder.finishedEntry(existing, id: id, plan: plan, report: report, config: config, volume: volume,
+                                                     card: card, whole: whole, storedFiles: stored)
+            }
+        }
     }
 
     // MARK: - Clips

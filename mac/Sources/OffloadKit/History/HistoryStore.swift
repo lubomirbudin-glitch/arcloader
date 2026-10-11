@@ -128,10 +128,10 @@ public final class HistoryStore {
         }
     }
 
-    /// UTF-8 without BOM, indented, ISO 8601 UTC dates to the second; a temporary name, then a rename.
+    /// UTF-8 without BOM, indented, sorted keys, ISO 8601 UTC dates to the second; a temporary name, then a rename.
     func save(_ entries: [HistoryEntry]) throws {
         let enc = JSONEncoder()
-        enc.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         enc.dateEncodingStrategy = .iso8601
         try IO.mkdirs(folder)
         try IO.writeFileDurably(file, enc.encode(Root(version: Self.currentVersion, entries: entries)))

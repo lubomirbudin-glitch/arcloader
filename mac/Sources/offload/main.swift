@@ -29,6 +29,10 @@ struct Offload: ParsableCommand {
             Self.exit(withError: e)
         } catch let e as CleanExit {
             Self.exit(withError: e)
+        } catch where String(reflecting: type(of: error)).hasPrefix("ArgumentParser.") {
+            // --help comes back from parseAsRoot as the parser's own help command, whose run() throws a help request:
+            // the parser prints it (before, it printed as "Error: CommandError(… helpRequested …)").
+            Self.exit(withError: error)
         } catch {
             fputs(Msg.cliError + "\(error)\n", stderr)
             Darwin.exit(1)
@@ -45,8 +49,11 @@ struct Copy: ParsableCommand {
     @Option(name: [.short, .long], help: "Destination root (repeat for each disk).")
     var dest: [String]
 
-    @Option(help: "Card folder name (default: volume label).")
+    @Option(help: "Card folder name (default: volume label); auto = the reel from the clip names (A001C003… → A001).")
     var name: String?
+
+    @Flag(help: "Neither read nor write the card history (history.json).")
+    var noHistory = false
 
     @Option(help: "Date folder (default: today, YYYY-MM-DD).")
     var date: String?
@@ -106,6 +113,21 @@ struct Copy: ParsableCommand {
         var config = JobConfig(source: abs(source), destRoots: dest.map(abs))
         config.cardName = name
         config.date = date
+        config.recordHistory = !noHistory
+        // The history line before the plan (no question — a script has nobody to answer it) and --name auto.
+        if !noHistory || name?.lowercased() == "auto" {
+            let insight = Copy.inspect(config.source, history: !noHistory)
+            if !noHistory, let line = insight.flatMap(Copy.historyLine) { print(line) }
+            if name?.lowercased() == "auto" {
+                if let s = insight?.nameSuggestion {
+                    config.cardName = s.name
+                    print(Msg.cardNameAuto(s.name))
+                } else {
+                    config.cardName = nil
+                    print(Msg.cardNameAutoNone)
+                }
+            }
+        }
         config.chunkMB = chunkMb
         config.buffers = buffers
         config.verify = !noVerify
@@ -204,10 +226,28 @@ struct Copy: ParsableCommand {
             }
         }
         if let e = status.error { print(Msg.cliError + e) }
+        if !HistoryRecorder.drain(timeout: 0) {
+            // The history stayed busy for 60 s: the CLI does not wait in the background.
+            print(Msg.cliWarning + Msg.historyNotWritten)
+        } else if let w = status.warning, w != Msg.historyDelayed {
+            print(Msg.cliWarning + w)
+        }
         if status.phase != .done || report?.success != true { throw ExitCode(1) }
         // Spec D.22.7: exit 0 after a verified copy only when the card may be formatted; --no-verify stays 0 (the user
         // turned the verification off), like Windows 0.6.0.
         if !noVerify && !status.safeToFormat { throw ExitCode(1) }
+    }
+
+    /// One look at the card (never written to): history match and the name from the clips. Nil when it cannot be read.
+    static func inspect(_ source: String, history: Bool) -> CardInsight? {
+        let store = history ? HistoryStore() : nil
+        return try? CardInspector.inspect(source, store: store, history: store?.load())
+    }
+
+    /// The history line with full destination paths, or nil when history does not know the card.
+    static func historyLine(_ insight: CardInsight) -> String? {
+        guard let m = insight.match else { return nil }
+        return insight.isEmptied ? HistoryText.emptied(m).0 : HistoryText.line(m, fullPaths: true).0
     }
 
     /// The "LUT: …" line before the copy (same wording as Windows).

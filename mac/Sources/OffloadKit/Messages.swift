@@ -120,6 +120,10 @@ public enum Msg {
         "\(n) \(plural(n, "file", "files")) of the earlier backup \(plural(n, "was", "were")) not verified — Verify backup recommended."
     }
     public static let cardNotInHistory = "The card is not in the history — give the backup folders with --into."
+    public static let historyDelayed =
+        "The card history is busy right now — the record of this backup will be written as soon as possible (do not close the app yet)."
+    public static let historyNotWritten =
+        "Could not write the record of this backup to the card history (the history was busy for too long) — the backup on the disks is fine, but the card will not be recognised the next time it is inserted."
 
     // Repair (file -3, task 62)
     public static let repairNothing = "Nothing to repair — every file is good on every destination."
@@ -160,6 +164,7 @@ public enum Msg {
 
     // CLI
     public static let cliError = "Error: "
+    public static let cliWarning = "Warning: "
     public static func unknownProxyCodec(_ x: String?) -> String {
         "Unknown proxy codec “\(x ?? "")” — use h264, hevc, proresProxy, proresLT, prores422 or prores422HQ."
     }

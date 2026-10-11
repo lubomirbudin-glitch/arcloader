@@ -5,7 +5,9 @@ import Foundation
 /// drives 1 and 2 were gone). Refreshed after every report write; the drives are only read; a failure is only logged
 /// and never fails the job. Off inside XCTest so tests never write to the user's Documents.
 public enum LocalReports {
-    public static var root = (NSHomeDirectory() as NSString).appendingPathComponent("Documents/Offload reporty")
+    /// OFFLOAD_REPORTS_DIR moves it (manual CLI checks against temporary folders, like OFFLOAD_SETTINGS_DIR).
+    public static var root = ProcessInfo.processInfo.environment["OFFLOAD_REPORTS_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+        ?? (NSHomeDirectory() as NSString).appendingPathComponent("Documents/Offload reporty")
     public static var enabled = NSClassFromString("XCTestCase") == nil
 
     /// Copies `_REPORT` and `ascmhl` of the first destination that has them. Returns the local folder, or nil.

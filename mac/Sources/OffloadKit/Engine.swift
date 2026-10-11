@@ -28,12 +28,20 @@ public struct DestFileResult {
     public var error: String?
 }
 
+public enum PlanMode: Equatable { case full, append, repair }
+
 public struct OffloadPlan {
     public let source: String
     public let scan: SourceScan
     public let date: String
     public let cardName: String
     public let destRoots: [String]
+    public var mode: PlanMode = .full
+    /// The ASC MHL generation this copy writes (1 = a full copy).
+    public var generation = 1
+    public var hashKinds: HashKinds = .xxh64
+    /// The project of the report and of history (an append keeps the earlier backup's).
+    public var project: String?
     public var cardPaths: [String] { destRoots.map { "\($0)/\(date)/\(cardName)" } }
 }
 
