@@ -13,7 +13,9 @@ param(
     [string]$Since,
     [string]$Repo = 'lubomirbudin-glitch/arcloader',
     # Print the release notes and stop (nothing is uploaded).
-    [switch]$DryRun
+    [switch]$DryRun,
+    # Do not upload to the website's download storage (web-upload.ps1).
+    [switch]$SkipWeb
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'release.ps1')
@@ -160,6 +162,13 @@ try {
     Write-Host "  download: $download"
     Write-Host "            $(($channelAssets.Zips | Select-Object -Skip 1 | ForEach-Object { "$base/download/$Channel/$_" }) -join ', ') (old name, the same zip)"
     Write-Host "  archive:  $base/tag/$versionTag"
+    # The website (offload.video …) serves its own copy: https://<site>/download/ArcLoader-Windows(-dev).zip (web-upload.ps1).
+    if ($SkipWeb) {
+        Write-Host '  website:  skipped (-SkipWeb)'
+    } else {
+        . (Join-Path $PSScriptRoot 'web-upload.ps1')
+        Publish-WebChannel -Channel $Channel -Zip $zip -Version $version -Commit $short
+    }
 } finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
