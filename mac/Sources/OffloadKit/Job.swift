@@ -523,6 +523,15 @@ public final class OffloadJob {
         // now; the primary's clips are read through the tap — task 68).
         if pending { startVerification(plan, report) }
         var final = config.analyzeClips || config.proxy.enabled ? analyzeAndRender(plan: plan, report: report, log: log) : report
+        // Spec 7 (task 70): the decoder's content warnings, however the copy was verified — the card then asks for a look
+        // before formatting, no chime.
+        let defects = final.contentWarnings.count
+        if defects > 0 {
+            update {
+                $0.contentWarnings = defects
+                $0.addWarning(VIPMsg.contentWarnings(defects))
+            }
+        }
         // The verification ends here — also when the analysis or the proxies were cancelled.
         if pending { final = finishVerification(plan, final, log: log) }
         setReport(final)
@@ -537,7 +546,7 @@ public final class OffloadJob {
 
     /// Plan 10 (R11): whether this job verifies with the proxies — verification and proxies on, verify-in-proxy not
     /// switched off, ffmpeg found (a repair always reads back; the Mac has none yet).
-    func verifiesInProxy(_ plan: OffloadPlan) -> Bool {
+    public func verifiesInProxy(_ plan: OffloadPlan) -> Bool {
         guard config.verify, plan.mode != .repair else { return false }
         if let forced = deferVerifyOverride { return forced }
         return config.verifyInProxy && config.proxy.enabled && config.tools.resolved().ffmpeg != nil
@@ -880,11 +889,19 @@ public final class OffloadJob {
                 // Verify-in-proxy (task 68): the primary's copy read through the tap (mode A) or read before the SDK (mode B).
                 let lease = verifying?.prepare(clip, dest: d)
                 defer { lease?.end() }
+                // Spec 7 (task 70): the decoder's words while it makes the proxy are the clip's content verdict.
+                let content = ContentCheck()
                 try renderer.render(clip, cardPath: plan.cardPaths[d], info: info, lut: entries[i].lut,
                                     output: plan.cardPaths[d] + "/" + rel,
                                     progress: { f in self.update { $0.clipFraction = f } },
                                     isCancelled: { self.isCancelled },
-                                    inputURL: lease?.url, activity: lease?.activity)
+                                    inputURL: lease?.url, activity: lease?.activity, content: content)
+                var verdict = content.verdict(info)
+                if verdict.isWarn {
+                    verdict.jpeg = renderer.snapshot(clip, cardPath: plan.cardPaths[d], info: info, frame: verdict.frame ?? 0)
+                    log?("content \(clip.name): \(ClipContent.kindText(verdict.kind)) at \(verdict.timecode ?? "?") — \(verdict.message ?? "")")
+                }
+                entries[i].content = verdict
                 entries[i].proxyStatus = .done
                 entries[i].proxyPath = rel
                 if config.proxy.copyToAllDestinations {

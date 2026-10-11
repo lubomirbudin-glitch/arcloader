@@ -92,6 +92,12 @@ a `swift test` projde — aplikace je kdykoli spustitelná; milníky říkají, 
 | M10 | 64 | **0.6.0** (plán 9): Pozastavit, Zkopírovat znovu, nový vzhled (je-li schválený) (body 22–23) |
 | M11 | 70 | **0.7.0** (plán 10): Verify-in-Proxy s kontrolou cache přes `mincore`, manifest, navázání po pádu, obsahová kontrola (bod 24) |
 
+**Stav 2026-10-11 (verze 0.7.0):** hotové úkoly 1–50, 51 (zúžený na blokové hashe — bez XXH3-128 u souborů, MD5 a `--hash`),
+61 (Pozastavit) a 65–70 (Verify-in-Proxy). **Zbývá:** 52–60 (seznamy klipů, denní report, proxy ve složkách, HTML lišta,
+projekty, pravidla LUTů, `--gen5`, oznámení, aktualizace, podpis) a 62–64 (Zkopírovat znovu, zbytek nového vzhledu) — verze
+0.4.0–0.6.0 se tím přeskočily. Ruční testy oddílu 7, bod 24, zatím neproběhly (bez hardwaru; kontrola cache ověřená jen na
+interním APFS a obrazech HFS+, exFAT a APFS).
+
 Obsah: 1–17 dorovnání (snímky, B1–B4, fronta, texty, vysunutí, HW diagnostika přes IOKit/DiskArbitration); 18 barvy, 19 hlídač
 ffmpeg, 20 složka pro proxy, 21–22 vestavěné LUTy, 23 CLI, 24 GUI, 25 balíček; 27 `braw-decode` (C++), 28 LUT podle gamy,
 29 knihovna / limit / poznámky, 30 náhledy BRAW a pumpa, 31 BRAW se vzorkem a dokumentace; 26 verze 0.2.0.

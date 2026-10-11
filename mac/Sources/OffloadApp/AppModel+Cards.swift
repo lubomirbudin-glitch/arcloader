@@ -196,6 +196,10 @@ extension AppModel {
             var config = JobConfig(source: src, destRoots: settings.destRoots)
             config.date = dateString
             config.verify = settings.verify
+            // Plan 10: the "Verify during proxy render" row (settings verifyInProxy) as it is now — a change applies to
+            // the next card added, not to one already in the queue.
+            config.verifyInProxy = settings.verifyInProxy
+            config.verifyPrimary = settings.verifyPrimary
             config.analyzeClips = settings.analyzeClips
             config.proxy = settings.proxy
             config.tools = settings.tools

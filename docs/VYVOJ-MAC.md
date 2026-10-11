@@ -13,7 +13,7 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   Vypnuto nebo bez proxy → zpětné čtení po kopii jako dosud. CLI `--classic-verify` (vypne). Smysl: kopie naplno, po ní
   „Safe to eject“, ověření všech disků celé během renderu proxy (disky jinak stojí), „Safe to format“ až po něm — u karty 9
   (855 GB) odhad 68 min místo 91. Ověření se nikdy nedělí mezi disky (každý disk se čte celý). Mac: pořadí 42–50 → 51 →
-  61 → 65–70 (build D5).
+  61 → 65–70 (build D5). **Mac hotovo v 0.7.0 (úkoly 65–70; čeká ruční test s kartou), Windows zatím jen v Nastavení.**
 
 - **Aplikace jen anglicky (zadání uživatele 2026-10-10, obě verze; Windows 0.9.0):** celá aplikace bude **natrvalo jen
   anglicky** — čeština zmizí ze všeho, co uživatel vidí: GUI, hlášky, poznámky u klipů, texty kontroly před startem,
@@ -70,7 +70,10 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   ověřeno ano/ne, kopie reportu na počítači). Zdroj dat: `history.json` + reporty `offload_report*.json` (z disků, nebo
   z lokální kopie `Offload reporty`, když disk už odešel). Uložit lokálně a volitelně na vybraný disk.
 
-- **Dorovnání 2 s Windows 0.6.0 — plány 6–10 a dodatky 0.5.x (2026-10-08):** návrh — oddíl „Doplněk 3“ (D.21–D.28)
+- **Dorovnání 2 s Windows 0.6.0 — zbývají úkoly 52–60 a 62–64** (stav 2026-10-11: hotové 32–50, 51 zúžený, 61, 65–70 =
+  verze 0.7.0; zbývají seznamy klipů, denní report, proxy ve složkách a lehčí originál, HTML lišta PDF, projekty, pravidla
+  LUTů, `--gen5`, oznámení, aktualizace, podpis a notarizace, Zkopírovat znovu, zbytek nového vzhledu; z úkolu 51 XXH3-128
+  u souborů, MD5 a `--hash`). Původní odrážka (2026-10-08): návrh — oddíl „Doplněk 3“ (D.21–D.28)
   v [`mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md`](../mac/docs/superpowers/specs/2026-10-05-offload-mac-parity-design.md),
   plán po úkolech s kódem a testy [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md)
   (úkoly 32–55: karty a bezpečnost dat, výstupy pro produkci a střih) a
@@ -132,12 +135,37 @@ GUI (`Sources/OffloadApp`) přechází na angličtinu zvlášť (nový vzhled); 
 `RoleLink.card`, `RoleLink.destination(n)` a `ChainView.bottleneckPrefix` (dřívější GUI barvilo řádek podle „Úzké hrdlo“). Testy hlídají anglické texty stejně přísně
 (přesné řetězce, stejné kódy).
 
-## 2026-10-10 — dorovnání 2 (plány 6–10), průběh
+## 2026-10-11 — verze 0.7.0: Verify-in-Proxy (plán 10); dorovnání 2 (plány 6–10), průběh
 
 Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md)
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 70 — verze **0.7.0**: obsahová kontrola dekodérem (`ContentCheck`: stderr ffmpeg na úrovni `warning` a `frame=`
+  z `-progress`; slova o poškozených datech, zvukovém dekodéru — vlastní AAC enkodér proxy se nepočítá — a časových
+  značkách, méně/víc snímků než `nb_frames`; opakování v softwaru zapomene první pokus) → `clips[].content` ok/warn
+  s TC a náhledem místa vady (JPEG jen v HTML); vada nikdy neselže kopii ani neblokuje „Safe to format“, ale karta je žlutě
+  „Safe to format after checking defects“, bez zvuku, s tlačítkem „Checked — the card can be formatted“ (platí i při
+  klasickém ověření). Volby `verifyInProxy` (výchozí zapnuto) a `verifyPrimary` (`fastest`/`first`, neznámá hodnota se
+  zachová a čte jako `fastest`) v nastavení; **zadání 2026-10-11**: řádek „Verify during proxy render“ v kroku 3 „After
+  copy“ (klikací jako ostatní, vypnutý bez Verify nebo Proxy, změna platí pro další přidanou kartu), Nastavení › Verify
+  „Verify the primary drive during proxy render“ a „Primary drive: Fastest in the copy / First destination“; karta úlohy
+  ukazuje „verify during proxy render“ / „verify by read-back“, kroky Copy · Proxy · Verify · Report, fázi „Finishing
+  verification“ s procenty, zvuk Glass až po „Safe to format“ na konci 2. fáze. CLI `copy` i `append`: `--classic-verify`,
+  `--primary N` (mimo rozsah anglická chyba a kód 1), řádek „Verify: during proxy render …“ v plánu, průběh „finishing
+  verification“; kód 0 jen při „Safe to format“ (`VerifyOptions.exitCode`, `--no-verify` dál 0). Report: HTML u cílů
+  sériové číslo svazku, metoda ověření a důvod zpětného čtení, dlaždice „safe to format after“, poznámky ověření, tabulka
+  vad obsahu; `verifyIncomplete` žlutě UNFINISHED s větou „do not format the card yet …“; TXT `Content warnings:`,
+  `Verification notes:`; `verifyMethod: read-back` i u klasického ověření (jako Windows, i v komentáři MHL).
+  Dokumentace: FORMATY (Mac přestává klíče plánu 10 ignorovat, `settings.json` `verifyInProxy`/`verifyPrimary` pro obě
+  verze), ROZDILY, README, README-START (stav). `scripts/build-app.sh` se nespouštěl (zadání). Ručně s CLI (debug build,
+  `OFFLOAD_REPORTS_DIR` a `OFFLOAD_SETTINGS_DIR` v dočasné složce, `--no-history`, cíle = obrazy `hdiutil` HFS+ 700 MB
+  a exFAT/FSKit 400 MB pod dočasnou složkou): `offload copy … --proxy` → „Verify: during proxy render“, primární HFS+
+  `verify-in-proxy`, exFAT `read-back` (sériové číslo `6ACB-3A30` z boot sektoru), kód 0; `--primary 5` → chyba a kód 1;
+  `kill -9` během renderu proxy 60s klipu → oba reporty `verifyPending`, bez `ascmhl/`, `.part` proxy zůstala →
+  `offload append --into … --into …` dokončil generaci 1 (karta se nečetla, proxy se vyrenderovala znovu, řetěz `[1]`,
+  kód 0) a `offload verify` na exFAT „all OK“. Ruční test s kartou a skutečnými disky (README-START oddíl 7, bod 24)
+  a křížový test s Windows 0.6.0 neproběhly
 - Úkol 69 — navázání po pádu (R6): `ResumePlanner.find` najde nepotvrzenou generaci (report `verifyPending` za
   potvrzenou nebo na ní, `verifyIncomplete`, nebo bez reportu se záznamy manifestu — pád během kopie); ostatní složky musí
   stát těsně před ní, nebo ji mít potvrzenou týmž během (stejné `started` a cíle), jinak `appendDiverged`. Doplnění pak

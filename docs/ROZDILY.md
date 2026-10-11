@@ -7,7 +7,7 @@ Pravidlo: když změna v jedné verzi způsobí, že se verze v něčem rozejdou
 aktualizuje se tento soubor ve stejném commitu. Historie každé verze je v [VYVOJ-MAC.md](VYVOJ-MAC.md)
 a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 
-*Stav k 2026-10-10.*
+*Stav k 2026-10-11.*
 
 ## Přehled
 
@@ -16,7 +16,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | Složka | [`mac/`](../mac/) | [`windows/`](../windows/) |
 | Systém | macOS 13+ | Windows 10/11 x64 |
 | Jazyk / UI | Swift 5.9, SwiftUI | C# / .NET 10, WPF |
-| Verze | 0.3.0 | 0.9.0-win (ve vývoji) |
+| Verze | 0.7.0 | 0.9.0-win (ve vývoji) |
 | Jazyk aplikace | anglicky (od 2026-10-10) | anglicky (od 0.9.0) |
 | Aplikace | `Offload.app` (CLI uvnitř `Contents/Resources/bin/offload`) | `Offload.exe` + CLI `bin\offload.exe` |
 | Build | `mac/scripts/build-app.sh` | `windows/scripts/build.ps1` |
@@ -67,11 +67,11 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Dnes a historie karet** (z `history.json`), štítek kamery a připojení, odhad času | ⏳ naplánováno | ✅ GUI |
 | **Proxy ve složkách jako na kartě** (`_PROXY/<složka klipu>/<klip>.mov`, plochá starší záloha zůstane plochá) | ⏳ naplánováno (proxy přímo v `_PROXY`) | ✅ 0.5.1 |
 | **Bez proxy, když je originál lehčí** (`proxy.skipLighterSources`, `--proxy-always`) | ⏳ naplánováno (renderuje vše) | ✅ CLI + GUI 0.5.1 |
-| **Verify-in-Proxy** (primární disk ověřený čtením pro proxy, ostatní na pozadí; `--classic-verify`, `--primary`) | ⏳ naplánováno (zpětné čtení) | ✅ CLI + GUI 0.6.0 |
-| **Lze vyjmout × Lze formátovat** (dva stavy karty, oznámení „hotovo“ až po ověření všech disků) | ✅ GUI + CLI (bez ověření během proxy — úkol 67) | ✅ GUI + CLI 0.6.0 |
+| **Verify-in-Proxy** (primární disk ověřený čtením pro proxy, ostatní na pozadí; `--classic-verify`, `--primary`) | ✅ CLI + GUI 0.7.0 (s kontrolou cache přes `mincore`; přepínač „Verify during proxy render“ i v kroku 3; čeká ruční test s kartou) | ✅ CLI + GUI 0.6.0 |
+| **Lze vyjmout × Lze formátovat** (dva stavy karty, oznámení „hotovo“ až po ověření všech disků) | ✅ GUI + CLI (od 0.7.0 i s ověřením během proxy) | ✅ GUI + CLI 0.6.0 |
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
 | **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ✅ 0.7.0 (manifest, „Finish interrupted backup“ v GUI, `offload append`; oprava na Macu zatím není; čeká ruční test s `kill -9`) | ✅ 0.6.0 |
-| **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ⏳ naplánováno | ✅ 0.6.0 |
+| **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ✅ 0.7.0 (potvrzení na kartě úlohy) | ✅ 0.6.0 |
 | **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ✅ 0.2.0C (`~/Documents/Offload reporty`) | ✅ CLI + GUI (čeká ruční test) |
 | **Souhrnný report z vybraných záloh** (zaškrtnuté karty v historii → jeden HTML + PDF do `Offload reporty\souhrn\`, volitelně na vybraný disk; `offload summary-report`; `clips[].info.recorded`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |
 | **Automatické načtení disků** (externí USB disk → cíl, karta ve čtečce → zaškrtnutá; odebraný disk si pamatuje, `autoDrives`) | ✅ 0.2.0C (zapisovatelné externí disky do cílů, `ignoredVolumes`) | ✅ GUI (čeká ruční test se skutečným diskem a čtečkou) |
@@ -209,16 +209,28 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
   „bez proxy — originál je lehčí (X Mb/s ≤ Y Mb/s)“); originál větší než proxy ji dostane vždy (rozhodnutí: 4K long-GOP
   se ve střižně dekóduje těžce i s nízkým tokem). Mac klíč ignoruje a renderuje proxy pro všechny klipy.
 - **Odkaz na proxy v HTML reportu** (Windows od 0.5.1): stav „hotovo“ odkazuje na soubor proxy (`../_PROXY/…`).
-- **Verify-in-Proxy** (Windows od 0.6.0): s proxy a ověřením se primární disk ověří z čtení pro proxy, ostatní disky na
-  pozadí; report ze stage 1 má `verifyPending` a generace ASC MHL se zapíše až po ověření. Mac klíče `verifyPending`,
-  `verifyIncomplete`, `unfinished`, `verifyMethod`, `volumeSerial`, `safeToFormatSeconds`, `verifyNotes`, `xxh128`, `content` ignoruje; záloha z Windows se
-  na Macu ověří z `<karta>.xxh64` nebo xxh64 v ASC MHL jako dřív. Report s `verifyPending` (aplikace spadla během ověření)
-  Mac považuje za neověřený.
-- **CLI `--classic-verify` a `--primary N`** (Windows od 0.6.0, `copy` i `append`): `--primary` mimo 1…počet cílů (`--dest`) skončí českou chybou a kódem 1, nikdy tichým návratem k nejrychlejšímu disku. Kód 1 má i kopie, po které kartu nelze formátovat (výsledek ověření nezapsán, neověřené dřívější soubory; `--no-verify` zůstává 0).
+- **Verify-in-Proxy** (Windows od 0.6.0, Mac od 0.7.0): s proxy a ověřením se primární disk ověří z čtení pro proxy
+  (ffmpeg přes HTTP tap na 127.0.0.1, RAW přečtený před SDK), ostatní disky na pozadí; report ze stage 1 má
+  `verifyPending` a generace ASC MHL se zapíše až po ověření (pak reporty, pak seznamy součtů). Obě verze zapisují
+  i čtou `verifyPending`, `verifyIncomplete`, `verifyMethod`, `verifyNote`, `volumeSerial`, `safeToFormatSeconds`,
+  `verifyNotes`, `content` a blokový manifest; Mac zatím **nezapisuje `xxh128`** (zúžený úkol 51), záloha z Macu se tedy
+  na Windows ověří z xxh64. Rozdíl: zrušení během ověření Windows potvrdí jako neověřenou generaci, Mac ji nechá
+  `verifyPending` (dokončí ji „Finish interrupted backup“) — v obou případech nikdy „ověřeno“.
+- **Kontrola cache** (Mac od 0.7.0): macOS nemá čtení vynuceně mimo cache (`F_NOCACHE` je jen nápověda) ani API pro
+  vyhození souboru z cache. Mac proto „ověřeno“ z čtení pro proxy uzná jen s důkazem `mincore`, že soubor nemá v paměti
+  žádnou stránku (sonda cíle zapsaná s `F_NOCACHE` + `F_FULLFSYNC` musí zůstat mimo cache; slepé `mincore` nebo síťový svazek
+  = vše zpětným čtením); soubor, který v paměti zůstane i po `msync(MS_INVALIDATE)`, se ověří zpětným čtením s poznámkou
+  „Verified by reading through the macOS cache …“ a varováním (obdoba Windows I3). Windows místo toho používá
+  `FILE_FLAG_NO_BUFFERING` a kontrolu nezarovnaným čtením. Kontrolní bod manifestu zapisuje Mac až po `F_FULLFSYNC`
+  souboru (Windows `WRITE_THROUGH`). Čtení na pozadí: Windows nízká priorita I/O, Mac `IOPOL_UTILITY` (`PRIO_DARWIN_BG`
+  škrtilo i samotné čtení na čtvrtinu).
+- **CLI `--classic-verify` a `--primary N`** (Windows od 0.6.0, Mac od 0.7.0, `copy` i `append`): `--primary` mimo 1…počet cílů (`--dest`) skončí chybou a kódem 1, nikdy tichým návratem k nejrychlejšímu disku. Kód 1 má i kopie, po které kartu nelze formátovat (výsledek ověření nezapsán, neověřené dřívější soubory; `--no-verify` zůstává 0).
+- **Ověření během proxy jako volba u každé kopie** (Mac od 0.7.0, zadání 2026-10-11; Windows naplánováno): řádek
+  „Verify during proxy render“ v kroku 3 „After copy“ (výchozí z nastavení `verifyInProxy`, platí pro další přidanou kartu);
+  karta úlohy ve frontě říká „verify during proxy render“ / „verify by read-back“.
 - **Lze vyjmout × Lze formátovat** (Windows od 0.6.0, Mac od úkolu 39): „kartu lze vysunout“ se rozdělilo — vyjmout po
-  zapsání, formátovat až po ověření všech disků; zelená, zvuk úspěchu a CLI kód 0 jen při „Safe to format“. Mac zatím
-  ověřuje jen zpětným čtením (ověření během proxy — úkol 67), takže „Safe to eject“ bez „Safe to format“ vidí jen
-  s vypnutým nebo zrušeným ověřením.
+  zapsání, formátovat až po ověření všech disků; zelená, zvuk úspěchu a CLI kód 0 jen při „Safe to format“. S ověřením
+  během proxy (obě verze) je karta „Safe to eject“ hned po kopii a „Safe to format“ až po proxy a ověření všech disků.
 - **Chyby souborů v HTML česky** (Windows): JSON je sdílený, takže chyby v něm zůstávají anglicky (`size mismatch`,
   `HASH MISMATCH` …); HTML/PDF report je zobrazí česky.
 - **Historie karet** (obě verze; Mac od 0.3.0, `~/Library/Application Support/Offload/history.json`, zámek `flock`):

@@ -47,7 +47,7 @@ struct StageTwo: ParsableArguments {
     @Flag(help: "Skip clip analysis (metadata + thumbnails in the report).")
     var noAnalyze = false
 
-    @Flag(help: "Render proxies after the copy is verified.")
+    @Flag(help: "Render proxies after the copy; the copies are verified while they render (see --classic-verify).")
     var proxy = false
 
     @Option(help: "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path.")
@@ -77,6 +77,22 @@ struct StageTwo: ParsableArguments {
     @Option(help: "Also copy every proxy to <folder>/<date>/<card name>/ (with --proxy; never overwrites).")
     var proxyFolder: String?
 
+    @Flag(help: "Verify by reading every destination back after the copy, not while the proxies render.")
+    var classicVerify = false
+
+    @Option(help: "The destination verified through the proxies, 1… in the order of --dest (default: the fastest in the copy).")
+    var primary: Int?
+
+    /// --primary as a 0-based index for `destinations` destinations; out of range: the message and exit 1.
+    func primaryIndex(destinations: Int) throws -> Int? {
+        do {
+            return try VerifyOptions.primaryIndex(primary, destinations: destinations)
+        } catch {
+            fputs(Msg.cliError + "\(error)\n", stderr)
+            throw ExitCode(1)
+        }
+    }
+
     func apply(to config: inout JobConfig) throws {
         if let a = frameAspect, !(a > 0) { throw ValidationError(Msg.notPositiveNumber(numberText(a))) }
         guard frameScale > 0 else { throw ValidationError(Msg.notPositiveNumber(numberText(frameScale))) }
@@ -103,6 +119,8 @@ struct StageTwo: ParsableArguments {
         config.proxy.burnFilename = !noBurnIn
         config.proxy.burnTimecode = !noBurnIn
         config.proxy.extraFolder = proxyFolder.map(abs)
+        // Plan 10: with proxies the copies verify while they render, unless --classic-verify.
+        config.verifyInProxy = !classicVerify
         if config.proxy.extraFolder != nil && !proxy {
             fputs(Msg.proxyFolderNoEffect + "\n", stderr)
         }
@@ -172,6 +190,7 @@ struct Copy: ParsableCommand {
         config.verify = !noVerify
         config.allowSameDevice = allowSameDevice
         try stage.apply(to: &config)
+        config.primaryDestination = try stage.primaryIndex(destinations: dest.count)
         try JobRun.run(config, dryRun: dryRun)
     }
 
@@ -242,6 +261,7 @@ struct Append: ParsableCommand {
             config.project = known.entry.project
         }
         config.appendInto = folders
+        config.primaryDestination = try stage.primaryIndex(destinations: folders.count)
         try JobRun.run(config, dryRun: dryRun)
     }
 }
@@ -286,6 +306,10 @@ enum JobRun {
             }
             if config.analyzeClips || config.proxy.enabled {
                 print("  ffmpeg: \(config.tools.resolved().ffmpeg ?? "NOT FOUND")")
+            }
+            if config.verify {
+                print(job.verifiesInProxy(plan) ? "  Verify: during proxy render — safe to eject after the copy, safe to format after the verification"
+                                                : "  Verify: read back after the copy")
             }
             // Connection chain: informational only — resolving it never fails the copy.
             var links = [RoleLink(role: RoleLink.card, link: DriveLinks.resolve(plan.source))]
@@ -346,16 +370,7 @@ enum JobRun {
         } else if let w = status.warning, w != Msg.historyDelayed, !job.engine.spaceWarnings.contains(w) {
             print(Msg.cliWarning + w)
         }
-        if exitCode(config, status, report) != 0 { throw ExitCode(1) }
-    }
-
-    /// 0 = the card is backed up (spec D.22.7): every copy verified everywhere and the results written — the whole backup
-    /// so for an append. "Nothing new" ends Done without a report: 0 when the backup is complete. With --no-verify
-    /// nothing can be verified: every file copied is success, like Windows 0.6.0.
-    static func exitCode(_ config: JobConfig, _ status: JobStatus, _ report: OffloadReport?) -> Int32 {
-        guard status.phase == .done else { return 1 }
-        guard let report else { return status.note != nil && status.safeToFormat ? 0 : 1 }
-        return report.success && (status.safeToFormat || !config.verify) ? 0 : 1
+        if VerifyOptions.exitCode(verify: config.verify, status, report) != 0 { throw ExitCode(1) }
     }
 }
 
@@ -642,6 +657,10 @@ final class ProgressDisplay {
         } else if st.phase == .analyzing || st.phase == .proxies {
             line = String(format: "%@ %d/%d  %3.0f%%  %@", st.phase.rawValue, st.clipIndex + 1, st.clipCount, st.clipFraction * 100, st.clipName)
             if st.safeToFormat { line += "  (card safe to format)" } else if st.safeToEject { line += "  (card safe to eject)" }
+            if st.verifyTotal > 0 { line += String(format: "  verified %3.0f%%", Double(st.verifyDone) / Double(st.verifyTotal) * 100) }
+        } else if st.phase == .finishingVerification {
+            line = String(format: "finishing verification  %3.0f%%", Double(st.verifyDone) / Double(max(st.verifyTotal, 1)) * 100)
+            if st.safeToEject { line += "  (card safe to eject)" }
         } else {
             line = st.phase.rawValue
         }

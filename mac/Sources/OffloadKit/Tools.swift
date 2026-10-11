@@ -81,8 +81,12 @@ final class StderrTail {
     private let lock = NSLock()
     private var bytes = Data()
     private var drained = false
+    /// Every whole line as it comes (task 70: the decoder's words for the content check); called under the lock.
+    private let onLine: ((String) -> Void)?
+    private var partial = Data()
 
-    init(_ process: Process) {
+    init(_ process: Process, onLine: ((String) -> Void)? = nil) {
+        self.onLine = onLine
         process.standardError = pipe
         pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
             guard let self else { return }
@@ -126,6 +130,14 @@ final class StderrTail {
 
     /// Caller holds `lock`. At most 16 000 bytes are kept (≥ 4000 characters of UTF-8).
     private func appendLocked(_ data: Data) {
+        if let onLine {
+            partial.append(data)
+            while let nl = partial.firstIndex(of: 10) {
+                onLine(String(decoding: partial[partial.startIndex..<nl], as: UTF8.self))
+                partial = Data(partial[partial.index(after: nl)...])
+            }
+            if partial.count > 65536 { partial = Data() }   // never an unbounded line
+        }
         bytes.append(data)
         if bytes.count > 16_000 { bytes = Data(bytes.suffix(16_000)) }
     }
@@ -146,8 +158,8 @@ final class ToolProcess {
 
     var stderrText: String { stderr?.text ?? "" }
 
-    func captureStderr() {
-        stderr = StderrTail(process)
+    func captureStderr(onLine: ((String) -> Void)? = nil) {
+        stderr = StderrTail(process, onLine: onLine)
     }
 
     /// After the process ended: the complete stderr tail.

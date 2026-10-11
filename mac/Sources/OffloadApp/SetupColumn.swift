@@ -350,7 +350,7 @@ struct SpaceBar: View {
 /// One row of step 3: the tick switches it (verify, analysis, proxy — the report is always written), a click on the
 /// row opens its settings section (as Windows 0.5.2).
 struct AfterCopyRow: Identifiable {
-    enum Kind { case verify, analysis, proxy, report }
+    enum Kind { case verify, verifyInProxy, analysis, proxy, report }
     let kind: Kind
     let label: String
     let value: String
@@ -358,21 +358,37 @@ struct AfterCopyRow: Identifiable {
     var warn = false
     var id: Kind { kind }
 
+    init(kind: Kind, label: String, value: String, on: Bool, warn: Bool = false, disabled: Bool = false) {
+        self.kind = kind
+        self.label = label
+        self.value = value
+        self.on = on
+        self.warn = warn
+        self.disabled = disabled
+    }
+
     var section: SettingsSection {
         switch kind {
-        case .verify: return .verify
+        case .verify, .verifyInProxy: return .verify
         case .analysis: return .analysis
         case .proxy: return .proxy
         case .report: return .report
         }
     }
 
-    var hasSwitch: Bool { kind != .report }
+    /// The report is always written; "Verify during proxy render" needs verification and proxies on.
+    var hasSwitch: Bool { kind != .report && !disabled }
+    var disabled = false
 
     static func rows(_ s: AppSettings, luts: LutCatalog) -> [AfterCopyRow] {
         let px = s.proxy
         return [
             AfterCopyRow(kind: .verify, label: "Verify (read back)", value: s.verify ? "xxHash64" : "off", on: s.verify, warn: !s.verify),
+            // User requirement 2026-10-11: per copy — the next card added takes it (settings verifyInProxy).
+            AfterCopyRow(kind: .verifyInProxy, label: "Verify during proxy render",
+                         value: !s.verify || !px.enabled ? "needs Verify and Proxy"
+                             : s.verifyInProxy ? "safe to eject after the copy" : "off — read back after the copy",
+                         on: s.verify && px.enabled && s.verifyInProxy, disabled: !s.verify || !px.enabled),
             AfterCopyRow(kind: .analysis, label: "Clip analysis & thumbnails", value: s.analyzeClips ? "3 frames / clip" : "off",
                          on: s.analyzeClips),
             AfterCopyRow(kind: .proxy, label: "Proxy",
@@ -384,7 +400,7 @@ struct AfterCopyRow: Identifiable {
 
     /// Step 3 while offloads run, in one line.
     static func line(_ s: AppSettings) -> String {
-        [s.verify ? "Verify xxHash64" : "No verification",
+        [s.verify ? (s.verifyInProxy && s.proxy.enabled ? "Verify xxHash64 during proxy render" : "Verify xxHash64") : "No verification",
          s.analyzeClips ? "analysis & thumbnails" : nil,
          s.proxy.enabled ? "proxy \(s.proxy.height)p \(AfterCopyTexts.codecShort(s.proxy.codec))" : nil,
          "report PDF, HTML, MHL"].compactMap { $0 }.joined(separator: " · ")
@@ -426,7 +442,8 @@ struct AfterCopyStep: View {
                 Button { toggle(row.kind) } label: { mark(row) }
                     .buttonStyle(.plain)
                     .disabled(!row.hasSwitch || model.starting)
-                    .help(row.hasSwitch ? (row.on ? "Switch off" : "Switch on") : "The report is always written")
+                    .help(row.hasSwitch ? (row.on ? "Switch off" : "Switch on")
+                          : row.kind == .report ? "The report is always written" : "Needs Verify and Proxy on")
                 Button { model.openSettings(row.section) } label: {
                     HStack(spacing: 12) {
                         Text(row.label).font(.ui(14)).foregroundStyle(row.warn ? p.warn : p.text)
@@ -466,6 +483,7 @@ struct AfterCopyStep: View {
     private func toggle(_ kind: AfterCopyRow.Kind) {
         switch kind {
         case .verify: model.settings.verify.toggle()
+        case .verifyInProxy: model.settings.verifyInProxy.toggle()
         case .analysis: model.settings.analyzeClips.toggle()
         case .proxy: model.settings.proxy.enabled.toggle()
         case .report: break

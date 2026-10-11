@@ -15,13 +15,24 @@ plán po úkolech: [`docs/superpowers/plans/2026-10-05-offload-mac-parity.md`](d
 (hotový ve verzi 0.2.0; ruční testy s hardwarem v [`README-START.md`](docs/superpowers/plans/README-START.md), oddíl 7).
 Verze 0.3.0 = plán 6 dorovnání 2 ([`2026-10-08-offload-mac-parity-2.md`](docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md),
 úkoly 32–50): historie karet, doplnění nových klipů, název z klipů, Ověřit zálohu, kontrola místa.
+Verze 0.7.0 = plán 10 ([`2026-10-08-offload-mac-parity-3.md`](docs/superpowers/plans/2026-10-08-offload-mac-parity-3.md),
+úkoly 65–70, s úkoly 51 zúženým a 61): **Verify-in-Proxy**, Pozastavit, „Finish interrupted backup“, obsahová kontrola
+dekodérem. Úkoly 52–60 a 62–64 zatím vynechané.
 
 ## Jak to funguje
 
 1. **Kopie** – karta se čte **jen jednou** (velké bloky, bez page cache), každý blok jde paralelně na všechny cíle
    a zároveň do xxHash64. Rychlost = nejpomalejší článek (karta nebo nejpomalejší disk).
 2. **Ověření** – po `F_FULLFSYNC` se každý soubor přečte z každého disku zpět (bez cache) a porovná se zdrojovým hashem.
-   Teprve potom aplikace hlásí „Safe to eject“.
+   Karta má dva stavy: **Safe to eject** (vše zapsané) a **Safe to format** (vše ověřené na všech discích a výsledek zapsaný).
+   **Verify-in-Proxy** (od 0.7.0, výchozí zapnuto, řádek „Verify during proxy render“ v kroku 3, CLI `--classic-verify`
+   vypne): s proxy se zpětné čtení po kopii nedělá — karta je „Safe to eject“ hned po kopii, ffmpeg čte klipy primárního
+   disku přes místní HTTP tap Offloadu (127.0.0.1) a každý přečtený 16MiB blok se porovná s XXH3-64 z karty, RAW (BRAW,
+   R3D, ARRIRAW) se před SDK přečte jednou z disku, ostatní disky se čtou celé na pozadí, chybějící bloky dočte dorovnání;
+   „Safe to format“ až po ověření všech disků a zápisu výsledku (ASC MHL, reporty, `.xxh64`). Soubor, který macOS drží
+   v paměti (`mincore`), se z tapu nikdy neověří — ověří ho zpětné čtení s poznámkou v reportu. Bez proxy nebo vypnuto:
+   zpětné čtení po kopii jako dřív. Vadu souboru z kamery (dekodér hlásí poškozená data, kopie přitom sedí s kartou) karta
+   ukáže žlutě a před formátováním chce potvrzení „Checked — the card can be formatted“.
 3. **Report** – `<root>/<YYYY-MM-DD>/<karta>/_REPORT/`: HTML (náhledy, metadata, TC), JSON, TXT, seznam xxh64;
    `ascmhl/` = ASC MHL v2 (ověřitelné `ascmhl` / Silverstack / ShotPut …).
 4. **Proxy (volitelné)** – po ověření, čte se z disku (karta už není potřeba): scale → LUT (.cube) → burn-in název + TC
@@ -85,6 +96,9 @@ offload copy /Volumes/A001 -d /Volumes/RAID_A --name auto      # název složky 
 offload copy /Volumes/A001 -d /Volumes/RAID_A --dry-run         # plán a místo po svazcích, nic se nekopíruje
 offload copy … --no-history                                     # historii karet nečte ani nezapisuje
 offload append /Volumes/A001 [--into /Volumes/RAID_A/2026-10-03/A001 --into …]   # jen nové soubory, generace N
+                                                                # i „Finish interrupted backup“: dokončí nepotvrzenou generaci
+offload copy /Volumes/A001 -d … -d … --proxy --primary 2         # ověření během proxy na 2. cíli (výchozí: nejrychlejší)
+offload copy /Volumes/A001 -d … --proxy --classic-verify         # zpětné čtení po kopii místo ověření během proxy
 offload verify /Volumes/RAID_A/2026-10-03/A001 [--report]       # nebo složka dne = každá karta; kód 1 = problém
 offload bench --read /Volumes/A001 --write /Volumes/RAID_A --write /Volumes/SHUTTLE_B
 ```
@@ -93,6 +107,8 @@ offload bench --read /Volumes/A001 --write /Volumes/RAID_A --write /Volumes/SHUT
 
 ```sh
 swift test                    # XCTest (Tests/OffloadKitTests); ffmpeg testy se bez ffmpeg přeskočí
+OFFLOAD_TEST_DEST=/Volumes/X swift test --filter CacheProbeTests   # kontrola cache (mincore) na daném disku
+OFFLOAD_TAP_BENCH=1 swift test --filter TapFFmpegTests            # měření tapu (a s OFFLOAD_TEST_DEST čtení na pozadí)
 ```
 
 ## Hardware (USB porty)

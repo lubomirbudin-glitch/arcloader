@@ -82,6 +82,10 @@ struct JobCardState {
     var ejected = false
     var hasReport = false
     var hasProxies = false
+    /// Task 70: "A001C001 — corrupted data at 01:00:02:13" per clip with a content defect.
+    var defects: [String] = []
+    /// The card may be formatted but its defects have not been looked at yet.
+    var canConfirmContent = false
 
     static let shownFailed = 5
 
@@ -90,7 +94,10 @@ struct JobCardState {
 #if DEBUG
         if let preview = item.preview { return preview }
 #endif
-        let s = item.status
+        var s = item.status
+        // Task 70: once the user has looked at the content defects, they are no reason to hold the card back.
+        let defectWarning = s.contentWarnings > 0 && s.warning == VIPMsg.contentWarnings(s.contentWarnings)
+        if item.contentConfirmed && defectWarning { s.warning = nil }
         let plan = item.plan
         let report = item.report
         let config = item.job.config
@@ -99,6 +106,8 @@ struct JobCardState {
         var c = JobCardState(kind: kind(s, report), phase: s.phase, name: name, sub: "")
         if let plan {
             c.sub = "\(Fmt.count(plan.scan.files.count, "file")) · \(Fmt.bytes(plan.scan.totalBytes))"
+            // Which way this card is verified (user requirement 2026-10-11).
+            if config.verify { c.sub += s.verifyInProxy ? " · verify during proxy render" : " · verify by read-back" }
             c.path = "…/\(plan.date)/\(plan.cardName)/"
         } else {
             c.sub = ([item.estimatedBytes.map { "~" + Fmt.bytes($0) }] + [Fmt.count(names.count, "disk")])
@@ -110,8 +119,14 @@ struct JobCardState {
         c.ejected = item.ejected
         c.hasReport = report != nil && plan != nil
         c.hasProxies = report?.proxy?.enabled == true && s.proxiesDone > 0
+        if let r = report {
+            c.defects = r.contentWarnings.map { e in
+                "\(e.clip.name) — \(ClipContent.kindText(e.content?.kind)) at \(e.content?.timecode ?? "?")"
+            }
+        }
+        c.canConfirmContent = !item.contentConfirmed && s.contentWarnings > 0 && s.safeToFormat && s.phase.isFinished
         if c.kind != .waiting {
-            let chips = JobProgress.chips(s)
+            let chips = JobProgress.chips(s, contentConfirmed: item.contentConfirmed, contentWarnings: s.contentWarnings)
             c.ejectChip = chips.eject
             c.formatChip = chips.format
         }
@@ -262,6 +277,7 @@ struct JobCardState {
     /// Copy · Verify · Proxy (or Analysis) · Report — the phases this job does; done ones full, the active one as far
     /// as it got. Empty for a failed or cancelled job.
     static func steps(_ s: JobStatus, _ config: JobConfig, _ progress: Double) -> [PhaseStep] {
+        if s.verifyInProxy { return proxySteps(s, progress) }
         let stage2 = config.proxy.enabled || config.analyzeClips
         var labels = ["Copy"]
         if config.verify { labels.append("Verify") }
@@ -282,6 +298,33 @@ struct JobCardState {
         return labels.enumerated().map { i, label in
             let state: PhaseStep.State = i < active ? .done : i == active ? .active : .pending
             let fill = state == .done ? 1 : state == .active ? (stage1Report ? 1 : min(1, max(0, progress))) : 0
+            return PhaseStep(number: i + 1, label: label, state: state, fill: fill)
+        }
+    }
+
+    /// Verify-in-proxy (task 70): Copy · Proxy · Verify · Report — the verification ends after the proxies.
+    static func proxySteps(_ s: JobStatus, _ progress: Double) -> [PhaseStep] {
+        let labels = ["Copy", "Proxy", "Verify", "Report"]
+        if s.phase == .failed || s.phase == .cancelled { return [] }
+        let stage1Report = s.phase == .reporting && s.copySucceeded == nil
+        let active: Int
+        switch s.phase {
+        case .waiting: active = -1
+        case .copying, .flushing: active = 0
+        case .reporting where stage1Report: active = 0
+        case .analyzing, .proxies: active = 1
+        case .finishingVerification: active = 2
+        case .reporting: active = 3
+        default: active = labels.count
+        }
+        return labels.enumerated().map { i, label in
+            let state: PhaseStep.State = i < active ? .done : i == active ? .active : .pending
+            let fill: Double
+            if state == .done { fill = 1 } else if state != .active { fill = 0 } else if i == 2, s.verifyTotal > 0 {
+                fill = min(1, Double(s.verifyDone) / Double(s.verifyTotal))
+            } else {
+                fill = stage1Report ? 1 : min(1, max(0, progress))
+            }
             return PhaseStep(number: i + 1, label: label, state: state, fill: fill)
         }
     }

@@ -284,6 +284,6 @@ final class TapFFmpegTests: XCTestCase {
         XCTAssertFalse(job.status().verifyInProxy)
         XCTAssertTrue(job.status().safeToFormat, "read back in stage 1")
         job.runPost()
-        XCTAssertNil(job.report?.destinations.first?.verifyMethod, "the classic read-back of stage 1 (as before 0.7.0)")
+        XCTAssertEqual(job.report?.destinations.first?.verifyMethod, "read-back", "the classic read-back of stage 1 (task 70: named as Windows does)")
     }
 }

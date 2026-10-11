@@ -45,6 +45,10 @@ public struct AppSettings: Codable, Equatable {
     /// "xxh64" or "both" (xxh64 + MD5); any other value (a newer version's) is kept and reads as "xxh64".
     public var hash = "xxh64"
     public var outputs = OutputSettings()
+    /// Plan 10 (task 70): verify the primary drive while the proxies render ("Verify during proxy render"; default on).
+    public var verifyInProxy = true
+    /// "fastest" or "first" — the drive verified through the proxies; another value (a newer version's) reads as fastest.
+    public var verifyPrimary = VerifyOptions.fastest
 
     /// The JSON object last read (unknown keys of newer versions); written back under the known keys on save.
     public var raw: [String: Any] = [:]
@@ -53,6 +57,7 @@ public struct AppSettings: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case destRoots, verify, analyzeClips, proxy, tools, portNames, autoDestinations, ignoredVolumes, naming, hash, outputs
+        case verifyInProxy, verifyPrimary
     }
 
     public init() {}
@@ -61,6 +66,7 @@ public struct AppSettings: Codable, Equatable {
         a.destRoots == b.destRoots && a.verify == b.verify && a.analyzeClips == b.analyzeClips && a.proxy == b.proxy
             && a.tools == b.tools && a.portNames == b.portNames && a.autoDestinations == b.autoDestinations
             && a.ignoredVolumes == b.ignoredVolumes && a.naming == b.naming && a.hash == b.hash && a.outputs == b.outputs
+            && a.verifyInProxy == b.verifyInProxy && a.verifyPrimary == b.verifyPrimary
     }
 }
 
@@ -107,6 +113,12 @@ public enum SettingsStore {
             return true
         }
         read("outputs") { v in section(v, as: OutputSettings.self).map { s.outputs = $0 } != nil }
+        read("verifyInProxy") { v in bool(v).map { s.verifyInProxy = $0 } != nil }
+        read("verifyPrimary") { v in
+            guard let p = v as? String else { return false }
+            s.verifyPrimary = p.isEmpty ? VerifyOptions.fastest : p   // a newer value is kept; it reads as fastest
+            return true
+        }
         return normalize(s, catalog: catalog)
     }
 

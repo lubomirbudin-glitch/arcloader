@@ -421,6 +421,23 @@ public final class ProxyRenderer {
         return result
     }
 
+    /// Task 70: a small picture of the place of a content defect (JPEG, 180 px high) from the clip on the destination; nil
+    /// when it cannot be made (RAW, no ffmpeg) — the report then shows the defect without a picture.
+    public func snapshot(_ clip: Clip, cardPath: String, info: ClipInfo, frame: Int64) -> Data? {
+        guard let ffmpeg = tools.ffmpeg, clip.format == .video else { return nil }
+        let out = tempDir + "/defect-\(UUID().uuidString.prefix(8)).jpg"
+        defer { unlink(out) }
+        let seconds = Timecode.fps(info.frameRate).map { $0 > 0 ? Double(frame) / $0 : 0 } ?? 0
+        let at = String(format: "%.6f", max(0, seconds - 0.5))
+        do {
+            try ToolProcess.run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss", at, "-i", cardPath + "/" + clip.path,
+                                         "-frames:v", "1", "-vf", "scale=-2:180", "-q:v", "5", out])
+        } catch {
+            return nil
+        }
+        return FileManager.default.contents(atPath: out)
+    }
+
     /// A ToolError raised by braw-decode (ToolProcess names errors by the executable's file name).
     private func isBrawDecoder(_ tool: String) -> Bool {
         tools.brawDecoder.map { ($0 as NSString).lastPathComponent == tool } ?? false
@@ -431,9 +448,10 @@ public final class ProxyRenderer {
     /// never retries. Notes and log lines as on Windows.
     /// `inputURL`: verify-in-proxy's tap for the clip (mode A) — ffmpeg reads it from there instead of the file; `activity`:
     /// the tap's reads, which the stall watchdog takes as progress (a slow destination does not kill the proxy).
+    /// `content` (task 70): watches the decoder's warnings and frame count for the content check (-loglevel warning).
     public func render(_ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse? = nil, output: String,
                        progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool,
-                       inputURL: String? = nil, activity: (() -> Int64)? = nil) throws {
+                       inputURL: String? = nil, activity: (() -> Int64)? = nil, content: ContentCheck? = nil) throws {
         guard let ffmpeg = tools.ffmpeg else { throw ToolError(tool: "ffmpeg", status: -1, message: "not found") }
         let lutFile = try prepareLUT(lut)
         let look = ProxyRenderer.lookFor(lutFile != nil ? lut : nil, info: info)
@@ -441,7 +459,8 @@ public final class ProxyRenderer {
         let first: Error
         do {
             try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, lut: lut, lutFile: lutFile, look: look, hwaccel: hw,
-                           output: output, progress: progress, isCancelled: isCancelled, inputURL: inputURL, activity: activity)
+                           output: output, progress: progress, isCancelled: isCancelled, inputURL: inputURL, activity: activity,
+                           content: content)
             return
         } catch let e as FFmpegStall where !hw && !isCancelled() {
             throw FFmpegStall(note: e.note + "; proxy not created")
@@ -449,10 +468,12 @@ public final class ProxyRenderer {
             first = error   // hardware decoding stalled or failed: once more in software
         }
         if isCancelled() { throw ToolError(tool: "ffmpeg", status: -1, message: "cancelled") }
+        content?.reset()   // what the hardware decoder said is not the file's verdict
         log?("proxy \(clip.name): with hardware decoding: \(first) — retrying in software")
         do {
             try renderOnce(ffmpeg, clip, cardPath: cardPath, info: info, lut: lut, lutFile: lutFile, look: look, hwaccel: false,
-                           output: output, progress: progress, isCancelled: isCancelled, inputURL: inputURL, activity: activity)
+                           output: output, progress: progress, isCancelled: isCancelled, inputURL: inputURL, activity: activity,
+                           content: content)
             log?("proxy \(clip.name): software decoding succeeded")
         } catch where (error is FFmpegStall || error is ToolError) && !isCancelled() {
             log?("proxy \(clip.name): software decoding failed too: \(error)")
@@ -470,7 +491,7 @@ public final class ProxyRenderer {
     private func renderOnce(_ ffmpeg: String, _ clip: Clip, cardPath: String, info: ClipInfo, lut: LutUse?, lutFile: String?,
                             look: RawLook, hwaccel: Bool, output: String,
                             progress: @escaping (Double) -> Void, isCancelled: @escaping () -> Bool,
-                            inputURL: String? = nil, activity: (() -> Int64)? = nil) throws {
+                            inputURL: String? = nil, activity: (() -> Int64)? = nil, content: ContentCheck? = nil) throws {
         // ARRIRAW: art-cmd first writes a ProRes LT intermediate and reports no progress itself — estimate it from the
         // intermediate's size (0–80 %); ffmpeg's own progress covers the rest.
         let arriMonitor = clip.format == .arriraw ? intermediateProgress(info: info, progress: progress) : nil
@@ -489,7 +510,8 @@ public final class ProxyRenderer {
         let vf = FilterGraph.proxy(settings, outHeight: outHeight, alreadyCropped: src.alreadyCropped, lutFile: lutFile,
                                    premap: ProxyRenderer.needsPreMap(lut, source: src, info: info),
                                    burnIn: burnIn(clip: clip, info: info, height: outHeight))
-        var args = ["-hide_banner", "-loglevel", "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
+        // Warning level with the content check: "corrupt decoded frame" is a warning (Windows measurement, ffmpeg 8.1).
+        var args = ["-hide_banner", "-loglevel", content != nil ? "warning" : "error", "-y", "-nostats", "-progress", "pipe:1"] + src.inputArgs
         args += ["-map", "0:v:0"]
         if settings.audio && info.audioChannels > 0 && src.audioFromInput {
             args += ["-map", "0:a:0?"] + settings.codec.audioArgs
@@ -503,7 +525,7 @@ public final class ProxyRenderer {
         args += ["-f", "mov", part]
         do {
             try runFFmpeg(ffmpeg, args, feeder: src.feeder, explainFeederError: src.explainFeederError, duration: info.duration,
-                          progress: progress, isCancelled: isCancelled, stallAfter: stallTimeout, activity: activity)
+                          progress: progress, isCancelled: isCancelled, stallAfter: stallTimeout, activity: activity, content: content)
             // Never over a proxy that is already there (an append writes next to earlier proxies; a name taken meanwhile).
             do {
                 try ProxyCopy.renameNoReplace(part, output)
@@ -571,9 +593,9 @@ public final class ProxyRenderer {
     /// note); one that was terminated, or whose stdout the pump closed because ffmpeg had stopped reading, is not.
     func runFFmpeg(_ ffmpeg: String, _ args: [String], feeder: Process?, explainFeederError: ((ToolError) -> Error)? = nil,
                    duration: Double?, progress: ((Double) -> Void)?, isCancelled: () -> Bool,
-                   stallAfter: TimeInterval? = nil, activity: (() -> Int64)? = nil) throws {
+                   stallAfter: TimeInterval? = nil, activity: (() -> Int64)? = nil, content: ContentCheck? = nil) throws {
         let p = ToolProcess(ffmpeg, args)
-        p.captureStderr()
+        p.captureStderr(onLine: content.map { c in { c.stderr($0) } })
         let watch = ProgressWatch()
         // Set by the pump when ffmpeg stopped taking data and the feeder's stdout was closed under it.
         let feederCut = Flag()
@@ -623,6 +645,7 @@ public final class ProxyRenderer {
             p.process.standardInput = FileHandle.nullDevice
         }
         p.onStdoutLine { line in
+            content?.progress(line)
             watch.advanced(line)
             guard let progress, let d = duration, d > 0, line.hasPrefix("out_time_us="),
                   let us = Double(line.dropFirst("out_time_us=".count)) else { return }

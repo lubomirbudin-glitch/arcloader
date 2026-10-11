@@ -206,6 +206,23 @@ struct VerifySettings: View {
             }
             // TODO(hash): xxHash64 + MD5 once the Mac engine writes both (AppSettings.hash is kept, not used yet).
             if !model.settings.verify { Notice(kind: .warn, text: AfterCopyTexts.verifyOffWarning) }
+            // Plan 10 (task 70): verify-in-proxy and its primary drive.
+            FormRow(label: "During proxies") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle("Verify the primary drive during proxy render", isOn: $model.settings.verifyInProxy)
+                        .toggleStyle(.offloadCheckbox)
+                    Text("With proxies the card is safe to eject right after the copy; every drive is read in full while the proxies render, and the card is safe to format once all are verified. Off, or without proxies: read back after the copy.")
+                        .font(.ui(12)).foregroundStyle(p.text3).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            FormRow(label: "Primary drive") {
+                Picker("", selection: $model.settings.verifyPrimary) {
+                    Text("Fastest in the copy").tag(VerifyOptions.fastest)
+                    Text("First destination").tag(VerifyOptions.first)
+                }
+                .labelsHidden().pickerStyle(.segmented).fixedSize()
+                .disabled(!model.settings.verifyInProxy)
+            }
             FormRow(label: "Verify backup") {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Checks an earlier backup on a destination against its ASC MHL, without the card (⇧⌘O).")

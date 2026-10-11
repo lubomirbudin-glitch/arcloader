@@ -130,7 +130,8 @@ struct JobCardContainer: View {
             eject: { model.eject(item) },
             report: { model.openReport(item) },
             reveal: { model.reveal(item) },
-            proxies: { model.revealProxies(item) }))
+            proxies: { model.revealProxies(item) },
+            confirmContent: { item.contentConfirmed = true }))
     }
 }
 
@@ -142,6 +143,7 @@ struct JobCardActions {
     var report: () -> Void = {}
     var reveal: () -> Void = {}
     var proxies: () -> Void = {}
+    var confirmContent: () -> Void = {}
 }
 
 struct JobCardView: View {
@@ -505,6 +507,7 @@ struct ProblemCard: View {
                 // TODO(repair): "Copy again" (only the failed files, only where they failed) once the Mac can repair.
             }
             if !state.failed.isEmpty { failedList }
+            if !state.defects.isEmpty { defectList }
             if !state.summary.isEmpty && state.kind == .problem {
                 Text(state.summary.map { "\($0.label) \($0.value)" }.joined(separator: " · "))
                     .font(.ui(12)).foregroundStyle(p.text3)
@@ -516,6 +519,23 @@ struct ProblemCard: View {
         .padding(.horizontal, 22).padding(.vertical, 18)
         .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(c.bg))
         .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(c.border, lineWidth: 1))
+    }
+
+    /// Task 70: the clips whose decoder reported a defect (the copy matches the card) and the explicit confirmation.
+    private var defectList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(state.defects.enumerated()), id: \.offset) { _, line in
+                Text(line).foregroundStyle(p.text).lineLimit(2).textSelection(.enabled)
+            }
+            if state.canConfirmContent {
+                Button("Checked — the card can be formatted", action: actions.confirmContent)
+                    .buttonStyle(.offload(.secondary, height: 32))
+                    .help("The copy matches the card; the defects are in the camera files. Look at them in the report first.")
+            }
+        }
+        .font(.ui(13))
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(p.warnListBg))
     }
 
     private var failedList: some View {

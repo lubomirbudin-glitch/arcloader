@@ -117,6 +117,9 @@ public final class JobProgress {
         case .analyzing, .proxies:
             guard status.clipCount > 0 else { return 0 }
             return (Double(status.clipIndex) + status.clipFraction) / Double(status.clipCount)
+        case .finishingVerification:
+            guard status.verifyTotal > 0 else { return 0 }
+            return Double(status.verifyDone) / Double(status.verifyTotal)
         case .done:
             return 1
         default:
@@ -185,6 +188,8 @@ public final class JobProgress {
             return "Clip \(s.clipIndex + 1)/\(s.clipCount) · \(s.clipName)"
         case .proxies:
             return "Proxy \(s.clipIndex + 1)/\(s.clipCount) · \(s.clipName) · " + String(format: "%.0f", s.clipFraction * 100) + "%"
+        case .finishingVerification:
+            return "Finishing verification · " + String(format: "%.0f", phaseProgress * 100) + "%"
         default:
             return s.phase.label + "…"
         }

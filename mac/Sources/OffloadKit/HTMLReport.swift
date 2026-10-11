@@ -36,6 +36,16 @@ public enum HTMLReport {
         return t >= 3600 ? String(format: "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60) : String(format: "%d:%02d", t / 60, t % 60)
     }
 
+    /// "during proxy render" / "read back" — how a destination was verified (`destinations[].verifyMethod`).
+    static func methodLabel(_ m: String?) -> String {
+        switch m {
+        case OffloadReport.verifyInProxyMethod: return "during proxy render"
+        case OffloadReport.readBackMethod: return "read back"
+        case let other?: return other
+        case nil: return "—"
+        }
+    }
+
     static let stateLabel: [String: String] = [
         "verified": "verified", "written": "written", "failed": "FAILED", "pending": "pending",
     ]
@@ -104,8 +114,11 @@ public enum HTMLReport {
         let status = !ok ? "FAILED" : r.verifyPending == true ? "COPIED — VERIFYING" : incomplete ? "UNFINISHED"
             : (r.verified ? "VERIFIED" : "COPIED — NOT VERIFIED")
         let statusClass = !ok ? "bad" : (r.safeToFormat ? "ok" : "warn")
+        let defects = r.contentWarnings
         let verdict = !ok ? "" : r.safeToFormat
-            ? "<p class=\"ok\">\(esc(Texts.safeToFormat(r.destinations.count)))</p>\n"
+            ? (defects.isEmpty ? "<p class=\"ok\">\(esc(Texts.safeToFormat(r.destinations.count)))</p>\n"
+                : "<p class=\"warn\">\(esc(VIPMsg.contentWarnings(defects.count)))</p>\n")
+            : incomplete ? "<p class=\"warn\">The verification result is not written on every destination — do not format the card yet; finish the backup (Finish interrupted backup).</p>\n"
             : "<p class=\"muted\">\(esc(Texts.safeToEject(r.destinations.count)))</p>\n"
         let failed = r.failedFiles
         let videoClips = r.clips.filter { !$0.clip.isCameraProxy }
@@ -128,18 +141,39 @@ public enum HTMLReport {
         <div class="stat"><b>\(duration(r.copySeconds))</b><span>copy · \(formatRate(r.totalBytes, r.copySeconds))</span></div>
         <div class="stat"><b>\(r.verified ? duration(r.verifySeconds) : "—")</b><span>verification · \(r.verified ? formatRate(r.totalBytes, r.verifySeconds) : "not run")</span></div>
         \(r.pausedSeconds > 0 ? "<div class=\"stat\"><b>\(duration(r.pausedSeconds))</b><span>paused · not in the speeds</span></div>" : "")
+        \(r.safeToFormatSeconds.map { "<div class=\"stat\"><b>\(duration($0))</b><span>safe to format after</span></div>" } ?? "")
         <div class="stat"><b>\(esc(r.hashAlgorithm.uppercased()))</b><span>checksum</span></div>
         </div>
 
         <h2>Destinations</h2><div class="panel"><table>
-        <tr><th>Drive</th><th>Folder</th><th>FS</th><th class="num">OK</th><th class="num">Errors</th></tr>
+        <tr><th>Drive</th><th>Folder</th><th>FS</th><th>Volume</th><th>Verification</th><th class="num">OK</th><th class="num">Errors</th></tr>
 
         """
         for d in r.destinations {
             h += "<tr><td>\(esc((d.root as NSString).lastPathComponent))</td><td class=\"mono wrap\">\(esc(d.cardPath))</td><td>\(esc(d.filesystem))</td>"
+            h += "<td class=\"mono\">\(esc(d.volumeSerial ?? "—"))</td>"
+            h += "<td class=\"wrap\">\(esc(methodLabel(d.verifyMethod)))\(d.verifyNote.map { "<div class=\"note\">\(esc($0))</div>" } ?? "")</td>"
             h += "<td class=\"num ok\">\(d.filesOK)</td><td class=\"num \(d.filesFailed > 0 ? "bad" : "muted")\">\(d.filesFailed)</td></tr>\n"
         }
         h += "</table></div>\n"
+        if let notes = r.verifyNotes, !notes.isEmpty {
+            h += "<h2 class=\"warn\">Verification notes</h2><div class=\"panel\"><table>\n"
+            for n in notes { h += "<tr><td class=\"wrap\">\(esc(n))</td></tr>\n" }
+            h += "</table></div>\n"
+        }
+        if !defects.isEmpty {
+            // Spec 7: a defect of the camera file (the copy matches the card) — look at it before formatting.
+            h += "<h2 class=\"warn\">Content defects (\(defects.count))</h2><div class=\"panel\"><table>\n"
+            h += "<tr><th></th><th>Clip</th><th>Defect</th><th>TC</th><th>Decoder</th></tr>\n"
+            for c in defects {
+                let pic = c.content?.jpeg.map { "<img class=\"thumb\" src=\"data:image/jpeg;base64,\($0.base64EncodedString())\" alt=\"\">" }
+                    ?? "<div class=\"nothumb\"></div>"
+                h += "<tr><td>\(pic)</td><td class=\"clip\"><div class=\"clipname\">\(esc(c.clip.name))</div><div class=\"path\">\(esc(c.clip.path))</div></td>"
+                h += "<td class=\"warn\">\(esc(ClipContent.kindText(c.content?.kind)))</td><td class=\"mono tc\">\(esc(c.content?.timecode ?? ""))</td>"
+                h += "<td class=\"wrap note\">\(esc(c.content?.message ?? ""))</td></tr>\n"
+            }
+            h += "</table></div>\n"
+        }
         h += "<p class=\"sub\">Source: <span class=\"mono\">\(esc(r.source))</span> (\(esc(r.sourceFilesystem)))</p>\n"
 
         if !failed.isEmpty {

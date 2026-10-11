@@ -101,7 +101,7 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | Klíč | Typ | Význam |
 |---|---|---|
 | `tool` | string | `offload` |
-| `version` | string | `0.3.0` (Mac), `0.6.0-win` (Windows) |
+| `version` | string | `0.7.0` (Mac), `0.6.0-win` (Windows) |
 | `generation` | číslo? | jen Windows od 0.2.0 a jen v reportu doplnění nebo opravy (`offload_report_NNNN.json`): číslo generace ASC MHL; chybí = 1 (celá kopie) |
 | `kind` | string? | jen Windows od 0.5.0: `repair` u opravy („Zkopírovat znovu“); chybí u celé kopie a doplnění. Mac ignoruje |
 | `copyPausedSeconds`, `verifyPausedSeconds` | číslo? | Windows od 0.5.0, Mac od 0.6.0 (úkol 61, rovnou s pauzou po souboru / klipu): sekundy, které kopie / zpětné čtení stály pozastavené; chybí, když se nepozastavovalo. Od 0.8.0 (pauza po dokončení souboru / klipu, obě verze) se počítá jen doba, kdy úloha opravdu **stála** — od chvíle, kdy doběhl rozpracovaný soubor / klip, do Pokračovat; čas mezi stiskem Pozastavit a koncem souboru je práce a v rychlostech zůstává (do 0.7.x od stisku Pozastavit). Rychlosti a doby v TXT, HTML a PDF je odečítají (Mac stejně, zaokrouhleno na 0,1 s) |
@@ -112,15 +112,15 @@ Po doplnění se prodlouží stejně jako `<karta>.xxh64` — je to třetí soub
 | `cardName`, `date`, `source`, `sourceFilesystem` | string | |
 | `started`, `copyFinished`, `finished` | datum | |
 | `verified` | bool | proběhlo ověření (Windows od 0.6.0 i během proxy — metoda v `destinations[].verifyMethod`) |
-| `verifyPending` | bool? | jen Windows od 0.6.0: kopie je hotová a ověřuje se s proxy (`verified` je zatím `false`, stavy `written`); report s tímto klíčem ještě **nemá generaci ASC MHL** — zapíše se až po ověření. Po pádu aplikace ho dokončí doplnění (viz „Blokový manifest“). Mac ignoruje |
-| `verifyIncomplete` | bool? | jen Windows od 0.6.0: výsledek ověření se nepodařilo zapsat do všech složek karty; složky, kam se zapsal, nesou tento klíč a nejsou nikdy „ověřené“, dokud doplnění („Dokončit přerušenou zálohu“) klíč nepřepíše (viz „Blokový manifest“). Mac ignoruje |
-| `safeToFormatSeconds` | číslo? | jen Windows od 0.6.0: sekundy od startu do chvíle, kdy byl každý soubor ověřený na každém cíli (bez pauz); chybí, když to nenastalo |
-| `verifyNotes[]` | string? | jen Windows od 0.6.0: volný text (do 0.8.0 česky, od 0.9.0 anglicky) — nestabilní čtení (blok se při opakovaném čtení lišil), stejný blok špatně na více cílech a co dává karta při novém čtení |
+| `verifyPending` | bool? | Windows od 0.6.0, Mac od 0.7.0: kopie je hotová a ověřuje se s proxy (`verified` je zatím `false`, stavy `written`); report s tímto klíčem ještě **nemá generaci ASC MHL ani seznamy součtů** — zapíšou se až po ověření. Po pádu aplikace ho dokončí doplnění (viz „Blokový manifest“). Mac i Windows takovou zálohu nikdy nepovažují za ověřenou |
+| `verifyIncomplete` | bool? | Windows od 0.6.0, Mac od 0.7.0: výsledek ověření se nepodařilo zapsat do všech složek karty; složky, kam se zapsal, nesou tento klíč a nejsou nikdy „ověřené“, dokud doplnění („Dokončit přerušenou zálohu“ / „Finish interrupted backup“) klíč nepřepíše (viz „Blokový manifest“) |
+| `safeToFormatSeconds` | číslo? | Windows od 0.6.0, Mac od 0.7.0: sekundy od startu do chvíle, kdy byl každý soubor ověřený na každém cíli (bez pauz); chybí, když to nenastalo |
+| `verifyNotes[]` | string? | Windows od 0.6.0, Mac od 0.7.0: volný text (Windows do 0.8.0 česky, od 0.9.0 anglicky; Mac anglicky) — nestabilní čtení (blok se při opakovaném čtení lišil), stejný blok špatně na více cílech a co dává karta při novém čtení; Mac navíc „Verified by reading through the macOS cache: …“ (soubor zůstal v paměti i po `msync(MS_INVALIDATE)`, data mohla přijít z paměti) |
 | `totalFiles`, `totalBytes` | číslo | |
-| `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows); Windows od 0.6.0 `verifyMethod` (`verify-in-proxy` = čtením pro proxy a dorovnáním, `read-back` = zpětným čtením; chybí bez ověření), `verifyNote` (česky, proč zpětným čtením, i když běželo ověření během proxy) a `volumeSerial` (`1A2B-3C4D`, sériové číslo svazku cíle — podle něj se cíl pozná i pod jiným písmenem, R12; Mac čte od 0.3.0 a zapisuje od 0.7.0 (úkol 65 — dřívější Mac reporty ho nemají): u FAT/exFAT/NTFS stejně jako Windows, když smí číst boot sektor, jinak a u ostatních FS `uuid:<UUID svazku>`) |
+| `destinations[]` | objekt | `root`, `cardPath`, `filesystem`, `filesOK`, `filesFailed`, volitelně `unbuffered` (jen `false`, jen Windows); Windows od 0.6.0 a Mac od 0.7.0 `verifyMethod` (`verify-in-proxy` = čtením pro proxy a dorovnáním, `read-back` = zpětným čtením; chybí bez ověření), `verifyNote` (Windows do 0.8.0 česky, jinak anglicky: proč zpětným čtením, i když běželo ověření během proxy) a `volumeSerial` (`1A2B-3C4D`, sériové číslo svazku cíle — podle něj se cíl pozná i pod jiným písmenem, R12; Mac čte od 0.3.0 a zapisuje od 0.7.0 (úkol 65 — dřívější Mac reporty ho nemají): u FAT/exFAT/NTFS stejně jako Windows, když smí číst boot sektor, jinak a u ostatních FS `uuid:<UUID svazku>`) |
 | `files[]` | objekt | `path`, `size`, `modified`, `xxh64`?, `xxh128`? (XXH3-128, 32 malých hex, Windows od 0.6.0), `md5`? (32 malých hex, jen s MD5, Windows od 0.3.0), `sourceError`? (též `card changed while paused` — karta se během pauzy vyměnila nebo vytáhla, zbylé soubory se nekopírovaly), `destinations[]` (stav pro každý cíl), `errors[]` (chyba nebo `null` pro každý cíl; anglicky — HTML je zobrazí česky), `rewritten[]`? (jen oprava, Windows od 0.5.0: pro každý cíl `true` = nová kopie, `false` = dobrá kopie jen znovu přečtená) |
 | `skipped[]` | string | vynechané systémové položky |
-| `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`? (relativní k složce karty, např. `_PROXY/idle/1.mov` — viz „Proxy ve složkách jako na kartě“), `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje), `content`? {`state` (`ok` / `warn`), `kind` (`decode`, `audio`, `timestamps`, `frames`, `end`), `frame`, `timecode`, `message`, `framesDecoded`, `framesExpected`} (Windows od 0.6.0: co dekodér hlásil při tvorbě proxy — `warn` je vada souboru z kamery, kopie přitom souhlasí s kartou; Mac ignoruje) |
+| `clips[]` | objekt | `clip` {`name`, `path`, `format`, `segments`, `bytes`, `isCameraProxy`}, `info`?, `probeError`?, `proxyStatus`, `proxyPath`? (relativní k složce karty, např. `_PROXY/idle/1.mov` — viz „Proxy ve složkách jako na kartě“), `proxyNote`?, `proxySeconds`?, `lut`? {`source`, `id`, `name`, `reason`} (použitý LUT a proč; Windows od plánu 5, Mac zatím ignoruje), `content`? {`state` (`ok` / `warn`), `kind` (`decode`, `audio`, `timestamps`, `frames`, `end`), `frame`, `timecode`, `message`, `framesDecoded`, `framesExpected`} (Windows od 0.6.0, Mac od 0.7.0: co dekodér hlásil při tvorbě proxy — `warn` je vada souboru z kamery, kopie přitom souhlasí s kartou; chybí u klipu bez proxy) |
 | `proxy` | objekt? | nastavení proxy (`enabled`, `height`, `codec`, `bitrateMbps`, `lutPath`, `lutMode` (`auto`/`builtin`/`custom`/`none`), `lutBuiltin`, `lutFallback`, `burnFilename`, `burnTimecode`, `audio`, `skipCameraProxies`, `skipLighterSources` (jen Windows od 0.5.1), `copyToAllDestinations`, `frameAspect`, `frameScale`; jen Windows, volitelně `extraFolder`, od 0.4.0 `lutRules` a `brawGen4ToGen5`, od 2026-10-09 `hardwareDecode` — viz níže) |
 | `proxyEncoder` | string? | jen Windows: enkodér ffmpeg, kterým se renderovaly proxy (`h264_nvenc`, `libx264`, `prores_ks` …); chybí, když se žádná proxy nevyrenderovala |
 
@@ -215,7 +215,7 @@ Mac klíč nezná a ignoruje ho (renderuje vše).
 - Windows od 0.6.0: každý `<hash>` má i `<xxh128 action=… hashdate=…>` (XXH3-128, R2) — `<xxh64>` zůstává, takže zálohu
   ověří i Mac a starší Offload. Do generace jde jen soubor ověřený na daném cíli (`original`) nebo selhaný (`failed`);
   zapsaný a neověřený jen v generaci bez ověření nebo zrušené před ním. Metoda ověření toho cíle je na konci
-  `<creatorinfo><comment>` (`· ověření: verify-in-proxy` / `· ověření: read-back`; Windows od 0.9.0 anglicky `· verification: verify-in-proxy` / `· verification: read-back`) — `<process>` zůstává `transfer`,
+  `<creatorinfo><comment>` (`· ověření: verify-in-proxy` / `· ověření: read-back`; Windows od 0.9.0 a Mac od 0.7.0 anglicky `· verification: verify-in-proxy` / `· verification: read-back`) — `<process>` zůstává `transfer`,
   schéma ASC MHL v2 jiné hodnoty nepovoluje. S ověřením během proxy se generace zapíše až po ověření (`verifyPending`).
 
 ## Blokový manifest — `_REPORT/offload-manifest.jsonl` (Windows od 0.6.0, Mac od 0.7.0)
@@ -419,6 +419,11 @@ nebo formát `arriraw`) je to TC denní doby. Stopáž = součet `info.duration`
   z novější verze, kterou tahle verze nedokáže přečíst, zůstane beze změny) — Windows od 0.2.0 (verze 0.1.0 je smazala),
   Mac od 0.3.0 (`UserDefaults` klíč `settings`, stejné schéma; zachová je i v `naming` a `outputs`).
 - `naming.suggestFromClips` (bool, výchozí `true`, Windows od 0.2.0): navrhovat název složky karty z názvů klipů.
+- `verifyInProxy` (bool, výchozí `true`, Windows od 0.6.0, Mac od 0.7.0; součást projektu): s proxy ověřit kopie během renderu
+  proxy (primární disk čtením pro proxy, ostatní na pozadí) místo zpětného čtení po kopii. Mac: řádek „Verify during proxy
+  render“ v kroku 3 a Nastavení › Verify; změna platí pro další přidanou kartu. CLI `--classic-verify` = `false`.
+- `verifyPrimary` (`"fastest"` | `"first"`, výchozí `"fastest"`, obě verze; součást projektu): primární disk = nejrychlejší
+  při kopii, nebo první cíl. Jiná hodnota (z novější verze) se zachová a čte jako `"fastest"`. CLI `--primary N` (1…počet cílů) má přednost.
 - `hash` (`"xxh64"` | `"both"`, výchozí `"xxh64"`, Windows od 0.3.0): kontrolní součty kopie; `both` = xxh64 + MD5. Jiná
   hodnota (z novější verze) se zachová a čte jako `xxh64`.
 - `outputs` (Windows od 0.3.0): `dayReport` (bool, `true`) — denní report po každé úloze; `clipListCsv` (bool, `true`),

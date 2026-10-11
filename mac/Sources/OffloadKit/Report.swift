@@ -186,6 +186,8 @@ public struct OffloadReport: Codable {
         f.sourceError != nil || f.destinations.contains { !OffloadReport.isGood($0, verified: verified) }
     }
     public var failedFiles: [FileEntry] { files.filter(isFailed) }
+    /// Task 70: the clips whose decoder reported a defect (the copy matches the card).
+    public var contentWarnings: [ClipEntry] { clips.filter { $0.content?.isWarn == true } }
     public var success: Bool { failedFiles.isEmpty }
     /// Spec D.22.7: every file on every destination verified, and the result written everywhere.
     public var safeToFormat: Bool { success && verified && verifyPending != true && verifyIncomplete != true }
@@ -218,6 +220,8 @@ public struct OffloadReport: Codable {
                                 filesFailed: destResults[d].filter { !isGood($0.state.rawValue, verified: verified) }.count)
             // R12: the destination is known by its volume even under another name (spec D.23.2).
             x.volumeSerial = VolumeFacts.volumeSerialText(plan.cardPaths[d])
+            // How it was verified (Windows 0.6.0): the read-back after the copy; verify-in-proxy sets its own later.
+            x.verifyMethod = verified ? OffloadReport.readBackMethod : nil
             return x
         }
         return OffloadReport(cardName: plan.cardName, date: plan.date, source: plan.source,
@@ -255,10 +259,18 @@ public struct OffloadReport: Codable {
 
         """
         if let t = safeToFormatSeconds { s += String(format: "Safe to format after: %.1f s\n", t) }
+        if verifyIncomplete == true { s += "Verification result not written on every destination: UNFINISHED — do not format the card yet.\n" }
+        let defects = contentWarnings
+        if !defects.isEmpty {
+            s += "Content warnings: \(defects.count) (\(defects.map { "\($0.clip.name) \($0.content?.timecode ?? "")" }.joined(separator: ", ")))\n"
+        }
         if pausedSeconds > 0 { s += String(format: "Paused:      %.1f s (not in the speeds)\n", pausedSeconds) }
         s += "Hash:        \(algorithms.joined(separator: "+"))\n"
         for d in destinations {
             s += "Destination: \(d.cardPath) [\(d.filesystem)\(d.volumeSerial.map { " " + $0 } ?? "")]  ok \(d.filesOK)  failed \(d.filesFailed)\(d.verifyMethod.map { "  verify: " + $0 } ?? "")\n"
+        }
+        if let notes = verifyNotes, !notes.isEmpty {
+            s += "\nVerification notes:\n" + notes.map { "  \($0)\n" }.joined()
         }
         if !skipped.isEmpty {
             s += "\nSkipped (system files): \(skipped.joined(separator: ", "))\n"
@@ -423,14 +435,16 @@ public struct ClipEntry: Codable {
 
     /// The LUT applied to this clip's proxy and thumbnails, and why (JSON "lut"; absent when nil, like Windows).
     public var lut: LutUse?
+    /// Task 70: what the decoder said while it made the proxy (absent without a proxy).
+    public var content: ClipContent?
 
     enum CodingKeys: String, CodingKey {
-        case clip, info, probeError, proxyStatus, proxyPath, proxyNote, proxySeconds, lut
+        case clip, info, probeError, proxyStatus, proxyPath, proxyNote, proxySeconds, lut, content
     }
 
     public init(clip: Clip) { self.clip = clip }
 }
 
 public enum OffloadVersion {
-    public static let string = "0.3.0"
+    public static let string = "0.7.0"
 }

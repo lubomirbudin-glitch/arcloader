@@ -35,6 +35,8 @@ final class JobItem: ObservableObject, Identifiable {
     let estimatedBytes: Int64?
     @Published var ejected = false
     @Published var ejecting = false
+    /// Task 70: the user has looked at the content defects ("Checked — the card can be formatted").
+    @Published var contentConfirmed = false
     @Published private(set) var thumbs: [ClipThumb] = []
     @Published private(set) var moreThumbs = 0
     let progress = JobProgress(now: Date())
@@ -707,6 +709,8 @@ final class AppModel: ObservableObject {
     func jobFinished(_ item: JobItem) {
         item.refresh()
         loadHistory()   // the card's line follows ("Backed up … — verified, safe to format")
+        // Verify-in-proxy: the card is safe to format only now, after the proxies (spec D.22.7 — the chime with it).
+        if !terminating, item.status.verifyInProxy, JobProgress.chime(item.status) { NSSound(named: "Glass")?.play() }
         if !terminating {
             if item.isError { NSSound(named: "Basso")?.play() }   // a job the user cancelled is not an error
             NSApp.requestUserAttention(.informationalRequest)
