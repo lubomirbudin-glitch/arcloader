@@ -48,6 +48,9 @@ public struct MHLHistory {
     public let chainProblems: [String]
 
     public func record(_ path: String) -> MHLFileRecord? { files[path.lowercased()] }
+
+    /// A report written into `<card>/_REPORT` does not break `ascmhl verify` (R8 exception, spec D.22.4).
+    public var ignoresReportFolder: Bool { MHLReader.ignored(Layout.reportDirName + "/x", ignore) }
 }
 
 /// Reads every generation of `<card>/ascmhl` (port of Windows `MhlReader`) — ours, the Windows version's, and those of
@@ -117,6 +120,54 @@ public enum MHLReader {
         for p in generations.flatMap(\.ignore) where !ignore.contains(p) { ignore.append(p) }
         return MHLHistory(generations: generations, files: files, lastGood: lastGood, ignore: ignore,
                           chain: chain ?? [], chainProblems: problems)
+    }
+
+    /// ASC MHL ignore patterns (gitwildmatch): a name without "/" matches any folder level of the path, "name/" only a
+    /// folder, a pattern with "/" from the card root; "*" and "?" never cross "/", "**" does; any case. A matching
+    /// folder ignores everything under it. (Task 45 moves it to BackupVerifier.)
+    public static func ignored(_ relPath: String, _ patterns: [String]) -> Bool {
+        let parts = relPath.split(separator: "/").map(String.init)
+        for raw in patterns {
+            let folderOnly = raw.hasSuffix("/")
+            let pattern = folderOnly ? String(raw.dropLast()) : raw
+            if pattern.isEmpty { continue }
+            if pattern.contains("/") {
+                let body = wildcard(pattern.hasPrefix("/") ? String(pattern.dropFirst()) : pattern)
+                if relPath.range(of: "^" + body + (folderOnly ? "/.*" : "(/.*)?") + "$", options: [.regularExpression, .caseInsensitive]) != nil {
+                    return true
+                }
+                continue
+            }
+            let name = "^" + wildcard(pattern) + "$"
+            let candidates = folderOnly ? Array(parts.dropLast()) : parts
+            if candidates.contains(where: { $0.range(of: name, options: [.regularExpression, .caseInsensitive]) != nil }) { return true }
+        }
+        return false
+    }
+
+    static func wildcard(_ glob: String) -> String {
+        var rx = ""
+        let c = Array(glob)
+        var i = 0
+        while i < c.count {
+            if c[i] == "*", i + 1 < c.count, c[i + 1] == "*" {
+                i += 1
+                if i + 1 < c.count, c[i + 1] == "/" {
+                    i += 1
+                    rx += "(.*/)?"
+                } else {
+                    rx += ".*"
+                }
+            } else if c[i] == "*" {
+                rx += "[^/]*"
+            } else if c[i] == "?" {
+                rx += "[^/]"
+            } else {
+                rx += NSRegularExpression.escapedPattern(for: String(c[i]))
+            }
+            i += 1
+        }
+        return rx
     }
 
     static func leadingNumber(_ name: String) -> Int? {

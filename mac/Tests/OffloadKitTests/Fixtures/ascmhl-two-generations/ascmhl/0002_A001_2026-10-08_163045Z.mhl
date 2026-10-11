@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hashlist version="2.0" xmlns="urn:ASC:MHL:v2.0">
+  <creatorinfo>
+    <creationdate>2026-10-08T18:30:45+02:00</creationdate>
+    <hostname>EDIT-PC</hostname>
+    <tool version="0.6.0">Offload</tool>
+    <comment>Offload append: 1 new file from E:\</comment>
+  </creatorinfo>
+  <processinfo>
+    <process>transfer</process>
+    <ignore>
+      <pattern>.DS_Store</pattern>
+      <pattern>ascmhl</pattern>
+      <pattern>ascmhl/</pattern>
+      <pattern>_REPORT</pattern>
+      <pattern>_PROXY</pattern>
+      <pattern>System Volume Information</pattern>
+    </ignore>
+  </processinfo>
+  <hashes>
+    <hash>
+      <path size="3" lastmodificationdate="2026-10-08T15:40:02+02:00">B.bin</path>
+      <xxh64 action="original" hashdate="2026-10-08T18:30:45+02:00">44bc2cf5ad770999</xxh64>
+      <xxh128 action="original" hashdate="2026-10-08T18:30:45+02:00">06b05ab6733a618578af5f94892f3950</xxh128>
+    </hash>
+  </hashes>
+</hashlist>

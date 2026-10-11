@@ -129,6 +129,16 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 40 — ASC MHL: čtení všech generací už bylo (`MHLReader`, XMLDocument s jmennými prostory, problémy anglicky,
+  previousPath), přibylo `ignoresReportFolder` a vzory ignore (gitwildmatch, `MHLReader.ignored`, úkol 45 přesune);
+  zápis generace N podle Windows `Mhl.Write`: generace 1 nikdy přes řetěz, jen N = poslední + 1, ignore z generace 1,
+  xxh128 a md5, akce opravy (`MHL.entries`), metoda ověření v komentáři („ · verification: …“), `hasGeneration`,
+  `IOError(message:)`. Fixture `Fixtures/ascmhl-two-generations` je ručně složená bajt po bajtu podle Windows
+  `Mhl.cs` (generace 1 + doplnění, xxh64 + xxh128, čas s posunem), ne zachycená z Windows — skutečný výstup Windows
+  čeká; test nad ní ověří i hashe souborů a doplnění generace 3 Macem. Ověřeno `ascmhl` 1.2 (pip ve venv; příkaz
+  `verify` v 1.2 není, ověřuje `create`): generace 1+2 z Macu, kopie z CLI a fixture — vše „verified OK“, změněný
+  soubor = „hash mismatch“, kód 11. Pozor: ascmhl porovnává vzor `ascmhl` i s cestou nad kartou — složka karty
+  pod složkou jménem `ascmhl` se celá ignoruje
 - Úkol 39 — dva stavy karty: Safe to eject (vše zapsané) × Safe to format (vše ověřené a zapsané); zelená (tón karty,
   zelený pruh, štítky `JobProgress.chips`), zvuk Glass (`JobProgress.chime`) a CLI 0 jen při Safe to format
   (`--no-verify` zůstává 0); `JobStatus.warning`; HTML odznak VERIFIED zeleně jen při `safeToFormat` (COPIED — VERIFYING,

@@ -12,8 +12,15 @@ public struct IOError: Error, CustomStringConvertible {
         self.code = code
     }
 
+    /// A whole sentence (the ASC MHL refusals): `description` is just it.
+    public init(message: String) {
+        self.op = message
+        self.path = ""
+        self.code = 0
+    }
+
     public var description: String {
-        "\(op) \(path): \(String(cString: strerror(code))) (errno \(code))"
+        path.isEmpty && code == 0 ? op : "\(op) \(path): \(String(cString: strerror(code))) (errno \(code))"
     }
 }
 

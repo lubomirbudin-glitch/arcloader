@@ -20,13 +20,17 @@ public enum MHL {
         let dir = cardPath + "/" + dirName
         try IO.mkdirs(dir)
 
-        let generation = report.generation ?? 1
+        let generation = report.generationNumber
+        // Generation 1 starts a chain — never over one that is there (a commit retried, another copy).
+        if generation == 1 && FileManager.default.fileExists(atPath: dir + "/" + chainName) {
+            throw IOError(message: "The ASC MHL in \(cardPath) already has a chain — generation 1 was not written.")
+        }
         // An append keeps the chain and the ignore list of the earlier generations (spec 2.2) — and goes right after them.
         let earlier = generation > 1 ? MHLReader.read(cardPath: cardPath) : nil
         if generation > 1 {
             let last = earlier?.chain.map(\.seq).max() ?? 0
             if last != generation - 1 {
-                throw OffloadError.failed("The ASC MHL in \(cardPath) changed during the append (last generation \(last), the append writes \(generation)) — the generation was not written.")
+                throw IOError(message: "The ASC MHL in \(cardPath) changed during the append (last generation \(last), the append writes \(generation)) — the generation was not written.")
             }
         }
         let stamp = isoDate(now)
@@ -34,12 +38,17 @@ public enum MHL {
         utc.locale = Locale(identifier: "en_US_POSIX")
         utc.timeZone = TimeZone(identifier: "UTC")
         utc.dateFormat = "yyyy-MM-dd_HHmmss'Z'"
-        let folder = (cardPath as NSString).lastPathComponent
+        let folder = (cardPath.trimmingTrailingSlash() as NSString).lastPathComponent
         let fileName = String(format: "%04d_%@_%@.mhl", generation, folder, utc.string(from: now))
         let listed = report.files.filter { $0.xxh64 != nil }.count
-        let comment = generation > 1
+        let copied = report.files.filter { $0.xxh64 != nil && ($0.rewritten?.contains(true) ?? false) }.count
+        var comment = report.isRepair ? Msg.mhlRepairComment(copied: copied, readBack: listed - copied, source: report.source)
+            : generation > 1
             ? "Offload append: \(listed) new \(plural(listed, "file", "files")) from \(report.source)"
             : "Offload of \(report.cardName) from \(report.source)"
+        // How this destination was verified. `<process>` stays "transfer" — the ASC MHL v2 schema allows only in-place /
+        // transfer / flatten there — so the method goes into the generation's comment (as Windows).
+        if let method = report.destinations[d].verifyMethod { comment += " · verification: \(method)" }
         let ignore = earlier?.generations.first?.ignore
             ?? ignorePatterns + report.skipped.map { ($0 as NSString).lastPathComponent }
 
@@ -61,13 +70,11 @@ public enum MHL {
             x += "      <pattern>\(esc(p))</pattern>\n"
         }
         x += "    </ignore>\n  </processinfo>\n  <hashes>\n"
-        for f in report.files {
-            guard let h = f.xxh64 else { continue }
-            let state = d < f.destinations.count ? f.destinations[d] : FileState.pending.rawValue
-            let action = state == FileState.verified.rawValue || state == FileState.written.rawValue ? "original" : "failed"
+        for (f, action) in entries(report, destination: d) {
             x += "    <hash>\n"
             x += "      <path size=\"\(f.size)\" lastmodificationdate=\"\(isoDate(f.modified))\">\(esc(f.path))</path>\n"
-            x += "      <xxh64 action=\"\(action)\" hashdate=\"\(stamp)\">\(h)</xxh64>\n"
+            x += "      <xxh64 action=\"\(action)\" hashdate=\"\(stamp)\">\(f.xxh64!)</xxh64>\n"
+            if let v = f.xxh128 { x += "      <xxh128 action=\"\(action)\" hashdate=\"\(stamp)\">\(v)</xxh128>\n" }
             if let m = f.md5 { x += "      <md5 action=\"\(action)\" hashdate=\"\(stamp)\">\(m)</md5>\n" }   // spec 3.5
             x += "    </hash>\n"
         }
@@ -81,8 +88,8 @@ public enum MHL {
             try IO.writeFileDurably(dir + "/" + fileName, data)
         }
 
-        // The chain: every earlier generation as it was read, then this one — replaced atomically (temporary name +
-        // rename). Writing it is the commit point of the generation (see OffloadReport.write).
+        // The chain: every earlier generation exactly as it was read, then this one — replaced atomically (temporary
+        // name + rename). Writing it is the commit point of the generation (see OffloadReport.write).
         let entries = (earlier?.chain ?? []) + [MHLChainEntry(seq: generation, path: fileName, c4: c4(data))]
         var chain = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ascmhldirectory xmlns=\"urn:ASC:MHL:DIRECTORY:v2.0\">\n"
         for e in entries {
@@ -93,6 +100,48 @@ public enum MHL {
         }
         chain += "</ascmhldirectory>\n"
         try IO.writeFileDurably(dir + "/" + chainName, Data(chain.utf8))
+    }
+
+    /// The files generation `report` records for destination `d`, with their action (Windows Mhl.Entries).
+    /// A repair (`rewritten`): a good copy only read back is "verified"; one not read back in this generation, or not
+    /// touched, is left out; a new copy is "original"; a bad one "failed". Otherwise only a verified (or failed) copy
+    /// goes in — "written" only into a generation made without (or cancelled before) its verification.
+    static func entries(_ report: OffloadReport, destination d: Int) -> [(file: OffloadReport.FileEntry, action: String)] {
+        report.files.compactMap { f in
+            guard f.xxh64 != nil, d < f.destinations.count else { return nil }
+            let state = f.destinations[d]
+            if let rw = f.rewritten, d < rw.count {
+                if state == FileState.pending.rawValue
+                    || (!rw[d] && (state == FileState.written.rawValue || !report.verified)) { return nil }
+                return (f, state == FileState.failed.rawValue ? "failed" : rw[d] ? "original" : "verified")
+            }
+            if state == FileState.written.rawValue && report.verified { return nil }
+            return (f, state == FileState.verified.rawValue || state == FileState.written.rawValue ? "original" : "failed")
+        }
+    }
+
+    /// The chain of `cardPath` has `report`'s generation already (a commit retried) — its file intact and recording
+    /// exactly these files, xxh64 hashes and actions. False when the chain has not reached it yet (write it then).
+    /// Throws when the chain has that generation but another one, or a damaged one — nothing is overwritten.
+    static func hasGeneration(_ report: OffloadReport, cardPath: String) throws -> Bool {
+        guard let d = report.destinations.firstIndex(where: { $0.cardPath == cardPath }) else { return true }
+        let generation = report.generationNumber
+        let dir = cardPath + "/" + dirName
+        guard let entry = (MHLReader.readChain(ascmhlDir: dir) ?? []).first(where: { $0.seq == generation }) else { return false }
+        let file = dir + "/" + entry.path
+        guard !entry.path.contains("/"), !entry.path.contains("\\"), let data = FileManager.default.contents(atPath: file),
+              c4(data) == entry.c4 else {
+            throw IOError(message: "The ASC MHL in \(cardPath) has generation \(generation), but its file is missing or was changed — the generation was not written again.")
+        }
+        let have = try MHLReader.parseGeneration(file, seq: generation).files.map { f -> String in
+            let h = f.hashes.first { $0.algorithm == "xxh64" }
+            return "\(f.path)|\(h?.value ?? "")|\(h?.action ?? "")"
+        }.sorted()
+        let want = entries(report, destination: d).map { "\($0.file.path)|\($0.file.xxh64!)|\($0.action)" }.sorted()
+        guard have == want else {
+            throw IOError(message: "The ASC MHL in \(cardPath) already has a different generation \(generation) — the generation was not written again.")
+        }
+        return true
     }
 
     static func isoDate(_ d: Date) -> String {
