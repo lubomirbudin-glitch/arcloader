@@ -215,6 +215,57 @@ final class TapFFmpegTests: XCTestCase {
         }
     }
 
+    // Task 69: the app ended in stage 2 after its proxies, before the commit — "Finish interrupted backup" keeps them.
+    func testResumeKeepsFinishedProxies() throws {
+        _ = try TestMedia.requireFFmpeg()
+        let dir = tempDir()
+        let card = dir.sub("A004")
+        try clip(card + "/A004C001.mov", "mov")
+        var cfg = JobConfig(source: card, destRoots: [dir.sub("d1"), dir.sub("d2")])
+        cfg.proxy.enabled = true
+        cfg.proxy.height = 360
+        cfg.tools = TestMedia.tools
+        cfg.historyFolder = dir.sub("history")
+        var o = OffloadJob.engineOptions(cfg)
+        o.allowSourceVolume = true
+        o.allowSameDevice = true
+        let job = OffloadJob(config: cfg, options: o)
+        job.run()
+        let paths = try XCTUnwrap(job.plan).cardPaths
+        // On the disks as a crash before the commit leaves it: reports pending, no ASC MHL, no hash lists.
+        for p in paths {
+            var r = try OffloadReport.read(p + "/_REPORT/offload_report.json")
+            r = r.withVerification(results: r.destinations.indices.map { _ in r.files.map { _ in DestFileResult(state: .written) } },
+                                   verified: false, primary: -1, classicWhy: [], notes: [], finished: r.finished, verifyPaused: 0)
+            r.verifyPending = true
+            try r.jsonData().write(to: URL(fileURLWithPath: p + "/_REPORT/offload_report.json"))
+            try FileManager.default.removeItem(atPath: p + "/ascmhl")
+            try FileManager.default.removeItem(atPath: p + "/_REPORT/A004.xxh64")
+        }
+        let proxyBefore = try Data(contentsOf: URL(fileURLWithPath: paths[0] + "/_PROXY/A004C001.mov"))
+        var fc = JobConfig(source: card, destRoots: [])
+        fc.appendInto = paths
+        fc.proxy = cfg.proxy
+        fc.tools = TestMedia.tools
+        fc.historyFolder = cfg.historyFolder
+        var fo = OffloadJob.engineOptions(fc)
+        fo.allowSourceVolume = true
+        fo.allowSameDevice = true
+        let finish = OffloadJob(config: fc, options: fo)
+        let r = try XCTUnwrap(finish.run())
+        XCTAssertEqual(finish.status().phase, .done, finish.status().error ?? "")
+        XCTAssertTrue(finish.status().safeToFormat, finish.status().warning ?? "")
+        XCTAssertEqual(r.generationNumber, 1)
+        let c = try XCTUnwrap(r.clips.first)
+        XCTAssertEqual(c.proxyPath, "_PROXY/A004C001.mov")
+        XCTAssertEqual(c.proxyNote, VIPMsg.proxyKeptOnResume)
+        for p in paths {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: p + "/_PROXY/A004C001_2.mov"), "never _2")
+            XCTAssertEqual(MHLReader.readChain(ascmhlDir: p + "/ascmhl")?.map(\.seq), [1])
+        }
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: paths[0] + "/_PROXY/A004C001.mov")), proxyBefore, "nothing replaced")
+    }
+
     // The setting off (CLI --classic-verify): the read-back after the copy, as before.
     func testClassicVerifyReadsBackInStage1() throws {
         _ = try TestMedia.requireFFmpeg()

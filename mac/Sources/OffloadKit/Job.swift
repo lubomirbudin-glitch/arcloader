@@ -174,7 +174,7 @@ public final class OffloadJob {
         if let p = plan { return p }
         if let into = config.appendInto {
             // Shown before the run (CLI, GUI); the run plans again under the card folders' lock.
-            let ap = try AppendPlanner.plan(config.source, cardPaths: into)
+            let ap = try AppendPlanner.plan(config.source, cardPaths: into, blockSize: engine.options.chunkSize)
             if ap.newFiles.isEmpty { throw OffloadError.preflight(Msg.nothingNew, code: .nothingNew) }
             var p = OffloadPlan.from(ap)
             if p.project == nil { p.project = config.project }
@@ -410,7 +410,7 @@ public final class OffloadJob {
         defer { if !keepHeld { held.release() } }
         let ap: AppendPlan
         do {
-            ap = try AppendPlanner.plan(config.source, cardPaths: into, isCancelled: { self.isCancelled })
+            ap = try AppendPlanner.plan(config.source, cardPaths: into, blockSize: engine.options.chunkSize, isCancelled: { self.isCancelled })
         } catch is CancellationError {
             update { $0.phase = .cancelled }
             return false
@@ -842,6 +842,20 @@ public final class OffloadJob {
             }
             if clip.isCameraProxy && config.proxy.skipCameraProxies {
                 entries[i].proxyStatus = .skipped
+                continue
+            }
+            // Task 69: the proxy the interrupted run finished stays — never rendered again, never "_2", nothing replaced.
+            if let kept = plan.keptProxies[clip.path.lowercased()],
+               let at = plan.cardPaths.firstIndex(where: { FileManager.default.fileExists(atPath: $0 + "/" + kept) }) {
+                entries[i].proxyStatus = .done
+                entries[i].proxyPath = kept
+                entries[i].proxyNote = VIPMsg.proxyKeptOnResume
+                if config.proxy.copyToAllDestinations {
+                    for (o, other) in plan.cardPaths.enumerated() where o != at && !FileManager.default.fileExists(atPath: other + "/" + kept) {
+                        try? ProxyCopy.copyFile(plan.cardPaths[at] + "/" + kept, to: other + "/" + kept, replace: false)
+                    }
+                }
+                update { $0.proxiesDone += 1 }
                 continue
             }
             if let reason = renderer.unsupportedReason(clip) ?? (entries[i].info != nil && entries[i].info?.width == nil ? entries[i].probeError : nil) {

@@ -153,7 +153,7 @@ public enum HistoryRecorder {
         e.failedFiles = e.success ? nil : max(whole.failed, report.failedFiles.count)
         e.verified = e.success && whole.unverified == 0 && whole.failed == 0
         e.generations.removeAll { $0.seq == plan.generation }
-        e.generations.append(HistoryGeneration(seq: plan.generation, kind: plan.mode == .full ? "full" : plan.mode == .append ? "append" : "repair",
+        e.generations.append(HistoryGeneration(seq: plan.generation, kind: plan.mode == .full || plan.generation == 1 ? "full" : plan.mode == .append ? "append" : "repair",
                                                finished: report.finished, files: plan.scan.files.count,
                                                bytes: plan.scan.totalBytes, verified: report.safeToFormat))
         e.generations.sort { $0.seq < $1.seq }

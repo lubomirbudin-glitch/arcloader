@@ -25,6 +25,16 @@ public struct AppendPlan {
     public var resuming = false
     /// Task 69: card files a resumed generation cannot take (shot since).
     public var later = 0
+    /// Task 69, aligned with `newFiles` (nil when not resuming): per file and destination whether it is written there (it
+    /// is missing at its place); the manifest record of a file complete everywhere (never read again); a file complete
+    /// everywhere without one (only hashed from the card); the common checkpoint a part goes on from.
+    public var write: [[Bool]]?
+    public var known: [ManifestRecord?]?
+    public var hashOnly: [Bool]?
+    public var resume: [PartCheckpoint?]?
+    /// Task 69: proxies the interrupted run finished (clip path lower-cased → proxy path in the card folder) — kept, never
+    /// rendered again, never `_2`.
+    public var keptProxies: [String: String] = [:]
 }
 
 /// The truth is the content of the card folders (every report generation and the files themselves), never history.
@@ -122,8 +132,11 @@ public enum AppendPlanner {
 
     /// `sourceFilesystem`: tests pretend a FAT card; nil = the card's own. `destFilesystem`: the same for a card folder.
     public static func plan(_ source: String, cardPaths: [String], sourceFilesystem: String? = nil,
-                            destFilesystem: ((String) -> String)? = nil, isCancelled: () -> Bool = { false }) throws -> AppendPlan {
-        let b = try checkBackup(cardPaths)
+                            destFilesystem: ((String) -> String)? = nil, blockSize: Int = 16 << 20,
+                            isCancelled: () -> Bool = { false }) throws -> AppendPlan {
+        // R6 (task 69): a generation an earlier run never committed is completed by this append, not numbered after it.
+        let unfinished = try ResumePlanner.find(cardPaths)
+        let b = try checkBackup(cardPaths, unfinishedGeneration: unfinished?.generation)
         // Step 2: the card, compared with every backup — a known file must be the same on the card, in the report and on
         // the disk.
         let scan = try Scanner.scan(source, isCancelled: isCancelled)
@@ -131,19 +144,25 @@ public enum AppendPlanner {
         // A FAT destination shifts its own file times after a change of time zone, whatever the card is.
         let diskLocal = b.paths.map { cardLocal || FileTimes.storesLocalTime(destFilesystem?($0) ?? IO.filesystemType($0)) }
         let disks = b.paths.map(disk)
-        var newFiles: [SourceFile] = [], conflicts: [String] = []
-        var unverified = 0, known = 0
+        var newFiles: [SourceFile] = [], conflicts: [String] = [], presence: [[Bool]] = []
+        var unverified = 0, known = 0, later = 0
         for f in scan.files {
             if isCancelled() { throw CancellationError() }
             var present = 0, goodInRecord = 0, unverifiedFile = false
+            var here = Array(repeating: false, count: b.paths.count)
             for (d, p) in b.paths.enumerated() {
                 let full = p + "/" + f.relPath
                 let attrs = try? FileManager.default.attributesOfItem(atPath: full)
                 let exists = attrs != nil
                 if exists { present += 1 }
+                here[d] = exists
                 guard let rec = b.records[d].files[f.relPath.lowercased()] else {
-                    // Not in any report but on the disk: someone else's file — never overwritten, never trusted.
-                    if exists { conflicts.append(Msg.appendUnknownFile(disks[d], f.relPath)) }
+                    // Not in any report but on the disk: someone else's file — never overwritten, never trusted. Unless the
+                    // interrupted run wrote it (R6): its manifest names the card's file there.
+                    let size = (attrs?[.size] as? NSNumber)?.int64Value ?? -1
+                    if exists && unfinished?.owns(d, f, sizeOnDisk: size, localTime: diskLocal[d]) != true {
+                        conflicts.append(Msg.appendUnknownFile(disks[d], f.relPath))
+                    }
                     continue
                 }
                 let state = CardRecord.stateOf(rec, cardPath: p, position: d)
@@ -165,9 +184,17 @@ public enum AppendPlanner {
                 }
             }
             if unverifiedFile { unverified += 1 }
-            if goodInRecord > 0 { known += 1 }
-            if goodInRecord == 0 && present == 0 {
+            if goodInRecord > 0 || unfinished?.mentions(f) == true { known += 1 }
+            // A generation already in an ASC MHL chain takes no file it does not list: one shot since waits for the next
+            // append — the card is not safe meanwhile.
+            if goodInRecord == 0 && present == 0, let only = unfinished?.fixedFiles, !only.contains(f.relPath.lowercased()) {
+                later += 1
+                continue
+            }
+            // R6: a file of the unfinished generation on some disks (the run's own — else a conflict above) is part of it.
+            if goodInRecord == 0 && (present == 0 || unfinished != nil) {
                 newFiles.append(f)
+                presence.append(here)
             } else if goodInRecord > 0 && goodInRecord < b.paths.count && present < b.paths.count {
                 let on = b.paths.enumerated().filter { FileManager.default.fileExists(atPath: $0.element + "/" + f.relPath) }
                     .map { disks[$0.offset] }.joined(separator: ", ")
@@ -196,8 +223,22 @@ public enum AppendPlanner {
                               date: b.date, cardName: b.cardName, generation: b.nextGeneration, fullScan: scan, newFiles: newFiles,
                               newDirs: dirs.sorted())
         plan.unverifiedEarlier = unverified
-        plan.hashAlgorithms = b.records[0].generations.first?.report.algorithms ?? ["xxh64"]
-        plan.project = b.records[0].project
+        plan.hashAlgorithms = b.records[0].generations.first?.report.algorithms ?? unfinished?.report?.algorithms ?? ["xxh64"]
+        plan.project = b.records[0].project ?? unfinished?.report?.project
+        if let u = unfinished {
+            let d = ResumePlanner.decide(u, cardPaths: b.paths, files: newFiles, present: presence, localTime: diskLocal, blockSize: blockSize)
+            plan.resuming = true
+            plan.later = later
+            plan.write = d.write
+            plan.known = d.known
+            plan.hashOnly = d.hashOnly
+            plan.resume = d.resume
+            // The proxies the interrupted run finished (its report says so and the file is there).
+            for c in u.report?.clips ?? [] where c.proxyStatus == .done {
+                guard let rel = c.proxyPath, b.paths.contains(where: { FileManager.default.fileExists(atPath: $0 + "/" + rel) }) else { continue }
+                plan.keptProxies[c.clip.path.lowercased()] = rel
+            }
+        }
         return plan
     }
 }

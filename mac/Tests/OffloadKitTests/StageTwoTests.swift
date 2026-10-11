@@ -66,6 +66,8 @@ final class StageTwoTests: XCTestCase {
         var config = JobConfig(source: card, destRoots: [dir.sub("d1"), dir.sub("d2")])
         config.proxy = proxySettings()
         config.tools = TestMedia.tools
+        // The proxy renders from the primary destination of verify-in-proxy (task 68): d1 here, not the faster of the two.
+        config.primaryDestination = 0
         let job = OffloadJob(config: config, options: options())
         XCTAssertTrue(job.runCopy())
         let paths = try XCTUnwrap(job.plan).cardPaths

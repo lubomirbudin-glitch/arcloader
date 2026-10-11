@@ -70,7 +70,7 @@ a [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md).
 | **Verify-in-Proxy** (primární disk ověřený čtením pro proxy, ostatní na pozadí; `--classic-verify`, `--primary`) | ⏳ naplánováno (zpětné čtení) | ✅ CLI + GUI 0.6.0 |
 | **Lze vyjmout × Lze formátovat** (dva stavy karty, oznámení „hotovo“ až po ověření všech disků) | ✅ GUI + CLI (bez ověření během proxy — úkol 67) | ✅ GUI + CLI 0.6.0 |
 | **XXH128 v ASC MHL** (vedle xxh64) a `files[].xxh128` | ⏳ naplánováno (xxh64) | ✅ 0.6.0 |
-| **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ⏳ naplánováno | ✅ 0.6.0 |
+| **Blokový manifest a navázání po pádu** (`offload-manifest.jsonl`, „Dokončit přerušenou zálohu“) | ✅ 0.7.0 (manifest, „Finish interrupted backup“ v GUI, `offload append`; oprava na Macu zatím není; čeká ruční test s `kill -9`) | ✅ 0.6.0 |
 | **Obsahová kontrola dekodérem** (`clips[].content`, vady s timecodem a náhledem) | ⏳ naplánováno | ✅ 0.6.0 |
 | **Kopie reportu i na počítači** (`_REPORT` + `ascmhl` do `Dokumenty\Offload reporty\<datum>\<karta>\`, obnoví se při každém přepisu; `outputs.localReport`, `--no-local-report`) | ✅ 0.2.0C (`~/Documents/Offload reporty`) | ✅ CLI + GUI (čeká ruční test) |
 | **Souhrnný report z vybraných záloh** (zaškrtnuté karty v historii → jeden HTML + PDF do `Offload reporty\souhrn\`, volitelně na vybraný disk; `offload summary-report`; `clips[].info.recorded`) | ⏳ naplánováno | ✅ CLI + GUI (čeká ruční test) |

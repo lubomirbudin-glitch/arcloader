@@ -138,6 +138,20 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 69 — navázání po pádu (R6): `ResumePlanner.find` najde nepotvrzenou generaci (report `verifyPending` za
+  potvrzenou nebo na ní, `verifyIncomplete`, nebo bez reportu se záznamy manifestu — pád během kopie); ostatní složky musí
+  stát těsně před ní, nebo ji mít potvrzenou týmž během (stejné `started` a cíle), jinak `appendDiverged`. Doplnění pak
+  dokončí **tutéž** generaci (nikdy nové číslo): soubor na místě se stejným záznamem `file` všude se z karty nečte (`known`,
+  součty z manifestu), na místě bez záznamu se z karty jen přepočítá (`hashOnly`), rozepsaný `.offload-part` pokračuje od
+  společného kontrolního bodu všech cílů (bloky se z disku přečtou a porovnají, nesedí-li → od nuly; jen se stejnou
+  velikostí bloku — jiná `--chunk-mb` = soubor znovu, odchylka M2: ověřovač Macu má jednu velikost bloku na soubor);
+  soubor, který neuvádí žádný report, je „vlastní“ přerušenému běhu jen se záznamem v manifestu (jinak konflikt jako dřív);
+  generace už v některém řetězu bere jen své soubory (`later` → karta není Safe to format). Reporty přerušené generace se
+  nahradí, potvrzení idempotentní (MHL jen kde chybí). Hotové proxy přerušeného běhu zůstanou (`proxy from the interrupted
+  run — not rendered again …`), nikdy `_2`. GUI: karta s nedokončenou zálohou nabídne tlačítko „Finish“ i bez nového
+  souboru (texty Windows „Finish interrupted backup (finishes the verification)“ / „(N files · …)“). Testovací háček
+  `OffloadOptions.crashAfterBlock` (pád uprostřed souboru). Oprava („Copy again“, úkol 62) na Macu zatím není, takže
+  `testRepairRefusesUnfinished` odpadá (text `VIPMsg.repairUnfinished` připravený); ruční test s `kill -9` čeká
 - Úkol 68 — ověření během proxy: HTTP tap jen na 127.0.0.1 (BSD sockety, náhodný port, 128bit token + náhodné id, žádná
   cesta v URL, jen GET/HEAD a jeden rozsah, `Host` přesně `127.0.0.1:<port>` jinak 400, protistrana mimo loopback se
   zahodí, nejvýš 8 spojení, hlavička celá do 30 s); ffmpeg čte klip MOV/MP4/MXF primárního cíle přes tap

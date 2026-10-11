@@ -56,14 +56,24 @@ public enum BackedUpPrompt {
 public enum AppendRules {
     /// Only for a card volume whose history match found new files (and nothing changed) and whose earlier card folders
     /// can be reached — never for a folder (matched by its shape alone, too weak a proof) or another card.
+    /// Ruling I5 (plan 10, task 69): a backup the app never finished ("unfinished") is offered also with nothing new on
+    /// the card — "Finish interrupted backup" completes its copy or its verification (R6).
     public static func offer(_ insight: CardInsight?) -> Bool {
         guard let i = insight, i.error == nil, i.volume != nil, i.appendReachable, let m = i.match, !m.entry.destinations.isEmpty else { return false }
-        return m.kind == .newFiles
+        return m.kind == .newFiles || (m.kind == .identical && m.entry.unfinished)
     }
 
-    /// "Append new clips only to the earlier backup (12 files · 3.2 GB)"
+    /// The card's backup was interrupted: the button says "Finish", not "Append".
+    public static func isResume(_ m: HistoryMatch) -> Bool { m.entry.unfinished }
+
+    /// "Append new clips only to the earlier backup (12 files · 3.2 GB)"; R6: "Finish interrupted backup (…)" for a copy the
+    /// app never finished (what is on the disks already is not copied again) — the texts of Windows.
     public static func checkboxText(_ m: HistoryMatch) -> String {
-        "Append new clips only to the earlier backup (\(m.new.count) \(Texts.plural(m.new.count, "file", "files")) · \(formatBytesShort(m.newBytes)))"
+        let files = "\(m.new.count) \(Texts.plural(m.new.count, "file", "files")) · \(formatBytesShort(m.newBytes))"
+        if m.entry.unfinished {
+            return m.new.isEmpty ? "Finish interrupted backup (finishes the verification)" : "Finish interrupted backup (\(files))"
+        }
+        return "Append new clips only to the earlier backup (\(files))"
     }
 
     /// "Folder: 2026-10-06/A001 on 2 destinations" — the backup's own card folders (the name may be "A001_2").

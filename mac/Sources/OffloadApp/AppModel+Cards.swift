@@ -86,6 +86,9 @@ extension AppModel {
         if on && canAppend(path) { appendSelected.insert(path) } else { appendSelected.remove(path) }
     }
 
+    /// The card's backup was interrupted: "Finish interrupted backup" instead of "Append".
+    func appendIsResume(_ path: String) -> Bool { insights[path]?.match.map(AppendRules.isResume) ?? false }
+
     /// "Append new clips only to the earlier backup (12 files · 3.2 GB)".
     func appendText(_ path: String) -> String? {
         guard canAppend(path), let m = insights[path]?.match else { return nil }

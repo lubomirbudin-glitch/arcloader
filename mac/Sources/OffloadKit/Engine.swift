@@ -21,6 +21,9 @@ public struct OffloadOptions {
     /// Tests only (internal): called on the copy thread after every block read from the card (with the file's index) —
     /// a deterministic point inside a file.
     var afterChunkRead: ((Int) -> Void)?
+    /// Tests only (internal, task 69): a crash — after block `(file, block)` was read and every writer wrote what it had,
+    /// `run` throws `SimulatedCrash` and leaves everything as it is (parts on the disk, no reports).
+    var crashAfterBlock: ((Int, Int) -> Bool)?
     /// A `part` checkpoint goes into the block manifest after this many blocks of a file being written (64 × 16 MiB =
     /// 1 GiB) — after an F_FULLFSYNC of the file: F_NOCACHE does not promise the medium (spec D.23.1).
     public var checkpointBlocks = 64
@@ -61,6 +64,18 @@ public struct OffloadPlan {
     public var unverifiedEarlier = 0
     /// Append/repair: the backup's card folders (the same on every destination); a full copy derives them.
     public var fixedCardPaths: [String]?
+    /// Task 69: this copy completes a generation an interrupted run never committed (its reports are replaced).
+    public var resuming = false
+    /// Task 69, aligned with the files: per destination whether the file is written there (else it is at its place).
+    public var write: [[Bool]]?
+    /// Task 69: a file complete everywhere with this manifest record — never read from the card again.
+    public var known: [ManifestRecord?]?
+    /// Task 69: a file complete everywhere without a record — only read from the card for its hashes.
+    public var hashOnly: [Bool]?
+    /// Task 69: the checkpoint a `.offload-part` goes on from (the blocks before it are read from the disk and compared).
+    public var resume: [PartCheckpoint?]?
+    /// Task 69: proxies the interrupted run finished (clip path lower-cased → proxy path), kept as they are.
+    public var keptProxies: [String: String] = [:]
     public var cardPaths: [String] { fixedCardPaths ?? destRoots.map { "\($0)/\(date)/\(cardName)" } }
 
     public init(source: String, scan: SourceScan, date: String, cardName: String, destRoots: [String]) {
@@ -82,6 +97,13 @@ public struct OffloadPlan {
         p.unverifiedEarlier = a.unverifiedEarlier
         p.project = a.project
         p.fixedCardPaths = a.cardPaths
+        p.resuming = a.resuming
+        p.notInBackup = a.later
+        p.write = a.write
+        p.known = a.known
+        p.hashOnly = a.hashOnly
+        p.resume = a.resume
+        p.keptProxies = a.keptProxies
         return p
     }
 }
@@ -206,6 +228,17 @@ final class SourceHasher {
     /// The xxh64 of file `i` once the hasher is past it (a writer asks after `finish(i)` was queued).
     func hash(_ i: Int) -> UInt64? { queue.sync { hashes[i] } }
 
+    /// The xxh64 and the block hashes of file `i` once the hasher is past it.
+    func result(_ i: Int) -> (UInt64?, [UInt64]) { queue.sync { (hashes[i], blocks[i]) } }
+
+    /// Task 69: a file the card is not read for — its hashes are the manifest's.
+    func setKnown(_ i: Int, _ xxh64: UInt64?, _ blocks: [UInt64]) {
+        queue.async {
+            self.hashes[i] = xxh64
+            self.blocks[i] = blocks
+        }
+    }
+
     func abort() { queue.async { self.stream = nil } }
     func wait() { queue.sync {} }
 }
@@ -224,6 +257,8 @@ final class DestWriter {
     let generation: Int
     /// The card's xxh64 of file `i` (from the hasher) — for the manifest's `file` record.
     var hashOf: ((Int) -> UInt64?)?
+    /// The hasher's xxh64 and blocks of file `i` (task 69: a file adopted in place).
+    var resultOf: ((Int) -> (UInt64?, [UInt64]))?
     private let queue: DispatchQueue
     private var fd: Int32 = -1
     private var partPath = ""
@@ -280,6 +315,38 @@ final class DestWriter {
                 self.fd = -1
                 self.currentError = "\(error)"
             }
+        }
+    }
+
+    /// Task 69: goes on writing `file`'s `.offload-part` after its checkpoint (opened as it is, never truncated): the
+    /// checkpoint's blocks are on the disk already (read and compared before this).
+    func beginResume(_ file: SourceFile, _ cp: PartCheckpoint) {
+        queue.async {
+            self.currentError = nil
+            self.current = file
+            self.blockHashes = cp.blocks
+            self.checkpointed = cp.blocks.count
+            self.partPath = self.cardPath + "/" + DestWriter.partName(file.relPath)
+            let fd = Darwin.open(self.partPath, O_WRONLY)
+            if fd < 0 {
+                self.fd = -1
+                self.currentError = "\(IOError("open", self.partPath))"
+            } else {
+                _ = fcntl(fd, F_NOCACHE, 1)
+                self.fd = fd
+            }
+        }
+    }
+
+    /// Task 69: `file` is at its place here already (the interrupted run renamed it there): "written" — it is verified
+    /// like every copy. `record`: its manifest record may be missing (written once the drive is flushed).
+    func adopt(_ i: Int, _ file: SourceFile, record: Bool) {
+        queue.async {
+            self.results[i] = DestFileResult(state: .written, error: nil)
+            guard record, let (x, blocks) = self.resultOf?(i), let x,
+                  blocks.count == BlockManifest.countFor(file.size, self.options.chunkSize) else { return }
+            self.awaitingFlush.append(ManifestRecord(gen: self.generation, path: file.relPath, size: file.size, modified: file.modifiedUtc,
+                                                     xxh64: hex64(x), blockSize: self.options.chunkSize, blocks: ManifestRecord.hex(blocks)))
         }
     }
 
@@ -359,6 +426,11 @@ final class DestWriter {
         if flushedAlone { try? ManifestFile.append(cardPath, [r]) } else { awaitingFlush.append(r) }
     }
 
+    /// The file failed at the source; this destination's copy (at its place already) is left untouched.
+    func abortQuietly(_ i: Int, reason: String) {
+        queue.async { self.results[i] = DestFileResult(state: .failed, error: reason) }
+    }
+
     func abort(_ i: Int, reason: String) {
         queue.async {
             self.closeAndRemovePart()
@@ -424,6 +496,9 @@ final class DestWriter {
         if !partPath.isEmpty { unlink(partPath) }
     }
 }
+
+/// Tests only: `OffloadOptions.crashAfterBlock` stopped the copy as a crash would.
+struct SimulatedCrash: Error {}
 
 public enum OffloadError: Error, CustomStringConvertible {
     case preflight(String, code: PreflightCode = .other)
@@ -629,6 +704,45 @@ public final class OffloadEngine {
         return worker.waitWhilePaused(isCancelled: { self.isCancelled })
     }
 
+    /// Task 69: reads the checkpoint's blocks of `f`'s `.offload-part` on every target (F_NOCACHE) and compares them with
+    /// the checkpoint; when all agree, the first target's blocks go into the hasher (the card is then read from there) and
+    /// the offset the card is read from comes back. Nil = start over (a block that does not read back as recorded).
+    private func resumeFromCheckpoint(_ f: SourceFile, _ cp: PartCheckpoint, targets: [String], hasher: SourceHasher, pool: BufferPool) -> Int64? {
+        guard cp.blockSize == options.chunkSize, !cp.blocks.isEmpty, Int64(cp.blocks.count) * Int64(cp.blockSize) <= f.size else { return nil }
+        let size = cp.blockSize
+        // First every target compared (nothing goes into the hasher before all of them agree).
+        for (t, card) in targets.enumerated() {
+            let part = card + "/" + DestWriter.partName(f.relPath)
+            guard let fd = try? IO.openRead(part) else { return nil }
+            defer { close(fd) }
+            let buf = IO.allocateAligned(size)
+            defer { free(buf) }
+            for (b, want) in cp.blocks.enumerated() {
+                guard let n = try? IO.pread(fd, buf, size, Int64(b) * Int64(size), path: part), n == size,
+                      BlockHash.xxh3(buf, n) == want else { return nil }
+                _ = t
+            }
+        }
+        let first = targets[0] + "/" + DestWriter.partName(f.relPath)
+        guard let fd = try? IO.openRead(first) else { return nil }
+        defer { close(fd) }
+        for b in cp.blocks.indices {
+            let buf = pool.take()
+            guard let n = try? IO.pread(fd, buf, size, Int64(b) * Int64(size), path: first), n == size else {
+                pool.give(buf)
+                hasher.abort()
+                hasher.begin()
+                return nil
+            }
+            hasher.update(Chunk(buf: buf, length: n, offset: Int64(b) * Int64(size), consumers: 1, pool: pool))
+        }
+        resumedBytes += Int64(cp.blocks.count) * Int64(size)
+        return Int64(cp.blocks.count) * Int64(size)
+    }
+
+    /// Tests (task 69): bytes taken from checkpoints instead of the card.
+    public private(set) var resumedBytes: Int64 = 0
+
     /// Seconds paused, to 0.1 s; nil when the job never stood.
     static func pausedField(_ t: TimeInterval) -> Double? {
         let r = (t * 10).rounded() / 10
@@ -650,7 +764,10 @@ public final class OffloadEngine {
 
         let pool = BufferPool(count: options.bufferCount, size: options.chunkSize)
         let hasher = SourceHasher(fileCount: files.count, blockSize: options.chunkSize)
-        for w in ws { w.hashOf = { hasher.hash($0) } }
+        for w in ws {
+            w.hashOf = { hasher.hash($0) }
+            w.resultOf = { hasher.result($0) }
+        }
         var sourceErrors: [String?] = Array(repeating: nil, count: files.count)
         let pausedBefore = pauses.pausedTotal
         var requestsChecked = pauses.requests
@@ -682,10 +799,27 @@ public final class OffloadEngine {
             }
             lock.lock(); fileIndex = i; currentFile = f.relPath; lock.unlock()
             let src = plan.source + "/" + f.relPath
-            ws.forEach { $0.begin(f) }
+            // Task 69: a file complete on every destination with its manifest record is not read again.
+            if let rec = plan.known?[i] ?? nil, let blocks = rec.blockValues() {
+                hasher.setKnown(i, rec.xxh64Value, blocks)
+                ws.forEach { $0.adopt(i, f, record: false) }
+                continue
+            }
+            let mask = plan.write?[i] ?? Array(repeating: true, count: ws.count)
+            let targets = (plan.hashOnly?[i] ?? false) ? [] : ws.indices.filter { mask[$0] }.map { ws[$0] }
+            let placed = ws.indices.filter { !mask[$0] || (plan.hashOnly?[i] ?? false) }.map { ws[$0] }
             hasher.begin()
             var failure: String?
             var offset: Int64 = 0
+            // Task 69: a part goes on from the checkpoint every destination it is written to has — once its blocks there
+            // read back as the checkpoint says (else it starts over).
+            if let cp = plan.resume?[i] ?? nil, !targets.isEmpty,
+               let fed = resumeFromCheckpoint(f, cp, targets: targets.map(\.cardPath), hasher: hasher, pool: pool) {
+                offset = fed
+                targets.forEach { $0.beginResume(f, cp) }
+            } else {
+                targets.forEach { $0.begin(f) }
+            }
             var fd: Int32 = -1
             do { fd = try IO.openRead(src) } catch { failure = "\(error)" }
             while failure == nil && !isCancelled {
@@ -703,12 +837,17 @@ public final class OffloadEngine {
                     }
                 }
                 if failure != nil || n == 0 { pool.give(buf); break }
-                let chunk = Chunk(buf: buf, length: n, offset: offset, consumers: ws.count + 1, pool: pool)
+                let chunk = Chunk(buf: buf, length: n, offset: offset, consumers: targets.count + 1, pool: pool)
                 hasher.update(chunk)
-                ws.forEach { $0.write(chunk) }
+                targets.forEach { $0.write(chunk) }
                 offset += Int64(n)
                 readCounter.add(n)
                 options.afterChunkRead?(i)
+                if let crash = options.crashAfterBlock, crash(i, Int((offset - 1) / Int64(options.chunkSize))) {
+                    if fd >= 0 { close(fd) }
+                    ws.forEach { $0.wait() }
+                    throw SimulatedCrash()
+                }
                 if n < options.chunkSize { break }
             }
             if fd >= 0 { close(fd) }
@@ -717,11 +856,14 @@ public final class OffloadEngine {
             if let failure {
                 sourceErrors[i] = failure
                 hasher.abort()
-                ws.forEach { $0.abort(i, reason: "source: \(failure)") }
+                // Never a copy already at its place (task 69): only the parts this copy wrote go.
+                targets.forEach { $0.abort(i, reason: "source: \(failure)") }
+                placed.forEach { $0.abortQuietly(i, reason: "source: \(failure)") }
                 lock.lock(); errorCount += 1; lock.unlock()
             } else {
                 hasher.finish(i)
-                ws.forEach { $0.finish(i, f) }
+                targets.forEach { $0.finish(i, f) }
+                placed.forEach { $0.adopt(i, f, record: true) }
             }
         }
         hasher.wait()
@@ -767,10 +909,17 @@ public final class OffloadEngine {
         var reportErrors: [String] = []
         if deferring {
             // Spec D.22.5: the reports say verifyPending — no ASC MHL generation, no hash lists until the commit. A later
-            // generation's reports are only created new (an earlier one is never replaced).
+            // generation's reports are only created new (an earlier one is never replaced) — except the uncommitted
+            // reports of the generation a resume completes.
             beforePendingReports?()
             for path in plan.cardPaths {
-                do { try report.write(cardPath: path, includeHashRecords: false, createNew: plan.generation > 1) } catch { reportErrors.append("\(error)") }
+                do { try report.write(cardPath: path, includeHashRecords: false, createNew: plan.generation > 1 && !plan.resuming) } catch { reportErrors.append("\(error)") }
+            }
+        } else if plan.resuming {
+            // Task 69: the generation is committed like a verified one — reports replaced, the ASC MHL generation only
+            // where the chain does not have it yet, the hash lists merged.
+            for path in plan.cardPaths {
+                do { try report.commit(cardPath: path) } catch { reportErrors.append("\(error)") }
             }
         } else {
             for path in plan.cardPaths {

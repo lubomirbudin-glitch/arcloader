@@ -137,7 +137,7 @@ struct CardTile: View {
                     // Only the new clips into the earlier backup (spec 2.2).
                     let on = model.appendChosen(path)
                     Button { model.setAppend(path, !on) } label: {
-                        Label("Append", systemImage: on ? "checkmark" : "plus").font(.ui(12, .semibold))
+                        Label(model.appendIsResume(path) ? "Finish" : "Append", systemImage: on ? "checkmark" : "plus").font(.ui(12, .semibold))
                     }
                     .buttonStyle(.offload(on ? .warnSoft : .secondary, height: 28))
                     .help(appendText)
