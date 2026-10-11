@@ -1,4 +1,6 @@
-# ArcLoader pro Mac (dříve Offload)
+# mmMover pro Mac (dříve ArcLoader a Offload)
+
+> Produkt se jmenuje mmMover (web https://mmmover.video). Mac sestavení se zatím jmenuje `ArcLoader.app` / `arcloader`; přejmenování na `mmMover.app` / `mmmover` je naplánováno (`docs/VYVOJ-MAC.md`) — názvy níže odpovídají aktuálnímu stavu.
 
 Kopírování paměťových karet z kamery na více disků najednou, s ověřením, reportem a volitelnými proxy s LUT. macOS 13+.
 

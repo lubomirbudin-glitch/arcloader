@@ -1,8 +1,8 @@
-# ArcLoader (dříve Offload) — společný formát na disku
+# mmMover (dříve ArcLoader a Offload) — společný formát na disku
 
-> Produkt se od Windows 0.10.0 jmenuje ArcLoader; názvy souborů v záloze (`offload_report.json` …) zůstávají kvůli kompatibilitě
+> Produkt se od Windows 0.11.0 jmenuje mmMover (0.10.x ArcLoader, ≤ 0.9.x Offload); názvy souborů v záloze (`offload_report.json` …) zůstávají kvůli kompatibilitě
 > (starší verze a Mac je čtou a ověřují). Totéž platí pro názvy zámků a mutexů (`Local\Offload-history-…`, `Local\Offload-append-…`) a klíče JSON.
-> Mac se jmenuje ArcLoader od buildu po 0.7.0 D6 (stejná pravidla: v záloze se nic nemění, `tool` zůstává `"offload"`; ASC MHL `<tool>ArcLoader</tool>`).
+> Mac se jmenuje ArcLoader od buildu po 0.7.0 D6 (stejná pravidla: v záloze se nic nemění, `tool` zůstává `"offload"`; ASC MHL `<tool>ArcLoader</tool>`). Přejmenování Macu na mmMover je naplánováno (`docs/VYVOJ-MAC.md`).
 
 Tohle je **smlouva mezi Mac a Windows verzí**. Co tu je, musí obě verze zapisovat stejně, aby šlo kopii
 udělanou jednou verzí ověřit druhou (`offload verify`) i nástroji třetích stran (`ascmhl`, Silverstack, ShotPut).
@@ -262,7 +262,7 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
 - zkopírují se jen nové soubory; existující soubory ani dřívější reporty se nikdy nepřepíšou (soubor, který se mezitím
   na cíli objeví, kopii zastaví);
 - nová generace ASC MHL `NNNN_<karta>_<YYYY-MM-DD_HHMMSS>Z.mhl` obsahuje **jen nové soubory** (`action="original"`,
-  `<process>transfer</process>`, `<comment>Offload doplnění: 12 nových souborů z E:\</comment>` (Windows od 0.9.0 `Offload append: 12 new files from E:\`, od 0.10.0 `ArcLoader append: …`; volný text, na ničem nezávisí), `<ignore>` stejné jako
+  `<process>transfer</process>`, `<comment>Offload doplnění: 12 nových souborů z E:\</comment>` (Windows od 0.9.0 `Offload append: 12 new files from E:\`, 0.10.x `ArcLoader append: …`, od 0.11.0 `mmMover append: …`; volný text, na ničem nezávisí), `<ignore>` stejné jako
   generace 1); `ascmhl_chain.xml` se nahradí (dočasné jméno + `ReplaceFile`): dřívější záznamy `<hashlist>` mají stejné
   `sequencenr`, cestu a C4 (zapíšou se znovu, ne bajt po bajtu) a přibude nový záznam s číslem N a C4 nového souboru;
 - report doplnění `_REPORT/offload_report_NNNN.json/.txt`, `<karta>_report_NNNN.html/.pdf` (NNNN = generace MHL, na všech
@@ -270,7 +270,7 @@ Karta, na kterou kamera po offloadu natočila další klipy, se doplní do **ste
 - pořadí zápisu: reporty `_NNNN` → soubor generace MHL → řetěz (bod potvrzení) → `<karta>.xxh64` naposled; přerušení před
   řetězem nechá reporty bez generace MHL a další doplnění to odmítne;
 - generace = nejvyšší číslo v řetězu a v reportech + 1; kdyby se počet reportů a generací MHL lišil (nedokončené
-  doplnění, `ascmhl create` jiného nástroje), nebo se lišil mezi cíli, ArcLoader nic nekopíruje a složku je třeba opravit
+  doplnění, `ascmhl create` jiného nástroje), nebo se lišil mezi cíli, mmMover nic nekopíruje a složku je třeba opravit
   ručně;
 - doplnění odmítne: nedostupný dřívější cíl; chybějící report nebo ASC MHL; poškozenou historii MHL (změněná generace,
   soubor mimo řetěz); kartu, na které není ani jeden soubor dřívější zálohy; soubor na kartě, který má v záloze jinou
@@ -307,7 +307,7 @@ selhaly — jako další generace ve stejné složce karty (jen GUI, tlačítko 
   nepřepíše; je-li místo obsazené, použije se první volné `neshoda_NNNN_2`, `_3`, …; obsadí-li se až po plánování,
   soubor na tom cíli selže s `set aside: …` a nic se nepřepíše);
 - generace MHL N obsahuje opravované soubory na všech cílech: nová kopie `action="original"`, přečtená dobrá kopie
-  `action="verified"` (`hashdate` = čas opravy), `<comment>Offload oprava: 1 soubor znovu z E:\</comment>` (Windows od 0.9.0 `Offload repair: 1 file copied again from E:\`, od 0.10.0 `ArcLoader repair: …`; volný text);
+  `action="verified"` (`hashdate` = čas opravy), `<comment>Offload oprava: 1 soubor znovu z E:\</comment>` (Windows od 0.9.0 `Offload repair: 1 file copied again from E:\`, 0.10.x `ArcLoader repair: …`, od 0.11.0 `mmMover repair: …`; volný text);
 - report `offload_report_NNNN.*` s `kind: "repair"`, `rewritten`, `setAside`; `<karta>.xxh64` (a `.md5`) se přepíše bez
   opakovaných řádků; nic k opravě = nic se nezapíše.
 
@@ -401,19 +401,19 @@ Mac: `~/Documents/ArcLoader reports/summary/<YYYY-MM-DD>_<HHmmss>_summary.html/.
 existující `.offload-origin` (kopie z Windows) má přednost. Výměnné médium = `volumeIsRemovable`, kamerová karta =
 `Volumes.looksLikeCameraCard` kořene svazku bez složky s datem (výstup Offloadu) v kořeni nebo o úroveň níž.
 
-Jeden report z vybraných záloh (karty i z různých dnů a disků): `<ArcLoader reports>/summary/<YYYY-MM-DD>_<HHmmss>_summary.html` (do 0.8.0 `<Offload reporty>/souhrn/…_souhrn.html`)
-+ `.pdf` (A4 na šířku, bez náhledů), volitelně i do složky, kterou uživatel vybere. `<ArcLoader reports>` =
-`outputs.localReportFolder`, jinak `<Dokumenty>\ArcLoader reports` (do 0.9.x `Offload reports`, do 0.8.0 `Offload reporty` — obě se čtou dál) — i když je kopie reportu vypnutá. Soubory se **nikdy
+Jeden report z vybraných záloh (karty i z různých dnů a disků): `<mmMover reports>/summary/<YYYY-MM-DD>_<HHmmss>_summary.html` (do 0.8.0 `<Offload reporty>/souhrn/…_souhrn.html`)
++ `.pdf` (A4 na šířku, bez náhledů), volitelně i do složky, kterou uživatel vybere. `<mmMover reports>` =
+`outputs.localReportFolder`, jinak `<Dokumenty>\mmMover reports` (do 0.10.x `ArcLoader reports`, do 0.9.x `Offload reports`, do 0.8.0 `Offload reporty` — všechny se čtou dál) — i když je kopie reportu vypnutá. Soubory se **nikdy
 nepřepisují**: při shodě jména `…_summary_2.html/.pdf`, `_3` … (stejná přípona pro HTML i PDF); HTML odkazuje na PDF, jen když PDF vzniklo. Vybraná složka se odmítne (česky s důvodem), když je
 ve složce zálohy karty — i rozpracované nebo přerušené: ona nebo složka nad ní má `_REPORT` nebo `ascmhl` (pravidlo M13;
 `_REPORT` složky dne se nepočítá), nebo leží uvnitř `<YYYY-MM-DD>/<karta>/…` —, na kartě ve frontě, na svazku s kamerovou
-strukturou v kořeni (pravidlo automatických cílů `CameraAtRoot`, pokud na něm není výstup ArcLoaderu), na výměnném médiu
+strukturou v kořeni (pravidlo automatických cílů `CameraAtRoot`, pokud na něm není výstup mmMoveru), na výměnném médiu
 (karta ve čtečce, flash disk) nebo na svazku jen pro čtení; platí pro GUI i `offload summary-report -o`. Nic jiného se
-nezapisuje — reporty karet, denní reporty, `ArcLoader reports/<datum>` ani `history.json` se nemění.
+nezapisuje — reporty karet, denní reporty, `mmMover reports/<datum>` ani `history.json` se nemění.
 
 Zdroj: záznamy `history.json` (cíle `destinations[].cardPath`, soubory, velikost, ověření) a reporty `offload_report.json`
 + `offload_report_NNNN.json` (všechny generace — doplnění i opravy, jako denní report) ze složky karty na připojeném cíli
-(nejnovější report, pravidlo kopie na počítači); když žádný cíl není připojený, z kopie `<ArcLoader reports>/<datum>/<karta>` (nebo staré `Offload reports` / `Offload reporty`)
+(nejnovější report, pravidlo kopie na počítači); když žádný cíl není připojený, z kopie `<mmMover reports>/<datum>/<karta>` (nebo staré `ArcLoader reports` / `Offload reports` / `Offload reporty`)
 (i `_2`, `_3` …), jejíž `.offload-origin` odpovídá záloze (přesně, když je report přečtený; jinak karta a zdroj z historie).
 Report, který na cíli nejde přečíst, ustoupí dalšímu připojenému cíli, pak kopii na počítači. Lokální kopie bez přečteného
 reportu se vezme jen tehdy, když jí odpovídá karta, zdroj i konec některé generace z historie a je jediná taková — jinak
@@ -443,7 +443,7 @@ nebo formát `arriraw`) je to TC denní doby. Stopáž = součet `info.duration`
   hodnota (z novější verze) se zachová a čte jako `xxh64`.
 - `outputs` (Windows od 0.3.0): `dayReport` (bool, `true`) — denní report po každé úloze; `clipListCsv` (bool, `true`),
   `clipListAle` (bool, `false`) — seznamy klipů; `localReport` (bool, `true`, úkol 2026-10-09) — kopie reportu karty na
-  tomto počítači; `localReportFolder` (string | `null` = `<Dokumenty>\ArcLoader reports`; dříve `Offload reports` a (do 0.8.0) `Offload reporty`, ty se při čtení prohledávají také). Neznámé klíče sekce se zachovají.
+  tomto počítači; `localReportFolder` (string | `null` = `<Dokumenty>\mmMover reports`; dříve `ArcLoader reports`, `Offload reports` a (do 0.8.0) `Offload reporty`, ty se při čtení prohledávají také). Neznámé klíče sekce se zachovají.
 - Kopie reportu na počítači (Windows, úkol 2026-10-09): `<složka>\<datum>\<karta>\_REPORT\…` a `…\ascmhl\…` jako na
   cíli (bez médií: bez `_REPORT\neshoda_NNNN\`, klipů a proxy), denní report do `<složka>\<datum>\_REPORT\`. Ve složce
   karty je skrytý soubor `.offload-origin` (`<started UTC>|<cardName>|<source>` z `offload_report.json`): podle něj se jiná
@@ -466,7 +466,7 @@ nebo formát `arriraw`) je to TC denní doby. Stopáž = součet `info.duration`
   `false`), `server` (string, `https://ntfy.sh`), `topic` (string, `""`; písmena bez diakritiky, číslice, `-` a `_`,
   nejvýš 64 znaků) } — bez přihlašovacího tokenu.
 - `updates` (Windows od 0.4.0, společné): `manifest` (string | `null`, výchozí `null` = kontrola vypnutá) — http(s) adresa
-  nebo cesta k `offload-update.json` (`{"version": "0.4.0", "url": "…", "notes": "…"}`, UTF-8). Aplikace přečte nejvýš
+  nebo cesta k `mmmover-update.json` (dříve `arcloader-update.json` a `offload-update.json`, obsah je stejný; `{"version": "0.4.0", "url": "…", "notes": "…"}`, UTF-8). Aplikace přečte nejvýš
   64 KB; `version` nejvýš 32 znaků, `url` nejvýš 1000, `notes` se zkrátí na 2000; řídicí a formátovací znaky ve verzi
   nebo adrese manifest vyřadí.
 
@@ -476,7 +476,7 @@ Mac: zámek historie `flock` na `~/Library/Application Support/Offload/locks/his
 jednoho uživatele na jednom Macu); `card.fsSerial` z boot sektoru svazku (jako Windows), když ho smí číst (obrazy disků),
 jinak `uuid:<UUID svazku>` — historie přenesená z Windows kartu na Macu nespáruje; `card.identity` = `uuid:<UUID>`.
 
-`%APPDATA%\ArcLoader\history.json` + `%APPDATA%\ArcLoader\history\<id>.files.gz` (od 0.10.0; při prvním startu se starší složka `%APPDATA%\Offload` zkopíruje, nikdy nepřesouvá; Mac: `~/Library/Application Support/ArcLoader/`, při prvním startu zkopírováno z `…/Offload/` bez `bin/`, `arri/` a `locks/` — nikdy nepřesouváno; zámky Macu zůstávají v `…/Offload/locks/`)
+`%APPDATA%\mmMover\history.json` + `%APPDATA%\mmMover\history\<id>.files.gz` (od 0.11.0; 0.10.x `%APPDATA%\ArcLoader`; při prvním startu se nejnovější starší složka — `%APPDATA%\ArcLoader`, jinak `%APPDATA%\Offload` — zkopíruje, nikdy nepřesouvá; Mac: `~/Library/Application Support/ArcLoader/`, při prvním startu zkopírováno z `…/Offload/` bez `bin/`, `arri/` a `locks/` — nikdy nepřesouváno; zámky Macu zůstávají v `…/Offload/locks/`)
 — historie offloadů, nikam se neposílá (složku lze přesměrovat proměnnou `OFFLOAD_SETTINGS_DIR`). UTF-8 bez BOM,
 odsazené, data ISO 8601 UTC na sekundy; zapisuje GUI i CLI (`--no-history` vypne) pod pojmenovaným mutexem
 `Local\Offload-history-<sha256 plné cesty složky velkými písmeny>` (jeden na složku historie, GUI i CLI nad stejnou
@@ -507,7 +507,7 @@ podle `finished` se smažou i se seznamem souborů). Poškozený soubor se přej
 Karta se pozná podle `fsSerial` + `capacity` (GUID svazku dává Windows podle čtečky, proto se k poznání nepoužije);
 ručně přidaná složka podle `shape`. Doplnění zapíše do záznamu další generaci pod jedním držením zámku.
 
-`%APPDATA%\ArcLoader\update-check.json` (jen Windows, od 0.4.0): stav kontroly aktualizací — `lastCheck` (datum UTC
+`%APPDATA%\mmMover\update-check.json` (jen Windows, od 0.4.0): stav kontroly aktualizací — `lastCheck` (datum UTC
 posledního čtení manifestu, i neúspěšného), `lastSource` (adresa manifestu, ze které se četlo; jiná adresa = číst hned),
 `lastVersion`, `lastUrl`, `lastNotes` (co manifest naposledy řekl). Manifest se čte nejvýš jednou za 24 h (`lastCheck`
 v budoucnosti = číst hned); poškozený soubor = číst znovu. Odkaz „Nová verze“ otevře jen adresu `https://…`; síťové

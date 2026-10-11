@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>ArcLoader for Windows – User manual</title>
+<title>mmMover for Windows – User manual</title>
 <style>
 :root {
   --fg: #1c1e21;
@@ -22,7 +22,7 @@
   size: A4;
   margin: 18mm 17mm 20mm 17mm;
   @bottom-right { content: counter(page); font: 9pt "Segoe UI", sans-serif; color: #5d636b; }
-  @bottom-left { content: "ArcLoader for Windows – User manual"; font: 9pt "Segoe UI", sans-serif; color: #5d636b; }
+  @bottom-left { content: "mmMover for Windows – User manual"; font: 9pt "Segoe UI", sans-serif; color: #5d636b; }
 }
 @page :first {
   @bottom-right { content: none; }
@@ -187,16 +187,16 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
 <!-- ============ TITLE PAGE ============ -->
 <div class="title-page">
   <img src="offload-icon.png" alt="">
-  <h1>ArcLoader for Windows</h1>
+  <h1>mmMover for Windows</h1>
   <div class="subtitle">User manual</div>
-  <div class="subtitle" style="font-size:11pt">(formerly Offload)</div>
+  <div class="subtitle" style="font-size:11pt">(formerly ArcLoader and Offload)</div>
   <div class="lead">
     Camera card backup to several disks at once, checksum verification, HTML and PDF reports,
     clip thumbnails, proxies with LUTs and a USB connection check. For camera assistants, DITs, data wranglers and editors.
   </div>
   <div class="meta">
     App version 0.10.0-win · Windows 10 and 11 (64-bit) · portable version, no installation<br>
-    This manual describes the app <b>ArcLoader.exe</b> and the command line <b>bin\arcloader.exe</b> from the package <b>ArcLoader-win-x64-&lt;version&gt;.zip</b>.
+    This manual describes the app <b>mmMover.exe</b> and the command line <b>bin\mmmover.exe</b> from the package <b>mmMover-win-x64-&lt;version&gt;.zip</b>.
   </div>
 </div>
 
@@ -204,7 +204,7 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
 <nav class="toc">
   <h2>Contents</h2>
   <ol>
-    <li><span class="n">1</span><span>What ArcLoader does<span class="sub">copy, verification, report; proxies, thumbnails, LUTs; nothing is ever written to the card</span></span></li>
+    <li><span class="n">1</span><span>What mmMover does<span class="sub">copy, verification, report; proxies, thumbnails, LUTs; nothing is ever written to the card</span></span></li>
     <li><span class="n">2</span><span>Installation and first start<span class="sub">unpacking the ZIP, SmartScreen, requirements, optional add-ons, where settings and the log are, updates</span></span></li>
     <li><span class="n">3</span><span>The main window<span class="sub">top bar, project, the steps Cards – Destinations – After copy, start bar, queue, today and card history, Settings</span></span></li>
     <li><span class="n">4</span><span>Step by step: your first offload<span class="sub">from inserting the card to ejecting it</span></span></li>
@@ -214,7 +214,7 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
     <li><span class="n">8</span><span>Job queue, pause, cancel, ejecting the card<span class="sub">job card, pause, Copy again, notifications (Windows, phone), cancelling, closing the app, ejecting</span></span></li>
     <li><span class="n">9</span><span>Hardware: USB ports and the bottleneck<span class="sub">connections, recommendations, speed test, port names, bottleneck during the copy</span></span></li>
     <li><span class="n">10</span><span>What ends up on the destination disk<span class="sub">folder structure, card and day _REPORT, ascmhl, _PROXY</span></span></li>
-    <li><span class="n">11</span><span>Command line<span class="sub">arcloader copy, append, verify, day-report, summary-report, bench, ports, luts</span></span></li>
+    <li><span class="n">11</span><span>Command line<span class="sub">mmmover copy, append, verify, day-report, summary-report, bench, ports, luts</span></span></li>
     <li><span class="n">12</span><span>Troubleshooting and FAQ</span></li>
     <li><span class="n">13</span><span>Licences</span></li>
   </ol>
@@ -222,9 +222,9 @@ figcaption { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
 
 <!-- ============ 1 ============ -->
 <section class="chapter" id="ch1">
-<h2 class="ch"><span class="n">1</span>What ArcLoader does</h2>
+<h2 class="ch"><span class="n">1</span>What mmMover does</h2>
 
-<p>ArcLoader backs up camera cards. It reads the card <b>only once</b> and writes every block of data to all selected
+<p>mmMover backs up camera cards. It reads the card <b>only once</b> and writes every block of data to all selected
 destination disks at the same time. Then it reads the copy on each disk back and compares checksums — with proxies (since
 0.6.0) the primary disk is verified while the proxies are made, without an extra read. A card has two states:
 <b>Safe to eject</b> as soon as everything is written, and <b>Safe to format</b> only once everything is verified on all disks.</p>
@@ -236,8 +236,8 @@ destination disks at the same time. Then it reads the copy on each disk back and
   <li><b>Verification</b>: every file is read from every destination disk and its blocks are compared with the checksums
     computed while reading the card. The data is read from the disk, not from the computer's memory (both writing and reading
     bypass the Windows cache). With proxies, the primary disk is verified during the proxies — ffmpeg reads the clips through
-    ArcLoader and every block it reads is verified; the other disks are read in parallel in the background. A RAW clip (BRAW,
-    R3D, ARRIRAW) is read and verified by ArcLoader itself before the maker's decoder runs, and the decoder then reads it from
+    mmMover and every block it reads is verified; the other disks are read in parallel in the background. A RAW clip (BRAW,
+    R3D, ARRIRAW) is read and verified by mmMover itself before the maker's decoder runs, and the decoder then reads it from
     the disk again (not from memory) — so RAW is read from the primary disk twice. Without proxies, or when the destination
     does not allow it (a network drive), each disk is read back right after the copy.</li>
   <li><b>Report</b> into the <code>_REPORT</code> folder on each destination: HTML, PDF, JSON, TXT and a checksum list,
@@ -252,28 +252,28 @@ As soon as all files are written to all disks, the job card shows the chip <b>Sa
 <span class="q">“All files are on 2 disks — the card is safe to eject. Format it only after verification.”</span> Clip analysis
 and proxies read only from the destination disks, so you can insert the next card in the meantime. But <b>do not format</b>
 the card until the second chip says <b>Safe to format</b> — only then is everything verified. Only <b>Safe to format</b> is
-green; the sound and the notification <span class="q">“ArcLoader: A001 done”</span> with the text “Verified on 2 disks — the card is safe to format.”
+green; the sound and the notification <span class="q">“mmMover: A001 done”</span> with the text “Verified on 2 disks — the card is safe to format.”
 also come only then. Until then the chip shows <b>Verifying…</b>, and briefly <b>Finishing verification</b> at the end. When the
 decoder finds a defect in a camera file while making proxies (the copy still matches the card), a yellow label with the timecode
 and <b class="ui">Preview</b> appears; formatting is possible only after
 <b class="ui">Checked — the card is safe to format</b>.</div>
 
 <div class="box danger"><span class="t">Nothing is ever written to the card</span>
-ArcLoader only reads the card. It creates, deletes and renames nothing on it. The same goes for the speed test in the Hardware window.</div>
+mmMover only reads the card. It creates, deletes and renames nothing on it. The same goes for the speed test in the Hardware window.</div>
 
 <h3>What else it does</h3>
 <ul>
   <li>Several cards in a row in the queue; while the proxies of one card are rendering, the next one is copying.</li>
   <li>Built-in Log → Rec.709 LUTs for ARRI, Sony, Blackmagic, RED, Canon, Panasonic, DJI and Fujifilm, and automatic LUT
     selection by camera (chapter 6).</li>
-  <li>ArcLoader history: a “Backed up on …” line on the card, appending only new clips to an earlier backup, a folder name from the
+  <li>mmMover history: a “Backed up on …” line on the card, appending only new clips to an earlier backup, a folder name from the
     clip names, verifying a finished backup against ASC MHL and a free space check before the start (chapters 3, 8 and 10).</li>
   <li>Output for production and editorial: a day report of the whole day, a CSV clip list (Resolve, Excel) and ALE (Avid), MD5
     in addition to xxHash64, proxies ready for relinking in Resolve and Premiere (chapters 5, 6 and 7).</li>
   <li>A USB connection check of the reader and disks with recommendations, and a bottleneck indicator during the copy (chapter 9).</li>
   <li>The same on-disk format as the Mac version (still called Offload) — a copy made on Windows can be verified on a Mac and vice versa.</li>
-  <li>The command line <code>bin\arcloader.exe</code> for scripts (chapter 11).</li>
-  <li>While a job is running, ArcLoader keeps the computer from going to sleep.</li>
+  <li>The command line <code>bin\mmmover.exe</code> for scripts (chapter 11).</li>
+  <li>While a job is running, mmMover keeps the computer from going to sleep.</li>
 </ul>
 </section>
 
@@ -292,28 +292,28 @@ ArcLoader only reads the card. It creates, deletes and renames nothing on it. Th
 
 <h3>Unpacking and starting</h3>
 <ol class="steps">
-  <li>Unpack the whole ZIP <code>ArcLoader-win-x64-&lt;version&gt;.zip</code> into an ordinary folder (e.g. <code>Documents\ArcLoader</code>).
+  <li>Unpack the whole ZIP <code>mmMover-win-x64-&lt;version&gt;.zip</code> into an ordinary folder (e.g. <code>Documents\mmMover</code>).
     <b>Do not run the app directly from the archive.</b></li>
-  <li>Run <code>ArcLoader.exe</code>. The first start takes a few seconds longer (libraries are unpacked), later starts do not.</li>
+  <li>Run <code>mmMover.exe</code>. The first start takes a few seconds longer (libraries are unpacked), later starts do not.</li>
   <li>On the first start Windows may show a blue window <span class="q">“Windows protected your PC”</span>
     (if this is an unsigned build). Click <b class="ui">More info</b> → <b class="ui">Run anyway</b>.</li>
 </ol>
 
 <div class="box tip"><span class="t">A folder as an argument</span>
-You can drag a folder with footage (e.g. a copy of a card on a disk) onto <code>ArcLoader.exe</code>. The app opens
+You can drag a folder with footage (e.g. a copy of a card on a disk) onto <code>mmMover.exe</code>. The app opens
 and the folder is already ticked in step <b class="ui">1 · CARDS</b>.</div>
 
 <h3>What is in the folder</h3>
 <table>
   <thead><tr><th class="w30">File / folder</th><th>What for</th></tr></thead>
-  <tr><td class="k"><code>ArcLoader.exe</code></td><td>the app</td></tr>
-  <tr><td class="k"><code>bin\arcloader.exe</code></td><td>command line (<code>arcloader --help</code>)</td></tr>
+  <tr><td class="k"><code>mmMover.exe</code></td><td>the app</td></tr>
+  <tr><td class="k"><code>bin\mmmover.exe</code></td><td>command line (<code>mmmover --help</code>)</td></tr>
   <tr><td class="k"><code>bin\braw-decode.exe</code></td><td>Blackmagic RAW decoder (the Blackmagic library is not bundled)</td></tr>
   <tr><td class="k"><code>bin\ffmpeg.exe</code>, <code>bin\ffprobe.exe</code></td><td>FFmpeg — proxies, thumbnails, clip metadata (GPL v3 licence, see <code>licence\ffmpeg</code>)</td></tr>
   <tr><td class="k"><code>luts\</code></td><td>built-in Log → Rec.709 LUTs for proxies and thumbnails (11 <code>.cube</code> files)</td></tr>
   <tr><td class="k"><code>licence\</code></td><td>licences of the bundled programs and a description of the LUTs</td></tr>
   <tr><td class="k"><code>READ-ME.txt</code></td><td>short start-up guide</td></tr>
-  <tr><td class="k"><code>ArcLoader-manual.pdf</code></td><td>this manual</td></tr>
+  <tr><td class="k"><code>mmMover-manual.pdf</code></td><td>this manual</td></tr>
 </table>
 
 <h3>Optional add-ons for RAW</h3>
@@ -335,7 +335,7 @@ and the folder is already ticked in step <b class="ui">1 · CARDS</b>.</div>
 </table>
 <p>When a tool is missing, <b class="ui">Settings → RAW decoders</b> shows a <b class="ui">Download…</b> link to the maker's
 page next to it, and the same address is in the note of each clip that got no proxy because of it.</p>
-<p>ArcLoader finds installed tools in their standard locations; another path can be set in
+<p>mmMover finds installed tools in their standard locations; another path can be set in
 <b class="ui">Settings → RAW decoders</b>. RED and ARRIRAW support is finished in the app, but has not yet been
 tested with the makers' real tools. ARRI Reference Tool does not report progress: for ARRIRAW, progress up to 80 %
 is estimated from the size of the tool's intermediate file; the rest is the conversion to the proxy.</p>
@@ -343,19 +343,19 @@ is estimated from the size of the tool's intermediate file; the rest is the conv
 <h3>Where settings and the log are</h3>
 <table>
   <thead><tr><th class="w40">File</th><th>Contents</th></tr></thead>
-  <tr><td class="k"><code>%APPDATA%\ArcLoader\settings.json</code></td><td>all settings — projects, destinations, proxies, notifications, tool paths…</td></tr>
-  <tr><td class="k"><code>%APPDATA%\ArcLoader\update-check.json</code></td><td>when the update check ran and what it said (only when it is turned on)</td></tr>
-  <tr><td class="k"><code>%APPDATA%\ArcLoader\app.log</code></td><td>the app's log (useful when reporting a bug)</td></tr>
-  <tr><td class="k"><code>%APPDATA%\ArcLoader\hwtest.json</code></td><td>result of the last USB port test</td></tr>
+  <tr><td class="k"><code>%APPDATA%\mmMover\settings.json</code></td><td>all settings — projects, destinations, proxies, notifications, tool paths…</td></tr>
+  <tr><td class="k"><code>%APPDATA%\mmMover\update-check.json</code></td><td>when the update check ran and what it said (only when it is turned on)</td></tr>
+  <tr><td class="k"><code>%APPDATA%\mmMover\app.log</code></td><td>the app's log (useful when reporting a bug)</td></tr>
+  <tr><td class="k"><code>%APPDATA%\mmMover\hwtest.json</code></td><td>result of the last USB port test</td></tr>
 </table>
-<p>In File Explorer, type <code>%APPDATA%\ArcLoader</code> into the address bar. <b>Uninstalling:</b> delete the app's folder; the settings stay in <code>%APPDATA%\ArcLoader</code> until you delete them.</p>
-<p><b>Coming from Offload?</b> On the first start, when <code>%APPDATA%\ArcLoader</code> does not exist yet and <code>%APPDATA%\Offload</code> does, the old folder is <b>copied</b> to the new place (never moved or deleted), so you can still go back to an older version. Local report copies are now in <code>Documents\ArcLoader reports</code>; the old <code>Offload reports</code> and <code>Offload reporty</code> folders are still read.</p>
+<p>In File Explorer, type <code>%APPDATA%\mmMover</code> into the address bar. <b>Uninstalling:</b> delete the app's folder; the settings stay in <code>%APPDATA%\mmMover</code> until you delete them.</p>
+<p><b>Coming from ArcLoader or Offload?</b> On the first start, when <code>%APPDATA%\mmMover</code> does not exist yet, the newest old folder — <code>%APPDATA%\ArcLoader</code>, else <code>%APPDATA%\Offload</code> — is <b>copied</b> to the new place (never moved or deleted), so you can still go back to an older version. Local report copies are now in <code>Documents\mmMover reports</code>; the old <code>ArcLoader reports</code>, <code>Offload reports</code> and <code>Offload reporty</code> folders are still read.</p>
 
 <h3>Updates</h3>
-<p>ArcLoader downloads nothing and by default never checks for a new version. In <b class="ui">Settings → App →
+<p>mmMover downloads nothing and by default never checks for a new version. In <b class="ui">Settings → App →
 Updates…</b>
 enter the <b>manifest address</b> — a web address <code>https://…</code> or a path on a NAS or shared folder (e.g.
-<code>\\NAS\ArcLoader\offload-update.json</code>) from whoever prepares ArcLoader for you. The app then checks at most once
+<code>\\NAS\mmMover\mmmover-update.json</code>) from whoever prepares mmMover for you. The app then checks at most once
 every 24 hours (5 s after start) whether there is a new version; if there is, the link
 <span class="q">“New version 0.9.1”</span> appears in the top bar. The window shows the release notes and where the new ZIP is.
 The <b class="ui">Open</b> button is shown only for an <code>https://…</code> address (opens the browser) and for a local folder or ZIP
@@ -380,8 +380,8 @@ change it in Windows.</p>
 
 <figure>
 <div class="win">
-  <div class="bar"><span>ArcLoader — Film X</span><span>— ☐ ✕</span></div>
-  <div class="top"><span class="callout">1</span><b>ArcLoader</b> <span class="btn">Project <b>Film X</b> ▾</span><span class="sp"></span>
+  <div class="bar"><span>mmMover — Film X</span><span>— ☐ ✕</span></div>
+  <div class="top"><span class="callout">1</span><b>mmMover</b> <span class="btn">Project <b>Film X</b> ▾</span><span class="sp"></span>
     <span class="pillq">● Running 1 offload · 1 in queue</span> <span class="btn">Verify backup</span> <span class="btn"><span class="txt-ok">●</span> Hardware</span> <span class="btn">⚙</span></div>
   <div class="body">
     <div class="left">
@@ -475,7 +475,7 @@ settings when they were started — switching the project does not change them. 
 questions) the switcher is locked. Tool paths, USB port names and the update check stay shared by all projects.</p>
 <p><b class="ui">Save as new project…</b> creates a project from the current settings and selects it;
 <b class="ui">Delete…</b> asks <span class="q">“Delete project Film X? The project's settings will be lost; the backups on the disks stay.”</span> Name: 1–60 characters, must not repeat (not even in different letter case), and <span class="q">“No project”</span>
-is reserved. The window title shows the selected project, e.g. <span class="q">“ArcLoader — Film X”</span>. The project is written into the
+is reserved. The window title shows the selected project, e.g. <span class="q">“mmMover — Film X”</span>. The project is written into the
 report and the history: the <span class="q">“next after A001 (today)”</span> suggestion counts only cards of the same project, and the day
 report shows <span class="q">“Project: Film X”</span> when all cards of the day come from it.</p>
 <p><b>Appending to a card</b> follows the project in which the card was originally backed up (not the one currently selected).
@@ -486,9 +486,9 @@ says so. The start checks only the LUTs and proxy folders that the jobs really u
 <ul>
   <li>A card inserted into a reader <b>appears by itself and is ticked</b> (a card with a camera structure, or a non-empty card in a
     reader — e.g. from a sound recorder; this is turned off in Settings → Folder structure → <b class="ui">Automatically select cards in readers as sources</b>). While there is none, the step shows a dashed frame
-    <span class="q">“Insert a card into the reader”</span> (during an arcloader <span class="q">“Insert another card”</span>).</li>
+    <span class="q">“Insert a card into the reader”</span> (during an mmmover <span class="q">“Insert another card”</span>).</li>
   <li>The card tile shows the name, the <b>camera</b> (e.g. <span class="q">“ALEXA 35 · LogC4”</span> — found from the card's first clip,
-    read-only, at most 5 s; when ArcLoader does not recognise it, the label is missing) and the line <span class="q">“24 clips · 1.70 GB ·
+    read-only, at most 5 s; when mmMover does not recognise it, the label is missing) and the line <span class="q">“24 clips · 1.70 GB ·
     exFAT · reader USB 3 · 5 Gb/s”</span>. The connection type is <span class="q">“reader USB 3 · 5 Gb/s”</span>,
     <span class="q">“reader USB 2.0”</span>, <span class="q">“SD reader”</span>, <span class="q">“NVMe”</span>, <span class="q">“SATA”</span>
     or <span class="q">“network”</span>. Windows cannot tell Thunderbolt apart — a reader behind it shows up as NVMe or USB.
@@ -502,10 +502,10 @@ says so. The start checks only the LUTs and proxy folders that the jobs really u
     then green <span class="txt-ok">“Backed up on 2026-10-06 08:15 to Backup (D:), Backup2 (F:) — verified, safe to format”</span>, orange
     with the addition <span class="txt-warn">“· new files: 12 (3.2 GB)”</span>, <span class="txt-warn">“— NOT VERIFIED (safe to eject, do not format)”</span> or
     <span class="txt-warn">“…, but the card has changed since (4 files differ) — cannot append, only a full copy”</span>,
-    red <span class="txt-bad">“— with errors (3 files)”</span>. A card ArcLoader has never copied gets no line;
-    a card emptied in the camera shows a neutral <span class="q">“The card is empty — backed up earlier …”</span>. ArcLoader recognises the card by
+    red <span class="txt-bad">“— with errors (3 files)”</span>. A card mmMover has never copied gets no line;
+    a card emptied in the camera shows a neutral <span class="q">“The card is empty — backed up earlier …”</span>. mmMover recognises the card by
     the file system serial number and capacity, so even in a different reader; a reformatted card is a new card. The history is only
-    on this computer (<code>%APPDATA%\ArcLoader\history.json</code>); a copy cancelled half-way is not written into it.</li>
+    on this computer (<code>%APPDATA%\mmMover\history.json</code>); a copy cancelled half-way is not written into it.</li>
   <li>A ticked card has a <b class="ui">Folder name</b> field with a hint where the suggestion comes from. The grey pre-filled suggestion is: the reel
     from the clip names (<code>A001C003_…</code> → <code>A001</code>, <span class="q">“from the clip names (A001C003…)”</span>); for a card without
     such names and without history, <span class="q">“next after A001 (today)”</span> based on the cards copied into the same
@@ -530,7 +530,7 @@ says so. The start checks only the LUTs and proxy folders that the jobs really u
     again when it is disconnected. A card or SSD from a camera (a camera structure right in the disk's root: DCIM, PRIVATE, CLIP, CONTENTS,
     ARRI, RED…, or clips right in the root as on an SSD from Blackmagic or Atomos), a card reader, or an internal
     or system disk (SATA, NVMe — even a disk behind Thunderbolt; add that one by hand) is never added as a destination. A backup disk
-    with clips in folders is added, as is any disk with an ArcLoader (or older Offload) backup. A disk you remove with the cross is remembered
+    with clips in folders is added, as is any disk with an mmMover (or older ArcLoader or Offload) backup. A disk you remove with the cross is remembered
     (by serial number and capacity) and is not added automatically again; <b class="ui">Add disk</b> or
     <b class="ui">Forget removed disks (N)</b> in Settings undoes that. A full disk (less than 1 GB free) or a read-only disk
     is not added — under the destinations it says in orange <span class="txt-warn">Disk BACKUP (G:) is full — not added as a destination.</span>
@@ -571,7 +571,7 @@ one line with the options) to leave more room for the queue.</p>
 
 <h3>Start bar</h3>
 <p>It is pinned at the bottom of the left column. It shows <span class="q">“<b>1 card → 2 disks</b> · 1.70 GB”</span> and below that a time
-estimate, e.g. <span class="q">“estimate ~1:30 incl. proxies”</span>. The estimate uses only speeds that ArcLoader really measured since the app
+estimate, e.g. <span class="q">“estimate ~1:30 incl. proxies”</span>. The estimate uses only speeds that mmMover really measured since the app
 was started (copy, verification and post-copy processing of the previous card); so it is not shown for the first card after start or after a
 change of the proxy options — the bar then shows only the size. Without a card: <span class="q">“Select a card”</span>.
 The <b class="ui">▶ Start offload</b> button (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>; when something is already running,
@@ -730,7 +730,7 @@ Version 0.2.0 does not know the new 0.3.0 options (checksum, clip lists, day rep
 </ul>
 
 <h3>What is checked before copying</h3>
-<p>Before anything is written, ArcLoader checks the following. When something is wrong, the job ends with the status <span class="pill bad">Error</span>
+<p>Before anything is written, mmMover checks the following. When something is wrong, the job ends with the status <span class="pill bad">Error</span>
 and a message on the job card (meaning and solution in chapter 12):</p>
 <ul>
   <li>the source exists and contains files; the destinations exist and can be written to;</li>
@@ -820,12 +820,12 @@ by name).</p>
 <p>When a proxy with the same name already exists in the same folder (e.g. <code>A.mov</code> and <code>A.mxf</code> in one card folder,
 or an append), the new one gets <code>_2</code> and the clip has the note <span class="q">“Proxy renamed to A_2 (name clash) —
 relink it by hand.”</span> Clips with the same name in <b>different</b> folders are not renamed (since 0.5.1).</p>
-<p><b>Older backups:</b> backups from Offload 0.5.0 and older (the former name of ArcLoader) (and from the Mac) have all proxies directly in <code>_PROXY</code>. ArcLoader
+<p><b>Older backups:</b> backups from Offload 0.5.0 and older (an earlier name of this app) (and from the Mac) have all proxies directly in <code>_PROXY</code>. mmMover
 never moves them. An append to such a backup recognises from its report that it is “flat” and puts the new proxies directly into
 <code>_PROXY</code> as well (with the old <code>_2</code> rule), so that one backup has one layout. New backups have subfolders.</p>
 
 <h3>Proxy encoding</h3>
-<p>ArcLoader encodes H.264 and H.265 on the graphics card if it finds one (it tries NVIDIA, Intel and AMD in this order; tested
+<p>mmMover encodes H.264 and H.265 on the graphics card if it finds one (it tries NVIDIA, Intel and AMD in this order; tested
 with NVIDIA), otherwise on the CPU. ProRes is always encoded on the CPU. The encoder used is listed in the report, e.g.
 <span class="q">“Proxies: H.264 (h264_nvenc), 1080p …”</span>. Proxy colours are Rec.709.</p>
 
@@ -834,7 +834,7 @@ with NVIDIA), otherwise on the CPU. ProRes is always encoded on the CPU. The enc
 <p>The selected LUT is applied to the proxies and to the clip's three frames in the report. The <b class="ui">LUT</b> list offers:</p>
 <table>
   <thead><tr><th class="w30">Option</th><th>What happens</th></tr></thead>
-  <tr><td><b class="ui">Automatic by camera</b> (default)</td><td>For every clip ArcLoader finds the camera and log curve and picks a built-in LUT.
+  <tr><td><b class="ui">Automatic by camera</b> (default)</td><td>For every clip mmMover finds the camera and log curve and picks a built-in LUT.
       Under the list is the option <b class="ui">If the camera is not recognised:</b> — a fallback LUT for clips the automatic choice does not recognise
       (default <b class="ui">No LUT</b>, or any built-in LUT).</td></tr>
   <tr><td>a built-in LUT (e.g. <b class="ui">Sony S-Log3 / S-Gamut3.Cine → Rec.709</b>)</td><td>All clips get this LUT.</td></tr>
@@ -842,10 +842,10 @@ with NVIDIA), otherwise on the CPU. ProRes is always encoded on the CPU. The enc
   <tr><td><b class="ui">Custom…</b></td><td>Opens a file picker for a <code>.cube</code> file. The name of the chosen file is shown after <b>Custom LUT:</b> (the <b class="ui">Custom .cube…</b> link picks another file), the full path in the tooltip. When the file disappears (e.g. a disconnected disk), the offload cannot be started and it says in red
       <span class="txt-bad">“LUT not found: … — select another one or remove it.”</span></td></tr>
 </table>
-<p><b>The maker's official LUT instead of the built-in one:</b> save it as <code>%APPDATA%\ArcLoader\luts\&lt;id&gt;.cube</code>
-(<code>arcloader luts</code> lists the ids, e.g. <code>arri-logc4-awg4.cube</code> for ARRI LogC4) and restart ArcLoader. The built-in
+<p><b>The maker's official LUT instead of the built-in one:</b> save it as <code>%APPDATA%\mmMover\luts\&lt;id&gt;.cube</code>
+(<code>mmmover luts</code> lists the ids, e.g. <code>arri-logc4-awg4.cube</code> for ARRI LogC4) and restart mmMover. The built-in
 LUT with the same id is then replaced everywhere by this file — the list shows <span class="q">“(custom file)”</span> and the report
-mentions it for the clip. The built-in LUTs are ArcLoader's own calculation (the makers' licences do not allow bundling their LUTs).</p>
+mentions it for the clip. The built-in LUTs are mmMover's own calculation (the makers' licences do not allow bundling their LUTs).</p>
 
 <h4>Built-in LUTs (Log → Rec.709)</h4>
 <table>
@@ -862,7 +862,7 @@ mentions it for the clip. The built-in LUTs are ArcLoader's own calculation (the
   <tr><td>DJI D-Log / D-Gamut → Rec.709</td><td><code>dji-dlog-dgamut</code></td></tr>
   <tr><td>Fujifilm F-Log2 / F-Gamut → Rec.709</td><td><code>fujifilm-flog2-fgamut</code></td></tr>
 </table>
-<p class="note">The built-in LUTs are ArcLoader's own calculation from the makers' white papers, not the makers' official LUTs.</p>
+<p class="note">The built-in LUTs are mmMover's own calculation from the makers' white papers, not the makers' official LUTs.</p>
 
 <h4>Which cameras are recognised automatically</h4>
 <table>
@@ -894,7 +894,7 @@ from top to bottom, <b>before</b> the automatic camera recognition; the first on
 For now the serial number is read for Sony (the <code>M01.XML</code> file) and from QuickTime metadata (Blackmagic, Apple, Canon…); where
 the camera does not state it, a serial number rule never matches. When a custom <code>.cube</code> from a rule is missing, the offload cannot
 be started (<span class="q">“LUT of rule 2 not found: show.cube”</span>). The rules belong to the project. A rule written by a
-newer version of ArcLoader that this one does not know (a kind other than camera, serial number, reel and folder) is shown read-only
+newer version of mmMover that this one does not know (a kind other than camera, serial number, reel and folder) is shown read-only
 (<span class="q">“Rule from a newer version (…) — this version skips it”</span>), is never used and is left unchanged when saving; you can delete it
 with the ✕ button.</p>
 
@@ -923,7 +923,7 @@ with a note on what is missing.</p>
 <section class="chapter" id="ch7">
 <h2 class="ch"><span class="n">7</span>Report</h2>
 <p><b>A copy on this computer:</b> disks with footage are handed on, so the report of every card (<code>_REPORT</code>
-and <code>ascmhl</code>, never clips or proxies) is also copied to <code>Documents\ArcLoader reports\&lt;date&gt;\&lt;card&gt;\</code>
+and <code>ascmhl</code>, never clips or proxies) is also copied to <code>Documents\mmMover reports\&lt;date&gt;\&lt;card&gt;\</code>
 and refreshed whenever the report is rewritten (analysis, proxies, verification, append, repair, the day report into
 <code>…\&lt;date&gt;\_REPORT\</code>). A different card with the same name on the same day gets <code>_2</code>, as on the destination. It is
 turned off and the folder is changed in Settings → Report (it belongs to the project), on the command line <code>--no-local-report</code>. When the copy
@@ -978,14 +978,14 @@ For R3D and ARRIRAW the frames are taken from the finished proxy, so without pro
 </table>
 <p>When the LUT is turned off with the <b class="ui">No LUT</b> option, the line is not shown.</p>
 
-<p class="note"><b>Why do the file names still say “offload”?</b> The app was called Offload until version 0.10.0. The names inside a backup — <code>offload_report.json</code>, <code>offload-manifest.jsonl</code>, <code>.&lt;name&gt;.offload-part</code>, <code>offload_verify_….json</code> — are kept unchanged for compatibility, so older backups, older versions and the Mac version still read and verify each other's work.</p>
+<p class="note"><b>Why do the file names still say “offload”?</b> The app was called Offload until version 0.9.x and ArcLoader in 0.10.x. The names inside a backup — <code>offload_report.json</code>, <code>offload-manifest.jsonl</code>, <code>.&lt;name&gt;.offload-part</code>, <code>offload_verify_….json</code> — are kept unchanged for compatibility, so older backups, older versions and the Mac version still read and verify each other's work.</p>
 
 <h3>Other files in <code>_REPORT</code></h3>
 <table>
   <thead><tr><th class="w35">File</th><th>Contents</th></tr></thead>
   <tr><td><code>offload_report.json</code></td><td>the complete machine-readable report (for other tools)</td></tr>
   <tr><td><code>offload_report.txt</code></td><td>a short text summary</td></tr>
-  <tr><td><code>&lt;card&gt;.xxh64</code></td><td>the xxHash64 checksum list of all files — <code>arcloader verify</code> verifies from it</td></tr>
+  <tr><td><code>&lt;card&gt;.xxh64</code></td><td>the xxHash64 checksum list of all files — <code>mmmover verify</code> verifies from it</td></tr>
   <tr><td><code>&lt;card&gt;.md5</code></td><td>only with the <b class="ui">xxHash64 + MD5</b> option: MD5 checksums in <code>md5sum</code> format</td></tr>
   <tr><td><code>&lt;card&gt;_clips.csv</code></td><td>clip list (see below)</td></tr>
   <tr><td><code>&lt;card&gt;_clips.ale</code></td><td>clip list for Avid, only with the option turned on (see below)</td></tr>
@@ -1021,9 +1021,9 @@ It is turned off with the option <b class="ui">Day report after every card</b> (
 take turns; each destination has a report of what is on it.</p>
 <h3>Summary report from selected backups</h3>
 <p>In the <b class="ui">Card history</b> tab (or at TODAY), tick the cards that belong in the overview — for example all cards
-of a shoot across several days and disks — and click <b class="ui">Summary report (N)…</b>. ArcLoader asks whether to save the report
+of a shoot across several days and disks — and click <b class="ui">Summary report (N)…</b>. mmMover asks whether to save the report
 to a chosen disk as well (for example the one going to the editors); on this computer it is always saved, to
-<code>Documents\ArcLoader reports\summary\&lt;date&gt;_&lt;time&gt;_summary.html</code> and <code>.pdf</code> (the report copy folder
+<code>Documents\mmMover reports\summary\&lt;date&gt;_&lt;time&gt;_summary.html</code> and <code>.pdf</code> (the report copy folder
 from Settings → Report), and the HTML is opened. An existing file is never overwritten — the new one gets <code>_2</code>, <code>_3</code>…;
 nothing is written into a card folder with a backup or onto a card in a reader.</p>
 <p>The report (without thumbnails, A4 landscape) contains: the shooting days; for each day, each card and in total the number of clips and files, the size,
@@ -1033,7 +1033,7 @@ real time), the cameras and the verification status; and finally <b>Where everyt
 whether it is verified and whether there is a copy of the report on this computer. The data is read from the reports on the disks (including appends and repairs);
 a disk that has already left is replaced by the copy of the report on this computer. When there is not even that, the card stays in the summary with the note
 <span class="q">“report not available”</span> and with the number of files and the size from the history. From the command line:
-<code>arcloader summary-report &lt;card or day folders&gt; [-o &lt;folder&gt;]</code>.</p>
+<code>mmmover summary-report &lt;card or day folders&gt; [-o &lt;folder&gt;]</code>.</p>
 <p>Next to it, in the <code>ascmhl</code> folder, is ASC MHL (version 2) with the checksums of all files — it can be verified with third-party tools
 (<code>ascmhl</code>, Silverstack, ShotPut). The frames from the report are only in the HTML and PDF, not in the JSON.</p>
 </section>
@@ -1084,7 +1084,7 @@ stops the job; the button changes to <b class="ui">Resume</b>, which carries on 
     finishes reading the file it is reading (including the background reads of Verify-in-Proxy). Meanwhile the job card shows
     <span class="q">“Pausing (finishing file A001C003.mxf…)”</span> and the speeds keep running — with a large file (ARRIRAW
     100+ GB) this may take several minutes. Then <span class="q">“Paused — Resume continues with the next file.”</span>,
-    the speeds show “—” and the time estimate disappears. Before the copy stops, ArcLoader flushes the write cache of the destination disks and writes
+    the speeds show “—” and the time estimate disappears. Before the copy stops, mmMover flushes the write cache of the destination disks and writes
     the records of the finished files: everything copied up to that moment really is on the disks, and after a crash or the computer turning off
     it is not copied again. During the pause no half-written <code>.offload-part</code> file is open
     (with <b class="ui">Copy again</b>, finished copies wait under a hidden name until the end of the copy; if the computer
@@ -1095,19 +1095,19 @@ stops the job; the button changes to <b class="ui">Resume</b>, which carries on 
   <li>Only the time when the job really <b>stood still</b> is left out of the speeds and times in the report and out of “Total” on the card; the time
     spent finishing a file is work. After <b class="ui">Resume</b> the speed is measured again.</li>
   <li>The stuck-disk watchdog does not step in during a pause: a stopped job reads nothing, and a file that is still being finished keeps
-    being read. But when a disk really gets stuck while the background verification is being finished, ArcLoader gives up on it after the limit (its
+    being read. But when a disk really gets stuck while the background verification is being finished, mmMover gives up on it after the limit (its
     files fail with a note about an unresponsive disk, never green) and the job stops — it does not hang in the
     “Pausing” state.</li>
-  <li>When you swap the card during “Pausing” or the pause and press <b class="ui">Resume</b>, ArcLoader always checks again which card is in the
+  <li>When you swap the card during “Pausing” or the pause and press <b class="ui">Resume</b>, mmMover always checks again which card is in the
     reader before the next file (even if the job had not stopped yet).</li>
   <li>During a pause the computer does not go to sleep (sleep could damage open files on a USB disk). A paused job
     blocks the queue — the next card waits.</li>
   <li><b class="ui">Cancel</b> and closing the app during a pause — even in the “Pausing” state — end the job immediately, as without a
-    pause: they do not wait for the file to finish, and the files in progress are deleted. Only when ArcLoader is just flushing the write
+    pause: they do not wait for the file to finish, and the files in progress are deleted. Only when mmMover is just flushing the write
     cache of the destination disks (right before “Paused”, and at the end of the copy) does it wait for the disks to finish writing — usually a few seconds.</li>
   <li>When you disconnect a destination disk during a pause, after <b class="ui">Resume</b> the files on that disk fail (the other destinations
     carry on) and the job card turns yellow — then <b class="ui">Copy again</b> helps.</li>
-  <li>When you swap or pull out the card during a pause, after <b class="ui">Resume</b> ArcLoader copies nothing more
+  <li>When you swap or pull out the card during a pause, after <b class="ui">Resume</b> mmMover copies nothing more
     and the job card turns yellow: <span class="q">“The card in the reader was swapped or removed while paused — the remaining files were not copied. Insert the original card and append to the backup.”</span> What was copied stays and is verified.</li>
   <li>An append keeps its backup locked even during a pause: no other job can append to it in the meantime.</li>
 </ul>
@@ -1133,19 +1133,19 @@ where they do not match</b> — with the same settings as the original job and a
     An interrupted repair spoils nothing — start it again.</li>
   <li>A repair is always verified by read-back, even when the original job ran without verification; good copies that have not been read back
     yet (cancelled verification, a backup without verification) are read too — with a large card this may take a while. When something is
-    still unverified after the repair, the card stays yellow and ArcLoader says so.</li>
+    still unverified after the repair, the card stays yellow and mmMover says so.</li>
   <li>A repair and an append of the same backup never run at the same time (<span class="q">“Another job is working with this backup right now — an append, a repair or a verification during proxies (…) — wait until it finishes.”</span>).
     A repair cannot be started from the command line.</li>
 </ul>
-<p>When any job ends, ArcLoader's button in the Windows taskbar flashes; on an error, an error sound plays.
+<p>When any job ends, mmMover's button in the Windows taskbar flashes; on an error, an error sound plays.
 A finished card appears in the <b>TODAY</b> overview under the queue and in the <b class="ui">Card history</b> tab.</p>
 
 <h3>Notifications</h3>
-<p>When the ArcLoader window is not in the foreground, Windows shows a notification at the end of a job (the ArcLoader icon appears in the notification
+<p>When the mmMover window is not in the foreground, Windows shows a notification at the end of a job (the mmMover icon appears in the notification
 area at the bottom right and stays there until the app is closed; clicking the notification or the icon brings the window back):
-<span class="q">“ArcLoader: A001 done”</span> (<span class="q">“Verified on 2 disks — the card is safe to format. Proxies: 24 done.”</span>),
-<span class="q">“ArcLoader: A001 — needs attention”</span> (not verified, failed proxies, proxies skipped for lack of space…),
-<span class="q">“ArcLoader: A001 — ERROR”</span> and, after the copy while the proxies are still being made and verification runs, <span class="q">“ArcLoader: A001 — safe to
+<span class="q">“mmMover: A001 done”</span> (<span class="q">“Verified on 2 disks — the card is safe to format. Proxies: 24 done.”</span>),
+<span class="q">“mmMover: A001 — needs attention”</span> (not verified, failed proxies, proxies skipped for lack of space…),
+<span class="q">“mmMover: A001 — ERROR”</span> and, after the copy while the proxies are still being made and verification runs, <span class="q">“mmMover: A001 — safe to
 eject”</span> (without a sound; not safe to format yet). A job that fails during the copy reports the error as soon as the copy ends. A cancelled job has no notification. The sound
 and the flashing button stay.</p>
 <p><b class="ui">Settings → Notifications → Edit notifications…</b>: <b class="ui">Windows notifications</b> (on) and <b class="ui">Send to a phone via ntfy</b> — to the ntfy app on your phone (the server <code>https://ntfy.sh</code> or your own; the <b>topic</b> may contain only letters without
@@ -1155,7 +1155,7 @@ anyone who knows it can read the notifications. The phone gets a fixed text: the
 eject” is not sent to the phone. A job never waits for the sending. The notification settings belong to the project.</p>
 
 <h3>Cards already backed up</h3>
-<p>When you start a full copy of a card the history knows, ArcLoader asks in the <b>Cards already backed up</b> window
+<p>When you start a full copy of a card the history knows, mmMover asks in the <b>Cards already backed up</b> window
 (for one card, <b>Card already backed up</b>) with a list of the backups and the folder that would be created (e.g. <code>A001_2</code>):
 <b class="ui">Copy again in full</b>, <b class="ui">Skip backed-up</b> (starts only the other cards) or
 <b class="ui">Cancel</b> (starts nothing). It does not ask for a card that has changed since the backup (its line already says that only a
@@ -1169,7 +1169,7 @@ overwrites nothing and writes a new generation of the report and ASC MHL (chapte
 refused before anything is written (a red message on the job card, chapter 12) when the earlier backup is unreachable, its
 report or ASC MHL is missing, the backups on the destinations are not the same, the card holds no file of the backup (a different card), there is a file
 with the same name but a different size or date, or another job is appending to the same backup right now (the same card folder is
-only ever appended to once at a time, even from a second ArcLoader window). Then make a full copy. When the card changed between ticking it and Start,
+only ever appended to once at a time, even from a second mmMover window). Then make a full copy. When the card changed between ticking it and Start,
 Start says <span class="q">“Card A001 has changed — it can no longer be appended. Check it and start again.”</span>
 and does not start that card (the others start).</p>
 
@@ -1183,8 +1183,8 @@ timestamps, extra frames, a clip that ends early, damaged audio). The copy still
 is in the original. The clip gets a yellow label with the <b>timecode of the spot</b> (e.g. <span class="q">“01:00:02:13 · corrupt data”</span>)
 and the <b class="ui">Preview</b> button opens an image of that spot. The chip changes to <b>Safe to format after checking defects</b>.
 When you have checked the defects, confirm them with the <b class="ui">Checked — the card is safe to format</b> button: only then do the
-chip and the card turn green. ArcLoader itself never formats the card.</p>
-<p><b>A note about the cache.</b> ArcLoader reads the copies from the disk bypassing the Windows cache. When the volume or file does not allow that (for example
+chip and the card turn green. mmMover itself never formats the card.</p>
+<p><b>A note about the cache.</b> mmMover reads the copies from the disk bypassing the Windows cache. When the volume or file does not allow that (for example
 a file compressed by NTFS or encrypted with EFS), it is verified by reading through the cache and the card shows an orange note
 <span class="q">“Verified by reading through the Windows cache: … — the volume or the file does not allow reads past the cache, so the data may have come from memory instead of the disk.”</span>. The copy counts as
 verified and the card is safe to format, but without the sound and with a <i>needs attention</i> notification; the most reliable choice is to back up to
@@ -1195,7 +1195,7 @@ uncompressed and unencrypted folders.</p>
 <b>unfinished</b>: the history shows it as <span class="q">“Unfinished backup on … to … — the copy was interrupted; it can be finished”</span>, the day report
 marks it <b>VERIFYING</b> or <b>UNFINISHED</b>, and <b class="ui">Verify backup</b> does not report a clean “Verified: all … files match” (on the command
 line it ends with code <code>1</code>). Do not format the card. Insert the card again: it has the checkbox
-<b class="ui">Finish interrupted backup</b> (on the command line <code>arcloader append</code>); it is offered even when there is nothing new
+<b class="ui">Finish interrupted backup</b> (on the command line <code>mmmover append</code>); it is offered even when there is nothing new
 to copy and only the verification is missing. Finishing continues where the backup stopped: files that are already on the disks are not read
 from the card again, a half-written large file continues from the last checkpoint (every 1 GiB) and the verification runs to the end; the result is
 written in the <b>same</b> generation. Until the backup is finished, <b class="ui">Copy again</b> (repair) and further appends are
@@ -1408,18 +1408,18 @@ Bottleneck: disk SHUTTLE_B (USB 2.0 (480 Mb/s) — the link is saturated). The c
 
 <div class="box tip"><span class="t">Verifying a copy later</span>
 You can verify a finished copy against ASC MHL again at any time: <b class="ui">Verify backup</b> in the top bar (chapter 8),
-or <code>bin\arcloader.exe verify D:\Backup\2026-10-06\A001</code> (chapter 11).</div>
+or <code>bin\mmmover.exe verify D:\Backup\2026-10-06\A001</code> (chapter 11).</div>
 </section>
 
 <!-- ============ 11 ============ -->
 <section class="chapter" id="ch11">
 <h2 class="ch"><span class="n">11</span>Command line</h2>
 
-<p>The command line <code>bin\arcloader.exe</code> does the same as the app and writes the same output. It is handy for scripts
-and batch processing. Run it from PowerShell or the Command Prompt in the ArcLoader folder. Help, progress output, errors and
+<p>The command line <code>bin\mmmover.exe</code> does the same as the app and writes the same output. It is handy for scripts
+and batch processing. Run it from PowerShell or the Command Prompt in the mmMover folder. Help, progress output, errors and
 summaries are in English.</p>
-<pre class="cmd">bin\arcloader.exe --help
-bin\arcloader.exe copy --help</pre>
+<pre class="cmd">bin\mmmover.exe --help
+bin\mmmover.exe copy --help</pre>
 
 <h3>Commands</h3>
 <table>
@@ -1435,24 +1435,24 @@ bin\arcloader.exe copy --help</pre>
 </table>
 
 <h3>Examples</h3>
-<pre class="cmd">arcloader E:\ -d D:\Backup -d F:\Backup                 # card E: to two disks, verification, report
-arcloader E:\ -d D:\Backup -d F:\Backup --name A001     # custom card folder name
-arcloader E:\ -d D:\Backup --proxy --proxy-folder G:\Proxy   # proxies also to G:\Proxy\&lt;date&gt;\&lt;card&gt;\
-arcloader E:\ -d D:\Backup --proxy --lut sony-slog3-sgamut3   # built-in LUT by id
-arcloader E:\ -d D:\Backup --proxy --lut look.cube --frame-aspect 1.85   # custom LUT and frame lines
-arcloader E:\ -d D:\Backup -d F:\Backup --name auto     # folder name from clip names (A001C003…→A001)
-arcloader append E:\                                     # append new clips, destinations from history
-arcloader append E:\ --into D:\Backup\2026-10-06\A001    # … into the given folder (repeat per dest.)
-arcloader verify D:\Backup\2026-10-06\A001              # verify a finished copy again
-arcloader verify D:\Backup\2026-10-06 --report           # verify all cards of the day, save reports
-arcloader E:\ -d D:\Backup --hash both --ale            # xxHash64 + MD5, clip list for Avid too
-arcloader day-report D:\Backup\2026-10-06               # day report again (e.g. after edits)
-arcloader summary-report D:\Backup\2026-10-06 -o G:\Reports   # summary report, also to G:\Reports
-arcloader bench --read E:\ --write D:\ --gb 2           # card and disk speed
-arcloader ports                                         # ports and recommendations
-arcloader ports --measure --card E:\ --dest D:\         # + measure the real speed
-arcloader luts                                          # list of the built-in LUTs</pre>
-<p class="note">In the examples, <code>arcloader</code> is short for <code>bin\arcloader.exe</code>.</p>
+<pre class="cmd">mmmover E:\ -d D:\Backup -d F:\Backup                 # card E: to two disks, verification, report
+mmmover E:\ -d D:\Backup -d F:\Backup --name A001     # custom card folder name
+mmmover E:\ -d D:\Backup --proxy --proxy-folder G:\Proxy   # proxies also to G:\Proxy\&lt;date&gt;\&lt;card&gt;\
+mmmover E:\ -d D:\Backup --proxy --lut sony-slog3-sgamut3   # built-in LUT by id
+mmmover E:\ -d D:\Backup --proxy --lut look.cube --frame-aspect 1.85   # custom LUT and frame lines
+mmmover E:\ -d D:\Backup -d F:\Backup --name auto     # folder name from clip names (A001C003…→A001)
+mmmover append E:\                                     # append new clips, destinations from history
+mmmover append E:\ --into D:\Backup\2026-10-06\A001    # … into the given folder (repeat per dest.)
+mmmover verify D:\Backup\2026-10-06\A001              # verify a finished copy again
+mmmover verify D:\Backup\2026-10-06 --report           # verify all cards of the day, save reports
+mmmover E:\ -d D:\Backup --hash both --ale            # xxHash64 + MD5, clip list for Avid too
+mmmover day-report D:\Backup\2026-10-06               # day report again (e.g. after edits)
+mmmover summary-report D:\Backup\2026-10-06 -o G:\Reports   # summary report, also to G:\Reports
+mmmover bench --read E:\ --write D:\ --gb 2           # card and disk speed
+mmmover ports                                         # ports and recommendations
+mmmover ports --measure --card E:\ --dest D:\         # + measure the real speed
+mmmover luts                                          # list of the built-in LUTs</pre>
+<p class="note">In the examples, <code>mmmover</code> is short for <code>bin\mmmover.exe</code>.</p>
 
 <h3>copy options</h3>
 <table>
@@ -1480,7 +1480,7 @@ arcloader luts                                          # list of the built-in L
   <tr><td class="k"><code>--no-clip-list</code></td><td>no CSV clip list</td></tr>
   <tr><td class="k"><code>--ale</code></td><td>also a clip list for Avid (ALE)</td></tr>
   <tr><td class="k"><code>--no-day-report</code></td><td>do not make the day report after the copy</td></tr>
-  <tr><td class="k"><code>--no-local-report</code></td><td>do not copy the card's report to <code>Documents\ArcLoader reports</code> on this computer</td></tr>
+  <tr><td class="k"><code>--no-local-report</code></td><td>do not copy the card's report to <code>Documents\mmMover reports</code> on this computer</td></tr>
   <tr><td class="k"><code>--project</code></td><td>the settings of a project saved in the app as defaults; what you type on the command line wins (<code>-d</code> replaces the project's destinations); an unknown project = error</td></tr>
   <tr><td class="k"><code>--lut-rule</code></td><td>a custom LUT rule <code>&lt;camera|serial|reel|folder&gt;=&lt;value&gt;:&lt;id|none|path.cube&gt;</code>, repeatable, order = priority (only with <code>--lut auto</code>)</td></tr>
   <tr><td class="k"><code>--hw-decode</code></td><td>H.264/H.265 originals for proxies are decoded by the graphics card (experimental; the default is the CPU)</td></tr>
@@ -1489,7 +1489,7 @@ arcloader luts                                          # list of the built-in L
 </table>
 
 <h3>append options</h3>
-<p><code>arcloader append &lt;card&gt;</code> has the same analysis, proxy and output options as <code>copy</code> (<code>--no-analyze</code>,
+<p><code>mmmover append &lt;card&gt;</code> has the same analysis, proxy and output options as <code>copy</code> (<code>--no-analyze</code>,
 <code>--proxy</code>, <code>--lut</code>, <code>--ale</code>, <code>--no-day-report</code> …; the checksums are set by the earlier
 backup, so it has no <code>--hash</code>) and in addition <code>--into &lt;card folder&gt;</code> (repeat it for every destination of the earlier
 backup; without it the folders are found in the history, otherwise <span class="q">“Error: The card is not in the history — give the backup folders
@@ -1524,8 +1524,8 @@ refine) and <code>--no-history</code> (then <code>--into</code> is required). Co
 <table>
   <thead><tr><th class="w35">Problem</th><th>Solution</th></tr></thead>
   <tr><td>Blue window “Windows protected your PC”</td><td>An unsigned build of the app. Click <b class="ui">More info</b> → <b class="ui">Run anyway</b>.</td></tr>
-  <tr><td>You are running ArcLoader.exe straight from the opened ZIP</td><td>First unpack the whole ZIP into an ordinary folder and run the app from there.</td></tr>
-  <tr><td>“ArcLoader could not start: … Details: …” or “Unexpected application error: …”</td><td>The message contains the path to the log (<code>%APPDATA%\ArcLoader\app.log</code>). Attach the log to the bug report. After an unexpected error, running offloads carry on.</td></tr>
+  <tr><td>You are running mmMover.exe straight from the opened ZIP</td><td>First unpack the whole ZIP into an ordinary folder and run the app from there.</td></tr>
+  <tr><td>“mmMover could not start: … Details: …” or “Unexpected application error: …”</td><td>The message contains the path to the log (<code>%APPDATA%\mmMover\app.log</code>). Attach the log to the bug report. After an unexpected error, running offloads carry on.</td></tr>
 </table>
 
 <h3>Cards and destinations</h3>
@@ -1546,7 +1546,7 @@ refine) and <code>--no-history</code> (then <code>--into</code> is required). Co
   <tr><td>“Windows cannot store some names: …”</td><td>The card holds names Windows cannot store (forbidden characters, names such as <code>CON</code>, a trailing dot or space, or two names that differ only in letter case). The message lists the affected files.</td></tr>
   <tr><td>“The earlier backup is not available: … — connect the disk, or make a full copy.”</td><td>An append needs all disks of the earlier backup. Connect them, or copy the card in full (a new folder is created).</td></tr>
   <tr><td>“The report of the earlier backup is missing in …”, “ASC MHL is missing in …”, “Cannot read the report of the earlier backup in … (…) — cannot append.”</td><td>The backup folder is not complete (a copy from another tool without MHL, a deleted or damaged report). Make a full copy.</td></tr>
-  <tr><td>“The backups on the destinations differ (…) — check them with Verify backup (top bar of the window; on the command line arcloader verify); cannot append.”</td><td>The backups on the disks are not the same (one was appended to without the other, a copy was interrupted). Verify both backups; then make a full copy.</td></tr>
+  <tr><td>“The backups on the destinations differ (…) — check them with Verify backup (top bar of the window; on the command line mmmover verify); cannot append.”</td><td>The backups on the disks are not the same (one was appended to without the other, a copy was interrupted). Verify both backups; then make a full copy.</td></tr>
   <tr><td>“The reports in … do not match the ASC MHL (the last report is generation …, the last MHL generation …) — an earlier append did not finish. …”</td><td>An earlier append was interrupted while writing the reports. Verify the backup and repair the folder by hand (or make a full copy into a new folder).</td></tr>
   <tr><td>“The ASC MHL history in … is damaged — check it with Verify backup …; cannot append.”</td><td>Someone changed an MHL file, or a file outside the chain appeared in the <code>ascmhl</code> folder. Verify the backup; an append is possible only after a repair, a full copy always.</td></tr>
   <tr><td>“No file of the earlier backup is on the card — is it a different card? Make a full copy.”</td><td>You are appending to a different card than the one backed up (or the copy was cancelled before its first file). Make a full copy.</td></tr>
@@ -1555,13 +1555,13 @@ refine) and <code>--no-history</code> (then <code>--into</code> is required). Co
   <tr><td>“Repair stopped — nothing was copied. N files cannot be repaired: …”</td><td><b class="ui">Copy again</b> did not find the file on the card (“no longer on the card”), the file has a different size or date than at the copy, a good copy is missing in the backup folder, or the place for setting aside the mismatched copy (<code>_REPORT\neshoda_…</code>) is taken. Check that the same card is in the reader, verify the backup, or copy the card in full.</td></tr>
   <tr><td>“Nothing to repair — all files are fine on all destinations.”</td><td>Not an error — a repair has already run in the meantime (maybe from a second window), or the reports on the disks show no errors.</td></tr>
   <tr><td>A file stayed yellow after the repair with the reason “card”</td><td>The card reads differently from what was copied the first time (a faulty card or reader). The new copy is not considered good; try another reader and repair again.</td></tr>
-  <tr><td>“Another job is working with this backup right now — an append, a repair or a verification during proxies (…) — wait until it finishes.”</td><td>Another job is appending to the same card folder (even from a second ArcLoader window or from <code>arcloader append</code>). Wait for it to end; then start the append again — only what has not been added in the meantime is appended.</td></tr>
+  <tr><td>“Another job is working with this backup right now — an append, a repair or a verification during proxies (…) — wait until it finishes.”</td><td>Another job is appending to the same card folder (even from a second mmMover window or from <code>mmmover append</code>). Wait for it to end; then start the append again — only what has not been added in the meantime is appended.</td></tr>
   <tr><td>“Nothing new — the backup is complete.”</td><td>Not an error — all files of the card are already in the backup.</td></tr>
-  <tr><td>“Folder … has no ASC MHL and no checksum list — nothing to compare with.”</td><td>The selected folder is not an ArcLoader card or day folder (or both <code>ascmhl</code> and <code>_REPORT</code> are missing). Choose a card folder <code>&lt;destination&gt;\&lt;date&gt;\&lt;card&gt;</code>.</td></tr>
+  <tr><td>“Folder … has no ASC MHL and no checksum list — nothing to compare with.”</td><td>The selected folder is not an mmMover card or day folder (or both <code>ascmhl</code> and <code>_REPORT</code> are missing). Choose a card folder <code>&lt;destination&gt;\&lt;date&gt;\&lt;card&gt;</code>.</td></tr>
   <tr><td><span class="txt-warn">“ASC MHL generation 0002 does not match the chain (the MHL file was changed).”</span> (verification)</td><td>Someone changed the MHL file after it was written. The files were verified anyway; check the backup, or make a new copy.</td></tr>
   <tr><td>Yellow card “— do not eject the card yet”</td><td>The job card lists the files and the reason for each disk; details are in the Errors part of the PDF report (the <b class="ui">Report PDF</b> button). Check the card, the reader and the disks and press <b class="ui">Copy again</b> (chapter 8), or offload the card again in full.</td></tr>
   <tr><td>“Report not found on any destination: …”</td><td>No destination with the report is connected. Connect a destination disk.</td></tr>
-  <tr><td>“Destination N: the volume does not support direct writes; the system cache was used.” (in the report)</td><td>Typically a network drive that cannot write past the system cache. ArcLoader wrote to it the normal way and says so in the report.</td></tr>
+  <tr><td>“Destination N: the volume does not support direct writes; the system cache was used.” (in the report)</td><td>Typically a network drive that cannot write past the system cache. mmMover wrote to it the normal way and says so in the report.</td></tr>
 </table>
 
 <h3>Proxies, LUTs and thumbnails</h3>
@@ -1571,13 +1571,13 @@ refine) and <code>--no-history</code> (then <code>--into</code> is required). Co
   <tr><td><span class="txt-bad">The proxy folder is not available: …</span></td><td>Connect the disk with the folder, or cancel the option with the cross next to <b class="ui">Also copy proxies to a folder</b>.</td></tr>
   <tr><td><span class="txt-warn">ffmpeg/ffprobe not found — thumbnails and proxies are skipped; the copy and the verification run.</span></td><td>The bundled ffmpeg or ffprobe is missing from the <code>bin</code> folder. Unpack the whole ZIP again, or choose the tool's path in <b class="ui">Settings → RAW decoders</b>.</td></tr>
   <tr><td>Proxies render slowly</td><td>Without an NVIDIA graphics card (Intel and AMD are tried, but not tested) H.264/H.265 are encoded on the CPU. ProRes is always encoded on the CPU. A lower <b class="ui">Height</b> helps (e.g. 720p). The copy of the next card runs in the meantime.</td></tr>
-  <tr><td>Note “ffmpeg stalled (60 s without a new frame)” (followed by “also without hardware decoding; no proxy was made” when the retry stalled too)</td><td>ffmpeg produced no frame for a minute; ArcLoader stopped it (with hardware decoding on, it tried once more without it). The job carries on, the other clips are processed. Check the clip (it may be damaged).</td></tr>
+  <tr><td>Note “ffmpeg stalled (60 s without a new frame)” (followed by “also without hardware decoding; no proxy was made” when the retry stalled too)</td><td>ffmpeg produced no frame for a minute; mmMover stopped it (with hardware decoding on, it tried once more without it). The job carries on, the other clips are processed. Check the clip (it may be damaged).</td></tr>
   <tr><td>“Blackmagic RAW: braw-decode or the Blackmagic RAW library (SDK, Player or DaVinci Resolve) is missing — download: …”</td><td>Install the free Blackmagic RAW Player (or DaVinci Resolve). Note: the <b>braw-decode</b> line in Settings → RAW decoders is green even without the library — you can tell the BRAW status from the clip's note in the report.</td></tr>
   <tr><td>“Blackmagic RAW: cannot open the clip — it is damaged, or the library … is older than the camera (install the current Blackmagic RAW Player)”</td><td>Install the current Blackmagic RAW Player. If that does not help, the clip may be damaged.</td></tr>
   <tr><td>“Blackmagic RAW: cannot use the library … — install the current Blackmagic RAW Player”</td><td>Install the current Blackmagic RAW Player.</td></tr>
   <tr><td>“RED R3D: install REDCINE-X PRO (REDline)” / “ARRIRAW: install ARRI Reference Tool (art-cmd)”</td><td>Install the maker's tool, or choose its path in Settings → RAW decoders. Without it the clips are only copied and verified.</td></tr>
   <tr><td>“ARRIRAW: art-cmd ended without an error but wrote nothing — no proxy was made (…)” (or the same for REDline)</td><td>The maker's tool finished as if all was well, but did not create the intermediate file. Its own message is in the brackets ([error] …). Check that the tool is up to date and the clip is readable; the job log contains the full message.</td></tr>
-  <tr><td>“codec not supported by ffmpeg (e.g. Sony X-OCN) — copied and verified, no proxy”, “Canon Cinema RAW Light: there is no command-line decoder for Windows — copied and verified, proxy skipped”</td><td>ArcLoader only copies and verifies these formats; proxies cannot be made for them.</td></tr>
+  <tr><td>“codec not supported by ffmpeg (e.g. Sony X-OCN) — copied and verified, no proxy”, “Canon Cinema RAW Light: there is no command-line decoder for Windows — copied and verified, proxy skipped”</td><td>mmMover only copies and verifies these formats; proxies cannot be made for them.</td></tr>
   <tr><td>An ARRI clip recorded in Rec.709 got a LUT</td><td>For ARRI the automatic choice assumes log recording. For such clips choose <b class="ui">No LUT</b>.</td></tr>
   <tr><td>A clip got “no LUT (camera not recognised)”</td><td>Canon, Panasonic, DJI and Fujifilm are not recognised automatically yet. Set a fallback LUT in <b class="ui">If the camera is not recognised:</b>, or choose the LUT by hand.</td></tr>
   <tr><td>R3D and ARRIRAW clips have no frames in the report</td><td>For these formats the frames are taken from the finished proxy. Turn on proxies.</td></tr>
@@ -1588,7 +1588,7 @@ refine) and <code>--no-history</code> (then <code>--into</code> is required). Co
   <thead><tr><th class="w35">Problem</th><th>Solution</th></tr></thead>
   <tr><td>“Could not eject the card: another program has a file on the card open — close it and try again”</td><td>Close the program (File Explorer showing the card, a player) and try again.</td></tr>
   <tr><td>“… the volume is dismounted, but the device is still connected; eject it with the Safely Remove Hardware icon”</td><td>The card is no longer in use; finish ejecting it with the Windows icon.</td></tr>
-  <tr><td>“the card in the drive is not the one that was copied”</td><td>A different card is in the reader. ArcLoader ejects only the card it copied.</td></tr>
+  <tr><td>“the card in the drive is not the one that was copied”</td><td>A different card is in the reader. mmMover ejects only the card it copied.</td></tr>
   <tr><td>The Eject card button is missing</td><td>The card was pulled out or swapped, or it is a folder or internal disk, which are never ejected.</td></tr>
   <tr><td><span class="txt-warn">A speed measurement is running — wait or stop it</span></td><td>A speed test is running in the Hardware window. Wait, or click <b class="ui">Stop</b>.</td></tr>
   <tr><td>After closing the app during a copy</td><td>The files in progress are deleted. A card whose copy was interrupted is <b>not backed up</b> — offload it again in full.</td></tr>
@@ -1601,8 +1601,8 @@ refine) and <code>--no-history</code> (then <code>--into</code> is required). Co
 <h4>Do I need two destinations?</h4>
 <p>No, but with one destination the app warns that two independent copies are recommended.</p>
 <h4>How do I verify a backup later, for example after the disk has been transported?</h4>
-<p><b class="ui">Verify backup</b> in the top bar, or <code>bin\arcloader.exe verify &lt;destination&gt;\&lt;date&gt;\&lt;card&gt;</code>. The <code>ascmhl verify</code> tool reports false
-“new/missing file” on Windows because of the slashes in paths — run a full <code>ascmhl verify</code> on macOS or Linux; on Windows use <code>arcloader verify</code>.</p>
+<p><b class="ui">Verify backup</b> in the top bar, or <code>bin\mmmover.exe verify &lt;destination&gt;\&lt;date&gt;\&lt;card&gt;</code>. The <code>ascmhl verify</code> tool reports false
+“new/missing file” on Windows because of the slashes in paths — run a full <code>ascmhl verify</code> on macOS or Linux; on Windows use <code>mmmover verify</code>.</p>
 <h4>Does the Mac version (still called Offload) verify a copy made on Windows?</h4>
 <p>Yes, both versions write the same format (checksum list, report, MHL).</p>
 </section>
@@ -1617,7 +1617,7 @@ under the <b>GNU GPL v3</b> licence. The licence text and a description of the b
 <code>licence\ffmpeg</code>. When passing the package on, the licence and a link to the FFmpeg source must be included.</p>
 
 <h3>Built-in LUTs</h3>
-<p>The eleven LUTs in the <code>luts</code> folder are ArcLoader's own calculation from the camera makers' white papers, not copies
+<p>The eleven LUTs in the <code>luts</code> folder are mmMover's own calculation from the camera makers' white papers, not copies
 of the makers' official LUTs (those have their own licences, which do not allow free bundling). They are described in
 <code>licence\LUTs-README.md</code>.</p>
 
