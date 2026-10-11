@@ -63,6 +63,18 @@ public final class JobProgress {
     public var isRunning: Bool { status.phase != .waiting && !status.phase.isFinished }
 
     public func update(_ s: JobStatus, now: Date) {
+        if s.paused {
+            // Paused (or pausing): no speeds, no estimate, no bottleneck — measured again from Resume.
+            readRate = 0
+            destRates = destRates.map { _ in 0 }
+            eta = nil
+            brake = nil
+            brakes?.reset()
+            lastPhase = .waiting   // the first update after Resume starts a fresh measurement
+            lastTime = now
+            status = s
+            return
+        }
         let dt = now.timeIntervalSince(lastTime)
         if let c = s.copy, dt > 0.2 {
             let copying = s.phase == .copying
@@ -112,7 +124,28 @@ public final class JobProgress {
         }
     }
 
-    public var statusText: String { status.phase == .done && status.copySucceeded == false ? "Error" : status.phase.label }
+    public var statusText: String {
+        if let p = pauseLabel { return p }
+        return status.phase == .done && status.copySucceeded == false ? "Error" : status.phase.label
+    }
+
+    /// "Paused" once the job stands, "Pausing" until then; nil while it runs.
+    public var pauseLabel: String? { !status.paused ? nil : status.pauseHeld ? "Paused" : "Pausing" }
+
+    /// What the card says while paused, or nil (user requirement 2026-10-09): the file or clip in progress finishes
+    /// first — "Pausing (finishing file A001C003.mov…)" — then "Paused"; Resume goes on with the next one.
+    public var pauseText: String? { JobProgress.pauseText(status) }
+
+    public static func pauseText(_ s: JobStatus) -> String? {
+        guard s.paused else { return nil }
+        if s.pauseHeld {
+            return s.phase == .analyzing || s.phase == .proxies
+                ? "Paused — Resume continues with the next clip."
+                : "Paused — Resume continues with the next file."
+        }
+        if let step = s.pauseStep, !step.isEmpty { return "Pausing (finishing \(step)…)" }
+        return "Pausing…"
+    }
 
     /// Failed, or copied with errors — a job the user cancelled is not an error (no error sound).
     public var isError: Bool { tone == .error }

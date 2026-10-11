@@ -70,6 +70,13 @@ struct JobCardState {
     var moreFailed: String?
     var path: String?
     var canCancel = false
+    /// Pause / Resume (a running job only; the CLI has none).
+    var canPause = false
+    var paused = false
+    /// "Pausing (finishing file A001C003.mov…)" / "Paused — Resume continues with the next file.", nil while it runs.
+    var pauseText: String?
+    /// A waiting card behind a job paused in its copy: "Waiting for a paused job."
+    var waitingHint: String?
     var showEject = false
     var ejecting = false
     var ejected = false
@@ -111,19 +118,26 @@ struct JobCardState {
         switch c.kind {
         case .waiting:
             c.title = "Waiting in queue"
+            if model.waitsForPausedJob(item) { c.waitingHint = PausedQueue.waitingText }
         case .running:
+            c.canPause = item.isRunning
+            c.paused = s.paused
+            c.pauseText = item.progress.pauseText
             c.steps = steps(s, config, item.phaseProgress)
             c.percent = Int((item.phaseProgress * 100).rounded(.down))
-            c.remaining = remaining(s.phase, item.progress.eta)
+            c.remaining = s.paused ? nil : remaining(s.phase, item.progress.eta)
             c.rows = rows(item, names)
             (c.fileCaption, c.fileValue) = fileLine(s)
-            if s.phase == .copying, let chain = item.chain { c.brake = brakeSentence(item.progress.brake, chain, names) }
+            if s.phase == .copying && !s.paused, let chain = item.chain { c.brake = brakeSentence(item.progress.brake, chain, names) }
             c.safeWhileRunning = s.safeToEject
             c.safeFormat = s.safeToFormat
         case .done, .problem, .failed, .cancelled:
             (c.title, c.text) = headline(c.kind, name, s, report, names)
             if c.kind != .cancelled, let r = report {
-                c.summary = summary(r, seconds: item.startedAt.flatMap { start in item.finishedAt.map { $0.timeIntervalSince(start) } })
+                // Total without the time the job stood paused (Windows JobCard.Summary).
+                c.summary = summary(r, seconds: item.startedAt.flatMap { start in
+                    item.finishedAt.map { max(0, $0.timeIntervalSince(start) - s.pausedTotal) }
+                })
                 if !r.success {
                     c.failed = failedRows(r, names)
                     c.moreFailed = moreFiles(r.failedFiles.count)
@@ -164,6 +178,8 @@ struct JobCardState {
         case .problem:
             let notYet = s.safeToEject ? "\(card) — safe to eject, don't format yet" : "\(card) — don't eject the card yet"
             guard let r else { return (notYet, s.warning ?? s.error ?? "The backup isn't complete yet.") }
+            // A copy that stopped with a reason of its own (the card swapped while paused) says it.
+            if s.phase == .failed, let e = s.error { return (notYet, e) }
             if !r.success { return (notYet, problemText(r, names)) }
             if !r.verified { return ("\(card) — copied without verification", AfterCopyTexts.verifyOffWarning) }
             if let w = s.warning { return (notYet, w) }
@@ -222,6 +238,7 @@ struct JobCardState {
         if e.hasPrefix("HASH MISMATCH") || e.hasPrefix("MD5 MISMATCH") { return "hash" }
         if e.hasPrefix("size mismatch") { return "size" }
         if e.hasPrefix("verify:") { return "read" }
+        if e == OffloadEngine.cardChangedWhilePaused { return "card" }
         if e.contains("cancelled") { return "cancelled" }
         if e.hasPrefix("source:") { return "card" }
         return "write"
@@ -296,6 +313,10 @@ struct JobCardState {
             let done = verifying ? (d < c.verifiedBytes.count ? c.verifiedBytes[d] : 0) : (d < c.writtenBytes.count ? c.writtenBytes[d] : 0)
             let rate = d < p.destRates.count ? p.destRates[d] : 0
             rows.append(TransferRow(id: d + 1, name: name, number: d + 1, share: share(done), rate: Fmt.rate(rate), tooltip: tip(d + 1)))
+        }
+        if s.paused {
+            // Paused: no speeds (they are measured again from Resume).
+            rows = rows.map { TransferRow(id: $0.id, name: $0.name, number: $0.number, share: $0.share, rate: "—", tooltip: $0.tooltip) }
         }
         return rows
     }

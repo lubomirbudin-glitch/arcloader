@@ -25,7 +25,7 @@ struct TopBar: View {
             // TODO(projects): the project switcher goes here once the Mac has projects (Windows plan 8, Mac task 56).
             Spacer(minLength: 20)
             let counts = model.queueCounts
-            if let pill = TopBar.pillText(running: counts.running, waiting: counts.waiting) {
+            if let pill = TopBar.pillText(running: counts.running, paused: counts.paused, waiting: counts.waiting) {
                 Pill(text: pill, fg: p.pillRunText, bg: p.accentSoft2, dot: p.accentBar)
                     .padding(.horizontal, 4)
                     .frame(height: 34)
@@ -55,10 +55,11 @@ struct TopBar: View {
         .overlay(alignment: .bottom) { Rectangle().fill(p.line).frame(height: 1) }
     }
 
-    /// "Running 1 offload · 1 queued", "2 queued"; nil when nothing runs or waits.
-    static func pillText(running: Int, waiting: Int) -> String? {
+    /// "Running 1 offload · 1 paused · 1 queued", "Paused: 1 offload", "2 queued"; nil when nothing runs, stands or waits.
+    static func pillText(running: Int, paused: Int = 0, waiting: Int) -> String? {
         var parts: [String] = []
         if running > 0 { parts.append("Running \(Fmt.count(running, "offload"))") }
+        if paused > 0 { parts.append(running > 0 ? "\(paused) paused" : "Paused: \(Fmt.count(paused, "offload"))") }
         if waiting > 0 { parts.append("\(waiting) queued") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

@@ -7,8 +7,8 @@ import SwiftUI
 /// cancelled (grey); an empty queue shows the flow Card → disks → Verify → Proxy → Report.
 ///
 /// Verify backup items (⇧⌘O) are cards of the same queue — they run one after another with the copies.
-/// Not on the Mac yet (hidden): the "Card history" tab and "Today" table, Pause, "Copy again" (repair), the time
-/// estimate for the whole job.
+/// Not on the Mac yet (hidden): the "Card history" tab and "Today" table, "Copy again" (repair), the time estimate for
+/// the whole job.
 struct QueueColumn: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
@@ -125,6 +125,8 @@ struct JobCardContainer: View {
         let state = JobCardState.make(item, model: model)
         JobCardView(state: state, actions: JobCardActions(
             cancel: { model.cancel(item) },
+            pause: { model.pause(item) },
+            resume: { model.resume(item) },
             eject: { model.eject(item) },
             report: { model.openReport(item) },
             reveal: { model.reveal(item) },
@@ -134,6 +136,8 @@ struct JobCardContainer: View {
 
 struct JobCardActions {
     var cancel: () -> Void = {}
+    var pause: () -> Void = {}
+    var resume: () -> Void = {}
     var eject: () -> Void = {}
     var report: () -> Void = {}
     var reveal: () -> Void = {}
@@ -169,6 +173,7 @@ struct RunningCard: View {
                 VerdictChips(state: state)
                 if !state.steps.isEmpty { phases }
                 if !state.rows.isEmpty { speedTable }
+                if state.pauseText != nil { pauseLine }
                 footer
                 if state.safeWhileRunning { safeStrip }
             }
@@ -255,11 +260,28 @@ struct RunningCard: View {
                 }
             }
             Spacer(minLength: 12)
-            // TODO(pause): "Pause" once the Mac engine can pause (Windows plan 9, Mac task 61).
+            // Pause lets the file or clip in progress finish; Resume goes on with the next one (Windows 0.8.0).
+            if state.canPause {
+                if state.paused {
+                    Button("Resume", action: actions.resume).buttonStyle(.offload(.secondary, height: 36))
+                } else {
+                    Button("Pause", action: actions.pause).buttonStyle(.offload(.secondary, height: 36))
+                }
+            }
             if state.canCancel {
                 Button("Cancel", action: actions.cancel).buttonStyle(.offload(.danger, height: 36))
             }
         }
+    }
+
+    /// "Pausing (finishing file A001C003.mov…)" → "Paused — Resume continues with the next file."
+    private var pauseLine: some View {
+        HStack(spacing: 10) {
+            Image(systemName: state.pauseText?.hasPrefix("Paused") == true ? "pause.circle.fill" : "pause.circle")
+                .font(.system(size: 14))
+            Text(state.pauseText ?? "")
+        }
+        .font(.ui(13)).foregroundStyle(p.warn)
     }
 
     /// Proxies still render, but the copy is verified: the card may go.
@@ -328,7 +350,7 @@ struct WaitingCard: View {
                 Text(state.sub).font(.ui(13)).foregroundStyle(p.text2).lineLimit(1)
             }
             Spacer(minLength: 12)
-            Pill(text: "Waiting in queue", fg: p.textSoft, bg: p.chip)
+            Pill(text: state.waitingHint ?? "Waiting in queue", fg: p.textSoft, bg: p.chip)
             if state.canCancel {
                 Button("Cancel", action: actions.cancel).buttonStyle(.offload(.danger, height: 30))
             }

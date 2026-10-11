@@ -608,17 +608,22 @@ final class AppModel: ObservableObject {
     /// A copy writes or verifies the destinations — no speed measurement now.
     var copyRunning: Bool { QueueRules.measureBlocked(jobs.map(\.status.phase)) || verifies.contains { $0.isRunning } }
 
-    /// Running, waiting: the top bar's pill and the queue's count.
-    var queueCounts: (running: Int, waiting: Int) {
-        var running = 0, waiting = 0
+    /// Running, paused (really standing), waiting: the top bar's pill and the queue's count.
+    var queueCounts: (running: Int, paused: Int, waiting: Int) {
+        var running = 0, paused = 0, waiting = 0
         for j in jobs {
             let p = j.queuePhase
-            if p == .waiting { waiting += 1 } else if !p.isFinished { running += 1 }
+            if p == .waiting { waiting += 1 } else if !p.isFinished { if j.status.pauseHeld { paused += 1 } else { running += 1 } }
         }
         for v in verifies where !v.isFinished {
             if v.isRunning { running += 1 } else { waiting += 1 }
         }
-        return (running, waiting)
+        return (running, paused, waiting)
+    }
+
+    /// A waiting job behind a job paused in its copy does not start (copies run one after another).
+    func waitsForPausedJob(_ item: JobItem) -> Bool {
+        PausedQueue.blocked(item.queuePhase, others: jobs.filter { $0 !== item }.map { ($0.queuePhase, $0.status.paused) })
     }
 
     /// "Add to queue" while a card waits for or is in its copy — a new one then waits.
@@ -711,6 +716,18 @@ final class AppModel: ObservableObject {
 
     func cancel(_ item: JobItem) {
         item.job.cancel()
+        item.refresh()
+    }
+
+    /// Pause: the file or clip in progress finishes, then the job stands (the Mac stays awake meanwhile).
+    func pause(_ item: JobItem) {
+        guard item.isRunning else { return }
+        item.job.pause()
+        item.refresh()
+    }
+
+    func resume(_ item: JobItem) {
+        item.job.resume()
         item.refresh()
     }
 

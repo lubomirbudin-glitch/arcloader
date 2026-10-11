@@ -74,6 +74,15 @@ public struct JobStatus {
     public var errorCode: PreflightCode?
     /// A grey line of a finished job that is not a warning ("Nothing new — the backup is complete.").
     public var note: String?
+    /// Pause was pressed and Resume not yet (only while the job runs) — it may still be finishing its step.
+    public var paused = false
+    /// …and the job really stands: the file or clip in progress is finished and nothing works.
+    public var pauseHeld = false
+    /// Paused, not standing yet: what it still finishes ("file A001C003.mov", "files a.mov, b.wav", "clip A003",
+    /// "the proxy of clip A003") — "Pausing (finishing …)"; nil when unknown or not pausing.
+    public var pauseStep: String?
+    /// How long the job has stood paused so far (from the end of the step it finished to Resume).
+    public var pausedTotal: TimeInterval = 0
 
     public init() {}
 
@@ -95,6 +104,8 @@ public final class OffloadJob {
     private let lock = NSLock()
     /// R6: the history entry a full copy wrote when it started ("unfinished"); finished or removed after the copy.
     private var startEntry: String?
+    /// Stage 2's thread as a worker of the pause gate (it waits between clips), nil outside stage 2.
+    private var postWorker: PauseGate.Worker?
 
     /// Set on a worker thread, read by the app's main thread — always under the lock.
     public var plan: OffloadPlan? { lock.lock(); defer { lock.unlock() }; return _plan }
@@ -158,6 +169,18 @@ public final class OffloadJob {
 
     public var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
 
+    /// "Pause" (user requirement 2026-10-09, Windows 0.8.0): the step in progress finishes — the file being copied (on
+    /// every destination) or read back, the clip being analysed or rendered — then the job stands: stage 1 before its
+    /// next file, stage 2 before its next clip and before the PDF — never in the middle of a file, a clip, a report or
+    /// an ffmpeg run, and never holding the history lock (an append's folder lock stays held through stage 1). Resume
+    /// goes on with the next file or clip. Cancel while pausing or paused ends the job as a cancel does. The GUI only;
+    /// the CLI has no pause.
+    public func pause() { engine.pauses.pause() }
+
+    public func resume() { engine.pauses.resume() }
+
+    public var isPaused: Bool { engine.pauses.isPaused }
+
     public func status() -> JobStatus {
         lock.lock()
         var s = state
@@ -176,11 +199,44 @@ public final class OffloadJob {
         }
         // Cancelled while still queued: it never runs, so say so instead of "Waiting" forever.
         if s.phase == .waiting && !wasStarted && wasCancelled { s.phase = .cancelled }
+        let gate = engine.pauses
+        let running = s.phase != .waiting && !s.phase.isFinished
+        s.paused = running && gate.isPaused
+        s.pauseHeld = s.paused && gate.isHeld
+        s.pausedTotal = gate.pausedTotal
+        if s.paused && !s.pauseHeld {
+            lock.lock(); let clipDone = postWorker?.isHolding == true; lock.unlock()
+            s.pauseStep = OffloadJob.finishing(s, clipDone: clipDone)
+        }
         return s
     }
 
+    /// Paused, not standing yet: what the job still finishes — the file the copy is on, the files the read-backs read,
+    /// the clip stage 2 analyses or renders (`clipDone`: its thread waits already); nil when none is known.
+    static func finishing(_ s: JobStatus, clipDone: Bool) -> String? {
+        func files(_ rel: [String]) -> String? {
+            var names: [String] = []
+            for r in rel where !r.isEmpty {
+                let n = (r as NSString).lastPathComponent
+                if !names.contains(where: { $0.caseInsensitiveCompare(n) == .orderedSame }) { names.append(n) }
+            }
+            return names.isEmpty ? nil : names.count == 1 ? "file " + names[0] : "files " + names.joined(separator: ", ")
+        }
+        switch s.phase {
+        case .copying: return files([s.copy?.currentFile ?? ""])
+        case .verifying: return files(s.copy?.verifyingFiles ?? [])
+        case .analyzing where !clipDone && !s.clipName.isEmpty: return "clip " + s.clipName
+        case .proxies where !clipDone && !s.clipName.isEmpty: return "the proxy of clip " + s.clipName
+        default: return nil
+        }
+    }
+
     private func update(_ f: (inout JobStatus) -> Void) {
-        lock.lock(); f(&state); lock.unlock()
+        lock.lock()
+        f(&state)
+        let ended = state.phase.isFinished
+        lock.unlock()
+        if ended { engine.pauses.end() }   // the paused time stops with the job, also when it ended paused
     }
 
     /// Runs the whole job synchronously. Never throws: the outcome is in `status()` and the returned report.
@@ -201,7 +257,10 @@ public final class OffloadJob {
         if cancelledBeforeStart { state.phase = .cancelled }
         lock.unlock()
         // Cancelled before it began: stay Cancelled, never prepare or copy.
-        if cancelledBeforeStart { return false }
+        if cancelledBeforeStart {
+            engine.pauses.end()
+            return false
+        }
         let activity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .idleSystemSleepDisabled], reason: "Offloading camera card")
         defer { ProcessInfo.processInfo.endActivity(activity) }
@@ -234,6 +293,7 @@ public final class OffloadJob {
                 return false
             }
             if let historyFolder { recordFinished(plan, report: report, volume: volume, card: plan.scan, folder: historyFolder) }
+            if engine.cardChanged { return endCardChanged(report, plan: plan) }
             guard config.analyzeClips || config.proxy.enabled else {
                 writePDFReports(report, plan: plan)
                 update { $0.phase = .done }
@@ -245,6 +305,18 @@ public final class OffloadJob {
             fail(error)
             return false
         }
+    }
+
+    /// Ruling I1: another card (or none) after Resume — the files copied before the pause are in the report and in
+    /// history; the rest was never read. The job fails; no stage 2 (the PDF as without it). An append with the original
+    /// card completes the backup.
+    private func endCardChanged(_ report: OffloadReport, plan: OffloadPlan) -> Bool {
+        writePDFReports(report, plan: plan)
+        update {
+            $0.phase = .failed
+            $0.error = Msg.cardChangedWhilePaused
+        }
+        return false
     }
 
     private func fail(_ error: Error) {
@@ -334,6 +406,7 @@ public final class OffloadJob {
             return false
         }
         if let historyFolder { recordFinished(plan, report: report, volume: volume, card: ap.fullScan, folder: historyFolder) }
+        if engine.cardChanged { return endCardChanged(report, plan: plan) }
         guard config.analyzeClips || config.proxy.enabled else {
             writePDFReports(report, plan: plan)
             update { $0.phase = .done }
@@ -349,8 +422,16 @@ public final class OffloadJob {
         let activity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .idleSystemSleepDisabled], reason: "Rendering proxies")
         defer { ProcessInfo.processInfo.endActivity(activity) }
+        // Stage 2 joins the pause gate: Pause lets the clip in progress finish, then the job stands before the next.
+        let worker = engine.pauses.work()
+        lock.lock(); postWorker = worker; lock.unlock()
+        defer {
+            lock.lock(); postWorker = nil; lock.unlock()
+            worker.leave()
+        }
         let final = analyzeAndRender(plan: plan, report: report, log: log)
         setReport(final)
+        _ = waitBetweenSteps()   // not in the middle of the PDF; a cancel while paused still writes it, as before
         update { $0.phase = .reporting }
         writePDFReports(final, plan: plan)
         let finalPhase: JobStatus.Phase = isCancelled ? .cancelled : .done
@@ -426,6 +507,13 @@ public final class OffloadJob {
         }
     }
 
+    /// Stage 2, between clips (and before the PDF): waits while paused; false when the job was cancelled meanwhile.
+    private func waitBetweenSteps() -> Bool {
+        lock.lock(); let w = postWorker; lock.unlock()
+        let cancelled = { self.isCancelled }
+        return w?.waitWhilePaused(isCancelled: cancelled) ?? engine.pauses.waitWhilePaused(isCancelled: cancelled)
+    }
+
     // MARK: - Clips
 
     private func analyzeAndRender(plan: OffloadPlan, report input: OffloadReport, log: ((String) -> Void)?) -> OffloadReport {
@@ -453,7 +541,8 @@ public final class OffloadJob {
             $0.clipCount = entries.count
         }
         for i in entries.indices {
-            if isCancelled { break }
+            // A pause waits between clips: the clip being probed finishes first (no ffmpeg is ever suspended).
+            if isCancelled || !waitBetweenSteps() { break }
             let clip = entries[i].clip
             update {
                 $0.clipIndex = i
@@ -527,7 +616,8 @@ public final class OffloadJob {
         // copy has new card folders; a name taken there meanwhile still fails the render instead of replacing it.)
         var usedNames = plan.mode == .full ? Set<String>() : JobFiles.proxyNames(plan.cardPaths)
         for i in entries.indices {
-            if isCancelled { break }
+            // A pause waits between clips: the proxy being rendered finishes first.
+            if isCancelled || !waitBetweenSteps() { break }
             let clip = entries[i].clip  // may have been reclassified during analysis (MXF → ARRIRAW)
             update {
                 $0.clipIndex = i

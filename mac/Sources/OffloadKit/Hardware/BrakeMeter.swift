@@ -32,6 +32,9 @@ public final class BrakeMeter {
         self.linkMBps = linkMBps
     }
 
+    /// Forgets the window (a pause: the time standing says nothing about who brakes).
+    public func reset() { samples.removeAll() }
+
     /// Feed one progress snapshot (seconds from any fixed start). Returns the brake once the window holds enough
     /// history (half the window), else nil.
     public func add(seconds: Double, readBytes: Int64, writtenBytes: [Int64]) -> Brake? {

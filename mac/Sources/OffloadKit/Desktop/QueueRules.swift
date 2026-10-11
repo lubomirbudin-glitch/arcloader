@@ -17,6 +17,16 @@ public enum CardIdentity {
 
 /// Safely removes a card: `NSWorkspace.unmountAndEjectDevice` unmounts the volume and ejects the media — a card in a
 /// reader leaves the reader connected for the next card; a USB disk is ejected as a whole device.
+/// A waiting job behind a job paused in stage 1 (copying, flushing, verifying, its report) does not start: copies run one
+/// after another (Windows `QueueRules.BlockedByPaused`).
+public enum PausedQueue {
+    public static let waitingText = "Waiting for a paused job."
+
+    public static func blocked(_ phase: JobStatus.Phase, others: [(phase: JobStatus.Phase, paused: Bool)]) -> Bool {
+        phase == .waiting && others.contains { $0.paused && [.copying, .flushing, .verifying, .reporting].contains($0.phase) }
+    }
+}
+
 public enum CardEject {
     /// Why this volume must not be ejected, or nil. Allowed only for a local, whole, non-system volume that is
     /// ejectable, removable or external (USB, Thunderbolt, SD).

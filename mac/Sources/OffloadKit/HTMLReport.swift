@@ -127,6 +127,7 @@ public enum HTMLReport {
         <div class="stat"><b>\(videoClips.count)</b><span>\(videoClips.count == 1 ? "clip" : "clips")\(totalDuration > 0 ? " · " + duration(totalDuration) : "")</span></div>
         <div class="stat"><b>\(duration(r.copySeconds))</b><span>copy · \(formatRate(r.totalBytes, r.copySeconds))</span></div>
         <div class="stat"><b>\(r.verified ? duration(r.verifySeconds) : "—")</b><span>verification · \(r.verified ? formatRate(r.totalBytes, r.verifySeconds) : "not run")</span></div>
+        \(r.pausedSeconds > 0 ? "<div class=\"stat\"><b>\(duration(r.pausedSeconds))</b><span>paused · not in the speeds</span></div>" : "")
         <div class="stat"><b>\(esc(r.hashAlgorithm.uppercased()))</b><span>checksum</span></div>
         </div>
 
@@ -145,7 +146,9 @@ public enum HTMLReport {
             h += "<h2 class=\"bad\">Errors (\(failed.count))</h2><div class=\"panel\"><table><tr><th>File</th><th>Problem</th></tr>\n"
             for f in failed {
                 var msgs: [String] = []
-                if let e = f.sourceError { msgs.append("card: " + e) }
+                if let e = f.sourceError {
+                    msgs.append("card: " + (e == OffloadEngine.cardChangedWhilePaused ? "the card was swapped or removed while paused" : e))
+                }
                 for (i, e) in f.errors.enumerated() { if let e { msgs.append("destination \(i + 1): " + e) } }
                 h += "<tr><td class=\"mono\">\(esc(f.path))</td><td class=\"err\">\(esc(msgs.joined(separator: " · ")))</td></tr>\n"
             }

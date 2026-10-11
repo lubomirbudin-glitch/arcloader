@@ -59,6 +59,7 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   zapsaný soubor, žádný přerušený render). Pokračovat **plynule naváže** dalším souborem / klipem, bez opakování hotové
   práce a bez nového spuštění úlohy; stav „pozastavuji (dokončuji …)“ → „pozastaveno“ musí být vidět. Windows od 0.5.0
   pozastavuje mezi 16MB bloky a mezi klipy 2. fáze — sladit s tímto zadáním (pozastavení po dokončení souboru/klipu).
+  **Windows hotovo v 0.8.0, Mac v úkolu 61** (viz průběh dorovnání níže; ruční test s kartou čeká).
 
 - **Souhrnný report z vybraných záloh (zadání uživatele 2026-10-09, obě verze):** v historii karet označit libovolný
   počet záloh (karet, i z různých dnů a disků) a vytvořit z nich **jeden souhrnný report** (HTML + PDF, bez náhledů):
@@ -137,6 +138,24 @@ Plán [`mac/docs/superpowers/plans/2026-10-08-offload-mac-parity-2.md`](../mac/d
 (úkoly 32–55) a `-3` (56–70); nejnovější úkol nahoře. Rozpracovaný kód paralelních proudů (`mac/docs/parita-0.3/`) se
 slučuje s plánem úkol po úkolu — co plánu odpovídá, zůstává; co se liší, nahrazuje verze plánu (zprávy commitů).
 
+- Úkol 61 (vytažený dopředu s úkolem 51) — Pozastavit / Pokračovat podle zadání uživatele 2026-10-09 a Windows 0.8.0,
+  ne podle plánu (ten pozastavoval i mezi 16MB bloky): `PauseGate` (pracovníci `work()`; úloha „stojí“ až když čeká
+  a žádný přihlášený pracovník nedokončuje krok; `pausedTotal` jen doba stání; `requests`, `holds`, `end()`); kopie
+  dokončí rozpracovaný soubor na všech cílech, zapisovače doběhnou (žádný otevřený `.offload-part`), F_FULLFSYNC cílů
+  (trvalý kontrolní bod), pak stojí před dalším souborem; zpětné čtení stojí před dalším souborem (každý cíl svým
+  vláknem); 2. fáze před dalším klipem analýzy / proxy a před PDF — ffmpeg se nikdy neuspává, zámky historie a dne se
+  nedrží (test), zámek složek doplnění ano (test). Po každém stisku Pozastavit (i Pokračovat dřív, než úloha stála) se
+  karta před dalším čtením znovu pozná (`CardIdentity` + sériové číslo a kapacita svazku, 3× znovu po 250 ms); jiná nebo
+  žádná = zbylé soubory `card changed while paused`, úloha skončí chybou `Msg.cardChangedWhilePaused` bez 2. fáze (PDF
+  ano), HTML „the card was swapped or removed while paused“. Zrušit funguje i během „Pausing“ a „Paused“ (hned,
+  rozpracované soubory se smažou). Report `copyPausedSeconds` / `verifyPausedSeconds` (0,1 s), TXT `Paused:`, HTML
+  dlaždice „paused · not in the speeds“. GUI (nový vzhled): Pause / Resume na kartě běžící úlohy ve frontě, řádek
+  „Pausing (finishing file A001C003.mov…)“ → „Paused — Resume continues with the next file/clip.“, stav „Pausing“/
+  „Paused“, rychlosti „—“ a bez odhadu a brzdy (`BrakeMeter.reset`), čekající karta za úlohou pozastavenou v 1. fázi
+  „Waiting for a paused job.“, pilulka „Running 1 offload · 1 paused“, Celkem na hotové kartě bez pauzy. Mac během
+  pauzy nespí (aktivita úlohy trvá). API pro úkoly 65–68: `OffloadEngine.pauses`, `PauseGate.Worker`. Odchylky od
+  plánu: pauza jen mezi soubory / klipy (zadání uživatele), identita po každé žádosti o pauzu (`requests`, ne jen
+  `holds` — Windows review I-1), testovací háček `OffloadOptions.afterChunkRead`. GUI se nespouštělo (jen build)
 - Úkol 51 — **zúžený rozsah (rozhodnutí uživatele 2026-10-11)**: vytažený dopředu kvůli Verify-in-Proxy (úkoly 52–60
   zatím vynechané, verze zůstává 0.3.0) a jen v tom, co úkoly 65–68 potřebují: kopie počítá v jednom čtení karty
   k xxh64 i XXH3-64 každého bloku (`SourceHasher.blocks` přes `MultiHasher` bez XXH3-128, blok = `chunkSize`;

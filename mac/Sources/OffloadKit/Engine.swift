@@ -15,6 +15,12 @@ public struct OffloadOptions {
     var allowSourceVolume = false
     /// Tests only (internal): called on the copy thread before file `i` is copied (a deterministic point to cancel at).
     var beforeFileCopy: ((Int) -> Void)?
+    /// Tests only (internal): which card is at the source (nil = none) — asked at the start of the copy and again after
+    /// a pause; default `OffloadEngine.cardFingerprint`.
+    var cardIdentity: ((String) -> String?)?
+    /// Tests only (internal): called on the copy thread after every block read from the card (with the file's index) —
+    /// a deterministic point inside a file.
+    var afterChunkRead: ((Int) -> Void)?
 
     public init() {}
 }
@@ -84,6 +90,8 @@ public struct ProgressSnapshot {
     public var writtenBytes: [Int64]
     public var verifiedBytes: [Int64]
     public var errors: Int
+    /// The files the read-backs read now (relative; what "Pausing (finishing …)" names).
+    public var verifyingFiles: [String] = []
 }
 
 /// Byte counter shared between the I/O threads and the progress display.
@@ -207,6 +215,10 @@ final class DestWriter {
     private var partPath = ""
     private var currentError: String?
     private(set) var results: [DestFileResult]
+    private let verifyingLock = NSLock()
+    private var verifyingNow: String?
+    /// The file the read-back reads now (relative), nil when none.
+    var verifyingFile: String? { verifyingLock.lock(); defer { verifyingLock.unlock() }; return verifyingNow }
 
     init(index: Int, cardPath: String, fileCount: Int, options: OffloadOptions, noReplace: Bool = false,
          beforeRename: ((String) -> Void)? = nil) {
@@ -308,13 +320,18 @@ final class DestWriter {
 
     func wait() { queue.sync {} }
 
-    /// Re-reads every written file from the disk and compares it with the source hash.
-    func verify(files: [SourceFile], sourceHashes: [UInt64?], isCancelled: () -> Bool) {
+    /// Re-reads every written file from the disk and compares it with the source hash. `gate`: the read-back's
+    /// membership of the pause gate — it waits there before every file, never inside one (Pause lets the file being
+    /// read finish).
+    func verify(files: [SourceFile], sourceHashes: [UInt64?], gate: PauseGate.Worker? = nil, isCancelled: () -> Bool) {
         let buf = IO.allocateAligned(options.chunkSize)
         defer { free(buf) }
         for (i, f) in files.enumerated() where results[i].state == .written {
             if isCancelled() { return }
+            if let gate, !gate.waitWhilePaused(isCancelled: isCancelled) { return }
             let path = cardPath + "/" + f.relPath
+            setVerifying(f.relPath)
+            defer { setVerifying(nil) }
             do {
                 let r = try hashFile(path, chunkSize: options.chunkSize, buffer: buf) { self.verified.add($0) }
                 if r.size != f.size {
@@ -329,6 +346,8 @@ final class DestWriter {
             }
         }
     }
+
+    private func setVerifying(_ rel: String?) { verifyingLock.lock(); verifyingNow = rel; verifyingLock.unlock() }
 
     private func closeAndRemovePart() {
         if fd >= 0 { close(fd); fd = -1 }
@@ -372,6 +391,17 @@ public final class OffloadEngine {
     public private(set) var fileBlocks: [[UInt64]] = []
     /// Tests only: the free space of a path (nil = ask the volume).
     var testFreeSpace: ((String) -> Int64?)?
+    /// "Pause": the copy and the read-back stop before their next file (the one in progress is finished on every
+    /// destination); the job's stage 2 waits at the same gate between clips.
+    public let pauses = PauseGate()
+    /// The card was not the copied one after a pause: the remaining files were left out (`cardChangedWhilePaused`).
+    public private(set) var cardChanged = false
+    /// The file error (report JSON, English like every file error) of a file left out because the card at the source was
+    /// not the copied one after a pause (Windows ruling I1).
+    public static let cardChangedWhilePaused = "card changed while paused"
+    /// How many times more the card is identified, 250 ms apart, before it counts as changed — a reader that answers
+    /// late once after a pause must not fail the job.
+    static let identifyRetries = 3
     /// Space warnings of the last `prepare` / `checkSpace` (less than 5 % would be left) — never blocking.
     public private(set) var spaceWarnings: [String] = []
     /// What every volume needs and has free (the CLI's --dry-run).
@@ -484,10 +514,47 @@ public final class OffloadEngine {
             readBytes: readCounter.get(),
             writtenBytes: writers.map { $0.written.get() },
             verifiedBytes: writers.map { $0.verified.get() },
-            errors: errorCount)
+            errors: errorCount,
+            verifyingFiles: phase == .verify ? writers.compactMap(\.verifyingFile) : [])
     }
 
     private func setPhase(_ p: ProgressSnapshot.Phase) { lock.lock(); phase = p; lock.unlock() }
+
+    /// Which card is at `source`: the volume identity (`CardIdentity`) and, for a volume root, its file system serial and
+    /// capacity (`CardVolume`). Nil when nothing readable is there. Touches the card — never on the main thread.
+    public static func cardFingerprint(_ source: String) -> String? {
+        guard let id = CardIdentity.of(source) else { return nil }
+        guard let v = CardVolume.of(source) else { return id }
+        return "\(id)|\(v.fsSerial)|\(v.capacity)"
+    }
+
+    /// Is the card at the source still `want`? A different or missing answer is asked again `identifyRetries` times,
+    /// 250 ms apart.
+    private func stillSameCard(_ source: String, _ want: String, _ identify: (String) -> String?) -> Bool {
+        for attempt in 0...OffloadEngine.identifyRetries {
+            if identify(source) == want { return true }
+            if attempt < OffloadEngine.identifyRetries && !isCancelled { usleep(250_000) }
+        }
+        return false
+    }
+
+    /// Pause, before the next file (user requirement 2026-10-09, Windows 0.8.0): the file just read from the card is
+    /// finished on EVERY destination first — the writers empty their queues (no `.offload-part` stays open), the drives'
+    /// caches are flushed (a durable checkpoint) — and only then the copy waits at the gate. False = cancelled.
+    private func holdBetweenFiles(_ worker: PauseGate.Worker, _ ws: [DestWriter]) -> Bool {
+        guard pauses.isPaused else { return !isCancelled }
+        ws.forEach { $0.wait() }
+        if pauses.isPaused && !isCancelled {
+            DispatchQueue.concurrentPerform(iterations: ws.count) { ws[$0].flushDevice() }
+        }
+        return worker.waitWhilePaused(isCancelled: { self.isCancelled })
+    }
+
+    /// Seconds paused, to 0.1 s; nil when the job never stood.
+    static func pausedField(_ t: TimeInterval) -> Double? {
+        let r = (t * 10).rounded() / 10
+        return r > 0 ? r : nil
+    }
 
     public func run(_ plan: OffloadPlan) throws -> OffloadReport {
         let files = plan.scan.files
@@ -505,11 +572,33 @@ public final class OffloadEngine {
         let pool = BufferPool(count: options.bufferCount, size: options.chunkSize)
         let hasher = SourceHasher(fileCount: files.count, blockSize: options.chunkSize)
         var sourceErrors: [String?] = Array(repeating: nil, count: files.count)
+        let pausedBefore = pauses.pausedTotal
+        var requestsChecked = pauses.requests
+        // Ruling I1: the card is identified now and again after any pause (it may have been swapped or pulled meanwhile —
+        // the same names, sizes and times are no proof). Nil = nothing to compare with: never asked again.
+        let identify = options.cardIdentity ?? OffloadEngine.cardFingerprint
+        let cardAtStart = identify(plan.source)
+        // The copy is one worker of the pause gate: it stops only between files, once every destination has the file.
+        let copying = pauses.work()
 
         // Copy: the card is read exactly once; every block fans out to the hasher and all destinations.
         for (i, f) in files.enumerated() {
             if isCancelled { sourceErrors[i] = "cancelled"; continue }
-            options.beforeFileCopy?(i)
+            if !cardChanged {
+                options.beforeFileCopy?(i)
+                if !holdBetweenFiles(copying, ws) { sourceErrors[i] = "cancelled"; continue }
+                // Pause was pressed since the last file (whether the copy stood or was resumed while it still finished its
+                // file): the card is identified again before anything more is read from it.
+                if pauses.requests != requestsChecked {
+                    requestsChecked = pauses.requests
+                    if let want = cardAtStart, !stillSameCard(plan.source, want, identify) { cardChanged = true }
+                }
+            }
+            if cardChanged {
+                sourceErrors[i] = OffloadEngine.cardChangedWhilePaused
+                lock.lock(); errorCount += 1; lock.unlock()
+                continue
+            }
             lock.lock(); fileIndex = i; currentFile = f.relPath; lock.unlock()
             let src = plan.source + "/" + f.relPath
             ws.forEach { $0.begin(f) }
@@ -538,6 +627,7 @@ public final class OffloadEngine {
                 ws.forEach { $0.write(chunk) }
                 offset += Int64(n)
                 readCounter.add(n)
+                options.afterChunkRead?(i)
                 if n < options.chunkSize { break }
             }
             if fd >= 0 { close(fd) }
@@ -555,20 +645,27 @@ public final class OffloadEngine {
         }
         hasher.wait()
         ws.forEach { $0.wait() }
+        copying.leave()   // past the last file: a pause pressed now stands before the read-back's first file (or in stage 2)
         fileBlocks = hasher.blocks
 
         setPhase(.flush)
         DispatchQueue.concurrentPerform(iterations: ws.count) { ws[$0].flushDevice() }
         let copyFinished = Date()
+        let copyPaused = pauses.pausedTotal - pausedBefore
 
         if options.verify && !isCancelled {
             setPhase(.verify)
             let hashes = hasher.hashes
+            // Every destination's read-back joins the gate before any starts (the job never looks standing while one of
+            // them has yet to begin); each stops only between files.
+            let readers = ws.map { _ in pauses.work() }
             DispatchQueue.concurrentPerform(iterations: ws.count) { d in
-                ws[d].verify(files: files, sourceHashes: hashes, isCancelled: { self.isCancelled })
+                ws[d].verify(files: files, sourceHashes: hashes, gate: readers[d], isCancelled: { self.isCancelled })
+                readers[d].leave()
             }
         }
         let finished = Date()
+        let verifyPaused = pauses.pausedTotal - pausedBefore - copyPaused
 
         setPhase(.report)
         var report = OffloadReport.build(plan: plan, hashes: hasher.hashes, sourceErrors: sourceErrors,
@@ -576,6 +673,8 @@ public final class OffloadEngine {
                                          started: started, copyFinished: copyFinished, finished: finished)
         report.generation = plan.generation > 1 ? plan.generation : nil
         report.project = plan.project
+        report.copyPausedSeconds = OffloadEngine.pausedField(copyPaused)
+        report.verifyPausedSeconds = OffloadEngine.pausedField(verifyPaused)
         var reportErrors: [String] = []
         for path in plan.cardPaths {
             do { try report.write(cardPath: path, includeHashRecords: true) } catch { reportErrors.append("\(error)") }
