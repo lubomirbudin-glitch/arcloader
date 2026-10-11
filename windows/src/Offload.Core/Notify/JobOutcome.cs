@@ -37,7 +37,7 @@ public static class JobOutcomes
             var note = status.Note ?? Msg.NothingNew;
             return status.Warning != null || !status.SafeToFormat
                 ? Attention(card, $"{note} {FirstLine(status.Warning ?? "The backup is not fully verified.")}", $"{note} Needs attention — details in the app.")
-                : new JobOutcome(OutcomeKind.Done, $"Offload: {card} done", note, note == Msg.NothingNew ? note : "Done.");
+                : new JobOutcome(OutcomeKind.Done, $"{Product.Name}: {card} done", note, note == Msg.NothingNew ? note : "Done.");
         }
         if (report == null)
             return Error(card, status.Error ?? "The copy failed.", "Error before copying — the card is NOT backed up.");
@@ -64,14 +64,14 @@ public static class JobOutcomes
             return Attention(card, "The copy is done, but do not format the card yet — it is not fully verified.", "The copy is done but not fully verified.");
         int disks = report.Destinations.Count;
         var done = $"Verified on {Texts.N(disks, "disk")} — the card is safe to format." + (status.ProxiesDone > 0 ? $" Proxies: {status.ProxiesDone} done." : "");
-        return new JobOutcome(OutcomeKind.Done, $"Offload: {card} done", done, done);
+        return new JobOutcome(OutcomeKind.Done, $"{Product.Name}: {card} done", done, done);
     }
 
     /// At the end of stage 1 when everything is copied (R5 "Safe to eject") and stage 2 still runs (Windows only); else
     /// null. With verify-in-proxy (plan 10) the copies are verified only with the proxies: formatting waits.
     public static JobOutcome? CopyDone(string card, JobStatus status, bool proxies) =>
         status.SafeToEject && !status.Phase.IsFinished()
-            ? new JobOutcome(OutcomeKind.Ejectable, $"Offload: {card} — safe to eject",
+            ? new JobOutcome(OutcomeKind.Ejectable, $"{Product.Name}: {card} — safe to eject",
                 status.SafeToFormat ? (proxies ? "Proxies are still rendering." : "Clips are still being processed.")
                     : "Verifying with the proxies — format only after it finishes.", "")
             : null;
@@ -83,10 +83,10 @@ public static class JobOutcomes
         status.SafeToFormat && status.Warning == null && status.Phase is not (JobPhase.Cancelled or JobPhase.Failed);
 
     static JobOutcome Attention(string card, string message, string phone) =>
-        new(OutcomeKind.Attention, $"Offload: {card} — needs attention", message, phone);
+        new(OutcomeKind.Attention, $"{Product.Name}: {card} — needs attention", message, phone);
 
     static JobOutcome Error(string card, string message, string phone) =>
-        new(OutcomeKind.Error, $"Offload: {card} — ERROR", message, phone);
+        new(OutcomeKind.Error, $"{Product.Name}: {card} — ERROR", message, phone);
 
     static string FirstLine(string text) => text.Split('\n')[0].Trim();
 }

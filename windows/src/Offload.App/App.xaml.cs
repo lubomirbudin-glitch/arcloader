@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Markup;
+using Offload.Core;
 using Offload.Core.Desktop;
 
 namespace Offload.App;
@@ -17,6 +18,7 @@ public partial class App : Application
         base.OnStartup(e);
         var options = StartupOptions.Parse(e.Args);
         if (options.Demo != null) AppData.UseDemoFolder();   // ruling I3: before anything reads or writes a file (the log too)
+        AppData.MigrateFromOffload(AppLog.Write);   // 0.10.0: %APPDATA%\Offload copied to %APPDATA%\ArcLoader once (never with --demo)
         UseEnglish();
         // A bug in the UI must never take running offloads down: log it, tell the user, keep going.
         DispatcherUnhandledException += (_, ex) =>
@@ -88,7 +90,7 @@ public partial class App : Application
     {
         try
         {
-            MessageBox.Show($"Offload could not start: {ex.Message}\n\nDetails: {AppLog.Path}", "Offload",
+            MessageBox.Show($"{Product.Name} could not start: {ex.Message}\n\nDetails: {AppLog.Path}", Product.Name,
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch (Exception boxEx)
@@ -109,9 +111,9 @@ public partial class App : Application
         {
             var text = $"Unexpected application error: {message}\n\nDetails: {AppLog.Path}";
             if (MainWindow is { IsLoaded: true } owner)
-                MessageBox.Show(owner, text, "Offload", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(owner, text, Product.Name, MessageBoxButton.OK, MessageBoxImage.Error);
             else
-                MessageBox.Show(text, "Offload", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(text, Product.Name, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch (Exception boxEx)
         {

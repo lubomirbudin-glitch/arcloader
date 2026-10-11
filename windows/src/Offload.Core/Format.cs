@@ -11,6 +11,17 @@ public static class OffloadVersion
         typeof(OffloadVersion).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0-win";
 }
 
+/// The product's name as users see it (rename 2026-10-11, Windows 0.10.0: Offload → ArcLoader). Names inside a backup
+/// (`offload_report.json`, `_REPORT` …), the report's `tool` value, lock names and code namespaces keep "offload".
+public static class Product
+{
+    /// Window titles, notifications, report footers, the ASC MHL creatorinfo, the User-Agent.
+    public const string Name = "ArcLoader";
+
+    /// The command-line tool (bin\arcloader.exe) as it is typed.
+    public const string Cli = "arcloader";
+}
+
 public static class Format
 {
     static readonly string[] Units = ["B", "KB", "MB", "GB", "TB"];

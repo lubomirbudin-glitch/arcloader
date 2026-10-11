@@ -22,7 +22,7 @@ static class CopyCommand
         var noVerify = new Option<bool>("--no-verify") { Description = "Skip read-back verification (not recommended)." };
         var allowSame = new Option<bool>("--allow-same-device") { Description = "Allow two destinations on the same volume." };
         var dryRun = new Option<bool>("--dry-run") { Description = "Only scan and check, do not copy." };
-        var noHistory = new Option<bool>("--no-history") { Description = "Do not read or write the offload history (%APPDATA%\\Offload\\history.json)." };
+        var noHistory = new Option<bool>("--no-history") { Description = "Do not read or write the offload history (%APPDATA%\\ArcLoader\\history.json)." };
         var hash = new Option<string>("--hash") { Description = "Checksums: xxh64 (default) or both (xxh64 + MD5; MD5 is slower on fast cards).", DefaultValueFactory = _ => "xxh64" };
         var project = CliProject.Create();
         var ntfy = CliNtfy.Create();

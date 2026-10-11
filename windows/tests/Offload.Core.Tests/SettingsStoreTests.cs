@@ -436,7 +436,7 @@ public class SettingsStoreTests
         Assert.Null(ProxyPreflight.Warning(new ProxySettings { Enabled = true }, true, new ExternalTools { Ffmpeg = "f", Ffprobe = "p" }));
     }
 
-    // %APPDATA%\Offload\luts — in the tests the folder OFFLOAD_SETTINGS_DIR points to (TestEnvironment), never the real one.
+    // %APPDATA%\ArcLoader\luts — in the tests the folder OFFLOAD_SETTINGS_DIR points to (TestEnvironment), never the real one.
     [Fact]
     public void UserFolder_IsInAppData_DefaultCatalogReadsIt()
     {
@@ -463,26 +463,36 @@ public class SettingsStoreTests
     public void AppDataFolder_Override()
     {
         _ = LutCatalog.Default;   // never first loaded from the real %APPDATA% in the moment below
+        var oldNew = Environment.GetEnvironmentVariable("ARCLOADER_SETTINGS_DIR");
         var old = Environment.GetEnvironmentVariable("OFFLOAD_SETTINGS_DIR");
+        var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         try
         {
+            Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", null);
             Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", @"X:\iso");
             Assert.Equal(@"X:\iso", AppData.Folder);
             Assert.Equal(@"X:\iso\settings.json", SettingsStore.DefaultPath);
             Assert.Equal(@"X:\iso\hwtest.json", Hardware.HwTest.DefaultPath);
             Assert.Equal(@"X:\iso\luts", LutCatalog.UserFolder);
-            // Unset (also when the shell running the tests has it set): %APPDATA%\Offload.
+            // The new name wins over the old one (0.10.0); the old one keeps working alone (above).
+            Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", @"X:\arc");
+            Assert.Equal(@"X:\arc", AppData.Folder);
+            Assert.Equal(@"X:\arc\settings.json", SettingsStore.DefaultPath);
             Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", null);
-            Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Offload"), AppData.Folder);
+            Assert.Equal(@"X:\arc", AppData.Folder);
+            // Unset (also when the shell running the tests has them set): %APPDATA%\ArcLoader.
+            Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", null);
+            Assert.Equal(Path.Combine(roaming, "ArcLoader"), AppData.Folder);
+            Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", "");
             Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", "");
-            Assert.EndsWith(@"\Offload", AppData.Folder);
+            Assert.EndsWith(@"\ArcLoader", AppData.Folder);
         }
         finally
         {
+            Environment.SetEnvironmentVariable("ARCLOADER_SETTINGS_DIR", oldNew);
             Environment.SetEnvironmentVariable("OFFLOAD_SETTINGS_DIR", old);
         }
-        Assert.Equal(old is { Length: > 0 } ? old : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Offload"),
-            AppData.Folder);
+        Assert.Equal(oldNew is { Length: > 0 } ? oldNew : old is { Length: > 0 } ? old : Path.Combine(roaming, "ArcLoader"), AppData.Folder);
     }
 
     [Fact]

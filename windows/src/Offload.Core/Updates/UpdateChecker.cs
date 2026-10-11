@@ -37,7 +37,7 @@ public sealed record UpdateResult(UpdateStatus Status, UpdateInfo? Info, string?
     };
 }
 
-/// %APPDATA%\Offload\update-check.json: when the manifest was last read, from where, and what it said.
+/// %APPDATA%\ArcLoader\update-check.json: when the manifest was last read, from where, and what it said.
 public sealed class UpdateState
 {
     [JsonPropertyName("lastCheck")] public DateTime? LastCheck { get; set; }
@@ -111,7 +111,7 @@ public static class UpdateChecker
         {
             using var cts = new CancellationTokenSource(httpTimeout);
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            request.Headers.UserAgent.ParseAdd($"Offload/{Plain(OffloadVersion.String)}");
+            request.Headers.UserAgent.ParseAdd($"{Product.Name}/{Plain(OffloadVersion.String)}");
             try
             {
                 using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);

@@ -26,7 +26,7 @@ public sealed class JobConfig(string source, IReadOnlyList<string> destRoots)
     public ExternalTools Tools { get; set; } = new();
     /// Write the finished copy into history.json (R27; CLI --no-history turns it off).
     public bool RecordHistory { get; set; } = true;
-    /// Where history.json lives; null = HistoryStore.Default (%APPDATA%\Offload).
+    /// Where history.json lives; null = HistoryStore.Default (%APPDATA%\ArcLoader).
     public string? HistoryFolder { get; set; }
     /// Append (spec 2.2): only the card's new files go into these card folders (`<root>\<date>\<card>` of the earlier
     /// backup); DestRoots, CardName and Date are then taken from them.
@@ -206,7 +206,7 @@ public sealed class OffloadJob
     // A preview job (DemoScenario): its status comes from here; it never runs.
     Func<JobStatus>? preview;
 
-    /// `Offload.exe --demo` only (DemoScenario): a job that never runs — Status() returns `status()`, Plan and Report are
+    /// `ArcLoader.exe --demo` only (DemoScenario): a job that never runs — Status() returns `status()`, Plan and Report are
     /// the given ones. RunCopy and RunPost do nothing.
     public static OffloadJob ForPreview(JobConfig config, OffloadPlan? plan, Func<JobStatus> status, OffloadReport? report = null) =>
         new(config) { preview = status, Plan = plan, Report = report };
@@ -253,7 +253,7 @@ public sealed class OffloadJob
     internal void Abandon() => Interlocked.Exchange(ref verifyLock, null)?.Dispose();
 
     public bool IsCancelled => Engine.IsCancelled;
-    /// A DemoScenario preview: it never runs (`Offload.exe --demo`).
+    /// A DemoScenario preview: it never runs (`ArcLoader.exe --demo`).
     public bool IsPreview => preview != null;
 
     /// "Pause" (UI návrh 9, task 2026-10-09): the step in progress finishes — the file being copied (on every

@@ -88,7 +88,7 @@ public class AppendEngineTests
             var gen2 = XDocument.Load(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_A001_*.mhl").Single());
             XNamespace ns = "urn:ASC:MHL:v2.0";
             Assert.Equal("transfer", gen2.Descendants(ns + "process").Single().Value);
-            Assert.StartsWith("Offload append: 1 new file from ", gen2.Descendants(ns + "comment").Single().Value);
+            Assert.StartsWith("ArcLoader append: 1 new file from ", gen2.Descendants(ns + "comment").Single().Value);
 
             var verify = BackupVerifier.Verify(paths[d], chunkSize: 4096);
             Assert.True(verify.Success);
@@ -245,7 +245,7 @@ public class AppendEngineTests
 
         Assert.Equal(JobPhase.Failed, append.Status().Phase);
         var disk = AppendPlanner.Disk(paths[0]);
-        Assert.Equal($"The backups on the destinations differ ({disk} has 1 MHL generation, {disk} 2) — check them with Verify backup (top bar of the window; on the command line offload verify); cannot append.",
+        Assert.Equal($"The backups on the destinations differ ({disk} has 1 MHL generation, {disk} 2) — check them with Verify backup (top bar of the window; on the command line arcloader verify); cannot append.",
             append.Status().Error);
         for (int d = 0; d < paths.Count; d++) AppendFixtures.AssertSameTree(trees[d], paths[d]);
     }

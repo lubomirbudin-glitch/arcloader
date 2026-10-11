@@ -7,6 +7,28 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Přejmenovat na ArcLoader (zadání uživatele 2026-10-11, obě verze; Windows 0.10.0):** produkt se jmenuje
+  **ArcLoader** (přesně takto; malými `arcloader` jen tam, kde je zvykem — příkaz CLI a repozitář). Windows je přejmenované
+  v 0.10.0, Mac dostane totéž; pravidla (společná s Windows) upravená pro Mac:
+  - **Co uživatel vidí:** aplikace `ArcLoader.app` (dosud `Offload.app`), CLI `arcloader` (dosud `offload`, uvnitř
+    `Contents/Resources/bin/arcloader`), názvy oken, About, oznámení, nápověda CLI (`arcloader copy …`), chyby, záhlaví a
+    zápatí reportů („ArcLoader 0.4.0“), HTML `<title>`, readme a návod v balíčku; v ASC MHL `<creatorinfo>` jméno nástroje
+    `ArcLoader` (volný text, verze zůstávají). Zip a složka balíčku `ArcLoader-…`.
+  - **Data uživatele:** `~/Library/Application Support/ArcLoader` (nastavení, historie, `luts/`, `arri/`, `locks/`); při startu,
+    když složka `ArcLoader` neexistuje a `Offload` ano, starou složku **zkopírovat** (nikdy nepřesouvat ani nemazat — návrat
+    na starší verzi musí dál fungovat) a zapsat to do logu. Odkaz `…/bin/art-cmd` v nové složce zkontrolovat po kopii.
+  - **Kopie reportů:** `~/Documents/ArcLoader reports/<datum>/<karta>/` a `…/summary/`; čtení (souhrnný report,
+    `.offload-origin`) se dál dívá i do `~/Documents/Offload reports` a `~/Documents/Offload reporty`.
+  - **Nesmí se změnit (kompatibilita se staršími verzemi a Windows, `docs/FORMATY.md`):** jména uvnitř zálohy
+    (`offload_report*.json/.txt`, `offload-manifest.jsonl`, `.<jméno>.offload-part`, `offload_verify_*.json`, `_REPORT`,
+    `ascmhl`, `_PROXY`, `neshoda_NNNN`, `.offload-origin`), klíče JSON a hodnoty enumů; názvy zámků (`flock` soubory
+    `history-*.lock`, `append-*.lock` v `locks/`) a mutexů, aby se starý Offload a nový ArcLoader dál vylučovaly.
+  - **Interně zůstává:** jména balíčků a cílů SwiftPM (`OffloadKit`, `OffloadApp`, `Tests/OffloadKitTests`), proměnné prostředí
+    `OFFLOAD_*` (volitelně přidat `ARCLOADER_*` s přednostní platností).
+  - **Odkazy:** repozitář `https://github.com/lubomirbudin-glitch/arcloader` (starý název přesměrovává); stahovací soubory
+    kanálů `ArcLoader-Mac.zip` / `ArcLoader-Mac-dev.zip` (a dál nahrávat i staré názvy `Offload-Mac*.zip`).
+  - Po přejmenování upravit `mac/README.md`, `docs/ROZDILY.md` (řádek Aplikace: ⏳ → ✅) a přidat záznam do historie.
+
 - **Ověřování během proxy jako volba u každé kopie (zadání uživatele 2026-10-11, obě verze):** přepínač
   „Verify during proxy render“ v kroku 3 „After copy“ levého sloupce (klikací řádek jako ostatní volby po kopii), ne jen
   v Nastavení → Verification; výchozí hodnota z nastavení/projektu (`verifyInProxy`), změna platí pro další přidanou kartu.

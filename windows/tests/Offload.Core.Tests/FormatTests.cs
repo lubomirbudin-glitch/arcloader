@@ -21,7 +21,7 @@ public class FormatTests
     }
 
     [Fact]
-    public void Version_IsWindowsBuild() => Assert.Equal("0.9.0-win", OffloadVersion.String);
+    public void Version_IsWindowsBuild() => Assert.Equal("0.10.0-win", OffloadVersion.String);
 
     // R22: the version comes from Directory.Build.props (InformationalVersion), shaped x.y.z-win - never typed twice.
     [Fact]

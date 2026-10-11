@@ -166,7 +166,7 @@ public static class VerifyReport
         Section(h, "The newest record failed during the copy (verified against an older generation)", "warn", r.FailedSuperseded);
         Section(h, r.Basis == "ascmhl" ? "Extra (not in the MHL)" : "Extra (not in the checksum list)", "warn", r.Extra);
         Section(h, "ASC MHL chain", "warn", r.ChainProblems);
-        h.Append($"<footer>offload {HtmlReport.Esc(OffloadVersion.String)} · verification report · {HtmlReport.DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
+        h.Append($"<footer>{Product.Name} {HtmlReport.Esc(OffloadVersion.String)} · verification report · {HtmlReport.DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
         return h.ToString();
     }
 

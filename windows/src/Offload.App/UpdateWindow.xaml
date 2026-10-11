@@ -10,7 +10,7 @@
         <TextBlock Text="Manifest address (web, NAS or shared folder)" Style="{StaticResource Caption}" Margin="0,12,0,4" />
         <TextBox Text="{Binding UpdateManifest, UpdateSourceTrigger=LostFocus}" x:Name="Manifest" AutomationProperties.AutomationId="UpdateManifest"
                  AutomationProperties.Name="Manifest address" />
-        <TextBlock Text="Offload only checks whether there is a new version — it never downloads or runs anything. Empty = check off."
+        <TextBlock Text="ArcLoader only checks whether there is a new version — it never downloads or runs anything. Empty = check off."
                    Style="{StaticResource Caption}" Margin="0,4,0,0" TextWrapping="Wrap" />
         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
             <Button x:Name="CheckButton" Content="Check now" Click="Check_Click" Padding="12,5" AutomationProperties.AutomationId="UpdateCheckNow" />

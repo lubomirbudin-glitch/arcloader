@@ -73,7 +73,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// "Offload — Film X" (spec 4.1).
+    /// "ArcLoader — Film X" (spec 4.1).
     public string WindowTitle => Projects.WindowTitle(ActiveProjectName);
 
     void SaveAsProject()

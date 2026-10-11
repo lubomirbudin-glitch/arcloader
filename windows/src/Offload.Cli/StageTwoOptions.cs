@@ -10,7 +10,7 @@ sealed class StageTwoOptions
 {
     readonly Option<bool> noAnalyze = new("--no-analyze") { Description = "Skip clip analysis (metadata + thumbnails in the report)." };
     readonly Option<bool> proxy = new("--proxy") { Description = "Render proxies after the copy is verified." };
-    readonly Option<string?> lut = new("--lut") { Description = "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (offload luts prints them) or a .cube path." };
+    readonly Option<string?> lut = new("--lut") { Description = "LUT for proxies and thumbnails: auto (by camera, default), none, a built-in id (arcloader luts prints them) or a .cube path." };
     readonly Option<string?> lutFallback = new("--lut-fallback") { Description = "Built-in LUT id (or none) for clips whose camera is not recognised with --lut auto." };
     readonly Option<string[]> lutRule = new("--lut-rule") { Description = "Own LUT rule before the camera detection (with --lut auto), repeat in priority order: <camera|serial|reel|folder>=<value>:<lut id|none|path.cube>, e.g. camera=FX6:sony-slog3-sgamut3cine.", DefaultValueFactory = _ => [] };
     readonly Option<int> proxyHeight = new("--proxy-height") { Description = "Proxy height in pixels.", DefaultValueFactory = _ => 1080 };
@@ -28,7 +28,7 @@ sealed class StageTwoOptions
     readonly Option<bool> noDayReport = new("--no-day-report") { Description = "Do not make the day report (<date>\\_REPORT\\<date>_day_report.html) again after the copy." };
     readonly Option<bool> classicVerify = new("--classic-verify") { Description = "Read every destination back right after the copy (as before 0.6.0) instead of verifying the primary one while the proxies are made." };
     readonly Option<int?> primary = new("--primary") { Description = "Destination (1, 2 …, in the order of --dest) the proxies read and verify; default: the fastest one measured during the copy." };
-    readonly Option<bool> noLocalReport = new("--no-local-report") { Description = "Do not copy the card's report (_REPORT, ascmhl) to Documents\\Offload reports\\<date>\\<card name>\\ on this computer." };
+    readonly Option<bool> noLocalReport = new("--no-local-report") { Description = "Do not copy the card's report (_REPORT, ascmhl) to Documents\\ArcLoader reports\\<date>\\<card name>\\ on this computer." };
 
     public void AddTo(Command cmd)
     {
@@ -97,7 +97,7 @@ sealed class StageTwoOptions
         if (Given(noDayReport)) outputs.DayReport = !r.GetValue(noDayReport);
         if (Given(noLocalReport)) outputs.LocalReport = !r.GetValue(noLocalReport);
         config.Outputs = outputs;
-        // Task 2026-10-09: the report on this computer too (the project's folder, else Documents\\Offload reports).
+        // Task 2026-10-09: the report on this computer too (the project's folder, else Documents\\ArcLoader reports).
         config.LocalReports = LocalReports.RootFor(outputs);
         config.AnalyzeClips = Given(noAnalyze) ? !r.GetValue(noAnalyze) : project!.AnalyzeClips;
         // Plan 10 (R11): verify-in-proxy unless --classic-verify (or the project switched it off); --primary picks the disk.

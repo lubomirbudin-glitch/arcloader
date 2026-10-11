@@ -31,7 +31,8 @@ public sealed class ExternalTools
     [JsonIgnore] internal bool NoSearch { get; set; }
 
     /// Folders searched in order: bin\ next to the app (GUI), the exe's own folder (CLI lives in bin\),
-    /// the repo's windows\tools\bin for development builds, %LOCALAPPDATA%\Offload\bin, then PATH.
+    /// the repo's windows\tools\bin for development builds, %LOCALAPPDATA%\ArcLoader\bin (then the same folder
+    /// of versions before 0.10.0, %LOCALAPPDATA%\Offload\bin), then PATH.
     public static IReadOnlyList<string> SearchDirs
     {
         get
@@ -50,7 +51,9 @@ public sealed class ExternalTools
                     dirs.Add(Path.Combine(d, "tools", "bin"));
                 }
             }
-            dirs.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Offload", "bin"));
+            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            dirs.Add(Path.Combine(local, Product.Name, "bin"));
+            dirs.Add(Path.Combine(local, "Offload", "bin"));   // before the rename (0.10.0): still searched
             dirs.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
             return dirs;
         }
@@ -71,6 +74,7 @@ public sealed class ExternalTools
         ["art-cmd.exe"] =
         [
             @"C:\Program Files\ARRI\ARRI Reference Tool\art-cmd.exe",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Product.Name, "arri", "art-cmd.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Offload", "arri", "art-cmd.exe"),
         ],
     };

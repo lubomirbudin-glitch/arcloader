@@ -35,6 +35,22 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 - **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzích 0.7.0 a 0.7.1, viz níže.
 
+## 2026-10-11 — 0.10.0: přejmenování na ArcLoader
+
+Verze **0.10.0** (zadání uživatele: „a přejmenuj to na ArcLoader“; repozitář také → `lubomirbudin-glitch/arcloader`).
+
+- Aplikace se jmenuje **ArcLoader** — `ArcLoader.exe`, příkazová řádka `binrcloader.exe` (`arcloader copy …`); ArcLoader
+  je v titulcích oken, dialozích, oznámeních (i ntfy), patičkách reportů, HTML `<title>` a v `<creatorinfo>` ASC MHL.
+- Nastavení a historie v `%APPDATA%\ArcLoader`; při prvním startu se `%APPDATA%\Offload` jednou **zkopíruje** (původní
+  složka zůstane, návrat ke starší verzi funguje); `ARCLOADER_SETTINGS_DIR` má přednost, `OFFLOAD_SETTINGS_DIR` platí dál.
+- Kopie reportů v `Documents\ArcLoader reports`; starší kopie v `Offload reports` a `Offload reporty` souhrnný report dál najde.
+- Beze změny kvůli kompatibilitě: názvy uvnitř zálohy (`offload_report.json`, `_REPORT`, `ascmhl`, `.offload-part` …),
+  hodnota `tool: "offload"`, jména zámků (starý Offload a ArcLoader se navzájem vylučují), interní názvy projektů `Offload.*`.
+- Balík `ArcLoader-win-x64-<verze>.zip` (složka `ArcLoader\`, `READ-ME.txt`, `ArcLoader-manual.pdf`); vydání
+  `ArcLoader-Windows(-dev).zip` + kopie pod starými jmény `Offload-Windows(-dev).zip` (odkazy na webu uživatele),
+  manifest `arcloader-update.json` + `offload-update.json`.
+- Mac: úkol „Přejmenovat na ArcLoader“ v [VYVOJ-MAC.md](VYVOJ-MAC.md).
+
 ## 2026-10-10 — 0.9.0: aplikace jen anglicky
 
 Verze **0.9.0** (zadání uživatele: „obě verze programu do EN“ → „Jen angličtina“). Tři souběžné větve (Core + testy,
