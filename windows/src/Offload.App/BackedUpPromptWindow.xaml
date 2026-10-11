@@ -1,7 +1,7 @@
 <Window x:Class="Offload.App.BackedUpPromptWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ArcLoader" SizeToContent="WidthAndHeight" MinWidth="420" MaxWidth="720" ResizeMode="NoResize"
+        Title="mmMover" SizeToContent="WidthAndHeight" MinWidth="420" MaxWidth="720" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Icon="pack://application:,,,/Offload.ico">
     <StackPanel Margin="22,18">

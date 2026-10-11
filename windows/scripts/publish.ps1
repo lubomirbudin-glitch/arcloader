@@ -1,17 +1,18 @@
 ﻿# Publishes the built zip on GitHub Releases, so that fixed links always point to the newest build (user 2026-10-10):
-#   -Channel stable  → release "stable" (rolling tag, marked Latest): ArcLoader-Windows.zip + arcloader-update.json
-#   -Channel dev     → release "dev" (rolling tag, pre-release):       ArcLoader-Windows-dev.zip
-# and in both cases the versioned archive release "windows-v<version>" with ArcLoader-win-x64-<version>.zip
+#   -Channel stable  → release "stable" (rolling tag, marked Latest): mmMover-Windows.zip + mmmover-update.json
+#   -Channel dev     → release "dev" (rolling tag, pre-release):       mmMover-Windows-dev.zip
+# and in both cases the versioned archive release "windows-v<version>" with mmMover-win-x64-<version>.zip
 # (pre-release while it is only a dev build; publishing the same version as stable makes it a normal release).
-# Since the rename (0.10.0, Offload → ArcLoader) the channel zip is also uploaded under its old name
-# (Offload-Windows.zip / Offload-Windows-dev.zip — links on the user's web point there), and stable also carries
-# offload-update.json (the same manifest — versions before 0.10.0 read it). The names: Get-ChannelAssetNames (release.ps1).
+# Since the renames (0.10.0 Offload → ArcLoader, 0.11.0 ArcLoader → mmMover) the channel zip is also uploaded under its
+# older names (ArcLoader-Windows(-dev).zip, Offload-Windows(-dev).zip — links already out there point there), and stable
+# also carries arcloader-update.json and offload-update.json (the same manifest — 0.10.x and versions before 0.10.0 read
+# them). The names: Get-ChannelAssetNames (release.ps1).
 # Run it in the checkout the zip was built from (scripts\build.ps1), after that commit is pushed to origin/main.
 # The release notes come from docs\VYVOJ-WINDOWS.md: the sections of the versions newer than -Since (default: this one).
 param(
     [Parameter(Mandatory = $true)][ValidateSet('stable', 'dev')][string]$Channel,
     [string]$Since,
-    [string]$Repo = 'lubomirbudin-glitch/arcloader',
+    [string]$Repo = 'lubomirbudin-glitch/mmmover',
     # Print the release notes and stop (nothing is uploaded).
     [switch]$DryRun,
     # Do not upload to the website's download storage (web-upload.ps1).
@@ -74,7 +75,7 @@ $download = "$base/download/$Channel/$downloadName"
 $notesBody = Get-VersionNotes -From $Since -To $version
 
 $intro = if ($Channel -eq 'stable') {
-    "**Stable version** — the latest released version of ArcLoader for Windows; all automated tests passed.`n`n" +
+    "**Stable version** — the latest released version of mmMover for Windows; all automated tests passed.`n`n" +
     "### ⬇️ Download: [$downloadName]($download)"
 } else {
     "**Development version** — the newest development build. All automated tests passed, but it may contain unfinished " +
@@ -86,8 +87,8 @@ $intro
 
 Version **$version** · commit [$short](https://github.com/$Repo/commit/$commit)
 
-**How to run:** Windows 10/11 x64. Unpack the ZIP anywhere and run ``ArcLoader\ArcLoader.exe`` — nothing is installed.
-The user manual is in the package (``ArcLoader-manual.pdf``), a short intro in ``READ-ME.txt``. For an unsigned program
+**How to run:** Windows 10/11 x64. Unpack the ZIP anywhere and run ``mmMover\mmMover.exe`` — nothing is installed.
+The user manual is in the package (``mmMover-manual.pdf``), a short intro in ``READ-ME.txt``. For an unsigned program
 Windows may show SmartScreen: *More info → Run anyway*.
 
 **RAW decoders** (not in the package, the makers' licences do not allow it; without them clips are copied and verified, just without proxies):
@@ -103,7 +104,7 @@ all versions: [$base]($base) · source code (view only, all rights reserved): ht
 $notesBody
 "@
 if ($DryRun) { Write-Output $notes; return }
-$tmp = Join-Path ([IO.Path]::GetTempPath()) ("arcloader-publish-" + [guid]::NewGuid().ToString('N'))
+$tmp = Join-Path ([IO.Path]::GetTempPath()) ("mmmover-publish-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $tmp | Out-Null
 try {
     $notesFile = Join-Path $tmp 'notes.md'
@@ -111,7 +112,7 @@ try {
 
     # 1) Archive release windows-v<version>.
     $versionTag = "windows-v$version"
-    $title = "ArcLoader for Windows $version" + $(if ($Channel -eq 'dev') { ' (development)' } else { '' })
+    $title = "mmMover for Windows $version" + $(if ($Channel -eq 'dev') { ' (development)' } else { '' })
     $released = (Test-Release $versionTag) -and -not [bool]((& gh release view $versionTag --repo $Repo --json isPrerelease | ConvertFrom-Json).isPrerelease)
     if ($Channel -eq 'dev' -and $released) {
         Write-Host "$versionTag is already a stable release - archive left as it is"
@@ -132,21 +133,21 @@ try {
     } else {
         Invoke-Gh api "repos/$Repo/git/refs" -f "ref=refs/tags/$Channel" -f "sha=$commit" | Out-Null
     }
-    # The same zip under the new name and under the old one (a copy each: gh uploads a file under its own name).
+    # The same zip under the new name and under the older ones (a copy each: gh uploads a file under its own name).
     $assets = @()
     foreach ($name in $channelAssets.Zips) {
         $asset = Join-Path $tmp $name
         Copy-Item $zip $asset
         $assets += $asset
     }
-    # The update check (Settings → App → Updates…) can read these manifests (the same content under both names):
-    # https://github.com/<repo>/releases/download/stable/arcloader-update.json (and offload-update.json).
+    # The update check (Settings → App → Updates…) can read these manifests (the same content under every name):
+    # https://github.com/<repo>/releases/download/stable/mmmover-update.json (and arcloader-, offload-update.json).
     foreach ($name in $channelAssets.Manifests) {
         $manifest = Join-Path $tmp $name
-        Write-UpdateManifest -Path $manifest -Version $version -Url "$base/tag/stable" -Notes "ArcLoader for Windows $version"
+        Write-UpdateManifest -Path $manifest -Version $version -Url "$base/tag/stable" -Notes "mmMover for Windows $version"
         $assets += $manifest
     }
-    $channelTitle = if ($Channel -eq 'stable') { "ArcLoader for Windows — stable version ($version)" } else { "ArcLoader for Windows — development version ($version)" }
+    $channelTitle = if ($Channel -eq 'stable') { "mmMover for Windows — stable version ($version)" } else { "mmMover for Windows — development version ($version)" }
     if (Test-Release $Channel) {
         Invoke-Gh release upload $Channel @assets --repo $Repo --clobber
         $flags = @('--title', $channelTitle, '--notes-file', $notesFile)
@@ -160,14 +161,16 @@ try {
     Write-Host "published $version ($short) as $Channel"
     Write-Host "  page:     $base/tag/$Channel"
     Write-Host "  download: $download"
-    Write-Host "            $(($channelAssets.Zips | Select-Object -Skip 1 | ForEach-Object { "$base/download/$Channel/$_" }) -join ', ') (old name, the same zip)"
+    Write-Host "            $(($channelAssets.Zips | Select-Object -Skip 1 | ForEach-Object { "$base/download/$Channel/$_" }) -join ', ') (older names, the same zip)"
     Write-Host "  archive:  $base/tag/$versionTag"
-    # The website (offload.video …) serves its own copy: https://<site>/download/ArcLoader-Windows(-dev).zip (web-upload.ps1).
+    # The website (mmmover.video …) serves its own copy: https://<site>/download/mmMover-Windows(-dev).zip and, as a
+    # server-side copy, ArcLoader-Windows(-dev).zip (web-upload.ps1).
     if ($SkipWeb) {
         Write-Host '  website:  skipped (-SkipWeb)'
     } else {
-        . (Join-Path $PSScriptRoot 'web-upload.ps1')
-        Publish-WebChannel -Channel $Channel -Zip $zip -Version $version -Commit $short
+        # Run as a script of its own (&), never dot-sourced: its param block would set this script's $Channel, $zip and
+        # $version to nothing.
+        & (Join-Path $PSScriptRoot 'web-upload.ps1') -Channel $Channel -Zip $zip -Version $version -Commit $short
     }
 } finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue

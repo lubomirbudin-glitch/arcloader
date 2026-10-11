@@ -73,7 +73,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// "ArcLoader — Film X" (spec 4.1).
+    /// "mmMover — Film X" (spec 4.1).
     public string WindowTitle => Projects.WindowTitle(ActiveProjectName);
 
     void SaveAsProject()

@@ -148,7 +148,7 @@ public class UpdateCheckerTests
         Assert.Equal((UpdateStatus.NewVersion, "https://example.invalid/offload.zip", null), (r.Status, r.Info?.Url, r.Error));
         var req = Assert.Single(server.Requests);
         Assert.Equal(("GET", "/offload-update.json"), (req.Method, req.Path));
-        Assert.Matches(@"^ArcLoader/\d+\.\d+\.\d+$", req.UserAgent);
+        Assert.Matches(@"^mmMover/\d+\.\d+\.\d+$", req.UserAgent);
     }
 
     // Review focus 4: a server that does not answer, a 404 — Failed with the reason. Only the outcome is asserted

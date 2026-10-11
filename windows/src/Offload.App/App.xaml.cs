@@ -18,7 +18,7 @@ public partial class App : Application
         base.OnStartup(e);
         var options = StartupOptions.Parse(e.Args);
         if (options.Demo != null) AppData.UseDemoFolder();   // ruling I3: before anything reads or writes a file (the log too)
-        AppData.MigrateFromOffload(AppLog.Write);   // 0.10.0: %APPDATA%\Offload copied to %APPDATA%\ArcLoader once (never with --demo)
+        AppData.MigrateFromOlder(AppLog.Write);   // 0.11.0: %APPDATA%\ArcLoader (else %APPDATA%\Offload) copied to %APPDATA%\mmMover once (never with --demo)
         UseEnglish();
         // A bug in the UI must never take running offloads down: log it, tell the user, keep going.
         DispatcherUnhandledException += (_, ex) =>

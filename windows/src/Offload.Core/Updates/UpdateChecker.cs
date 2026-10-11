@@ -37,7 +37,7 @@ public sealed record UpdateResult(UpdateStatus Status, UpdateInfo? Info, string?
     };
 }
 
-/// %APPDATA%\ArcLoader\update-check.json: when the manifest was last read, from where, and what it said.
+/// %APPDATA%\mmMover\update-check.json: when the manifest was last read, from where, and what it said.
 public sealed class UpdateState
 {
     [JsonPropertyName("lastCheck")] public DateTime? LastCheck { get; set; }

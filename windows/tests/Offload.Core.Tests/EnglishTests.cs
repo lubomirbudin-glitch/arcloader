@@ -122,10 +122,11 @@ public partial class EnglishTests
         }
     }
 
-    /// The local report copies of earlier versions are in `Documents\Offload reports` (0.9.x, before the rename) and
-    /// `Documents\Offload reporty` (before 0.9.0): the summary report still finds them in both (its fallback when the disk
-    /// is gone), while new copies go to `Documents\ArcLoader reports`.
+    /// The local report copies of earlier versions are in `Documents\ArcLoader reports` (0.10.x), `Documents\Offload
+    /// reports` (0.9.x) and `Documents\Offload reporty` (before 0.9.0): the summary report still finds them in each (its
+    /// fallback when the disk is gone), while new copies go to `Documents\mmMover reports`.
     [Theory]
+    [InlineData("ArcLoader reports")]
     [InlineData("Offload reports")]
     [InlineData("Offload reporty")]
     public void OldLocalFolder_StillRead_NewCopiesGoToTheNewOne(string oldName)
@@ -147,7 +148,7 @@ public partial class EnglishTests
             Assert.Contains(oldRoot, roots);
             Assert.Contains(oldRoot, LocalReports.OldDefaultRoots);
             Assert.Equal(LocalReports.DefaultRoot, roots[0]);
-            Assert.Equal(Path.Combine(LocalReports.Documents, "ArcLoader reports"), LocalReports.DefaultRoot);
+            Assert.Equal(Path.Combine(LocalReports.Documents, "mmMover reports"), LocalReports.DefaultRoot);
             Assert.Equal(LocalReports.DefaultRoot, LocalReports.RootFor(new OutputSettings()));
 
             var found = Assert.Single(SummaryReport.Load([SummaryInput.Of(SummaryReportTests.Entry(card, "2026-09-30", d1))], roots).Cards);
@@ -162,14 +163,19 @@ public partial class EnglishTests
         }
     }
 
-    /// The rename (0.10.0): every place a local copy may be — the new default first, then both folders of earlier versions.
+    /// The renames (0.10.0, 0.11.0): every place a local copy may be — the new default first, then the folders of earlier
+    /// versions, newest first. Only the new one is ever written (RootFor).
     [Fact]
-    public void LocalRoots_NewDefaultFirst_ThenBothOldFolders()
+    public void LocalRoots_NewDefaultFirst_ThenEveryOldFolder()
     {
         var roots = SummaryReport.LocalRoots(new AppSettings());
         Assert.Equal(
-            [Path.Combine(LocalReports.Documents, "ArcLoader reports"), Path.Combine(LocalReports.Documents, "Offload reports"), Path.Combine(LocalReports.Documents, "Offload reporty")],
+            [Path.Combine(LocalReports.Documents, "mmMover reports"), Path.Combine(LocalReports.Documents, "ArcLoader reports"),
+             Path.Combine(LocalReports.Documents, "Offload reports"), Path.Combine(LocalReports.Documents, "Offload reporty")],
             roots);
+        Assert.Equal(["ArcLoader reports", "Offload reports", "Offload reporty"], LocalReports.OldFolderNames);
+        Assert.Equal(Path.Combine(LocalReports.Documents, "mmMover reports"), LocalReports.RootFor(new OutputSettings()));
+        Assert.DoesNotContain(LocalReports.RootFor(new OutputSettings()), LocalReports.OldDefaultRoots);
     }
 
     /// The summary report is saved as `<local root>\summary\<date>_<time>_summary.html`.

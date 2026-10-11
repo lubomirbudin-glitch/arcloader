@@ -35,7 +35,7 @@ public sealed class HistoryGeneration
     [JsonPropertyName("verified")] public bool Verified { get; set; }
 }
 
-/// One card offload in %APPDATA%\ArcLoader\history.json (spec 5.2). An append updates its entry instead of adding one.
+/// One card offload in %APPDATA%\mmMover\history.json (spec 5.2). An append updates its entry instead of adding one.
 public sealed class HistoryEntry
 {
     [JsonPropertyName("id")] public string Id { get; set; } = "";

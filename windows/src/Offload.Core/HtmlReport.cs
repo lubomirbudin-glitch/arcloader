@@ -82,7 +82,7 @@ public static partial class HtmlReport
         $"<a href=\"{Esc(Uri.EscapeDataString(pdfFileName))}\" title=\"The PDF is made at the end with Microsoft Edge; without it the file may not exist\">Open PDF report</a></div>\n";
 
     /// The footer's tool name: a report written by this app (or by Offload before the rename, or by the Mac) says
-    /// `tool: "offload"` (the JSON value never changes, docs/FORMATY.md) — it is shown as ArcLoader; anything else as it is.
+    /// `tool: "offload"` (the JSON value never changes, docs/FORMATY.md) — it is shown as mmMover; anything else as it is.
     internal static string ToolName(string tool) => string.Equals(tool, "offload", StringComparison.OrdinalIgnoreCase) ? Product.Name : tool;
 
     internal static string DateTimeText(DateTime d) => d.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", Inv);

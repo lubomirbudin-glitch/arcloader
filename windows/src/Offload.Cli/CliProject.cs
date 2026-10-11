@@ -3,7 +3,7 @@ using Offload.Core.Desktop;
 
 namespace Offload.Cli;
 
-/// `--project <name>` (spec 4.1): a project saved in the app (settings.json in %APPDATA%\ArcLoader, or
+/// `--project <name>` (spec 4.1): a project saved in the app (settings.json in %APPDATA%\mmMover, or
 /// OFFLOAD_SETTINGS_DIR) gives the defaults; every option written on the command line wins over it.
 static class CliProject
 {

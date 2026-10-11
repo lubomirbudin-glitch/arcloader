@@ -30,7 +30,7 @@ public static partial class Msg
     /// The job's warning when the verified generation could not be written into a card folder (it stays uncommitted:
     /// "Finish interrupted backup", an append, finishes it — R6, ruling I5; a repair refuses an unfinished backup).
     public static string VerifyNotCommitted(string detail) =>
-        $"Could not write the verification result ({detail}) — do not format the card yet; \"Finish interrupted backup\" (Append, arcloader append) finishes the backup.";
+        $"Could not write the verification result ({detail}) — do not format the card yet; \"Finish interrupted backup\" (Append, mmmover append) finishes the backup.";
 
     // Fix round 1, item 2b: a record of the job that the history lock kept out.
     public const string HistoryDelayed = "The card history is busy right now — the record of this backup will be written as soon as possible (do not close the app yet).";
@@ -50,7 +50,7 @@ public static partial class Msg
         $"{cardPath}: the unfinished backup (generation {generation.ToString(Inv)}) does not match the other destinations — check it by hand.";
     /// Ruling I5: the repair points to the tick the card gets on insert ("Finish interrupted backup", even with no new
     /// file) and to its CLI form.
-    public const string RepairUnfinished = "The backup was not finished (the app ended during the copy or the verification) — finish it first with \"Finish interrupted backup\" on the card (arcloader append).";
+    public const string RepairUnfinished = "The backup was not finished (the app ended during the copy or the verification) — finish it first with \"Finish interrupted backup\" on the card (mmmover append).";
 
     /// A card folder gone before the verification results were written into it (an unplugged disk) — never made anew.
     public const string CardFolderGone = "the card folder on the destination disappeared (disk disconnected?)";

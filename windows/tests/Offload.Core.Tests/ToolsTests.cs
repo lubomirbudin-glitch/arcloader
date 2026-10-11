@@ -16,6 +16,18 @@ public class ToolsTests
         Assert.Contains(ExternalTools.SearchDirs, d => d.EndsWith(@"\tools\bin", StringComparison.OrdinalIgnoreCase));
     }
 
+    // The renames (0.10.0, 0.11.0): %LOCALAPPDATA%\mmMover\bin first, then the folders of earlier versions, newest first.
+    [Fact]
+    public void SearchDirs_LocalAppData_NewNameFirst_ThenArcLoader_ThenOffload()
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var dirs = ExternalTools.SearchDirs.ToList();
+        int At(string name) => dirs.FindIndex(d => string.Equals(d, Path.Combine(local, name, "bin"), StringComparison.OrdinalIgnoreCase));
+        Assert.True(At("mmMover") >= 0);
+        Assert.True(At("mmMover") < At("ArcLoader"));
+        Assert.True(At("ArcLoader") < At("Offload"));
+    }
+
     [Fact]
     public void Run_ReturnsStdout() => Assert.Equal("hello\n", ToolProcess.Run(Cmd, ["/c", "echo hello"]));
 

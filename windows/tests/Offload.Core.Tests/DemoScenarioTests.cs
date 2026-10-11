@@ -2,7 +2,7 @@ using Offload.Core.Desktop;
 
 namespace Offload.Core.Tests;
 
-/// `ArcLoader.exe --demo` (off by default): the states of docs/ui-navrh/screeny, checked through the same Core code the
+/// `mmMover.exe --demo` (off by default): the states of docs/ui-navrh/screeny, checked through the same Core code the
 /// window binds — so the visual check compares the design with what the app really computes.
 public class DemoScenarioTests
 {
@@ -157,9 +157,9 @@ public class DemoSealTests
     [Fact]
     public void AppData_DemoFolderWinsOverTheEnvironment()
     {
-        Assert.Equal(@"C:\R\ArcLoader", AppData.Resolve(null, null, @"C:\R"));
+        Assert.Equal(@"C:\R\mmMover", AppData.Resolve(null, null, @"C:\R"));
         Assert.Equal(@"D:\iso", AppData.Resolve(@"D:\iso", null, @"C:\R"));
-        Assert.Equal(@"C:\Temp\Offload-demo-1", AppData.Resolve(@"D:\iso", @"C:\Temp\Offload-demo-1", @"C:\R"));   // ARCLOADER_ / OFFLOAD_SETTINGS_DIR unset or set
+        Assert.Equal(@"C:\Temp\Offload-demo-1", AppData.Resolve(@"D:\iso", @"C:\Temp\Offload-demo-1", @"C:\R"));   // MMMOVER_ / ARCLOADER_ / OFFLOAD_SETTINGS_DIR unset or set
         Assert.Equal(@"C:\Temp\Offload-demo-1", AppData.Resolve(null, @"C:\Temp\Offload-demo-1", @"C:\R"));
     }
 

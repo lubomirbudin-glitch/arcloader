@@ -8,7 +8,7 @@ using Offload.Core.Desktop;
 
 namespace Offload.Core.History;
 
-/// %APPDATA%\ArcLoader\history.json + history\<id>.files.gz (spec 2.1, 5.2). Local to this PC, never sent anywhere.
+/// %APPDATA%\mmMover\history.json + history\<id>.files.gz (spec 2.1, 5.2). Local to this PC, never sent anywhere.
 /// The GUI and the CLI may run at once: every read-modify-write holds the named mutex of this history folder
 /// (LockName — plan 10 fix round 1: one per folder, so the GUI and the CLI on the same folder share it and nothing else
 /// waits for it; at most LockTimeout, then the write reports Busy — a job waits longer and retries, OffloadJob), and the
@@ -23,7 +23,7 @@ public sealed partial class HistoryStore(string folder, Action<string>? log = nu
         @"Local\Offload-history-" + Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
             Path.GetFullPath(folder).TrimEnd('\\', '/').ToUpperInvariant())));
 
-    /// %APPDATA%\ArcLoader (or ARCLOADER_SETTINGS_DIR / OFFLOAD_SETTINGS_DIR). Tests set DefaultFolderOverride once, so no test ever writes into
+    /// %APPDATA%\mmMover (or MMMOVER_ / ARCLOADER_ / OFFLOAD_SETTINGS_DIR). Tests set DefaultFolderOverride once, so no test ever writes into
     /// the developer's own history — not even while another test changes OFFLOAD_SETTINGS_DIR.
     public static HistoryStore Default(Action<string>? log = null) => new(DefaultFolderOverride ?? AppData.Folder, log);
 

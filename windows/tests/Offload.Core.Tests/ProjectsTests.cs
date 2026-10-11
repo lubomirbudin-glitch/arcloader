@@ -376,8 +376,8 @@ public class ProjectsTests
     [Fact]
     public void WindowTitleAndDeleteQuestion()
     {
-        Assert.Equal("ArcLoader", Projects.WindowTitle(null));
-        Assert.Equal("ArcLoader — Film X", Projects.WindowTitle("Film X"));
+        Assert.Equal("mmMover", Projects.WindowTitle(null));
+        Assert.Equal("mmMover — Film X", Projects.WindowTitle("Film X"));
         Assert.Equal("Delete project Film X? The project's settings will be lost; the backups on the disks stay.", Projects.DeleteQuestion("Film X"));
     }
 }

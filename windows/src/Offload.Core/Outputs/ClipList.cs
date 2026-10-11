@@ -18,7 +18,7 @@ public sealed class OutputSettings
     [JsonPropertyName("clipListAle")] public bool ClipListAle { get; set; }
     /// A copy of every card's report on this computer (task 2026-10-09) — on by default.
     [JsonPropertyName("localReport")] public bool LocalReport { get; set; } = true;
-    /// Where: null = `<Dokumenty>\ArcLoader reports` (LocalReports.DefaultRoot).
+    /// Where: null = `<Dokumenty>\mmMover reports` (LocalReports.DefaultRoot).
     [JsonPropertyName("localReportFolder")] public string? LocalReportFolder { get; set; }
 
     /// Keys of this section a newer version wrote: kept and written back (R24).
