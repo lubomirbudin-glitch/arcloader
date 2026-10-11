@@ -13,7 +13,7 @@ public class UpdateCheckerTests
     [Theory]
     [InlineData("0.4.0", "0.3.0-win", true)]
     [InlineData("0.10.0", "0.9.0", true)]
-    [InlineData("0.9.0", "0.10.0-win", false)]
+    [InlineData("0.9.0", "0.11.0-win", false)]
     [InlineData("1.0.0", "0.99.99", true)]
     [InlineData("0.4.0", "0.4.0-win", false)]
     [InlineData("0.4.0-beta", "0.4.0", false)]
@@ -148,7 +148,7 @@ public class UpdateCheckerTests
         Assert.Equal((UpdateStatus.NewVersion, "https://example.invalid/offload.zip", null), (r.Status, r.Info?.Url, r.Error));
         var req = Assert.Single(server.Requests);
         Assert.Equal(("GET", "/offload-update.json"), (req.Method, req.Path));
-        Assert.Matches(@"^ArcLoader/\d+\.\d+\.\d+$", req.UserAgent);
+        Assert.Matches(@"^mmMover/\d+\.\d+\.\d+$", req.UserAgent);
     }
 
     // Review focus 4: a server that does not answer, a 404 — Failed with the reason. Only the outcome is asserted

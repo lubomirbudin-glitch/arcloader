@@ -25,10 +25,6 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
-- **Přejmenování na mmMover (zadání uživatele 2026-10-11, Mac hotovo v buildu D12):** Mac se jmenuje **mmMover** (CLI
-  `mmmover`, složky `mmMover`, `Documents/mmMover reports`, proměnné `MMMOVER_*` před `ARCLOADER_*`/`OFFLOAD_*`). Windows
-  je zatím ArcLoader (0.10.0) — přejmenovat stejně, se čtením starých složek ArcLoader i Offload; formát zálohy beze změny.
-
 - **Celý řetěz připojení u každé rychlosti (zadání uživatele 2026-10-11, Mac hotovo v buildu D11):** v tabulce rychlostí
   karty úlohy pod každým řádkem (čtení karty, každý cíl) „zařízení · linka (kabel) · port“ a „NN % of link“ (výrazně od
   85 %), ne jen v tooltipu; při ověření během proxy tabulka disků s průběhem ověření a rychlostí čtení každého disku.
@@ -63,6 +59,26 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 - **Snímací fps, pauza po souboru/klipu, souhrnný report (zadání 2026-10-09/10)** — hotovo ve verzi 0.8.0, viz níže.
 
 - **Zjištění z ostrého nasazení Mac verze a nové úkoly z 2026-10-09** — převzato ve verzích 0.7.0 a 0.7.1, viz níže.
+
+## 2026-10-11 — 0.11.0: přejmenování na mmMover
+
+Verze **0.11.0** (zadání uživatele: jméno ArcLoader už používá jiný produkt — arcloader.com, nástroj pro Neo Geo; po
+prověření domén a obsazenosti jmen zvoleno **mmMover**, doména `mmmover.video`, repozitář `lubomirbudin-glitch/mmmover`).
+
+- Aplikace se jmenuje **mmMover** — `mmMover.exe`, příkazová řádka `bin\mmmover.exe` (`mmmover copy …`); mmMover je
+  v titulcích oken, dialozích, oznámeních (i ntfy), patičkách reportů, HTML `<title>`, User-Agentu a v `<creatorinfo>` ASC MHL.
+- Nastavení a historie v `%APPDATA%\mmMover`; při prvním startu se jednou **zkopíruje** nejnovější starší složka —
+  `%APPDATA%\ArcLoader`, jinak `%APPDATA%\Offload` (původní zůstanou); přednost `MMMOVER_SETTINGS_DIR`, pak
+  `ARCLOADER_SETTINGS_DIR` a `OFFLOAD_SETTINGS_DIR`.
+- Kopie reportů v `Documents\mmMover reports`; starší `ArcLoader reports`, `Offload reports` a `Offload reporty` se dál čtou.
+- Balík `mmMover-win-x64-<verze>.zip` (složka `mmMover\`, `mmMover-manual.pdf`); vydání `mmMover-Windows(-dev).zip`
+  + kopie pod jmény `ArcLoader-` a `Offload-Windows(-dev).zip`; manifest `mmmover-update.json` + starší jména.
+- Web: nahrává se `mmMover-Windows(-dev).zip`, `ArcLoader-Windows(-dev).zip` vytvoří úložiště kopií na serveru (S3
+  CopyObject); `channels.json` uvádí nové jméno.
+- Oprava: `publish.ps1` načítal `web-upload.ps1` tečkou a jeho parametry mu vymazaly `$Channel`, `$zip` a `$version` —
+  nahrání na web by dostalo prázdné hodnoty; teď se spouští jako samostatný skript.
+- Beze změny: názvy v záloze (`offload_report.json` …), `tool: "offload"`, zámky, interní názvy `Offload.*`, bucket
+  `arcloader-dl`.
 
 ## 2026-10-11 — 0.10.0: přejmenování na ArcLoader
 

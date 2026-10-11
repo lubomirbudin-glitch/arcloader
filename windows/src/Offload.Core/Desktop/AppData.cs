@@ -1,19 +1,21 @@
 namespace Offload.Core.Desktop;
 
 /// Where the app keeps its files (settings.json, history.json, hwtest.json, app.log, luts\, update-check.json):
-/// %APPDATA%\ArcLoader, or the folder in ARCLOADER_SETTINGS_DIR / OFFLOAD_SETTINGS_DIR (isolated test and automation runs).
-/// `--demo` (ruling I3) uses a folder of its own in %TEMP% — whatever those variables say — so the demo can never touch
-/// the real settings, history or log. Versions before 0.10.0 (still called Offload) used %APPDATA%\Offload: the first start
-/// copies it (MigrateFromOffload), never moves or deletes it — an older version still finds its own files.
+/// %APPDATA%\mmMover, or the folder in MMMOVER_SETTINGS_DIR / ARCLOADER_SETTINGS_DIR / OFFLOAD_SETTINGS_DIR (isolated test
+/// and automation runs). `--demo` (ruling I3) uses a folder of its own in %TEMP% — whatever those variables say — so the
+/// demo can never touch the real settings, history or log. Earlier versions used %APPDATA%\ArcLoader (0.10.x) and
+/// %APPDATA%\Offload (up to 0.9.x): the first start copies the newest of them (MigrateFromOlder), never moves or deletes
+/// it — an older version still finds its own files.
 public static class AppData
 {
     public const string FolderName = Product.Name;
 
-    /// The folder of versions before the rename (0.10.0).
-    public const string OldFolderName = "Offload";
+    /// The folders of earlier versions, newest first: "ArcLoader" (0.10.x), "Offload" (up to 0.9.x). The first one that
+    /// exists is copied.
+    public static readonly IReadOnlyList<string> OldFolderNames = ["ArcLoader", "Offload"];
 
-    /// The settings-folder variables, the first one set wins: the new name, then the old one (tests, automation).
-    public static readonly IReadOnlyList<string> SettingsDirVariables = ["ARCLOADER_SETTINGS_DIR", "OFFLOAD_SETTINGS_DIR"];
+    /// The settings-folder variables, the first one set wins: the new name, then the older ones (tests, automation).
+    public static readonly IReadOnlyList<string> SettingsDirVariables = ["MMMOVER_SETTINGS_DIR", "ARCLOADER_SETTINGS_DIR", "OFFLOAD_SETTINGS_DIR"];
 
     static volatile string? demoFolder;
 
@@ -24,7 +26,7 @@ public static class AppData
     static string? SettingsDirVariable() =>
         SettingsDirVariables.Select(Environment.GetEnvironmentVariable).FirstOrDefault(v => v is { Length: > 0 });
 
-    /// The demo's folder wins over everything; then ARCLOADER_SETTINGS_DIR / OFFLOAD_SETTINGS_DIR; then %APPDATA%\ArcLoader.
+    /// The demo's folder wins over everything; then MMMOVER_ / ARCLOADER_ / OFFLOAD_SETTINGS_DIR; then %APPDATA%\mmMover.
     public static string Resolve(string? settingsDirVariable, string? demo, string roamingAppData) =>
         demo is { Length: > 0 } ? demo
         : settingsDirVariable is { Length: > 0 } dir ? dir
@@ -40,17 +42,26 @@ public static class AppData
         return folder;
     }
 
-    /// The rename (0.10.0): at the start of the GUI and the CLI, before anything reads or writes a file of the app. Only
-    /// for the real folder — never with `--demo` or a settings-folder variable. See CopyOldFolder. `log` gets one line
-    /// when something was copied (or failed).
-    public static void MigrateFromOffload(Action<string>? log) =>
-        MigrateFromOffload(SettingsDirVariable(), demoFolder, Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), log);
+    /// The renames (0.10.0 Offload → ArcLoader, 0.11.0 ArcLoader → mmMover): at the start of the GUI and the CLI, before
+    /// anything reads or writes a file of the app. Only for the real folder — never with `--demo` or a settings-folder
+    /// variable. See CopyOldFolder. `log` gets one line when something was copied (or failed).
+    public static void MigrateFromOlder(Action<string>? log) =>
+        MigrateFromOlder(SettingsDirVariable(), demoFolder, Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), log);
 
-    /// MigrateFromOffload with what it reads passed in (tests: a temporary "roaming" folder). True when copied.
-    internal static bool MigrateFromOffload(string? settingsDirVariable, string? demo, string roamingAppData, Action<string>? log)
+    /// MigrateFromOlder with what it reads passed in (tests: a temporary "roaming" folder). When %APPDATA%\mmMover does
+    /// not exist, the first of OldFolderNames that does (ArcLoader, else Offload) is copied to it. True when copied.
+    internal static bool MigrateFromOlder(string? settingsDirVariable, string? demo, string roamingAppData, Action<string>? log)
     {
         if (demo is { Length: > 0 } || settingsDirVariable is { Length: > 0 } || roamingAppData.Length == 0) return false;
-        return CopyOldFolder(Path.Combine(roamingAppData, OldFolderName), Path.Combine(roamingAppData, FolderName), log);
+        var newFolder = Path.Combine(roamingAppData, FolderName);
+        var source = OldFolderNames.Select(n => Path.Combine(roamingAppData, n)).FirstOrDefault(Exists);
+        return source != null && CopyOldFolder(source, newFolder, log);
+    }
+
+    static bool Exists(string folder)
+    {
+        try { return Directory.Exists(folder); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { return false; }
     }
 
     /// Copies `oldFolder` (with every subfolder) to `newFolder` when `newFolder` does not exist and `oldFolder` does;

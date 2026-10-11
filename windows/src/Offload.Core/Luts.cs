@@ -15,11 +15,11 @@ public sealed record BuiltinLut(
 {
     [JsonIgnore] public string Path { get; init; } = "";
 
-    /// The user's own file from %APPDATA%\ArcLoader\luts replaced the built-in one (LutCatalog.WithUserOverrides).
+    /// The user's own file from %APPDATA%\mmMover\luts replaced the built-in one (LutCatalog.WithUserOverrides).
     [JsonIgnore] public bool UserFile { get; init; }
 }
 
-/// The built-in LUTs shipped next to the app (ArcLoader\luts) or, in a development build, shared\luts in the repo.
+/// The built-in LUTs shipped next to the app (mmMover\luts) or, in a development build, shared\luts in the repo.
 public sealed class LutCatalog(string? folder, IReadOnlyList<BuiltinLut> luts)
 {
     public string? Folder { get; } = folder;
@@ -35,14 +35,14 @@ public sealed class LutCatalog(string? folder, IReadOnlyList<BuiltinLut> luts)
     /// Builds what Default holds (Default itself is loaded once, on first use).
     public static LutCatalog LoadDefault() => Load(DefaultFolder).WithUserOverrides(UserFolder);
 
-    /// %APPDATA%\ArcLoader\luts (or OFFLOAD_SETTINGS_DIR\luts): `<id>.cube` there replaces the built-in LUT with that id
+    /// %APPDATA%\mmMover\luts (or <MMMOVER_SETTINGS_DIR>\luts): `<id>.cube` there replaces the built-in LUT with that id
     /// — like ~/Library/Application Support/Offload/luts on the Mac.
     public static string UserFolder => System.IO.Path.Combine(Desktop.AppData.Folder, "luts");
 
     public const string UserFileSuffix = " (custom file)";
 
     /// The user's own file for a camera log wins over the built-in approximation — e.g. ARRI's official Rec.709 LUT saved
-    /// as %APPDATA%\ArcLoader\luts\arri-logc4-awg4.cube (vendor LUTs may not be shipped with the app, but anyone may use
+    /// as %APPDATA%\mmMover\luts\arri-logc4-awg4.cube (vendor LUTs may not be shipped with the app, but anyone may use
     /// them on their own computer). Only valid 3D .cube files count; other names in the folder are ignored. Never throws.
     public LutCatalog WithUserOverrides(string? folder)
     {

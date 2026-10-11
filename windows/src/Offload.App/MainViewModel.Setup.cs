@@ -610,7 +610,7 @@ public sealed partial class MainViewModel
         set { Settings.Outputs.LocalReport = value; SettingsChanged(); Raise(); }
     }
 
-    /// The folder the reports are copied to: the chosen one, else `<Documents>\ArcLoader reports` (memory only).
+    /// The folder the reports are copied to: the chosen one, else `<Documents>\mmMover reports` (memory only).
     public string LocalReportFolderText => Settings.Outputs.LocalReportFolder ?? LocalReports.DefaultRoot;
 
     public bool LocalReportFolderCustom => Settings.Outputs.LocalReportFolder != null;

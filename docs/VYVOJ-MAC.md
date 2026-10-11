@@ -7,30 +7,32 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
-- **Přejmenovat na ArcLoader (zadání uživatele 2026-10-11, obě verze; Windows 0.10.0):** produkt se jmenuje
-  **ArcLoader** (přesně takto; malými `arcloader` jen tam, kde je zvykem — příkaz CLI a repozitář). Windows je přejmenované
-  v 0.10.0, Mac dostane totéž; pravidla (společná s Windows) upravená pro Mac:
-  - **Co uživatel vidí:** aplikace `ArcLoader.app` (dosud `Offload.app`), CLI `arcloader` (dosud `offload`, uvnitř
-    `Contents/Resources/bin/arcloader`), názvy oken, About, oznámení, nápověda CLI (`arcloader copy …`), chyby, záhlaví a
-    zápatí reportů („ArcLoader 0.4.0“), HTML `<title>`, readme a návod v balíčku; v ASC MHL `<creatorinfo>` jméno nástroje
-    `ArcLoader` (volný text, verze zůstávají). Zip a složka balíčku `ArcLoader-…`.
-  - **Data uživatele:** `~/Library/Application Support/ArcLoader` (nastavení, historie, `luts/`, `arri/`, `locks/`); při startu,
-    když složka `ArcLoader` neexistuje a `Offload` ano, starou složku **zkopírovat** (nikdy nepřesouvat ani nemazat — návrat
-    na starší verzi musí dál fungovat) a zapsat to do logu. Odkaz `…/bin/art-cmd` v nové složce zkontrolovat po kopii.
-  - **Kopie reportů:** `~/Documents/ArcLoader reports/<datum>/<karta>/` a `…/summary/`; čtení (souhrnný report,
-    `.offload-origin`) se dál dívá i do `~/Documents/Offload reports` a `~/Documents/Offload reporty`.
+- ✅ **Hotovo v buildu D12 (viz historie níže).** **Přejmenovat na mmMover (zadání uživatele 2026-10-11, obě verze; Windows 0.11.0):** produkt se jmenuje **mmMover**
+  (přesně takto; malými `mmmover` jen tam, kde je zvykem — příkaz CLI, repozitář, doména). Historie jmen: Offload (≤ 0.9.x),
+  ArcLoader (Windows 0.10.x, Mac po 0.7.0 D6 — jméno se ukázalo jako obsazené jiným produktem), nyní mmMover. Windows je
+  přejmenované v 0.11.0, Mac dostane totéž; pravidla (společná s Windows) upravená pro Mac:
+  - **Co uživatel vidí:** aplikace `mmMover.app` (dosud `ArcLoader.app`), CLI `mmmover` (dosud `arcloader`, uvnitř
+    `Contents/Resources/bin/mmmover`), názvy oken, About, oznámení, nápověda CLI (`mmmover copy …`), chyby, záhlaví a
+    zápatí reportů („mmMover 0.4.0“), HTML `<title>`, readme a návod v balíčku; v ASC MHL `<creatorinfo>` jméno nástroje
+    `mmMover` (volný text, verze zůstávají); komentáře MHL `mmMover offload of …` / `mmMover append: …` / `mmMover repair: …`.
+    Zip a složka balíčku `mmMover-…`.
+  - **Data uživatele:** `~/Library/Application Support/mmMover` (nastavení, historie, `luts/`); při startu, když složka
+    `mmMover` neexistuje, **zkopírovat** nejnovější starší složku — `…/ArcLoader`, jinak `…/Offload` — (nikdy nepřesouvat ani
+    nemazat — návrat na starší verzi musí dál fungovat) a zapsat to do logu. `bin/` a `arri/` se dál nekopírují (nástroje se
+    hledají ve všech třech složkách), `locks/` zůstávají v `…/Offload/locks`, ať se starší verze a nová dál vylučují.
+    Proměnné prostředí: `MMMOVER_SETTINGS_DIR` / `MMMOVER_REPORTS_DIR` mají přednost před `ARCLOADER_*`, ty před `OFFLOAD_*`.
+  - **Kopie reportů:** `~/Documents/mmMover reports/<datum>/<karta>/` a `…/summary/`; čtení (souhrnný report,
+    `.offload-origin`) se dál dívá i do `~/Documents/ArcLoader reports`, `~/Documents/Offload reports` a `~/Documents/Offload reporty`.
   - **Nesmí se změnit (kompatibilita se staršími verzemi a Windows, `docs/FORMATY.md`):** jména uvnitř zálohy
     (`offload_report*.json/.txt`, `offload-manifest.jsonl`, `.<jméno>.offload-part`, `offload_verify_*.json`, `_REPORT`,
-    `ascmhl`, `_PROXY`, `neshoda_NNNN`, `.offload-origin`), klíče JSON a hodnoty enumů; názvy zámků (`flock` soubory
-    `history-*.lock`, `append-*.lock` v `locks/`) a mutexů, aby se starý Offload a nový ArcLoader dál vylučovaly.
-  - **Interně zůstává:** jména balíčků a cílů SwiftPM (`OffloadKit`, `OffloadApp`, `Tests/OffloadKitTests`), proměnné prostředí
-    `OFFLOAD_*` (volitelně přidat `ARCLOADER_*` s přednostní platností).
-  - **Odkazy:** repozitář `https://github.com/lubomirbudin-glitch/arcloader` (starý název přesměrovává); stahovací soubory
-    kanálů `ArcLoader-Mac.zip` / `ArcLoader-Mac-dev.zip` (a dál nahrávat i staré názvy `Offload-Mac*.zip`).
+    `ascmhl`, `_PROXY`, `neshoda_NNNN`, `.offload-origin`), klíče JSON a hodnoty enumů (`tool` zůstává `"offload"`); názvy
+    zámků (`flock` soubory `history-*.lock`, `append-*.lock` v `locks/`) a mutexů.
+  - **Interně zůstává:** jména balíčků a cílů SwiftPM (`OffloadKit`, `OffloadApp`, `Tests/OffloadKitTests`) a bundle id
+    `cz.budin.offload` (UserDefaults).
+  - **Odkazy:** web **https://mmmover.video**, repozitář `https://github.com/lubomirbudin-glitch/mmmover` (starý název
+    přesměrovává); stahovací soubory kanálů `mmMover-Mac.zip` / `mmMover-Mac-dev.zip` (a dál nahrávat i staré názvy
+    `ArcLoader-Mac*.zip` a `Offload-Mac*.zip`; starší odkazy musí fungovat).
   - Po přejmenování upravit `mac/README.md`, `docs/ROZDILY.md` (řádek Aplikace: ⏳ → ✅) a přidat záznam do historie.
-  - **Mac hotovo 2026-10-11 (po D6, viz níže)** s odchylkami: `locks/` zůstávají v `…/Offload/locks` (jinak by se starý
-    Offload a ArcLoader nevylučovaly — zámek je cesta), `bin/` a `arri/` se nekopírují, ale hledají v obou složkách. Zbývá:
-    zip a readme/návod balíčku, odkazy na stahování, repozitář (Mac zatím balíček nedělá).
 
 - **Ověřování během proxy jako volba u každé kopie (zadání uživatele 2026-10-11, obě verze):** přepínač
   „Verify during proxy render“ v kroku 3 „After copy“ levého sloupce (klikací řádek jako ostatní volby po kopii), ne jen

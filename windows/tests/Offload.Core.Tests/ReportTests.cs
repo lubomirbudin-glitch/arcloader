@@ -25,7 +25,7 @@ public class ReportTests
         var root = doc.RootElement;
         Assert.Equal("2026-10-04T08:00:00Z", root.GetProperty("started").GetString());
         Assert.Equal("offload", root.GetProperty("tool").GetString());
-        Assert.Equal("0.10.0-win", root.GetProperty("version").GetString());
+        Assert.Equal("0.11.0-win", root.GetProperty("version").GetString());
         Assert.Equal(0, root.GetProperty("clips").GetArrayLength());
         Assert.False(root.TryGetProperty("proxy", out _));
 

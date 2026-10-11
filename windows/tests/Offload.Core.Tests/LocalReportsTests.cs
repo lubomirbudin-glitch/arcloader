@@ -202,7 +202,7 @@ public class LocalReportsTests
     [Fact]
     public void Root_DefaultInDocuments_CustomFolder_Off()
     {
-        Assert.Equal(Path.Combine(LocalReports.Documents, "ArcLoader reports"), LocalReports.RootFor(new OutputSettings()));
+        Assert.Equal(Path.Combine(LocalReports.Documents, "mmMover reports"), LocalReports.RootFor(new OutputSettings()));
         Assert.Equal(@"X:\Reporty", LocalReports.RootFor(new OutputSettings { LocalReportFolder = @"X:\Reporty" }));
         Assert.Null(LocalReports.RootFor(new OutputSettings { LocalReport = false }));
         // The test assembly never writes into the real Documents (TestEnvironment).

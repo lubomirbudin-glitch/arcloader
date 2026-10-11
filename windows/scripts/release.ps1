@@ -10,36 +10,38 @@ function Get-OffloadVersion([string]$Props) {
     return $v.Trim()
 }
 
-# The product's name in file names (rename 2026-10-11, Windows 0.10.0: Offload → ArcLoader). The function names here
-# (Get-OffloadVersion …) and the OFFLOAD_SIGN_PFX variables stay: they are internal / already set on build machines.
+# The product's name in file names (renames 2026-10-11: Windows 0.10.0 Offload → ArcLoader, 0.11.0 ArcLoader → mmMover).
+# The function names here (Get-OffloadVersion …) and the OFFLOAD_SIGN_PFX variables stay: they are internal / already
+# set on build machines.
 
-# The versioned zip build.ps1 makes and publish.ps1 uploads: ArcLoader-win-x64-<version>.zip.
+# The versioned zip build.ps1 makes and publish.ps1 uploads: mmMover-win-x64-<version>.zip.
 function Get-ReleaseZipName([string]$Version) {
-    return "ArcLoader-win-x64-$Version.zip"
+    return "mmMover-win-x64-$Version.zip"
 }
 
-# The folder inside the zip and its own exes (R23: the ones that are signed): ArcLoader.exe, bin\arcloader.exe,
-# bin\braw-decode.exe. $Out is the built folder (build\ArcLoader).
+# The folder inside the zip and its own exes (R23: the ones that are signed): mmMover.exe, bin\mmmover.exe,
+# bin\braw-decode.exe. $Out is the built folder (build\mmMover).
 function Get-OwnExes([string]$Out) {
-    return @((Join-Path $Out 'ArcLoader.exe'), (Join-Path $Out 'bin\arcloader.exe'), (Join-Path $Out 'bin\braw-decode.exe'))
+    return @((Join-Path $Out 'mmMover.exe'), (Join-Path $Out 'bin\mmmover.exe'), (Join-Path $Out 'bin\braw-decode.exe'))
 }
 
-# The update manifests next to a build or on the stable release: arcloader-update.json and — with the same content —
-# offload-update.json, which versions before 0.10.0 read.
+# The update manifests next to a build or on the stable release: mmmover-update.json and — with the same content —
+# arcloader-update.json (0.10.x reads it) and offload-update.json (versions before 0.10.0 read it).
 function Get-UpdateManifestNames {
-    return @('arcloader-update.json', 'offload-update.json')
+    return @('mmmover-update.json', 'arcloader-update.json', 'offload-update.json')
 }
 
-# What publish.ps1 uploads to a rolling channel release: the zip under the new name and, as copies, under the old one
-# (Offload-Windows.zip / Offload-Windows-dev.zip — links on the user's web point there); stable also the manifests.
+# What publish.ps1 uploads to a rolling channel release: the zip under the new name and, as copies, under the older
+# ones (ArcLoader-Windows(-dev).zip, Offload-Windows(-dev).zip — links already out there point there); stable also the
+# manifests.
 function Get-ChannelAssetNames([ValidateSet('stable', 'dev')][string]$Channel) {
     if ($Channel -eq 'stable') {
-        return [pscustomobject]@{ Zips = @('ArcLoader-Windows.zip', 'Offload-Windows.zip'); Manifests = @(Get-UpdateManifestNames) }
+        return [pscustomobject]@{ Zips = @('mmMover-Windows.zip', 'ArcLoader-Windows.zip', 'Offload-Windows.zip'); Manifests = @(Get-UpdateManifestNames) }
     }
-    return [pscustomobject]@{ Zips = @('ArcLoader-Windows-dev.zip', 'Offload-Windows-dev.zip'); Manifests = @() }
+    return [pscustomobject]@{ Zips = @('mmMover-Windows-dev.zip', 'ArcLoader-Windows-dev.zip', 'Offload-Windows-dev.zip'); Manifests = @() }
 }
 
-# build\arcloader-update.json (and offload-update.json) for the update check: {"version", "url", "notes"}, UTF-8 without BOM.
+# build\mmmover-update.json (and the older names) for the update check: {"version", "url", "notes"}, UTF-8 without BOM.
 function Write-UpdateManifest([string]$Path, [string]$Version, [string]$Url, [string]$Notes) {
     $json = [ordered]@{ version = $Version; url = $Url; notes = $Notes } | ConvertTo-Json
     [IO.File]::WriteAllText($Path, $json, (New-Object Text.UTF8Encoding $false))
@@ -146,7 +148,7 @@ function Invoke-SignToolCall([string]$SignTool, [string[]]$Arguments) {
 function Invoke-OffloadSign([hashtable]$Setup, [string[]]$Files, [string]$TimestampUrl = 'http://timestamp.digicert.com', [int]$RetryDelaySeconds = 5) {
     foreach ($f in $Files) { if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "File to sign not found: $f" } }
     $signtool = $Setup.SignTool
-    $signArguments = @('sign', '/fd', 'SHA256', '/td', 'SHA256', '/tr', $TimestampUrl) + @($Setup.CertArgs) + @('/d', 'ArcLoader') + @($Files)
+    $signArguments = @('sign', '/fd', 'SHA256', '/td', 'SHA256', '/tr', $TimestampUrl) + @($Setup.CertArgs) + @('/d', 'mmMover') + @($Files)
     for ($attempt = 1; ; $attempt++) {
         $r = Invoke-SignToolCall $signtool $signArguments
         if ($r.Code -eq 0) { break }

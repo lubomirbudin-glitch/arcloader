@@ -1,12 +1,14 @@
-# ArcLoader
+# mmMover
 
-*(dříve Offload)*
+*(dříve ArcLoader a Offload)*
+
+Web: **https://mmmover.video** · GitHub: https://github.com/lubomirbudin-glitch/mmmover
 
 **Bezpečné stahování kamerových karet na více disků najednou — s ověřením, reportem, ASC MHL a proxy s LUTem.**
 Pro Windows a macOS. **Aplikace pro Windows, její reporty i uživatelský návod jsou v angličtině** (dokumentace repozitáře je česky;
 Mac verze zatím česky, přechod na angličtinu je naplánován).
 
-> *English summary:* ArcLoader (formerly Offload) copies camera cards to several drives at once. The card is read once and written to every
+> *English summary:* mmMover (formerly ArcLoader and Offload) copies camera cards to several drives at once. The card is read once and written to every
 > destination. Every copy is verified by checksum (xxHash64 / XXH128, optionally MD5), and the job produces a report
 > (HTML, PDF, JSON, TXT), ASC MHL v2 and, optionally, proxies with LUTs and burn-ins. It is aimed at DITs, data
 > wranglers and camera assistants. The Windows (C#/.NET 10, WPF) and macOS (Swift, SwiftUI) versions write identical
@@ -19,7 +21,7 @@ Mac verze zatím česky, přechod na angličtinu je naplánován).
 ## Obsah
 
 - [Stažení](#stažení)
-- [Co ArcLoader dělá](#co-arcloader-dělá)
+- [Co mmMover dělá](#co-mmmover-dělá)
 - [Jak zajišťuje bezpečnost dat](#jak-zajišťuje-bezpečnost-dat)
 - [Co vznikne na disku](#co-vznikne-na-disku)
 - [Podporované formáty a dekodéry](#podporované-formáty-a-dekodéry)
@@ -37,18 +39,19 @@ Mac verze zatím česky, přechod na angličtinu je naplánován).
 
 | | Windows 10/11 (x64) |
 |---|---|
-| **Stabilní verze** — poslední vydaná | [⬇️ ArcLoader-Windows.zip](https://github.com/lubomirbudin-glitch/arcloader/releases/download/stable/ArcLoader-Windows.zip) · [popis verze](https://github.com/lubomirbudin-glitch/arcloader/releases/tag/stable) |
-| **Vývojová verze** — nejnovější build z vývoje | [⬇️ ArcLoader-Windows-dev.zip](https://github.com/lubomirbudin-glitch/arcloader/releases/download/dev/ArcLoader-Windows-dev.zip) · [popis verze](https://github.com/lubomirbudin-glitch/arcloader/releases/tag/dev) |
-| Všechny verze (archiv) | [Releases](https://github.com/lubomirbudin-glitch/arcloader/releases) |
+| **Stabilní verze** — poslední vydaná | [⬇️ mmMover-Windows.zip](https://github.com/lubomirbudin-glitch/mmmover/releases/download/stable/mmMover-Windows.zip) · [popis verze](https://github.com/lubomirbudin-glitch/mmmover/releases/tag/stable) |
+| **Vývojová verze** — nejnovější build z vývoje | [⬇️ mmMover-Windows-dev.zip](https://github.com/lubomirbudin-glitch/mmmover/releases/download/dev/mmMover-Windows-dev.zip) · [popis verze](https://github.com/lubomirbudin-glitch/mmmover/releases/tag/dev) |
+| **Web** — stažení bez GitHubu | [⬇️ mmMover-Windows.zip](https://mmmover.video/download/mmMover-Windows.zip) · [⬇️ mmMover-Windows-dev.zip](https://mmmover.video/download/mmMover-Windows-dev.zip) |
+| Všechny verze (archiv) | [Releases](https://github.com/lubomirbudin-glitch/mmmover/releases) |
 
 Odkazy se nemění a vždy vedou na nejnovější build daného kanálu. Rozbalte ZIP kamkoli a spusťte
-`ArcLoader\ArcLoader.exe`, nic se neinstaluje. Mac verze se zatím sestavuje jen ze zdrojů (viz [Mac verze](#mac-verze)).
-Staré odkazy na `Offload-Windows.zip` a `Offload-Windows-dev.zip` dál fungují (stejné soubory se nahrávají i pod starým názvem).
+`mmMover\mmMover.exe`, nic se neinstaluje. Mac verze se zatím sestavuje jen ze zdrojů (viz [Mac verze](#mac-verze)).
+Staré odkazy na `ArcLoader-Windows(-dev).zip` a `Offload-Windows(-dev).zip` dál fungují (stejné soubory se nahrávají i pod starým názvem).
 Hotové balíčky je dovoleno zdarma používat, viz [Licence](#licence).
 
-## Co ArcLoader dělá
+## Co mmMover dělá
 
-ArcLoader je nástroj pro kameraasistenty a DITy na place. Postará se o celý offload karty, od vložení do čtečky až po
+mmMover je nástroj pro kameraasistenty a DITy na place. Postará se o celý offload karty, od vložení do čtečky až po
 okamžik, kdy je bezpečné kartu naformátovat.
 
 - **Kopie na více disků najednou.** Karta se čte **jen jednou** velkými bloky a každý blok jde zároveň na všechny cíle
@@ -83,12 +86,12 @@ okamžik, kdy je bezpečné kartu naformátovat.
   - během kopie ukazuje řetěz připojení a úzké hrdlo ("bottleneck: D1").
 - **Pohodlí:**
   - automatické načtení disků a karet a fronta úloh;
-  - kopie každého reportu i do počítače (`Documents\ArcLoader reports`);
+  - kopie každého reportu i do počítače (`Documents\mmMover reports`);
   - jen ve Windows: projekty a předvolby, Pause / Resume (pozastavit / pokračovat), přesná kontrola volného místa předem a oznámení
     ve Windows i na telefon (ntfy).
 
 Obě verze mají i **příkazovou řádku**, takže se dají použít ve skriptech. Mac (zatím pod starým názvem) umí `offload copy | verify | bench | ports | luts`,
-Windows (`arcloader`) navíc `append` a `day-report`.
+Windows (`mmmover`) navíc `append` a `day-report`.
 
 ## Jak zajišťuje bezpečnost dat
 
@@ -130,7 +133,7 @@ takže **kopii z Macu ověří Windows a naopak**.
 | Formát | Proxy a náhledy přes | Co je potřeba |
 |---|---|---|
 | ProRes, H.264, H.265/HEVC, XAVC, XF-AVC, DNxHD/HR, AVC-Intra (MOV, MP4, MXF) | ffmpeg | přibaleno v balíčku |
-| Blackmagic RAW (`.braw`) | `braw-decode` (součást ArcLoaderu) → ffmpeg | knihovna Blackmagic RAW: [Blackmagic RAW Player / SDK](https://www.blackmagicdesign.com/products/blackmagicraw) nebo DaVinci Resolve |
+| Blackmagic RAW (`.braw`) | `braw-decode` (součást mmMoveru) → ffmpeg | knihovna Blackmagic RAW: [Blackmagic RAW Player / SDK](https://www.blackmagicdesign.com/products/blackmagicraw) nebo DaVinci Resolve |
 | RED R3D | REDline → ProRes LT → ffmpeg | [REDCINE-X PRO](https://www.reddigitalcinema.com/downloads) |
 | ARRIRAW, ARRIRAW HDE, ARRICORE (`.mxf`, `.ari`) | art-cmd → ProRes LT → ffmpeg | [ARRI Reference Tool](https://www.arri.com/en/learn/camera-systems/tools/arri-reference-tool) |
 | Canon Cinema RAW Light, Sony X-OCN | — | zkopíruje se a ověří, proxy se přeskočí (dekodér pro příkazovou řádku neexistuje) |
@@ -164,8 +167,8 @@ ve [windows/README.md](windows/README.md).
 
 **Požadavky:** Windows 10 nebo 11 (x64). Nic se neinstaluje, balíček je přenosný.
 
-**Spuštění z balíčku:** stáhněte [stabilní verzi](https://github.com/lubomirbudin-glitch/arcloader/releases/download/stable/ArcLoader-Windows.zip), rozbalte ji kamkoli a spusťte `ArcLoader\ArcLoader.exe`. Anglický návod pro
-uživatele je přiložený jako `ArcLoader-manual.pdf` a krátký úvod jako `READ-ME.txt`.
+**Spuštění z balíčku:** stáhněte [stabilní verzi](https://github.com/lubomirbudin-glitch/mmmover/releases/download/stable/mmMover-Windows.zip), rozbalte ji kamkoli a spusťte `mmMover\mmMover.exe`. Anglický návod pro
+uživatele je přiložený jako `mmMover-manual.pdf` a krátký úvod jako `READ-ME.txt`.
 
 **Sestavení ze zdrojů** (.NET 10 SDK):
 
@@ -173,7 +176,7 @@ uživatele je přiložený jako `ArcLoader-manual.pdf` a krátký úvod jako `RE
 cd windows
 dotnet build Offload.sln
 dotnet test tests\Offload.Core.Tests
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1    # → build\ArcLoader-win-x64-<verze>.zip
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1    # → build\mmMover-win-x64-<verze>.zip
 ```
 
 Podrobnosti o vydání verze, podepisování, kontrole aktualizací a ručních testech jsou ve
@@ -206,8 +209,8 @@ shared/
     icon/             ikona aplikace
 windows/    (interní názvy projektů a jmenných prostorů — Offload.Core, Offload.App … — zůstávají staré, přejmenován je jen produkt)
     src/Offload.Core/       jádro: kopie, ověření, reporty, ASC MHL, proxy, RAW, historie …
-    src/Offload.App/        GUI (WPF) — ArcLoader.exe
-    src/Offload.Cli/        příkazová řádka — bin\arcloader.exe
+    src/Offload.App/        GUI (WPF) — mmMover.exe
+    src/Offload.Cli/        příkazová řádka — bin\mmmover.exe
     src/Offload.BrawDecode/ dekodér Blackmagic RAW — bin\braw-decode.exe
     tests/                  automatické testy (xUnit)
     package/                manual (anglický návod, HTML → PDF), READ-ME.txt
@@ -231,7 +234,7 @@ mac/
 | [docs/VYVOJ-WINDOWS.md](docs/VYVOJ-WINDOWS.md) | co se ve Windows verzi změnilo, kdy a proč; naplánované úkoly |
 | [docs/VYVOJ-MAC.md](docs/VYVOJ-MAC.md) | totéž pro Mac verzi |
 | [windows/README.md](windows/README.md) | Windows: stav, sestavení, vydání, podpis, CLI, ruční testy |
-| [windows/package/manual/manual.html](windows/package/manual/manual.html) | uživatelský návod, anglicky (zdroj `ArcLoader-manual.pdf` v balíčku) |
+| [windows/package/manual/manual.html](windows/package/manual/manual.html) | uživatelský návod, anglicky (zdroj `mmMover-manual.pdf` v balíčku) |
 | [mac/README.md](mac/README.md) | Mac: jak to funguje, formáty, sestavení |
 | [shared/luts/README.md](shared/luts/README.md) | jak vznikají vestavěné LUTy |
 | [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) | komponenty třetích stran a jejich licence |
@@ -249,7 +252,7 @@ mac/
 
 Zdrojový kód je zveřejněný **pouze k nahlédnutí**. Bez předchozího písemného svolení autora ho není dovoleno
 kopírovat, upravovat, šířit ani používat, a to včetně sestavení a spuštění. **Hotové balíčky** ze sekce
-[Releases](https://github.com/lubomirbudin-glitch/arcloader/releases) je dovoleno zdarma stáhnout a používat tak, jak jsou;
+[Releases](https://github.com/lubomirbudin-glitch/mmmover/releases) je dovoleno zdarma stáhnout a používat tak, jak jsou;
 nesmí se upravovat, prodávat ani šířit jako součást jiného produktu. Celé znění je v [LICENSE](LICENSE).
 Komponenty třetích stran mají vlastní licence, viz [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 

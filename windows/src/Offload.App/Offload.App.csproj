@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
-    <AssemblyName>ArcLoader</AssemblyName>
+    <AssemblyName>mmMover</AssemblyName>
     <RootNamespace>Offload.App</RootNamespace>
     <!-- ThemeMode (Fluent) is marked experimental in WPF. -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>

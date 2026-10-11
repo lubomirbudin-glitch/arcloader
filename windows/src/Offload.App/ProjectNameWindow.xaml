@@ -1,7 +1,7 @@
 <Window x:Class="Offload.App.ProjectNameWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ArcLoader" SizeToContent="Height" Width="420" ResizeMode="NoResize"
+        Title="mmMover" SizeToContent="Height" Width="420" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Icon="pack://application:,,,/Offload.ico">
     <StackPanel Margin="22,18">

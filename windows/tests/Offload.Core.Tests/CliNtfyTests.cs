@@ -51,7 +51,7 @@ public class CliNtfyTests
         Assert.Equal(0, r.Exit);
         var body = Body(server);
         Assert.Equal("kanal-1", body.GetProperty("topic").GetString());
-        Assert.Equal("ArcLoader: A001 done", body.GetProperty("title").GetString());
+        Assert.Equal("mmMover: A001 done", body.GetProperty("title").GetString());
         Assert.Equal("Verified on 1 disk — the card is safe to format.", body.GetProperty("message").GetString());
         Assert.Contains("ntfy: sent", r.Err);
     }
@@ -136,7 +136,7 @@ public class CliNtfyTests
         var r = Run(null, Card(dir), "-d", Path.Combine(dir.Path, "missing"), "--no-history", "--ntfy", server.Url + "k");
         Assert.Equal(1, r.Exit);
         var body = Body(server);
-        Assert.Equal("ArcLoader: A001 — ERROR", body.GetProperty("title").GetString());
+        Assert.Equal("mmMover: A001 — ERROR", body.GetProperty("title").GetString());
         Assert.Equal("Error before copying — the card is NOT backed up.", body.GetProperty("message").GetString());
         Assert.Equal(5, body.GetProperty("priority").GetInt32());
     }
@@ -149,7 +149,7 @@ public class CliNtfyTests
         using var server = new LocalHttp();
         var r = Run(null, Path.Combine(dir.Path, "B002"), "-d", dir.Sub("d1"), "--no-history", "--ntfy", server.Url + "k");   // no such source
         Assert.Equal(1, r.Exit);
-        Assert.Equal("ArcLoader: B002 — ERROR", Body(server).GetProperty("title").GetString());
+        Assert.Equal("mmMover: B002 — ERROR", Body(server).GetProperty("title").GetString());
     }
 
     // --project with ntfy on sends there; --ntfy on the command line wins; without either nothing is sent.
@@ -244,7 +244,7 @@ public class CliNtfyTests
         Assert.Equal(1, exit);
         var req = Assert.Single(server.Requests);
         var text = System.Text.Encoding.UTF8.GetString(req.Body);
-        Assert.Contains("ArcLoader: A001 — ERROR", text);
+        Assert.Contains("mmMover: A001 — ERROR", text);
         Assert.DoesNotContain("tajny-rodic", text);
     }
 

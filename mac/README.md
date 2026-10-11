@@ -1,4 +1,6 @@
-# mmMover pro Mac (dříve Offload)
+# mmMover pro Mac (dříve ArcLoader a Offload)
+
+> Produkt se jmenuje mmMover (web https://mmmover.video). Mac: `mmMover.app` a CLI `mmmover` od buildu D12 (2026-10-11).
 
 Kopírování paměťových karet z kamery na více disků najednou, s ověřením, reportem a volitelnými proxy s LUT. macOS 13+.
 
