@@ -1,4 +1,4 @@
-# Offload pro Mac
+# ArcLoader pro Mac (zatím jako Offload.app)
 
 Kopírování paměťových karet z kamery na více disků najednou, s ověřením, reportem a volitelnými proxy s LUT. macOS 13+.
 

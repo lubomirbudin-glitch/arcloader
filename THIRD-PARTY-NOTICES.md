@@ -1,6 +1,6 @@
 # Third-party notices
 
-Offload itself is **All rights reserved** (see [LICENSE](LICENSE)). These components keep their own licences.
+ArcLoader (formerly Offload) itself is **All rights reserved** (see [LICENSE](LICENSE)). These components keep their own licences.
 
 ## Included in this repository
 
@@ -26,7 +26,7 @@ Offload itself is **All rights reserved** (see [LICENSE](LICENSE)). These compon
 
 ## Not bundled — installed by the user
 
-These decoders are proprietary and their licences do not allow redistribution; Offload only calls them when present:
+These decoders are proprietary and their licences do not allow redistribution; ArcLoader only calls them when present:
 
 | Tool | Maker | Download |
 |---|---|---|

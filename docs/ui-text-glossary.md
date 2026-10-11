@@ -1,9 +1,14 @@
-# Offload — English-only UI: rules and glossary (user decision 2026-10-10: "Jen angličtina")
+# ArcLoader (formerly Offload) — English-only UI: rules and glossary (user decision 2026-10-10: "Jen angličtina")
 
 The whole application becomes **English only, permanently** — Czech disappears from everything a user sees: GUI,
 messages, clip notes, preflight texts, notifications (Windows + ntfy), reports (HTML/PDF/TXT, day report, verify report,
 summary report, clip lists' human-readable columns), CLI help/output/errors, braw-decode messages, the manual and the
 readme in the zip. Developer docs in `docs/` and code comments stay as they are (they are not part of the app).
+
+## Product name (user decision 2026-10-11, Windows 0.10.0)
+- The product is **ArcLoader** (exact spelling; lower case `arcloader` only for the CLI command and the repo). Window titles, About, tray and
+  ntfy titles, dialogs, CLI help, reports (headers/footers), manual and READ-ME use it. The Mac app is still called Offload until its rename.
+- Backup-internal names keep the old spelling (`offload_report.json`, `.offload-part`, …) — see below and docs/FORMATY.md.
 
 ## Must NOT change (on-disk format shared with the Mac and with older backups — docs/FORMATY.md)
 - JSON keys and enum values, ASC MHL, `.xxh64`/`.md5`, manifest, history.json keys, settings.json keys and values.
@@ -19,10 +24,10 @@ readme in the zip. Developer docs in `docs/` and code comments stay as they are 
 - `<html lang="en">`.
 
 ## Local folders (not part of a backup)
-- Local report copies: `Documents\Offload reports\<date>\<card>\` (was `Offload reporty`); the summary report goes to
-  `Documents\Offload reports\summary\<date>_<time>_summary.html/.pdf`. Reading (summary fallback, `.offload-origin`)
-  must ALSO look in the old `Offload reporty` folder. The settings key for the folder stays.
-- Zip contents: `READ-ME.txt` (was `CTI-ME.txt`), `Offload-manual.pdf` (was `Offload-navod.pdf`), manual source
+- Local report copies: `Documents\ArcLoader reports\<date>\<card>\` (was `Offload reports`, before that `Offload reporty`); the summary report goes to
+  `Documents\ArcLoader reports\summary\<date>_<time>_summary.html/.pdf`. Reading (summary fallback, `.offload-origin`)
+  must ALSO look in the old `Offload reports` and `Offload reporty` folders. The settings key for the folder stays.
+- Zip contents: `READ-ME.txt` (was `CTI-ME.txt`), `ArcLoader-manual.pdf` (was `Offload-manual.pdf`, `Offload-navod.pdf`), manual source
   `windows/package/manual/manual.html` (was `navod/navod.html`) + `render.ps1`.
 
 ## Glossary (use consistently)
