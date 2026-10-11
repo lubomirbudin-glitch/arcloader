@@ -180,6 +180,14 @@ struct FoldersSettings: View {
                             .font(.ui(12)).foregroundStyle(p.text3).fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                FormRow(label: "Appearance") {
+                    Picker("", selection: $model.settings.appearance) {
+                        Text("Dark").tag("dark")
+                        Text("Light").tag("light")
+                        Text("System").tag("system")
+                    }
+                    .labelsHidden().pickerStyle(.segmented).fixedSize()
+                }
                 FormRow(label: "Disks") {
                     VStack(alignment: .leading, spacing: 6) {
                         Toggle("Add connected disks automatically", isOn: $model.settings.autoDestinations)

@@ -54,6 +54,7 @@ struct OffloadApp: App {
         WindowGroup("Offload") {
             ContentView()
                 .environmentObject(model)
+                .preferredColorScheme(model.colorScheme)
                 .onAppear { delegate.model = model }
         }
         .defaultSize(width: 1360, height: 900)
@@ -69,6 +70,7 @@ struct OffloadApp: App {
         Window("Hardware — USB ports and disks", id: "hardware") {
             HardwareView(hw: model.hardware)
                 .environmentObject(model)
+                .preferredColorScheme(model.colorScheme)
         }
         .defaultSize(width: 860, height: 700)
     }

@@ -11,6 +11,17 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(load("null"), AppSettings())
     }
 
+    // The look is dark unless the user picks light or system; it survives a save.
+    func testAppearanceDefaultsToDarkAndRoundTrips() throws {
+        XCTAssertEqual(AppSettings().appearance, "dark")
+        XCTAssertEqual(load(#"{"verify":true}"#).appearance, "dark")
+        XCTAssertEqual(load(#"{"appearance":"light"}"#).appearance, "light")
+        XCTAssertEqual(load(#"{"appearance":7}"#).appearance, "dark")
+        var s = AppSettings()
+        s.appearance = "system"
+        XCTAssertEqual(SettingsStore.decode(SettingsStore.encode(s)).appearance, "system")
+    }
+
     // Review focus 3: what version 0.1.0 stored (no portNames) keeps the destinations after the update.
     func testOldMacSettingsWithoutPortNamesKeepDestinations() throws {
         var old = AppSettings()

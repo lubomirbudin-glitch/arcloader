@@ -49,6 +49,8 @@ public struct AppSettings: Codable, Equatable {
     public var verifyInProxy = true
     /// "fastest" or "first" — the drive verified through the proxies; another value (a newer version's) reads as fastest.
     public var verifyPrimary = VerifyOptions.fastest
+    /// "dark" (default, the look of docs/ui-navrh), "light" or "system"; another value (a newer version's) reads as dark.
+    public var appearance = "dark"
 
     /// The JSON object last read (unknown keys of newer versions); written back under the known keys on save.
     public var raw: [String: Any] = [:]
@@ -57,7 +59,7 @@ public struct AppSettings: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case destRoots, verify, analyzeClips, proxy, tools, portNames, autoDestinations, ignoredVolumes, naming, hash, outputs
-        case verifyInProxy, verifyPrimary
+        case verifyInProxy, verifyPrimary, appearance
     }
 
     public init() {}
@@ -66,7 +68,7 @@ public struct AppSettings: Codable, Equatable {
         a.destRoots == b.destRoots && a.verify == b.verify && a.analyzeClips == b.analyzeClips && a.proxy == b.proxy
             && a.tools == b.tools && a.portNames == b.portNames && a.autoDestinations == b.autoDestinations
             && a.ignoredVolumes == b.ignoredVolumes && a.naming == b.naming && a.hash == b.hash && a.outputs == b.outputs
-            && a.verifyInProxy == b.verifyInProxy && a.verifyPrimary == b.verifyPrimary
+            && a.verifyInProxy == b.verifyInProxy && a.verifyPrimary == b.verifyPrimary && a.appearance == b.appearance
     }
 }
 
@@ -117,6 +119,11 @@ public enum SettingsStore {
         read("verifyPrimary") { v in
             guard let p = v as? String else { return false }
             s.verifyPrimary = p.isEmpty ? VerifyOptions.fastest : p   // a newer value is kept; it reads as fastest
+            return true
+        }
+        read("appearance") { v in
+            guard let a = v as? String else { return false }
+            s.appearance = a.isEmpty ? "dark" : a
             return true
         }
         return normalize(s, catalog: catalog)

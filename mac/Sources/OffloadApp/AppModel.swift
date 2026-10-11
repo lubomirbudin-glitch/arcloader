@@ -865,3 +865,16 @@ final class AppModel: ObservableObject {
     }
 #endif
 }
+
+import SwiftUI
+
+extension AppModel {
+    /// The window's look: dark by default (docs/ui-navrh), light, or nil = follow the system.
+    var colorScheme: ColorScheme? {
+        switch settings.appearance {
+        case "light": return .light
+        case "system": return nil
+        default: return .dark
+        }
+    }
+}
