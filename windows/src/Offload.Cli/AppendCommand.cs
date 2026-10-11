@@ -4,7 +4,7 @@ using Offload.Core.Desktop;
 
 namespace Offload.Cli;
 
-/// `offload append <source> [--into <card folder>]…` (spec 2.2): only the card's new files into the card folders of
+/// `arcloader append <source> [--into <card folder>]…` (spec 2.2): only the card's new files into the card folders of
 /// the earlier backup, as a new ASC MHL generation. Without --into the folders come from the offload history.
 static class AppendCommand
 {

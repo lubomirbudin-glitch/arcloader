@@ -1,8 +1,8 @@
 namespace Offload.Core.Desktop;
 
-/// Offload.exe arguments: `--no-hw-prompt` is still accepted (older scripts) but has no effect — the USB check
+/// ArcLoader.exe arguments: `--no-hw-prompt` is still accepted (older scripts) but has no effect — the USB check
 /// is on demand only since 2026-10-05 (spec 8a.2), there is no start-up question; every argument that is
-/// an existing folder becomes a ticked manual source (drag a folder onto Offload.exe). `--demo <stav>` (pripraveno,
+/// an existing folder becomes a ticked manual source (drag a folder onto ArcLoader.exe). `--demo <stav>` (pripraveno,
 /// probiha, hotovo, nastaveni; overuje — plan 10, both verdicts) fills the window with a state of docs/ui-navrh for the visual check — off by default.
 public sealed record StartupOptions(bool NoHwPrompt, IReadOnlyList<string> Sources, DemoState? Demo = null)
 {

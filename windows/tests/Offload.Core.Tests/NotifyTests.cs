@@ -23,7 +23,7 @@ public class JobOutcomeTests
     public void Done_VerifiedOnDisks_WithProxies()
     {
         var o = JobOutcomes.Final("A001", Status(JobPhase.Done, proxiesDone: 24), Report())!;
-        Assert.Equal((OutcomeKind.Done, "Offload: A001 done", "Verified on 1 disk — the card is safe to format. Proxies: 24 done."), (o.Kind, o.Title, o.Message));
+        Assert.Equal((OutcomeKind.Done, "ArcLoader: A001 done", "Verified on 1 disk — the card is safe to format. Proxies: 24 done."), (o.Kind, o.Title, o.Message));
         Assert.Equal(o.Message, o.PhoneMessage);
         Assert.Equal((3, "white_check_mark"), (o.Priority, o.Tags.Single()));
         Assert.Equal("Verified on 1 disk — the card is safe to format.", JobOutcomes.Final("A001", Status(JobPhase.Done), Report())!.Message);
@@ -33,7 +33,7 @@ public class JobOutcomeTests
     public void Attention_Cases()
     {
         var unverified = JobOutcomes.Final("A001", Status(JobPhase.Done), Report(verified: false))!;
-        Assert.Equal((OutcomeKind.Attention, "Offload: A001 — needs attention", "The copy is done but NOT VERIFIED."), (unverified.Kind, unverified.Title, unverified.Message));
+        Assert.Equal((OutcomeKind.Attention, "ArcLoader: A001 — needs attention", "The copy is done but NOT VERIFIED."), (unverified.Kind, unverified.Title, unverified.Message));
         Assert.Equal((4, "warning"), (unverified.Priority, unverified.Tags.Single()));
         Assert.Equal("The copy is verified, but 2 proxies failed.", JobOutcomes.Final("A001", Status(JobPhase.Done, proxiesFailed: 2), Report())!.Message);
         Assert.Equal("The copy is verified, but the processing after the copy failed.", JobOutcomes.Final("A001", Status(JobPhase.Failed, error: "x"), Report())!.Message);
@@ -72,7 +72,7 @@ public class JobOutcomeTests
     public void Error_FailedFiles_OrBeforeTheCopy()
     {
         var failed = JobOutcomes.Final("A001", Status(JobPhase.Done), Report(destError: "write failed"))!;
-        Assert.Equal((OutcomeKind.Error, "Offload: A001 — ERROR", "1 file failed — the card is NOT backed up."), (failed.Kind, failed.Title, failed.Message));
+        Assert.Equal((OutcomeKind.Error, "ArcLoader: A001 — ERROR", "1 file failed — the card is NOT backed up."), (failed.Kind, failed.Title, failed.Message));
         Assert.Equal((5, "rotating_light"), (failed.Priority, failed.Tags.Single()));
         var preflight = JobOutcomes.Final("A001", Status(JobPhase.Failed, error: @"Destination not found: D:\Backup — is the disk connected?"), null)!;
         Assert.Equal(@"Destination not found: D:\Backup — is the disk connected?", preflight.Message);   // Windows: the error itself
@@ -93,7 +93,7 @@ public class JobOutcomeTests
     public void Ejectable_OnlyWhileStageTwoRuns_WindowsOnly()
     {
         var e = JobOutcomes.CopyDone("A001", Status(JobPhase.Proxies), proxies: true)!;
-        Assert.Equal((OutcomeKind.Ejectable, "Offload: A001 — safe to eject", "Proxies are still rendering."), (e.Kind, e.Title, e.Message));
+        Assert.Equal((OutcomeKind.Ejectable, "ArcLoader: A001 — safe to eject", "Proxies are still rendering."), (e.Kind, e.Title, e.Message));
         Assert.False(e.ForPhone);
         Assert.Null(JobOutcomes.CopyDone("A001", Status(JobPhase.Done), proxies: true));
         Assert.Null(JobOutcomes.CopyDone("A001", Status(JobPhase.Analyzing, safe: false), proxies: false));
@@ -119,7 +119,7 @@ public class JobOutcomeTests
             foreach (var text in new[] { o.Title, o.PhoneMessage })
             {
                 Assert.DoesNotContain("\\", text);
-                Assert.DoesNotMatch(@"\b[A-Za-z]:", Regex.Replace(text, "^Offload: ", ""));
+                Assert.DoesNotMatch(@"\b[A-Za-z]:", Regex.Replace(text, "^ArcLoader: ", ""));
             }
         }
     }
@@ -131,7 +131,7 @@ public class NtfyClientTests
     public async Task Send_JsonShape_Utf8_Priority_NoPathInUrl()
     {
         using var server = new LocalHttp();
-        var o = new JobOutcome(OutcomeKind.Attention, "Offload: Č001 — needs attention", "x", "The copy is verified, but 2 proxies failed.");
+        var o = new JobOutcome(OutcomeKind.Attention, "ArcLoader: Č001 — needs attention", "x", "The copy is verified, but 2 proxies failed.");
 
         var r = await NtfyClient.SendAsync(server.Url.TrimEnd('/'), "film-x_7", o.Title, o.PhoneMessage, o.Priority, o.Tags);
 
@@ -139,11 +139,11 @@ public class NtfyClientTests
         var req = Assert.Single(server.Requests);
         Assert.Equal(("POST", "/"), (req.Method, req.Path));
         Assert.Equal("application/json; charset=utf-8", req.ContentType);
-        Assert.Matches(@"^Offload/\d+\.\d+\.\d+$", req.UserAgent);   // M17: no "-win" suffix
+        Assert.Matches(@"^ArcLoader/\d+\.\d+\.\d+$", req.UserAgent);   // M17: no "-win" suffix
         using var doc = JsonDocument.Parse(req.Body);
         var root = doc.RootElement;
         Assert.Equal("film-x_7", root.GetProperty("topic").GetString());
-        Assert.Equal("Offload: Č001 — needs attention", root.GetProperty("title").GetString());
+        Assert.Equal("ArcLoader: Č001 — needs attention", root.GetProperty("title").GetString());
         Assert.Equal("The copy is verified, but 2 proxies failed.", root.GetProperty("message").GetString());
         Assert.Equal(4, root.GetProperty("priority").GetInt32());
         Assert.Equal("warning", root.GetProperty("tags")[0].GetString());
@@ -222,7 +222,7 @@ public class NtfyClientTests
         using var server = new LocalHttp(_ => Task.Delay(Timeout.Infinite));
         var settings = new NtfySettings { Enabled = true, Server = server.Url, Topic = "t" };
         var log = new List<string>();
-        var outcome = new JobOutcome(OutcomeKind.Done, "Offload: A001 done", "x", "Verified on 2 disks.");
+        var outcome = new JobOutcome(OutcomeKind.Done, "ArcLoader: A001 done", "x", "Verified on 2 disks.");
 
         var send = NtfyClient.SendOutcomeAsync(settings, outcome, m => { lock (log) log.Add(m); }, TimeSpan.FromMilliseconds(500));
         // No wall-clock assert: the server never answers, so the call returning with an unfinished task IS the proof that

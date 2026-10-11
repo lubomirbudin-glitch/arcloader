@@ -2,7 +2,7 @@ using Offload.Core.History;
 
 namespace Offload.Core.Desktop;
 
-/// `Offload.exe --demo <stav>` (off by default): the window filled with the states of docs/ui-navrh/screeny, for the
+/// `ArcLoader.exe --demo <stav>` (off by default): the window filled with the states of docs/ui-navrh/screeny, for the
 /// visual check against the design — nothing is scanned, inspected, copied or written. pripraveno = obr. 1, probiha =
 /// obr. 2, hotovo = obr. 3, nastaveni = obr. 4; overuje (plan 10, R5) = both verdicts: a card copied and verifying with
 /// its proxies ("Safe to eject"), one with a content defect and the green one ("Safe to format").

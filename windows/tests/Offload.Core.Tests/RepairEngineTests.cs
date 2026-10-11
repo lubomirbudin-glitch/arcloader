@@ -68,7 +68,7 @@ public class RepairEngineTests
             Assert.Equal(["xxh64", "xxh128"], gen2.Hashes.Select(h => h.Algorithm));
             Assert.All(gen2.Hashes, h => Assert.Equal(d == 0 ? "verified" : "original", h.Action));
             Assert.Equal(f.Xxh64, gen2.Hashes[0].Value);
-            Assert.StartsWith("Offload repair: 1 file copied again from ", File.ReadAllText(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_*.mhl").Single()).Split("<comment>")[1]);
+            Assert.StartsWith("ArcLoader repair: 1 file copied again from ", File.ReadAllText(Directory.GetFiles(Path.Combine(paths[d], "ascmhl"), "0002_*.mhl").Single()).Split("<comment>")[1]);
             Assert.Empty(CardRecord.Load(paths[d]).FailedFiles);
             var verify = BackupVerifier.Verify(paths[d], chunkSize: 4096);
             Assert.True(verify.Success);

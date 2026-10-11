@@ -83,6 +83,6 @@ public sealed partial class MainViewModel
     /// "Windows: on · phone (ntfy): off".
     public string NotifySummary => SettingsTexts.NotifySummary(Settings.Notify);
 
-    /// "Offload 0.5.0-win".
-    public string VersionText => $"Offload {OffloadVersion.String}";
+    /// "ArcLoader 0.5.0-win".
+    public string VersionText => $"{Product.Name} {OffloadVersion.String}";
 }

@@ -129,7 +129,7 @@ public class DayReportTests
         Assert.Contains("not verified — the copy was not read back", html);
         Assert.Contains("<tr><td>ARRI LogC4 → Rec.709</td><td class=\"num\">2</td></tr>", html);
         Assert.DoesNotContain("<tr><td>SOUND</td><td class=", html);   // ruling M13: not a problem
-        Assert.Contains("<footer>offload ", html);
+        Assert.Contains("<footer>ArcLoader ", html);
         Assert.Contains("@page{size:A4 landscape", DayReport.Html(DayReport.Load(Path.Combine(dir.Path, "D", "2026-10-06")), forPrint: true));
     }
 

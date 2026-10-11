@@ -7,7 +7,7 @@ using Offload.Core.Desktop;
 
 namespace Offload.App;
 
-/// `Offload.exe --demo <stav>` (DemoScenario, off by default): the window shows a state of docs/ui-navrh/screeny for the
+/// `ArcLoader.exe --demo <stav>` (DemoScenario, off by default): the window shows a state of docs/ui-navrh/screeny for the
 /// visual check — the scans, the card inspections and history.json are replaced by the scenario's data; nothing is
 /// copied, nothing is written. The destinations are the ones of settings.json (the check gives it two empty folders).
 public sealed partial class MainViewModel

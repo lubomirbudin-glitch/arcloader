@@ -130,7 +130,7 @@ public class ReleaseScriptTests
     public void Version_FromProps_Manifest()
     {
         using var dir = new TempDir();
-        var manifest = Path.Combine(dir.Path, "offload-update.json");
+        var manifest = Path.Combine(dir.Path, "arcloader-update.json");
         var r = Ps($"Write-UpdateManifest -Path '{manifest}' -Version (Get-OffloadVersion '{Path.Combine(WindowsDir, "Directory.Build.props")}') " +
                    "-Url '\\\\NAS\\Offload\\' -Notes 'Projekty, oznámení'");
         Assert.True(r.Code == 0, r.Out);
@@ -193,13 +193,71 @@ public class ReleaseScriptTests
         Assert.Contains($@"ERROR: Certificate with thumbprint {new string('0', 40)} not found", ok.Out);
     }
 
+    // The rename (0.10.0): the zip, the folder in it and the exes are ArcLoader; the update manifest is published under
+    // both names (old apps read offload-update.json).
+    [Fact]
+    public void ReleaseNames_AreArcLoader()
+    {
+        var r = Ps("Get-ReleaseZipName '0.10.0'; (Get-OwnExes 'C:\\b\\ArcLoader') -join '|'; (Get-UpdateManifestNames) -join '|'");
+        Assert.True(r.Code == 0, r.Out);
+        Assert.Equal(
+            ["ArcLoader-win-x64-0.10.0.zip", @"C:\b\ArcLoader\ArcLoader.exe|C:\b\ArcLoader\bin\arcloader.exe|C:\b\ArcLoader\bin\braw-decode.exe",
+             "arcloader-update.json|offload-update.json"],
+            r.Out.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    // publish.ps1's channel assets: the zip under the new name first (the notes link to it), then the same zip under the
+    // old name (links on the user's web); stable also both manifests, dev none.
+    [Fact]
+    public void ChannelAssets_NewNameFirst_OldNamesKept()
+    {
+        var r = Ps("foreach ($c in 'stable', 'dev') { $a = Get-ChannelAssetNames $c; \"$c zips=$($a.Zips -join ',') manifests=$($a.Manifests -join ',')\" }");
+        Assert.True(r.Code == 0, r.Out);
+        Assert.Equal(
+            ["stable zips=ArcLoader-Windows.zip,Offload-Windows.zip manifests=arcloader-update.json,offload-update.json",
+             "dev zips=ArcLoader-Windows-dev.zip,Offload-Windows-dev.zip manifests="],
+            r.Out.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        Assert.Contains("ERROR", Ps("Get-ChannelAssetNames 'beta'").Out);
+    }
+
+    // build.ps1 and publish.ps1 use those names (they cannot run here: dotnet publish, gh, the network) — checked in
+    // their text: the new repo, the new zip and manual, no old exe or zip name left except the kept copies.
+    [Fact]
+    public void BuildAndPublish_UseTheNewNames()
+    {
+        var build = File.ReadAllText(Path.Combine(WindowsDir, "scripts", "build.ps1"));
+        Assert.Contains(@"Copy-Item (Join-Path $root 'package\READ-ME.txt') $out", build);
+        Assert.Contains(@"Copy-Item (Join-Path $root 'package\ArcLoader-manual.pdf') $out", build);
+        Assert.Contains(@"'build\staging\ArcLoader' } else { 'build\ArcLoader' }", build);
+        Assert.Contains("-Files (Get-OwnExes $out)", build);
+        Assert.Contains(@"('build\' + (Get-ReleaseZipName $version))", build);
+        Assert.Contains("foreach ($name in Get-UpdateManifestNames)", build);
+        Assert.DoesNotContain("Offload.exe", build, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Offload-win-x64", build);
+        Assert.DoesNotContain("Offload-manual", build);
+
+        var publish = File.ReadAllText(Path.Combine(WindowsDir, "scripts", "publish.ps1"));
+        Assert.Contains("[string]$Repo = 'lubomirbudin-glitch/arcloader'", publish);
+        Assert.Contains(@"('build\' + (Get-ReleaseZipName $version))", publish);
+        Assert.Contains("$channelAssets = Get-ChannelAssetNames $Channel", publish);
+        Assert.Contains("foreach ($name in $channelAssets.Zips)", publish);
+        Assert.Contains("foreach ($name in $channelAssets.Manifests)", publish);
+        Assert.Contains("\"ArcLoader for Windows $version\"", publish);
+        Assert.Contains("\"ArcLoader for Windows — stable version ($version)\"", publish);
+        Assert.Contains("\"ArcLoader for Windows — development version ($version)\"", publish);
+        Assert.DoesNotContain("Offload for Windows", publish);
+        Assert.DoesNotContain("glitch/offload", publish);
+        Assert.DoesNotContain("Offload.exe", publish);
+        Assert.DoesNotContain("Offload-win-x64", publish);
+    }
+
     // The manual names the versioned zip.
     [Fact]
     public void Manual_NamesTheVersionedZip()
     {
         var html = File.ReadAllText(Path.Combine(WindowsDir, "package", "manual", "manual.html"));
-        Assert.DoesNotContain("Offload-win-x64.zip", html);
-        Assert.Contains("Offload-win-x64-&lt;version&gt;.zip", html);
+        Assert.DoesNotContain("ArcLoader-win-x64.zip", html);
+        Assert.Contains("ArcLoader-win-x64-&lt;version&gt;.zip", html);
     }
 
     // M8: a certificate that could not sign (no private key, not for code signing) is refused before the build.
@@ -242,8 +300,8 @@ public class ReleaseScriptTests
         using var dir = new TempDir();
         var signtool = FakeSigntool(dir.Path);
         var pfx = Pfx(dir.Path, "tajne-heslo-2");
-        var a = Exe(dir.Path, "Offload.exe");
-        var b = Exe(dir.Path, "offload.exe.cli");
+        var a = Exe(dir.Path, "ArcLoader.exe");
+        var b = Exe(dir.Path, "arcloader.exe.cli");
         File.WriteAllText(Path.Combine(dir.Path, "warn"), "");   // a harmless stderr line on success must not abort (I4)
         var r = Ps($"$s = Get-OffloadSignSetup; Invoke-OffloadSign -Setup $s -Files @('{a}', '{b}') -TimestampUrl 'http://ts.example' -RetryDelaySeconds 0",
             new() { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = pfx, ["OFFLOAD_SIGN_PFX_PASSWORD"] = "tajne-heslo-2" });
@@ -252,7 +310,7 @@ public class ReleaseScriptTests
         Assert.DoesNotContain("tajne-heslo-2", r.Out);
         var calls = File.ReadAllLines(Path.Combine(dir.Path, "calls.txt"));
         Assert.Equal(2, calls.Length);
-        Assert.Equal($"sign /fd SHA256 /td SHA256 /tr http://ts.example /f {pfx} /p tajne-heslo-2 /d Offload {a} {b}", calls[0].Trim());
+        Assert.Equal($"sign /fd SHA256 /td SHA256 /tr http://ts.example /f {pfx} /p tajne-heslo-2 /d ArcLoader {a} {b}", calls[0].Trim());
         Assert.Equal($"verify /pa /all {a} {b}", calls[1].Trim());
     }
 
@@ -264,7 +322,7 @@ public class ReleaseScriptTests
         using var dir = new TempDir();
         var signtool = FakeSigntool(dir.Path);
         File.WriteAllText(Path.Combine(dir.Path, "ts-fail"), "");
-        var a = Exe(dir.Path, "Offload.exe");
+        var a = Exe(dir.Path, "ArcLoader.exe");
         var r = Ps($"$s = Get-OffloadSignSetup; Invoke-OffloadSign -Setup $s -Files @('{a}') -TimestampUrl 'http://ts.invalid' -RetryDelaySeconds 0",
             new() { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = Pfx(dir.Path, "heslo-3"), ["OFFLOAD_SIGN_PFX_PASSWORD"] = "heslo-3" });
         Assert.Equal(1, r.Code);
@@ -280,7 +338,7 @@ public class ReleaseScriptTests
         using var dir = new TempDir();
         var signtool = FakeSigntool(dir.Path);
         File.WriteAllText(Path.Combine(dir.Path, "ts-fail"), "");
-        var a = Exe(dir.Path, "Offload.exe");
+        var a = Exe(dir.Path, "ArcLoader.exe");
         // the first call fails; the script block removes the marker before the retry (the delay is a function of the script)
         var r = Ps($"$s = Get-OffloadSignSetup; function Start-Sleep {{ param($Seconds) Remove-Item '{Path.Combine(dir.Path, "ts-fail")}' -ErrorAction SilentlyContinue }}; " +
                    $"Invoke-OffloadSign -Setup $s -Files @('{a}') -TimestampUrl 'http://ts.flaky' -RetryDelaySeconds 0",
@@ -297,7 +355,7 @@ public class ReleaseScriptTests
         var signtool = FakeSigntool(dir.Path);
         File.WriteAllText(Path.Combine(dir.Path, "verify-fail"), "");
         var env = new Dictionary<string, string?> { ["SIGNTOOL"] = signtool, ["OFFLOAD_SIGN_PFX"] = Pfx(dir.Path, "h4"), ["OFFLOAD_SIGN_PFX_PASSWORD"] = "h4" };
-        var a = Exe(dir.Path, "Offload.exe");
+        var a = Exe(dir.Path, "ArcLoader.exe");
         var r = Ps($"$s = Get-OffloadSignSetup; Invoke-OffloadSign -Setup $s -Files @('{a}') -RetryDelaySeconds 0", env);
         Assert.Contains("ERROR: Cannot verify the signature: SignTool Error: No signature found.", r.Out);
         var missing = Ps($"$s = Get-OffloadSignSetup; Invoke-OffloadSign -Setup $s -Files @('{Path.Combine(dir.Path, "gone.exe")}') -RetryDelaySeconds 0", env);

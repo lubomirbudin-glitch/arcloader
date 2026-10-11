@@ -214,7 +214,7 @@ public static class DayReport
             foreach (var (name, clips) in luts) h.Append($"<tr><td>{E(name)}</td><td class=\"num\">{clips}</td></tr>\n");
             h.Append("</table></div>\n");
         }
-        h.Append($"<footer>offload {E(OffloadVersion.String)} · day report · {HtmlReport.DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
+        h.Append($"<footer>{Product.Name} {E(OffloadVersion.String)} · day report · {HtmlReport.DateTimeText(DateTime.Now)}</footer></main></body></html>\n");
         return h.ToString();
     }
 

@@ -1,4 +1,5 @@
-﻿# Release helpers for build.ps1 (spec 4.4, 4.5): the version, the update manifest and code signing.
+﻿# Release helpers for build.ps1 and publish.ps1 (spec 4.4, 4.5): the version, the file names of a release, the update
+# manifest and code signing.
 # Dot-source it: . (Join-Path $PSScriptRoot 'release.ps1'). Windows PowerShell 5.1 and PowerShell 7.
 # Saved as UTF-8 with BOM: Windows PowerShell 5.1 reads a file without one in the ANSI code page (the dashes in the messages).
 
@@ -9,7 +10,36 @@ function Get-OffloadVersion([string]$Props) {
     return $v.Trim()
 }
 
-# build\offload-update.json for the update check: {"version", "url", "notes"}, UTF-8 without BOM.
+# The product's name in file names (rename 2026-10-11, Windows 0.10.0: Offload → ArcLoader). The function names here
+# (Get-OffloadVersion …) and the OFFLOAD_SIGN_PFX variables stay: they are internal / already set on build machines.
+
+# The versioned zip build.ps1 makes and publish.ps1 uploads: ArcLoader-win-x64-<version>.zip.
+function Get-ReleaseZipName([string]$Version) {
+    return "ArcLoader-win-x64-$Version.zip"
+}
+
+# The folder inside the zip and its own exes (R23: the ones that are signed): ArcLoader.exe, bin\arcloader.exe,
+# bin\braw-decode.exe. $Out is the built folder (build\ArcLoader).
+function Get-OwnExes([string]$Out) {
+    return @((Join-Path $Out 'ArcLoader.exe'), (Join-Path $Out 'bin\arcloader.exe'), (Join-Path $Out 'bin\braw-decode.exe'))
+}
+
+# The update manifests next to a build or on the stable release: arcloader-update.json and — with the same content —
+# offload-update.json, which versions before 0.10.0 read.
+function Get-UpdateManifestNames {
+    return @('arcloader-update.json', 'offload-update.json')
+}
+
+# What publish.ps1 uploads to a rolling channel release: the zip under the new name and, as copies, under the old one
+# (Offload-Windows.zip / Offload-Windows-dev.zip — links on the user's web point there); stable also the manifests.
+function Get-ChannelAssetNames([ValidateSet('stable', 'dev')][string]$Channel) {
+    if ($Channel -eq 'stable') {
+        return [pscustomobject]@{ Zips = @('ArcLoader-Windows.zip', 'Offload-Windows.zip'); Manifests = @(Get-UpdateManifestNames) }
+    }
+    return [pscustomobject]@{ Zips = @('ArcLoader-Windows-dev.zip', 'Offload-Windows-dev.zip'); Manifests = @() }
+}
+
+# build\arcloader-update.json (and offload-update.json) for the update check: {"version", "url", "notes"}, UTF-8 without BOM.
 function Write-UpdateManifest([string]$Path, [string]$Version, [string]$Url, [string]$Notes) {
     $json = [ordered]@{ version = $Version; url = $Url; notes = $Notes } | ConvertTo-Json
     [IO.File]::WriteAllText($Path, $json, (New-Object Text.UTF8Encoding $false))
@@ -116,7 +146,7 @@ function Invoke-SignToolCall([string]$SignTool, [string[]]$Arguments) {
 function Invoke-OffloadSign([hashtable]$Setup, [string[]]$Files, [string]$TimestampUrl = 'http://timestamp.digicert.com', [int]$RetryDelaySeconds = 5) {
     foreach ($f in $Files) { if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "File to sign not found: $f" } }
     $signtool = $Setup.SignTool
-    $signArguments = @('sign', '/fd', 'SHA256', '/td', 'SHA256', '/tr', $TimestampUrl) + @($Setup.CertArgs) + @('/d', 'Offload') + @($Files)
+    $signArguments = @('sign', '/fd', 'SHA256', '/td', 'SHA256', '/tr', $TimestampUrl) + @($Setup.CertArgs) + @('/d', 'ArcLoader') + @($Files)
     for ($attempt = 1; ; $attempt++) {
         $r = Invoke-SignToolCall $signtool $signArguments
         if ($r.Code -eq 0) { break }

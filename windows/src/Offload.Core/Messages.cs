@@ -114,7 +114,7 @@ public static partial class Msg
     public static string CardUnreadable(string detail) => $"Cannot read the card: {detail}";
 
     /// Where a backup is checked: the top bar of the window (since the new look, UI návrh) or the CLI.
-    public const string VerifyHint = "Verify backup (top bar of the window; on the command line offload verify)";
+    public const string VerifyHint = "Verify backup (top bar of the window; on the command line arcloader verify)";
 
     /// The end of every refused append; a refused repair says CannotRepair instead (ForRepair, minor M5).
     const string CannotAppend = "cannot append";
@@ -184,7 +184,7 @@ public static partial class Msg
     public const string RepairNeedsVerify = "A repair is always verified by reading back — it cannot run without verification.";
     /// The comment of a repair's ASC MHL generation: the files copied again, and those only read back (fix round 2, B).
     public static string MhlRepairComment(int copied, int readBack, string source) =>
-        $"Offload repair: {N(copied, "file")} copied again from {source}"
+        $"{Product.Name} repair: {N(copied, "file")} copied again from {source}"
         + (readBack > 0 ? $"; {N(readBack, "file")} only read back" : "");
     /// Ruling I1: the card in the drive is not the one the repaired backup was copied from.
     public const string RepairOtherCard =
@@ -269,7 +269,7 @@ public static partial class Msg
 
     // A copy of the report on this computer too (2026-10-09)
     public static string LocalReportFailed(string detail) => $"Could not copy the report to this computer: {detail} — the report is only on the destination disks.";
-    public const string LocalReportOnCard = "the folder for the report copy is on the card — Offload never writes to a card";
+    public const string LocalReportOnCard = "the folder for the report copy is on the card — ArcLoader never writes to a card";
     public static string LocalReportWritten(string path) => $"Report copy: {path}";
 
     // Summary report of selected backups (2026-10-09)
@@ -280,11 +280,11 @@ public static partial class Msg
     public static string SummaryTargetMissing(string path) => $"Folder for the summary report not found: {path}";
     public static string SummaryTargetIsCard(string path) =>
         $"{path} is inside the backup folder of a card (even an unfinished or interrupted one) — the summary report is never written into a backup; select another folder.";
-    public static string SummaryTargetCameraCard(string path) => $"{path} looks like a camera card — Offload never writes to a card.";
+    public static string SummaryTargetCameraCard(string path) => $"{path} looks like a camera card — ArcLoader never writes to a card.";
     public static string SummaryTargetRemovable(string path) =>
         $"{path} is on removable media (a card in a reader, a flash drive) — the summary report is not saved there; select a disk.";
     public static string SummaryTargetReadOnly(string path) => $"{path} is on a read-only disk.";
-    public static string SummaryTargetIsSource(string path) => $"{path} is on the card — Offload never writes to a card.";
+    public static string SummaryTargetIsSource(string path) => $"{path} is on the card — ArcLoader never writes to a card.";
     public static string SummaryWritten(string path) => $"Summary report: {path}";
     public static string SummaryExtraWritten(string path) => $"Summary report also on the selected disk: {path}";
     public static string SummaryExtraFailed(string detail) => $"The summary report was not written to the selected disk: {detail} — it is only on this computer.";

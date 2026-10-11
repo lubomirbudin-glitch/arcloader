@@ -1,4 +1,5 @@
 using System.Windows;
+using Offload.Core;
 
 namespace Offload.App;
 
@@ -8,7 +9,7 @@ public partial class HardwareWindow : Window
     {
         InitializeComponent();
         DataContext = vm;
-        vm.Confirm = text => MessageBox.Show(this, text, "Offload", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        vm.Confirm = text => MessageBox.Show(this, text, Product.Name, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         Closed += (_, _) => vm.WindowClosed();   // a running measurement stops at once and deletes its temporary file
     }
 
