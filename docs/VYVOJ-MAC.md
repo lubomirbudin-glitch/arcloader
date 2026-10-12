@@ -7,6 +7,10 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Nová ikona (uživatel 2026-10-12, obě verze):** `shared/icon/Offload.iconset` je přegenerovaný — varianta E (tři
+  petrolejové šipky na grafitu, `shared/icon/mmMover.svg`). `build-app.sh` ho bere beze změny; stačí nový build a ověřit
+  ikonu v Docku a Finderu (macOS si ikony cachuje — případně `touch` na .app nebo restart Docku).
+
 - ✅ **Hotovo v buildu D12 (viz historie níže).** **Přejmenovat na mmMover (zadání uživatele 2026-10-11, obě verze; Windows 0.11.0):** produkt se jmenuje **mmMover**
   (přesně takto; malými `mmmover` jen tam, kde je zvykem — příkaz CLI, repozitář, doména). Historie jmen: Offload (≤ 0.9.x),
   ArcLoader (Windows 0.10.x, Mac po 0.7.0 D6 — jméno se ukázalo jako obsazené jiným produktem), nyní mmMover. Windows je

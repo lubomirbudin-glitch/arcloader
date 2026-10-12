@@ -1,4 +1,4 @@
-"""Offload app icon: a memory card with a green "verified" check on a blue-teal tile.
+"""mmMover app icon (option E, user 2026-10-12): three petrol chevrons moving right on a graphite tile.
 Drawn at 4096 px and downscaled for smooth edges; writes a 1024 master PNG, a Windows .ico and a macOS iconset.
 
 Usage: python make_icon.py [out_dir] [--preview]
@@ -20,68 +20,50 @@ def lerp(a, b, t):
 
 
 def tile():
-    """Rounded square with a vertical gradient (Windows 11 / macOS style)."""
-    top, bottom = (24, 92, 186), (10, 160, 160)
+    """Rounded square with a vertical graphite gradient (the website's colours; Windows 11 / macOS style)."""
+    top, bottom = (44, 54, 56), (26, 33, 35)
     grad = Image.new("RGBA", (S, S))
     gd = ImageDraw.Draw(grad)
     for y in range(S):
         gd.line([(0, y), (S, y)], fill=lerp(top, bottom, y / (S - 1)) + (255,))
     mask = Image.new("L", (S, S), 0)
-    m = int(S * 0.06)
-    ImageDraw.Draw(mask).rounded_rectangle([m, m, S - m, S - m], radius=int(S * 0.22), fill=255)
+    ImageDraw.Draw(mask).rounded_rectangle([M, M, S - M, S - M], radius=int(S * 0.22), fill=255)
     out = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     out.paste(grad, (0, 0), mask)
     return out
 
 
-def card(img):
-    """White SD-style card: rounded body with the top-right corner cut, gold contacts."""
-    d = ImageDraw.Draw(img)
-    x0, y0, x1, y1 = int(S * 0.24), int(S * 0.20), int(S * 0.70), int(S * 0.80)
-    cut = int(S * 0.13)
-    r = int(S * 0.045)
-    body = [(x0 + r, y0), (x1 - cut, y0), (x1, y0 + cut), (x1, y1 - r), (x1 - r, y1),
-            (x0 + r, y1), (x0, y1 - r), (x0, y0 + r)]
-    # soft shadow
-    sh = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    ImageDraw.Draw(sh).polygon([(x + int(S * 0.015), y + int(S * 0.025)) for x, y in body], fill=(0, 30, 60, 110))
-    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(S * 0.02)))
-    d.polygon(body, fill=(250, 252, 255, 255))
-    # contacts
-    cw, ch, gap = int(S * 0.045), int(S * 0.12), int(S * 0.022)
-    cx = x0 + int(S * 0.06)
-    cy = y0 + int(S * 0.07)
-    for i in range(5):
-        if cx + cw > x1 - cut + int(S * 0.02) and i > 0:
-            break
-        d.rounded_rectangle([cx, cy, cx + cw, cy + ch], radius=int(S * 0.008), fill=(232, 176, 58, 255))
-        cx += cw + gap
-    # label lines
-    lx0, lx1 = x0 + int(S * 0.06), x1 - int(S * 0.06)
-    for k, ly in enumerate((y0 + int(S * 0.33), y0 + int(S * 0.40))):
-        d.rounded_rectangle([lx0, ly, lx1 - (int(S * 0.10) if k else 0), ly + int(S * 0.025)],
-                            radius=int(S * 0.012), fill=(198, 210, 226, 255))
+M = int(S * 0.06)             # margin around the tile
 
 
-def badge(img):
-    """Green circle with a white check: copied and verified."""
-    d = ImageDraw.Draw(img)
-    cx, cy, rad = int(S * 0.68), int(S * 0.70), int(S * 0.17)
-    ring = int(S * 0.025)
-    d.ellipse([cx - rad - ring, cy - rad - ring, cx + rad + ring, cy + rad + ring], fill=(255, 255, 255, 255))
-    d.ellipse([cx - rad, cy - rad, cx + rad, cy + rad], fill=(34, 170, 84, 255))
-    w = int(S * 0.045)
-    pts = [(cx - rad * 0.50, cy + rad * 0.02), (cx - rad * 0.12, cy + rad * 0.40), (cx + rad * 0.55, cy - rad * 0.38)]
-    d.line(pts, fill=(255, 255, 255, 255), width=w, joint="curve")
-    for p in (pts[0], pts[-1]):
-        d.ellipse([p[0] - w / 2, p[1] - w / 2, p[0] + w / 2, p[1] + w / 2], fill=(255, 255, 255, 255))
+def at(x, y):
+    """A point of the 1024 design grid (icon option E, 2026-10-12) on the tile inside the margin."""
+    f = (S - 2 * M) / 1024
+    return (M + x * f, M + y * f)
+
+
+def chevrons(img):
+    """Three chevrons moving right, fading in: the last one solid petrol (mmMover icon, option E)."""
+    f = (S - 2 * M) / 1024
+    w = int(96 * f)
+    for dx, colour, alpha in ((0, (63, 155, 157), 0.35), (170, (79, 169, 171), 0.65), (340, (127, 209, 210), 1.0)):
+        layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+        d = ImageDraw.Draw(layer)
+        pts = [at(230 + dx, 300), at(420 + dx, 512), at(230 + dx, 724)]
+        fill = colour + (255,)
+        d.line(pts, fill=fill, width=w, joint="curve")
+        for px, py in (pts[0], pts[-1]):
+            d.ellipse([px - w / 2, py - w / 2, px + w / 2, py + w / 2], fill=fill)
+        if alpha < 1.0:
+            a = layer.getchannel("A").point(lambda v, k=alpha: int(v * k))
+            layer.putalpha(a)
+        img.alpha_composite(layer)
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
     img = tile()
-    card(img)
-    badge(img)
+    chevrons(img)
     master = img.resize((1024, 1024), Image.LANCZOS)
     master.save(os.path.join(OUT, "Offload-1024.png"))
     sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256]

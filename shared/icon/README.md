@@ -1,9 +1,12 @@
-# Ikona Offloadu
+# Ikona mmMoveru
 
-Ikona aplikace pro Windows i Mac: bílá paměťová karta se zlatými kontakty a zeleným odznakem s fajfkou (zkopírováno a ověřeno) na zaobleném čtverci s přechodem z modré do tyrkysové. Všechny soubory tady jsou commitnuté a kreslí je skript `make_icon.py` (Pillow) — ikona se needituje ručně, mění se skript.
+Ikona aplikace pro Windows i Mac (varianta E, vybraná uživatelem 2026-10-12): tři petrolejové šipky (chevrony) jedoucí
+doprava, zleva průhlednější, na zaobleném čtverci s grafitovým přechodem — barvy webu mmmover.video. Názvy souborů
+(`Offload.ico`, `Offload.iconset`, `Offload-1024.png`) zůstávají kvůli odkazům z projektů Windows a Mac. Všechny soubory tady jsou commitnuté a kreslí je skript `make_icon.py` (Pillow) — ikona se needituje ručně, mění se skript.
 
 | Soubor | K čemu je |
 |---|---|
+| `mmMover.svg` | vektorová předloha stejné ikony (favicon webu, tisk) |
 | `make_icon.py` | generátor (kreslí ve 4096 px a zmenšuje, aby hrany byly hladké) |
 | `Offload-1024.png` | předloha 1024 × 1024 |
 | `Offload.ico` | ikona pro Windows (16, 20, 24, 32, 40, 48, 64, 128 a 256 px) |

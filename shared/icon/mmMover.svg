@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- mmMover icon, option E (user 2026-10-12): three petrol chevrons moving right on a graphite tile.
+       Vector source for the website (favicon) and print; the app icons are drawn by make_icon.py. -->
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c3638"/><stop offset="1" stop-color="#1a2123"/></linearGradient></defs>
+  <rect width="1024" height="1024" rx="228" fill="url(#g)"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="96">
+    <path d="M230 300 L420 512 L230 724" stroke="#3f9b9d" stroke-opacity=".35"/>
+    <path d="M400 300 L590 512 L400 724" stroke="#4fa9ab" stroke-opacity=".65"/>
+    <path d="M570 300 L760 512 L570 724" stroke="#7fd1d2"/>
+  </g>
+</svg>
