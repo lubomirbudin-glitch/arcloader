@@ -166,7 +166,7 @@ function Publish-WebChannel([string]$Channel, [string]$Zip, [string]$Version, [s
     try {
         $utf8 = New-Object Text.UTF8Encoding $false
         foreach ($name in $files.Manifests) {
-            $manifest = [ordered]@{ version = $Version; url = '/download/'; notes = "mmMover for Windows $Version" } | ConvertTo-Json
+            $manifest = [ordered]@{ version = $Version; url = 'https://mmmover.video/'; notes = "mmMover for Windows $Version" } | ConvertTo-Json
             $mf = Join-Path $tmp $name
             [IO.File]::WriteAllText($mf, $manifest, $utf8)
             Send-WebObject $S $name $mf 'application/json'

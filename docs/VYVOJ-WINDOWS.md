@@ -81,6 +81,8 @@ prověření domén a obsazenosti jmen zvoleno **mmMover**, doména `mmmover.vid
   CopyObject); `channels.json` uvádí nové jméno.
 - Oprava: `publish.ps1` načítal `web-upload.ps1` tečkou a jeho parametry mu vymazaly `$Channel`, `$zip` a `$version` —
   nahrání na web by dostalo prázdné hodnoty; teď se spouští jako samostatný skript.
+- **2026-10-12: 0.11.0 povýšena na stabilní** (zadání uživatele) — GitHub `stable` i web `/download/mmMover-Windows.zip`;
+  manifest aktualizací na webu odkazuje na `https://mmmover.video/` (dřív relativní `/download/`, který aplikace neotevře).
 - Beze změny: názvy v záloze (`offload_report.json` …), `tool: "offload"`, zámky, interní názvy `Offload.*`, bucket
   `arcloader-dl`.
 
