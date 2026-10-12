@@ -32,6 +32,20 @@ final class PreflightTests: XCTestCase {
         }
     }
 
+    // A card macOS refuses to list (privacy) stops with how to allow it — never as an empty card (field report 2026-10-11).
+    func testUnlistableSourceSaysHowToAllowIt() throws {
+        let dir = tempDir()
+        let card = card(dir)
+        chmod(card, 0)
+        defer { chmod(card, 0o755) }
+        let d1 = dir.sub("d1")
+        assertPreflight(.noReadAccess, Msg.noReadAccess(card)) { e in
+            _ = try e.prepare(source: card, destRoots: [d1], cardName: nil, date: "2026-10-04")
+        }
+        XCTAssertThrowsError(try Scanner.scan(card))
+        XCTAssertTrue(Msg.noReadAccess(card).contains("Removable Volumes"))
+    }
+
     func testPlanHasScanDateAndCardFolder() throws {
         let dir = tempDir()
         let card = card(dir)

@@ -252,6 +252,16 @@ Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
   (1 clip)`. Testy `CaptureFrameRateTests` (i skutečné vzorky ARRIRAW v `TestMedia` — oba 24 fps). Vzorek
   `profile.braw` z Blackmagic RAW Speed Test hlásí `sensorRate` 1 (syntetický klip) — stejně jako Windows se nehlídá.
 
+## 2026-10-12 — build „mmMover D13“: karta, kterou macOS nepustí
+
+- **Hlášení z ostrého provozu:** jeden z prvních buildů v novém vzhledu „nedokázal číst z karty“. Příčina: build je
+  podepsaný ad hoc, každý nový build má jiný podpis a macOS se znovu ptá na přístup k vyměnitelným svazkům (TCC
+  `kTCCServiceSystemPolicyRemovableVolumes`, záznam pro `cz.budin.offload` vlastní vždy poslední povolený build). Bez
+  povolení `FileManager.enumerator` nevrátí nic → karta vypadala prázdná. Teď `Scanner.checkReadAccess` (opendir →
+  EPERM/EACCES) zastaví úlohu i kontrolu karty hláškou, kde přístup povolit (`PreflightCode.noReadAccess`).
+- Trvalé řešení: podepisovat buildy stálou identitou (vlastní certifikát nebo Developer ID, úkol 60) — pak macOS
+  povolení drží napříč buildy.
+
 ## 2026-10-11 — build „mmMover D12“: přejmenování na mmMover
 
 - **Zadání uživatele:** aplikace se jmenuje **mmMover** (CLI `mmmover`). Všude, kde je vidět jméno (okna, nastavení,

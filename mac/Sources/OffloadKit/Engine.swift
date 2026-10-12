@@ -598,6 +598,7 @@ public final class OffloadEngine {
         guard fm.fileExists(atPath: source, isDirectory: &isDir), isDir.boolValue else {
             throw OffloadError.preflight(Msg.sourceNotFound(source), code: .sourceNotFound)
         }
+        try Scanner.checkReadAccess(source)
         guard !destRoots.isEmpty else { throw OffloadError.preflight(Msg.noDestination, code: .noDestination) }
         var seen: [String] = []
         for root in destRoots {

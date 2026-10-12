@@ -5,6 +5,8 @@ public enum PreflightCode: String {
     case other, chunkSize, bufferCount, date, sourceNotFound, noDestination, duplicateDestination, sourceIsOffload
     case sourceUnreadable, destinationNotFound, destinationNotWritable, destinationUnreadable, sameVolumeAsSource
     case sharedVolume, emptySource, noSpace, noHashRecord, noFilesToRead
+    /// macOS privacy (TCC) refused reading the source — usually a new build not yet allowed on removable volumes.
+    case noReadAccess
     case appendUnavailable, appendNoReport, appendNoMhl, appendDiverged, appendConflict, appendMissingFile, appendFailedFile
     case appendOtherCard, appendMhlDamaged, appendBusy
     /// Not an error: the backup already has everything (the job ends "Done").
@@ -24,6 +26,10 @@ public enum Msg {
     public static func bufferCount(_ n: Int) -> String { "Buffer count must be at least 2 (got \(n))." }
     public static func date(_ d: String) -> String { "Date must be YYYY-MM-DD (got “\(d)”)." }
     public static func sourceNotFound(_ p: String) -> String { "Source not found: \(p)" }
+    /// The card is there but macOS refuses to list it (privacy: a removable volume not allowed for this build).
+    public static func noReadAccess(_ p: String) -> String {
+        "macOS does not let \(Product.name) read \(p). Allow it in System Settings › Privacy & Security › Files and Folders › \(Product.name) › Removable Volumes (every new build asks again), then add the card again."
+    }
     public static let noDestination = "No destination selected."
     public static func duplicateDestination(_ r: String) -> String { "Destination added twice: \(r)" }
     public static let sourceIsOffload =

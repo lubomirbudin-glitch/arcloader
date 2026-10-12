@@ -39,8 +39,20 @@ public enum Scanner {
         name == ".DS_Store" || name.hasPrefix("._")
     }
 
+    /// A folder macOS refuses to list (privacy, EPERM / EACCES) must not look like an empty card: the enumerator would
+    /// just return nothing. Seen in the field (2026-10-11): a new build, not yet allowed on removable volumes.
+    public static func checkReadAccess(_ root: String) throws {
+        guard let d = opendir(root) else {
+            let e = errno
+            if e == EPERM || e == EACCES { throw OffloadError.preflight(Msg.noReadAccess(root), code: .noReadAccess) }
+            return   // other errors: reported by the scan itself
+        }
+        closedir(d)
+    }
+
     /// `isCancelled` is asked every 1 000 entries (a card swapped while it is inspected); then CancellationError.
     public static func scan(_ root: String, isCancelled: () -> Bool = { false }) throws -> SourceScan {
+        try checkReadAccess(root)
         guard let en = FileManager.default.enumerator(atPath: root) else {
             throw IOError("scan", root, ENOENT)
         }

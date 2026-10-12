@@ -58,6 +58,9 @@ public enum CardInspector {
             scan = try Scanner.scan(source, isCancelled: isCancelled)
         } catch is CancellationError {
             throw CancellationError()
+        } catch OffloadError.preflight(let message, code: .noReadAccess) {
+            r.error = message   // how to allow it, not "Cannot read the card: …"
+            return r
         } catch {
             r.error = Msg.cardUnreadable("\(error)")
             return r

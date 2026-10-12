@@ -25,6 +25,10 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
+- **Zdroj bez práva ke čtení (zjištění z Macu 2026-10-12):** složka/karta, kterou systém nedovolí vypsat (Mac: soukromí
+  macOS; Windows: ACL, BitLocker zamčený, chráněná složka), nesmí vypadat jako prázdná karta — zastavit kontrolou před
+  startem s hláškou, co povolit (Mac `Msg.noReadAccess`, kód `noReadAccess`).
+
 - **Celý řetěz připojení u každé rychlosti (zadání uživatele 2026-10-11, Mac hotovo v buildu D11):** v tabulce rychlostí
   karty úlohy pod každým řádkem (čtení karty, každý cíl) „zařízení · linka (kabel) · port“ a „NN % of link“ (výrazně od
   85 %), ne jen v tooltipu; při ověření během proxy tabulka disků s průběhem ověření a rychlostí čtení každého disku.
