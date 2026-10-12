@@ -416,7 +416,7 @@ public class ReleaseScriptTests
             steps);
         var contents = lines.Where(l => l.StartsWith("  ")).Select(l => l.Trim()).ToArray();
         Assert.Equal(5, contents.Length);
-        Assert.All(contents[..3], m => Assert.Equal("{ \"version\": \"0.11.0\", \"url\": \"/download/\", \"notes\": \"mmMover for Windows 0.11.0\" }", m));
+        Assert.All(contents[..3], m => Assert.Equal("{ \"version\": \"0.11.0\", \"url\": \"https://mmmover.video/\", \"notes\": \"mmMover for Windows 0.11.0\" }", m));
         Assert.Contains("\"file\": \"mmMover-Windows.zip\"", contents[3]);
         Assert.Contains("\"file\": \"mmMover-Windows-dev.zip\"", contents[4]);
         Assert.Contains("\"size\": 1234", contents[4]);
