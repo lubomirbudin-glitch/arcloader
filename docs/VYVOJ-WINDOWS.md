@@ -69,7 +69,7 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 - Ikona mmMoveru: varianta E z šesti návrhů (uživatel: „E je super“) — tři petrolejové šipky doprava na grafitovém
   čtverci (barvy webu). `shared/icon/make_icon.py` ji kreslí místo karty s fajfkou; `Offload.ico`, `Offload.iconset`,
   `Offload-1024.png` přegenerované pod stejnými jmény (Windows exe/okna i Mac `build-app.sh` je převezmou bez změny),
-  nově `shared/icon/mmMover.svg` (vektor pro favicon webu); ikona v návodu taky. Windows ji dostane v příštím buildu.
+  nově `shared/icon/mmMover.svg` (vektor pro favicon webu); ikona v návodu taky. Windows **0.11.1** = 0.11.0 s novou ikonou.
 
 ## 2026-10-11 — 0.11.0: přejmenování na mmMover
 
