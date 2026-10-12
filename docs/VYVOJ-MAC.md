@@ -262,6 +262,9 @@ Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
   statický ffmpeg/ffprobe (x86_64), `braw-decode`, CLI `mmmover`, 11 vestavěných LUTů. `swift build -c release` a
   `swift test` zelené: 622 testů, 0 selhání, 10 přeskočených (6 BRAW bez vzorku, 2 USB bez připojeného USB svazku
   v testu, 2 měření tapu bez `OFFLOAD_TAP_BENCH`). Starší buildy (Offload-*, ArcLoader-*, mmMover-D12/D13) zůstávají.
+- Vydáno na GitHubu: release **`mac-v0.7.0`** (pre-release, ne „Latest“ — rolling `stable`/`dev` Windows nedotčené),
+  `mmMover-Mac-0.7.0.zip` (60 MB, `ditto`, SHA-256 516e179b…08c). Bez Developer ID podpisu (ad hoc) — první spuštění
+  pravým tlačítkem → Otevřít. Kanálové názvy `mmMover-Mac(-dev).zip` a web až s podpisem a notarizací (úkol 60).
 
 ## 2026-10-12 — build „mmMover D13“: karta, kterou macOS nepustí
 
