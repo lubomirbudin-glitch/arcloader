@@ -7,6 +7,14 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Denní report po klipech a jméno operátora (zadání uživatele 2026-10-13, obě verze):** stejné zadání jako ve
+  [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md) (Naplánováno, stejný nadpis) — Mac musí zapisovat totéž, co Windows:
+  `settings.json` `operatorName` (Settings → General „Operator name“), CLI `--operator`, `offload_report.json` `operator`,
+  řádek „Operator: …“ v reportu karty (HTML/PDF/TXT), v denním a souhrnném reportu, `<author role="DIT">` v ASC MHL,
+  náhledy `_REPORT/thumbs/<cesta klipu, / → __>.jpg` a denní report s kartami v pořadí zálohy, sloupcem „On disks“ a
+  oddílem „Clips by card“ (náhled, klip, Recorded, TC in, délka, formát, velikost; u karty disky s počty OK/chyb a
+  způsobem ověření). Podrobnosti formátu v FORMATY.md, jakmile je Windows zapíše.
+
 - **Nová ikona (uživatel 2026-10-12, obě verze):** `shared/icon/Offload.iconset` je přegenerovaný — varianta E (tři
   petrolejové šipky na grafitu, `shared/icon/mmMover.svg`). `build-app.sh` ho bere beze změny; stačí nový build a ověřit
   ikonu v Docku a Finderu (macOS si ikony cachuje — případně `touch` na .app nebo restart Docku).

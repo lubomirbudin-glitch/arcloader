@@ -25,6 +25,29 @@ Plány: [`windows/docs/superpowers/plans/`](../windows/docs/superpowers/plans/)
 
 ## Naplánováno
 
+- **Denní report po klipech a jméno operátora (zadání uživatele 2026-10-13, obě verze; Mac totéž):** návrh schválený
+  na mockupu ze simulace 3 karet. Uživatel: „tam musí být každá karta rozepsaná po klipech a velikosti a kdy se udělalo,
+  1 screenshot ke každému klipu, a taky tam bude napsáno, na kterém disku to je“; „přidej do programu jméno operátora do
+  nastavení a to se bude vypisovat na reporty“.
+  - **Jméno operátora:** Settings → General pole „Operator name“ (volný text, oříznutý; prázdné = nikde nic).
+    `settings.json` kořenový klíč `operatorName` (string, výchozí `""`) — jedno pro celý počítač, ne pro projekt. CLI
+    `copy` a `append` volba `--operator <name>` (má přednost před nastavením). Zapíše se do `offload_report.json` jako
+    `operator` (string?, chybí, když je prázdné); doplnění zapíše toho, kdo doplňoval, do reportu své generace.
+    Ukáže se v reportu karty (HTML/PDF v hlavičce „Operator: …“, TXT řádek `Operator: …`), v denním a souhrnném reportu
+    v hlavičce (operátoři dne/výběru, každý jednou, v pořadí karet) a v ASC MHL `<creatorinfo><author role="DIT">jméno</author>`
+    (podle XSD ASC MHL v2: za `<tool>`, před `<location>`/`<comment>`; chybí bez jména).
+  - **Náhledy pro denní report:** report karty k HTML navíc uloží prostřední snímek každého klipu (ze 3; jediný, když je
+    jen jeden) jako `_REPORT/thumbs/<cesta klipu, `/` → `__`>.jpg` (např. `PRIVATE__M4ROOT__CLIP__A001C001.jpg`); doplnění
+    přidá náhledy svých klipů. Bez náhledu (starší záloha, bez ffmpeg, analýza vypnutá) = šedé pole.
+  - **Denní report:** tabulka karet v pořadí, jak se zálohovaly (podle `started`; složky bez reportu na konci v pořadí
+    Průzkumníka), nový sloupec „On disks“ (každý cíl karty: jméno disku jako v reportu karty + ✓/✗), jméno karty je odkaz
+    na její oddíl. Pod tabulkou oddíl **„Clips by card“**: u každé karty nadpis (jméno, stav, čas zálohy od–do, počet klipů,
+    data, operátor), řádek „On disks:“ (disk · N OK · N errors · způsob ověření) a tabulka klipů (bez proxy z kamery):
+    náhled, klip (jméno + cesta), **Recorded** (`files[].modified` prvního souboru klipu, místní čas `HH:MM:SS`, s datem,
+    když je jiný den), TC in, délka, formát (rozlišení + kodek), velikost. HTML samostatné (náhledy base64), PDF stejně,
+    oddíl karty se nedělí přes stránku, když se vejde.
+  - FORMATY.md: `operator`, `operatorName`, `_REPORT/thumbs/`, `<author>` v MHL, nový obsah denního reportu.
+
 - **Zdroj bez práva ke čtení (zjištění z Macu 2026-10-12):** složka/karta, kterou systém nedovolí vypsat (Mac: soukromí
   macOS; Windows: ACL, BitLocker zamčený, chráněná složka), nesmí vypadat jako prázdná karta — zastavit kontrolou před
   startem s hláškou, co povolit (Mac `Msg.noReadAccess`, kód `noReadAccess`).
