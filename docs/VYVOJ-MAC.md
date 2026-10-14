@@ -15,7 +15,7 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
   oddílem „Clips by card“ (náhled, klip, Recorded, TC in, délka, formát, velikost; u karty disky s počty OK/chyb a
   způsobem ověření). Podrobnosti formátu v FORMATY.md, jakmile je Windows zapíše.
 
-- **Nová ikona (uživatel 2026-10-12, obě verze):** `shared/icon/Offload.iconset` je přegenerovaný — varianta E (tři
+- ✅ **Hotovo ve finálním buildu `mmMover.app` 0.7.0 (2026-10-12).** **Nová ikona (uživatel 2026-10-12, obě verze):** `shared/icon/Offload.iconset` je přegenerovaný — varianta E (tři
   petrolejové šipky na grafitu, `shared/icon/mmMover.svg`). `build-app.sh` ho bere beze změny; stačí nový build a ověřit
   ikonu v Docku a Finderu (macOS si ikony cachuje — případně `touch` na .app nebo restart Docku).
 
@@ -263,6 +263,16 @@ Bez nové verze (zůstává 0.7.0); nejnovější nahoře.
   a pod tím šedě „playback 24“ + vysvětlivka pod tabulkou; TXT `Frame rate:  35 fps capture, 24 playback (2 clips); 25 fps
   (1 clip)`. Testy `CaptureFrameRateTests` (i skutečné vzorky ARRIRAW v `TestMedia` — oba 24 fps). Vzorek
   `profile.braw` z Blackmagic RAW Speed Test hlásí `sensorRate` 1 (syntetický klip) — stejně jako Windows se nehlídá.
+
+## 2026-10-12 — finální build `mmMover.app` 0.7.0
+
+- `scripts/build-app.sh` bez označení → `build/mmMover.app` („mmMover“, verze 0.7.0), nová ikona (tři šipky, varianta E),
+  statický ffmpeg/ffprobe (x86_64), `braw-decode`, CLI `mmmover`, 11 vestavěných LUTů. `swift build -c release` a
+  `swift test` zelené: 622 testů, 0 selhání, 10 přeskočených (6 BRAW bez vzorku, 2 USB bez připojeného USB svazku
+  v testu, 2 měření tapu bez `OFFLOAD_TAP_BENCH`). Starší buildy (Offload-*, ArcLoader-*, mmMover-D12/D13) zůstávají.
+- Vydáno na GitHubu: release **`mac-v0.7.0`** (pre-release, ne „Latest“ — rolling `stable`/`dev` Windows nedotčené),
+  `mmMover-Mac-0.7.0.zip` (60 MB, `ditto`, SHA-256 516e179b…08c). Bez Developer ID podpisu (ad hoc) — první spuštění
+  pravým tlačítkem → Otevřít. Kanálové názvy `mmMover-Mac(-dev).zip` a web až s podpisem a notarizací (úkol 60).
 
 ## 2026-10-12 — build „mmMover D13“: karta, kterou macOS nepustí
 
