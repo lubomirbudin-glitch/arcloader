@@ -81,11 +81,17 @@ public enum VerifyReport {
     }
 
     /// The machine lines of the CLI (English, for scripts): MISMATCH, MISSING, ERROR, EXTRA, FAILED-AT-COPY …
+    /// Appended part by part: one long `+` chain is too much for some compilers' type checker (Xcode 26.2 on Apple
+    /// Silicon gave up on it).
     public static func machineLines(_ r: VerifyResult) -> [String] {
-        r.changed.map { "MISMATCH  \($0)" } + r.missing.map { "MISSING   \($0)" }
-            + r.unreadable.map { "ERROR     \($0.path): \($0.error)" } + r.extra.map { "EXTRA     \($0)" }
-            + r.failedAtCopy.map { "FAILED-AT-COPY  \($0)" } + r.failedSuperseded.map { "FAILED-SUPERSEDED  \($0)" }
-            + r.chainProblems.map { "CHAIN     \($0)" }
+        var lines: [String] = r.changed.map { "MISMATCH  \($0)" }
+        lines += r.missing.map { "MISSING   \($0)" }
+        lines += r.unreadable.map { "ERROR     \($0.path): \($0.error)" }
+        lines += r.extra.map { "EXTRA     \($0)" }
+        lines += r.failedAtCopy.map { "FAILED-AT-COPY  \($0)" }
+        lines += r.failedSuperseded.map { "FAILED-SUPERSEDED  \($0)" }
+        lines += r.chainProblems.map { "CHAIN     \($0)" }
+        return lines
     }
 
     // MARK: - The report
