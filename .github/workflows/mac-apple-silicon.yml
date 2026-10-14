@@ -35,8 +35,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The Intel MacBook builds with Xcode 26 (macOS 26); the image's default Xcode 16 / Swift 6.1 cannot type-check
+      # some of the code in time. Use the newest Xcode 26 on the runner.
       - name: Toolchain
         run: |
+          ls -d /Applications/Xcode*.app
+          X=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          [[ -n $X ]] || { echo "::error::no Xcode 26 on the runner"; exit 1; }
+          sudo xcode-select -s "$X"
           uname -m
           sw_vers
           xcodebuild -version
