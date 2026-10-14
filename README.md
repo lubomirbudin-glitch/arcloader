@@ -44,8 +44,16 @@ Mac verze zatím česky, přechod na angličtinu je naplánován).
 | **Web** — stažení bez GitHubu | [⬇️ mmMover-Windows.zip](https://mmmover.video/download/mmMover-Windows.zip) · [⬇️ mmMover-Windows-dev.zip](https://mmmover.video/download/mmMover-Windows-dev.zip) |
 | Všechny verze (archiv) | [Releases](https://github.com/lubomirbudin-glitch/mmmover/releases) |
 
+| | Mac s Apple Silicon (M1 a novější) | Mac s Intelem |
+|---|---|---|
+| **Web** — nejnovější Mac build | [⬇️ mmMover-Mac-AppleSilicon.zip](https://mmmover.video/download/mmMover-Mac-AppleSilicon.zip) | [⬇️ mmMover-Mac.zip](https://mmmover.video/download/mmMover-Mac.zip) |
+| GitHub | [Releases `mac-v…`](https://github.com/lubomirbudin-glitch/mmmover/releases) | [Releases `mac-v…`](https://github.com/lubomirbudin-glitch/mmmover/releases) |
+
 Odkazy se nemění a vždy vedou na nejnovější build daného kanálu. Rozbalte ZIP kamkoli a spusťte
-`mmMover\mmMover.exe`, nic se neinstaluje. Mac verze se zatím sestavuje jen ze zdrojů (viz [Mac verze](#mac-verze)).
+`mmMover\mmMover.exe`, nic se neinstaluje. Mac: rozbalit a přesunout `mmMover.app` do Aplikací (zatím bez podpisu
+Developer ID — poprvé Nastavení systému › Soukromí a zabezpečení › Přesto otevřít). Verze pro Apple Silicon je nativní
+(arm64) a sestavuje ji GitHub Actions ([mac-apple-silicon.yml](.github/workflows/mac-apple-silicon.yml)), verzi pro Intel
+sestavuje ručně MacBook s Intelem (viz [Mac verze](#mac-verze)).
 Staré odkazy na `ArcLoader-Windows(-dev).zip` a `Offload-Windows(-dev).zip` dál fungují (stejné soubory se nahrávají i pod starým názvem).
 Hotové balíčky je dovoleno zdarma používat, viz [Licence](#licence).
 
@@ -191,6 +199,11 @@ cd mac
 scripts/build-app.sh          # → build/Offload.app (CLI uvnitř Contents/Resources/bin/offload)
 swift test
 ```
+
+**Verze pro Apple Silicon** (M1 a novější) se sestavuje na Macu s M1 v GitHub Actions: workflow
+[mac-apple-silicon.yml](.github/workflows/mac-apple-silicon.yml) při každém pushi do `mac/` nebo `shared/` sestaví
+aplikaci, CLI, `braw-decode` a přibalí ffmpeg 8.1 pro arm64, pustí testy a zabalí `mmMover-Mac-AppleSilicon-<verze>.zip`;
+ruční spuštění s `publish` ho přiloží k releasu `mac-v<verze>`.
 
 Podrobnosti jsou v [mac/README.md](mac/README.md). Plány dorovnání s Windows jsou v
 [mac/docs/superpowers/](mac/docs/superpowers/).

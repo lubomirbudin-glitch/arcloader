@@ -88,7 +88,9 @@ složkách, zámky zůstávají v `…/Offload/locks` (starý Offload a mmMover 
 pod stejným bundle id `cz.budin.offload`. Uvnitř záloh se nic nemění (`offload_report.json`, `tool: "offload"` …).
 Proměnné `ARCLOADER_SETTINGS_DIR` / `ARCLOADER_REPORTS_DIR` mají přednost před `OFFLOAD_*`.
 
-`Tools/bin/` (ignorováno gitem) musí obsahovat `ffmpeg` a `ffprobe` (statické x86_64 buildy z evermeet.cx);
+`Tools/bin/` (ignorováno gitem) musí obsahovat `ffmpeg` a `ffprobe` — statické buildy pro procesor Macu: x86_64
+z evermeet.cx (Intel), arm64 z osxexperts.net (`ffmpeg81arm.zip`, `ffprobe81arm.zip`; Apple Silicon — tak je bere i
+[CI build](../.github/workflows/mac-apple-silicon.yml), který hlídá SHA-256 a potřebné enkodéry a filtry);
 `braw-decode` se zbuilduje automaticky z `Tools/braw-decode/` (hlavičky BRAW SDK, licence Blackmagic je v nich).
 
 ### Vzorek BRAW (testy dekodéru Blackmagic RAW)

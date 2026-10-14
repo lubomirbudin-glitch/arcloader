@@ -7,6 +7,17 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
 
 ## Naplánováno
 
+- **Ověřit build pro Apple Silicon na skutečném Macu s M procesorem (2026-10-14):** CI na virtuálním M1 vynechává
+  `MacHardwareTests.testStartupVolumeIsInternalWithAProduct` a `testEveryUsbDeviceLinksToASocketInThePortList` (VM má
+  virtuální USB klávesnici a digitizér na portech 9/10 — seznam portů je bere jako „neznámý typ“, řádek disku jako
+  USB 2 — a startovací disk bez modelu). Na M Macu pustit `swift test --filter MacHardwareTests` s USB diskem,
+  ostrou kopii karty, proxy přes VideoToolbox (H.264/HEVC) a BRAW s knihovnou Blackmagic (arm64).
+- **Názvy Mac zipů (2026-10-14):** web má tři soubory: `mmMover-Windows.zip`, `mmMover-Mac.zip` (Intel, beze změny
+  názvu — odkazy venku platí) a `mmMover-Mac-AppleSilicon.zip`. `channels.json` má klíče `mac` (Intel) a `macArm`.
+  Další Mac verze: Intel build z MacBooku → `mac/scripts/web-upload.py` jako dosud; Apple Silicon → GitHub Actions
+  „Mac Apple Silicon“ → Run workflow s `publish` (zip do releasu `mac-v<verze>`), pak na web jako
+  `mmMover-Mac-AppleSilicon.zip` a v `channels.json` `macArm` (version, file, size, date, commit, platform).
+
 - **Denní report po klipech a jméno operátora (zadání uživatele 2026-10-13, obě verze):** stejné zadání jako ve
   [VYVOJ-WINDOWS.md](VYVOJ-WINDOWS.md) (Naplánováno, stejný nadpis) — Mac musí zapisovat totéž, co Windows:
   `settings.json` `operatorName` (Settings → General „Operator name“), CLI `--operator`, `offload_report.json` `operator`,
@@ -159,6 +170,23 @@ Formát záznamu: `datum — co se změnilo (commit / verze)`.
       „Vlastní…“ ponechá volbu; vestavěný LUT přežije restart; výběr složky pro proxy, červená hláška po odpojení, křížek
       ji smaže; kontrola odpojení těsně před startem; ostrý offload se složkou → řádky v reportu;
     - úkol 25: ikona v Docku, ⌘⇥ a Finderu; 11 LUTů v *Proxy › LUT*.
+
+## 2026-10-14 — třetí build: mmMover pro Mac s Apple Silicon (0.7.0, arm64)
+
+- Workflow [`.github/workflows/mac-apple-silicon.yml`](../.github/workflows/mac-apple-silicon.yml) na GitHub runneru
+  `macos-15` (Apple M1, nejnovější Xcode 26 — na runneru 26.2): stáhne statický ffmpeg/ffprobe 8.1 arm64 z osxexperts.net
+  (SHA-256 hlídané ve workflow), zkontroluje arm64 a enkodéry/filtry, které proxy potřebují (`h264_videotoolbox`,
+  `hevc_videotoolbox`, `prores_ks`, `drawtext`, `lut3d`, `colorspace`, `scale`), sestaví `braw-decode`, `swift build`,
+  `swift test`, `scripts/build-app.sh` beze změny, ověří arm64 u všech pěti binárek a `mmmover --version`, zabalí
+  `mmMover-Mac-AppleSilicon-<verze>.zip` (`ditto`). Spouští se při pushi do `mac/`, `shared/` nebo workflow; ručně
+  s `publish` ho přiloží k releasu `mac-v<verze>`.
+- Testy na M1: 606 prošlo, 14 přeskočeno (jako na Intelu), 2 hardwarové testy vynechané kvůli VM (viz Naplánováno).
+- `VerifyReport.machineLines` skládá řádky postupně (`+=`): dlouhý řetěz `+` nestihl type checker Xcode 26.2 na
+  Apple Silicon (na MacBooku s Intelem prošel). Stejné řádky, stejné pořadí.
+- Vydáno: release `mac-v0.7.0` má vedle `mmMover-Mac-0.7.0.zip` (Intel) i `mmMover-Mac-AppleSilicon-0.7.0.zip`
+  (51 MB, SHA-256 a3012bbd…a30). Na webu https://mmmover.video/download/mmMover-Mac-AppleSilicon.zip, `channels.json`
+  klíč `macArm`; každá stránka webu má tlačítka Windows · Mac (Apple Silicon) · Intel Mac, tabulka ke stažení řádek
+  pro každý build (web commit 18681cc ve větvi `redesign`).
 
 ## 2026-10-11 — po D6: dorovnání s Windows 0.8.0 (snímací fps, historie karet, denní a souhrnný report)
 
