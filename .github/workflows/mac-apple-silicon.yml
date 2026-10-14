@@ -1,0 +1,126 @@
+# mmMover for Mac with an Apple Silicon (M1–M4) processor: the third build next to Windows and Mac Intel.
+# The Mac Intel build is made by hand on the Intel MacBook (mac/scripts/build-app.sh); this one runs on GitHub's
+# Apple Silicon runner, so the app, the CLI, braw-decode and the bundled ffmpeg are all native arm64, and the whole
+# test suite runs on an M processor. Same script, same app — only the processor and the ffmpeg build differ.
+# Every push that touches mac/ or shared/ builds and tests it; "Run workflow" with publish attaches the zip to the
+# GitHub release mac-v<version> (made as a pre-release when it is not there yet).
+name: Mac Apple Silicon
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Attach the zip to the GitHub release mac-v<version>
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ['mac/**', 'shared/**', '.github/workflows/mac-apple-silicon.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mac-apple-silicon-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          uname -m
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      # Static ffmpeg/ffprobe 8.1 for arm64 (osxexperts.net; the Intel build uses evermeet.cx, which has no arm64).
+      # Pinned by SHA-256: a changed download stops the build instead of shipping something unchecked.
+      - name: ffmpeg + ffprobe 8.1 arm64
+        run: |
+          mkdir -p Tools/bin "$RUNNER_TEMP/ff"
+          cd "$RUNNER_TEMP/ff"
+          curl -fsSL --retry 3 -o ffmpeg.zip https://www.osxexperts.net/ffmpeg81arm.zip
+          curl -fsSL --retry 3 -o ffprobe.zip https://www.osxexperts.net/ffprobe81arm.zip
+          shasum -a 256 -c <<'SUMS'
+          ebb82529562b71170807bbc6b0e7eb4f0b13af8cbb0e085bb9e8f6fe709598ad  ffmpeg.zip
+          a6640a77d38a6f0527c5b597e599cb36a3427a6931444ed80bc62542421950a1  ffprobe.zip
+          SUMS
+          unzip -oq ffmpeg.zip ffmpeg
+          unzip -oq ffprobe.zip ffprobe
+          chmod +x ffmpeg ffprobe
+          mv ffmpeg ffprobe "$GITHUB_WORKSPACE/mac/Tools/bin/"
+
+      # What mmMover's proxies need from ffmpeg (Proxy.swift): VideoToolbox H.264/HEVC, ProRes, burn-in, LUT, colour.
+      - name: Check ffmpeg (arm64, encoders, filters)
+        working-directory: mac/Tools/bin
+        run: |
+          for t in ffmpeg ffprobe; do
+            echo "$t: $(lipo -archs $t) — $(./$t -hide_banner -version | sed -n 1p)"
+            lipo -archs $t | grep -qw arm64 || { echo "::error::$t is not arm64"; exit 1; }
+          done
+          enc=$(./ffmpeg -hide_banner -encoders)
+          for e in h264_videotoolbox hevc_videotoolbox prores_ks; do
+            grep -qw "$e" <<<"$enc" || { echo "::error::ffmpeg has no encoder $e"; exit 1; }
+          done
+          flt=$(./ffmpeg -hide_banner -filters)
+          for f in drawtext lut3d colorspace scale; do
+            grep -qw "$f" <<<"$flt" || { echo "::error::ffmpeg has no filter $f"; exit 1; }
+          done
+
+      - name: braw-decode
+        run: Tools/braw-decode/build.sh
+
+      - name: Build
+        run: swift build -c release
+
+      - name: Test
+        run: swift test
+
+      - name: App
+        run: scripts/build-app.sh
+
+      - name: Check the app is Apple Silicon
+        run: |
+          VERSION=$(sed -n 's/.*static let string = "\(.*\)".*/\1/p' Sources/OffloadKit/Report.swift)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          APP=build/mmMover.app
+          for b in "$APP/Contents/MacOS/mmMover" "$APP"/Contents/Resources/bin/*; do
+            echo "$b: $(lipo -archs "$b")"
+            lipo -archs "$b" | grep -qw arm64 || { echo "::error::$b is not arm64"; exit 1; }
+          done
+          "$APP/Contents/Resources/bin/mmmover" --version
+          plutil -p "$APP/Contents/Info.plist" | grep -E 'CFBundleShortVersionString|LSMinimumSystemVersion'
+
+      - name: Zip
+        run: |
+          ZIP=build/mmMover-Mac-AppleSilicon-$VERSION.zip
+          ditto -c -k --keepParent build/mmMover.app "$ZIP"
+          ls -l "$ZIP"
+          shasum -a 256 "$ZIP"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mmMover-Mac-AppleSilicon-${{ env.VERSION }}
+          path: mac/${{ env.ZIP }}
+          compression-level: 0
+
+      - name: Publish to release mac-v${{ env.VERSION }}
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=mac-v$VERSION
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --prerelease --latest=false --target "$GITHUB_SHA" \
+              --title "mmMover for Mac $VERSION" --notes "mmMover for Mac $VERSION."
+          gh release upload "$TAG" "$ZIP" --clobber
