@@ -87,8 +87,13 @@ jobs:
       - name: Build
         run: swift build -c release
 
+      # Two tests read the machine's own hardware and the runner is a virtual Mac: its startup disk has no model in
+      # DiskArbitration and its USB devices are the VM's virtual keyboard and digitizer. Run them on a real M Mac.
       - name: Test
-        run: swift test
+        run: |
+          swift test \
+            --skip 'MacHardwareTests/testStartupVolumeIsInternalWithAProduct' \
+            --skip 'MacHardwareTests/testEveryUsbDeviceLinksToASocketInThePortList'
 
       - name: App
         run: scripts/build-app.sh
